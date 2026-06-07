@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# csift pre-commit gate — installed by cargo-husky (user-hooks feature) into
+# .git/hooks/pre-commit on the first `cargo test` / `cargo build` after checkout.
+# Mirrors the CI gate exactly. DO NOT edit the copy in .git/hooks; edit this
+# source file (.cargo-husky/hooks/pre-commit) and re-run `cargo test` to reinstall.
+#
+# Bypass for a genuine WIP commit only: `git commit --no-verify`.
+set -euo pipefail
+
+echo "[csift pre-commit] cargo fmt --check"
+cargo fmt --all -- --check
+
+echo "[csift pre-commit] cargo clippy --all-targets -- -D warnings"
+cargo clippy --all-targets -- -D warnings
+
+echo "[csift pre-commit] cargo test"
+cargo test
+
+echo "[csift pre-commit] OK"

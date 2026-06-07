@@ -1,0 +1,10 @@
+# Sensible defaults — stable rustfmt only (no nightly-only options) so the
+# `cargo fmt --check` pre-commit/CI gate runs on the pinned 1.89 stable toolchain.
+edition = "2021"
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+use_small_heuristics = "Default"
+reorder_imports = true
+reorder_modules = true

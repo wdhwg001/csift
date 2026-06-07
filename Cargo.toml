@@ -1,0 +1,59 @@
+[package]
+name = "csift"
+version = "0.1.0"
+authors = ["Greendam <8943519+wdhwg001@users.noreply.github.com>"]
+edition = "2021"
+rust-version = "1.89"
+description = "ripgrep for Claude Code session transcripts — fast regex list/search over ~/.claude/projects/**/*.jsonl"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "csift"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+regex = "1.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+memchr = "2.8"
+memmap2 = "0.9"
+rayon = "1.12"
+anyhow = "1.0"
+# Modern datetime + timezone crate. The brief prefers jiff; it built clean, so no
+# fallback to time/chrono was needed. Used for ISO8601 parse + Australia/Sydney
+# local rendering alongside raw UTC.
+jiff = "0.2"
+
+[dev-dependencies]
+# Installs a git pre-commit hook on first `cargo test`/build that runs the same
+# gate as CI: fmt --check + clippy (warnings-as-errors) + test. The hook is
+# sourced from .cargo-husky/hooks/ (user-hooks feature) and copied to
+# .git/hooks/pre-commit. See CLAUDE.md § Commands.
+cargo-husky = { version = "1.5", default-features = false, features = [
+    "user-hooks",
+] }
+
+[lints.rust]
+unsafe_code = "warn"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+# CI denies via `cargo clippy --all-targets -- -D warnings`; here the whole `all`
+# group is set to warn (priority -1 so specific allows below win), then the
+# pedantic/nursery noise that is not useful for a CLI of this shape is quieted.
+# Real correctness lints stay loud.
+all = { level = "warn", priority = -1 }
+# Pedantic is intentionally NOT enabled wholesale (too noisy for a CLI). The
+# allows below pre-empt the most common false positives so a future pedantic
+# opt-in stays low-friction.
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+# Fast scans over 200MB+ files: prefer throughput. thin-LTO + single codegen unit.
+lto = "thin"
+codegen-units = 1
