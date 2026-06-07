@@ -32,7 +32,7 @@ use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
 
 use crate::cli::{Category, OutputFormat, SearchArgs};
-use crate::model::{normalize_line, tool_result_content_text, Block, Record, AUQ_ANSWER_MARKER};
+use crate::model::{is_auq_answer_text, normalize_line, tool_result_content_text, Block, Record};
 use crate::parse::{mmap_bytes, scan_lines_bytes};
 use crate::path::{self, ProjectDir};
 use crate::time_window::TimeWindow;
@@ -178,6 +178,19 @@ fn apply_builder(pattern: &str, case_insensitive: bool, multiline: bool) -> Resu
 /// is plain (no regex metacharacters), so we never drop a line that could match.
 /// (A richer HIR analysis is possible but this captures the common keyword case —
 /// `csift search "carry"` — with zero false negatives.)
+///
+/// **JSON-escape safety (load-bearing — SPEC §0 "no silent truncation").** The
+/// prefilter runs the literal against the RAW JSON line bytes, where string content
+/// is JSON-encoded: `"` is stored as `\"`, `\` as `\\`, and every control char
+/// (`< 0x20`) plus DEL (`0x7f`) as a `\uXXXX`/`\n`/`\t`/… escape. A literal
+/// containing any such char therefore can NOT appear verbatim in the raw line — a
+/// `memmem` for it would falsely report "absent" and silently drop a line whose
+/// DECODED text actually matches (e.g. searching `Say"Xello`). So we refuse to emit
+/// a literal prefilter whenever the pattern contains a JSON-escaped character; the
+/// match then falls back to running the regex on the raw bytes (still pre-JSON, just
+/// without the cheap literal short-circuit). Non-ASCII (`>= 0x80`) is emitted
+/// verbatim as UTF-8 by serde_json (CJK searches like `x` confirm this), so it
+/// stays prefilter-eligible.
 fn required_literal(pattern: &str) -> Option<Vec<u8>> {
     const META: &[char] = &[
         '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '^', '$', '\\',
@@ -185,7 +198,21 @@ fn required_literal(pattern: &str) -> Option<Vec<u8>> {
     if pattern.is_empty() || pattern.chars().any(|c| META.contains(&c)) {
         return None;
     }
+    // A char that JSON escapes inside a string does not survive verbatim in the raw
+    // line bytes the prefilter scans — emitting a literal for it causes false
+    // negatives. `\` is already excluded via META above; guard `"`, control chars,
+    // and DEL here.
+    if pattern.chars().any(json_escapes_in_string) {
+        return None;
+    }
     Some(pattern.as_bytes().to_vec())
+}
+
+/// True when `c` is escaped inside a JSON string literal (so it never appears
+/// verbatim in the raw line bytes): `"`, any C0 control char (`< 0x20`), or DEL.
+/// (`\` is handled separately as a regex metacharacter.)
+fn json_escapes_in_string(c: char) -> bool {
+    c == '"' || (c as u32) < 0x20 || c == '\u{7f}'
 }
 
 /// Entry point for `csift search`.
@@ -558,6 +585,16 @@ fn collect_record_hits(
                     content: Some(c), ..
                 } if category_active(want, Category::ToolResponse) => {
                     let mut text = tool_result_content_text(c);
+                    // §5 de-dup: an AUQ answer IS a tool_result, so it is eligible for
+                    // BOTH `user` (the §4.1 exception, emitted above) and
+                    // `tool-response`. "Do not double-count within a single emitted
+                    // exchange" — so when the `user` category is ALSO active we skip
+                    // the tool-response copy (the answer already surfaced as `user`).
+                    // A `-t tool-response` filter that does NOT name `user` still
+                    // surfaces it, so the answer is never lost, just not duplicated.
+                    if is_auq_answer_text(&text) && category_active(want, Category::User) {
+                        continue;
+                    }
                     // §4.6: when asked, replace the inline persisted-output pointer
                     // with the real file content (matching runs against the resolved
                     // text so a regex can hit the full output).
@@ -606,7 +643,8 @@ fn resolve_persisted_text(path: &str, inline: &str) -> String {
     }
 }
 
-/// The synthesized AUQ-answer string from a carrier's `tool_result` (§4.4).
+/// The synthesized AUQ-answer string from a carrier's `tool_result` (§4.4). Matches
+/// any known AUQ-answer marker (both shipped phrasings, see `model::AUQ_ANSWER_MARKERS`).
 fn auq_answer_text(rec: &Record) -> Option<String> {
     let blocks = rec.blocks()?;
     for b in blocks {
@@ -615,7 +653,7 @@ fn auq_answer_text(rec: &Record) -> Option<String> {
         } = b
         {
             let t = tool_result_content_text(c);
-            if t.contains(AUQ_ANSWER_MARKER) {
+            if is_auq_answer_text(&t) {
                 return Some(t);
             }
         }
@@ -884,6 +922,50 @@ mod tests {
         assert_eq!(required_literal("carry"), Some(b"carry".to_vec()));
         assert!(required_literal("ca.ry").is_none());
         assert!(required_literal("a|b").is_none());
+    }
+
+    #[test]
+    fn required_literal_rejects_json_escaped_chars() {
+        // DEFECT 2: a pattern char that JSON escapes inside a string ('"', control
+        // chars, DEL) does not appear verbatim in the raw JSON line, so a memmem
+        // prefilter for it would silently drop a line whose decoded text matches.
+        // Such patterns must NOT get a literal prefilter (fall back to regex).
+        assert!(
+            required_literal("Say\"Xello").is_none(),
+            "a quote-containing literal must not be prefiltered"
+        );
+        assert!(required_literal("a\tb").is_none(), "tab is JSON-escaped");
+        assert!(
+            required_literal("a\nb").is_none(),
+            "newline is JSON-escaped"
+        );
+        // Non-ASCII (CJK) is emitted verbatim as UTF-8 → still prefilter-eligible.
+        assert_eq!(
+            required_literal("x"),
+            Some("x".as_bytes().to_vec())
+        );
+    }
+
+    #[test]
+    fn quote_pattern_no_silent_drop_case_sensitive() {
+        // DEFECT 2 end-to-end: a record whose DECODED text is `Say"Xello there`. The
+        // raw line stores the quote escaped as \". A case-sensitive search for
+        // `Say"Xello` must STILL match (no literal prefilter → regex runs on decoded
+        // text), not silently drop the hit (SPEC §0). Build the matcher with an
+        // uppercase letter so smart-case stays case-SENSITIVE (the buggy path).
+        let m = build_matcher(&args("Say\"Xello")).unwrap();
+        assert!(
+            m.prefilter.is_none(),
+            "no byte prefilter for a quote-containing literal"
+        );
+        // The decoded text matches the regex.
+        assert!(m.is_match("Say\"Xello there"));
+        // And the raw-line gate must NOT drop the carrier (can't prove absence).
+        let raw = br#"{"type":"user","message":{"role":"user","content":"Say\"Xello there"}}"#;
+        assert!(
+            m.line_may_match(raw),
+            "without a literal prefilter the line passes to the regex stage"
+        );
     }
 
     #[test]
@@ -1171,5 +1253,70 @@ mod tests {
             .hits
             .iter()
             .any(|h| h.category == Category::User && h.excerpt.contains("bold option")));
+    }
+
+    #[test]
+    fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
+        // DEFECT 1: the dominant real-data phrasing ("Your questions have been
+        // answered: …") must surface under `user`, exactly like the other phrasing.
+        // (Previously the single hardcoded marker missed it entirely.)
+        let lines = vec![
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
+            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which?\"=\"the teal option\". You can now continue with these answers in mind."}]}}"#,
+        ];
+        let mut a = args("teal option");
+        a.categories = vec![Category::User];
+        let ex = search(&lines, &a);
+        assert_eq!(
+            ex.len(),
+            1,
+            "alternate AUQ phrasing must surface a user hit"
+        );
+        assert_eq!(ex[0].turn_index, 0);
+        assert!(ex[0]
+            .hits
+            .iter()
+            .any(|h| h.category == Category::User && h.excerpt.contains("teal option")));
+    }
+
+    #[test]
+    fn auq_answer_not_double_counted_no_category_filter() {
+        // DEFECT 3: with NO -t filter (all categories active) an AUQ answer must be
+        // surfaced ONCE (under `user`), NOT twice (also `tool-response`). SPEC §5.
+        let lines = vec![
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
+            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"zzqq choice\". You can now continue."}]}}"#,
+        ];
+        // No category filter → all five eligible.
+        let ex = search(&lines, &args("zzqq"));
+        assert_eq!(ex.len(), 1);
+        let cats: Vec<Category> = ex[0].hits.iter().map(|h| h.category).collect();
+        assert_eq!(
+            cats,
+            vec![Category::User],
+            "AUQ answer must appear once under `user`, not also tool-response"
+        );
+    }
+
+    #[test]
+    fn auq_answer_still_surfaces_under_tool_response_alone() {
+        // The de-dup must NOT hide the AUQ answer from a `-t tool-response` filter
+        // that does not also name `user` — it is genuinely a tool_result.
+        let lines = vec![
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
+            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"zzqq choice\". You can now continue."}]}}"#,
+        ];
+        let mut a = args("zzqq");
+        a.categories = vec![Category::ToolResponse];
+        let ex = search(&lines, &a);
+        assert_eq!(ex.len(), 1);
+        assert!(ex[0]
+            .hits
+            .iter()
+            .all(|h| h.category == Category::ToolResponse));
+        assert_eq!(ex[0].hits.len(), 1, "exactly one tool-response hit");
     }
 }

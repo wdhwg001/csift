@@ -30,10 +30,28 @@
 
 use serde::Deserialize;
 
-/// The synthesized prefix Claude Code writes into the `tool_result` answering an
-/// `AskUserQuestion` (§4.4). Used to surface AUQ answers under the `user` category
-/// without re-parsing `toolUseResult`.
-pub const AUQ_ANSWER_MARKER: &str = "User has answered your questions";
+/// The synthesized prefixes Claude Code writes into the `tool_result` answering an
+/// `AskUserQuestion` (§4.4). CC has shipped (at least) TWO phrasings for the same
+/// synthesized answer — verified across real `~/.claude/projects` data:
+///
+/// - `"User has answered your questions: \"<q>\"=\"<a>\". …"`
+/// - `"Your questions have been answered: \"<q>\"=\"<a>\". …"`  (the dominant form
+///   in current data; a single hardcoded marker missed it entirely)
+///
+/// Some sessions span a version transition and contain BOTH forms, so an AUQ
+/// answer must be recognised if it carries EITHER prefix. Used to surface AUQ
+/// answers under the `user` category without re-parsing `toolUseResult`.
+pub const AUQ_ANSWER_MARKERS: &[&str] = &[
+    "User has answered your questions",
+    "Your questions have been answered",
+];
+
+/// True when `text` (a `tool_result`'s rendered content) is a synthesized
+/// AskUserQuestion answer — i.e. it contains any known AUQ-answer marker (§4.4).
+#[must_use]
+pub fn is_auq_answer_text(text: &str) -> bool {
+    AUQ_ANSWER_MARKERS.iter().any(|m| text.contains(m))
+}
 
 /// A single parsed jsonl line. Unknown top-level fields are ignored by serde.
 ///
@@ -250,9 +268,10 @@ impl Record {
     }
 
     /// True when this is an AUQ-answer carrier: a `type:"user"` record carrying a
-    /// `tool_result` block whose textual content is the synthesized
-    /// `"User has answered your questions: …"` string (§4.4). Such a record is
-    /// surfaced under the `user` category even though it rides on a carrier.
+    /// `tool_result` block whose textual content is a synthesized AUQ-answer string
+    /// (any known marker, §4.4 — both `"User has answered your questions: …"` and
+    /// `"Your questions have been answered: …"`). Such a record is surfaced under the
+    /// `user` category even though it rides on a carrier.
     #[must_use]
     pub fn is_auq_answer(&self) -> bool {
         if !self.is_type("user") {
@@ -265,7 +284,7 @@ impl Record {
             Block::ToolResult { content, .. } => content
                 .as_ref()
                 .map(tool_result_content_text)
-                .is_some_and(|t| t.contains(AUQ_ANSWER_MARKER)),
+                .is_some_and(|t| is_auq_answer_text(&t)),
             _ => false,
         })
     }
@@ -550,6 +569,30 @@ mod tests {
         assert!(r.is_auq_answer());
         // It is NOT a genuine user (it's a carrier) but IS an AUQ answer.
         assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn auq_answer_alternate_phrasing_detected() {
+        // The DOMINANT real-data phrasing the single hardcoded marker used to miss:
+        // "Your questions have been answered: …" (verified across real sessions —
+        // 16 sessions use this form vs 13 the other, 4 contain BOTH). Must be
+        // recognised under the `user` category exactly like the other phrasing.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"Your questions have been answered: \"Q\"=\"A\". You can now continue with these answers in mind."}]}}"#,
+        );
+        assert!(r.is_auq_answer(), "alternate AUQ phrasing must be detected");
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn is_auq_answer_text_recognises_both_phrasings() {
+        assert!(is_auq_answer_text(
+            "User has answered your questions: \"q\"=\"a\"."
+        ));
+        assert!(is_auq_answer_text(
+            "Your questions have been answered: \"q\"=\"a\"."
+        ));
+        assert!(!is_auq_answer_text("a normal tool output"));
     }
 
     #[test]
