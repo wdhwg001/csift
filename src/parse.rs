@@ -41,6 +41,14 @@ use crate::model::Record;
 /// observed 400 KB single-line max).
 const TAIL_CHUNK: usize = 64 * 1024;
 
+/// Open + memory-map a file read-only and hand back the [`Mmap`] for the caller to
+/// borrow a `&[u8]` from (used by `search`, which needs to retain records borrowed
+/// against the live map for the whole scan). Returns `Ok(None)` for an empty file.
+/// Same SAFETY contract as [`mmap_file`].
+pub fn mmap_bytes(path: &Path) -> Result<Option<Mmap>> {
+    mmap_file(path)
+}
+
 /// Open + memory-map a file read-only. Length is captured at open; a concurrently
 /// growing/shrinking live session is tolerated (we treat the length as fixed and
 /// skip any torn trailing fragment). Returns `Ok(None)` for an empty file.
@@ -85,52 +93,23 @@ pub fn parse_line(line: &[u8]) -> Result<Option<Record>> {
     Ok(Some(rec))
 }
 
-/// A line locator: byte offset + length within the mmap, plus 0-based line index.
-#[derive(Debug, Clone, Copy)]
-pub struct LineSpan {
-    pub index: usize,
-    pub start: usize,
-    pub end: usize,
-}
-
-/// Full streaming scan: visit every line front-to-back, calling `visit` with the
-/// line's span and raw bytes (excluding the trailing `\n`). The visitor decides
-/// whether to fully parse (the lazy-parse boundary). A torn final fragment with no
-/// trailing newline is still visited (it is a complete record in practice).
-pub fn scan_lines<F>(path: &Path, mut visit: F) -> Result<()>
+/// Scan every line of an already-mapped byte slice front-to-back, calling `visit`
+/// with each line's raw bytes (excluding the trailing `\n`). Unlike [`scan_lines`]
+/// this takes the slice directly (the caller owns the [`Mmap`] so it can retain
+/// records borrowed against it) and the visitor is infallible — `search` collects
+/// its own errors/skips internally. A torn final fragment with no trailing newline
+/// is still visited.
+pub fn scan_lines_bytes<F>(bytes: &[u8], mut visit: F) -> Result<()>
 where
-    F: FnMut(LineSpan, &[u8]) -> Result<()>,
+    F: FnMut(&[u8]),
 {
-    let Some(mmap) = mmap_file(path)? else {
-        return Ok(());
-    };
-    let bytes: &[u8] = &mmap;
     let mut start = 0usize;
-    let mut index = 0usize;
     for nl in memchr_iter(b'\n', bytes) {
-        let line = &bytes[start..nl];
-        visit(
-            LineSpan {
-                index,
-                start,
-                end: nl,
-            },
-            line,
-        )?;
-        index += 1;
+        visit(&bytes[start..nl]);
         start = nl + 1;
     }
-    // Trailing fragment with no final newline.
     if start < bytes.len() {
-        let line = &bytes[start..];
-        visit(
-            LineSpan {
-                index,
-                start,
-                end: bytes.len(),
-            },
-            line,
-        )?;
+        visit(&bytes[start..]);
     }
     Ok(())
 }
@@ -159,13 +138,9 @@ pub struct RevLines<'a> {
 }
 
 impl<'a> RevLines<'a> {
-    #[must_use]
-    pub fn new(bytes: &'a [u8]) -> Self {
-        Self::with_chunk(bytes, TAIL_CHUNK)
-    }
-
-    /// Construct with an explicit chunk size (used by tests to force the carry
-    /// path across many boundaries). `chunk` is clamped to at least 1.
+    /// Construct with an explicit chunk size (the default tail read uses
+    /// [`TAIL_CHUNK`]; tests force a tiny chunk to exercise the carry path across
+    /// many boundaries). `chunk` is clamped to at least 1.
     #[must_use]
     pub fn with_chunk(bytes: &'a [u8], chunk: usize) -> Self {
         Self {

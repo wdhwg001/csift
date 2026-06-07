@@ -7,19 +7,13 @@
 //! Scaffold status (Phase 1): module skeletons compile; handler bodies are
 //! `todo!()` and will be filled in Phase 2 per SPEC.md.
 
-// SCAFFOLD-ONLY: the Phase-1 stubs declare the full type/function surface before
-// the handlers are wired, so every item is transiently unused. The pre-commit /
-// CI gate runs `clippy -- -D warnings`, which would otherwise block on dead_code.
-// REMOVE THIS in Phase 2 once handlers reference every public item; a leftover
-// allow then becomes a real defect to catch.
-#![allow(dead_code)]
-
 mod cli;
 mod model;
 mod parse;
 mod path;
 mod search;
 mod session;
+mod time_window;
 mod whoami;
 
 use std::process::ExitCode;

@@ -30,7 +30,21 @@
 
 use serde::Deserialize;
 
+/// The synthesized prefix Claude Code writes into the `tool_result` answering an
+/// `AskUserQuestion` (§4.4). Used to surface AUQ answers under the `user` category
+/// without re-parsing `toolUseResult`.
+pub const AUQ_ANSWER_MARKER: &str = "User has answered your questions";
+
 /// A single parsed jsonl line. Unknown top-level fields are ignored by serde.
+///
+/// Several fields below are deserialized for completeness of the documented record
+/// model (SPEC §3.2) and to keep parsing tolerant, but are not (yet) read by any
+/// handler — e.g. `parent_uuid` (the §6.4 x reconstruction keys on file order +
+/// genuine-user delimiting, not the uuid tree), `is_sidechain`,
+/// `is_visible_in_transcript_only`, `subtype`, `content`. They are part of the
+/// data contract, intentionally retained, hence the targeted allow rather than
+/// deleting SPEC-mandated shape.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Record {
     /// Record discriminator: "user", "assistant", "system", "summary",
@@ -91,6 +105,11 @@ pub struct Record {
     /// The role-bearing message payload (present on user/assistant records).
     #[serde(default)]
     pub message: Option<Message>,
+
+    /// Structured echo on tool-result carriers (§4.6). Kept raw; we read
+    /// `persistedOutputPath`/`persistedOutputSize` from it for `--resolve-persisted`.
+    #[serde(default, rename = "toolUseResult")]
+    pub tool_use_result: Option<serde_json::Value>,
 }
 
 /// The `message` object on user / assistant records.
@@ -116,6 +135,13 @@ pub enum Content {
 
 /// A typed content block within `message.content`. `#[serde(other)]` Unknown
 /// catches any future block type without a parse error.
+///
+/// Some block fields are deserialized for the documented model (SPEC §3.5) but not
+/// read by current logic (`signature`, the `ToolUse.id`, the `ToolResult`
+/// `tool_use_id`/`is_error`, `Image.source`). The x reconstruction returns the
+/// whole turn, so `tool_use`↔`tool_result` pairing-by-id is not needed (both sit in
+/// the same emitted exchange); the fields stay for shape-completeness + future use.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Block {
@@ -213,6 +239,70 @@ impl Record {
         Some(flatten_content_text(content))
     }
 
+    /// The content blocks of this record's message, if it has an array body.
+    /// Returns `None` for string content or no message.
+    #[must_use]
+    pub fn blocks(&self) -> Option<&[Block]> {
+        match self.message.as_ref()?.content.as_ref()? {
+            Content::Blocks(blocks) => Some(blocks),
+            Content::Text(_) => None,
+        }
+    }
+
+    /// True when this is an AUQ-answer carrier: a `type:"user"` record carrying a
+    /// `tool_result` block whose textual content is the synthesized
+    /// `"User has answered your questions: …"` string (§4.4). Such a record is
+    /// surfaced under the `user` category even though it rides on a carrier.
+    #[must_use]
+    pub fn is_auq_answer(&self) -> bool {
+        if !self.is_type("user") {
+            return false;
+        }
+        let Some(blocks) = self.blocks() else {
+            return false;
+        };
+        blocks.iter().any(|b| match b {
+            Block::ToolResult { content, .. } => content
+                .as_ref()
+                .map(tool_result_content_text)
+                .is_some_and(|t| t.contains(AUQ_ANSWER_MARKER)),
+            _ => false,
+        })
+    }
+
+    /// The persisted-output file path for this carrier (§4.6), preferring the
+    /// structured `toolUseResult.persistedOutputPath` (exact — no regex) and falling
+    /// back to scraping the inline `Full output saved to: <path>` marker from a
+    /// `tool_result` block. Returns `None` when there is no persisted pointer.
+    #[must_use]
+    pub fn persisted_output_path(&self) -> Option<String> {
+        // Structured field first (SPEC §4.6 resolution rule).
+        if let Some(tur) = &self.tool_use_result {
+            if let Some(p) = tur
+                .get("persistedOutputPath")
+                .and_then(serde_json::Value::as_str)
+            {
+                if !p.is_empty() {
+                    return Some(p.to_string());
+                }
+            }
+        }
+        // Inline fallback: scan tool_result content for the marker.
+        let blocks = self.blocks()?;
+        for b in blocks {
+            if let Block::ToolResult {
+                content: Some(c), ..
+            } = b
+            {
+                let text = tool_result_content_text(c);
+                if let Some(p) = scrape_persisted_path(&text) {
+                    return Some(p);
+                }
+            }
+        }
+        None
+    }
+
     /// Plain-text rendering of the assistant's VISIBLE end-of-turn message — the
     /// concatenation of its `text` blocks (`thinking`/`tool_use` excluded). Returns
     /// `None` unless this is an `assistant` record carrying at least one non-empty
@@ -267,10 +357,57 @@ fn flatten_content_text(content: &Content) -> String {
     }
 }
 
+/// Extract the textual payload of a `tool_result` block's `content` (§4.5). The
+/// content is raw `serde_json::Value`: a bare string, OR an array of
+/// `{type:"text",text}` / `{type:"image"}` / `{type:"tool_reference",tool_name}`
+/// objects. We concatenate every `text` field found and, for `tool_reference`,
+/// surface the `tool_name` (so a regex like `ToolSearch` still matches). Anything
+/// else (images, unknown shapes) contributes nothing. Whitespace is NOT normalized
+/// here — callers that excerpt do their own normalization; matchers want the raw
+/// text. Returns an owned `String` (possibly empty).
+#[must_use]
+pub fn tool_result_content_text(content: &serde_json::Value) -> String {
+    match content {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(items) => {
+            let mut parts: Vec<String> = Vec::new();
+            for item in items {
+                if let Some(t) = item.get("text").and_then(serde_json::Value::as_str) {
+                    parts.push(t.to_string());
+                } else if let Some(name) = item.get("tool_name").and_then(serde_json::Value::as_str)
+                {
+                    parts.push(name.to_string());
+                }
+            }
+            parts.join("\n")
+        }
+        // Object/number/bool/null: render compactly so a regex can still match
+        // structured payloads that aren't the common string/array shapes.
+        other => other.to_string(),
+    }
+}
+
+/// Scrape the inline persisted-output pointer (§4.6 fallback): the line
+/// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.
+/// Returns the trimmed path, or `None` if the marker is absent.
+fn scrape_persisted_path(text: &str) -> Option<String> {
+    const MARKER: &str = "Full output saved to:";
+    let idx = text.find(MARKER)?;
+    let rest = &text[idx + MARKER.len()..];
+    // The path runs to end-of-line.
+    let line_end = rest.find('\n').unwrap_or(rest.len());
+    let path = rest[..line_end].trim();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
 /// Collapse all runs of ASCII whitespace (incl. newlines/tabs) to single spaces
 /// and trim the ends, so an excerpt renders on one line. Does NOT truncate —
 /// length capping with an explicit `… (+N chars)` marker is the caller's job.
-fn normalize_line(s: &str) -> String {
+pub(crate) fn normalize_line(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut prev_ws = false;
     for ch in s.chars() {
@@ -401,5 +538,78 @@ mod tests {
     fn agent_text_none_for_user_record() {
         let r = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
         assert!(r.agent_text().is_none());
+    }
+
+    #[test]
+    fn auq_answer_carrier_detected() {
+        // Real shape: a user-carrier whose tool_result content is the synthesized
+        // "User has answered your questions: …" string (§4.4).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"A\". You can now continue."}]}}"#,
+        );
+        assert!(r.is_auq_answer());
+        // It is NOT a genuine user (it's a carrier) but IS an AUQ answer.
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn plain_tool_result_is_not_auq_answer() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"just a normal tool output"}]}}"#,
+        );
+        assert!(!r.is_auq_answer());
+    }
+
+    #[test]
+    fn persisted_output_path_structured_field_preferred() {
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"persistedOutputPath":"/tmp/x/tool-results/abc.txt","persistedOutputSize":123},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"<persisted-output>\nOutput too large (1 KB). Full output saved to: /wrong/inline/path.txt\n</persisted-output>"}]}}"#,
+        );
+        // Structured field wins over the inline marker.
+        assert_eq!(
+            r.persisted_output_path().as_deref(),
+            Some("/tmp/x/tool-results/abc.txt")
+        );
+    }
+
+    #[test]
+    fn persisted_output_path_inline_fallback() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"<persisted-output>\nOutput too large (200 KB). Full output saved to: /tmp/sess/tool-results/b070yh2rb.txt\n\nPreview (first 2KB):\n…\n</persisted-output>"}]}}"#,
+        );
+        assert_eq!(
+            r.persisted_output_path().as_deref(),
+            Some("/tmp/sess/tool-results/b070yh2rb.txt")
+        );
+    }
+
+    #[test]
+    fn persisted_output_path_none_when_absent() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"a normal small tool output"}]}}"#,
+        );
+        assert!(r.persisted_output_path().is_none());
+    }
+
+    #[test]
+    fn scrape_persisted_path_handles_marker() {
+        assert_eq!(
+            scrape_persisted_path("Full output saved to: /a/b/c.txt\nmore"),
+            Some("/a/b/c.txt".to_string())
+        );
+        assert!(scrape_persisted_path("no marker here").is_none());
+    }
+
+    #[test]
+    fn tool_result_content_text_string_and_array() {
+        let s = serde_json::json!("hello world");
+        assert_eq!(tool_result_content_text(&s), "hello world");
+        let arr = serde_json::json!([
+            {"type":"text","text":"first"},
+            {"type":"image","source":{}},
+            {"type":"text","text":"second"},
+            {"type":"tool_reference","tool_name":"WebSearch"}
+        ]);
+        assert_eq!(tool_result_content_text(&arr), "first\nsecond\nWebSearch");
     }
 }
