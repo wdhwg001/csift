@@ -213,7 +213,9 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
           files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n  \
           recover  reconstruct a file's history from the transcript — segmented diff-patches,\n           \
-                   point-in-time partial snapshot, coverage scoping, or plan restoration\n\n\
+                   point-in-time partial snapshot, coverage scoping, or plan restoration\n  \
+          turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
+                   back-and-forth a compaction summary clipped, within a char/token budget\n\n\
         list/search/files span each session's subagent transcripts by default (built-in \
         Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` to restrict \
         to top-level sessions.\n\n\
@@ -229,7 +231,8 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift whoami                                # who am I (this CC session)?\n  \
           csift files <uuid> --by-file                # which files this session modified, when\n  \
           csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
-          csift recover . --plan --out /tmp/plan.md   # restore the latest plan text to a file\n\n\
+          csift recover . --plan --out /tmp/plan.md   # restore the latest plan text to a file\n  \
+          csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
 pub struct Cli {
@@ -252,6 +255,20 @@ pub enum Command {
     /// Reconstruct a file's history from the transcript — segmented diff-patches,
     /// point-in-time partial snapshot, coverage scoping, or plan restoration.
     Recover(RecoverArgs),
+    /// Turn-fidelity reconstruction — restore the verbatim user/assistant
+    /// back-and-forth a compaction summary clipped, within a char/token budget.
+    Turns(TurnsArgs),
+}
+
+/// How to interpret `--budget`: as raw characters (default) or as tokens (estimated
+/// at [`crate::turns::TOKEN_CHARS`] characters/token, a documented heuristic).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum BudgetUnit {
+    /// Interpret `--budget` as a character count (default).
+    #[default]
+    Chars,
+    /// Interpret `--budget` as a token count (≈4 chars/token heuristic).
+    Tokens,
 }
 
 /// A transcript content category, used by `search --category/-t` (repeatable).
@@ -868,6 +885,129 @@ impl RecoverArgs {
         } else {
             RecoverMode::Patches
         }
+    }
+}
+
+#[derive(Debug, Args)]
+#[command(
+    long_about = "Turn-fidelity reconstruction: restore the verbatim user/assistant \
+        back-and-forth that a Claude Code COMPACTION SUMMARY clipped. A summary preserves \
+        TASK STATE (the 9-section synthesis: intent, file ledger, errors+fixes, plan, next \
+        step) in high fidelity but PROVABLY LOSES turn fidelity — its \"All user messages\" \
+        section clips ~22 real prose turns to ~17 `...`-truncated bullets, and the assistant \
+        side collapses to a SINGLE verbatim quote. `turns` supplements (never replaces) the \
+        summary: it re-emits the clipped user phrasings + discarded assistant end-of-turn \
+        replies, IN ORIGINAL ORDER, each line carrying the jsonl LINE NUMBER so a consumer \
+        can `Read` the raw transcript at the cited line.\n\n\
+        SELECTION is recency-first (most-recent turns win the budget, what a resumed agent \
+        most needs); the EMITTED document is sorted ascending so it reads as a forward \
+        transcript. The backward walk is TRANSPARENT to compaction boundaries — a summary \
+        record is a turn MEMBER, never a delimiter — so a 40K-char budget reaches back \
+        across multiple boundaries by default (verified: 3 on one real sample, 2 on \
+        another). `--max-compactions` only caps how far.\n\n\
+        BUDGET (`--budget`, default 40000) bounds the WHOLE reconstruction in chars (or \
+        tokens via `--budget-unit tokens`, ≈4 chars/token). `--round-trip-fraction` \
+        (default 0.5) is a HARD FLOOR: that fraction of the budget can ONLY be spent on \
+        COMPLETE round-trips (user → [N tool calls] → assistant EOT), never on user-only / \
+        assistant-only fragments — without it an assistant-heavy tail recovers ZERO human \
+        turns. Over-cap units are MIDDLE-truncated (head+tail kept) with an explicit \
+        `… [+K chars, L lines elided] …` marker; the assistant head is larger than the \
+        user head (its prose front-loads context, back-loads the decision). Nothing is \
+        ever fabricated or silently dropped.\n\n\
+        DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
+        summary)` and DEMOTED (selected only after non-dup turns) — never silently dropped \
+        (a false positive must not lose a real turn).\n\n\
+        WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
+        mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). \
+        `--out <PATH>` writes the full (un-terminal-truncated) reconstruction to a file \
+        while the summary still prints to stdout. `--format json` emits one VERBATIM \
+        (un-truncated) object per unit plus interleaved compaction-boundary records.",
+    after_help = "EXAMPLES\n  \
+          csift turns .                                     # default 40K-char reconstruction, this project\n  \
+          csift turns <uuid> --budget 12000                 # a 200K-context-sized recovery (~10-15K)\n  \
+          csift turns <uuid> --budget 40000 --format json   # machine-readable, line-numbered\n  \
+          csift turns <uuid> --round-trip-fraction 0.6      # weight harder toward complete round-trips\n  \
+          csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
+          csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary"
+)]
+pub struct TurnsArgs {
+    /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
+    /// turns from. Optional when `--session` is given; with neither, every project is
+    /// scanned. Repeatable.
+    #[arg(
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target
+    )]
+    pub paths: Vec<PathBuf>,
+
+    /// Restrict to a single parent session id (uuid).
+    #[arg(long, value_name = "SESSION_ID")]
+    pub session: Option<String>,
+
+    /// Character (default) or token budget for the WHOLE reconstruction. The rendered
+    /// text length is bounded by this. Default 40000.
+    #[arg(long, value_name = "N", default_value_t = 40000)]
+    pub budget: usize,
+
+    /// Interpret `--budget` as chars (default) or tokens (≈4 chars/token heuristic).
+    #[arg(long = "budget-unit", value_enum, default_value_t = BudgetUnit::Chars)]
+    pub budget_unit: BudgetUnit,
+
+    /// Fraction of the budget RESERVED to guarantee complete round-trips (user →
+    /// [N tool calls] → assistant EOT), not user messages alone. A hard floor.
+    /// Default 0.5; must be in the open interval (0.0, 1.0).
+    #[arg(long = "round-trip-fraction", value_name = "F", default_value_t = 0.5)]
+    pub round_trip_fraction: f64,
+
+    /// Also span each in-scope session's SUBAGENT transcripts (built-in Task/Agent-tool,
+    /// OMC, and Workflow agents) under `subagents/**`. Default ON; pass `--no-subagents`
+    /// to restrict to top-level sessions.
+    #[arg(
+        long = "include-subagents",
+        overrides_with = "no_subagents",
+        default_value_t = true
+    )]
+    pub include_subagents: bool,
+
+    /// Exclude subagent transcripts — reconstruct only from the top-level session.
+    /// Overrides `--include-subagents`.
+    #[arg(long = "no-subagents")]
+    pub no_subagents: bool,
+
+    /// Stop walking back after crossing N compaction boundaries (0 = unlimited;
+    /// default 0). A guard, not a target.
+    #[arg(long = "max-compactions", value_name = "N", default_value_t = 0)]
+    pub max_compactions: usize,
+
+    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Mutually exclusive with `--since` / `--until`.
+    #[arg(long, value_name = "START..END")]
+    pub turn_range: Option<String>,
+
+    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    #[arg(long, value_name = "WHEN")]
+    pub since: Option<String>,
+
+    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    #[arg(long, value_name = "WHEN")]
+    pub until: Option<String>,
+
+    /// Write the full (un-terminal-truncated) reconstruction verbatim to this file;
+    /// the summary still prints to stdout.
+    #[arg(long, value_name = "PATH")]
+    pub out: Option<PathBuf>,
+
+    /// Emit JSON instead of the headered text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+}
+
+impl TurnsArgs {
+    /// Resolve the include/exclude flags into a single decision (default include).
+    #[must_use]
+    pub fn want_subagents(&self) -> bool {
+        !self.no_subagents
     }
 }
 

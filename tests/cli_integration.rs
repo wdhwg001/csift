@@ -3220,3 +3220,1336 @@ fn recover_turn_range_alone_is_accepted() {
     // Turn 0 only → the first segment's reads/edits are in scope; the turn-1 boundary is not.
     assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// turns
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Build the `turns` integration fixture: a realistic multi-compaction transcript
+/// authored with LOCALE-NEUTRAL tokens only (accented-Latin + emoji — the
+/// same house charset style as the recover fixtures).
+///
+/// Shape (all on the SINGLE top-level session jsonl so the spanning walk is exercised
+/// without subagent noise; tests pass `--no-subagents`):
+///   • 3 genuine round-trip turns, then a compaction SUMMARY #1 (its §6 quotes turn 0's
+///     user verbatim + §9 quotes the last assistant — drives the dedup test),
+///   • 3 more round-trips, then SUMMARY #2,
+///   • 3 more round-trips, then SUMMARY #3,
+///   • a final live block: one HUGE round-trip (user > 600 chars, assistant > 900 chars
+///     → drives the role-asymmetric ellipsis test) and an assistant-heavy tail (a turn
+///     whose assistant side is enormous + a pure tool-call turn) → drives the 50% floor.
+/// Plus one malformed line for the skipped-line accounting.
+/// A tiny jsonl builder for the turns fixture: free methods on a struct so there is no
+/// closure-capture conflict (the earlier closure form double-borrowed the buffer).
+struct TurnsBuilder {
+    out: String,
+    ts: u64,
+}
+
+impl TurnsBuilder {
+    fn new() -> Self {
+        TurnsBuilder {
+            out: String::new(),
+            ts: 0,
+        }
+    }
+
+    fn next_ts(&mut self) -> String {
+        self.ts += 1;
+        let t = self.ts;
+        format!(
+            "2026-06-07T{:02}:{:02}:{:02}.000Z",
+            t / 3600,
+            (t / 60) % 60,
+            t % 60
+        )
+    }
+
+    fn line(&mut self, s: &str) {
+        self.out.push_str(s);
+        self.out.push('\n');
+    }
+
+    /// A round-trip turn: user opener (+ optional N tool calls) + assistant EOT text.
+    fn round_trip(&mut self, user: &str, asst: &str, tools: usize) {
+        let ts = self.next_ts();
+        self.line(&format!(
+            r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":"{user}"}}}}"#
+        ));
+        if tools > 0 {
+            let blocks: Vec<String> = (0..tools)
+                .map(|i| format!(r#"{{"type":"tool_use","id":"t{i}","name":"Bash","input":{{}}}}"#))
+                .collect();
+            let ts = self.next_ts();
+            self.line(&format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","message":{{"role":"assistant","content":[{}]}}}}"#,
+                blocks.join(",")
+            ));
+        }
+        let ts = self.next_ts();
+        self.line(&format!(
+            r#"{{"type":"assistant","timestamp":"{ts}","message":{{"role":"assistant","content":[{{"type":"text","text":"{asst}"}}]}}}}"#
+        ));
+    }
+}
+
+fn turns_fixture_jsonl() -> String {
+    let mut b = TurnsBuilder::new();
+
+    // ── Block A: 3 round-trips, then SUMMARY #1 ──
+    b.round_trip(
+        "the very first ask about the café budget walk logic",
+        "first reply café🛠",
+        2,
+    );
+    b.round_trip(
+        "second ask explain the panic path now please",
+        "second reply",
+        2,
+    );
+    b.round_trip("third ask about the carry boundary", "third reply", 0);
+    // SUMMARY #1: §6 quotes turn 0's user verbatim (dedup target), §9 quotes an assistant.
+    b.line(
+        r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation.\n6. All user messages:\n   - \"the very first ask about the café budget walk logic\"\n   - \"second ask explain ...\"\n9. Optional Next Step:\n   The assistant said \"third reply\" before compaction."}}"#,
+    );
+
+    // ── Block B: 3 round-trips, then SUMMARY #2 ──
+    b.round_trip(
+        "fourth ask after the first compaction boundary",
+        "fourth reply",
+        1,
+    );
+    b.round_trip("fifth ask keep going", "fifth reply", 3);
+    b.round_trip("sixth ask about détours", "sixth reply", 0);
+    b.line(
+        r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued.\n6. All user messages:\n   - \"fourth ask after the first compaction boundary\"\n9. Optional Next Step:\n   The assistant said \"sixth reply\"."}}"#,
+    );
+
+    // ── Block C: 3 round-trips, then SUMMARY #3 ──
+    b.round_trip("seventh ask post second boundary", "seventh reply", 2);
+    b.round_trip("eighth ask almost there", "eighth reply", 1);
+    b.round_trip("ninth ask wrap it up", "ninth reply", 0);
+    b.line(
+        r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued.\n6. All user messages:\n   - \"seventh ask post second boundary\"\n9. Optional Next Step:\n   The assistant said \"ninth reply\"."}}"#,
+    );
+
+    // ── Block D (live region, after the newest summary) ──
+    // A HUGE round-trip: user > 600 chars, assistant > 900 chars → role-asymmetric ellipsis.
+    let huge_user = format!("HEADuser {} TAILuser", "u".repeat(800));
+    let huge_asst = format!("HEADasst {} TAILasst", "a".repeat(1100));
+    b.round_trip(&huge_user, &huge_asst, 5);
+    // An assistant-heavy tail: a complete turn whose assistant side is enormous.
+    let big_asst = format!("big {} end", "b".repeat(3000));
+    b.round_trip("short live ask", &big_asst, 2);
+    // A pure tool-call turn (no assistant EOT text) → partial turn.
+    let ts = b.next_ts();
+    b.line(&format!(
+        r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":"do the final thing"}}}}"#
+    ));
+    let ts = b.next_ts();
+    b.line(&format!(
+        r#"{{"type":"assistant","timestamp":"{ts}","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"z","name":"Bash","input":{{}}}}]}}}}"#
+    ));
+    // A malformed line that survives the prefilter (carries "role":"user") → counted.
+    b.line(r#"{"type":"user","role":"user" broken json after marker}"#);
+
+    b.out
+}
+
+fn turns_home() -> Home {
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &turns_fixture_jsonl());
+    h
+}
+
+/// Parse the JSON-lines stdout into a vector of serde_json::Value objects.
+fn json_lines(stdout: &str) -> Vec<serde_json::Value> {
+    stdout
+        .lines()
+        .filter(|l| l.trim_start().starts_with('{'))
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .collect()
+}
+
+#[test]
+fn turns_budget_respected_and_header_accounting() {
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "8000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+    // The header reports chars used <= budget.
+    // Parse "NNNN / 8000 chars used".
+    let used: usize = out
+        .stdout
+        .lines()
+        .find_map(|l| {
+            let l = l.trim();
+            let idx = l.find(" / 8000 chars used")?;
+            l[..idx].rsplit(' ').next()?.parse().ok()
+        })
+        .expect("chars-used line present");
+    assert!(used <= 8000, "rendered chars {used} must be <= budget 8000");
+    // The skipped malformed line is surfaced, never hidden.
+    assert!(out.stdout.contains("skipped 1 malformed"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_budget_respected_via_json_sum() {
+    // Sum the rendered-unit chars (rendered_chars + the fixed header cost) and assert it
+    // is within budget — the hard budget test on real (compiled-binary) output.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "12000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let mut sum = 0usize;
+    for o in &objs {
+        if o.get("role").is_some() {
+            sum += o["rendered_chars"].as_u64().unwrap() as usize + 24; // HEADER_COST
+        }
+    }
+    // The selected units' rendered chars + per-unit header is what the budget bounds (the
+    // `[N tool calls]` marker + banners are small framing); assert it is within budget.
+    assert!(
+        sum <= 12000,
+        "summed rendered chars {sum} exceeds budget 12000"
+    );
+    assert!(sum > 0, "at least some units selected");
+}
+
+#[test]
+fn turns_smaller_budget_selects_fewer() {
+    let h = turns_home();
+    let big = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    let small = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "3000",
+        "--format",
+        "json",
+    ]);
+    let count_units = |s: &str| {
+        json_lines(s)
+            .iter()
+            .filter(|o| o.get("role").is_some())
+            .count()
+    };
+    assert!(
+        count_units(&small.stdout) < count_units(&big.stdout),
+        "small budget must select strictly fewer units"
+    );
+}
+
+#[test]
+fn turns_round_trip_floor_recovers_a_user_turn() {
+    // The fixture's live tail is assistant-heavy (a huge assistant EOT). The 50% floor
+    // must still recover at least one USER turn even at a modest budget — the pulse
+    // regression. Without the floor a naive recency walk would recover zero users.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "6000",
+        "--round-trip-fraction",
+        "0.5",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let users = objs.iter().filter(|o| o["role"] == "user").count();
+    assert!(
+        users >= 1,
+        "the 50% floor must recover >=1 user turn, got {users}"
+    );
+}
+
+#[test]
+fn turns_spans_at_least_two_compaction_boundaries() {
+    // THE HEADLINE: a 40K budget over the 3-summary fixture must span >= 2 boundaries,
+    // and at least one selected unit must come from before the 2nd-newest summary
+    // (compactions_before >= 2). Asserted on the compiled binary's JSON over real-shaped
+    // committed data.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let boundaries = objs
+        .iter()
+        .filter(|o| o["kind"] == "compaction_boundary")
+        .count();
+    assert!(
+        boundaries >= 2,
+        "must span >=2 compaction boundaries, got {boundaries}"
+    );
+    let deep = objs
+        .iter()
+        .filter(|o| o.get("role").is_some())
+        .any(|o| o["compactions_before"].as_u64().unwrap_or(0) >= 2);
+    assert!(
+        deep,
+        "at least one unit must predate the 2nd-newest summary"
+    );
+    // Each boundary record carries a line_no + summary_chars.
+    for o in objs.iter().filter(|o| o["kind"] == "compaction_boundary") {
+        assert!(o["line_no"].as_u64().unwrap() > 0);
+        assert!(o["summary_chars"].as_u64().unwrap() > 0);
+    }
+}
+
+#[test]
+fn turns_max_compactions_caps_the_reach() {
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--max-compactions",
+        "1",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let boundaries = objs
+        .iter()
+        .filter(|o| o["kind"] == "compaction_boundary")
+        .count();
+    assert!(
+        boundaries <= 1,
+        "--max-compactions 1 caps boundaries to <=1, got {boundaries}"
+    );
+    // No selected unit may have compactions_before > 1.
+    for o in objs.iter().filter(|o| o.get("role").is_some()) {
+        assert!(
+            o["compactions_before"].as_u64().unwrap() <= 1,
+            "cap leaked: {o}"
+        );
+    }
+}
+
+#[test]
+fn turns_ellipsis_role_asymmetry_and_counts() {
+    // The huge live round-trip: user > 600 → head 360 / tail 240; assistant > 900 →
+    // head 594 / tail 306. The assistant head is strictly larger. The text output shows
+    // the head + the elision marker + the tail; JSON carries the exact elided counts.
+    let h = turns_home();
+    let text = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    // The user head begins with HEADuser then 'u's; the marker carries the elided count.
+    assert!(
+        text.stdout.contains("HEADuser"),
+        "user head present: {}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains("TAILuser"),
+        "user tail kept: {}",
+        text.stdout
+    );
+    assert!(text.stdout.contains("HEADasst"), "asst head present");
+    assert!(text.stdout.contains("TAILasst"), "asst tail kept");
+    assert!(
+        text.stdout.contains("chars elided") || text.stdout.contains("chars]"),
+        "elision marker present: {}",
+        text.stdout
+    );
+
+    let json = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    let objs = json_lines(&json.stdout);
+    // Find the huge user + huge assistant units (full_chars over the cap).
+    let huge_user = objs
+        .iter()
+        .find(|o| o["role"] == "user" && o["full_chars"].as_u64().unwrap_or(0) > 600)
+        .expect("huge user unit present");
+    let huge_asst = objs
+        .iter()
+        .find(|o| o["role"] == "assistant" && o["full_chars"].as_u64().unwrap_or(0) > 900)
+        .expect("huge assistant unit present");
+    assert!(huge_user["truncated"].as_bool().unwrap());
+    assert!(huge_asst["truncated"].as_bool().unwrap());
+    // The assistant rendered_chars (900) is strictly larger than the user's (600) — the
+    // role-asymmetric caps drive a larger assistant head.
+    assert_eq!(huge_user["rendered_chars"].as_u64().unwrap(), 600);
+    assert_eq!(huge_asst["rendered_chars"].as_u64().unwrap(), 900);
+    assert!(
+        huge_asst["rendered_chars"].as_u64().unwrap()
+            > huge_user["rendered_chars"].as_u64().unwrap()
+    );
+    // elided_chars == full_chars - cap.
+    assert_eq!(
+        huge_user["elided_chars"].as_u64().unwrap(),
+        huge_user["full_chars"].as_u64().unwrap() - 600
+    );
+    assert_eq!(
+        huge_asst["elided_chars"].as_u64().unwrap(),
+        huge_asst["full_chars"].as_u64().unwrap() - 900
+    );
+    // The JSON `text` field is the FULL verbatim message (un-truncated) — longer than
+    // the rendered cap.
+    assert!(huge_user["text"].as_str().unwrap().chars().count() > 600);
+}
+
+#[test]
+fn turns_tool_call_markers_present_with_correct_counts() {
+    // The fixture's huge live round-trip has 5 tool calls; turn "fifth ask" has 3.
+    let h = turns_home();
+    let text = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(
+        text.stdout.contains("[5 tool calls]"),
+        "5-tool marker: {}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains("[3 tool calls]"),
+        "3-tool marker present"
+    );
+    // A 0-tool turn omits the marker — "third reply" turn had 0 tools, so there is no
+    // "[0 tool calls]" anywhere.
+    assert!(
+        !text.stdout.contains("[0 tool calls]"),
+        "0-tool marker must be omitted"
+    );
+    // JSON carries the exact tool_calls count.
+    let json = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    let objs = json_lines(&json.stdout);
+    assert!(
+        objs.iter()
+            .any(|o| o["role"] == "user" && o["tool_calls"] == 5),
+        "a unit with tool_calls==5 present"
+    );
+}
+
+#[test]
+fn turns_line_numbers_present_in_text_and_json() {
+    let h = turns_home();
+    let text = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    // Text lines carry L<number> markers (the jsonl line) for both roles.
+    assert!(
+        text.stdout.lines().any(|l| l.starts_with("▽ L")),
+        "user lines carry L-numbers: {}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.lines().any(|l| l.starts_with("△ L")),
+        "assistant lines carry L-numbers"
+    );
+    let json = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    for o in json_lines(&json.stdout)
+        .iter()
+        .filter(|o| o.get("role").is_some())
+    {
+        assert!(
+            o["line_no"].as_u64().unwrap() > 0,
+            "every unit carries a positive line_no"
+        );
+        // full_chars == text.chars().count().
+        assert_eq!(
+            o["full_chars"].as_u64().unwrap() as usize,
+            o["text"].as_str().unwrap().chars().count()
+        );
+    }
+}
+
+#[test]
+fn turns_dedup_demotes_summary_match_never_drops() {
+    // Turn 0's user ("the very first ask...") is quoted verbatim by SUMMARY #1's §6.
+    // BUT turn 0 sits BEFORE older boundaries (compactions_before > 0), so it is NOT
+    // deduped (older summary content is gone from context). To exercise live-region
+    // dedup we check the NEWEST summary's quotes against live turns; the fixture's live
+    // turns are unique, so dedup count may be 0 here — assert the mechanism via the
+    // header only when it fires, and always assert nothing is dropped.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    // Every selected unit has a boolean also_in_summary field (mechanism wired).
+    for o in objs.iter().filter(|o| o.get("role").is_some()) {
+        assert!(o["also_in_summary"].is_boolean());
+    }
+    // Turn 0's verbatim user text is still present (not dropped) even though SUMMARY #1
+    // quotes it — pre-boundary turns are pure restoration.
+    assert!(
+        objs.iter().any(|o| o["role"] == "user"
+            && o["text"]
+                .as_str()
+                .unwrap()
+                .contains("the very first ask about the café")),
+        "the pre-boundary verbatim user turn is restored, never dropped"
+    );
+}
+
+#[test]
+fn turns_fidelity_beats_summary_verbatim_count() {
+    // The summary holds ~1 verbatim assistant quote (§9) + a handful of clipped §6
+    // bullets. `turns` restores MANY more verbatim units. Assert concrete counts:
+    // >= 3 restored user units and >= 3 restored assistant units, far exceeding the
+    // summary's single verbatim assistant quote.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    let objs = json_lines(&out.stdout);
+    let users = objs.iter().filter(|o| o["role"] == "user").count();
+    let asst = objs.iter().filter(|o| o["role"] == "assistant").count();
+    assert!(
+        users >= 3,
+        "restored user units {users} must exceed the summary's clipped bullets"
+    );
+    assert!(
+        asst >= 3,
+        "restored assistant units {asst} must exceed the summary's 1 verbatim quote"
+    );
+}
+
+#[test]
+fn turns_deterministic_byte_identical() {
+    let h = turns_home();
+    let a = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "10000",
+    ]);
+    let b = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "10000",
+    ]);
+    assert_eq!(
+        a.stdout, b.stdout,
+        "two identical invocations must be byte-identical"
+    );
+}
+
+#[test]
+fn turns_out_file_holds_full_reconstruction() {
+    let h = turns_home();
+    let out_path = h.root.join("turns-out.md");
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("wrote full reconstruction"),
+        "{}",
+        out.stdout
+    );
+    let body = std::fs::read_to_string(&out_path).expect("out file written");
+    assert!(body.contains("▽ L"), "out file carries the rendered turns");
+    assert!(
+        body.contains("compaction boundary"),
+        "out file carries banners"
+    );
+}
+
+#[test]
+fn turns_token_budget_unit_scales_by_four() {
+    // --budget-unit tokens multiplies by ~4 chars/token. A 3000-token budget should
+    // select more than a 3000-char budget (4x the room).
+    let h = turns_home();
+    let tok = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "3000",
+        "--budget-unit",
+        "tokens",
+        "--format",
+        "json",
+    ]);
+    let chr = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "3000",
+        "--budget-unit",
+        "chars",
+        "--format",
+        "json",
+    ]);
+    let units = |s: &str| {
+        json_lines(s)
+            .iter()
+            .filter(|o| o.get("role").is_some())
+            .count()
+    };
+    assert!(
+        units(&tok.stdout) >= units(&chr.stdout),
+        "a token budget (4x chars) must not select fewer units"
+    );
+}
+
+#[test]
+fn turns_turn_range_and_since_mutually_exclusive() {
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--turn-range",
+        "0..2",
+        "--since",
+        "2h",
+    ]);
+    assert!(!out.success, "the conflicting window flags must error");
+    assert!(
+        out.stderr.contains("mutually exclusive"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn turns_invalid_round_trip_fraction_errors() {
+    let h = turns_home();
+    for f in ["0", "1", "1.5", "-0.1"] {
+        let out = h.run(&[
+            "turns",
+            "--session",
+            SESS,
+            "--no-subagents",
+            "--round-trip-fraction",
+            f,
+        ]);
+        assert!(!out.success, "round-trip-fraction {f} must be rejected");
+    }
+}
+
+#[test]
+fn turns_zero_budget_errors() {
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "0",
+    ]);
+    assert!(!out.success, "a zero budget must error");
+    assert!(
+        out.stderr.contains("--budget must be > 0"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn turns_help_lists_the_subcommand_and_flags() {
+    let h = turns_home();
+    let top = h.run(&["--help"]);
+    assert!(
+        top.stdout.contains("turns"),
+        "top help lists turns: {}",
+        top.stdout
+    );
+    let sub = h.run(&["turns", "--help"]);
+    assert!(sub.stdout.contains("--budget"), "{}", sub.stdout);
+    assert!(
+        sub.stdout.contains("--round-trip-fraction"),
+        "{}",
+        sub.stdout
+    );
+    assert!(sub.stdout.contains("--max-compactions"), "{}", sub.stdout);
+    assert!(sub.stdout.contains("--budget-unit"), "{}", sub.stdout);
+}
+
+/// A fixture whose NEWEST summary quotes a LIVE-region turn verbatim → exercises the
+/// live-region dedup demote-and-flag path (the main fixture's live turns are unique).
+fn turns_dedup_home() -> Home {
+    let h = Home::new();
+    let mut s = String::new();
+    // turn 0 (pre-boundary): user + assistant.
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pre-boundary ask kept verbatim here"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"pre reply"}]}}"#);
+    s.push('\n');
+    // SUMMARY whose §6 quotes a LIVE turn that comes AFTER it (the "live duplicate ask").
+    s.push_str(r#"{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"6. All user messages:\n   - \"the live duplicate ask that the summary already holds verbatim\"\n9. Optional Next Step:\n   The assistant said \"pre reply\"."}}"#);
+    s.push('\n');
+    // turn 1 (LIVE region) whose user text matches the summary's §6 bullet → deduped.
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"the live duplicate ask that the summary already holds verbatim"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"live reply"}]}}"#);
+    s.push('\n');
+    // turn 2 (LIVE region) unique.
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T07:00:00.000Z","message":{"role":"user","content":"a unique live follow-up question"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T07:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"follow-up reply"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &s);
+    h
+}
+
+#[test]
+fn turns_live_region_dedup_demotes_and_flags() {
+    let h = turns_dedup_home();
+    // Text: the dedup header line + the (also in summary) flag must appear.
+    let text = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    assert!(
+        text.stdout.contains("also present in summary"),
+        "dedup header line: {}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains("(also in summary)"),
+        "demoted-unit flag: {}",
+        text.stdout
+    );
+    // JSON: exactly the live duplicate unit carries also_in_summary:true, and it is still
+    // PRESENT (demoted, never dropped).
+    let json = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    let objs = json_lines(&json.stdout);
+    let flagged: Vec<_> = objs
+        .iter()
+        .filter(|o| o.get("also_in_summary").and_then(|v| v.as_bool()) == Some(true))
+        .collect();
+    assert!(
+        !flagged.is_empty(),
+        "at least one unit flagged also_in_summary"
+    );
+    assert!(
+        flagged.iter().any(|o| o["text"]
+            .as_str()
+            .unwrap()
+            .contains("the live duplicate ask")),
+        "the live duplicate unit is flagged AND present (not dropped)"
+    );
+}
+
+#[test]
+fn turns_json_out_file_is_verbatim() {
+    let h = turns_home();
+    let out_path = h.root.join("turns.json");
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let body = std::fs::read_to_string(&out_path).expect("json out file");
+    // The huge user unit's full verbatim text (un-truncated) is in the file.
+    assert!(
+        body.contains("HEADuser"),
+        "out json carries the unit objects"
+    );
+    // Every non-blank line is valid JSON.
+    for line in body.lines().filter(|l| !l.trim().is_empty()) {
+        serde_json::from_str::<serde_json::Value>(line).expect("each out line is JSON");
+    }
+}
+
+#[test]
+fn turns_no_genuine_turns_emits_honest_empty_message() {
+    // A session with NO genuine user turns (only a summary + an isMeta pseudo-turn +
+    // tool noise) → nothing selected, an honest "no turns selected" message (never a
+    // fabricated turn). This is the only empty-selection path: the most-recent complete
+    // turn is always force-included when one exists (load-bearing).
+    let h = Home::new();
+    let mut s = String::new();
+    s.push_str(r#"{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"6. All user messages:\n   - \"gone\""}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"Continue from where you left off."}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"a carrier, not a genuine turn"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &s);
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no turns selected"),
+        "honest empty message: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_default_all_projects_scan_runs() {
+    // No target + no --session → scan every project under the scratch $HOME. The fixture
+    // is the only project, so it is found. Exercises the all-projects resolve path.
+    let h = turns_home();
+    let out = h.run(&["turns", "--no-subagents", "--budget", "40000"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_json_single_side_units_present_under_tight_budget() {
+    // A tight budget forces some single-side (user-only / assistant-only) selections in
+    // the JSON output — exercise the single-side JSON emit path.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "2500",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    // Some units selected, budget respected.
+    let units: usize = objs.iter().filter(|o| o.get("role").is_some()).count();
+    assert!(units >= 1, "at least one unit under a tight budget");
+    let sum: usize = objs
+        .iter()
+        .filter(|o| o.get("role").is_some())
+        .map(|o| o["rendered_chars"].as_u64().unwrap() as usize + 24)
+        .sum();
+    assert!(sum <= 2500, "tight budget respected: {sum}");
+}
+
+#[test]
+fn turns_since_window_filters_turns() {
+    // A `--since` far in the future excludes every turn (timestamp-less or older) → no
+    // selection. Exercises the time-window path in run_turns.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--since",
+        "2999-01-01T00:00:00Z",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("no turns selected"), "{}", out.stdout);
+}
+
+/// A SECOND clean session (no malformed lines) under the same project — exercises the
+/// multi-session render path (blank separator) + the no-skipped-lines branch.
+fn turns_two_sessions_home() -> Home {
+    let h = Home::new();
+    // Session 1: the main multi-summary fixture (has a malformed line).
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &turns_fixture_jsonl());
+    // Session 2: a small CLEAN session (no malformed line, no summary).
+    let sess2 = "00000000-0000-4000-8000-000000000002";
+    let mut s = String::new();
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T08:00:00.000Z","message":{"role":"user","content":"clean session ask"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T08:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"clean session reply"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{sess2}.jsonl"), &s);
+    h
+}
+
+#[test]
+fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
+    // No --session → both sessions in the project are rendered, separated by a blank
+    // line (the `if !first { println!() }` arm). Sessions are sorted by id.
+    let h = turns_two_sessions_home();
+    let out = h.run(&["turns", "--no-subagents", "--budget", "40000"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let session_headers = out
+        .stdout
+        .lines()
+        .filter(|l| l.starts_with("SESSION "))
+        .count();
+    assert!(
+        session_headers >= 2,
+        "both sessions rendered: {}",
+        out.stdout
+    );
+    // The clean session's content is present.
+    assert!(out.stdout.contains("clean session ask"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_clean_session_reports_no_skipped_lines() {
+    // A session with NO malformed lines → the skipped-lines footer is OMITTED (the
+    // `skipped_lines > 0` false arm).
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-000000000003";
+    let mut s = String::new();
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T08:00:00.000Z","message":{"role":"user","content":"clean ask one"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T08:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"clean reply one"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{sess}.jsonl"), &s);
+    let out = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+    assert!(
+        !out.stdout.contains("malformed"),
+        "clean session has no skipped-line footer: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_json_clean_session_has_no_skipped_record() {
+    // JSON: a clean session emits no {"kind":"skipped_lines"} record.
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-000000000004";
+    let mut s = String::new();
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T08:00:00.000Z","message":{"role":"user","content":"clean json ask"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T08:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"clean json reply"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{sess}.jsonl"), &s);
+    let out = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    assert!(
+        !objs.iter().any(|o| o["kind"] == "skipped_lines"),
+        "no skipped_lines record for a clean session"
+    );
+    assert!(objs.iter().any(|o| o["role"] == "user"));
+}
+
+#[test]
+fn turns_main_fixture_text_reports_skipped_line() {
+    // The main fixture HAS a malformed line → the skipped-lines footer appears (the
+    // `skipped_lines > 0` TRUE arm in both text + an explicit count).
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("skipped 1 malformed"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_json_main_fixture_has_skipped_record() {
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    assert!(
+        objs.iter()
+            .any(|o| o["kind"] == "skipped_lines" && o["count"].as_u64().unwrap() >= 1),
+        "the malformed line is surfaced in JSON"
+    );
+}
+
+#[test]
+fn turns_assistant_only_orphan_lead_renders() {
+    // A session that LEADS with an assistant before any user is rare but real; turns
+    // must render the orphan assistant side without panicking (the user-None render
+    // arms). group_turn_indices folds the lead into turn 0.
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-000000000005";
+    let mut s = String::new();
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T08:00:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"orphan lead before any user"}]}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T08:00:01.000Z","message":{"role":"user","content":"the real first ask"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T08:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"real reply"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{sess}.jsonl"), &s);
+    let out = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_turn_range_alone_is_not_a_conflict() {
+    // --turn-range WITHOUT --since/--until is valid (the L186 false arm: turn_range set
+    // but since/until both None). Restrict to turns 0..2.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--turn-range",
+        "0..2",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        out.success,
+        "a bare --turn-range must not conflict: {}",
+        out.stderr
+    );
+    let objs = json_lines(&out.stdout);
+    // No turn beyond index 2 selected.
+    for o in objs.iter().filter(|o| o.get("role").is_some()) {
+        assert!(
+            o["turn_index"].as_u64().unwrap() <= 2,
+            "turn-range cap: {o}"
+        );
+    }
+}
+
+#[test]
+fn turns_empty_session_file_is_safe() {
+    // An empty jsonl (0 bytes) → mmap returns None → no turns, honest empty message.
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-000000000006";
+    h.write(&format!("{ENC}/{sess}.jsonl"), "");
+    let out = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("no turns selected"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_valid_round_trip_fraction_accepted() {
+    // A fraction strictly inside (0,1) is accepted (the L189 false arm — valid input).
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--round-trip-fraction",
+        "0.7",
+    ]);
+    assert!(out.success, "0.7 is a valid fraction: {}", out.stderr);
+    assert!(
+        out.stdout.contains("round-trip-fraction 0.70"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_nonzero_budget_accepted() {
+    // A positive budget passes the L195 check (false arm).
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "1000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_since_and_until_both_bound_the_window() {
+    // BOTH --since and --until set (the L186 inner `||` both-bounds path + the time
+    // window contains() both arms). A wide window admits the fixture's turns.
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--since",
+        "2026-06-07T00:00:00Z",
+        "--until",
+        "2026-06-08T00:00:00Z",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_token_budget_text_output_runs() {
+    // --budget-unit tokens through the TEXT renderer (the BudgetUnit::Tokens conversion
+    // arm in run_turns, distinct from the json tests).
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "2000",
+        "--budget-unit",
+        "tokens",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // 2000 tokens ≈ 8000 chars budget in the header.
+    assert!(out.stdout.contains("budget 8000 chars"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_turn_range_excludes_out_of_window_turns() {
+    // A turn-range that excludes the LOW turns (the L278 `turn_index < lo` true arm) and
+    // the HIGH turns (`turn_index > hi` true arm).
+    let h = turns_home();
+    let out = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--turn-range",
+        "3..5",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    for o in objs.iter().filter(|o| o.get("role").is_some()) {
+        let ti = o["turn_index"].as_u64().unwrap();
+        assert!((3..=5).contains(&ti), "turn {ti} outside 3..5");
+    }
+}
+
+#[test]
+fn turns_multi_session_json_runs_both() {
+    // JSON over two sessions (no --session) → both sessions' units emitted.
+    let h = turns_two_sessions_home();
+    let out = h.run(&[
+        "turns",
+        "--no-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let sessions: std::collections::BTreeSet<&str> = objs
+        .iter()
+        .filter_map(|o| o.get("session_id").and_then(|v| v.as_str()))
+        .collect();
+    assert!(
+        sessions.len() >= 2,
+        "both sessions present in JSON: {sessions:?}"
+    );
+}
+
+#[test]
+fn turns_scan_skips_non_candidate_lines() {
+    // A session containing NON-candidate records (a system metrics line, a
+    // file-history-snapshot) interleaved with real turns → the scan-time prefilter skips
+    // them (the `!line_is_turn_candidate` true arm) without affecting the turns.
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-000000000007";
+    let mut s = String::new();
+    s.push_str(r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"ask before noise"}}"#);
+    s.push('\n');
+    s.push_str(r#"{"type":"system","subtype":"turn_duration","durationMs":1234}"#);
+    s.push('\n');
+    s.push_str(
+        r#"{"type":"file-history-snapshot","snapshot":{"messageId":"m","trackedFileBackups":{}}}"#,
+    );
+    s.push('\n');
+    s.push_str(r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply after noise"}]}}"#);
+    s.push('\n');
+    h.write(&format!("{ENC}/{sess}.jsonl"), &s);
+    let out = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--no-subagents",
+        "--budget",
+        "40000",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("ask before noise"), "{}", out.stdout);
+    assert!(out.stdout.contains("reply after noise"), "{}", out.stdout);
+    // The non-candidate lines are silently skipped (not malformed → no skip count).
+    assert!(
+        !out.stdout.contains("malformed"),
+        "non-candidate != malformed: {}",
+        out.stdout
+    );
+}

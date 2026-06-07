@@ -18,6 +18,7 @@ mod session;
 mod subagent;
 mod time_window;
 mod timez;
+mod turns;
 mod whoami;
 
 use std::process::ExitCode;
@@ -49,5 +50,6 @@ fn run(cli: Cli) -> Result<()> {
         Command::Agents(args) => agents::run_agents(&args),
         Command::Files(args) => files::run_files(&args),
         Command::Recover(args) => recover::run_recover(&args),
+        Command::Turns(args) => turns::run_turns(&args),
     }
 }

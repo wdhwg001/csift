@@ -561,6 +561,33 @@ csift recover <uuid> --file /abs/app.py --at @turn:42   # partial snapshot as th
 csift recover . --plan --out /tmp/restored-plan.md      # restore the latest plan verbatim
 ```
 
+### 6.8 `turns` — turn-fidelity reconstruction (restore the back-and-forth a compaction summary clipped)
+
+**Purpose.** A Claude Code **compaction summary** preserves TASK STATE (its 9-section synthesis: primary request, key concepts, file ledger, errors+fixes, plan, next step) in high fidelity, but provably **loses turn fidelity**: its "All user messages" section clips real prose turns to `...`-truncated bullets (measured: ~22 real user turns → ~17 bullets), and the assistant side collapses to a SINGLE verbatim quote (the last pre-compaction message). `turns` **supplements** the summary — it re-emits the verbatim user/assistant TURNS, in original order, each line carrying the JSONL line number (`Lnnnnn`) so a consumer can `Read` the raw transcript at the cited line. It does **not** re-derive task state (the summary owns that; duplicating it wastes budget and risks contradiction). The split of labor is the summary's own design — its trailer says "read the full transcript at `<path>`" for the exact content it generated; `turns` automates that pointer.
+
+**Reuse, no re-parse.** `turns` sits on the §6.7 `recover` extraction layer verbatim: the same `scan_one_file` forward line-numbered `scan_lines_bytes` pass (the 1:1 jsonl line map), the same `group_turn_indices` (§6.4) turn delimiter, the same `Record` helpers (`is_genuine_user` / `genuine_user_text` / `agent_text` / `blocks` / `is_compact_summary`), the same `resolve_session_files` / `TimeWindow` / `timez` rendering. The byte prefilter is a SUPERSET of recover's, broadened with `"role":"assistant"` / `"type":"assistant"` probes so a pure-text assistant turn (carrying none of Edit/Write/Read/Bash) is never missed. The `Record`/`Block` model needs no change.
+
+**Selection vs render order.** Selection walks **backward from EOF** (recency-first) so the budget is spent on what a resumed agent most needs; the emitted document is sorted **ascending** so it reads as a forward transcript. The backward walk is **transparent to `isCompactSummary` boundaries** (a summary is a turn MEMBER, never a delimiter — §6.4 / model.rs), so it reaches back across multiple compaction boundaries by default (verified on real transcripts: a 40K-char ellipsized budget spans 26 boundaries on a 35-summary session; `--max-compactions N` caps the crossing count).
+
+**Budget allocation (two-phase).** `--budget <N>` (default 40000) bounds the whole reconstruction in chars (or tokens via `--budget-unit tokens`, ≈4 chars/token). `--round-trip-fraction <F>` (default 0.5) is a **hard floor**: Phase 1 spends `budget·F` ONLY on round-trip-complete turns (user && assistant-EOT), walking recency-first; Phase 2 fills the rest with whichever single sides remain, user-first (the user wording is the scarcer, higher-signal loss). Without the floor an assistant-heavy tail recovers ZERO user turns (measured on a real pulse-shaped tail). The `[N tool calls]` marker cost is charged per turn (omitted when 0). Determinism: recency = descending line_no, ties by descending turn_index.
+
+**Ellipsis (role-asymmetric middle-truncation).** A unit over its role cap (`USER_CAP=600`, `ASST_CAP=900`, sized from measured medians) is **middle-truncated**, keeping head+tail, with an explicit `… [+K chars, L lines elided] …` marker (the line count uses the pre-normalization text; omitted for single-line user messages). The assistant head is both absolutely larger (900 vs 600) and a larger fraction (0.66 vs 0.60 → head 594/tail 306 vs user 360/240), because EOT prose front-loads context and back-loads the decision. Cuts are on `char` boundaries (UTF-8 safe). No content is fabricated; nothing is silently dropped.
+
+**Dedup against the live summary.** The newest in-range summary is already in the resumed model's context (it IS the seed). A live-region turn (compactions_before == 0) whose 80-char normalized prefix matches the summary's §6 user bullets or §9 assistant quote is flagged `(also in summary)` and **demoted** (selected only after non-dup turns) — never silently dropped (a false positive must not lose a real turn). Turns predating an OLDER boundary are genuinely gone from context, so they are pure restoration, never deduped.
+
+**Output.** Text groups under `SESSION <id>`: a budget-accounting header, then turn-by-turn `▽ Lnnnnn USER (ts)` / `[N tool calls]` / `△ Lnnnnn ASSISTANT (ts)`, with `══ compaction boundary · summary at Lnnnnn ══` banners at crossings and `(also in summary)` flags on demoted units. `--out` writes the full (un-terminal-truncated) reconstruction to a file while the summary prints to stdout. JSON (`--format json`) emits one VERBATIM (un-truncated `text`) object per unit (`line_no`, `role`, `ts_utc`/`ts_local`, `tool_calls`, `full_chars`, `rendered_chars`, `truncated`, `elided_chars`/`elided_lines`, `also_in_summary`, `compactions_before`) plus interleaved `{"kind":"compaction_boundary","line_no":…,"summary_chars":…}` records. **No silent truncation** — skipped malformed lines are counted and surfaced.
+
+**Windowing** matches §6.7: `--turn-range START..END` (inclusive, 0-based genuine-user order) is mutually exclusive with `--since`/`--until` (ISO8601 / relative).
+
+**Example invocations:**
+```bash
+csift turns .                                   # default 40K-char reconstruction, this project's session
+csift turns <uuid> --budget 12000               # a 200K-context-sized recovery (~10-15K)
+csift turns <uuid> --budget 40000 --format json # machine-readable, line-numbered
+csift turns <uuid> --round-trip-fraction 0.6    # weight harder toward complete round-trips
+csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
+```
+
 ---
 
 ## 7. Performance design (NON-FUNCTIONAL contract)

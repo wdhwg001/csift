@@ -41,11 +41,20 @@ or `cargo run -- <subcommand>` during development).
   necessarily PARTIAL (unknown lines are explicit gaps, never fabricated), and every output line
   carries the JSONL LINE NUMBER. The motivating use: restore a deleted plan / a file lost in a
   bad-recovery.
+- **"Restore the verbatim back-and-forth a compaction summary clipped."** → `csift turns --session
+  <uuid> --budget 40000` reconstructs the verbatim user/assistant TURNS, in original order, that a
+  Claude Code compaction summary lossily clipped (its "All user messages" section truncates real prose
+  turns to `...`-clipped bullets; the assistant side collapses to a single quote). Recency-first
+  selection within a char/token budget, ~50% reserved as a HARD FLOOR for complete round-trips, role-
+  asymmetric middle-truncation for over-cap turns, and a backward walk that reaches across multiple
+  compaction boundaries by default. Every line carries the JSONL LINE NUMBER. SUPPLEMENTS the summary
+  (which owns task state) — it does not re-derive intent / the plan / the file ledger.
 - **"Who am I (the calling session)?"** → `csift whoami` resolves the current session id from
   `$CLAUDE_CODE_SESSION_ID`.
 - **Post-compaction recovery** → after a context compaction, diff the compaction summary against the
   lossless jsonl to surface STANDING DIRECTIVES the summary dropped or inverted (the motivating
-  use-case — see "Integration recipes → (A)").
+  use-case — see "Integration recipes → (A)"). For the verbatim TURN back-and-forth (vs standing
+  directives), `csift turns` automates the summary's own "read the full transcript at `<path>`" pointer.
 
 Reach for csift instead of hand-grepping `~/.claude/projects/**/*.jsonl`: it understands the
 record model (genuine-user vs tool_result-carrier, thinking/tool/agent categories), spans subagent
