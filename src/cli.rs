@@ -60,8 +60,14 @@ pub enum OutputFormat {
 #[derive(Debug, Args)]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, or a direct
-    /// `~/.claude/projects/<encoded>` path. Repeatable. Defaults to all projects.
-    #[arg(value_name = "PATH")]
+    /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir. Repeatable.
+    /// Defaults to all projects.
+    ///
+    /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`
+    /// (an absolute cwd's leading `/` encodes to `-`), e.g.
+    /// `csift list -Users-testuser-Projects-foo`. Without this clap would reject the
+    /// leading `-` token as an unknown flag (SPEC §6.1 baseline invocation).
+    #[arg(value_name = "PATH", allow_hyphen_values = true)]
     pub paths: Vec<PathBuf>,
 
     /// Emit JSON instead of the headered text format.
