@@ -128,6 +128,23 @@ pub struct Record {
     /// `persistedOutputPath`/`persistedOutputSize` from it for `--resolve-persisted`.
     #[serde(default, rename = "toolUseResult")]
     pub tool_use_result: Option<serde_json::Value>,
+
+    /// Top-level `attachment` payload (a sibling of `message`, not a content block).
+    /// Real records carry attachments for hook output, `edited_text_file` external
+    /// edits, `file` snapshots, etc. Kept RAW (like `tool_use_result`) and read only
+    /// by `recover` (file-reconstruction); additive + tolerant, so no other subcommand
+    /// changes behaviour.
+    #[serde(default)]
+    pub attachment: Option<serde_json::Value>,
+
+    /// `file-history-snapshot` payload (a top-level sibling). Carries
+    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.
+    /// Read only by `recover` to know a disk backup EXISTED for a path at a time
+    /// (a coverage annotation); the on-disk blob name is not derivable from it (the
+    /// real `backupFileName` is frequently `null`), so it is never used to fabricate
+    /// content. Additive + tolerant.
+    #[serde(default)]
+    pub snapshot: Option<serde_json::Value>,
 }
 
 /// The `message` object on user / assistant records.

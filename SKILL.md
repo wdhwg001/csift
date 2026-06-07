@@ -1,6 +1,6 @@
 ---
 name: csift
-description: Search and audit Claude Code session + subagent jsonl transcripts. Use when you need to find what was said/done in a past (or the current) Claude Code session — regex-search the transcript corpus under ~/.claude/projects, list sessions to identify "which session is this", inspect a session's subagent lifecycle (built-in Task agents + OMC/workflow agents), see which files/dirs a session modified and when, identify the calling session, or recover standing directives a context-compaction dropped. ripgrep-for-transcripts: pure regex, no embeddings/semantic search.
+description: Search and audit Claude Code session + subagent jsonl transcripts. Use when you need to find what was said/done in a past (or the current) Claude Code session — regex-search the transcript corpus under ~/.claude/projects, list sessions to identify "which session is this", inspect a session's subagent lifecycle (built-in Task agents + OMC/workflow agents), see which files/dirs a session modified and when, reconstruct a file's content (or restore a deleted plan) from the transcript's Read/Write/Edit stream, identify the calling session, or recover standing directives a context-compaction dropped. ripgrep-for-transcripts: pure regex, no embeddings/semantic search.
 user-invocable: true
 ---
 
@@ -33,6 +33,14 @@ or `cargo run -- <subcommand>` during development).
   Edit/Write/Notebook (authoritative) + Bash (heuristic) mutations per dir/file, with create-vs-edit
   discrimination and first/last timestamps. Answers "how many distinct gap docs touched / `/tmp` docs
   created" directly.
+- **"Reconstruct / restore a file (or plan) from the transcript."** → `csift recover --session <uuid>
+  --file <abs>` rebuilds a file's CONTENT line-by-line from its Read/Write/Edit stream — as segmented
+  diff-patches (`--patches`), a point-in-time partial snapshot (`--at`), a coverage/scoping summary
+  (`--coverage`), or a restored plan (`--plan`). It SEGMENTS at integrity boundaries (a `modified
+  since read` error, an `originalFile` disagreement, an external edit, a heuristic Bash mutation), is
+  necessarily PARTIAL (unknown lines are explicit gaps, never fabricated), and every output line
+  carries the JSONL LINE NUMBER. The motivating use: restore a deleted plan / a file lost in a
+  bad-recovery.
 - **"Who am I (the calling session)?"** → `csift whoami` resolves the current session id from
   `$CLAUDE_CODE_SESSION_ID`.
 - **Post-compaction recovery** → after a context compaction, diff the compaction summary against the
@@ -47,9 +55,9 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 ## Command surface
 
-Five subcommands: `list`, `search`, `agents`, `whoami`, `files`. `list`/`search`/`files` span each
-session's subagent transcripts **by default** (`--no-subagents` opts out). Every subcommand takes
-`--format text|json` (default `text`).
+Six subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`.
+`list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
+(`--no-subagents` opts out). Every subcommand takes `--format text|json` (default `text`).
 
 A **target** is EITHER a real filesystem cwd (csift path-encodes it for you) OR an already-encoded
 `-Users-...` projects-dir token OR a direct `~/.claude/projects/<encoded>` path. With no target,
@@ -289,6 +297,56 @@ notebook_edit, multi_edit, bash, total, distinct_files, first_utc, first_local, 
 last_local}`; or per mutation for `--timeline` with `{session_id, path, op, ts_utc, ts_local,
 turn_index, is_create, heuristic}`), then a trailing summary object
 `{distinct_files, total_mutations, skipped_lines, detail_level}`.
+
+### `recover` — reconstruct a file's content (or restore a plan)
+
+```
+csift recover [PATH...] [--session ID] --file <ABS_PATH> [--no-subagents]
+              [--patches | --at WHEN | --coverage(--dry-run) | --plan]
+              [--turn-range START..END] [--since WHEN] [--until WHEN]
+              [--line-range START..END] [--out PATH] [--format text|json]
+```
+
+Where `files` reports THAT a file changed, `recover` rebuilds its **content** by replaying the
+file's Read / Write / Edit stream in transcript order. Four mutually-exclusive modes (default
+`--patches`):
+
+- **`--patches`** (DEFAULT) — segmented unified-diff history of `--file`, split at **integrity
+  boundaries** where reconstruction across them is invalid: a `modified since read` harness error
+  (authoritative), an `originalFile` that disagrees with the replayed buffer (authoritative — the
+  signal other recovery tools discard), an external `edited_text_file` (authoritative), or a Bash
+  mutation (heuristic, always flagged). No diff spans a boundary.
+- **`--at WHEN`** — the **partial, line-numbered "in the LLM's eyes" snapshot** as of a cutoff
+  (ISO8601, relative `2h`, `@turn:<N>`, or `@line:<N>`). Known lines carry their number; unknown
+  regions are explicit `??? lines A..B unknown` markers — **gaps are NEVER fabricated**.
+- **`--coverage`** (alias `--dry-run`) — scope a recovery without dumping content: recoverable line
+  ranges, where the boundaries sit, per-op counts (reads / edits / writes / bash / external-edits),
+  fragment count.
+- **`--plan`** — restore a plan (an `ExitPlanMode` text or a plan-file `Write`); the latest in range
+  by default, with `Lnnn`/turn/timestamp provenance. `--file` is optional here.
+
+`--file` is **required** for `--patches`/`--at`/`--coverage`, optional for `--plan`. `--out` writes
+the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to a file while the
+summary still prints to stdout. **Every output line carries the JSONL line number** (`Lnnnnn`) so you
+can `Read` the raw jsonl directly. Reconstruction is necessarily PARTIAL: an un-anchorable edit (its
+old text over an unknown gap, or whose context disagrees with the buffer) is a counted coverage hole,
+never a fabricated line — so the contiguous-from-line-1 prefix matches the on-disk file exactly.
+
+Examples:
+
+```bash
+csift recover . --file /abs/PLAN.md --coverage          # scope first: covered ranges + boundaries
+csift recover <uuid> --file /abs/app.py --patches       # segmented unified diffs over the session
+csift recover <uuid> --file /abs/app.py --at @turn:42   # partial snapshot as the LLM saw it at turn 42
+csift recover . --plan --out /tmp/restored-plan.md      # restore the latest plan verbatim
+```
+
+JSON is NDJSON: one object per segment / boundary / snapshot / plan-candidate (every object carries
+`line_no` + `ts_utc`/`ts_local`; `--at` lines carry `set_at_line` provenance), then a trailing summary.
+
+**Use it to** restore a plan a compaction or bad-recovery dropped, extract a file's diff-history over a
+turn/time range, or check (via `--coverage`) whether a file is even worth attempting to reconstruct
+and where it will break — before dumping anything.
 
 ---
 

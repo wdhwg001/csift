@@ -1,9 +1,10 @@
 //! Command-line surface (clap derive).
 //!
-//! Five subcommands: `list`, `search`, `agents`, `whoami`, `files`. Each carries
-//! example-rich help (`--help`) keyed off the SPEC §6.1–§6.6 baseline invocations.
-//! `list`/`search`/`files` span each session's subagent transcripts by default
-//! (`--no-subagents` opts out); `agents` reports a session's subagent lifecycle.
+//! Six subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`. Each
+//! carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
+//! invocations. `list`/`search`/`files`/`recover` span each session's subagent
+//! transcripts by default (`--no-subagents` opts out); `agents` reports a session's
+//! subagent lifecycle.
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
@@ -210,7 +211,9 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           search   regex over transcripts, returning the complete round-trip exchange per hit\n  \
           agents   list a session's subagents (kind, start/completion, status) + time-window filter\n  \
           whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
-          files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n\n\
+          files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n  \
+          recover  reconstruct a file's history from the transcript — segmented diff-patches,\n           \
+                   point-in-time partial snapshot, coverage scoping, or plan restoration\n\n\
         list/search/files span each session's subagent transcripts by default (built-in \
         Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` to restrict \
         to top-level sessions.\n\n\
@@ -224,7 +227,9 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift search \"\" -t user --since 2h --path . # pure filter: user turns, last 2h, here\n  \
           csift agents --session <uuid> --since 2h    # subagents started in the last 2h\n  \
           csift whoami                                # who am I (this CC session)?\n  \
-          csift files <uuid> --by-file                # which files this session modified, when\n\n\
+          csift files <uuid> --by-file                # which files this session modified, when\n  \
+          csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
+          csift recover . --plan --out /tmp/plan.md   # restore the latest plan text to a file\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
 pub struct Cli {
@@ -244,6 +249,9 @@ pub enum Command {
     Agents(AgentsArgs),
     /// Which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash).
     Files(FilesArgs),
+    /// Reconstruct a file's history from the transcript — segmented diff-patches,
+    /// point-in-time partial snapshot, coverage scoping, or plan restoration.
+    Recover(RecoverArgs),
 }
 
 /// A transcript content category, used by `search --category/-t` (repeatable).
@@ -698,6 +706,167 @@ impl FilesArgs {
             FilesDetail::Timeline
         } else {
             FilesDetail::Summary
+        }
+    }
+}
+
+/// The reconstruction mode for `recover` (exactly one is active; default patches).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoverMode {
+    /// One or more unified-diff patches over the range, segmented at integrity
+    /// boundaries (the DEFAULT).
+    Patches,
+    /// The partial, line-numbered point-in-time snapshot as of `--at <WHEN>`.
+    At,
+    /// Coverage / scoping summary — recoverable ranges + boundaries + counts, no dump.
+    Coverage,
+    /// Plan restoration (ExitPlanMode / plan-file recovery).
+    Plan,
+}
+
+#[derive(Debug, Args)]
+#[command(
+    long_about = "Reconstruct a single file's history from a session transcript. Unlike \
+        `files` (which only ROLLS UP that a file was touched), `recover` rebuilds the \
+        file's CONTENT line-by-line from the transcript's Reads / Writes / Edits, in \
+        transcript order, with every output line carrying the JSONL LINE NUMBER so an \
+        LLM can `Read` the raw jsonl directly.\n\n\
+        FOUR MUTUALLY-EXCLUSIVE MODES (exactly one; default `--patches`):\n  \
+          --patches   (DEFAULT) segmented unified-diff history of `--file`. The range \
+        is split at INTEGRITY BOUNDARIES — points where reconstruction across them is \
+        invalid (a `File has been modified since read` harness error, an `originalFile` \
+        that disagrees with the replayed buffer, an external `edited_text_file`, or a \
+        heuristic Bash mutation). Each segment + boundary carries its jsonl line / turn \
+        / timestamp.\n  \
+          --at <WHEN> the PARTIAL, line-numbered \"in the LLM's eyes\" snapshot of \
+        `--file` as of <WHEN> (ISO8601, relative `2h`, `@turn:<N>`, or `@line:<N>`). \
+        Known lines carry their number; unknown regions are marked `??? lines A..B \
+        unknown` — gaps are NEVER fabricated.\n  \
+          --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
+        line ranges are recoverable, where the integrity boundaries sit, and per-op \
+        counts (reads / edits / writes / bash / external-edits).\n  \
+          --plan      restore a PLAN (ExitPlanMode text or a plan-file Write) — the \
+        latest in range by default; `--file` is optional here.\n\n\
+        The TARGET selects the session(s): `--session <uuid>` for one, or a project \
+        PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
+        top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
+        WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
+        mutually exclusive with `--since`/`--until` (ISO8601 / relative). `--line-range \
+        START..END` further restricts to a 1-based file-line span. `--out <PATH>` writes \
+        the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to \
+        a file while the summary still prints to stdout.\n\n\
+        Reconstruction is NECESSARILY PARTIAL and NEVER fabricates: an unseen line is \
+        an explicit gap, an un-anchorable edit is a coverage hole, a Bash touch is a \
+        heuristic (not authoritative) boundary. No silent truncation.",
+    after_help = "EXAMPLES\n  \
+          csift recover . --file /abs/PLAN.md --coverage            # scope first: covered ranges + boundaries, no dump\n  \
+          csift recover <uuid> --file /abs/app.py --patches         # segmented unified diffs over the whole session\n  \
+          csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only\n  \
+          csift recover <uuid> --file /abs/app.py --at @turn:42     # partial snapshot as the LLM saw it at turn 42\n  \
+          csift recover . --plan --out /tmp/restored-plan.md        # restore the latest plan text to a file\n  \
+          csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200"
+)]
+pub struct RecoverArgs {
+    /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
+    /// from. Optional when `--session` is given; with neither, every project is
+    /// scanned. Repeatable.
+    #[arg(
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target
+    )]
+    pub paths: Vec<PathBuf>,
+
+    /// Restrict to a single parent session id (uuid).
+    #[arg(long, value_name = "SESSION_ID")]
+    pub session: Option<String>,
+
+    /// The ABSOLUTE file path whose history to reconstruct, matched against the path
+    /// exactly as written in the transcript (with a basename-suffix fallback). REQUIRED
+    /// for `--patches` / `--at` / `--coverage`; OPTIONAL for `--plan`.
+    #[arg(long, value_name = "ABS_PATH")]
+    pub file: Option<String>,
+
+    /// Also reconstruct from SUBAGENT transcripts (built-in Task/Agent-tool, OMC, and
+    /// Workflow agents) under the session. Default ON; `--no-subagents` restricts to
+    /// the top-level session.
+    #[arg(
+        long = "include-subagents",
+        overrides_with = "no_subagents",
+        default_value_t = true
+    )]
+    pub include_subagents: bool,
+
+    /// Exclude subagent transcripts — reconstruct only from the top-level session.
+    #[arg(long = "no-subagents")]
+    pub no_subagents: bool,
+
+    /// DEFAULT mode: segmented unified-diff history of `--file`.
+    #[arg(long, group = "mode")]
+    pub patches: bool,
+
+    /// Point-in-time partial snapshot of `--file` as of `<WHEN>` (ISO8601, relative
+    /// `2h`, `@turn:<N>`, or `@line:<N>`). Setting this both selects the mode AND
+    /// supplies its cutoff.
+    #[arg(long, value_name = "WHEN", group = "mode")]
+    pub at: Option<String>,
+
+    /// Coverage / scoping summary (no content dump). Alias: `--dry-run`.
+    #[arg(long, visible_alias = "dry-run", group = "mode")]
+    pub coverage: bool,
+
+    /// Restore a plan (ExitPlanMode text / plan-file Write); `--file` optional.
+    #[arg(long, group = "mode")]
+    pub plan: bool,
+
+    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Mutually exclusive with `--since` / `--until`.
+    #[arg(long, value_name = "START..END")]
+    pub turn_range: Option<String>,
+
+    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    #[arg(long, value_name = "WHEN")]
+    pub since: Option<String>,
+
+    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    #[arg(long, value_name = "WHEN")]
+    pub until: Option<String>,
+
+    /// Restrict to a 1-based, inclusive file-line span of `--file` (filters the
+    /// reconstructed line space, independent of the turn/time window).
+    #[arg(long, value_name = "START..END")]
+    pub line_range: Option<String>,
+
+    /// Write the reconstructed artifact (snapshot / plan / concatenated patches)
+    /// verbatim to this file; the summary still prints to stdout.
+    #[arg(long, value_name = "PATH")]
+    pub out: Option<PathBuf>,
+
+    /// Emit JSON instead of the headered text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+}
+
+impl RecoverArgs {
+    /// Resolve the include/exclude flags into a single decision (default include).
+    #[must_use]
+    pub fn want_subagents(&self) -> bool {
+        !self.no_subagents
+    }
+
+    /// Resolve the mode flags into the active [`RecoverMode`]. clap's `group = "mode"`
+    /// (multiple=false) rejects more than one at parse time, so at most one is set;
+    /// none set ⇒ the `Patches` default.
+    #[must_use]
+    pub fn mode(&self) -> RecoverMode {
+        if self.at.is_some() {
+            RecoverMode::At
+        } else if self.coverage {
+            RecoverMode::Coverage
+        } else if self.plan {
+            RecoverMode::Plan
+        } else {
+            RecoverMode::Patches
         }
     }
 }

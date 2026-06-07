@@ -1,6 +1,6 @@
 //! csift — "ripgrep for Claude Code session transcripts".
 //!
-//! Fast regex `list` / `search` / `agents` / `whoami` / `files` over
+//! Fast regex `list` / `search` / `agents` / `whoami` / `files` / `recover` over
 //! `~/.claude/projects/**/*.jsonl`. This file is the thin binary entrypoint: parse
 //! args, dispatch to a subcommand handler, map errors to a process exit code. All real
 //! work lives in the modules.
@@ -12,6 +12,7 @@ mod files;
 mod model;
 mod parse;
 mod path;
+mod recover;
 mod search;
 mod session;
 mod subagent;
@@ -47,5 +48,6 @@ fn run(cli: Cli) -> Result<()> {
         Command::Whoami(args) => whoami::run_whoami(&args),
         Command::Agents(args) => agents::run_agents(&args),
         Command::Files(args) => files::run_files(&args),
+        Command::Recover(args) => recover::run_recover(&args),
     }
 }

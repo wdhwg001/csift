@@ -1421,3 +1421,900 @@ fn no_subcommand_errors() {
 fn _assert_path_exists(p: &Path) {
     assert!(p.exists());
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// recover
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Absolute path of the file whose history the recover scenarios reconstruct.
+const RFILE: &str = "/Users/testuser/Projects/foo/app.py";
+
+/// A session that builds `app.py` across a realistic life-cycle, mirroring the shapes
+/// verified against real `~/.claude/projects` data:
+///   turn 0  full Read of app.py (4 lines) → an Edit (line 2 rewritten, structuredPatch)
+///   turn 1  a `modified since read` integrity error (a HARD boundary), then a fresh full
+///           Read (the post-drift state) → another Edit
+///   turn 2  an ExitPlanMode plan + a plan-file Write (for --plan)
+/// Plus a malformed line (skipped-line accounting) and a history-snapshot marker.
+fn recover_scenario_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            // ── turn 0 ──
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"refactor app.py"}}"#, "\n",
+            // file-history-snapshot marker for app.py (backupFileName null, as in real data).
+            r#"{"type":"file-history-snapshot","snapshot":{"timestamp":"2026-06-07T05:00:00.500Z","trackedFileBackups":{"/Users/testuser/Projects/foo/app.py":{"backupFileName":null,"version":1,"backupTime":"2026-06-07T05:00:00.500Z"}}}}"#, "\n",
+            // Full Read of app.py: 4 lines, startLine 1 == numLines == totalLines (an anchor).
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/Users/testuser/Projects/foo/app.py","content":"import os\nraw = open(src).read()\nuse(raw)\nprint(café🛠)","startLine":1,"numLines":4,"totalLines":4}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            // Edit line 2 (structuredPatch replaces the open().read() line with a with-block).
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed0","name":"Edit","input":{"file_path":"/Users/testuser/Projects/foo/app.py","old_string":"raw = open(src).read()","new_string":"with open(src) as fh:\n    raw = fh.read()","replace_all":false}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.500Z","toolUseResult":{"filePath":"/Users/testuser/Projects/foo/app.py","oldString":"raw = open(src).read()","newString":"with open(src) as fh:\n    raw = fh.read()","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":2,"lines":["-raw = open(src).read()","+with open(src) as fh:","+    raw = fh.read()"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
+            // ── turn 1: a modified-since-read integrity error (HARD boundary) ──
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"continue"}}"#, "\n",
+            // The error carrier (no inline path) — attributed to app.py via the tool_use_id join.
+            r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:01.500Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/Users/testuser/Projects/foo/app.py","old_string":"use(raw)","new_string":"USE(raw)"}}]}}"#, "\n",
+            // A fresh full Read of the post-drift file (6 lines now).
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T06:00:02.000Z","toolUseResult":{"file":{"filePath":"/Users/testuser/Projects/foo/app.py","content":"import os\nwith open(src) as fh:\n    raw = fh.read()\nuse(raw)\nprint(café🛠)\nEOF","startLine":1,"numLines":6,"totalLines":6}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
+            // ── turn 2: a plan (ExitPlanMode) + a plan-file Write ──
+            r#"{"type":"user","uuid":"u2","timestamp":"2026-06-07T07:00:00.000Z","message":{"role":"user","content":"plan the next step"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T07:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pl0","name":"ExitPlanMode","input":{"plan":"PLAN café🛠\n- step one\n- step two","planFilePath":"/Users/testuser/.claude/plans/foo.md"}}]}}"#, "\n",
+            // A malformed line that survives the prefilter (carries "Edit") → counted.
+            r#"{"type":"user","role":"user" broken Edit json after marker}"#, "\n",
+        ),
+    );
+    h
+}
+
+#[test]
+fn recover_coverage_counts_and_boundary() {
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--coverage"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+    // Two full reads, two edits, one integrity error, one history snapshot.
+    assert!(
+        out.stdout.contains("2 read (2 full"),
+        "read counts: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("edit"), "edit count: {}", out.stdout);
+    assert!(out.stdout.contains("integrity-error"), "{}", out.stdout);
+    assert!(out.stdout.contains("history-snapshot"), "{}", out.stdout);
+    // The modified-since-read boundary is AUTHORITATIVE and carries its jsonl line number.
+    assert!(
+        out.stdout.contains("modified since read"),
+        "boundary text: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("AUTHORITATIVE"), "{}", out.stdout);
+    // Fragments = boundaries + 1 = 2.
+    assert!(
+        out.stdout.contains("fragments: 2"),
+        "fragments: {}",
+        out.stdout
+    );
+    // The malformed line is counted, never hidden.
+    assert!(
+        out.stdout.contains("malformed line(s) skipped"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_patches_segments_split_at_boundary_with_line_numbers() {
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--patches"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // At least TWO segments, split by the integrity boundary.
+    let segs = out.stdout.matches("─ SEGMENT").count();
+    assert!(
+        segs >= 2,
+        "expected ≥2 segments, got {segs}:\n{}",
+        out.stdout
+    );
+    // The boundary divider carries L<line>, the kind, and AUTHORITATIVE confidence.
+    assert!(out.stdout.contains("INTEGRITY BOUNDARY"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("modified since read") && out.stdout.contains("AUTHORITATIVE"),
+        "boundary line: {}",
+        out.stdout
+    );
+    // Every segment header + boundary carries a jsonl line number (Lnnn).
+    assert!(
+        out.stdout.contains("L"),
+        "line numbers present: {}",
+        out.stdout
+    );
+    // The first segment's diff shows the open().read() → with-block refactor.
+    assert!(
+        out.stdout.contains("-raw = open(src).read()"),
+        "diff removed line: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("+with open(src) as fh:"),
+        "diff added line: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_snapshot_has_line_numbers_and_no_fabrication() {
+    let h = recover_scenario_home();
+    // As of @turn:0 (before the post-drift re-read), the file is the 4-line original with
+    // the line-2 edit applied → 5 lines, all known, line-numbered.
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--at",
+        "@turn:0",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Line-numbered known content.
+    assert!(out.stdout.contains("import os"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("with open(src) as fh:"),
+        "edit applied: {}",
+        out.stdout
+    );
+    // The café🛠 line round-trips UTF-8 verbatim (locale-neutral multi-byte).
+    assert!(
+        out.stdout.contains("café🛠"),
+        "utf-8 verbatim: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_partial_read_marks_explicit_gaps() {
+    // A separate session that ONLY windowed-reads a slice of a file → explicit gaps.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"look at the spec"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/spec.md","content":"line5\nline6\nline7","startLine":5,"numLines":3,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/spec.md",
+        "--at",
+        "@line:9999",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Known lines 5-7 are numbered; lines 1-4 and 8-10 are EXPLICIT gaps, never fabricated.
+    assert!(
+        out.stdout.contains("??? lines 1..4 unknown"),
+        "leading gap: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("    5  line5"),
+        "numbered known line: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("??? lines 8..10 unknown"),
+        "trailing gap: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_plan_restores_latest_with_provenance() {
+    let h = recover_scenario_home();
+    let out_path = h.root.join("restored-plan.md");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--plan",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The ExitPlanMode plan is listed as a candidate with Lnnn / turn / ts provenance.
+    assert!(out.stdout.contains("ExitPlanMode"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("restored from"),
+        "provenance line: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("jsonl line"), "{}", out.stdout);
+    // The restored file equals the plan text verbatim.
+    let restored = std::fs::read_to_string(&out_path).expect("restored plan written");
+    assert_eq!(restored, "PLAN café🛠\n- step one\n- step two");
+}
+
+#[test]
+fn recover_json_every_object_has_line_no_and_local_ts() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--coverage",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let lines: Vec<&str> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    // First object is the coverage object; it carries covered_ranges + boundaries (each
+    // boundary has line_no + ts_utc + ts_local).
+    let cov: serde_json::Value = serde_json::from_str(lines[0]).expect("ndjson parses");
+    assert!(cov.get("covered_ranges").is_some(), "{cov}");
+    let bounds = cov
+        .get("boundaries")
+        .and_then(|b| b.as_array())
+        .expect("boundaries array");
+    assert!(!bounds.is_empty(), "≥1 boundary");
+    let b0 = &bounds[0];
+    assert!(
+        b0.get("line_no").and_then(|v| v.as_u64()).is_some(),
+        "boundary line_no: {b0}"
+    );
+    assert!(
+        b0.get("ts_utc").is_some() && b0.get("ts_local").is_some(),
+        "boundary ts: {b0}"
+    );
+    assert_eq!(
+        b0.get("kind").and_then(|v| v.as_str()),
+        Some("modified_since_read")
+    );
+    // Trailing summary line.
+    let summary: serde_json::Value = serde_json::from_str(lines.last().unwrap()).unwrap();
+    assert!(
+        summary.get("summary").is_some(),
+        "trailing summary: {summary}"
+    );
+}
+
+#[test]
+fn recover_at_json_lines_carry_provenance_and_gaps() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--at",
+        "@turn:0",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let first = out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap();
+    let snap: serde_json::Value = serde_json::from_str(first).unwrap();
+    assert_eq!(snap.get("type").and_then(|v| v.as_str()), Some("snapshot"));
+    let lines = snap
+        .get("lines")
+        .and_then(|v| v.as_array())
+        .expect("lines array");
+    // Every emitted line carries n + text + set_at_line provenance (the jsonl line that set it).
+    for l in lines {
+        assert!(
+            l.get("n").is_some() && l.get("text").is_some(),
+            "line shape: {l}"
+        );
+        assert!(l.get("set_at_line").is_some(), "provenance: {l}");
+    }
+    assert!(snap.get("gaps").is_some(), "gaps array present: {snap}");
+}
+
+// ── clap surface (mode group, mutual exclusion, --file requirement) ──
+
+#[test]
+fn recover_two_modes_conflict() {
+    let h = Home::new();
+    let out = h.run(&["recover", ".", "--file", RFILE, "--coverage", "--plan"]);
+    assert!(
+        !out.success,
+        "two modes must be a clap conflict: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_turn_range_and_since_mutually_exclusive() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--coverage",
+        "--turn-range",
+        "0..1",
+        "--since",
+        "2h",
+    ]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("mutually exclusive"),
+        "expected the mutual-exclusion bail: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn recover_file_required_for_patches_optional_for_plan() {
+    let h = recover_scenario_home();
+    // --patches without --file → error.
+    let no_file = h.run(&["recover", "--session", SESS, "--patches"]);
+    assert!(!no_file.success);
+    assert!(
+        no_file.stderr.contains("--file") && no_file.stderr.contains("required"),
+        "file-required bail: {}",
+        no_file.stderr
+    );
+    // --plan without --file → OK.
+    let plan_ok = h.run(&["recover", "--session", SESS, "--plan"]);
+    assert!(plan_ok.success, "plan needs no --file: {}", plan_ok.stderr);
+}
+
+#[test]
+fn recover_dry_run_alias_works() {
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--dry-run"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("recoverable"),
+        "coverage via --dry-run alias: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_line_range_restricts_output() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--at",
+        "@line:9999",
+        "--line-range",
+        "1..2",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Only lines 1-2 are shown; line 5 (EOF) is outside the range and absent.
+    assert!(out.stdout.contains("import os"), "{}", out.stdout);
+    assert!(
+        !out.stdout.contains("    6  EOF"),
+        "line 6 outside range: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_help_mentions_modes() {
+    let h = Home::new();
+    let out = h.run(&["recover", "--help"]);
+    assert!(out.success);
+    // The four mutually-exclusive mode flags and their semantics are documented.
+    for needle in [
+        "--patches",
+        "--at",
+        "--coverage",
+        "--plan",
+        "segmented unified-diff",
+        "partial snapshot",
+    ] {
+        assert!(
+            out.stdout.contains(needle),
+            "help missing {needle}:\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn recover_no_history_says_so() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/no/such/file.rs",
+        "--coverage",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no recoverable history"),
+        "honest empty result: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_patches_json_segments_and_boundary_objects() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--patches",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    // At least one segment object (carrying unified_diff + line_no + pre_state_known +
+    // anchor_source) and one boundary object (carrying line_no + kind + confidence).
+    let seg = objs
+        .iter()
+        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("segment"))
+        .expect("a segment object");
+    assert!(
+        seg.get("unified_diff").and_then(|v| v.as_str()).is_some(),
+        "{seg}"
+    );
+    assert!(
+        seg.get("line_no").and_then(|v| v.as_u64()).is_some(),
+        "segment line_no: {seg}"
+    );
+    assert!(seg.get("pre_state_known").is_some(), "{seg}");
+    assert!(seg.get("anchor_source").is_some(), "{seg}");
+    let bnd = objs
+        .iter()
+        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("boundary"))
+        .expect("a boundary object");
+    assert_eq!(
+        bnd.get("kind").and_then(|v| v.as_str()),
+        Some("modified_since_read")
+    );
+    assert_eq!(
+        bnd.get("confidence").and_then(|v| v.as_str()),
+        Some("authoritative")
+    );
+    assert!(
+        bnd.get("line_no").and_then(|v| v.as_u64()).is_some(),
+        "{bnd}"
+    );
+    // Trailing summary.
+    assert!(objs.last().unwrap().get("summary").is_some());
+}
+
+#[test]
+fn recover_patches_out_writes_concatenated_diffs() {
+    let h = recover_scenario_home();
+    let out_path = h.root.join("patches.diff");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--patches",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("wrote concatenated patches"),
+        "{}",
+        out.stdout
+    );
+    let blob = std::fs::read_to_string(&out_path).expect("patches file");
+    assert!(
+        blob.contains("@@ -") && blob.contains("+with open(src) as fh:"),
+        "diff blob: {blob}"
+    );
+}
+
+#[test]
+fn recover_at_out_writes_partial_snapshot_with_gaps() {
+    // A windowed-read-only file → the --out artifact carries explicit gap markers.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"peek"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/spec.md","content":"l3\nl4","startLine":3,"numLines":2,"totalLines":8}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out_path = h.root.join("snap.txt");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/spec.md",
+        "--at",
+        "@line:9999",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("wrote partial snapshot"),
+        "{}",
+        out.stdout
+    );
+    let body = std::fs::read_to_string(&out_path).expect("snapshot file");
+    assert!(
+        body.contains("??? lines 1..2 unknown"),
+        "leading gap in artifact: {body}"
+    );
+    assert!(body.contains("l3"), "known content in artifact: {body}");
+    assert!(
+        body.contains("??? lines 5..8 unknown"),
+        "trailing gap in artifact: {body}"
+    );
+}
+
+#[test]
+fn recover_plan_json_lists_candidates_with_line_no() {
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--plan", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    let cand = objs
+        .iter()
+        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("plan_candidate"))
+        .expect("a plan_candidate object");
+    assert!(
+        cand.get("line_no").and_then(|v| v.as_u64()).is_some(),
+        "{cand}"
+    );
+    assert!(
+        cand.get("source").and_then(|v| v.as_str()).is_some(),
+        "{cand}"
+    );
+    assert!(cand.get("ts_local").is_some(), "local ts present: {cand}");
+    assert!(cand.get("is_latest_in_session").is_some(), "{cand}");
+    assert!(objs.last().unwrap().get("summary").is_some());
+}
+
+#[test]
+fn recover_plan_stdout_without_out_prints_body() {
+    // No --out → the plan body is printed inline (small plan, no truncation marker).
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--plan"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("--- plan body ---"),
+        "inline body header: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("PLAN café🛠"),
+        "plan content inline: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_patches_via_project_path_target() {
+    // Drive recover by a PROJECT PATH (encoded dir) instead of --session, exercising the
+    // multi-session merge + sort path.
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", ENC, "--file", RFILE, "--coverage"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("recoverable"), "{}", out.stdout);
+}
+
+#[test]
+fn recover_at_json_out_writes_artifact() {
+    let h = recover_scenario_home();
+    let out_path = h.root.join("snap.json.txt");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--at",
+        "@turn:0",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // stdout is NDJSON; the --out file is the verbatim reconstructed body.
+    let body = std::fs::read_to_string(&out_path).expect("at --out artifact");
+    assert!(body.contains("import os"), "verbatim known content: {body}");
+}
+
+#[test]
+fn recover_plan_json_out_writes_plan_verbatim() {
+    let h = recover_scenario_home();
+    let out_path = h.root.join("plan.json.md");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--plan",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let body = std::fs::read_to_string(&out_path).expect("plan --out artifact");
+    assert_eq!(
+        body, "PLAN café🛠\n- step one\n- step two",
+        "verbatim plan text"
+    );
+}
+
+#[test]
+fn recover_coverage_no_boundaries_says_none() {
+    // A clean file with only a full Read (no integrity issues) → no boundaries.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/clean.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/clean.rs",
+        "--coverage",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("integrity boundaries: (none)"),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("fragments: 1"), "{}", out.stdout);
+}
+
+#[test]
+fn recover_patches_heuristic_bash_boundary_is_flagged() {
+    // A full Read then a Bash `sed -i` on the same file → a HEURISTIC (soft) boundary,
+    // flagged with HEURISTIC confidence (not AUTHORITATIVE).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/h.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"sed -i 's/a/A/' /p/h.rs"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/h.rs",
+        "--patches",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("INTEGRITY BOUNDARY"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("HEURISTIC"),
+        "heuristic confidence: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("bash"), "bash detail: {}", out.stdout);
+}
+
+// ── REAL-FIXTURE acceptance tests (the load-bearing falsification, design §10.8-10) ──
+//
+// These drive the recover binary against the ACTUAL 233 MB session jsonl on this dev
+// machine. They are GATED on the fixture's presence (like the e2e password-gated tests):
+// when it is absent (CI / another machine) they print a skip note and return, so the
+// suite stays hermetic — but where the data exists, they prove the feature on REAL data.
+
+/// The real session fixture + its encoded project dir, or `None` when absent.
+fn real_fixture() -> Option<(String, String, PathBuf)> {
+    let home = std::env::var_os("HOME")?;
+    let enc = "-Users-testuser-Projects-Acme-widget-factory-worktrees-feature-session-7";
+    let sess = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    let p = PathBuf::from(&home)
+        .join(".claude")
+        .join("projects")
+        .join(enc)
+        .join(format!("{sess}.jsonl"));
+    if p.is_file() {
+        Some((enc.to_string(), sess.to_string(), p))
+    } else {
+        None
+    }
+}
+
+/// Run the real binary against the REAL `$HOME` (not a temp one) for fixture tests.
+fn run_real(args: &[&str]) -> Output {
+    let exe = env!("CARGO_BIN_EXE_csift");
+    let mut cmd = Command::new(exe);
+    cmd.args(args)
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .env_remove("CODEX_COMPANION_SESSION_ID");
+    let out = cmd.output().expect("spawn csift");
+    Output {
+        success: out.status.success(),
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+    }
+}
+
+#[test]
+fn recover_real_plan_round_trips_to_disk_byte_exact() {
+    let Some((enc, sess, _)) = real_fixture() else {
+        eprintln!("SKIP recover_real_plan_round_trips_to_disk_byte_exact: real fixture absent");
+        return;
+    };
+    // The motivating use-case: restore the latest plan and compare it to the on-disk plan
+    // file `goofy-finding-kettle.md`. The recovered text must match the disk file exactly.
+    let disk_plan = PathBuf::from(std::env::var_os("HOME").unwrap())
+        .join(".claude")
+        .join("plans")
+        .join("goofy-finding-kettle.md");
+    if !disk_plan.is_file() {
+        eprintln!("SKIP: on-disk plan file absent");
+        return;
+    }
+    let out_dir = std::env::temp_dir().join(format!("csift-real-plan-{}", std::process::id()));
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let restored = out_dir.join("restored.md");
+    let out = run_real(&[
+        "recover",
+        &enc,
+        "--session",
+        &sess,
+        "--plan",
+        "--out",
+        restored.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Provenance is cited (Lnnn / turn / ts).
+    assert!(
+        out.stdout.contains("restored from"),
+        "provenance: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("jsonl line"),
+        "line number cited: {}",
+        out.stdout
+    );
+    let got = std::fs::read_to_string(&restored).expect("restored plan");
+    let want = std::fs::read_to_string(&disk_plan).expect("disk plan");
+    std::fs::remove_dir_all(&out_dir).ok();
+    assert_eq!(
+        got, want,
+        "restored plan must be BYTE-EXACT to the on-disk plan"
+    );
+}
+
+#[test]
+fn recover_real_multi_patch_segmentation_at_modified_since_read() {
+    let Some((enc, sess, _)) = real_fixture() else {
+        eprintln!("SKIP recover_real_multi_patch_segmentation: real fixture absent");
+        return;
+    };
+    // engine.py shows a real `File has been modified since read` error at jsonl L22980.
+    // A --patches run over it must emit ≥2 segments split by an AUTHORITATIVE boundary
+    // carrying that line number, and no single diff may span the boundary.
+    let engine = "/Users/testuser/Projects/Acme/widget_factory-worktrees/feature-session-7/app/src/app/engine/engine.py";
+    let out = run_real(&[
+        "recover",
+        &enc,
+        "--session",
+        &sess,
+        "--file",
+        engine,
+        "--patches",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let segs = out.stdout.matches("─ SEGMENT").count();
+    assert!(segs >= 2, "expected ≥2 real segments, got {segs}");
+    assert!(
+        out.stdout.contains("INTEGRITY BOUNDARY") && out.stdout.contains("L22980"),
+        "boundary at the real L22980: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("modified since read"), "{}", out.stdout);
+    assert!(out.stdout.contains("AUTHORITATIVE"), "{}", out.stdout);
+}
+
+#[test]
+fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
+    let Some((enc, sess, _)) = real_fixture() else {
+        eprintln!("SKIP recover_real_reconstruction_matches_disk: real fixture absent");
+        return;
+    };
+    // Reconstruct the plan file from its Read/Edit stream (NOT the whole-plan anchor) and
+    // assert the contiguous-from-line-1 KNOWN prefix matches the live on-disk file
+    // byte-for-byte. Gaps + post-drift islands are allowed (partial by design); the
+    // trustworthy contiguous prefix must never disagree with disk.
+    let disk_plan = PathBuf::from(std::env::var_os("HOME").unwrap())
+        .join(".claude")
+        .join("plans")
+        .join("goofy-finding-kettle.md");
+    if !disk_plan.is_file() {
+        eprintln!("SKIP: on-disk plan file absent");
+        return;
+    }
+    let out = run_real(&[
+        "recover",
+        &enc,
+        "--session",
+        &sess,
+        "--file",
+        disk_plan.to_str().unwrap(),
+        "--at",
+        "@line:99999999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let first = out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap();
+    let snap: serde_json::Value = serde_json::from_str(first).unwrap();
+    let mut known: std::collections::BTreeMap<usize, String> = std::collections::BTreeMap::new();
+    for l in snap.get("lines").and_then(|v| v.as_array()).unwrap() {
+        let n = l.get("n").and_then(|v| v.as_u64()).unwrap() as usize;
+        let t = l.get("text").and_then(|v| v.as_str()).unwrap().to_string();
+        known.insert(n, t);
+    }
+    let disk = std::fs::read_to_string(&disk_plan).unwrap();
+    let disk_lines: Vec<&str> = {
+        let mut v: Vec<&str> = disk.split('\n').collect();
+        if v.last() == Some(&"") {
+            v.pop();
+        }
+        v
+    };
+    // Walk the contiguous prefix from line 1 and assert each known line matches disk.
+    let mut n = 1usize;
+    let mut prefix_len = 0usize;
+    while let Some(text) = known.get(&n) {
+        assert!(
+            n <= disk_lines.len(),
+            "reconstructed beyond disk length at {n}"
+        );
+        assert_eq!(
+            text,
+            disk_lines[n - 1],
+            "contiguous-prefix line {n} must match disk"
+        );
+        prefix_len = n;
+        n += 1;
+    }
+    assert!(
+        prefix_len > 50,
+        "expected a substantial clean prefix, got {prefix_len}"
+    );
+}
