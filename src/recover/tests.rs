@@ -1299,3 +1299,845 @@ fn classify_integrity_error_distinguishes_kinds_and_ignores_other_errors() {
     let other = serde_json::json!("<tool_use_error>Command timed out.</tool_use_error>");
     assert_eq!(classify_integrity_error(&other), None);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch-completeness round 2: error / second-operand / short-circuit arms that
+// the first test pass left uncovered. Each drives a SPECIFIC missed branch with a
+// real assertion on the documented behavior (never a coverage-only touch).
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn classify_integrity_error_accepts_alternate_phrasings() {
+    // The classifier ORs two phrasings per kind. The first test only hit the canonical
+    // "has been modified since read" / "has not been read yet" wordings; these drive the
+    // SECOND operand of each `||` (the harness has emitted both forms in real transcripts).
+    let modified_alt =
+        serde_json::json!("<tool_use_error>File has been modified externally.</tool_use_error>");
+    assert_eq!(
+        classify_integrity_error(&modified_alt),
+        Some(IntegrityKind::ModifiedSinceRead),
+        "the 'File has been modified' phrasing (no 'since read') still classifies as modified"
+    );
+    let notread_alt = serde_json::json!(
+        "<tool_use_error>You must Read it first before editing.</tool_use_error>"
+    );
+    assert_eq!(
+        classify_integrity_error(&notread_alt),
+        Some(IntegrityKind::NotReadYet),
+        "the 'Read it first' phrasing (no 'has not been read yet') classifies as not-read-yet"
+    );
+}
+
+#[test]
+fn path_matches_multi_segment_suffix_requires_slash_boundary() {
+    // The basename-suffix fallback strips `target` off the tail and accepts ONLY when the
+    // remaining prefix is empty OR ends in '/'. This drives the `prefix.ends_with('/')`
+    // operand: a deep multi-segment suffix whose prefix is non-empty but slash-aligned.
+    assert!(
+        path_matches(Some("turn_engine/engine.py"), "/a/b/turn_engine/engine.py"),
+        "multi-segment suffix accepted at a '/' boundary (prefix '/a/b/' ends in '/')"
+    );
+    // A suffix that lands mid-component (prefix does NOT end in '/') is rejected.
+    assert!(
+        !path_matches(Some("engine.py"), "/a/bxengine.py"),
+        "mid-component match rejected (prefix 'bx' is non-empty and not slash-aligned)"
+    );
+}
+
+#[test]
+fn is_plan_path_each_arm_independently() {
+    // Drive each surviving OR arm in isolation (the redundant `.claude/plans/` arm was
+    // removed as dead — it is a strict subset of `/plans/`).
+    assert!(is_plan_path("/x/PLAN.MD"), "plan.md arm (case-folded)");
+    assert!(
+        is_plan_path("/repo/plans/step1.txt"),
+        "/plans/ arm even when the file is not .md"
+    );
+    assert!(
+        is_plan_path("/repo/refactor-plan.md"),
+        "the (contains 'plan' && ends '.md') arm"
+    );
+    // A '.claude/plans/' path still matches — via the /plans/ arm, proving the removal of
+    // the dedicated operand changed no behavior.
+    assert!(is_plan_path("/u/.claude/plans/x.md"));
+    // No 'plan' token and not under /plans/ → not plan-ish.
+    assert!(!is_plan_path("/repo/readme.md"));
+}
+
+#[test]
+fn line_is_recover_candidate_matches_each_distinct_marker() {
+    // The prefilter is a big OR of byte-substring probes; the corpus tests mostly hit the
+    // FIRST matching operand, so later operands' "found" sides stay uncovered. Drive each
+    // marker with a line that contains ONLY that marker (no earlier-listed substring).
+    // toolUseResult (no "role":"user").
+    assert!(line_is_recover_candidate(br#"{"toolUseResult":{"x":1}}"#));
+    // tool_use_error in isolation (no earlier marker substring).
+    assert!(line_is_recover_candidate(
+        br#"{"x":"<tool_use_error>boom</tool_use_error>"}"#
+    ));
+    // file-history-snapshot in isolation.
+    assert!(line_is_recover_candidate(
+        br#"{"type":"file-history-snapshot"}"#
+    ));
+    // edited_text_file in isolation.
+    assert!(line_is_recover_candidate(
+        br#"{"attachment":{"type":"edited_text_file"}}"#
+    ));
+    // A line carrying NONE of the markers is rejected (the all-false fall-through).
+    assert!(!line_is_recover_candidate(
+        br#"{"type":"summary","leafUuid":"x"}"#
+    ));
+}
+
+#[test]
+fn structured_patch_resizes_dense_when_hunk_extends_past_known_end() {
+    // A patch hunk whose old region runs PAST the current known buffer length forces the
+    // `end > dense.len()` resize path. The buffer knows lines 1-2; a hunk at oldStart 2,
+    // oldLines 2 reaches line 3 (one past the end). The trailing unknown line is a gap, so
+    // the region is not fully known → the edit is un-anchorable (no fabrication), but the
+    // resize branch is exercised on the way to that verdict.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "a\nb".into(),
+                total_lines: 2,
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::Edit {
+                hunks: vec![EditHunk {
+                    old_string: "b".into(),
+                    new_string: "B".into(),
+                    replace_all: false,
+                }],
+                original_file: None,
+                structured_patch: Some(vec![PatchHunk {
+                    old_start: 2,
+                    old_lines: 2, // reaches line 3, past the known end (resize path)
+                    new_lines: 1,
+                    lines: vec![" b".into(), "-gone".into(), "+B".into()],
+                }]),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.counts.edit_unanchorable, 1,
+        "a hunk reaching past known content over a gap is un-anchorable"
+    );
+    // The known line 2 is untouched (the refused edit never corrupts it).
+    assert_eq!(
+        rep.final_buffer.known.get(&2).map(|c| c.text.as_str()),
+        Some("b")
+    );
+}
+
+#[test]
+fn string_edit_empty_old_string_is_unanchorable() {
+    // The string-replacement fallback refuses an empty old_string (the FIRST operand of
+    // `old_string.is_empty() || !contains`). An empty old_string would match everywhere →
+    // we never guess, so it is un-anchorable and the buffer is unchanged.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "alpha\nbeta".into(),
+                total_lines: 2,
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::Edit {
+                hunks: vec![EditHunk {
+                    old_string: String::new(),
+                    new_string: "X".into(),
+                    replace_all: false,
+                }],
+                original_file: None,
+                structured_patch: None, // force the string-edit fallback
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.counts.edit_unanchorable, 1,
+        "empty old_string is refused, not applied everywhere"
+    );
+    assert_eq!(
+        rep.final_buffer.known_lines(),
+        vec![(1, "alpha".into()), (2, "beta".into())],
+        "buffer is left intact"
+    );
+}
+
+#[test]
+fn string_edit_with_no_hunks_is_unanchorable() {
+    // An Edit carrying ZERO hunks never sets `any` → the `if !any` guard returns
+    // un-anchorable (a real harness shape when a MultiEdit result has an empty edit list).
+    let mut buf = SparseBuffer::default();
+    buf.reset_to_full("a\nb", 2, 1);
+    let outcome = apply_string_edit(&mut buf, &[], 9);
+    assert_eq!(
+        outcome,
+        EditOutcome::UnAnchorable,
+        "no hunks → nothing applied → un-anchorable"
+    );
+    assert_eq!(
+        buf.known_lines(),
+        vec![(1, "a".into()), (2, "b".into())],
+        "buffer unchanged by a no-hunk edit"
+    );
+}
+
+#[test]
+fn replay_edit_into_already_open_segment_does_not_reopen() {
+    // When an Edit arrives with a segment already open (a windowed read opened it, no full
+    // anchor yet), the `seg_open.is_none()` guard takes its FALSE side — the edit extends
+    // the open segment instead of opening a new one. With no full anchor, the string-edit
+    // fallback cannot anchor a non-contiguous-from-1 buffer, so it is a hole — but the
+    // single-segment shape proves the open segment was reused, not reopened.
+    let events = vec![
+        FileEvent {
+            line_no: 10,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::PartialRead {
+                start_line: 1,
+                lines: vec!["a".into(), "b".into()],
+                total_lines: 2,
+            },
+        },
+        FileEvent {
+            line_no: 11,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::Edit {
+                hunks: vec![EditHunk {
+                    old_string: "a".into(),
+                    new_string: "A".into(),
+                    replace_all: false,
+                }],
+                original_file: None,
+                structured_patch: Some(vec![PatchHunk {
+                    old_start: 1,
+                    old_lines: 1,
+                    new_lines: 1,
+                    lines: vec!["-a".into(), "+A".into()],
+                }]),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.segments.len(),
+        1,
+        "the edit extended the read's open segment (seg_open was already Some)"
+    );
+    // The structured patch anchored on the known contiguous lines 1-2 → applied.
+    assert_eq!(
+        rep.final_buffer.known.get(&1).map(|c| c.text.as_str()),
+        Some("A"),
+        "structured patch anchored on the read's known lines"
+    );
+}
+
+#[test]
+fn lcs_diff_emits_trailing_deletions_when_old_is_longer() {
+    // old has lines new lacks at the END → the `while i < n` tail-delete loop runs (the
+    // first pass only exercised balanced / leading change runs).
+    let old = vec!["keep".to_string(), "drop1".to_string(), "drop2".to_string()];
+    let new = vec!["keep".to_string()];
+    let d = unified_diff(&old, &new);
+    assert!(
+        d.contains("-drop1") && d.contains("-drop2"),
+        "tail deletes: {d}"
+    );
+    // A pure deletion's new side is zero-length → the 0,0-style new header.
+    assert!(
+        d.contains("+0,0") || d.contains(" +1,1 "),
+        "new header form: {d}"
+    );
+    let ops = lcs_diff(&old, &new);
+    assert_eq!(
+        ops.iter().filter(|(o, _, _)| *o == DiffOp::Delete).count(),
+        2,
+        "exactly the two trailing lines are deletes"
+    );
+}
+
+#[test]
+fn lcs_diff_emits_trailing_insertions_when_new_is_longer() {
+    // new has lines old lacks at the END → the `while j < m` tail-insert loop runs.
+    let old = vec!["keep".to_string()];
+    let new = vec!["keep".to_string(), "add1".to_string(), "add2".to_string()];
+    let d = unified_diff(&old, &new);
+    assert!(
+        d.contains("+add1") && d.contains("+add2"),
+        "tail inserts: {d}"
+    );
+    let ops = lcs_diff(&old, &new);
+    assert_eq!(
+        ops.iter().filter(|(o, _, _)| *o == DiffOp::Insert).count(),
+        2,
+        "exactly the two trailing lines are inserts"
+    );
+}
+
+#[test]
+fn unified_diff_pure_deletion_uses_zero_length_new_header() {
+    // A diff that ONLY removes lines (no inserts, no surviving context) → `new_count == 0`
+    // and `new_lo == usize::MAX`, driving the `if new_lo == usize::MAX` reset and the
+    // `if new_count == 0` header form on the NEW side.
+    let old = vec!["x".to_string(), "y".to_string()];
+    let new: Vec<String> = vec![];
+    let d = unified_diff(&old, &new);
+    assert!(d.contains("-x") && d.contains("-y"), "both removed: {d}");
+    assert!(
+        d.contains("@@ -1,2 +0,0 @@"),
+        "pure-deletion header uses the 0,0 new form: {d}"
+    );
+}
+
+#[test]
+fn resolve_cutoff_empty_string_means_no_cutoff() {
+    // An empty `--at` spec returns None (replay everything). Drives the `when.is_empty()`
+    // true arm in isolation (the combined test asserted it among others).
+    let events = vec![FileEvent {
+        line_no: 7,
+        turn_index: 0,
+        timestamp_utc: Some("2026-06-07T05:00:00Z".into()),
+        kind: EventKind::HistorySnapshotMarker,
+    }];
+    assert_eq!(
+        resolve_cutoff("   ", &events).unwrap(),
+        None,
+        "blank → no cutoff"
+    );
+}
+
+#[test]
+fn window_admits_turn_below_low_bound_is_rejected() {
+    // The `turn_index < lo` operand of the range check: a turn BELOW the window's low bound
+    // is excluded (the prior test only drove the `> hi` operand).
+    let tw = TimeWindow::default();
+    assert!(
+        !window_admits(2, None, Some((5, 10)), &tw),
+        "turn 2 is below the [5,10] window low bound"
+    );
+    assert!(
+        window_admits(5, None, Some((5, 10)), &tw),
+        "turn 5 is the inclusive low bound"
+    );
+}
+
+#[test]
+fn fmt_counts_write_only_and_external_and_integrity_arms() {
+    // The first fmt_counts test left the write / external_edit / history_snapshot /
+    // integrity_error display arms uncovered (it only had reads/edits/bash). Drive them.
+    let c = EventCounts {
+        write: 1,
+        external_edit: 2,
+        history_snapshot: 1,
+        integrity_error: 3,
+        ..EventCounts::default()
+    };
+    let s = fmt_counts(&c);
+    assert!(s.contains("1 write"), "write arm: {s}");
+    assert!(s.contains("2 external-edit"), "external-edit arm: {s}");
+    assert!(
+        s.contains("1 history-snapshot"),
+        "history-snapshot arm: {s}"
+    );
+    assert!(s.contains("3 integrity-error"), "integrity-error arm: {s}");
+    // An edit with NO un-anchorable companion → the empty-suffix branch of the edit arm.
+    let only_edit = EventCounts {
+        edit: 2,
+        ..EventCounts::default()
+    };
+    let se = fmt_counts(&only_edit);
+    assert_eq!(
+        se, "2 edit",
+        "no un-anchorable suffix when all edits anchored"
+    );
+}
+
+#[test]
+fn render_snapshot_body_inline_truncates_long_known_lines() {
+    // `inline_trunc = true` truncates an over-long known line with the explicit marker; the
+    // first body test only exercised the verbatim (`false`) path.
+    let long = "z".repeat(EXCERPT_MAX + 10);
+    let known = vec![(1usize, long.clone())];
+    let trunc = render_snapshot_body(&known, 1, true);
+    assert!(
+        trunc.contains("… (+10 chars)"),
+        "inline-truncated with explicit marker: {}",
+        &trunc[..trunc.len().min(80)]
+    );
+    // The verbatim form keeps the full line.
+    let verbatim = render_snapshot_body(&known, 1, false);
+    assert!(verbatim.contains(&long), "verbatim form is not truncated");
+}
+
+#[test]
+fn gap_ranges_whole_file_unknown_when_no_known_lines() {
+    // Empty known + total>0 → the `else if known.is_empty() && total > 0` arm yields one
+    // whole-file gap. (The interior/trailing arms were already covered.)
+    assert_eq!(gap_ranges(&[], 4), vec![(1, 4)]);
+    // Empty known + total == 0 → no gaps at all (nothing seen, nothing to mark).
+    assert_eq!(gap_ranges(&[], 0), Vec::<(usize, usize)>::new());
+}
+
+#[test]
+fn structured_patch_multi_hunk_running_offset_anchors_later_hunk() {
+    // A two-hunk patch where the FIRST hunk inserts extra lines (positive running offset),
+    // shifting the SECOND hunk's anchored position. This exercises the cross-hunk offset
+    // accounting (each later hunk's oldStart maps onto the already-shifted dense vector).
+    // Buffer is a\nb\nc; hunk 1 expands line 1 into three lines, hunk 2 then changes the
+    // (offset-shifted) last line.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "a\nb\nc".into(),
+                total_lines: 3,
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::Edit {
+                hunks: vec![EditHunk {
+                    old_string: "a".into(),
+                    new_string: "a1\na2\na3".into(),
+                    replace_all: false,
+                }],
+                original_file: None,
+                structured_patch: Some(vec![
+                    // hunk 1: line 1 (a) → three lines → running offset +2.
+                    PatchHunk {
+                        old_start: 1,
+                        old_lines: 1,
+                        new_lines: 3,
+                        lines: vec!["-a".into(), "+a1".into(), "+a2".into(), "+a3".into()],
+                    },
+                    // hunk 2: original line 3 (c) → C. With offset +2 its start is 5, end 6,
+                    // past the span+1 (=5) dense length → forces the resize.
+                    PatchHunk {
+                        old_start: 3,
+                        old_lines: 1,
+                        new_lines: 1,
+                        lines: vec!["-c".into(), "+C".into()],
+                    },
+                ]),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.final_buffer.known_lines(),
+        vec![
+            (1, "a1".into()),
+            (2, "a2".into()),
+            (3, "a3".into()),
+            (4, "b".into()),
+            (5, "C".into()),
+        ],
+        "both hunks applied with the running offset; the trailing line C was reached via the resize"
+    );
+}
+
+#[test]
+fn replay_edit_as_first_event_opens_a_segment() {
+    // An Edit arriving with NO prior read/anchor (seg_open == None) takes the TRUE side of
+    // `if seg_open.is_none()` and OPENS a fresh segment. With no known content it cannot
+    // anchor (un-anchorable hole), but a segment is opened so the op is timeline-visible.
+    let events = vec![FileEvent {
+        line_no: 1,
+        turn_index: 0,
+        timestamp_utc: None,
+        kind: EventKind::Edit {
+            hunks: vec![EditHunk {
+                old_string: "x".into(),
+                new_string: "y".into(),
+                replace_all: false,
+            }],
+            original_file: None,
+            structured_patch: None,
+        },
+    }];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.segments.len(),
+        1,
+        "the lone edit opened a segment (seg_open was None → the if-body ran)"
+    );
+    assert_eq!(
+        rep.counts.edit_unanchorable, 1,
+        "with no known content the edit is an honest hole"
+    );
+}
+
+#[test]
+fn collect_tool_use_paths_skips_missing_and_empty_file_path() {
+    // A Read tool_use with NO file_path input, and an Edit tool_use with an EMPTY one →
+    // neither is recorded (the `if let Some(p)` None side + the `!p.is_empty()` false side).
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"r1","name":"Read","input":{"limit":5}},{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"","old_string":"x","new_string":"y"}}]}}"#,
+    ]);
+    let mut out = std::collections::BTreeMap::new();
+    for (_, r) in &recs {
+        collect_tool_use_paths(r.blocks(), &mut out);
+    }
+    assert!(
+        out.is_empty(),
+        "a Read with no file_path and an Edit with an empty one record no id→path entry: {out:?}"
+    );
+}
+
+#[test]
+fn exitplanmode_with_missing_or_empty_plan_yields_no_candidate() {
+    // ExitPlanMode whose `plan` field is absent → the `if let Some(plan_text)` None side;
+    // and one whose plan is the empty string → the `!plan_text.is_empty()` false side.
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"planFilePath":"/x.md"}}]}}"#,
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p2","name":"ExitPlanMode","input":{"plan":""}}]}}"#,
+    ]);
+    let (_, plans) = extract(&recs, None);
+    assert!(
+        plans.is_empty(),
+        "a plan-less and an empty-plan ExitPlanMode produce no candidates: {}",
+        plans.len()
+    );
+}
+
+#[test]
+fn bash_tool_use_without_command_is_ignored() {
+    // A Bash tool_use with no `command` input → the `if let Some(cmd)` None side; no
+    // BashTouch is produced (and nothing panics on the missing field).
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"timeout":1000}}]}}"#,
+    ]);
+    let ev = extract_events(&recs, "/p/a.rs");
+    assert!(
+        ev.is_empty(),
+        "a Bash tool_use with no command touches nothing: {}",
+        ev.len()
+    );
+}
+
+#[test]
+fn write_to_plan_path_without_content_or_file_path_is_ignored() {
+    // A Write to a plan-ish path with NO content → the content `if let Some` None side; and
+    // a Write with no file_path at all → the file_path None side. Neither becomes a plan.
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/repo/plan.md"}}]}}"#,
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"w2","name":"Write","input":{"content":"body"}}]}}"#,
+    ]);
+    let (_, plans) = extract(&recs, None);
+    assert!(
+        plans.is_empty(),
+        "a content-less plan Write and a path-less Write produce no plan candidates: {}",
+        plans.len()
+    );
+}
+
+#[test]
+fn history_snapshot_without_tracked_backups_is_ignored() {
+    // A file-history-snapshot whose snapshot object lacks `trackedFileBackups` → the
+    // `if let Some(tfb)` None side; no marker event is emitted.
+    let recs = numbered(&[
+        r#"{"type":"file-history-snapshot","snapshot":{"timestamp":"2026-06-07T05:00:00.000Z","messageId":"m1"}}"#,
+    ]);
+    let ev = extract_events(&recs, "/p/a.rs");
+    assert!(
+        ev.is_empty(),
+        "a snapshot with no trackedFileBackups yields no marker: {}",
+        ev.len()
+    );
+}
+
+#[test]
+fn apply_edit_falls_back_to_string_edit_when_structured_patch_is_empty() {
+    // A structured_patch of `Some(vec![])` (empty) takes the `if !patches.is_empty()` FALSE
+    // side and falls through to the string-replacement path, which still applies cleanly.
+    let mut buf = SparseBuffer::default();
+    buf.reset_to_full("hello\nworld", 2, 1);
+    let hunks = vec![EditHunk {
+        old_string: "world".into(),
+        new_string: "there".into(),
+        replace_all: false,
+    }];
+    let outcome = apply_edit(&mut buf, &hunks, &Some(vec![]), 9);
+    assert_eq!(
+        outcome,
+        EditOutcome::Applied,
+        "empty patch → string fallback applied"
+    );
+    assert_eq!(
+        buf.known_lines(),
+        vec![(1, "hello".into()), (2, "there".into())]
+    );
+}
+
+#[test]
+fn structured_patch_pure_insertion_adjacent_to_known_lines_applies() {
+    // A pure insertion (old_lines == 0) adjacent to known content drives the
+    // `h.old_lines > 0` FALSE side of both the region-known and context-verify guards, and
+    // the insertion is applied (the gap-isolated variant is covered separately as a hole).
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "a\nb".into(),
+                total_lines: 2,
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::Edit {
+                hunks: vec![EditHunk {
+                    old_string: "a".into(),
+                    new_string: "a\nINS".into(),
+                    replace_all: false,
+                }],
+                original_file: None,
+                // Insert after line 1 (old_lines 0, adjacent to the known line 1).
+                structured_patch: Some(vec![PatchHunk {
+                    old_start: 2,
+                    old_lines: 0,
+                    new_lines: 1,
+                    lines: vec!["+INS".into()],
+                }]),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.final_buffer.known_lines(),
+        vec![(1, "a".into()), (2, "INS".into()), (3, "b".into())],
+        "the adjacent pure insertion is applied without fabricating islands"
+    );
+    assert_eq!(
+        rep.counts.edit_unanchorable, 0,
+        "an anchored insertion is not a hole"
+    );
+}
+
+#[test]
+fn edit_originalfile_present_but_no_full_anchor_does_not_flag() {
+    // An Edit carrying an originalFile arrives BEFORE any full anchor (had_full_anchor is
+    // false) → the `had_full_anchor && …` short-circuit FALSE side: no disagreement
+    // boundary is raised (we cannot prove drift without an anchor to compare against).
+    let events = vec![FileEvent {
+        line_no: 1,
+        turn_index: 0,
+        timestamp_utc: None,
+        kind: EventKind::Edit {
+            hunks: vec![EditHunk {
+                old_string: "a".into(),
+                new_string: "A".into(),
+                replace_all: false,
+            }],
+            original_file: Some("totally\ndifferent".into()),
+            structured_patch: None,
+        },
+    }];
+    let rep = replay(&events, None);
+    assert!(
+        rep.boundaries.is_empty(),
+        "no anchor yet → originalFile cannot be cross-checked → no false boundary"
+    );
+}
+
+#[test]
+fn structured_patch_skips_context_check_when_old_region_len_mismatches() {
+    // A malformed hunk that claims old_lines=2 but lists only ONE old-region line drives the
+    // `old_region.len() == h.old_lines` FALSE side: the context-equality check is skipped
+    // (we cannot compare a mismatched region), but the region-known guard still applies. The
+    // region IS known here (lines 1-2), so the edit is applied by position without the
+    // (impossible) context comparison.
+    let mut buf = SparseBuffer::default();
+    buf.reset_to_full("a\nb\nc", 3, 1);
+    // old_lines=2 but only one " " context line listed → old_region.len()==1 != 2.
+    let patches = vec![PatchHunk {
+        old_start: 1,
+        old_lines: 2,
+        new_lines: 1,
+        lines: vec![" a".into(), "+merged".into()],
+    }];
+    let outcome = apply_structured_patch(&mut buf, &patches, 9);
+    assert_eq!(
+        outcome,
+        EditOutcome::Applied,
+        "a mismatched-length old-region is applied by position, skipping the context check"
+    );
+    // The new region is the context (` a`) + added (`+merged`) lines, spliced over the
+    // declared 2-line old span (lines 1-2), so line 3 (c) is preserved after them.
+    assert_eq!(
+        buf.known_lines(),
+        vec![(1, "a".into()), (2, "merged".into()), (3, "c".into())]
+    );
+}
+
+#[test]
+fn edit_originalfile_agreeing_with_buffer_raises_no_boundary() {
+    // An Edit whose originalFile MATCHES the anchored buffer drives the
+    // `buffer_disagrees_with_original(...)` FALSE side (anchor present, no drift) → no
+    // disagreement boundary, and the edit applies normally.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "a\nb\nc".into(),
+                total_lines: 3,
+                source: SnapSource::FullRead,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::Edit {
+                hunks: vec![EditHunk {
+                    old_string: "b".into(),
+                    new_string: "B".into(),
+                    replace_all: false,
+                }],
+                // originalFile AGREES with the replayed buffer → no disagreement.
+                original_file: Some("a\nb\nc".into()),
+                structured_patch: Some(vec![PatchHunk {
+                    old_start: 2,
+                    old_lines: 1,
+                    new_lines: 1,
+                    lines: vec!["-b".into(), "+B".into()],
+                }]),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert!(
+        !rep.boundaries
+            .iter()
+            .any(|b| b.kind == "original_file_disagreement"),
+        "an agreeing originalFile raises no boundary"
+    );
+    assert_eq!(
+        rep.final_buffer.known.get(&2).map(|c| c.text.as_str()),
+        Some("B"),
+        "the edit applied cleanly"
+    );
+}
+
+#[test]
+fn unified_diff_caps_leading_context_at_three_lines() {
+    // A change far into the file (preceded by many identical lines) must show AT MOST 3
+    // lines of leading context — driving the `ctx_back < CONTEXT` cap of the back-context
+    // walk. Lines 1-6 are identical; line 7 changes. The hunk's first context line is line
+    // 4 (7 minus 3), never line 1.
+    let old: Vec<String> = (1..=8).map(|n| format!("line{n}")).collect();
+    let mut new = old.clone();
+    new[6] = "line7-CHANGED".to_string(); // change the 7th line (index 6)
+    let d = unified_diff(&old, &new);
+    assert!(
+        d.contains("-line7") && d.contains("+line7-CHANGED"),
+        "the change: {d}"
+    );
+    // Exactly three leading context lines (line4, line5, line6); line3 and earlier excluded.
+    assert!(
+        d.contains(" line4\n line5\n line6\n"),
+        "3 lines of leading context: {d}"
+    );
+    assert!(
+        !d.contains(" line1\n") && !d.contains(" line3\n"),
+        "context is capped at 3 lines (line1..line3 excluded): {d}"
+    );
+}
+
+#[test]
+fn buffer_disagrees_below_threshold_does_not_flag() {
+    // A single mismatch in many comparable lines stays UNDER the 25% threshold → the
+    // `mismatches * 4 >= compared` FALSE side: not flagged (one fluke is not a boundary).
+    let mut buf = SparseBuffer::default();
+    buf.reset_to_full("a\nb\nc\nd\ne\nf\ng\nh", 8, 1);
+    // Original differs in exactly ONE of eight lines (12.5% < 25%).
+    assert!(
+        !buffer_disagrees_with_original(&buf, "a\nb\nc\nX\ne\nf\ng\nh"),
+        "1/8 mismatch is below the disagreement threshold"
+    );
+}
+
+#[test]
+fn strip_gutter_skips_digits_without_a_separator_and_unparseable_widths() {
+    // A line with leading digits but NEITHER a tab NOR an arrow separator → the final else
+    // `continue` (no gutter recognized). And a digit run too large for usize → the
+    // `digits.parse::<usize>()` Err side: skipped, never fabricated.
+    let huge = "9".repeat(40); // overflows usize
+    let snippet = format!("12 no-separator-here\n{huge}\tlost\n7\tkept");
+    let got = strip_gutter(&snippet);
+    assert_eq!(
+        got,
+        vec![(7, "kept".to_string())],
+        "only the well-formed tab-guttered line survives: {got:?}"
+    );
+}
+
+#[test]
+fn path_matches_deep_suffix_after_slash_boundary() {
+    // Directly drives the `prefix.ends_with('/')` operand: a target that is a trailing
+    // multi-segment slice whose stripped prefix is non-empty and slash-terminated.
+    assert!(
+        path_matches(Some("src/relay/engine.py"), "/root/app/src/relay/engine.py"),
+        "deep suffix accepted (prefix '/root/app/' is non-empty and ends with '/')"
+    );
+    assert!(
+        path_matches(Some("b/c.rs"), "/a/b/c.rs"),
+        "two-segment suffix at a '/' boundary"
+    );
+}
+
+#[test]
+fn buffer_disagrees_requires_partial_overlap_and_threshold() {
+    // Known lines that fall OUTSIDE the original's length are skipped (the `*k <= len`
+    // guard), and a single mismatch below the 25% threshold does NOT flag.
+    let mut buf = SparseBuffer::default();
+    // Known lines 1,2,3,4 — original is only 4 long; one of four mismatches = 25% → flags.
+    buf.reset_to_full("a\nb\nc\nQ", 4, 1);
+    assert!(
+        buffer_disagrees_with_original(&buf, "a\nb\nc\nd"),
+        "one mismatch in four (25%) meets the threshold"
+    );
+    // A known line beyond the original's length is ignored (not compared, not a mismatch).
+    let mut buf2 = SparseBuffer::default();
+    buf2.reset_to_full("a\nb\nEXTRA", 3, 1);
+    assert!(
+        !buffer_disagrees_with_original(&buf2, "a\nb"),
+        "the line-3 EXTRA is beyond the 2-line original → not compared → no false flag"
+    );
+}

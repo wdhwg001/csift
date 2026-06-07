@@ -838,11 +838,13 @@ fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk
 }
 
 /// True when a path looks plan-ish (heuristic, for `--plan` plan-file Write detection).
+///
+/// Note: a dedicated `.claude/plans/` arm is intentionally absent — every such path is a
+/// strict superset of `/plans/`, so that operand would be dead (unreachable) code.
 fn is_plan_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower.contains("plan.md")
         || lower.contains("/plans/")
-        || lower.contains(".claude/plans/")
         || (lower.contains("plan") && lower.ends_with(".md"))
 }
 
@@ -1007,6 +1009,11 @@ fn apply_structured_patch(
 
         let start = (h.old_start as isize + offset).max(1) as usize;
         let end = start + h.old_lines; // exclusive
+                                       // Defensive grow: `dense` is pre-sized to `span + 1` (≥ every hunk's
+                                       // `old_start + old_lines`) and each splice grows it by the running offset, so with
+                                       // well-formed ascending hunks `end` never exceeds `dense.len()`. We keep the guard
+                                       // anyway because the hunk stream is untrusted transcript data — a pathological
+                                       // (e.g. non-ascending) `structuredPatch` must not index out of bounds below.
         if end > dense.len() {
             dense.resize(end, None);
         }

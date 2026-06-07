@@ -2318,3 +2318,905 @@ fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
         "expected a substantial clean prefix, got {prefix_len}"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// recover render-path branch completeness: arms reachable only through the real
+// stdout/JSON renderers (empty-session skips, no-history `!any`, multi-session
+// separators, --out for every mode, coverage holes, truncation). Synthetic homes
+// only — these never touch the real fixture.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A session that reads a file then makes an UN-ANCHORABLE edit (a structured patch deep
+/// in an unknown gap) → `--coverage` reports a coverage hole + a windowed read.
+fn recover_hole_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"peek"}}"#, "\n",
+            // A windowed read of lines 1-2 of a 100-line file (lines 3-100 stay gaps).
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/big.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":100}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            // An edit at line 60 — deep in the gap, no adjacent known line → un-anchorable.
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"filePath":"/p/big.rs","oldString":"zzz","newString":"Z","structuredPatch":[{"oldStart":60,"oldLines":1,"newStart":60,"newLines":1,"lines":["-zzz","+Z"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h
+}
+
+#[test]
+fn recover_coverage_reports_unanchorable_holes() {
+    // Drives the `if rep.counts.edit_unanchorable > 0` coverage-hole line in the text
+    // renderer + the windowed-read count display.
+    let h = recover_hole_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/big.rs",
+        "--coverage",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("un-anchorable edits (coverage holes): 1"),
+        "coverage hole reported: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("windowed"),
+        "windowed read counted: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_patches_no_history_says_so() {
+    // `--patches` against a file with no recoverable events → the `!any` honest-empty arm
+    // of the patches text renderer (distinct from the coverage-mode `!any` already tested).
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/no/such.rs",
+        "--patches",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no recoverable history"),
+        "patches honest-empty: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_no_history_says_so() {
+    // `--at` against a file with no events → the at-mode `!any` honest-empty arm.
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/no/such.rs",
+        "--at",
+        "@line:5",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no recoverable history"),
+        "at honest-empty: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_plan_no_history_says_so() {
+    // A session with file events but ZERO plan candidates → the plan-mode `!any` arm
+    // ("no restorable plan found in range"), and the `s.plans.is_empty()` skip.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/x.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", "--session", SESS, "--plan"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no restorable plan found"),
+        "plan honest-empty: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
+    // A session whose ONLY event for the target is a file-history-snapshot marker. The
+    // marker is counted but opens no segment and creates no boundary → the
+    // `segments.is_empty() && boundaries.is_empty()` skip fires (both text + JSON patches).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"file-history-snapshot","snapshot":{"timestamp":"2026-06-07T05:00:00.500Z","trackedFileBackups":{"/p/snap.rs":{"backupFileName":null,"version":1,"backupTime":"2026-06-07T05:00:00.500Z"}}}}"#, "\n",
+        ),
+    );
+    // Text patches: the snapshot-only session is skipped → honest empty.
+    let text = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/snap.rs",
+        "--patches",
+    ]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    assert!(
+        text.stdout.contains("no recoverable history"),
+        "snapshot-only session yields no patch segments: {}",
+        text.stdout
+    );
+    // JSON patches: only the trailing summary object, zero segment/boundary objects.
+    let js = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/snap.rs",
+        "--patches",
+        "--format",
+        "json",
+    ]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    let objs: Vec<serde_json::Value> = js
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    assert!(
+        objs.iter().all(|o| o.get("type").is_none()),
+        "no segment/boundary objects, only the summary: {}",
+        js.stdout
+    );
+    assert!(objs.last().unwrap().get("summary").is_some());
+    assert_eq!(
+        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        Some(0),
+        "the snapshot-only session contributed no patch output"
+    );
+}
+
+#[test]
+fn recover_coverage_groups_multiple_sessions_with_separator() {
+    // Two sessions BOTH touching the same file via a positional project-path target (no
+    // --session) → the coverage renderer prints two SESSION headers separated by a blank
+    // line (the `if !*first` separator arm).
+    let h = Home::new();
+    let sess_a = "aaaaaaaa-1111-1111-1111-111111111111";
+    let sess_b = "bbbbbbbb-2222-2222-2222-222222222222";
+    for s in [sess_a, sess_b] {
+        h.write(
+            &format!("{ENC}/{s}.jsonl"),
+            concat!(
+                r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+                r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/shared.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            ),
+        );
+    }
+    let out = h.run(&["recover", ENC, "--file", "/p/shared.rs", "--coverage"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.matches("SESSION").count() >= 2,
+        "two session headers with a separator: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_skips_session_with_no_seen_total() {
+    // Two sessions under one project: one reads /p/seen.rs, the other only reads a DIFFERENT
+    // file. For the target /p/seen.rs, the second session has empty known + no seen_total →
+    // the `known.is_empty() && seen_total_lines.is_none()` continue fires, so only ONE
+    // session snapshot is emitted (the other is honestly skipped, not shown as empty).
+    let h = Home::new();
+    let sess_a = "aaaaaaaa-3333-3333-3333-333333333333";
+    let sess_b = "bbbbbbbb-4444-4444-4444-444444444444";
+    h.write(
+        &format!("{ENC}/{sess_a}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/seen.rs","content":"x\ny","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{sess_b}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/other.rs","content":"q","startLine":1,"numLines":1,"totalLines":1}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", ENC, "--file", "/p/seen.rs", "--at", "@line:9999"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout.matches("SESSION").count(),
+        1,
+        "only the session that actually touched /p/seen.rs is shown: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("x"),
+        "the seen content is rendered: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_plan_long_body_prints_truncation_hint() {
+    // A plan whose body exceeds the inline excerpt cap → stdout prints the truncated body
+    // AND the "pass --out … to write the full N chars verbatim" hint (the
+    // `r.text.chars().count() > EXCERPT_MAX` arm of the plan text renderer).
+    let big_plan = "STEP ".repeat(200); // 1000 chars, well over the 400-char cap
+    let line = format!(
+        r#"{{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"pl0","name":"ExitPlanMode","input":{{"plan":"{}"}}}}]}}}}"#,
+        big_plan.trim_end()
+    );
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#,
+            line
+        ),
+    );
+    // No --out → the body is printed inline (truncated) and the hint is shown.
+    let out = h.run(&["recover", "--session", SESS, "--plan"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("--- plan body ---"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("… (+") && out.stdout.contains("chars)"),
+        "inline truncation marker: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("pass --out") && out.stdout.contains("verbatim"),
+        "truncation hint pointing at --out: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_json_out_writes_partial_snapshot_artifact() {
+    // The at-mode JSON renderer's `--out` arm: it writes the partial-snapshot blob (known
+    // lines + explicit gap markers) to disk while still emitting NDJSON to stdout.
+    let h = recover_scenario_home();
+    let out_path = h.root.join("at-artifact.txt");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--at",
+        "@turn:0",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let blob = std::fs::read_to_string(&out_path).expect("at JSON --out artifact");
+    assert!(
+        blob.contains("import os"),
+        "the snapshot artifact carries known content: {blob}"
+    );
+}
+
+#[test]
+fn recover_patches_json_out_writes_concatenated_diffs() {
+    // The patches-mode JSON renderer's `--out` arm writes the concatenated diff blob.
+    let h = recover_scenario_home();
+    let out_path = h.root.join("patches-json.diff");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--patches",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let blob = std::fs::read_to_string(&out_path).expect("patches JSON --out artifact");
+    assert!(
+        blob.contains("@@ -") && blob.contains("+with open(src) as fh:"),
+        "concatenated diff blob from the JSON renderer: {blob}"
+    );
+}
+
+#[test]
+fn recover_plan_json_out_writes_global_latest_verbatim() {
+    // The plan-mode JSON renderer's `--out` arm writes the GLOBALLY latest plan text
+    // verbatim (across sessions) to disk.
+    let h = recover_scenario_home();
+    let out_path = h.root.join("plan-json.md");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--plan",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let got = std::fs::read_to_string(&out_path).expect("plan JSON --out artifact");
+    assert_eq!(
+        got, "PLAN café🛠\n- step one\n- step two",
+        "the latest plan body is written byte-exact from the JSON renderer"
+    );
+}
+
+/// A session whose ONLY event for the target is an edit with no preceding read → the edit
+/// is un-anchorable, leaving an empty buffer and no seen_total (events non-empty, but the
+/// reconstruction is empty). Used to drive the at-mode "nothing known" skip in both
+/// renderers.
+fn recover_empty_reconstruction_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            // An Edit result for /p/e.rs with NO prior read → un-anchorable, no known lines.
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"filePath":"/p/e.rs","oldString":"x","newString":"y","structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-x","+y"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h
+}
+
+#[test]
+fn recover_at_text_skips_session_with_events_but_no_known_content() {
+    // Text at-mode: the session HAS an event (the edit, so it passes the events-empty
+    // guard) but reconstructs to nothing known + no seen_total → the
+    // `known.is_empty() && seen_total.is_none()` continue fires → honest "no history".
+    let h = recover_empty_reconstruction_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/e.rs",
+        "--at",
+        "@line:9999",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no recoverable history"),
+        "an all-un-anchorable session shows nothing reconstructable: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_json_skips_session_with_events_but_no_known_content() {
+    // JSON at-mode: same shape → no snapshot object, only the summary with sessions == 0.
+    let h = recover_empty_reconstruction_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/e.rs",
+        "--at",
+        "@line:9999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    assert!(
+        objs.iter()
+            .all(|o| o.get("type").and_then(|v| v.as_str()) != Some("snapshot")),
+        "no snapshot emitted for an empty reconstruction: {}",
+        out.stdout
+    );
+    assert_eq!(
+        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        Some(0)
+    );
+}
+
+#[test]
+fn recover_coverage_zero_seen_total_reports_zero_percent() {
+    // A coverage run where the reconstruction is empty (un-anchorable edit only) → known 0,
+    // seen_total 0 → the `if total > 0` percent guard takes its FALSE side (0%), and the
+    // covered-ranges line shows "(none)".
+    let h = recover_empty_reconstruction_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/e.rs",
+        "--coverage",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("0/0 lines (0%)"),
+        "zero-total recoverable reports 0%: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("covered line ranges: (none)"),
+        "no covered ranges: {}",
+        out.stdout
+    );
+    // The un-anchorable edit is surfaced as a coverage hole.
+    assert!(
+        out.stdout
+            .contains("un-anchorable edits (coverage holes): 1"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_turn_range_and_until_mutually_exclusive() {
+    // The mutual-exclusion guard's `until.is_some()` operand: --turn-range with --until (no
+    // --since) → the second operand of the inner `||` is the one that trips the bail.
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--coverage",
+        "--turn-range",
+        "0..1",
+        "--until",
+        "2026-06-08",
+    ]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("mutually exclusive"),
+        "--turn-range + --until is the mutual-exclusion bail: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn recover_json_coverage_skips_empty_event_session() {
+    // JSON coverage mode: one session touches the target, another touches a different file.
+    // The non-touching session is skipped (`s.events.is_empty()` true in the JSON branch),
+    // so exactly one coverage object precedes the summary, and summary.sessions == 1.
+    let h = Home::new();
+    let sess_a = "aaaaaaaa-5555-5555-5555-555555555555";
+    let sess_b = "bbbbbbbb-6666-6666-6666-666666666666";
+    h.write(
+        &format!("{ENC}/{sess_a}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/t.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{sess_b}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/elsewhere.rs","content":"q","startLine":1,"numLines":1,"totalLines":1}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        ENC,
+        "--file",
+        "/p/t.rs",
+        "--coverage",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    let cov_objs = objs
+        .iter()
+        .filter(|o| o.get("recoverable_lines").is_some())
+        .count();
+    assert_eq!(
+        cov_objs, 1,
+        "only the touching session yields a coverage object"
+    );
+    assert_eq!(
+        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        Some(1),
+        "the non-touching session was skipped, not emitted"
+    );
+}
+
+#[test]
+fn recover_json_patches_skips_empty_event_session() {
+    // JSON patches mode skip: a target with no events in the (only) session → no segment or
+    // boundary objects, summary.sessions == 0 (the `s.events.is_empty()` JSON-patches arm).
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/no/such.rs",
+        "--patches",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    assert!(
+        objs.iter().all(|o| o.get("type").is_none()),
+        "no segment/boundary objects for a no-event target: {}",
+        out.stdout
+    );
+    assert_eq!(
+        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        Some(0)
+    );
+}
+
+#[test]
+fn recover_json_at_skips_session_with_no_seen_total() {
+    // JSON at-mode skip: same two-session shape as the text variant, but `--format json`,
+    // driving the `known.is_empty() && seen_total.is_none()` continue in the JSON renderer.
+    let h = Home::new();
+    let sess_a = "aaaaaaaa-7777-7777-7777-777777777777";
+    let sess_b = "bbbbbbbb-8888-8888-8888-888888888888";
+    h.write(
+        &format!("{ENC}/{sess_a}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/here.rs","content":"x\ny","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{sess_b}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/elsewhere.rs","content":"q","startLine":1,"numLines":1,"totalLines":1}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        ENC,
+        "--file",
+        "/p/here.rs",
+        "--at",
+        "@line:9999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    let snaps = objs
+        .iter()
+        .filter(|o| o.get("type").and_then(|v| v.as_str()) == Some("snapshot"))
+        .count();
+    assert_eq!(
+        snaps, 1,
+        "only the session that saw /p/here.rs emits a snapshot"
+    );
+    assert_eq!(
+        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        Some(1)
+    );
+}
+
+#[test]
+fn recover_json_plan_skips_session_with_no_plans() {
+    // JSON plan mode skip: a session with file events but ZERO plans → `s.plans.is_empty()`
+    // true in the JSON plan branch, so no plan_candidate objects, summary.sessions == 0.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/np.rs","content":"a","startLine":1,"numLines":1,"totalLines":1}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", "--session", SESS, "--plan", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    assert!(
+        objs.iter().all(|o| o.get("type").is_none()),
+        "no plan_candidate objects when there are no plans: {}",
+        out.stdout
+    );
+    assert_eq!(
+        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        Some(0)
+    );
+}
+
+#[test]
+fn recover_coverage_heuristic_boundary_uses_soft_symbol() {
+    // A coverage run over a session with a HEURISTIC (bash) boundary drives the coverage
+    // renderer's `~` (soft) boundary symbol arm — distinct from the `⚠` authoritative one.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/sb.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"sed -i 's/a/A/' /p/sb.rs"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/sb.rs",
+        "--coverage",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("integrity boundaries:") && out.stdout.contains("HEURISTIC"),
+        "heuristic boundary listed in coverage: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("~ L"),
+        "the soft '~' symbol prefixes a heuristic boundary: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_patches_boundary_only_session_still_renders() {
+    // A session whose ONLY event is a Bash mutation on the target (no prior read) produces a
+    // boundary but NO segment → `segments.is_empty() && boundaries.is_empty()` is
+    // `true && false` (the second operand FALSE side), so the session is NOT skipped and the
+    // lone boundary is rendered.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"sed -i 's/a/A/' /p/bo.rs"}}]}}"#, "\n",
+        ),
+    );
+    // Text patches: the boundary is shown even though no segment exists.
+    let text = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/bo.rs",
+        "--patches",
+    ]);
+    assert!(text.success, "stderr: {}", text.stderr);
+    assert!(
+        text.stdout.contains("INTEGRITY BOUNDARY") && text.stdout.contains("HEURISTIC"),
+        "the lone boundary renders without a segment: {}",
+        text.stdout
+    );
+    // JSON patches: a boundary object is emitted (same non-skip second-operand path).
+    let js = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/bo.rs",
+        "--patches",
+        "--format",
+        "json",
+    ]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    let has_boundary = js
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .any(|o| o.get("type").and_then(|v| v.as_str()) == Some("boundary"));
+    assert!(has_boundary, "a boundary object is emitted: {}", js.stdout);
+}
+
+#[test]
+fn recover_at_empty_when_spec_omits_cutoff_line() {
+    // `--at ""` (an explicit empty cutoff spec) → `resolve_cutoff` returns None → the
+    // `if let Some(c) = cutoff` FALSE side: the snapshot renders WITHOUT an "as of:" line.
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--at", ""]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("as of: jsonl line"),
+        "an empty cutoff omits the 'as of' line: {}",
+        out.stdout
+    );
+    // It still renders the fully-replayed snapshot (no cutoff → everything).
+    assert!(out.stdout.contains("import os"), "{}", out.stdout);
+}
+
+#[test]
+fn recover_at_line_range_outside_known_keeps_seen_total() {
+    // A windowed read sets seen_total_lines, but a `--line-range` that selects NO known line
+    // leaves `known` empty while seen_total is still Some → the
+    // `known.is_empty() && seen_total.is_none()` check has its SECOND operand FALSE (the
+    // session is NOT skipped; it renders an all-gap snapshot up to the seen total).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            // A windowed read of lines 5-6 (seen_total 10).
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/lr.rs","content":"l5\nl6","startLine":5,"numLines":2,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    // Restrict to lines 1-2 — OUTSIDE the known 5-6 window → known empties, seen_total stays.
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/lr.rs",
+        "--at",
+        "@line:9999",
+        "--line-range",
+        "1..2",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The session is rendered (not skipped) because seen_total is Some → an explicit gap.
+    assert!(
+        out.stdout.contains("SESSION") && out.stdout.contains("unknown"),
+        "an out-of-range line filter still renders the session as explicit gaps: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_at_json_line_range_outside_known_keeps_seen_total() {
+    // The JSON at-mode twin of the text test: a windowed read sets seen_total, but a
+    // `--line-range` selecting no known line empties `known` while seen_total stays Some →
+    // the JSON renderer's `known.is_empty() && seen_total.is_none()` second operand is FALSE
+    // (the snapshot is emitted, carrying the gap up to the seen total).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/lrj.rs","content":"l5\nl6","startLine":5,"numLines":2,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/lrj.rs",
+        "--at",
+        "@line:9999",
+        "--line-range",
+        "1..2",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let snap = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("snapshot"))
+        .expect("a snapshot object is still emitted");
+    // No known lines survive the range filter, but the seen total + gaps are reported.
+    assert_eq!(
+        snap.get("lines")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len()),
+        Some(0),
+        "no known lines in the 1..2 range: {snap}"
+    );
+    assert_eq!(
+        snap.get("seen_total_lines").and_then(|v| v.as_u64()),
+        Some(10),
+        "the seen total is preserved: {snap}"
+    );
+}
+
+#[test]
+fn recover_plan_json_global_latest_ignores_earlier_session_plan() {
+    // Two sessions each with a plan; the SECOND-scanned session's plan is EARLIER. The
+    // global-latest selection's `plan_is_later(l, g)` returns false → the outer `if`
+    // condition FALSE side: the earlier plan does NOT replace the already-chosen later one.
+    let h = Home::new();
+    // Sessions sort by id; sess_a sorts first. Give sess_a the LATER timestamp so the
+    // later-scanned sess_b's earlier plan must NOT win.
+    let sess_a = "aaaaaaaa-9999-9999-9999-999999999999";
+    let sess_b = "bbbbbbbb-9999-9999-9999-999999999999";
+    h.write(
+        &format!("{ENC}/{sess_a}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T09:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T09:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"LATER PLAN"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{sess_b}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p2","name":"ExitPlanMode","input":{"plan":"EARLIER PLAN"}}]}}"#, "\n",
+        ),
+    );
+    let out_path = h.root.join("global-latest.md");
+    let out = h.run(&[
+        "recover",
+        ENC,
+        "--plan",
+        "--format",
+        "json",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let got = std::fs::read_to_string(&out_path).expect("global-latest plan written");
+    assert_eq!(
+        got, "LATER PLAN",
+        "the globally latest plan wins; the later-scanned earlier plan does not override it"
+    );
+}
+
+#[test]
+fn recover_turn_range_alone_is_accepted() {
+    // `--turn-range` WITHOUT --since/--until is valid (drives the `&&` right operand of the
+    // mutual-exclusion guard to its false side: turn_range set, since/until both absent).
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--coverage",
+        "--turn-range",
+        "0..0",
+    ]);
+    assert!(
+        out.success,
+        "a bare --turn-range is not a conflict: {}",
+        out.stderr
+    );
+    // Turn 0 only → the first segment's reads/edits are in scope; the turn-1 boundary is not.
+    assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
+}
