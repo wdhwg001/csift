@@ -64,8 +64,9 @@ fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
     // SAFETY: read-only mmap of a file we just opened. The documented hazard is a
     // concurrent truncation by another writer; we never write through the map and
     // treat its length as fixed-at-open, which is the SPEC's accepted contract
-    // (§7a). The crate lints `unsafe_code = "warn"`; mmap is irreducibly unsafe and
-    // SPEC-mandated, so allow it at exactly this call site.
+    // (§7a). The crate lints `unsafe_code = "deny"` (unsafe forbidden crate-wide);
+    // mmap is irreducibly unsafe and SPEC-mandated, so this is the single audited
+    // call site that explicitly allows it.
     #[allow(unsafe_code)]
     let mmap =
         unsafe { Mmap::map(&file) }.with_context(|| format!("cannot mmap {}", path.display()))?;
@@ -537,6 +538,195 @@ mod tests {
         let s = head_records(f.path(), |_| true).expect("head empty");
         assert_eq!(s, 0);
     }
+
+    // ── Branch-completeness ──
+
+    #[test]
+    fn mmap_open_error_surfaces_context() {
+        // A path that does not exist → the `File::open` error context arm of mmap_file.
+        let missing = std::env::temp_dir().join(format!(
+            "csift-missing-{}-{}.jsonl",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let err = mmap_bytes(&missing).unwrap_err();
+        assert!(
+            err.to_string().contains("cannot open")
+                || err.to_string().contains(&missing.display().to_string()),
+            "expected open-context error, got: {err:#}"
+        );
+        // head/tail over a missing file surface the same open error.
+        assert!(head_records(&missing, |_| true).is_err());
+        assert!(tail_records(&missing, |_| true).is_err());
+    }
+
+    #[test]
+    fn mmap_bytes_some_for_nonempty_none_for_empty() {
+        let f = tmp_jsonl(&[r#"{"type":"user","message":{"role":"user","content":"x"}}"#]);
+        assert!(mmap_bytes(f.path()).unwrap().is_some());
+        let e = tempfile_path::TempJsonl::empty();
+        assert!(mmap_bytes(e.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn scan_lines_bytes_visits_every_line_including_torn_tail() {
+        // A trailing fragment with NO newline must still be visited (the
+        // `start < bytes.len()` true arm).
+        let mut seen: Vec<String> = Vec::new();
+        scan_lines_bytes(b"aa\nbb\ncc", |line| {
+            seen.push(String::from_utf8_lossy(line).into_owned());
+        })
+        .unwrap();
+        assert_eq!(seen, vec!["aa", "bb", "cc"]);
+        // A slice ending exactly on a newline does NOT emit a trailing empty line
+        // (the `start < bytes.len()` false arm).
+        let mut seen2: Vec<String> = Vec::new();
+        scan_lines_bytes(b"aa\nbb\n", |line| {
+            seen2.push(String::from_utf8_lossy(line).into_owned());
+        })
+        .unwrap();
+        assert_eq!(seen2, vec!["aa", "bb"]);
+    }
+
+    #[test]
+    fn scan_lines_bytes_empty_slice_visits_nothing() {
+        let mut n = 0;
+        scan_lines_bytes(b"", |_| n += 1).unwrap();
+        assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn revlines_carry_flushed_at_bof_with_leading_partial() {
+        // A file whose FIRST line straddles below the lowest chunk read so it lands in
+        // the carry, then is flushed when `hi` reaches 0 (the `fill` hi==0 +
+        // non-empty-carry flush arm). Force it with chunk=1 over content whose first
+        // line is long and has no newline until late.
+        let data = b"leadingline\nx\n";
+        assert_eq!(rev_nonblank(data, 1), vec!["x", "leadingline"]);
+    }
+
+    #[test]
+    fn head_records_skips_blank_and_malformed_then_continues() {
+        // A blank line (Ok(None) arm), a malformed line (Err skip+count arm), then a
+        // valid record reached at the torn-tail position (no trailing newline).
+        let f = tmp_jsonl(&[
+            "",                 // blank → Ok(None)
+            r#"{ broken json"#, // malformed → counted
+            r#"{"type":"user","message":{"role":"user","content":"real"}}"#,
+        ]);
+        let mut first: Option<String> = None;
+        let skipped = head_records(f.path(), |rec| {
+            if let Some(t) = rec.genuine_user_text() {
+                first = Some(t);
+                return false;
+            }
+            true
+        })
+        .expect("head read");
+        assert_eq!(first.as_deref(), Some("real"));
+        assert_eq!(skipped, 1, "the one malformed line is counted");
+    }
+
+    #[test]
+    fn head_records_visits_torn_tail_fragment() {
+        // The final record has NO trailing newline (the `start < bytes.len()` arm of
+        // head_records). Scan everything (never early-stop) so the tail is reached.
+        let mut content = String::new();
+        content.push_str(r#"{"type":"user","message":{"role":"user","content":"a"}}"#);
+        content.push('\n');
+        content.push_str(r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"tail-no-newline"}]}}"#);
+        let p = std::env::temp_dir().join(format!(
+            "csift-torn-{}-{}.jsonl",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::write(&p, content.as_bytes()).unwrap();
+        let mut seen = 0usize;
+        let mut last_agent: Option<String> = None;
+        head_records(&p, |rec| {
+            seen += 1;
+            if let Some(t) = rec.agent_text() {
+                last_agent = Some(t);
+            }
+            true // scan all → reach the torn tail
+        })
+        .expect("head read");
+        std::fs::remove_file(&p).ok();
+        assert_eq!(seen, 2);
+        assert_eq!(last_agent.as_deref(), Some("tail-no-newline"));
+    }
+
+    #[test]
+    fn head_records_early_stop_before_tail_fragment() {
+        // Early-stop on the FIRST record (return false) so the `if stop { return }`
+        // arm fires mid-loop and the torn-tail branch is NOT reached.
+        let f = tmp_jsonl(&[
+            r#"{"type":"user","message":{"role":"user","content":"first"}}"#,
+            r#"{"type":"user","message":{"role":"user","content":"second"}}"#,
+        ]);
+        let mut count = 0;
+        head_records(f.path(), |_rec| {
+            count += 1;
+            false // stop immediately
+        })
+        .expect("head read");
+        assert_eq!(count, 1, "stopped after the first record");
+    }
+
+    #[test]
+    fn revlines_all_blank_slice() {
+        // A slice of only newlines → every line is blank, none survive the filter.
+        assert!(rev_nonblank(b"\n\n\n", 2).is_empty());
+    }
+
+    #[test]
+    fn revlines_next_after_exhaustion_returns_none() {
+        // Calling `next()` again after the iterator is exhausted hits the `if
+        // self.done { return None }` true arm (a normal `for` loop never re-polls).
+        // Content has no trailing newline → exactly two raw lines yielded.
+        let mut it = RevLines::with_chunk(b"a\nb", 64);
+        let mut all = Vec::new();
+        for l in it.by_ref() {
+            all.push(l);
+        }
+        assert_eq!(all.len(), 2, "two lines, newest-first: {all:?}");
+        assert_eq!(all[0], b"b");
+        assert_eq!(all[1], b"a");
+        assert!(
+            it.next().is_none(),
+            "post-exhaustion next is None via done flag"
+        );
+        assert!(it.next().is_none(), "still None");
+    }
+
+    #[test]
+    fn revlines_empty_slice_is_immediately_none() {
+        // An empty slice: hi==0 at construction, carry empty → fill returns false on
+        // the first poll (the `self.carry.is_empty()` TRUE arm at hi==0).
+        let mut it = RevLines::with_chunk(b"", 4);
+        assert!(it.next().is_none());
+    }
+
+    #[test]
+    fn revlines_trailing_newline_only_carry_empty_at_bof() {
+        // Content that is a single newline: the high tail after the newline is empty,
+        // seg0 (low edge) is also empty at BOF → buf-empty / empty-carry arms. No
+        // non-blank lines survive.
+        assert!(rev_nonblank(b"\n", 1).is_empty());
+        assert!(rev_nonblank(b"\n", 64).is_empty());
+    }
+
+    #[test]
+    fn revlines_carry_nonempty_flush_at_bof() {
+        // A leading partial line with NO newline before it, reached only after the
+        // carry has accumulated across chunks → the `self.carry.is_empty()` FALSE arm
+        // at hi==0 (flush the carry as the first line). chunk=2 forces accumulation.
+        let data = b"abcdefghij\nz\n";
+        assert_eq!(rev_nonblank(data, 2), vec!["z", "abcdefghij"]);
+    }
+
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     /// Minimal temp-file helper (no external dev-dep): writes lines to a uniquely
     /// named file under the OS temp dir and removes it on drop.

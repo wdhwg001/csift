@@ -2,9 +2,10 @@
 //!
 //! A bound is EITHER an absolute ISO8601 instant/date OR a relative form
 //! (`2h`, `3d`, `90m`, `45s`, `1w`) interpreted as "that long ago" relative to
-//! **now in Australia/Sydney**, then converted to UTC for comparison. A record's
-//! `timestamp` (raw UTC ISO8601) is compared against the resolved bounds; a record
-//! with no timestamp NEVER falls inside a bounded window (SPEC §6.2).
+//! **now in the system-local timezone** (auto-detected via [`crate::timez::local_tz`]),
+//! then converted to UTC for comparison. A record's `timestamp` (raw UTC ISO8601) is
+//! compared against the resolved bounds; a record with no timestamp NEVER falls
+//! inside a bounded window (SPEC §6.2).
 //!
 //! `--since` is inclusive lower, `--until` is inclusive upper. An unbounded window
 //! (neither set) admits every record, including timestamp-less ones.
@@ -12,7 +13,7 @@
 use anyhow::{bail, Context, Result};
 use jiff::{Span, Timestamp, Zoned};
 
-const SYDNEY: &str = "Australia/Sydney";
+use crate::timez::local_tz;
 
 /// A resolved `[since, until]` window in absolute UTC timestamps.
 #[derive(Debug, Clone, Default)]
@@ -69,7 +70,7 @@ impl TimeWindow {
 }
 
 /// Parse one bound: try the relative form first (`<N><unit>`), then absolute
-/// ISO8601 (full instant, or a bare date interpreted at Sydney midnight).
+/// ISO8601 (full instant, or a bare date interpreted at system-local midnight).
 fn parse_bound(s: &str) -> Result<Timestamp> {
     let s = s.trim();
     if let Some(ts) = parse_relative(s)? {
@@ -80,7 +81,7 @@ fn parse_bound(s: &str) -> Result<Timestamp> {
 
 /// Relative form: an optional-sign-free integer followed by a single unit char.
 /// `Ok(None)` when `s` is not in this shape (so the caller falls through to
-/// absolute parsing). Resolved against now in Sydney → UTC.
+/// absolute parsing). Resolved against now in the system-local timezone → UTC.
 fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
     // Must be all-ASCII-digits then exactly one unit letter.
     let bytes = s.as_bytes();
@@ -105,7 +106,7 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
     }
     .with_context(|| format!("relative-time span out of range in {s:?}"))?;
 
-    let now = now_sydney()?;
+    let now = now_local();
     // "2h" means two hours AGO.
     let then = now
         .checked_sub(span)
@@ -114,18 +115,16 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
 }
 
 /// Absolute ISO8601: a full instant (`2026-06-01T00:00:00Z`) or a bare date
-/// (`2026-06-01`, taken at Sydney local midnight).
+/// (`2026-06-01`, taken at system-local midnight).
 fn parse_absolute(s: &str) -> Result<Timestamp> {
     if let Ok(ts) = s.parse::<Timestamp>() {
         return Ok(ts);
     }
-    // Bare civil date → Sydney local midnight → UTC.
+    // Bare civil date → system-local midnight → UTC.
     if let Ok(date) = s.parse::<jiff::civil::Date>() {
-        let tz = jiff::tz::TimeZone::get(SYDNEY)
-            .with_context(|| "Australia/Sydney timezone unavailable")?;
         let zoned = date
-            .to_zoned(tz)
-            .with_context(|| format!("cannot place date {s:?} in Australia/Sydney"))?;
+            .to_zoned(local_tz())
+            .with_context(|| format!("cannot place date {s:?} in the system-local timezone"))?;
         return Ok(zoned.timestamp());
     }
     bail!(
@@ -134,10 +133,10 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
     )
 }
 
-fn now_sydney() -> Result<Zoned> {
-    let tz =
-        jiff::tz::TimeZone::get(SYDNEY).with_context(|| "Australia/Sydney timezone unavailable")?;
-    Ok(Timestamp::now().to_zoned(tz))
+/// `now` in the system-local timezone (auto-detected). [`local_tz`] is infallible,
+/// so this never errors.
+fn now_local() -> Zoned {
+    Timestamp::now().to_zoned(local_tz())
 }
 
 #[cfg(test)]
@@ -169,13 +168,23 @@ mod tests {
     }
 
     #[test]
-    fn bare_date_is_sydney_midnight() {
-        // 2026-06-01 Sydney (AEST +10) midnight == 2026-05-31T14:00:00Z.
+    fn bare_date_is_system_local_midnight() {
+        // A bare date resolves to local midnight. Derive the expected UTC instant
+        // from jiff for the SYSTEM zone (tz-agnostic — holds on any machine / CI),
+        // rather than hardcoding a single zone's offset.
+        let midnight_utc = "2026-06-01"
+            .parse::<jiff::civil::Date>()
+            .unwrap()
+            .to_zoned(local_tz())
+            .unwrap()
+            .timestamp();
+        let one_sec_before = midnight_utc - jiff::SignedDuration::from_secs(1);
+
         let w = TimeWindow::from_args(Some("2026-06-01"), None).unwrap();
-        // A record exactly at the Sydney-midnight UTC instant is included.
-        assert!(w.contains(Some("2026-05-31T14:00:00Z")));
+        // A record exactly at the local-midnight UTC instant is included.
+        assert!(w.contains(Some(&midnight_utc.to_string())));
         // One second before is excluded.
-        assert!(!w.contains(Some("2026-05-31T13:59:59Z")));
+        assert!(!w.contains(Some(&one_sec_before.to_string())));
     }
 
     #[test]
@@ -212,5 +221,81 @@ mod tests {
             TimeWindow::from_args(Some("2026-06-30T00:00:00Z"), Some("2026-06-01T00:00:00Z"))
                 .is_err()
         );
+    }
+
+    // ── Branch-completeness ──
+
+    #[test]
+    fn contains_unparseable_timestamp_excluded_from_bounded() {
+        // A bounded window with a record whose timestamp does not parse → excluded
+        // (the `Err(_) => false` arm in `contains`).
+        let w = TimeWindow::from_args(Some("2026-06-01"), None).unwrap();
+        assert!(!w.contains(Some("not-a-timestamp")));
+    }
+
+    #[test]
+    fn contains_until_upper_bound_excludes_after() {
+        // An UNTIL-only window: a ts AFTER the bound is excluded (the `ts > u` true
+        // arm, distinct from the since lower-bound path other tests cover).
+        let w = TimeWindow::from_args(None, Some("2026-06-07T00:00:00Z")).unwrap();
+        assert!(w.contains(Some("2026-06-06T23:59:59Z")));
+        assert!(!w.contains(Some("2026-06-07T00:00:01Z")));
+    }
+
+    #[test]
+    fn both_bounds_set_window() {
+        // Both since AND until present (the `(Some, Some)` arm in from_args + both
+        // arms of contains).
+        let w = TimeWindow::from_args(Some("2026-06-01T00:00:00Z"), Some("2026-06-02T00:00:00Z"))
+            .unwrap();
+        assert!(w.contains(Some("2026-06-01T12:00:00Z")));
+        assert!(!w.contains(Some("2026-05-31T00:00:00Z"))); // before since
+        assert!(!w.contains(Some("2026-06-03T00:00:00Z"))); // after until
+    }
+
+    #[test]
+    fn relative_short_string_is_not_relative() {
+        // A single-char string (len < 2) cannot be a relative form → it falls through
+        // to absolute parsing, which fails for "x" (so an error), but "1" alone is
+        // also < 2 chars and not absolute either.
+        assert!(TimeWindow::from_args(Some("x"), None).is_err());
+        assert!(TimeWindow::from_args(Some("1"), None).is_err());
+    }
+
+    #[test]
+    fn relative_non_digit_quantity_falls_through() {
+        // `ah` has a unit letter but a non-digit quantity → not relative; falls to
+        // absolute, which also fails → error.
+        assert!(TimeWindow::from_args(Some("ah"), None).is_err());
+    }
+
+    #[test]
+    fn relative_unrecognized_unit_falls_through_to_absolute() {
+        // `5y` — digits + an unrecognized unit letter → parse_relative returns None
+        // (the `_ => return Ok(None)` arm) and absolute parsing then fails.
+        assert!(TimeWindow::from_args(Some("5y"), None).is_err());
+    }
+
+    #[test]
+    fn relative_quantity_overflow_errors() {
+        // A quantity too large for i64 → the `.parse::<i64>()` with_context error path.
+        let huge = format!("{}h", "9".repeat(40));
+        assert!(TimeWindow::from_args(Some(&huge), None).is_err());
+    }
+
+    #[test]
+    fn relative_span_out_of_range_errors() {
+        // A numerically-valid i64 quantity whose span is out of jiff's range → the
+        // span `.with_context` error arm (weeks magnify the value the most).
+        let big = format!("{}w", i64::MAX);
+        assert!(TimeWindow::from_args(Some(&big), None).is_err());
+    }
+
+    #[test]
+    fn absolute_full_instant_path() {
+        // A full ISO instant takes the `s.parse::<Timestamp>()` Ok arm in
+        // parse_absolute (distinct from the bare-date arm other tests cover).
+        let w = TimeWindow::from_args(Some("2026-06-07T05:00:00Z"), None).unwrap();
+        assert!(w.contains(Some("2026-06-07T06:00:00Z")));
     }
 }

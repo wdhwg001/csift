@@ -6,11 +6,10 @@
 
 ## 0. Mission & non-negotiables
 
-**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Three subcommands: `list`, `search`, `whoami`.
+**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Four subcommands: `list`, `search`, `agents` (subagent lifecycle, §6.5), `whoami`. `list`/`search` span each session's subagent transcripts by default (`--no-subagents` opts out).
 
 - **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--json` for machine use.
-- **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Chinese tokenisation is intractable for lexical scoring; regex is the strength and the whole point.
-- **LOCAL git only** (see CLAUDE.md §2): never add a remote, never push.
+- **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
 - **Quality gates (hard):** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` all green. No `unwrap`/`expect` in library/hot paths (only `main` maps error→exit code, tests may `unwrap`). **No silent truncation** anywhere.
 
 ---
@@ -21,21 +20,26 @@ Each session lives under the CC projects root (`~/.claude/projects`, honoring `$
 
 ```
 ~/.claude/projects/<ENCODED>/
-  <session-uuid>.jsonl                    # the main session transcript (one JSON object per line)
-  <session-uuid>/                         # sibling per-session sidecar dir
-    tool-results/<id>.txt                 # externalised large tool outputs (see §4.6)
-    subagents/agent-<id>.jsonl            # subagent transcript — SAME record model, isSidechain:true
-    subagents/agent-<id>.meta.json        # subagent metadata companion (JSON, not jsonl)
-    workflows/  tasks/                    # other artifacts (NOT transcripts — ignore)
+  <session-uuid>.jsonl                                  # the main session transcript (one JSON object per line)
+  <session-uuid>/                                       # sibling per-session sidecar dir
+    tool-results/<id>.txt                               # externalised large tool outputs (see §4.6)
+    subagents/agent-<hex>.jsonl                         # (A) built-in Task/Agent-tool subagent transcript — isSidechain:true
+    subagents/agent-<hex>.meta.json                     #     companion {agentType, description, name?, toolUseId}
+    subagents/workflows/wf_<id>/agent-<hex>.jsonl       # (B) workflow / OMC workflow-subagent transcript (dominant kind)
+    subagents/workflows/wf_<id>/agent-<hex>.meta.json   #     companion {agentType}
+    subagents/workflows/wf_<id>/journal.jsonl           # (C) workflow EVENT log {agentId,key,type∈{started,result}} — NOT a transcript
+    workflows/wf_*.json  workflows/scripts/*.js         # top-level workflow DEFINITIONS (NOT transcripts — ignore)
 ```
+
+The three subagent transcript/journal shapes (A)/(B)/(C) and the `agents` subcommand are specified in **§6.5**. The bare `<hex>` (== the record/journal `agentId`) is the canonical agent id; the filename stem is `agent-<hex>`. Kind is the on-disk **path location**, not `agentType`.
 
 `<ENCODED>` is the session's **start cwd**, path-encoded (§2).
 
 **Structural facts the implementation must respect (verified):**
 
 1. **A projects dir is keyed by the session's START cwd, not by every cwd the session visits.** Every top-level `*.jsonl` in a given `<ENCODED>` dir carries a `cwd` field that encodes char-for-char to that dir name (0 anomalies across 11 ground-truth dirs). Deep in-session `cd`s (e.g. `…/beacon/src/beacon/turn_engine`) and subagent cwds appear *inside* the data but do **not** spawn their own top-level project dir. So: `<ENCODED> dir ⇒ its files' start cwd` holds 1:1; the inverse (`any cwd seen ⇒ a dir exists`) does **not**. Never assume it.
-2. **Some `<ENCODED>` dirs contain NO top-level `*.jsonl`** — only a nested `<uuid>/` sidecar (subagent transcripts) or a `memory/` dir. `list` must tolerate childless/jsonl-less project dirs (skip them, or descend into `subagents/` only when explicitly asked) — never assume every projects dir contains a session file, never crash on one that doesn't.
-3. **Subagent transcripts use the identical record model** as main transcripts, distinguished by `isSidechain:true`, with a companion `agent-<id>.meta.json`. By default csift searches/lists **main** transcripts only; subagent transcripts are opt-in (`search --include-subagents`, see §6.2).
+2. **Some `<ENCODED>` dirs contain NO top-level `*.jsonl`** — only a nested `<uuid>/` sidecar (subagent transcripts) or a `memory/` dir. `list` must tolerate childless/jsonl-less project dirs (skip them) — never assume every projects dir contains a session file, never crash on one that doesn't. Top-level session enumeration is **non-recursive** (it never descends into the `<uuid>/` sidecar), so it cannot mistakenly pick up a subagent file as a session.
+3. **Subagent transcripts use the identical record model** as main transcripts, distinguished by `isSidechain:true`, with a companion `agent-<hex>.meta.json`. csift **discovers + spans subagent transcripts by DEFAULT** on `list`/`search` (built-in + workflow / OMC agents under `subagents/**`); `--no-subagents` restricts to main transcripts. The workflow `journal.jsonl` is an event log, never a transcript, and is always excluded. The dedicated `agents` subcommand (§6.5) reports subagent lifecycle.
 
 ---
 
@@ -112,7 +116,7 @@ Present on message-bearing + most event records; **ragged** — model every fiel
 | field | rename | type | notes |
 |---|---|---|---|
 | `type` | — | `Option<String>` | discriminator; keep as String (open set), never enum-panic |
-| `uuid` | — | `Option<String>` | record identity; used for x stitching |
+| `uuid` | — | `Option<String>` | record identity; used for round-trip stitching |
 | `parentUuid` | `parent_uuid` | `Option<String>` | parent link; `null`/absent at thread roots & metadata records |
 | `timestamp` | — | `Option<String>` | ISO8601 UTC `2026-06-07T05:43:00.000Z`; **absent on metadata-only records** |
 | `sessionId` | `session_id` | `Option<String>` | the owning session uuid |
@@ -221,7 +225,7 @@ input.questions: [ { question, header, multiSelect: bool,
 ```
 User has answered your questions: "<question>"="<chosen label>". You can now continue…
 ```
-and the carrier's top-level `toolUseResult` echoes the full `questions[]` structure + the selection. **Implication:** csift never needs to render a "pending question" state — if an AUQ `tool_use` is on disk, its answer is too. For x (§6.4), an AUQ `tool_use` and its answering `tool_result` are a complete pair like any other tool round-trip; additionally the answer is surfaced under the `user` category (§4.1 exception).
+and the carrier's top-level `toolUseResult` echoes the full `questions[]` structure + the selection. **Implication:** csift never needs to render a "pending question" state — if an AUQ `tool_use` is on disk, its answer is too. For round-trip reconstruction (§6.4), an AUQ `tool_use` and its answering `tool_result` are a complete pair like any other tool round-trip; additionally the answer is surfaced under the `user` category (§4.1 exception).
 
 ### 4.5 `tool_result` (tool's response) → category `tool-response`
 
@@ -282,7 +286,7 @@ When no `--category` is given, **all five** categories are eligible (search ever
 
 ## 6. Subcommand specifications
 
-> **Common conventions.** All timestamps display as **Australia/Sydney local + raw UTC** side-by-side (e.g. `2026-06-07 15:43:00 AEST (2026-06-07T05:43:00.000Z)`) via `jiff`. All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
+> **Common conventions.** All timestamps display as **system-local timezone + raw UTC** side-by-side (e.g. `2026-06-07 15:43:00 AEST (2026-06-07T05:43:00.000Z)` on a machine in Sydney; the `<TZ>` abbrev and offset auto-track the detected local zone) via `jiff` (`TimeZone::system()`). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 
 ### 6.1 `list` — "which session is this?" fast index
 
@@ -293,7 +297,8 @@ When no `--category` is given, **all five** categories are eligible (search ever
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | a real cwd OR an encoded dir (§2.3); 0 args ⇒ every dir under projects root |
 | `--format text\|json` | enum | `text` | output format |
-| `--include-subagents` | bool | `false` | *(Phase-2 add)* also list `subagents/*.jsonl` |
+| `--include-subagents` | bool | `true` | also list each session's subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`); **default ON**. Workflow `journal.jsonl` is excluded (not a transcript). |
+| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only (overrides `--include-subagents`) |
 | `--limit N` | usize | none | *(Phase-2 add)* cap rows; reports dropped count |
 
 **Per-session fields emitted:** `session-id`, **first** genuine-user message (+ts), **last** genuine-user message (+ts), **last** agent message (+ts), the session `cwd` (decoded from data, §2.4), `version`, `gitBranch`. Each message is a one-line excerpt (truncated with an explicit `… (+N chars)` marker — never silent).
@@ -327,7 +332,7 @@ csift list ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype
 csift list --format json .                              # machine-readable index
 ```
 
-### 6.2 `search` — regex over transcripts, returns complete x exchanges
+### 6.2 `search` — regex over transcripts, returns complete round-trip exchanges
 
 **Purpose.** ripgrep-like regex search returning the **complete round-trip** containing each hit, never a bare fragment.
 
@@ -345,7 +350,8 @@ csift list --format json .                              # machine-readable index
 | `--until WHEN` | — | string | none | upper time bound |
 | `--max-count N` | — | usize | none | cap emitted exchanges; **reports dropped count** |
 | `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6) |
-| `--include-subagents` | — | bool | false | *(Phase-2 add)* also search `subagents/*.jsonl` |
+| `--include-subagents` | — | bool | `true` | also search each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`); **default ON**. Workflow `journal.jsonl` is never searched (not a transcript). |
+| `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions (overrides `--include-subagents`) |
 | `--format text\|json` | — | enum | `text` | output format |
 | `--context N` | `-C` | usize | full exchange | *(Phase-2 add)* optionally trim the exchange to ±N surrounding records |
 
@@ -353,11 +359,11 @@ csift list --format json .                              # machine-readable index
 
 **Validation:** `--turn-range` together with `--since`/`--until` is an error (mutually exclusive). An empty `PATTERN` with no other filter is allowed (matches every category-eligible record) but should warn that it will emit a lot.
 
-**Filter application order per session:** `--session`/`--path` (target selection) → category eligibility (§5) → time/turn window → regex match → x reconstruction (§6.4) → `--max-count` cap (with drop accounting).
+**Filter application order per session:** `--session`/`--path` (target selection) → category eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
 
-**Time window:** `--since`/`--until` compare against each record's `timestamp` (UTC). Records with no timestamp (metadata/noise) are never time-matched. Relative forms (`2h`,`3d`,`90m`) are resolved against *now* in Australia/Sydney then converted to UTC for comparison.
+**Time window:** `--since`/`--until` compare against each record's `timestamp` (UTC). Records with no timestamp (metadata/noise) are never time-matched. Relative forms (`2h`,`3d`,`90m`) are resolved against *now* in the system-local timezone then converted to UTC for comparison.
 
-**Output — complete x:** see §6.4. Each emitted unit is one **Exchange** with a session header, turn index, and the matched hit(s) shown in context of their full round-trip.
+**Output — complete round-trip:** see §6.4. Each emitted unit is one **Exchange** with a session header, turn index, and the matched hit(s) shown in context of their full round-trip.
 
 **Text output example:**
 ```
@@ -399,7 +405,7 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 ```
 **Error output (var absent):** non-zero exit + the guidance string from `whoami::AMBIGUOUS_GUIDANCE`.
 
-### 6.4 x (turn / exchange) reconstruction algorithm
+### 6.4 Round-trip (turn / exchange) reconstruction algorithm
 
 **A "turn" is delimited by a GENUINE user message** (§4.1) — a `tool_result`-carrier and an `isMeta` pseudo-turn never start a turn; a compaction summary never starts a turn. Turn index is 0-based in genuine-user order within a session.
 
@@ -408,7 +414,7 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 **Reconstruction (per session, single forward pass after collecting records):**
 1. Build `by_uuid: HashMap<uuid, &Record>` and a `children` adjacency (parentUuid → [child uuids]) over the session's records.
 2. Walk records in file order; each `is_genuine_user` record opens a new **Exchange** (turn index ++). All subsequent records up to (but excluding) the next genuine-user belong to that exchange.
-3. **x completeness rules when a hit lands:**
+3. **Round-trip completeness rules when a hit lands:**
    - A matched **`tool_use`** is returned **with its `tool_result`** — pair by `tool_result.tool_use_id == tool_use.id` (fallback via `toolUseResult`/`sourceToolAssistantUUID`, §4.5). Both blocks appear in the emitted exchange even if only one matched.
    - A matched **genuine-user turn** is returned **with the agent response** — i.e. the assistant `text`/`thinking`/`tool_use` records chained under it in the same turn.
    - A matched **`tool_result`** is returned **with the `tool_use` that produced it** (reverse of the above pairing).
@@ -416,6 +422,48 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 4. The emitted Exchange carries: `session_id`, `turn_index`, the list of `Hit`s (category + excerpt + UTC timestamp), and `record_uuids` (every record stitched in, for traceability) — matching `search::Exchange`.
 5. **AUQ pairing:** an `AskUserQuestion` `tool_use` and its answering `tool_result` (§4.4) are one pair; the answer is also surfaced under `user` per §4.1 but is **not** a turn boundary.
 6. **Compaction continuity:** a `compact_boundary`'s `logicalParentUuid`/`preservedSegment` may be used (best-effort) to keep turn indices monotonic across a compaction, but turn delimiting still keys on genuine-user records; never crash if these fields are absent.
+
+### 6.5 `agents` — a session's subagent lifecycle (kind, start/completion, status)
+
+**Purpose.** List the subagent transcripts a session spawned, with per-subagent identity + lifecycle, and an optional time-window filter (which subagents started/completed within a bound). Complements `--include-subagents` on `list`/`search` (which fold subagent *content* into those views); `agents` is the *lifecycle index* of those same subagents.
+
+**Subagent on-disk layout (empirically mapped against `~/.claude/projects`, 0 linkage mismatches across 600+ nested transcripts). Three shapes under a top-level session's sidecar `<ENCODED>/<session-uuid>/`:**
+
+| kind (csift) | path | meta.json | record markers |
+|---|---|---|---|
+| `builtin-task` | `subagents/agent-<hex>.jsonl` | `{agentType, description, name?, toolUseId}` | `isSidechain:true`, `agentId == <hex>`, `sessionId == <session-uuid>` |
+| `workflow` | `subagents/workflows/wf_<id>/agent-<hex>.jsonl` | `{agentType}` | same; `cwd` is often a DEEPER in-session path — never re-encode a subagent cwd |
+| *(excluded)* | `subagents/workflows/wf_<id>/journal.jsonl` | — | **NOT a transcript**: `{agentId, key, type∈{started,result}}`, no `message`/role |
+
+**Kind is the on-disk PATH LOCATION, not `agentType`.** Both `builtin-task` and `workflow` carry the same spread of `agentType` values (`Explore`, `general-purpose`, `oh-my-claudecode:*`); only `workflow-subagent` is workflow-exclusive. So `agentType` is a descriptive sub-label, not the discriminator. **The canonical agent id is the bare `<hex>`** (the record/journal `agentId`), not the `agent-<hex>` filename stem.
+
+**Linkage to the parent session** is FILESYSTEM-primary (the enclosing `<session-uuid>` dir name) corroborated by the record `sessionId` (600/0 verified). Top-level dir enumeration + `whoami` are safe from matching subagents because subagent files are named `agent-<hex>.jsonl` (never `<uuid>.jsonl`) and sit in a nested dir the non-recursive top-level scan never descends.
+
+**Args (matches `cli::AgentsArgs`):**
+| flag / positional | type | default | meaning |
+|---|---|---|---|
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3) whose sessions' subagents to list; optional when `--session` is given |
+| `--session ID` | string | none | restrict to one parent session uuid |
+| `--kind builtin-task\|workflow` | repeatable enum | all | filter to a subagent kind |
+| `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local), filters by the `--by` axis |
+| `--by start\|completion` | enum | `start` | which lifecycle timestamp `--since`/`--until` filter on |
+| `--format text\|json` | enum | `text` | output format |
+
+**Per-subagent fields emitted:** `agent_id` (bare hex), `kind`, `workflow_id` (workflow only), `agent_type` (meta `agentType`), `description` (built-in meta), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration`, `status`, `parent_session_id`.
+
+**Status resolution (honest — never over-claims "failed"):** `completed` when a workflow `journal.jsonl` carries a `result` event for the agent OR the transcript terminates with a visible assistant end-of-turn message; `running` when records exist with a start but no completion signal; `unknown` when no timestamps are determinable.
+
+**Time window** is the same semantics as `search` (§6.2): records/rows with no timestamp on the chosen axis are never admitted by a *bounded* window; an unbounded window admits all.
+
+**Example invocations:**
+```bash
+csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d   # one session's subagents
+csift agents .                                                # every session under this project
+csift agents . --kind workflow                                # only workflow agents
+csift agents --session <uuid> --since 2h                      # subagents STARTED in the last 2h
+csift agents --session <uuid> --since 09:00 --by completion   # COMPLETED since a bound
+csift agents . --format json                                  # machine-readable lifecycle rows
+```
 
 ---
 
@@ -459,7 +507,7 @@ Measured payoff (225 MB file): parse-every-line **1.39 s** vs prefilter-then-par
 1. **Category prefilter** (cheap `memchr::memmem::Finder`, built once per needle, reused across all lines): a line that could match a requested category must contain a marker substring — `"thinking"`, `"tool_use"`, `"tool_result"`, `"role":"assistant"`, etc. A line lacking **all** active markers is dropped pre-JSON. (Genuine-`user` is the exception: a `"type":"user"` line passing the substring gate still needs structural disambiguation from carriers, so it is parsed — but that's only ~8.8 K of 115 K lines, and only when the `user` category is active.)
 2. **Keyword prefilter** (the user regex): if the regex has a required literal substring (extract via `regex-syntax` HIR literal analysis, or use the `regex` crate's own prefilter), `memmem` that literal first. Empty pattern ⇒ pure filter (skip stage 2). Non-anchorable regex ⇒ run `regex::bytes::Regex` directly on raw bytes (still far cheaper than JSON parse).
 
-Only lines passing **both** gates reach `serde_json::from_slice` → typed `Record` → exact field-level match + x stitching. **`simd-json`/`sonic-rs` are NOT used** (and not a default dep): once the prefilter drops 98% of lines, total serde time is a few ms even on 225 MB; simd-json needs an owned, padded, mutable buffer (fights the zero-copy mmap `&[u8]`) and sonic-rs adds unsafe-heavy deps for a speedup on a tiny byte fraction. Capture most of the win instead with `serde_json::from_slice` + `#[serde(borrow)]` zero-copy fields. (Keep simd-json as a possible future `--feature`, not default.)
+Only lines passing **both** gates reach `serde_json::from_slice` → typed `Record` → exact field-level match + round-trip stitching. **`simd-json`/`sonic-rs` are NOT used** (and not a default dep): once the prefilter drops 98% of lines, total serde time is a few ms even on 225 MB; simd-json needs an owned, padded, mutable buffer (fights the zero-copy mmap `&[u8]`) and sonic-rs adds unsafe-heavy deps for a speedup on a tiny byte fraction. Capture most of the win instead with `serde_json::from_slice` + `#[serde(borrow)]` zero-copy fields. (Keep simd-json as a possible future `--feature`, not default.)
 
 ### 7e. Parallelism — rayon ACROSS files, not within (by default)
 
@@ -475,7 +523,7 @@ Only lines passing **both** gates reach `serde_json::from_slice` → typed `Reco
 ### 8.1 Text (default) — LLM/human-readable
 
 - Clear, scannable **session / turn / category / timestamp** headers (examples in §6.1, §6.2).
-- Timestamps: `YYYY-MM-DD HH:MM:SS <TZ> (RAW_UTC_ISO8601)` — Australia/Sydney local + raw UTC, via `jiff`.
+- Timestamps: `YYYY-MM-DD HH:MM:SS <TZ> (RAW_UTC_ISO8601)` — system-local timezone + raw UTC, via `jiff` (`TimeZone::system()`; `<TZ>` auto-tracks the detected zone).
 - Excerpts truncated only with an explicit `… (+N chars)` marker (never silent).
 - Footers state match counts and **dropped counts** (`N dropped` when `--max-count` capped).
 
@@ -500,9 +548,9 @@ JSON must be valid UTF-8; non-UTF-8 bytes in excerpts are lossily replaced (`Str
 - [ ] **Genuine-user correctness** (the load-bearing rule): excludes tool_result-carriers, `isCompactSummary`, and `isMeta` pseudo-turns; AUQ answers handled per §4.4. Unit-tested against fixtures incl. the `isMeta` case. (§4.1–§4.2)
 - [ ] **Path encoding:** `[^A-Za-z0-9]→'-'`, no collapse, case-preserved; reverse never attempted; target detection real-path-vs-encoded per §2.3. (§2)
 - [ ] **whoami:** env-var-first (`CLAUDE_CODE_SESSION_ID`, exact name), error-with-guidance on absence, **never** mtime/process-walk. (§6.3)
-- [ ] **Timestamps:** Australia/Sydney local + raw UTC everywhere. (§8.1)
+- [ ] **Timestamps:** system-local timezone + raw UTC everywhere (auto-detected via `TimeZone::system()`). (§8.1)
 - [ ] **Example-rich `--help`** for every subcommand (the invocations in §6.1–§6.3 are the baseline). (clap `long_about`/`after_help`)
-- [ ] **Gates green:** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. Remove the scaffold-only `#![allow(dead_code)]` once handlers reference every public item.
+- [ ] **Gates green:** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. No crate-level `#![allow(dead_code)]`; the only `#[allow(dead_code)]` is targeted on `model::Record`/`Block` for SPEC-mandated record-shape fields retained for tolerance/completeness (justified inline).
 
 ---
 

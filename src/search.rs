@@ -1,4 +1,5 @@
-//! `search` subcommand — regex over transcripts, returning complete x exchanges.
+//! `search` subcommand — regex over transcripts, returning complete round-trip
+//! exchanges.
 //!
 //! Behavior (SPEC.md §6.2, §6.4):
 //! - Pattern is ripgrep-like, default smart-case (`-i` forces insensitive,
@@ -36,9 +37,14 @@ use crate::model::{is_auq_answer_text, normalize_line, tool_result_content_text,
 use crate::parse::{mmap_bytes, scan_lines_bytes};
 use crate::path::{self, ProjectDir};
 use crate::time_window::TimeWindow;
+use crate::timez::{format_timestamp, local_iso};
 
 /// Max characters of a matched excerpt shown inline before truncation. Truncation
 /// is ALWAYS explicit (`… (+N chars)`) — never silent (SPEC §0, §8.1).
+///
+/// Deliberately LONGER than `list`'s 200-char cap (`session::EXCERPT_MAX`): a search
+/// hit wants enough of the matched exchange to be useful in context, whereas `list`
+/// is a dense at-a-glance identity index. The difference is intentional.
 const EXCERPT_MAX: usize = 400;
 
 /// A single category-tagged hit inside an exchange.
@@ -52,7 +58,8 @@ pub struct Hit {
     pub tool_name: Option<String>,
 }
 
-/// A complete reconstructed request/response exchange (x) containing the hit(s).
+/// A complete reconstructed request/response exchange (round-trip) containing the
+/// hit(s).
 #[derive(Debug, Clone)]
 pub struct Exchange {
     pub session_id: String,
@@ -189,8 +196,8 @@ fn apply_builder(pattern: &str, case_insensitive: bool, multiline: bool) -> Resu
 /// a literal prefilter whenever the pattern contains a JSON-escaped character; the
 /// match then falls back to running the regex on the raw bytes (still pre-JSON, just
 /// without the cheap literal short-circuit). Non-ASCII (`>= 0x80`) is emitted
-/// verbatim as UTF-8 by serde_json (CJK searches like `x` confirm this), so it
-/// stays prefilter-eligible.
+/// verbatim as UTF-8 by serde_json (multi-byte searches confirm this), so it stays
+/// prefilter-eligible.
 fn required_literal(pattern: &str) -> Option<Vec<u8>> {
     const META: &[char] = &[
         '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '^', '$', '\\',
@@ -243,8 +250,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         );
     }
 
-    // ── Resolve targets → session files ──
-    let session_files = resolve_search_targets(&args.paths, args.session.as_deref())?;
+    // ── Resolve targets → session files (optionally spanning subagents) ──
+    let session_files =
+        resolve_search_targets(&args.paths, args.session.as_deref(), args.want_subagents())?;
 
     // ── Parallel scan across files; collect order-stable, then merge ──
     let per_file: Vec<FileResult> = session_files
@@ -273,8 +281,17 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
 }
 
 /// Resolve `--path` targets (+ optional `--session`) into the concrete list of
-/// session `*.jsonl` files to scan. 0 `--path` ⇒ all projects.
-fn resolve_search_targets(paths: &[PathBuf], session: Option<&str>) -> Result<Vec<PathBuf>> {
+/// session `*.jsonl` files to scan. 0 `--path` ⇒ all projects. When
+/// `include_subagents` is set (the default), each top-level session's SUBAGENT
+/// transcripts (built-in Task/Agent-tool + workflow / OMC agents) are appended so a
+/// hit in a subagent's work is found alongside the main thread; workflow
+/// `journal.jsonl` event logs are excluded (not transcripts — see
+/// [`crate::subagent`]).
+fn resolve_search_targets(
+    paths: &[PathBuf],
+    session: Option<&str>,
+    include_subagents: bool,
+) -> Result<Vec<PathBuf>> {
     let dirs: Vec<ProjectDir> = if paths.is_empty() {
         path::all_project_dirs()?
     } else {
@@ -306,6 +323,18 @@ fn resolve_search_targets(paths: &[PathBuf], session: Option<&str>) -> Result<Ve
             }
         }
     }
+
+    // The --session restriction applies to the PARENT session (the top-level jsonl
+    // basename). Subagent transcripts of a selected session are still in scope — they
+    // belong to it — so they are gathered from the already-filtered `files` set.
+    if include_subagents {
+        let mut sub_files: Vec<PathBuf> = Vec::new();
+        for sf in &files {
+            sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
+        }
+        files.extend(sub_files);
+    }
+
     files.sort();
     files.dedup();
 
@@ -327,8 +356,9 @@ struct FileResult {
 /// line: when `false`, the line provably lacks the required literal, so it can
 /// never be a regex hit and we skip the (more expensive) per-block regex matching
 /// on it — but it is STILL retained so it can appear as a sibling record in a
-/// matched turn's complete x (SPEC §6.4). When the matcher has no anchorable
-/// literal (case-insensitive or regex-with-metachars) every record is `can_hit`.
+/// matched turn's complete round-trip (SPEC §6.4). When the matcher has no
+/// anchorable literal (case-insensitive or regex-with-metachars) every record is
+/// `can_hit`.
 struct Kept {
     rec: Record,
     can_hit: bool,
@@ -357,8 +387,8 @@ fn search_one_file(
     //      records). Broad-by-design (a role substring) so no genuine turn is lost.
     //   2. KEYWORD prefilter — a per-line `memmem` of the regex's required literal.
     //      It does NOT gate parsing (a non-matching record may still be a sibling in
-    //      a matched turn's x); instead it records `can_hit`, letting the match
-    //      phase skip regex work on records that provably can't match.
+    //      a matched turn's round-trip); instead it records `can_hit`, letting the
+    //      match phase skip regex work on records that provably can't match.
     let mut records: Vec<Kept> = Vec::new();
     let mut skipped = 0usize;
 
@@ -512,8 +542,8 @@ fn collect_turn_hits(
     for kept in &turn.records {
         // §7d keyword prefilter: if the raw line provably lacks the required
         // literal, this record can't be a hit — skip the regex work. (It still
-        // stays a member of this turn for the complete x; we just don't emit a
-        // hit for it.)
+        // stays a member of this turn for the complete round-trip; we just don't
+        // emit a hit for it.)
         if !kept.can_hit {
             continue;
         }
@@ -672,7 +702,8 @@ fn make_hit(category: Category, text: &str, ts: Option<String>, tool_name: Optio
 }
 
 /// Truncate to [`EXCERPT_MAX`] chars with an explicit `… (+N chars)` marker
-/// (CHARACTER-counted so CJK truncates cleanly). Never silent (SPEC §0, §8.1).
+/// (CHARACTER-counted so multi-byte UTF-8 truncates cleanly). Never silent
+/// (SPEC §0, §8.1).
 fn truncate_excerpt(s: &str) -> String {
     let total = s.chars().count();
     if total <= EXCERPT_MAX {
@@ -703,30 +734,9 @@ fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
 }
 
 // ── Rendering ──
-
-const SYDNEY: &str = "Australia/Sydney";
-
-fn format_ts(raw: Option<&str>) -> String {
-    let Some(raw) = raw else {
-        return "—".to_string();
-    };
-    match raw.parse::<jiff::Timestamp>() {
-        Ok(ts) => match jiff::tz::TimeZone::get(SYDNEY) {
-            Ok(tz) => {
-                let local = ts.to_zoned(tz).strftime("%Y-%m-%d %H:%M:%S %Z");
-                format!("{local} ({raw})")
-            }
-            Err(_) => format!("{raw} (UTC; Australia/Sydney tz unavailable)"),
-        },
-        Err(_) => format!("{raw} (unparsed)"),
-    }
-}
-
-fn local_iso(raw: &str) -> Option<String> {
-    let ts = raw.parse::<jiff::Timestamp>().ok()?;
-    let tz = jiff::tz::TimeZone::get(SYDNEY).ok()?;
-    Some(ts.to_zoned(tz).strftime("%Y-%m-%dT%H:%M:%S%:z").to_string())
-}
+//
+// Timestamp formatting (system-local + raw UTC) lives in `crate::timez`, shared
+// with `list` so the local-timezone choice is defined once.
 
 fn category_label(c: Category) -> &'static str {
     match c {
@@ -774,7 +784,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
                 .unwrap_or_default();
             println!(
                 "{glyph} {label}{name}  {}",
-                format_ts(hit.timestamp_utc.as_deref())
+                format_timestamp(hit.timestamp_utc.as_deref())
             );
             println!("   {}", hit.excerpt);
         }
@@ -870,6 +880,8 @@ mod tests {
             until: None,
             max_count: None,
             resolve_persisted: false,
+            include_subagents: true,
+            no_subagents: false,
             format: OutputFormat::Text,
         }
     }
@@ -939,11 +951,11 @@ mod tests {
             required_literal("a\nb").is_none(),
             "newline is JSON-escaped"
         );
-        // Non-ASCII (CJK) is emitted verbatim as UTF-8 → still prefilter-eligible.
-        assert_eq!(
-            required_literal("x"),
-            Some("x".as_bytes().to_vec())
-        );
+        // Non-ASCII multi-byte UTF-8 is emitted verbatim by serde_json → still
+        // prefilter-eligible (no JSON escaping). Use a locale-neutral fixture
+        // (accented Latin + an emoji, both multi-byte) to prove the bytes pass
+        // through unchanged.
+        assert_eq!(required_literal("café🛠"), Some("café🛠".as_bytes().to_vec()));
     }
 
     #[test]
@@ -1176,7 +1188,7 @@ mod tests {
     fn exchange_returns_full_round_trip() {
         // Match only the thinking block; the emitted exchange's record_uuids must
         // include the WHOLE turn 0 chain (user, thinking, tool_use, carrier, agent),
-        // proving the complete x is stitched, not just the matched record.
+        // proving the complete round-trip is stitched, not just the matched record.
         let mut a = args("straddling");
         a.categories = vec![Category::Thinking];
         let ex = search(&fixture(), &a);
@@ -1298,6 +1310,227 @@ mod tests {
             vec![Category::User],
             "AUQ answer must appear once under `user`, not also tool-response"
         );
+    }
+
+    // ── Branch-completeness for the pure helpers ──
+
+    #[test]
+    fn short_id_with_and_without_dash() {
+        assert_eq!(short_id("0a1b2c3d-4e5f-4a6b"), "0a1b2c3d…");
+        // A uuid-less id with no dash → returned verbatim (the `None` arm).
+        assert_eq!(short_id("nodashes"), "nodashes");
+    }
+
+    #[test]
+    fn category_label_and_glyph_all_variants() {
+        for (c, label, glyph) in [
+            (Category::Thinking, "thinking", '▸'),
+            (Category::User, "user", '◂'),
+            (Category::Tool, "tool", '▸'),
+            (Category::ToolResponse, "tool-response", '▸'),
+            (Category::Agent, "agent", '▸'),
+        ] {
+            assert_eq!(category_label(c), label);
+            assert_eq!(category_glyph(c), glyph);
+        }
+    }
+
+    #[test]
+    fn render_tool_use_name_only_input_only_both_neither() {
+        assert_eq!(render_tool_use(Some("Bash"), None), "Bash");
+        let v = serde_json::json!({"k":"v"});
+        // input only (no name) → leading space then the json.
+        assert_eq!(render_tool_use(None, Some(&v)), " {\"k\":\"v\"}");
+        // both
+        assert_eq!(
+            render_tool_use(Some("Read"), Some(&v)),
+            "Read {\"k\":\"v\"}"
+        );
+        // neither → empty
+        assert_eq!(render_tool_use(None, None), "");
+    }
+
+    #[test]
+    fn auq_answer_text_none_when_no_blocks_or_no_marker() {
+        // A record with string content → no blocks → None (the `blocks()?` arm).
+        let r = rec(r#"{"type":"user","message":{"role":"user","content":"plain string"}}"#);
+        assert!(auq_answer_text(&r).is_none());
+        // A carrier whose tool_result is NOT an AUQ answer → None (loop falls through).
+        let r2 = rec(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"just normal output"}]}}"#,
+        );
+        assert!(auq_answer_text(&r2).is_none());
+    }
+
+    #[test]
+    fn auq_answer_text_skips_non_tool_result_blocks() {
+        // The helper's loop must skip a non-ToolResult block (the `if let
+        // Block::ToolResult` FALSE arm) and still find the AUQ answer in a later one.
+        let r = rec(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}},{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"q\"=\"the picked one\"."}]}}"#,
+        );
+        assert_eq!(
+            auq_answer_text(&r).as_deref(),
+            Some("User has answered your questions: \"q\"=\"the picked one\".")
+        );
+    }
+
+    #[test]
+    fn auq_answer_under_user_present_but_pattern_does_not_match() {
+        // is_auq_answer is true and auq_answer_text returns Some, but the regex does
+        // NOT match the answer → the `matcher.is_match(&text)` FALSE arm: no hit.
+        let r = rec(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"q\"=\"alpha\"."}]}}"#,
+        );
+        // Pattern present in NEITHER a genuine-user text (there is none) NOR the answer.
+        let m = build_matcher(&args("zzzznomatch")).unwrap();
+        let mut hits = Vec::new();
+        collect_record_hits(&r, &[Category::User], &m, false, &mut hits);
+        assert!(
+            hits.is_empty(),
+            "non-matching AUQ answer yields no user hit"
+        );
+    }
+
+    #[test]
+    fn truncate_excerpt_long_and_short() {
+        assert_eq!(truncate_excerpt("short"), "short");
+        let s = "y".repeat(EXCERPT_MAX + 3);
+        let out = truncate_excerpt(&s);
+        assert!(out.ends_with("… (+3 chars)"), "got: {out}");
+    }
+
+    #[test]
+    fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
+        // A record marked `can_hit:false` is skipped before any regex work in
+        // collect_turn_hits (the `if !kept.can_hit { continue }` arm).
+        let m = build_matcher(&args("Carry")).unwrap(); // case-sensitive → has prefilter
+                                                        // A line lacking the literal → can_hit=false.
+        let raw = br#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"nothing relevant"}]}}"#;
+        let kept = Kept {
+            rec: serde_json::from_slice(raw).unwrap(),
+            can_hit: m.line_may_match(raw),
+        };
+        assert!(!kept.can_hit);
+        let turn = Turn {
+            index: 0,
+            records: vec![&kept],
+        };
+        let tw = TimeWindow::default();
+        let hits = collect_turn_hits(&turn, &[], &m, &tw, false);
+        assert!(hits.is_empty(), "a can_hit=false record yields no hits");
+    }
+
+    #[test]
+    fn collect_turn_hits_excludes_record_outside_time_window() {
+        // A record whose timestamp is outside a bounded window is skipped (the
+        // `!time_window.contains(...)` arm), even when it would otherwise match.
+        let m = build_matcher(&args("carry")).unwrap();
+        let raw = br#"{"type":"assistant","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"the carry"}]}}"#;
+        let kept = Kept {
+            rec: serde_json::from_slice(raw).unwrap(),
+            can_hit: m.line_may_match(raw),
+        };
+        let turn = Turn {
+            index: 0,
+            records: vec![&kept],
+        };
+        // Window starting AFTER the record's timestamp → excluded.
+        let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
+        assert!(collect_turn_hits(&turn, &[], &m, &tw, false).is_empty());
+        // An unbounded window admits it.
+        let tw2 = TimeWindow::default();
+        assert!(!collect_turn_hits(&turn, &[], &m, &tw2, false).is_empty());
+    }
+
+    #[test]
+    fn reconstruct_synthetic_lead_records_merge_into_first_real_turn() {
+        // A file whose FIRST records are NOT genuine users (leading tool noise) must
+        // fold into turn 0 once the first genuine user appears, and turns re-index
+        // 0-based on genuine users (the synthetic_lead re-index branch).
+        let lines = vec![
+            // leading non-user noise (a tool_result carrier) — synthetic lead.
+            r#"{"type":"user","uuid":"lead","timestamp":"2026-06-07T04:59:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"orphan carry note"}]}}"#,
+            // first genuine user (turn 0).
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"real first about carry"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"answer carry"}]}}"#,
+            // second genuine user (turn 1).
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"second carry"}}"#,
+        ];
+        let ex = search(&lines, &args("carry"));
+        let indices: Vec<usize> = ex.iter().map(|e| e.turn_index).collect();
+        assert_eq!(indices, vec![0, 1], "synthetic lead folds into turn 0");
+        // The orphan lead record is a MEMBER of turn 0's round-trip.
+        assert!(ex[0].record_uuids.contains(&"lead".to_string()));
+    }
+
+    #[test]
+    fn reconstruct_only_synthetic_lead_no_genuine_user() {
+        // A file with ONLY non-genuine records (no genuine user ever) → a single
+        // standalone turn 0 holding the orphans (the `else` seed-turn-0 arm, and the
+        // `turns.len() > 1` false guard so no re-index).
+        let lines = vec![
+            r#"{"type":"user","uuid":"o0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"orphan carry one"}]}}"#,
+            r#"{"type":"user","uuid":"o1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"y","content":"orphan carry two"}]}}"#,
+        ];
+        // Search tool-response category so the orphan carriers can produce a hit.
+        let mut a = args("carry");
+        a.categories = vec![Category::ToolResponse];
+        let ex = search(&lines, &a);
+        assert_eq!(ex.len(), 1);
+        assert_eq!(ex[0].turn_index, 0);
+    }
+
+    #[test]
+    fn parse_turn_range_equal_bounds_ok() {
+        // hi == lo is valid (single turn); only hi < lo errors.
+        assert_eq!(parse_turn_range("5..5").unwrap(), (5, 5));
+    }
+
+    #[test]
+    fn turn_range_excludes_below_lo_and_above_hi() {
+        // The two-turn fixture: a range `0..0` keeps turn 0 and excludes turn 1 via
+        // the `turn.index > hi` arm (complementing the `< lo` arm other tests cover).
+        let mut a = args("");
+        a.turn_range = Some("0..0".to_string());
+        let ex = search(&fixture(), &a);
+        let indices: Vec<usize> = ex.iter().map(|e| e.turn_index).collect();
+        assert_eq!(
+            indices,
+            vec![0],
+            "only turn 0; turn 1 excluded by the > hi arm"
+        );
+    }
+
+    #[test]
+    fn collect_record_hits_resolve_persisted_with_no_pointer_keeps_inline() {
+        // resolve_persisted=true but the tool_result has NO persisted pointer → the
+        // `persisted_output_path()` None arm: the inline text is matched as-is.
+        let r = rec(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"plain inline output with token zzinline"}]}}"#,
+        );
+        let m = build_matcher(&args("zzinline")).unwrap();
+        let mut hits = Vec::new();
+        collect_record_hits(&r, &[Category::ToolResponse], &m, true, &mut hits);
+        assert_eq!(
+            hits.len(),
+            1,
+            "inline text still matches when there is no pointer"
+        );
+        assert_eq!(hits[0].category, Category::ToolResponse);
+    }
+
+    #[test]
+    fn agent_text_block_only_from_assistant_not_user_text_block() {
+        // A USER record with a text block must NOT surface under `agent` (the
+        // `rec.is_type("assistant")` false arm of the agent-text branch).
+        let r = rec(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"user text foo"}]}}"#,
+        );
+        let m = build_matcher(&args("foo")).unwrap();
+        let mut hits = Vec::new();
+        collect_record_hits(&r, &[Category::Agent], &m, false, &mut hits);
+        assert!(hits.is_empty(), "a user text block is not an agent hit");
     }
 
     #[test]

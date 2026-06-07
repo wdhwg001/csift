@@ -57,8 +57,8 @@ pub fn is_auq_answer_text(text: &str) -> bool {
 ///
 /// Several fields below are deserialized for completeness of the documented record
 /// model (SPEC §3.2) and to keep parsing tolerant, but are not (yet) read by any
-/// handler — e.g. `parent_uuid` (the §6.4 x reconstruction keys on file order +
-/// genuine-user delimiting, not the uuid tree), `is_sidechain`,
+/// handler — e.g. `parent_uuid` (the §6.4 round-trip reconstruction keys on file
+/// order + genuine-user delimiting, not the uuid tree), `is_sidechain`,
 /// `is_visible_in_transcript_only`, `subtype`, `content`. They are part of the
 /// data contract, intentionally retained, hence the targeted allow rather than
 /// deleting SPEC-mandated shape.
@@ -156,9 +156,9 @@ pub enum Content {
 ///
 /// Some block fields are deserialized for the documented model (SPEC §3.5) but not
 /// read by current logic (`signature`, the `ToolUse.id`, the `ToolResult`
-/// `tool_use_id`/`is_error`, `Image.source`). The x reconstruction returns the
-/// whole turn, so `tool_use`↔`tool_result` pairing-by-id is not needed (both sit in
-/// the same emitted exchange); the fields stay for shape-completeness + future use.
+/// `tool_use_id`/`is_error`, `Image.source`). The round-trip reconstruction returns
+/// the whole turn, so `tool_use`↔`tool_result` pairing-by-id is not needed (both sit
+/// in the same emitted exchange); the fields stay for shape-completeness + future use.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -654,5 +654,213 @@ mod tests {
             {"type":"tool_reference","tool_name":"WebSearch"}
         ]);
         assert_eq!(tool_result_content_text(&arr), "first\nsecond\nWebSearch");
+    }
+
+    // ── Branch-completeness: the negative / fallback arms ──
+
+    #[test]
+    fn is_genuine_user_false_for_non_user_type() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
+        );
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn is_genuine_user_false_when_message_absent() {
+        // A `type:"user"` record with NO `message` object at all (the `let Some(msg)
+        // else` arm).
+        let r = parse(r#"{"type":"user","uuid":"x"}"#);
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn is_genuine_user_false_when_role_not_user() {
+        // role mismatch inside an otherwise user-typed record.
+        let r = parse(r#"{"type":"user","message":{"role":"assistant","content":"hi"}}"#);
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn is_genuine_user_false_when_content_absent() {
+        // message present, role user, but NO content (the `None => false` arm).
+        let r = parse(r#"{"type":"user","message":{"role":"user"}}"#);
+        assert!(!r.is_genuine_user());
+        assert!(r.genuine_user_text().is_none());
+    }
+
+    #[test]
+    fn is_genuine_user_false_for_blocks_without_text() {
+        // Block content that has NO text block (only an image) → not genuine.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
+        );
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn blocks_none_for_string_content() {
+        // `blocks()` returns None when content is a bare string (Content::Text arm).
+        let r = parse(r#"{"type":"user","message":{"role":"user","content":"plain"}}"#);
+        assert!(r.blocks().is_none());
+    }
+
+    #[test]
+    fn blocks_none_when_no_message() {
+        let r = parse(r#"{"type":"system","subtype":"compact_boundary"}"#);
+        assert!(r.blocks().is_none());
+    }
+
+    #[test]
+    fn is_auq_answer_false_for_non_user() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}"#,
+        );
+        assert!(!r.is_auq_answer());
+    }
+
+    #[test]
+    fn is_auq_answer_false_when_no_blocks() {
+        // user record with string content → no blocks → not an AUQ answer.
+        let r = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
+        assert!(!r.is_auq_answer());
+    }
+
+    #[test]
+    fn persisted_output_path_empty_structured_falls_through_to_inline() {
+        // An empty structured persistedOutputPath must NOT win — the inline marker
+        // is used instead (the `!p.is_empty()` false arm).
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"persistedOutputPath":""},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"<persisted-output>\nFull output saved to: /tmp/real/inline.txt\n</persisted-output>"}]}}"#,
+        );
+        assert_eq!(
+            r.persisted_output_path().as_deref(),
+            Some("/tmp/real/inline.txt")
+        );
+    }
+
+    #[test]
+    fn persisted_output_path_none_when_no_blocks() {
+        // user record with string content → blocks() is None → `?` short-circuits.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"no persisted pointer here"}}"#,
+        );
+        assert!(r.persisted_output_path().is_none());
+    }
+
+    #[test]
+    fn persisted_output_path_structured_present_but_missing_key_falls_to_inline() {
+        // `toolUseResult` exists but lacks `persistedOutputPath` (the
+        // `tur.get(...)` None arm) → fall through to the inline marker scan.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"somethingElse":1},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"Full output saved to: /tmp/fallback.txt\n"}]}}"#,
+        );
+        assert_eq!(
+            r.persisted_output_path().as_deref(),
+            Some("/tmp/fallback.txt")
+        );
+    }
+
+    #[test]
+    fn persisted_output_path_skips_non_tool_result_blocks_in_inline_scan() {
+        // The inline fallback loop must skip a non-ToolResult block (the `if let
+        // Block::ToolResult` FALSE arm) and find the marker in a later tool_result.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"not a tool result"},{"type":"tool_result","tool_use_id":"x","content":"Full output saved to: /tmp/later.txt\n"}]}}"#,
+        );
+        assert_eq!(r.persisted_output_path().as_deref(), Some("/tmp/later.txt"));
+    }
+
+    #[test]
+    fn is_auq_answer_skips_non_tool_result_blocks() {
+        // is_auq_answer's `.any()` must return false for a block that is NOT a
+        // tool_result (the match's `_ => false` arm) when no AUQ marker is present.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"plain user text, no AUQ marker"}]}}"#,
+        );
+        assert!(!r.is_auq_answer());
+    }
+
+    #[test]
+    fn agent_text_none_for_non_assistant() {
+        let r = parse(r#"{"type":"system","subtype":"away_summary"}"#);
+        assert!(r.agent_text().is_none());
+    }
+
+    #[test]
+    fn agent_text_handles_bare_string_assistant_content() {
+        // CC normally sends assistant content as a block array; a bare-string body is
+        // a surprise we surface rather than drop (the Content::Text fallback arm).
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":"  surprise bare string  "}}"#,
+        );
+        assert_eq!(r.agent_text().as_deref(), Some("surprise bare string"));
+    }
+
+    #[test]
+    fn agent_text_none_for_empty_bare_string() {
+        // A bare-string assistant body that is all whitespace normalizes to empty → None.
+        let r = parse(r#"{"type":"assistant","message":{"role":"assistant","content":"   "}}"#);
+        assert!(r.agent_text().is_none());
+    }
+
+    #[test]
+    fn agent_text_none_when_no_content() {
+        let r = parse(r#"{"type":"assistant","message":{"role":"assistant"}}"#);
+        assert!(r.agent_text().is_none());
+    }
+
+    #[test]
+    fn agent_text_skips_blank_text_blocks() {
+        // A text block that is all whitespace is skipped; only the real one counts.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"   "},{"type":"text","text":"real"}]}}"#,
+        );
+        assert_eq!(r.agent_text().as_deref(), Some("real"));
+    }
+
+    #[test]
+    fn flatten_blocks_ignores_non_text_blocks() {
+        // genuine_user_text over blocks where a non-text block is interleaved: the
+        // tool_use/image are filtered out, only text survives. (Exercised via a
+        // genuine-user record whose blocks mix text with an image.)
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"keep me"},{"type":"image","source":{}}]}}"#,
+        );
+        assert_eq!(r.genuine_user_text().as_deref(), Some("keep me"));
+    }
+
+    #[test]
+    fn tool_result_content_text_object_fallback() {
+        // A non-string/non-array content (e.g. an object) renders compactly so a
+        // regex can still match structured payloads (the `other => to_string` arm).
+        let obj = serde_json::json!({"k": "v", "n": 1});
+        let out = tool_result_content_text(&obj);
+        assert!(out.contains("\"k\""), "compact object render: {out}");
+        // A bare number/bool/null also goes through the same arm.
+        assert_eq!(tool_result_content_text(&serde_json::json!(42)), "42");
+        assert_eq!(tool_result_content_text(&serde_json::json!(null)), "null");
+    }
+
+    #[test]
+    fn scrape_persisted_path_empty_after_marker_is_none() {
+        // The marker is present but the path is blank → None (the `path.is_empty()`
+        // true arm).
+        assert!(scrape_persisted_path("Full output saved to:   \nnext").is_none());
+        // Marker with the path running to EOF (no trailing newline) → the `unwrap_or`
+        // line_end == rest.len() branch.
+        assert_eq!(
+            scrape_persisted_path("Full output saved to: /a/b.txt"),
+            Some("/a/b.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_line_collapses_and_trims() {
+        // Leading/trailing/internal whitespace runs collapse to single spaces; the
+        // trailing-space pop loop runs.
+        assert_eq!(normalize_line("  a\t\tb \n c   "), "a b c");
+        assert_eq!(normalize_line(""), "");
+        assert_eq!(normalize_line("   "), "");
     }
 }

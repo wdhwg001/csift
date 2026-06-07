@@ -22,8 +22,9 @@ memmap2 = "0.9"
 rayon = "1.12"
 anyhow = "1.0"
 # Modern datetime + timezone crate. The brief prefers jiff; it built clean, so no
-# fallback to time/chrono was needed. Used for ISO8601 parse + Australia/Sydney
-# local rendering alongside raw UTC.
+# fallback to time/chrono was needed. Used for ISO8601 parse + system-local
+# timezone rendering alongside raw UTC (jiff's default `tz-system` feature powers
+# `TimeZone::system()`).
 jiff = "0.2"
 
 [dev-dependencies]
@@ -36,7 +37,13 @@ cargo-husky = { version = "1.5", default-features = false, features = [
 ] }
 
 [lints.rust]
-unsafe_code = "warn"
+# Forbid unsafe crate-wide. `deny` (not `forbid`) is deliberate: it bans every
+# `unsafe` block EXCEPT the single audited, SPEC §7a-mandated mmap site, which
+# carries a targeted `#[allow(unsafe_code)]` (parse.rs). `forbid` cannot be
+# locally overridden, so it would refuse to compile that irreducibly-unsafe mmap;
+# `deny` gives "forbidden everywhere except the one commented exception". Any other
+# `unsafe` (without an explicit allow) is a hard error.
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
 [lints.clippy]

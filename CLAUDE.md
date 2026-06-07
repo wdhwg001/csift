@@ -11,17 +11,14 @@ Project-specific operating manual for any AI agent (Claude Code, Codex, Cursor) 
 **csift — "ripgrep for Claude Code session transcripts".** A fast Rust CLI that **lists** and **regex-searches** Claude Code session `.jsonl` files.
 
 - **Primary consumer is an LLM** — a Claude Code agent searching/recovering its own or a peer session. Output must be clean, token-efficient, and regex-driven. Default output is human/LLM-readable with clear session/turn/category/timestamp headers; `--json` is the machine format.
-- **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Chinese tokenisation is intractable for lexical scoring; regex is the strength and the whole point.
-- **Subcommands:** `list`, `search`, `whoami`.
+- **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
+- **Subcommands:** `list`, `search`, `agents`, `whoami`. `list`/`search` span each session's subagent transcripts by default (`--no-subagents` opts out); `agents` reports a session's subagent lifecycle (kind / start / completion / status), with `--since`/`--until` + `--by start|completion` window filters. See SPEC §6.5.
 
 ---
 
-## 2. LOCAL git only — never pushed
+## 2. Git & quality gate
 
-This repo is **local git only**: `git init` + local commits, nothing else.
-
-- **NEVER add a git remote. NEVER push.** There is no origin and there must not be one.
-- No CI service runs here; the pre-commit hook (below) is the entire quality gate.
+No CI service runs here; the pre-commit hook (§5) is the entire quality gate.
 
 ---
 
@@ -36,7 +33,7 @@ This repo is **local git only**: `git init` + local commits, nothing else.
 | Scan | `memchr` (SIMD newline) + `memmap2` (mmap) | 200MB+ files without full-buffer reads |
 | Parallel | `rayon` | Fan-out across many session files |
 | Errors | `anyhow` | Error chains surfaced on stderr; no `unwrap` in lib paths |
-| Date/TZ | `jiff` | ISO8601 parse + Australia/Sydney local render alongside raw UTC |
+| Date/TZ | `jiff` | ISO8601 parse + system-local timezone render alongside raw UTC (auto-detected via `TimeZone::system()`) |
 | Hooks | `cargo-husky` (dev-dep, `user-hooks`) | Installs the pre-commit gate |
 
 Versions are pinned by `^`-range in `Cargo.toml` + `Cargo.lock`. **Do not bump majors without an explicit reason.**
@@ -49,9 +46,9 @@ Versions are pinned by `^`-range in `Cargo.toml` + `Cargo.lock`. **Do not bump m
 - **No silent truncation.** If a result set is capped (`--max-count`), the output MUST state how many were dropped. A skipped malformed line must be counted, never hidden.
 - **Tolerant parsing.** Real jsonl carries far more fields than any doc lists (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`, `toolUseResult`, `slug`, …) and some records have no `timestamp`. Deserialize only what's used, ignore the rest, never crash on a new field or block type. The `Block` enum has a `#[serde(other)] Unknown` arm for exactly this.
 - **Performance is a contract, not a nicety.** `list`/`search` must stay fast on 200MB+ files: mmap + `memchr` line scan + a cheap byte/regex prefilter, with full `serde_json` only on candidate lines; tail reads SEEK from EOF backward (never parse the whole file); `rayon` parallelizes across files.
-- **`PascalCase` types, `snake_case` items, one module per concern** (`cli`, `path`, `model`, `parse`, `session`, `search`, `whoami`).
+- **`PascalCase` types, `snake_case` items, one module per concern** (`cli`, `path`, `model`, `parse`, `session`, `search`, `subagent`, `agents`, `time_window`, `timez`, `whoami`).
 - **Comments capture _why_ / a non-obvious constraint**, not what the code already says.
-- **Scaffold note:** `src/main.rs` currently has a crate-level `#![allow(dead_code)]` because Phase-1 stubs declare the full surface before handlers are wired. **Remove it in Phase 2** once every public item is referenced — a leftover allow then masks real dead code.
+- **Dead-code allows:** there is no crate-level `#![allow(dead_code)]`. The only `#[allow(dead_code)]` is targeted on `model::Record`/`Block` for SPEC-mandated record-shape fields that are deserialized for tolerance/completeness but not yet read by a handler (justified inline). Do not add a crate-wide allow — it would mask real dead code.
 
 ---
 
@@ -60,8 +57,9 @@ Versions are pinned by `^`-range in `Cargo.toml` + `Cargo.lock`. **Do not bump m
 ```bash
 cargo build                                  # debug build (GATE: must succeed)
 cargo build --release                        # optimised (thin-LTO, 1 cgu) for real scans
-cargo run -- list [PATH...]                  # list sessions
-cargo run -- search PATTERN [flags]          # regex search
+cargo run -- list [PATH...]                  # list sessions (+ subagents by default; --no-subagents to skip)
+cargo run -- search PATTERN [flags]          # regex search (spans subagents by default)
+cargo run -- agents [PATH | --session ID]    # subagent lifecycle (kind/start/completion/status; --since/--until/--by)
 cargo run -- whoami [--path]                 # identify the calling CC session
 cargo fmt --all                              # format
 cargo fmt --all -- --check                   # format gate
@@ -80,11 +78,14 @@ This is the load-bearing domain knowledge. Verified against real `~/.claude/proj
 ### 6.1 Data location
 
 ```
-~/.claude/projects/<ENCODED_PROJECT_DIR>/<session-uuid>.jsonl    # a session transcript
-~/.claude/projects/<ENCODED>/<session-uuid>/subagents/*.jsonl    # subagent transcripts
-~/.claude/projects/<ENCODED>/<session-uuid>/subagents/*.meta.json
-~/.claude/projects/<ENCODED>/<session-uuid>/tool-results/<id>.txt # externalised tool output
+~/.claude/projects/<ENCODED_PROJECT_DIR>/<session-uuid>.jsonl                          # a session transcript
+~/.claude/projects/<ENCODED>/<session-uuid>/subagents/agent-<hex>.jsonl                # (A) built-in Task/Agent subagent transcript
+~/.claude/projects/<ENCODED>/<session-uuid>/subagents/workflows/wf_*/agent-<hex>.jsonl # (B) workflow / OMC subagent transcript
+~/.claude/projects/<ENCODED>/<session-uuid>/subagents/workflows/wf_*/journal.jsonl     # (C) workflow EVENT log — NOT a transcript (excluded)
+~/.claude/projects/<ENCODED>/<session-uuid>/subagents/**/*.meta.json                   # {agentType, description?, …} companions
+~/.claude/projects/<ENCODED>/<session-uuid>/tool-results/<id>.txt                      # externalised tool output
 ```
+Kind = path location (A→builtin-task, B→workflow), NOT `agentType`. Canonical agent id = bare `<hex>` (the record/journal `agentId`). `journal.jsonl` is read only for completion status, never listed/searched. See SPEC §6.5 + `src/subagent.rs`.
 
 ### 6.2 Path encoding (verified, deterministic forward / lossy reverse)
 
@@ -134,7 +135,7 @@ A `tool_result`-carrier record does **not** count as genuine user and does **not
 - `tool-response` = `tool_result` blocks.
 - `agent` = assistant visible end-of-turn text (the agent message; "agent includes AskUserQuestion").
 
-### 6.6 Complete x (round-trip)
+### 6.6 Complete round-trip (exchange)
 
 On a match, return the COMPLETE exchange, not a fragment: a matched `tool_use` WITH its `tool_result`; a matched user turn WITH the agent response. Reconstruct via `uuid`/`parentUuid` linking. A **turn** is delimited by genuine-user messages.
 
@@ -152,18 +153,20 @@ src/cli.rs       # clap derive: Cli/Command + ListArgs/SearchArgs/WhoamiArgs + C
 src/path.rs      # encode_cwd + projects-root + target resolution (real-path vs encoded)
 src/model.rs     # serde Record/Message/Content/Block + is_genuine_user
 src/parse.rs     # mmap + memchr head/tail/stream readers + lazy parse_line
-src/session.rs   # `list`: head+tail read → SessionSummary
-src/search.rs    # `search`: regex + filters → complete x Exchange
+src/session.rs   # `list`: head+tail read → SessionSummary (+ spans subagents by default)
+src/search.rs    # `search`: regex + filters → complete round-trip Exchange (+ spans subagents)
+src/subagent.rs  # subagent discovery/classification (3 on-disk shapes, journal excluded) + lifecycle/status
+src/agents.rs    # `agents`: per-subagent lifecycle rows + --kind/--since/--until/--by filters
+src/time_window.rs # `--since`/`--until` parsing (absolute + relative, system-local); shared by search + agents
+src/timez.rs     # shared system-local timestamp rendering (format_timestamp / local_iso / local_tz)
 src/whoami.rs    # `whoami`: CLAUDE_CODE_SESSION_ID detection, false-positive-safe
 ```
-
-Phase-1 handler bodies are `todo!()`; the type/flag/test surface is real. Phase 2 fills the bodies per SPEC.md.
+The CLI entrypoint is `cli::parse_argv` (NOT `Cli::parse`): it runs an argv-normalization pass (`cli::normalize_argv`) so a `--format`/`--kind`/… flag works in ANY position relative to a leading-`-` encoded project target — fixes clap's `allow_hyphen_values` greedy-absorb bug (#3880) with zero-drift flag discovery via clap introspection.
 
 ---
 
 ## 8. What NOT to do
 
-- **Don't add a remote / don't push.** Local git only (§2).
 - **Don't introduce BM25 / embeddings / semantic search.** Regex only (§1).
 - **Don't `unwrap`/`expect` in library paths**, and **don't silently truncate** (§4).
 - **Don't parse a whole 200MB file** when a head or tail read answers the question (§4, §6).
