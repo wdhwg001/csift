@@ -210,6 +210,81 @@ pub fn all_project_dirs() -> Result<Vec<ProjectDir>> {
     Ok(dirs)
 }
 
+/// Resolve `--path` targets (+ optional `--session`) into the concrete, sorted,
+/// de-duplicated list of top-level session `*.jsonl` files to operate on, optionally
+/// spanning each session's SUBAGENT transcripts.
+///
+/// This is the SINGLE shared target resolver for `search` / `agents` / `files` (each
+/// previously carried a near-identical copy): 0 `paths` ⇒ every project under the
+/// projects root; a `--session` restricts to the parent session whose jsonl basename
+/// matches. When `include_subagents` is set, each selected top-level session's subagent
+/// transcripts (built-in Task/Agent-tool + workflow / OMC agents under `subagents/**`)
+/// are appended so a session-scoped operation also covers work a subagent performed;
+/// workflow `journal.jsonl` event logs are never transcripts and are excluded (see
+/// [`crate::subagent::subagent_transcript_files`]).
+///
+/// Bails (never returns an empty silent result) when a `--session` was given but no
+/// matching file exists under the resolved target(s). With no `--session`, an empty
+/// result is allowed (the caller renders an honest "nothing found").
+pub fn resolve_session_files(
+    paths: &[std::path::PathBuf],
+    session: Option<&str>,
+    include_subagents: bool,
+) -> Result<Vec<PathBuf>> {
+    let dirs: Vec<ProjectDir> = if paths.is_empty() {
+        all_project_dirs()?
+    } else {
+        let mut d = Vec::with_capacity(paths.len());
+        for p in paths {
+            d.push(resolve_target(p)?);
+        }
+        d
+    };
+
+    let mut files: Vec<PathBuf> = Vec::new();
+    for pd in &dirs {
+        let read = match std::fs::read_dir(&pd.dir) {
+            Ok(r) => r,
+            Err(_) => continue, // tolerate a vanished dir mid-scan
+        };
+        for entry in read.flatten() {
+            let p = entry.path();
+            let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
+            if is_file && p.extension().is_some_and(|e| e == "jsonl") {
+                // --session restricts to one uuid (the jsonl basename).
+                if let Some(sid) = session {
+                    let stem = p.file_stem().and_then(|s| s.to_str());
+                    if stem != Some(sid) {
+                        continue;
+                    }
+                }
+                files.push(p);
+            }
+        }
+    }
+
+    // The --session restriction applies to the PARENT session (the top-level jsonl
+    // basename). Subagent transcripts of a selected session are still in scope — they
+    // belong to it — so they are gathered from the already-filtered `files` set.
+    if include_subagents {
+        let mut sub_files: Vec<PathBuf> = Vec::new();
+        for sf in &files {
+            sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
+        }
+        files.extend(sub_files);
+    }
+
+    files.sort();
+    files.dedup();
+
+    if files.is_empty() {
+        if let Some(sid) = session {
+            bail!("no session file found for --session {sid} under the resolved target(s)");
+        }
+    }
+    Ok(files)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1093,6 +1093,306 @@ fn agents_groups_multiple_sessions_with_separator() {
     );
 }
 
+// ── files ──
+
+/// A session whose transcript performs the acid-test scenario: two `/tmp/*.md` Writes
+/// (creates), three `…/gaps/*.md` Edits (updates), and a Bash `rm`, across two turns,
+/// each structured tool_use paired with its create/update carrier. Returns the home.
+fn files_scenario_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"set up the gap docs and tmp notes"}}"#, "\n",
+            // Write /tmp/beacon-a.md (create) + carrier.
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/tmp/beacon-a.md","content":"x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/tmp/beacon-a.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            // Write /tmp/beacon-b.md (create) + carrier.
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w2","name":"Write","input":{"file_path":"/tmp/beacon-b.md","content":"y"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","toolUseResult":{"type":"create","filePath":"/tmp/beacon-b.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w2","content":"ok"}]}}"#, "\n",
+            // Three Edits to gaps docs (updates) + carriers.
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/p/spec/gaps/one.md","old_string":"a","new_string":"b"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","toolUseResult":{"type":"update","filePath":"/p/spec/gaps/one.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e2","name":"Edit","input":{"file_path":"/p/spec/gaps/two.md","old_string":"a","new_string":"b"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c3","toolUseResult":{"type":"update","filePath":"/p/spec/gaps/two.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e2","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a4","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e3","name":"Edit","input":{"file_path":"/p/spec/gaps/three.md","old_string":"a","new_string":"b"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c4","toolUseResult":{"type":"update","filePath":"/p/spec/gaps/three.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e3","content":"ok"}]}}"#, "\n",
+            // ── turn 1: a Bash rm ──
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"clean up tmp"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a5","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"rm /tmp/beacon-a.md"}}]}}"#, "\n",
+            // A malformed line that survives the prefilter (carries "role":"user").
+            r#"{"type":"user","role":"user" broken json after marker}"#, "\n",
+        ),
+    );
+    h
+}
+
+#[test]
+fn files_default_summary_acid_test() {
+    let h = files_scenario_home();
+    let out = h.run(&["files", "--session", SESS]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("SESSION"));
+    // The /tmp bucket: two writes (the created docs) + the heuristic bash rm.
+    assert!(
+        out.stdout.contains("/tmp: 2 write"),
+        "/tmp bucket: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("bash (heuristic)"),
+        "heuristic bash label: {}",
+        out.stdout
+    );
+    // The gaps bucket: three edits.
+    assert!(
+        out.stdout.contains("/p/spec/gaps: 3 edit"),
+        "gaps bucket: {}",
+        out.stdout
+    );
+    // Footer accounting + heuristic caveat + skipped-line note.
+    assert!(out.stdout.contains("detail=summary"));
+    assert!(out.stdout.contains("Bash mutations are heuristic"));
+    assert!(out.stdout.contains("malformed line(s) skipped"));
+}
+
+#[test]
+fn files_by_file_distinct_counts_via_json() {
+    let h = files_scenario_home();
+    let out = h.run(&["files", "--session", SESS, "--by-file", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let lines: Vec<&str> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    // The trailing summary object reports distinct_files + total_mutations.
+    let summary: serde_json::Value = serde_json::from_str(lines.last().unwrap()).unwrap();
+    // Distinct files: /tmp/beacon-a.md, /tmp/beacon-b.md, gaps/one,two,three = 5.
+    assert_eq!(
+        summary.get("distinct_files").and_then(|v| v.as_u64()),
+        Some(5),
+        "summary: {summary}"
+    );
+    assert_eq!(
+        summary.get("detail_level").and_then(|v| v.as_str()),
+        Some("by-file")
+    );
+    // Count distinct gap docs (acid test #1): rows whose `file` ends in `/gaps/*.md`.
+    let mut gap_docs = 0;
+    let mut tmp_creates = 0;
+    for l in &lines {
+        let v: serde_json::Value = serde_json::from_str(l).unwrap();
+        if let Some(f) = v.get("file").and_then(|f| f.as_str()) {
+            if f.starts_with("/p/spec/gaps/") {
+                gap_docs += 1;
+            }
+            // Acid test #2: /tmp Writes are authoritative creates (write count > 0).
+            if f.starts_with("/tmp/") && v.get("write").and_then(|w| w.as_u64()) == Some(1) {
+                tmp_creates += 1;
+            }
+        }
+    }
+    assert_eq!(gap_docs, 3, "three distinct gap docs touched");
+    assert_eq!(tmp_creates, 2, "two /tmp docs created via Write");
+}
+
+#[test]
+fn files_timeline_is_chronological_with_heuristic_label() {
+    let h = files_scenario_home();
+    let out = h.run(&["files", "--session", SESS, "--timeline"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("detail=timeline"));
+    // The bash rm is the newest mutation (06:00) and carries the heuristic label.
+    let lines: Vec<&str> = out
+        .stdout
+        .lines()
+        .filter(|l| l.contains("/tmp/beacon-a.md") || l.contains("/p/spec/gaps"))
+        .collect();
+    // The first /tmp/beacon-a.md mention (the Write at 05:00) precedes the bash rm.
+    let write_pos = out.stdout.find("write  /tmp/beacon-a.md");
+    let bash_pos = out.stdout.find("bash (heuristic)  /tmp/beacon-a.md");
+    assert!(write_pos.is_some() && bash_pos.is_some(), "{}", out.stdout);
+    assert!(
+        write_pos < bash_pos,
+        "the Write precedes the bash rm chronologically: {}",
+        out.stdout
+    );
+    assert!(!lines.is_empty());
+}
+
+#[test]
+fn files_by_dir_groups_and_counts() {
+    let h = files_scenario_home();
+    let out = h.run(&["files", "--session", SESS, "--by-dir", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let mut saw_gaps_dir = false;
+    for l in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
+        let v: serde_json::Value = serde_json::from_str(l).unwrap();
+        if v.get("dir").and_then(|d| d.as_str()) == Some("/p/spec/gaps") {
+            // Three edits, three distinct files in that dir.
+            assert_eq!(v.get("edit").and_then(|e| e.as_u64()), Some(3));
+            assert_eq!(v.get("distinct_files").and_then(|d| d.as_u64()), Some(3));
+            saw_gaps_dir = true;
+        }
+    }
+    assert!(saw_gaps_dir, "the gaps dir row must appear: {}", out.stdout);
+}
+
+#[test]
+fn files_turn_range_excludes_later_bash() {
+    // --turn-range 0..0 keeps the turn-0 structured edits and DROPS the turn-1 bash rm.
+    let h = files_scenario_home();
+    let out = h.run(&["files", "--session", SESS, "--turn-range", "0..0"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("turn-range=0..0"));
+    // 5 mutations remain (2 writes + 3 edits), not 6 (the bash rm is in turn 1).
+    assert!(
+        out.stdout.contains("5 mutation(s)"),
+        "turn 1 bash excluded: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn files_turn_range_with_since_is_mutually_exclusive() {
+    let h = files_scenario_home();
+    let out = h.run(&[
+        "files",
+        "--session",
+        SESS,
+        "--turn-range",
+        "0..1",
+        "--since",
+        "2h",
+    ]);
+    assert!(!out.success, "mutually-exclusive flags must error");
+    assert!(
+        out.stderr.contains("mutually exclusive"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn files_since_window_keeps_only_later_mutations() {
+    // A window starting at 06:00 drops all turn-0 structured edits (05:00) and keeps
+    // only the turn-1 bash rm (06:00).
+    let h = files_scenario_home();
+    let out = h.run(&[
+        "files",
+        "--session",
+        SESS,
+        "--since",
+        "2026-06-07T06:00:00Z",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("1 mutation(s)"), "got: {}", out.stdout);
+    assert!(out.stdout.contains("bash (heuristic)"));
+}
+
+#[test]
+fn files_no_mutations_says_none() {
+    // A session with a genuine user turn but no file-mutating tool use.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"just chatting"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","message":{"role":"assistant","content":[{"type":"text","text":"sure"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["files", "--session", SESS, "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no file mutations found"),
+        "got: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn files_spans_subagent_mutations() {
+    // A subagent that Writes a file → its mutation is attributed under the session by
+    // default (OMC fan-out edits happen in subagents). --no-subagents drops it.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub111.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"sub111","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"sub: write a file"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/tmp/subagent-out.md","content":"z"}}]}}"#, "\n",
+        ),
+    );
+    let with = h.run(&["files", "--session", SESS]);
+    assert!(with.success, "stderr: {}", with.stderr);
+    assert!(
+        with.stdout.contains("/tmp"),
+        "subagent write spanned: {}",
+        with.stdout
+    );
+    let without = h.run(&["files", "--session", SESS, "--no-subagents"]);
+    assert!(without.success, "stderr: {}", without.stderr);
+    assert!(
+        without.stdout.contains("no file mutations found"),
+        "--no-subagents drops the subagent write: {}",
+        without.stdout
+    );
+}
+
+#[test]
+fn files_unknown_session_errors() {
+    let h = files_scenario_home();
+    let out = h.run(&["files", "--session", "00000000-0000-0000-0000-000000000000"]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("no session file found"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn files_via_project_path_target() {
+    let h = files_scenario_home();
+    let out = h.run(&["files", ENC, "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("/tmp: 2 write"));
+}
+
+#[test]
+fn files_help_mentions_detail_levels_and_heuristic() {
+    let h = Home::new();
+    let out = h.run(&["files", "--help"]);
+    assert!(out.success);
+    assert!(out.stdout.contains("--summary"));
+    assert!(out.stdout.contains("--by-dir"));
+    assert!(out.stdout.contains("--by-file"));
+    assert!(out.stdout.contains("--timeline"));
+    assert!(
+        out.stdout.to_lowercase().contains("heuristic"),
+        "help must flag the Bash-heuristic caveat: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn search_help_mentions_regex_dialect_boundaries() {
+    let h = Home::new();
+    let out = h.run(&["search", "--help"]);
+    assert!(out.success);
+    assert!(
+        out.stdout.contains("linear-time"),
+        "dialect block: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("backreference"));
+    assert!(out.stdout.contains("lookahead") || out.stdout.contains("lookbehind"));
+}
+
 // ── top-level dispatch / help / version (main.rs + clap) ──
 
 #[test]

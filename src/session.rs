@@ -8,6 +8,16 @@
 //! system-local timezone alongside raw UTC (see [`crate::timez`]). Files are
 //! processed in parallel across the corpus (`rayon`), then sorted for deterministic
 //! output.
+//!
+//! ## Parallelism + the one serial step (honest)
+//!
+//! The dominant work — the per-session head+tail parse — runs `rayon` `par_iter()`
+//! across all session files on the default pool (= CPU count). The subagent
+//! PRE-DISCOVERY step (locating each session's `subagents/**` transcripts before the
+//! parallel summarize) is also fanned out with `par_iter().flat_map(...)`; it is a
+//! cheap `read_dir` stat-walk per session, dwarfed by the parallel parses, so even
+//! serial it would be acceptable — it is parallelized here only because the change was
+//! trivial and introduces no new bottleneck.
 
 use std::path::{Path, PathBuf};
 
@@ -97,10 +107,16 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     //     Workflow `journal.jsonl` event logs are never transcripts (see
     //     `subagent::discover_subagents`), so they are excluded here automatically.
     if args.want_subagents() {
-        let mut sub_files: Vec<PathBuf> = Vec::new();
-        for sf in &session_files {
-            sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
-        }
+        // Parallel pre-discovery (a read_dir stat-walk per session). flat_map over the
+        // parallel iterator preserves no order, but we sort+dedup right after, so the
+        // final set is deterministic regardless of completion order.
+        let sub_files: Vec<PathBuf> = session_files
+            .par_iter()
+            .map(|sf| crate::subagent::subagent_transcript_files(sf))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
         session_files.extend(sub_files);
         session_files.sort();
         session_files.dedup();

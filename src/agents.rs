@@ -10,13 +10,13 @@
 //! default; `--by completion` filters on completion instead. Files are processed in
 //! parallel across sessions, then sorted for deterministic output.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use rayon::prelude::*;
 
 use crate::cli::{AgentKindFilter, AgentTimeAxis, AgentsArgs, OutputFormat};
-use crate::path::{self, ProjectDir};
+use crate::path;
 use crate::subagent::{
     discover_subagents, duration_label, lifecycle, SubagentKind, SubagentLifecycle,
 };
@@ -26,8 +26,10 @@ use crate::timez::{format_timestamp, local_iso};
 /// Entry point for `csift agents`.
 pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // Resolve the target session files (PATH(s) + optional --session). With neither,
-    // every project is scanned — the same target model as list/search.
-    let session_files = resolve_target_sessions(&args.paths, args.session.as_deref())?;
+    // every project is scanned — the same target model as list/search. `agents`
+    // discovers each session's subagents itself, so it never spans subagent TRANSCRIPT
+    // files here (include_subagents=false).
+    let session_files = path::resolve_session_files(&args.paths, args.session.as_deref(), false)?;
 
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
@@ -69,52 +71,6 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 fn lifecycles_for_session(session_jsonl: &Path) -> Result<Vec<SubagentLifecycle>> {
     let subs = discover_subagents(session_jsonl)?;
     subs.iter().map(lifecycle).collect()
-}
-
-/// Resolve `--path` targets (+ optional `--session`) into the concrete list of
-/// top-level session `*.jsonl` files whose subagents we will enumerate. 0 PATH ⇒ all
-/// projects. (Mirrors `search::resolve_search_targets`; kept local to avoid coupling
-/// the two subcommands' target logic.)
-fn resolve_target_sessions(paths: &[PathBuf], session: Option<&str>) -> Result<Vec<PathBuf>> {
-    let dirs: Vec<ProjectDir> = if paths.is_empty() {
-        path::all_project_dirs()?
-    } else {
-        let mut d = Vec::with_capacity(paths.len());
-        for p in paths {
-            d.push(path::resolve_target(p)?);
-        }
-        d
-    };
-
-    let mut files: Vec<PathBuf> = Vec::new();
-    for pd in &dirs {
-        let read = match std::fs::read_dir(&pd.dir) {
-            Ok(r) => r,
-            Err(_) => continue, // tolerate a vanished dir mid-scan
-        };
-        for entry in read.flatten() {
-            let p = entry.path();
-            let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
-            if is_file && p.extension().is_some_and(|e| e == "jsonl") {
-                if let Some(sid) = session {
-                    let stem = p.file_stem().and_then(|s| s.to_str());
-                    if stem != Some(sid) {
-                        continue;
-                    }
-                }
-                files.push(p);
-            }
-        }
-    }
-    files.sort();
-    files.dedup();
-
-    if files.is_empty() {
-        if let Some(sid) = session {
-            bail!("no session file found for --session {sid} under the resolved target(s)");
-        }
-    }
-    Ok(files)
 }
 
 /// True when `kind` passes the `--kind` filter (empty filter ⇒ all kinds).

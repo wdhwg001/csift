@@ -356,6 +356,238 @@ impl Record {
     }
 }
 
+/// A file-mutating operation kind, keyed off the tool that performed it. The
+/// structured tools (`Write`/`Edit`/`MultiEdit`/`NotebookEdit`) are AUTHORITATIVE —
+/// they name an exact `file_path`/`notebook_path`. `BashMutation` is HEURISTIC: it is
+/// parsed lexically from a Bash command string (see [`crate::bash_mutations`]), which
+/// cannot be a true shell parse, so it is labelled heuristic everywhere it surfaces.
+///
+/// Write/Edit/NotebookEdit/MultiEdit are kept DISTINCT (not collapsed to "mutation")
+/// because the acid-test question — "how many files did it create vs edit" — needs
+/// create-vs-edit discrimination, and the per-op counts are a stated output of
+/// `csift files --by-file`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileOp {
+    /// `Write` tool — writes a file whole (a create when the path was new).
+    Write,
+    /// `Edit` tool — a single in-place string replacement in an existing file.
+    Edit,
+    /// `NotebookEdit` tool — edits a Jupyter notebook cell (`notebook_path`).
+    NotebookEdit,
+    /// `MultiEdit` tool — multiple edits to one file in a single call.
+    MultiEdit,
+    /// A file mutation inferred HEURISTICALLY from a Bash command string.
+    BashMutation,
+}
+
+impl FileOp {
+    /// Stable lowercase label used in CLI output + JSON (mirrors `SubagentKind::label`).
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            FileOp::Write => "write",
+            FileOp::Edit => "edit",
+            FileOp::NotebookEdit => "notebook-edit",
+            FileOp::MultiEdit => "multi-edit",
+            FileOp::BashMutation => "bash",
+        }
+    }
+
+    /// True only for [`FileOp::BashMutation`] — drives the explicit "heuristic"
+    /// labelling in `files` output (Bash mutations are a best-effort lexical parse,
+    /// never authoritative).
+    #[must_use]
+    pub fn is_heuristic(self) -> bool {
+        matches!(self, FileOp::BashMutation)
+    }
+}
+
+/// One extracted file-mutation fact, pure per-record (the turn index is assigned by
+/// the `files` module during turn reconstruction, NOT stored here). The `path` is the
+/// absolute path exactly as written in the record — never re-encoded or absolutized.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileMutation {
+    /// The path as written in the record (NOT re-encoded / absolutized).
+    pub path: String,
+    pub op: FileOp,
+    /// Raw ISO8601 UTC timestamp from the tool_use record, if present.
+    pub timestamp_utc: Option<String>,
+    /// `true` when the paired carrier reported `toolUseResult.type == "create"` (a new
+    /// file). On a bare tool_use record the carrier field is usually absent, so this
+    /// defaults `false` ("unknown / treat as edit"); the joiner in `files` enriches it.
+    pub is_create: bool,
+}
+
+impl Record {
+    /// The NON-HEURISTIC file mutations carried by this record's structured tool_use
+    /// blocks (`Write`/`Edit`/`MultiEdit` → `input.file_path`; `NotebookEdit` →
+    /// `input.notebook_path`). One [`FileMutation`] per qualifying block.
+    ///
+    /// MODELLING NOTE: in real data the `file_path` lives on the **tool_use** record
+    /// while `toolUseResult.type` (`create`/`update`) lives on the **paired
+    /// tool_result carrier**. This function extracts only what is locally present, so
+    /// `is_create` here is consulted from THIS record's own `toolUseResult` first (it
+    /// is usually absent on a tool_use record, defaulting `is_create` to `false` —
+    /// honestly "unknown / treat as edit"); the `files` module (Section 3) joins the
+    /// two sides by `tool_use_id` within a turn via [`Record::carrier_create_paths`]
+    /// so `is_create` becomes accurate. Keeping this per-record-pure mirrors how
+    /// `search` treats a turn as the join unit.
+    ///
+    /// Blocks whose path is absent/empty are skipped (a defensive arm, tested).
+    #[must_use]
+    pub fn structured_tool_mutations(&self) -> Vec<FileMutation> {
+        let Some(blocks) = self.blocks() else {
+            return Vec::new();
+        };
+        // This record's own carrier `type` (usually absent on a tool_use record).
+        let self_is_create = self
+            .tool_use_result
+            .as_ref()
+            .and_then(|tur| tur.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("create");
+
+        let mut out = Vec::new();
+        for block in blocks {
+            let Block::ToolUse { name, input, .. } = block else {
+                continue;
+            };
+            let Some(name) = name.as_deref() else {
+                continue;
+            };
+            let (op, key) = match name {
+                "Write" => (FileOp::Write, "file_path"),
+                "Edit" => (FileOp::Edit, "file_path"),
+                "MultiEdit" => (FileOp::MultiEdit, "file_path"),
+                "NotebookEdit" => (FileOp::NotebookEdit, "notebook_path"),
+                _ => continue,
+            };
+            let path = input
+                .as_ref()
+                .and_then(|v| v.get(key))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if path.is_empty() {
+                continue; // defensive: a structured tool_use with no/empty path.
+            }
+            out.push(FileMutation {
+                path: path.to_string(),
+                op,
+                timestamp_utc: self.timestamp.clone(),
+                is_create: self_is_create,
+            });
+        }
+        out
+    }
+
+    /// The carrier side of a file mutation: when this record's `toolUseResult` is an
+    /// object carrying a `filePath`, return `(tool_use_id, filePath, is_create)` for
+    /// each `tool_result` block, so the `files` joiner can set `is_create` on the
+    /// matching structured mutation (and fall back to this `filePath` if the
+    /// tool_use's own path was somehow absent).
+    ///
+    /// `toolUseResult.type` ∈ {`create`, `update`, `file_unchanged`, `text`, `image`};
+    /// only `create` ⇒ `is_create = true`, everything else ⇒ `false`. When there is no
+    /// `toolUseResult`, it is not an object, or it has no `filePath`, the result is
+    /// empty (defensive arms, each tested).
+    #[must_use]
+    pub fn carrier_create_paths(&self) -> Vec<(String, String, bool)> {
+        let Some(tur) = &self.tool_use_result else {
+            return Vec::new();
+        };
+        let Some(file_path) = tur.get("filePath").and_then(serde_json::Value::as_str) else {
+            return Vec::new();
+        };
+        if file_path.is_empty() {
+            return Vec::new();
+        }
+        let is_create = tur.get("type").and_then(serde_json::Value::as_str) == Some("create");
+
+        // The carrier rides on a `tool_result` block whose `tool_use_id` joins it back
+        // to the structured tool_use. Emit one tuple per tool_result block id found.
+        let mut out = Vec::new();
+        if let Some(blocks) = self.blocks() {
+            for block in blocks {
+                if let Block::ToolResult {
+                    tool_use_id: Some(id),
+                    ..
+                } = block
+                {
+                    out.push((id.clone(), file_path.to_string(), is_create));
+                }
+            }
+        }
+        out
+    }
+
+    /// The Bash command string for a `Block::ToolUse { name: "Bash", .. }`
+    /// (`input.command`). Returns `None` for any other record / a Bash tool_use with
+    /// no command. Feeds the heuristic parser in [`crate::bash_mutations`].
+    #[must_use]
+    pub fn bash_command(&self) -> Option<&str> {
+        let blocks = self.blocks()?;
+        for block in blocks {
+            if let Block::ToolUse { name, input, .. } = block {
+                if name.as_deref() == Some("Bash") {
+                    if let Some(cmd) = input
+                        .as_ref()
+                        .and_then(|v| v.get("command"))
+                        .and_then(serde_json::Value::as_str)
+                    {
+                        return Some(cmd);
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+/// Group records (in file order) into TURNS, returning one `Vec<usize>` of record
+/// indices per turn — the outer index IS the 0-based turn index (genuine-user order).
+///
+/// The single source of truth for turn delimiting (§6.4), shared by `search`'s
+/// exchange reconstruction and `files`'s mutation attribution so the two never drift:
+///
+/// - A turn opens on a genuine-user record (`is_genuine`); every record after it, up
+///   to the next genuine-user, belongs to that turn (a `tool_result`-carrier, an
+///   `isMeta` pseudo-turn, and a compaction summary are turn MEMBERS, never delimiters).
+/// - Records before the first genuine-user (rare: leading tool noise) seed turn 0 so
+///   they are never lost. When such a synthetic lead exists AND a real user turn
+///   follows, the lead is folded into the first real turn so indices stay 0-based on
+///   genuine users. With NO genuine user at all, the orphans are a standalone turn 0.
+///
+/// `is_genuine` is a closure (rather than calling [`Record::is_genuine_user`]
+/// directly) only so callers can test the grouping over lightweight bool fixtures; in
+/// production it is always `Record::is_genuine_user`.
+#[must_use]
+pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> Vec<Vec<usize>> {
+    let mut turns: Vec<Vec<usize>> = Vec::new();
+    for (i, rec) in records.iter().enumerate() {
+        if is_genuine(rec) {
+            turns.push(vec![i]);
+        } else if let Some(last) = turns.last_mut() {
+            last.push(i);
+        } else {
+            // Pre-first-user records seed turn 0 (a standalone turn 0 if no genuine
+            // user ever opens).
+            turns.push(vec![i]);
+        }
+    }
+    // If the first group is a synthetic pre-user lead AND a real user turn follows,
+    // fold the lead into the first real turn so indices align with genuine-user order.
+    let synthetic_lead = records.first().is_some_and(|r| !is_genuine(r));
+    if synthetic_lead && turns.len() > 1 {
+        let lead = turns.remove(0);
+        if let Some(first_real) = turns.first_mut() {
+            let mut merged = lead;
+            merged.extend(first_real.iter().copied());
+            *first_real = merged;
+        }
+    }
+    turns
+}
+
 /// Flatten a `Content` to a single normalized line of its textual parts.
 /// `string` → itself; `blocks` → all `text` blocks joined (other block types,
 /// which never co-occur with a genuine user `text` block, are ignored).
@@ -862,5 +1094,250 @@ mod tests {
         assert_eq!(normalize_line("  a\t\tb \n c   "), "a b c");
         assert_eq!(normalize_line(""), "");
         assert_eq!(normalize_line("   "), "");
+    }
+
+    // ── File-mutation extraction (FileOp / FileMutation / Record helpers) ──
+
+    #[test]
+    fn file_op_label_all_variants() {
+        assert_eq!(FileOp::Write.label(), "write");
+        assert_eq!(FileOp::Edit.label(), "edit");
+        assert_eq!(FileOp::NotebookEdit.label(), "notebook-edit");
+        assert_eq!(FileOp::MultiEdit.label(), "multi-edit");
+        assert_eq!(FileOp::BashMutation.label(), "bash");
+    }
+
+    #[test]
+    fn file_op_is_heuristic_only_for_bash() {
+        assert!(FileOp::BashMutation.is_heuristic());
+        assert!(!FileOp::Write.is_heuristic());
+        assert!(!FileOp::Edit.is_heuristic());
+        assert!(!FileOp::NotebookEdit.is_heuristic());
+        assert!(!FileOp::MultiEdit.is_heuristic());
+    }
+
+    #[test]
+    fn structured_tool_mutations_write_edit_multiedit() {
+        let r = parse(
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"t1","name":"Write","input":{"file_path":"/tmp/a.md","content":"x"}},
+                {"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":"/p/spec/gaps.md","old_string":"a","new_string":"b","replace_all":false}},
+                {"type":"tool_use","id":"t3","name":"MultiEdit","input":{"file_path":"/p/multi.rs","edits":[]}}
+            ]}}"#,
+        );
+        let muts = r.structured_tool_mutations();
+        assert_eq!(muts.len(), 3);
+        assert_eq!(muts[0].op, FileOp::Write);
+        assert_eq!(muts[0].path, "/tmp/a.md");
+        assert_eq!(
+            muts[0].timestamp_utc.as_deref(),
+            Some("2026-06-07T05:00:00.000Z")
+        );
+        assert!(!muts[0].is_create, "no carrier on tool_use → unknown=false");
+        assert_eq!(muts[1].op, FileOp::Edit);
+        assert_eq!(muts[1].path, "/p/spec/gaps.md");
+        assert_eq!(muts[2].op, FileOp::MultiEdit);
+        assert_eq!(muts[2].path, "/p/multi.rs");
+    }
+
+    #[test]
+    fn structured_tool_mutations_notebook_uses_notebook_path() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"t1","name":"NotebookEdit","input":{"notebook_path":"/p/nb.ipynb","new_source":"code"}}
+            ]}}"#,
+        );
+        let muts = r.structured_tool_mutations();
+        assert_eq!(muts.len(), 1);
+        assert_eq!(muts[0].op, FileOp::NotebookEdit);
+        assert_eq!(muts[0].path, "/p/nb.ipynb");
+    }
+
+    #[test]
+    fn structured_tool_mutations_reads_create_from_own_carrier() {
+        // The rare case where the tool_use record ALSO carries the toolUseResult with
+        // type:"create" (the `self_is_create` true arm).
+        let r = parse(
+            r#"{"type":"assistant","toolUseResult":{"type":"create","filePath":"/tmp/new.md"},"message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"t1","name":"Write","input":{"file_path":"/tmp/new.md","content":"x"}}
+            ]}}"#,
+        );
+        let muts = r.structured_tool_mutations();
+        assert_eq!(muts.len(), 1);
+        assert!(
+            muts[0].is_create,
+            "own carrier type:create → is_create true"
+        );
+    }
+
+    #[test]
+    fn structured_tool_mutations_skips_missing_and_empty_path() {
+        // A Write with NO file_path and an Edit with an EMPTY file_path → both skipped
+        // (the defensive `path.is_empty()` arm). A non-mutating tool is ignored too.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"t1","name":"Write","input":{"content":"x"}},
+                {"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":"","old_string":"a"}},
+                {"type":"tool_use","id":"t3","name":"Read","input":{"file_path":"/p/read.rs"}}
+            ]}}"#,
+        );
+        assert!(r.structured_tool_mutations().is_empty());
+    }
+
+    #[test]
+    fn structured_tool_mutations_skips_tool_use_with_no_name() {
+        // A tool_use block missing its `name` → the `name.as_deref()` None arm.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[
+                {"type":"tool_use","id":"t1","input":{"file_path":"/p/x.md"}}
+            ]}}"#,
+        );
+        assert!(r.structured_tool_mutations().is_empty());
+    }
+
+    #[test]
+    fn structured_tool_mutations_none_for_string_content() {
+        // A record with string content → blocks() None → empty (the early-return arm).
+        let r = parse(r#"{"type":"user","message":{"role":"user","content":"plain"}}"#);
+        assert!(r.structured_tool_mutations().is_empty());
+    }
+
+    #[test]
+    fn carrier_create_paths_create_update_and_missing() {
+        // type:"create" → is_create true, joined to the tool_result block's id.
+        let create = parse(
+            r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/tmp/new.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#,
+        );
+        assert_eq!(
+            create.carrier_create_paths(),
+            vec![("t1".to_string(), "/tmp/new.md".to_string(), true)]
+        );
+        // type:"update" → is_create false.
+        let update = parse(
+            r#"{"type":"user","toolUseResult":{"type":"update","filePath":"/p/gaps.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"ok"}]}}"#,
+        );
+        assert_eq!(
+            update.carrier_create_paths(),
+            vec![("t2".to_string(), "/p/gaps.md".to_string(), false)]
+        );
+        // No toolUseResult at all → empty (the `let Some(tur) else` arm).
+        let none = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t3","content":"ok"}]}}"#,
+        );
+        assert!(none.carrier_create_paths().is_empty());
+    }
+
+    #[test]
+    fn carrier_create_paths_file_unchanged_is_not_create() {
+        // type:"file_unchanged" (the edit-touched-but-no-change case) → is_create false.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"type":"file_unchanged","filePath":"/p/same.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#,
+        );
+        assert_eq!(
+            r.carrier_create_paths(),
+            vec![("t1".to_string(), "/p/same.md".to_string(), false)]
+        );
+    }
+
+    #[test]
+    fn carrier_create_paths_no_file_path_or_not_object() {
+        // toolUseResult present but NO filePath → empty (the filePath None arm).
+        let no_fp = parse(
+            r#"{"type":"user","toolUseResult":{"type":"text","stdout":"x"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"x"}]}}"#,
+        );
+        assert!(no_fp.carrier_create_paths().is_empty());
+        // toolUseResult is NOT an object (a bare string) → `.get("filePath")` is None.
+        let not_obj = parse(
+            r#"{"type":"user","toolUseResult":"just a string","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"x"}]}}"#,
+        );
+        assert!(not_obj.carrier_create_paths().is_empty());
+        // filePath present but EMPTY → empty (the `file_path.is_empty()` arm).
+        let empty_fp = parse(
+            r#"{"type":"user","toolUseResult":{"type":"create","filePath":""},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"x"}]}}"#,
+        );
+        assert!(empty_fp.carrier_create_paths().is_empty());
+    }
+
+    #[test]
+    fn carrier_create_paths_skips_non_tool_result_blocks_and_no_id() {
+        // A carrier with a filePath but whose only block is NOT a tool_result, OR a
+        // tool_result with no tool_use_id → no joinable id, so empty.
+        let no_id = parse(
+            r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/tmp/x.md"},"message":{"role":"user","content":[{"type":"text","text":"not a tool result"},{"type":"tool_result","content":"ok"}]}}"#,
+        );
+        assert!(no_id.carrier_create_paths().is_empty());
+    }
+
+    #[test]
+    fn carrier_create_paths_empty_when_no_blocks() {
+        // filePath present but the record has string content (no blocks) → empty.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/tmp/x.md"},"message":{"role":"user","content":"string body"}}"#,
+        );
+        assert!(r.carrier_create_paths().is_empty());
+    }
+
+    // ── group_turn_indices (the shared §6.4 turn delimiter) ──
+
+    #[test]
+    fn group_turn_indices_basic_two_turns() {
+        // bools = is_genuine_user; [user, member, member, user, member].
+        let flags = [true, false, false, true, false];
+        let turns = group_turn_indices(&flags, |b| *b);
+        assert_eq!(turns, vec![vec![0, 1, 2], vec![3, 4]]);
+    }
+
+    #[test]
+    fn group_turn_indices_synthetic_lead_folds_into_first_turn() {
+        // Leading non-genuine records (a synthetic lead) fold into turn 0 when a real
+        // user follows, so indices stay 0-based on genuine users.
+        let flags = [false, false, true, false, true];
+        let turns = group_turn_indices(&flags, |b| *b);
+        // The two lead members (0,1) join the first real turn (opening at idx 2).
+        assert_eq!(turns, vec![vec![0, 1, 2, 3], vec![4]]);
+    }
+
+    #[test]
+    fn group_turn_indices_only_synthetic_lead_no_genuine_user() {
+        // No genuine user ever → a single standalone turn 0 holding the orphans (the
+        // `turns.len() > 1` false guard means no fold).
+        let flags = [false, false, false];
+        let turns = group_turn_indices(&flags, |b| *b);
+        assert_eq!(turns, vec![vec![0, 1, 2]]);
+    }
+
+    #[test]
+    fn group_turn_indices_empty_is_empty() {
+        let flags: [bool; 0] = [];
+        assert!(group_turn_indices(&flags, |b| *b).is_empty());
+    }
+
+    #[test]
+    fn group_turn_indices_first_record_genuine_no_fold() {
+        // The first record IS genuine → no synthetic lead → no fold.
+        let flags = [true, false, true];
+        let turns = group_turn_indices(&flags, |b| *b);
+        assert_eq!(turns, vec![vec![0, 1], vec![2]]);
+    }
+
+    #[test]
+    fn bash_command_some_and_none() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"rm -rf /tmp/x","description":"clean"}}]}}"#,
+        );
+        assert_eq!(r.bash_command(), Some("rm -rf /tmp/x"));
+        // A Bash tool_use with NO command → None.
+        let no_cmd = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"description":"x"}}]}}"#,
+        );
+        assert!(no_cmd.bash_command().is_none());
+        // A non-Bash tool_use → None.
+        let other = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/p/x"}}]}}"#,
+        );
+        assert!(other.bash_command().is_none());
+        // A record with no blocks → None.
+        let no_blocks = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
+        assert!(no_blocks.bash_command().is_none());
     }
 }

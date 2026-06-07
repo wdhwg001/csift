@@ -25,7 +25,7 @@
 //! match phase skips regex work on records that provably lack the literal. Turn
 //! reconstruction then runs over the retained transcript records.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use memchr::memmem;
@@ -33,9 +33,11 @@ use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
 
 use crate::cli::{Category, OutputFormat, SearchArgs};
-use crate::model::{is_auq_answer_text, normalize_line, tool_result_content_text, Block, Record};
+use crate::model::{
+    group_turn_indices, is_auq_answer_text, normalize_line, tool_result_content_text, Block, Record,
+};
 use crate::parse::{mmap_bytes, scan_lines_bytes};
-use crate::path::{self, ProjectDir};
+use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
 
@@ -251,8 +253,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     }
 
     // ── Resolve targets → session files (optionally spanning subagents) ──
+    // Shared resolver (path::resolve_session_files), used identically by agents/files.
     let session_files =
-        resolve_search_targets(&args.paths, args.session.as_deref(), args.want_subagents())?;
+        path::resolve_session_files(&args.paths, args.session.as_deref(), args.want_subagents())?;
 
     // ── Parallel scan across files; collect order-stable, then merge ──
     let per_file: Vec<FileResult> = session_files
@@ -278,72 +281,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         OutputFormat::Json => render_json(&outcome)?,
     }
     Ok(())
-}
-
-/// Resolve `--path` targets (+ optional `--session`) into the concrete list of
-/// session `*.jsonl` files to scan. 0 `--path` ⇒ all projects. When
-/// `include_subagents` is set (the default), each top-level session's SUBAGENT
-/// transcripts (built-in Task/Agent-tool + workflow / OMC agents) are appended so a
-/// hit in a subagent's work is found alongside the main thread; workflow
-/// `journal.jsonl` event logs are excluded (not transcripts — see
-/// [`crate::subagent`]).
-fn resolve_search_targets(
-    paths: &[PathBuf],
-    session: Option<&str>,
-    include_subagents: bool,
-) -> Result<Vec<PathBuf>> {
-    let dirs: Vec<ProjectDir> = if paths.is_empty() {
-        path::all_project_dirs()?
-    } else {
-        let mut d = Vec::with_capacity(paths.len());
-        for p in paths {
-            d.push(path::resolve_target(p)?);
-        }
-        d
-    };
-
-    let mut files: Vec<PathBuf> = Vec::new();
-    for pd in &dirs {
-        let read = match std::fs::read_dir(&pd.dir) {
-            Ok(r) => r,
-            Err(_) => continue, // tolerate a vanished dir mid-scan
-        };
-        for entry in read.flatten() {
-            let p = entry.path();
-            let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
-            if is_file && p.extension().is_some_and(|e| e == "jsonl") {
-                // --session restricts to one uuid (the jsonl basename).
-                if let Some(sid) = session {
-                    let stem = p.file_stem().and_then(|s| s.to_str());
-                    if stem != Some(sid) {
-                        continue;
-                    }
-                }
-                files.push(p);
-            }
-        }
-    }
-
-    // The --session restriction applies to the PARENT session (the top-level jsonl
-    // basename). Subagent transcripts of a selected session are still in scope — they
-    // belong to it — so they are gathered from the already-filtered `files` set.
-    if include_subagents {
-        let mut sub_files: Vec<PathBuf> = Vec::new();
-        for sf in &files {
-            sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
-        }
-        files.extend(sub_files);
-    }
-
-    files.sort();
-    files.dedup();
-
-    if files.is_empty() {
-        if let Some(sid) = session {
-            bail!("no session file found for --session {sid} under the resolved target(s)");
-        }
-    }
-    Ok(files)
 }
 
 /// Per-file scan result before the global cap is applied.
@@ -440,63 +377,30 @@ fn reconstruct_and_match(
         .map(str::to_string)
         .unwrap_or_default();
 
-    // Group records into turns. A turn opens on a genuine-user record; every record
-    // after it (up to the next genuine-user) belongs to that turn. Records before
-    // the first genuine-user (rare: leading tool noise) form an implicit turn -1
-    // that we attach to turn 0 if it exists, else a standalone pre-turn group.
-    let mut turns: Vec<Turn> = Vec::new();
-    for kept in records {
-        if kept.rec.is_genuine_user() {
-            turns.push(Turn {
-                index: turns.len(),
-                records: vec![kept],
-            });
-        } else if let Some(last) = turns.last_mut() {
-            last.records.push(kept);
-        } else {
-            // Pre-first-user records: seed turn 0 so they aren't lost. They become
-            // part of turn 0 once it opens; if no genuine user ever appears, this is
-            // a standalone turn 0 holding the orphan records.
-            turns.push(Turn {
-                index: 0,
-                records: vec![kept],
-            });
-        }
-    }
-    // If the first turn was a synthetic pre-user group AND a real user turn follows,
-    // re-index so genuine turns are 0-based on genuine users. We only re-index when
-    // the very first record is NOT a genuine user.
-    let synthetic_lead = records.first().is_some_and(|k| !k.rec.is_genuine_user());
-    if synthetic_lead && turns.len() > 1 {
-        // Merge the synthetic lead group into the first real turn so indices align
-        // with genuine-user order (the lead group keeps index 0, first real user
-        // also wants 0 → fold the lead's records into it).
-        let lead = turns.remove(0);
-        if let Some(first_real) = turns.first_mut() {
-            let mut merged = lead.records;
-            merged.extend(first_real.records.iter().copied());
-            first_real.records = merged;
-        }
-        // Re-number remaining turns 0..n.
-        for (i, t) in turns.iter_mut().enumerate() {
-            t.index = i;
-        }
-    }
+    // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
+    // is the single source of truth, used identically by `files`). The outer index is
+    // the 0-based turn index; map each index group back to its `Kept` borrows.
+    let index_turns = group_turn_indices(records, |k| k.rec.is_genuine_user());
 
     let want_categories = &args.categories;
     let mut out = Vec::new();
 
-    for turn in &turns {
+    for (turn_index, idxs) in index_turns.iter().enumerate() {
         // Turn-range filter (inclusive, 0-based on genuine-user order).
         if let Some(&(lo, hi)) = turn_range {
-            if turn.index < lo || turn.index > hi {
+            if turn_index < lo || turn_index > hi {
                 continue;
             }
         }
 
+        let turn = Turn {
+            index: turn_index,
+            records: idxs.iter().map(|&i| &records[i]).collect(),
+        };
+
         // Collect the hits in this turn that satisfy category + time + regex.
         let hits = collect_turn_hits(
-            turn,
+            &turn,
             want_categories,
             matcher,
             time_window,

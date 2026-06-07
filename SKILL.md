@@ -1,6 +1,6 @@
 ---
 name: csift
-description: Search and audit Claude Code session + subagent jsonl transcripts. Use when you need to find what was said/done in a past (or the current) Claude Code session — regex-search the transcript corpus under ~/.claude/projects, list sessions to identify "which session is this", inspect a session's subagent lifecycle (built-in Task agents + OMC/workflow agents), identify the calling session, or recover standing directives a context-compaction dropped. ripgrep-for-transcripts: pure regex, no embeddings/semantic search.
+description: Search and audit Claude Code session + subagent jsonl transcripts. Use when you need to find what was said/done in a past (or the current) Claude Code session — regex-search the transcript corpus under ~/.claude/projects, list sessions to identify "which session is this", inspect a session's subagent lifecycle (built-in Task agents + OMC/workflow agents), see which files/dirs a session modified and when, identify the calling session, or recover standing directives a context-compaction dropped. ripgrep-for-transcripts: pure regex, no embeddings/semantic search.
 user-invocable: true
 ---
 
@@ -29,6 +29,10 @@ or `cargo run -- <subcommand>` during development).
   branch, CC version) without parsing whole files.
 - **"What subagents did this session spawn, and did they finish?"** → `csift agents --session <uuid>`
   reports each subagent's kind / start / completion / duration / status.
+- **"Which files/dirs did this session modify, and when?"** → `csift files --session <uuid>` rolls up
+  Edit/Write/Notebook (authoritative) + Bash (heuristic) mutations per dir/file, with create-vs-edit
+  discrimination and first/last timestamps. Answers "how many distinct gap docs touched / `/tmp` docs
+  created" directly.
 - **"Who am I (the calling session)?"** → `csift whoami` resolves the current session id from
   `$CLAUDE_CODE_SESSION_ID`.
 - **Post-compaction recovery** → after a context compaction, diff the compaction summary against the
@@ -43,8 +47,8 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 ## Command surface
 
-Four subcommands: `list`, `search`, `agents`, `whoami`. `list`/`search` span each session's
-subagent transcripts **by default** (`--no-subagents` opts out). Every subcommand takes
+Five subcommands: `list`, `search`, `agents`, `whoami`, `files`. `list`/`search`/`files` span each
+session's subagent transcripts **by default** (`--no-subagents` opts out). Every subcommand takes
 `--format text|json` (default `text`).
 
 A **target** is EITHER a real filesystem cwd (csift path-encodes it for you) OR an already-encoded
@@ -143,6 +147,24 @@ JSON: one object per exchange (`session_id`, `turn_index`, `hits[]` with
 `{category, excerpt, ts_utc, ts_local, tool_name}`, `record_uuids[]`), then a trailing summary
 object `{matched, dropped_by_cap, skipped_lines}`.
 
+#### Regex dialect — linear-time (RE2-class)
+
+The `search` PATTERN is the Rust **`regex` 1.12** crate (`regex::bytes`), which **guarantees
+linear-time matching** in the input length — there is **no catastrophic backtracking, ever**. That
+is a deliberate boundary: the constructs that force a non-linear engine are not supported, and a
+pattern using one **fails to compile** with a clear error (by design, not a bug).
+
+| Supported | NOT supported (need a non-linear engine) |
+| --- | --- |
+| literals; classes `[...]` / `[^...]` / `\d \w \s` + Unicode `\p{...}` | backreferences `\1` |
+| alternation `\|`; groups `(...)` / non-capturing `(?:...)` | lookahead / lookbehind `(?=) (?!) (?<=) (?<!)` |
+| quantifiers `* + ? {m,n}` (greedy + lazy `*?`) | atomic groups / possessive quantifiers `(?>...)` / `a*+` |
+| anchors `^ $ \b \B`; dot `.` (`--multiline` lets it cross newlines) | |
+| inline flags `(?i)(?m)(?s)(?x)`; Unicode-aware by default | |
+
+Case is **smart-case** by default (insensitive unless the pattern has an uppercase letter); `-i`
+forces insensitive. `--multiline` lives in the same dialect (it sets the `(?s)(?m)` flags).
+
 ### `agents` — a session's subagent lifecycle
 
 ```
@@ -206,6 +228,67 @@ csift whoami --format json
 
 If `whoami` errors that `CLAUDE_CODE_SESSION_ID is not set`, install the remediation hook in
 "Integration recipes → (B)".
+
+### `files` — which files/dirs a session modified
+
+```
+csift files [PATH...] [--session ID] [--no-subagents]
+            [--summary | --by-dir | --by-file | --timeline]
+            [--turn-range START..END] [--since WHEN] [--until WHEN] [--format text|json]
+```
+
+Reports the files + directories a session changed, and when. Mutations are extracted from the
+transcript (spanning subagents **by default** — OMC fan-out edits happen in subagents) with an
+**authoritative vs heuristic** split:
+
+- **Authoritative** — `Edit` / `Write` / `MultiEdit` (`input.file_path`) + `NotebookEdit`
+  (`input.notebook_path`). create-vs-edit is resolved from the paired `tool_result`
+  (`toolUseResult.type == "create"` = a new file).
+- **Heuristic** — `Bash` file mutations, parsed **lexically** from the command string
+  (`rm`/`mv`/`cp`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/redirection). Bash carries no path field in
+  its result, so these are best-effort and **always labelled `(heuristic)`**.
+
+Exactly one **detail level** applies (mutually exclusive; default `--summary`):
+
+- **`--summary`** (DEFAULT) — compact per-top-level-dir op rollup; the smallest output.
+- **`--by-dir`** — one row per distinct directory (per-op counts + distinct-file count + first/last).
+- **`--by-file`** — one row per distinct file (per-op counts + first/last touch).
+- **`--timeline`** — full chronological list, one line per mutation. **Heavy — opt-in only.**
+
+All levels honor `--turn-range` / `--since` / `--until` (same windowing semantics as `search`; a
+mutation with no timestamp never falls inside a bounded window) and `--format json`.
+
+Examples:
+
+```bash
+csift files <uuid>                          # default summary: per-top-level-dir op rollup
+csift files <uuid> --by-file                # per-file op counts + first/last touch
+csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
+csift files . --format json --by-dir        # machine-readable per-dir rollup
+```
+
+**Acid test — "how many distinct gap docs did this session touch, and how many `/tmp` docs did it
+create?"** — `csift files <uuid> --by-file` lists one row per file (count rows ending in a
+`gaps`-style doc), and `--by-file --format json` lets a consumer filter `file` under `/tmp` with a
+non-zero `write` count (a `Write` op is an authoritative create; Bash creates are flagged heuristic).
+The `--summary` view shows the same as bucket op-counts + distinct-file counts.
+
+Text output shape (Bash counts suffixed `(heuristic)`):
+
+```
+SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+  /p/spec/gaps: 3 edit
+  /tmp: 2 write, 1 bash (heuristic)
+
+5 distinct file(s)  ·  6 mutation(s)  ·  detail=summary  ·  all turns
+(Bash mutations are heuristic — parsed from the command string.)
+```
+
+JSON: one object per emitted unit (bucket / dir / file with `{session_id, <key>, write, edit,
+notebook_edit, multi_edit, bash, total, distinct_files, first_utc, first_local, last_utc,
+last_local}`; or per mutation for `--timeline` with `{session_id, path, op, ts_utc, ts_local,
+turn_index, is_create, heuristic}`), then a trailing summary object
+`{distinct_files, total_mutations, skipped_lines, detail_level}`.
 
 ---
 
@@ -406,7 +489,9 @@ search the current session and `csift whoami` is unavailable, read that file and
 ### (C) Quick agent-side patterns
 
 ```bash
-# Find every time a directive was given in this session (current session id from whoami):
+# Find every time a directive was given in this session (current session id from whoami).
+# The pattern mixes English directives with a multi-byte CJK token to show that regex
+# search handles arbitrary UTF-8 literals (serde_json emits non-ASCII verbatim):
 csift search "don't stop|keep going|x" -i --session "$(csift whoami --format json | jq -r .session_id)"
 
 # Recover what a specific subagent did, then read its full exchange:

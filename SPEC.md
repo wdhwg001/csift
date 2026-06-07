@@ -357,6 +357,8 @@ csift list --format json .                              # machine-readable index
 
 **Smart-case rule:** pattern is case-insensitive iff it contains no uppercase letter; `-i` forces insensitive regardless; the two never conflict (`-i` wins). Compile via `regex::bytes::RegexBuilder` (match on raw line bytes pre-JSON in the prefilter, then on decoded text for excerpting). `--multiline` sets `.dot_matches_new_line(true)` + multiline mode.
 
+**Regex dialect — linear-time (RE2-class).** The pattern is the Rust `regex` 1.12 crate (`regex::bytes`), which **guarantees linear-time matching** in the input length: **no catastrophic backtracking, ever**. *Supported:* literals; character classes `[...]` / `[^...]` / `\d \w \s` + Unicode classes `\p{...}`; alternation `|`; groups `(...)` / non-capturing `(?:...)`; quantifiers `* + ? {m,n}` (greedy + lazy `*?`); anchors `^ $ \b \B`; dot `.` (`--multiline` lets it cross newlines); inline flags `(?i)(?m)(?s)(?x)`; Unicode-aware by default. ***Deliberately NOT supported*** (they require a non-linear engine): backreferences `\1`; lookahead/lookbehind `(?=) (?!) (?<=) (?<!)`; atomic groups / possessive quantifiers `(?>...)` / `a*+`. A pattern using these **fails to compile** with a clear error — by design, not a bug. This boundary is documented identically in `--help` (`search`'s `after_help`) and `SKILL.md`.
+
 **Validation:** `--turn-range` together with `--since`/`--until` is an error (mutually exclusive). An empty `PATTERN` with no other filter is allowed (matches every category-eligible record) but should warn that it will emit a lot.
 
 **Filter application order per session:** `--session`/`--path` (target selection) → category eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
@@ -463,6 +465,51 @@ csift agents . --kind workflow                                # only workflow ag
 csift agents --session <uuid> --since 2h                      # subagents STARTED in the last 2h
 csift agents --session <uuid> --since 09:00 --by completion   # COMPLETED since a bound
 csift agents . --format json                                  # machine-readable lifecycle rows
+```
+
+### 6.6 `files` — which files/dirs a session modified, when
+
+**Purpose.** Report the files + directories a session changed, attributed to genuine-user turns, with a context-blow-up guard (a compact per-dir **summary** is the default; the full chronological list is opt-in). Answers the acid-test question "how many distinct gap docs did this session touch, and how many `/tmp` docs did it create?".
+
+**Extraction (verified against the live `~/.claude/projects` corpus, 2026-06-08) — authoritative vs heuristic:**
+
+| source | how | create-vs-edit | label |
+|---|---|---|---|
+| `Edit` / `Write` / `MultiEdit` | `input.file_path` | from paired `toolUseResult.type` (`create` ⇒ new file; `update`/`file_unchanged` ⇒ edit), joined by `tool_use_id` within the turn | authoritative |
+| `NotebookEdit` | `input.notebook_path` | same join | authoritative |
+| `Bash` | LEXICAL parse of `input.command` (`rm`/`mv`/`cp`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/redirection) | not knowable lexically (heuristic guess) | **HEURISTIC** — always labelled `(heuristic)` |
+
+Bash's `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpected}` — **no path field** — so Bash mutations are a best-effort lexical (NOT shell) parse and are flagged heuristic everywhere they surface (text, JSON, help, SKILL). The `file_path` lives on the **tool_use** record while `toolUseResult.type` (`create`/`update`) lives on the **paired tool_result carrier**; the joiner pairs them by `tool_use_id` within the turn so `is_create` is accurate. Relative Bash paths are reported VERBATIM (the session's cwd at command time is not reliably known — absolutizing would fabricate a path).
+
+**Args (matches `cli::FilesArgs`):**
+| flag / positional | type | default | meaning |
+|---|---|---|---|
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); optional when `--session` is given |
+| `--session ID` | string | none | restrict to one parent session uuid |
+| `--include-subagents` / `--no-subagents` | bool | `true` | attribute SUBAGENT mutations under the session (default ON — OMC fan-out edits happen in subagents) |
+| `--summary` / `--by-dir` / `--by-file` / `--timeline` | mutually-exclusive enum (clap group) | `--summary` | detail level (below) |
+| `--turn-range START..END` | string | none | inclusive 0-based turn range; **mutually exclusive** with `--since`/`--until` |
+| `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local) |
+| `--format text\|json` | enum | `text` | output format |
+
+**Detail levels (the context-blow-up guard — exactly one is active, default `--summary`):**
+- **`--summary` (DEFAULT)** — compact per-top-level-dir rollup with op counts (e.g. `"/tmp: 12 write, 3 edit; spec/gaps: 4 edit"`); the smallest output, answers the acid test directly. Bucket = the mutation path's parent directory; a bare relative filename buckets under `./`.
+- **`--by-dir`** — one row per distinct directory (full path) with per-op counts + distinct-file count + first/last timestamp.
+- **`--by-file`** — one row per distinct absolute path with per-op counts + first/last timestamp (where "how many distinct gap docs touched" is exactly answerable).
+- **`--timeline`** — full chronological list, one line per mutation `(timestamp, turn index, op, path)`. The verbose mode; never the default.
+
+**Filtering** is per-mutation: `--turn-range` (turn index assigned by the §6.4 genuine-user delimiter, shared with `search`) and `--since`/`--until` (a mutation with no timestamp never falls inside a *bounded* window — same rule as §6.2). **No silent truncation:** skipped malformed lines are counted and surfaced.
+
+**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then a footer: distinct files + total mutations, the active detail level, the turn/time filter context, the Bash-heuristic caveat, and the skipped-line count. Empty result prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--timeline` with `{path, op, ts_utc, ts_local, turn_index, is_create, heuristic}`), then a trailing summary object `{distinct_files, total_mutations, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention).
+
+**Perf shape** is `search`'s: a single forward pass per file (mmap + SIMD newline scan + a pre-JSON mutation byte-prefilter, full parse only on candidate lines), no large-blob retention (extract small `FileMutation` strings, drop the record — never hold `originalFile`/`content`/`structuredPatch`), rayon across files on the default pool (= CPU count).
+
+**Example invocations:**
+```bash
+csift files <uuid>                          # default summary: per-top-level-dir op rollup
+csift files <uuid> --by-file                # per-file op counts + first/last touch
+csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
+csift files . --format json --by-dir        # machine-readable per-dir rollup
 ```
 
 ---

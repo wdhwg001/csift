@@ -1,9 +1,9 @@
 //! Command-line surface (clap derive).
 //!
-//! Four subcommands: `list`, `search`, `agents`, `whoami`. Each carries example-rich
-//! help (`--help`) keyed off the SPEC §6.1–§6.4 baseline invocations. `list`/`search`
-//! span each session's subagent transcripts by default (`--no-subagents` opts out);
-//! `agents` reports a session's subagent lifecycle.
+//! Five subcommands: `list`, `search`, `agents`, `whoami`, `files`. Each carries
+//! example-rich help (`--help`) keyed off the SPEC §6.1–§6.6 baseline invocations.
+//! `list`/`search`/`files` span each session's subagent transcripts by default
+//! (`--no-subagents` opts out); `agents` reports a session's subagent lifecycle.
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
@@ -209,8 +209,9 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           list     fast \"which session is this?\" index (first/last user + last agent)\n  \
           search   regex over transcripts, returning the complete round-trip exchange per hit\n  \
           agents   list a session's subagents (kind, start/completion, status) + time-window filter\n  \
-          whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n\n\
-        list/search span each session's subagent transcripts by default (built-in \
+          whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
+          files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n\n\
+        list/search/files span each session's subagent transcripts by default (built-in \
         Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` to restrict \
         to top-level sessions.\n\n\
         A target is EITHER a real filesystem cwd (it gets path-encoded) OR an \
@@ -222,7 +223,8 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift search \"carry\"                        # smart-case regex, all projects\n  \
           csift search \"\" -t user --since 2h --path . # pure filter: user turns, last 2h, here\n  \
           csift agents --session <uuid> --since 2h    # subagents started in the last 2h\n  \
-          csift whoami                                # who am I (this CC session)?\n\n\
+          csift whoami                                # who am I (this CC session)?\n  \
+          csift files <uuid> --by-file                # which files this session modified, when\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
 pub struct Cli {
@@ -240,6 +242,8 @@ pub enum Command {
     Whoami(WhoamiArgs),
     /// List a session's subagents with kind, start/completion timestamps + status.
     Agents(AgentsArgs),
+    /// Which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash).
+    Files(FilesArgs),
 }
 
 /// A transcript content category, used by `search --category/-t` (repeatable).
@@ -368,7 +372,22 @@ impl ListArgs {
           csift search \"\" -t user --since 2h --path .            # user turns, last 2h, this project\n  \
           csift search \"tail.read\" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
           csift search \"panic\" -t agent -t thinking --turn-range 10..20 --max-count 50\n  \
-          csift search \"persisted-output\" --resolve-persisted --format json"
+          csift search \"persisted-output\" --resolve-persisted --format json\n\n\
+        REGEX DIALECT — linear-time (RE2-class)\n  \
+          The pattern is the Rust `regex` crate (regex::bytes), which GUARANTEES \
+        linear-time matching in the input length: NO catastrophic backtracking, ever.\n  \
+          Supported: literals; character classes [...] / [^...] / \\d \\w \\s and \
+        Unicode classes \\p{...}; alternation |; groups (...) and non-capturing \
+        (?:...); quantifiers * + ? {m,n} (greedy + lazy *?); anchors ^ $ \\b \\B; \
+        dot . (use --multiline to let it cross newlines); inline flags (?i)(?m)(?s)(?x); \
+        Unicode-aware by default.\n  \
+          NOT supported (these need non-linear engines): backreferences \\1; \
+        lookahead/lookbehind (?=) (?!) (?<=) (?<!); atomic groups / possessive \
+        quantifiers (?>...) / a*+. A pattern using these fails to COMPILE with a clear \
+        error — by design, not a bug.\n  \
+          Case: smart-case by default (insensitive unless the pattern has an uppercase \
+        letter); -i forces insensitive. --multiline lives in the SAME dialect (it sets \
+        the (?s)(?m) flags)."
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
@@ -545,6 +564,142 @@ pub enum AgentTimeAxis {
     Start,
     /// Filter on the subagent's COMPLETION timestamp (last transcript record).
     Completion,
+}
+
+/// The aggregation detail level for `files` (exactly one is active; default summary).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilesDetail {
+    /// Per-top-level-dir op rollup (the smallest output; the DEFAULT).
+    Summary,
+    /// One row per distinct directory (full path) with per-op + distinct-file counts.
+    ByDir,
+    /// One row per distinct file with per-op counts + first/last touch timestamps.
+    ByFile,
+    /// Full chronological list, one line per mutation (the verbose, opt-in mode).
+    Timeline,
+}
+
+#[derive(Debug, Args)]
+#[command(
+    long_about = "Show which FILES and DIRECTORIES a session modified, and when. csift \
+        extracts file mutations from a session's transcript (spanning its subagents by \
+        default, since OMC fan-out edits happen in subagents):\n  \
+          • AUTHORITATIVE  Edit / Write / MultiEdit (input.file_path) + NotebookEdit \
+        (input.notebook_path), with create-vs-edit resolved from the paired \
+        tool_result (`type:\"create\"` = a new file).\n  \
+          • HEURISTIC      Bash file mutations, parsed LEXICALLY from the command \
+        string (rm/mv/cp/mkdir/touch/tee/sed -i/git/redirection). Bash carries no path \
+        field in its result, so these are best-effort and ALWAYS labelled `(heuristic)`.\n\n\
+        DETAIL LEVELS (mutually exclusive; exactly one applies):\n  \
+          --summary   (DEFAULT) compact per-top-level-dir op rollup — the smallest output\n  \
+          --by-dir    one row per distinct directory (per-op + distinct-file counts + first/last)\n  \
+          --by-file   one row per distinct file (per-op counts + first/last touch)\n  \
+          --timeline  full chronological list, one line per mutation (HEAVY — opt-in only)\n\n\
+        The TARGET selects the session(s): `--session <uuid>` for one, or a project \
+        PATH/encoded-dir for every session under it; with neither, all projects are \
+        scanned. `--no-subagents` restricts to the top-level session.\n\n\
+        WINDOWING: `--turn-range START..END` (inclusive, 0-based on genuine-user order) \
+        is mutually exclusive with `--since`/`--until`. Time bounds accept ISO8601 \
+        (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
+        `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
+        with no timestamp never falls inside a bounded window.\n\n\
+        No silent truncation: skipped malformed lines are counted and surfaced.",
+    after_help = "EXAMPLES\n  \
+          csift files <uuid>                          # default summary: per-top-level-dir op rollup\n  \
+          csift files <uuid> --by-file                # per-file op counts + first/last touch\n  \
+          csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)\n  \
+          csift files . --format json --by-dir        # machine-readable per-dir rollup\n\n\
+        ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
+          csift files <uuid> --by-file                # count rows ending in gaps-style docs\n  \
+          csift files <uuid> --by-file --format json  # filter path under /tmp with is_create==true"
+)]
+pub struct FilesArgs {
+    /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to
+    /// report. Optional when `--session` is given; with neither, every project is
+    /// scanned. Repeatable.
+    #[arg(
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target
+    )]
+    pub paths: Vec<PathBuf>,
+
+    /// Restrict to a single parent session id (uuid).
+    #[arg(long, value_name = "SESSION_ID")]
+    pub session: Option<String>,
+
+    /// Also attribute file mutations a SUBAGENT performed (built-in Task/Agent-tool,
+    /// OMC, and Workflow agents) under the session. Default ON; pass `--no-subagents`
+    /// to restrict to the top-level session. Important because OMC fan-out edits happen
+    /// in subagents.
+    #[arg(
+        long = "include-subagents",
+        overrides_with = "no_subagents",
+        default_value_t = true
+    )]
+    pub include_subagents: bool,
+
+    /// Exclude subagent transcripts — report only the top-level `<uuid>.jsonl`
+    /// session's mutations. Overrides `--include-subagents`.
+    #[arg(long = "no-subagents")]
+    pub no_subagents: bool,
+
+    /// DEFAULT detail level: compact per-top-level-dir op rollup (the smallest output).
+    #[arg(long, group = "detail")]
+    pub summary: bool,
+
+    /// One row per distinct directory (full path) with per-op + distinct-file counts.
+    #[arg(long = "by-dir", group = "detail")]
+    pub by_dir: bool,
+
+    /// One row per distinct file with per-op counts + first/last touch timestamps.
+    #[arg(long = "by-file", group = "detail")]
+    pub by_file: bool,
+
+    /// Full chronological list, one line per mutation (HEAVY — never the default).
+    #[arg(long, group = "detail")]
+    pub timeline: bool,
+
+    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Mutually exclusive with `--since` / `--until`.
+    #[arg(long, value_name = "START..END")]
+    pub turn_range: Option<String>,
+
+    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    #[arg(long, value_name = "WHEN")]
+    pub since: Option<String>,
+
+    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    #[arg(long, value_name = "WHEN")]
+    pub until: Option<String>,
+
+    /// Emit JSON instead of the headered text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+}
+
+impl FilesArgs {
+    /// Resolve the include/exclude flags into a single decision (default include).
+    #[must_use]
+    pub fn want_subagents(&self) -> bool {
+        !self.no_subagents
+    }
+
+    /// Resolve the four detail-level bool flags into the active [`FilesDetail`]. clap's
+    /// `group = "detail"` (which is `multiple = false` by default) rejects more than one
+    /// at parse time, so at most one is set here; none set ⇒ the `Summary` default.
+    #[must_use]
+    pub fn detail(&self) -> FilesDetail {
+        if self.by_dir {
+            FilesDetail::ByDir
+        } else if self.by_file {
+            FilesDetail::ByFile
+        } else if self.timeline {
+            FilesDetail::Timeline
+        } else {
+            FilesDetail::Summary
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -859,6 +1014,86 @@ mod tests {
                 assert_eq!(a.by, AgentTimeAxis::Start, "default axis is start");
             }
             _ => panic!("expected agents"),
+        }
+    }
+
+    // ── files subcommand parsing ──
+
+    #[test]
+    fn files_default_detail_is_summary() {
+        let cli = parse(&["csift", "files", "--session", "abc"]).unwrap();
+        match cli.command {
+            Command::Files(a) => {
+                assert_eq!(a.detail(), FilesDetail::Summary, "default is summary");
+                assert!(a.want_subagents(), "subagents spanned by default");
+                assert_eq!(a.session.as_deref(), Some("abc"));
+            }
+            _ => panic!("expected files"),
+        }
+    }
+
+    #[test]
+    fn files_by_file_selects_by_file() {
+        let cli = parse(&["csift", "files", "--session", "abc", "--by-file"]).unwrap();
+        match cli.command {
+            Command::Files(a) => assert_eq!(a.detail(), FilesDetail::ByFile),
+            _ => panic!("expected files"),
+        }
+    }
+
+    #[test]
+    fn files_by_dir_and_timeline_select_levels() {
+        let by_dir = parse(&["csift", "files", ".", "--by-dir"]).unwrap();
+        match by_dir.command {
+            Command::Files(a) => assert_eq!(a.detail(), FilesDetail::ByDir),
+            _ => panic!("expected files"),
+        }
+        let timeline = parse(&["csift", "files", ".", "--timeline", "--since", "2h"]).unwrap();
+        match timeline.command {
+            Command::Files(a) => {
+                assert_eq!(a.detail(), FilesDetail::Timeline);
+                assert_eq!(a.since.as_deref(), Some("2h"));
+            }
+            _ => panic!("expected files"),
+        }
+    }
+
+    #[test]
+    fn files_explicit_summary_flag_is_summary() {
+        let cli = parse(&["csift", "files", ".", "--summary"]).unwrap();
+        match cli.command {
+            Command::Files(a) => assert_eq!(a.detail(), FilesDetail::Summary),
+            _ => panic!("expected files"),
+        }
+    }
+
+    #[test]
+    fn files_two_detail_flags_conflict() {
+        // The clap `group = "detail"` (multiple=false) rejects two detail flags.
+        let err = parse(&["csift", "files", ".", "--by-file", "--by-dir"]);
+        assert!(err.is_err(), "two detail levels must be a clap conflict");
+    }
+
+    #[test]
+    fn files_no_subagents_excludes() {
+        let cli = parse(&["csift", "files", ".", "--no-subagents"]).unwrap();
+        match cli.command {
+            Command::Files(a) => assert!(!a.want_subagents()),
+            _ => panic!("expected files"),
+        }
+    }
+
+    #[test]
+    fn files_encoded_token_then_flag_ordering() {
+        // normalize_argv must route a trailing flag ahead of a leading-`-` token.
+        let cli = parse(&["csift", "files", "-Users-foo", "--format", "json"]).unwrap();
+        match cli.command {
+            Command::Files(a) => {
+                assert_eq!(a.format, OutputFormat::Json);
+                assert_eq!(a.paths.len(), 1);
+                assert_eq!(a.paths[0].to_string_lossy(), "-Users-foo");
+            }
+            _ => panic!("expected files"),
         }
     }
 }
