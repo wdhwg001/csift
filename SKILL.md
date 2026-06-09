@@ -116,8 +116,11 @@ SESSION  0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
            …
 ```
 
-JSON: one object per session (`session_id`, `path`, `cwd`, `version`, `git_branch`,
-`first_user`, `last_user`, `last_agent`, `skipped_lines`).
+JSON: one object per session (`session_id`, `is_subagent`, `parent_session_id`, `path`, `cwd`,
+`version`, `git_branch`, `first_user`, `last_user`, `last_agent`, `skipped_lines`). A subagent
+row carries `is_subagent:true` + the re-feedable `parent_session_id`; the default spans subagents,
+so the text output leads with a `SCOPE` banner and brands each subagent row
+`SUBAGENT <hex> · parent SESSION <uuid>` (add `--no-subagents` for just the top-level row).
 
 ### `search` — regex over transcripts, complete round-trip per hit
 
@@ -233,8 +236,23 @@ Returned message is resolved 3 ways: **sync built-in** → the parent tool_resul
 `async-child-tail` / `workflow-journal`).
 
 `--since`/`--until` default to the **trigger** axis (the true spawn instant); `--by start|completion`
-switch axis. A subagent's id is the **bare hex** everywhere (`agents`/`files`/`recover`/`list`), so a
-file mutation is joinable back to its node.
+switch axis.
+
+**Id-domain across surfaces (uniform).** A subagent transcript's bare-hex id is NOT a re-feedable
+`--session` target, so every surface that emits a per-transcript identity also carries the
+re-feedable **owning uuid**:
+
+- `agents` keys on `agent_id` + `parent_session_id` (no overloaded `session_id`).
+- `search` / `files` / `list` / `recover` / `turns` JSON each emit `session_id` (the transcript's
+  own id — a top-level uuid, or a bare subagent hex) **plus** `is_subagent` + `parent_session_id`
+  (the always-re-feedable owning uuid; `== session_id` for a top-level record). Re-feed
+  `parent_session_id`, never a subagent `session_id`.
+- Text headers brand a subagent block distinctly: `search` → `SUBAGENT <hex> · parent SESSION
+  <uuid>`; `files` grouped views + `list` → the same `SUBAGENT <hex> · parent SESSION <uuid>`
+  header (with a `SCOPE` banner on `list`); `turns` → `SESSION <hex>  (subagent transcript)`.
+
+So a file mutation (or any per-transcript record) is joinable back to its node by structured field
+on **all** surfaces — no `path`-string parsing required.
 
 Examples:
 
@@ -371,10 +389,12 @@ csift files . --format json --by-dir        # machine-readable per-dir rollup
 
 **Acid test — "how many distinct gap docs did this session touch, and how many `/tmp` docs did it
 create?"** — `csift files <uuid> --by-file` lists one row per file (count rows ending in a
-`gaps`-style doc). For the create count, use `--timeline --format json` and filter `op` over `/tmp`
-rows with `is_create == true` — the per-mutation `is_create` flag lives **only** in the `--timeline`
-JSON; `--by-file` rows carry per-op COUNTS (`write`/`edit`/`bash`/…), not the create flag. The
-`--summary` view shows the same as bucket op-counts + distinct-file counts.
+`gaps`-style doc). For the create count, use `--timeline --format json` and filter `/tmp` rows with
+`is_create == true` (optionally AND `op` in `{write, multi_edit, notebook_edit}`). **There is no `op`
+value `create`** — `op` is one of `{bash, edit, write, multi_edit, notebook_edit}`; create-vs-edit is
+the SEPARATE `is_create` boolean. Both `op` and `is_create` live **only** in the `--timeline` JSON;
+`--by-file` rows carry per-op COUNTS (`write`/`edit`/`bash`/…), not the create flag. The `--summary`
+view shows the same as bucket op-counts + distinct-file counts.
 
 Text output shape (Bash counts suffixed `(heuristic)`):
 
@@ -387,14 +407,22 @@ SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 (Bash mutations are heuristic — parsed from the command string.)
 ```
 
-JSON: one object per emitted unit (bucket / dir / file with `{session_id, <key>, write, edit,
-notebook_edit, multi_edit, bash, total, distinct_files, first_utc, first_local, last_utc,
-last_local}`; or per mutation for `--timeline` with `{session_id, path, op, ts_utc, ts_local,
-turn_index, is_create, heuristic}`), then a trailing summary object
-`{distinct_files, total_mutations, skipped_lines, detail_level}`. **`heuristic`** is `true` ONLY for a
+JSON: one object per emitted unit (bucket / dir / file with `{session_id, is_subagent,
+parent_session_id, <key>, write, edit, notebook_edit, multi_edit, bash, total, distinct_files,
+first_utc, first_local, last_utc, last_local}`; or per mutation for `--timeline` with `{session_id,
+is_subagent, parent_session_id, path, op, ts_utc, ts_local, turn_index, is_create, heuristic}`), then
+a trailing summary object
+`{distinct_files, total_mutations, skipped_lines, detail_level}`. The `is_subagent`/`parent_session_id`
+discriminators ride EVERY view (grouped + timeline); a subagent group's TEXT header is branded
+`SUBAGENT <hex> · parent SESSION <uuid>` (re-feed the parent uuid). The on-wire `op` value is
+UNDERSCORE-delimited (`notebook_edit`/`multi_edit`), the SAME spelling as the grouped per-op count
+keys — so a script never special-cases the delimiter across the two modes (the human-readable TEXT
+timeline still shows the hyphenated `notebook-edit`/`multi-edit`). **`heuristic`** is `true` ONLY for a
 bash-derived mutation (a guessed path/op lexically parsed from a shell command, lower confidence);
 `false` = a definitive Edit/Write/Notebook/MultiEdit tool call with an exact `file_path`. Filter
-`heuristic==false` for confirmed mutations only.
+`heuristic==false` for confirmed mutations only. Bash mutation extraction strips shell `#` comments
+(an unquoted `#` at a word boundary → end-of-line), so a trailing `# note` neither fabricates a path
+nor displaces a real cp/mv destination; an in-path `#` (`/tmp/a#b`) is preserved.
 
 ### `recover` — reconstruct a file's content (or restore a plan)
 
@@ -415,7 +443,9 @@ file's Read / Write / Edit stream in transcript order. Four mutually-exclusive m
   signal other recovery tools discard), an external `edited_text_file` (authoritative), or a Bash
   mutation (heuristic, always flagged). No diff spans a boundary.
 - **`--at WHEN`** — the **partial, line-numbered "in the LLM's eyes" snapshot** as of a cutoff
-  (ISO8601, relative `2h`, `@turn:<N>`, or `@line:<N>`). Known lines carry their number; unknown
+  (ISO8601, relative `2h`, `@turn:<N>` = first line after genuine-user turn N, or `@line:<N>` =
+  JSONL TRANSCRIPT line N — the `Lnnnnn`/`line_no` this tool prints, **NOT** a file line of `--file`;
+  for a 1-based FILE-line span use `--line-range`). Known lines carry their number; unknown
   regions are explicit `??? lines A..B unknown` markers — **gaps are NEVER fabricated**.
 - **`--coverage`** (alias `--dry-run`) — scope a recovery without dumping content: recoverable line
   ranges, where the boundaries sit, per-op counts (reads / edits / writes / bash / external-edits),
@@ -432,7 +462,8 @@ file's Read / Write / Edit stream in transcript order. Four mutually-exclusive m
 
 `--file` is **required** for `--patches`/`--at`/`--coverage`, optional for `--plan`. `--out` writes
 the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to a file while the
-summary still prints to stdout. **Every output line carries the JSONL line number** (`Lnnnnn`) so you
+summary still prints to stdout — but is **ignored in `--coverage` mode** (coverage is a scoping
+summary, no artifact; a stderr note makes the no-op visible). **Every output line carries the JSONL line number** (`Lnnnnn`) so you
 can `Read` the raw jsonl directly. Reconstruction is necessarily PARTIAL: an un-anchorable edit (its
 old text over an unknown gap, or whose context disagrees with the buffer) is a counted coverage hole,
 never a fabricated line — so the contiguous-from-line-1 prefix matches the on-disk file exactly.
@@ -448,7 +479,9 @@ csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md  # reconstruct THAT p
 ```
 
 JSON is NDJSON: one object per segment / boundary / snapshot / plan-candidate (every object carries
-`line_no` + `ts_utc`/`ts_local`; `--at` lines carry `set_at_line` provenance), then a trailing summary.
+`session_id` + the id-domain discriminators `is_subagent` + `parent_session_id`, plus `line_no` +
+`ts_utc`/`ts_local`; `--at` lines carry `set_at_line` provenance), then a trailing summary. Re-feed
+`parent_session_id`, never a subagent `session_id`.
 
 **Use it to** restore a plan a compaction or bad-recovery dropped, extract a file's diff-history over a
 turn/time range, or check (via `--coverage`) whether a file is even worth attempting to reconstruct
@@ -600,8 +633,12 @@ JSON (`--format json`) opens with a `{kind:"session_header",…}` object (`sessi
 `sessions_rendered`, top-level/subagent split, lumped `automation_triggers` + per-class
 `automation_by_kind`), then one VERBATIM (un-truncated) object per emitted unit, interleaved
 compaction-boundary records, and a `collapsed_agents` placeholder record (with `agent_messages` /
-`tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span. An automation user unit
-additionally carries `trigger_kind` / `task_id` / `status` / `event`.
+`tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span. Each per-unit + collapsed
+record carries `session_id` + the id-domain discriminators `is_subagent` + `parent_session_id`
+(re-feed the parent uuid, never a subagent `session_id`). An automation user unit additionally
+carries `trigger_kind` / `task_id` / `status` / `event`. `budget_chars`/`max_total_chars` are always
+in CHARS — under `--budget-unit tokens` they read 4× `--budget` (a token budget is pre-multiplied
+×4), so pass an explicit `--budget` when flipping to tokens or the default `40000` becomes 160000 chars.
 
 ---
 

@@ -53,6 +53,13 @@
 //! skipped ([`strip_heredoc_bodies`]) BEFORE redirect/verb scanning, so a `>` or quote
 //! inside the body can no longer be mis-read as a redirect (only the opener LINE, which
 //! may carry a real trailing `> file`, is scanned).
+//!
+//! A trailing `# …` SHELL COMMENT is likewise lexically masked ([`shell_mask`]) before any
+//! token/redirect scan: an unquoted `#` at a word boundary opens a comment to end-of-line,
+//! so neither the comment words, an in-comment `>` redirect target, nor an in-comment `;`/`|`
+//! operator can fabricate a row OR displace a real cp/mv/ln destination (`cp src dst # note`
+//! reports `dst`, not `note`). An IN-PATH `#` (`/tmp/a#b`) is preserved — `#` masks only when
+//! it starts a token.
 
 /// One heuristically-detected Bash file mutation. `verb` is from the fixed allowlist
 /// below (it is the lexical command/operator that touched the path), and `path` is the
@@ -314,7 +321,31 @@ fn shell_mask(command: &str) -> String {
             i += 1;
             continue;
         }
-        // Outside any span. A `>(`/`<(` opens a process-sub body.
+        // Outside any span. An unquoted `#` at a WORD BOUNDARY opens a shell comment that
+        // runs to end-of-line: mask the whole `# … \n` tail so the comment words never
+        // become tokens (an in-comment `>`/`>>` redirect, a `;`/`|` operator, and every
+        // comment word are all masked, exactly like a heredoc body). `#` is a comment ONLY
+        // at a word start — preceded by start-of-input, whitespace, or a command separator
+        // (`;` `|` `&` `(` `\n`); guarding on that keeps an IN-PATH `#` (`/tmp/a#b`,
+        // `file#1`, where the prev byte is a path char) intact. The boundary set excludes
+        // `<`/`>` so a literal redirect target `> #file` is not mistaken for a comment.
+        if c == b'#'
+            && (i == 0
+                || matches!(
+                    bytes[i - 1],
+                    b' ' | b'\t' | b'\n' | b'\r' | b';' | b'|' | b'&' | b'('
+                ))
+        {
+            // Mask `#` through the byte before the next newline (the newline itself is a
+            // structural segment separator and stays unmasked so `split_segments` still
+            // sees it). End-of-input ends the comment too.
+            while i < bytes.len() && bytes[i] != b'\n' {
+                mask.push(MASK_BYTE);
+                i += 1;
+            }
+            continue;
+        }
+        // A `>(`/`<(` opens a process-sub body.
         if (c == b'>' || c == b'<') && bytes.get(i + 1) == Some(&b'(') {
             mask.push(c); // keep the `>(`/`<(` head so `has_syntax_noise` still sees it.
             mask.push(b'(');
@@ -1376,6 +1407,82 @@ mod tests {
             paths("tar czf /tmp/a.tar.gz src/"),
             vec![("/tmp/a.tar.gz".to_string(), "tar")]
         );
+    }
+
+    #[test]
+    fn trailing_comment_words_are_not_fabricated_paths() {
+        // A `# words` comment after a real mutation must NOT leak its words (nor the bare
+        // `#`) as touched paths — only the genuine operand survives.
+        assert_eq!(
+            paths("touch /tmp/real.txt  # create the marker file"),
+            vec![("/tmp/real.txt".to_string(), "touch")]
+        );
+        assert_eq!(
+            paths("rm -rf /tmp/build && mkdir /tmp/build  # rebuild from scratch"),
+            vec![
+                ("/tmp/build".to_string(), "rm"),
+                ("/tmp/build".to_string(), "mkdir")
+            ]
+        );
+    }
+
+    #[test]
+    fn in_comment_redirect_does_not_fabricate_a_path() {
+        // A `>`/`>>` that appears INSIDE a trailing comment is masked with the comment, so
+        // it is not read as a real redirect — only the genuine `mkdir` dir survives.
+        assert_eq!(
+            paths("mkdir -p /tmp/d # comment > /tmp/fabricated-by-comment-redirect.txt"),
+            vec![("/tmp/d".to_string(), "mkdir")]
+        );
+    }
+
+    #[test]
+    fn comment_does_not_displace_cp_destination() {
+        // The comment must not steal the cp/mv/ln destination: the LAST positional after the
+        // comment is masked away, so the true dest is the surviving last operand.
+        assert_eq!(
+            paths("cp /tmp/src.txt /tmp/real-dest.bak  # x"),
+            vec![("/tmp/real-dest.bak".to_string(), "cp")]
+        );
+        // `mv a b` reports the dest (`mv`) AND the source (`mv-from`); the `# note` tail must
+        // be masked away so it neither displaces the dest nor adds a phantom source.
+        assert_eq!(
+            paths("mv /tmp/a /tmp/b  # note"),
+            vec![
+                ("/tmp/b".to_string(), "mv"),
+                ("/tmp/a".to_string(), "mv-from")
+            ]
+        );
+    }
+
+    #[test]
+    fn in_path_hash_is_not_a_comment() {
+        // A `#` that is part of a path (prev byte is a path char, not whitespace/separator)
+        // is NOT a comment and the whole path is preserved.
+        assert_eq!(
+            paths("rm -f /tmp/a#b.txt"),
+            vec![("/tmp/a#b.txt".to_string(), "rm")]
+        );
+        assert_eq!(
+            paths("touch file#1.log"),
+            vec![("file#1.log".to_string(), "touch")]
+        );
+    }
+
+    #[test]
+    fn comment_after_separator_without_space_is_masked() {
+        // `cmd;# c` / `cmd|# c`: a `#` directly after a command separator (no space) still
+        // opens a comment (the separator is a word boundary).
+        assert_eq!(
+            paths("touch /tmp/x.txt;# trailing"),
+            vec![("/tmp/x.txt".to_string(), "touch")]
+        );
+    }
+
+    #[test]
+    fn full_line_leading_comment_emits_nothing() {
+        // A line that is ENTIRELY a comment yields no rows (the verb itself is masked away).
+        assert_eq!(paths("# just a note, nothing here"), vec![]);
     }
 
     #[test]

@@ -410,6 +410,12 @@ struct SummaryInfo {
 #[derive(Debug)]
 struct ScanResult {
     session_id: String,
+    /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
+    /// re-feedable `--session` target) — the r5 id-domain discriminator, now also on turns
+    /// JSON (the text path already brands a subagent block `(subagent transcript)`).
+    is_subagent: bool,
+    /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
+    parent_session_id: String,
     turns: Vec<TurnSlice>,
     /// Summary records in file order (oldest → newest), each with its line + dedup set.
     summaries: Vec<SummaryInfo>,
@@ -546,10 +552,18 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
     // `files`/`search`/`recover`/`agents` (id-form unification; a top-level uuid is
     // unaffected). See [`crate::subagent::session_id_from_path`].
     let session_id = crate::subagent::session_id_from_path(path);
+    // Id-domain discriminator (the r5 shape, now on turns JSON): a subagent transcript's
+    // `session_id` is a non-re-feedable bare hex; carry `is_subagent` + the re-feedable
+    // parent uuid (the dir before `subagents/`). A top-level file is its own parent.
+    let is_subagent = crate::subagent::is_subagent_path(path);
+    let parent_session_id =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(ScanResult {
             session_id,
+            is_subagent,
+            parent_session_id,
             turns: Vec::new(),
             summaries: Vec::new(),
             skipped_lines: 0,
@@ -575,6 +589,8 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
     let (turns, summaries) = build(&records);
     Ok(ScanResult {
         session_id,
+        is_subagent,
+        parent_session_id,
         turns,
         summaries,
         skipped_lines: skipped,
@@ -2411,6 +2427,11 @@ fn emit_unit_json(
     let r = render_unit_body(unit);
     let mut obj = json!({
         "session_id": sr.session_id,
+        // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex subagent
+        // unit; `parent_session_id` is the always-re-feedable owning uuid (= session_id for
+        // a top-level unit). A subagent `session_id` is NOT a `--session` target.
+        "is_subagent": sr.is_subagent,
+        "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,
         "line_no": unit.line_no,
         "role": unit.role.label(),
@@ -2467,6 +2488,8 @@ fn emit_placeholder_json(
     let obj = json!({
         "kind": "collapsed_agents",
         "session_id": sr.session_id,
+        "is_subagent": sr.is_subagent,
+        "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,
         "agent_messages": span.messages,
         "tool_calls": span.tool_calls,

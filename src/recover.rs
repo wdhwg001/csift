@@ -169,6 +169,11 @@ struct PlanCandidate {
 #[derive(Debug)]
 struct ScanResult {
     session_id: String,
+    /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
+    /// re-feedable `--session` target) — the r5 id-domain discriminator, now also on recover.
+    is_subagent: bool,
+    /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
+    parent_session_id: String,
     events: Vec<FileEvent>,
     plans: Vec<PlanCandidate>,
     skipped_lines: usize,
@@ -181,6 +186,16 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         bail!("--turn-range is mutually exclusive with --since/--until");
     }
     let mode = args.mode();
+
+    // ── `--out` is a no-op in `--coverage` mode (coverage is a scoping summary, not an
+    //    artifact) — make the no-op VISIBLE at runtime so a "save the coverage report" call
+    //    is not silently swallowed. The other three modes honor `--out` in render_text/json.
+    if matches!(mode, RecoverMode::Coverage) && args.out.is_some() {
+        eprintln!(
+            "note: --out is ignored in --coverage mode (a scoping summary has no artifact \
+             to write); use --patches / --at / --plan to write a file."
+        );
+    }
 
     // ── `--file` is required for content reconstruction modes ──
     let target_file = args.file.as_deref();
@@ -290,10 +305,18 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
     // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
     // — id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
     let session_id = crate::subagent::session_id_from_path(path);
+    // Id-domain discriminator (the r5 shape, now on recover): a subagent transcript's
+    // `session_id` is a non-re-feedable bare hex; carry `is_subagent` + the re-feedable
+    // parent uuid (the dir before `subagents/`) onto every emitted recover record.
+    let is_subagent = crate::subagent::is_subagent_path(path);
+    let parent_session_id =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(ScanResult {
             session_id,
+            is_subagent,
+            parent_session_id,
             events: Vec::new(),
             plans: Vec::new(),
             skipped_lines: 0,
@@ -320,6 +343,8 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
     let (events, plans) = extract(&records, target_file);
     Ok(ScanResult {
         session_id,
+        is_subagent,
+        parent_session_id,
         events,
         plans,
         skipped_lines: skipped,
@@ -2316,6 +2341,8 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 let spans = covered_spans(&known);
                 let obj = json!({
                     "session_id": s.session_id,
+                    "is_subagent": s.is_subagent,
+                    "parent_session_id": s.parent_session_id,
                     "file": ctx.file,
                     "recoverable_lines": known.len(),
                     "seen_total_lines": rep.final_buffer.seen_total_lines,
@@ -2355,6 +2382,8 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                             out_blob.push_str(&diff);
                             let obj = json!({
                                 "session_id": s.session_id,
+                                "is_subagent": s.is_subagent,
+                                "parent_session_id": s.parent_session_id,
                                 "type": "segment",
                                 "segment_index": seg.index,
                                 "line_no": seg.line_no_start,
@@ -2374,6 +2403,8 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                             let mut obj = boundary_json(b);
                             obj["type"] = json!("boundary");
                             obj["session_id"] = json!(s.session_id);
+                            obj["is_subagent"] = json!(s.is_subagent);
+                            obj["parent_session_id"] = json!(s.parent_session_id);
                             println!("{}", serde_json::to_string(&obj)?);
                         }
                     }
@@ -2409,6 +2440,8 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                     .collect();
                 let obj = json!({
                     "session_id": s.session_id,
+                    "is_subagent": s.is_subagent,
+                    "parent_session_id": s.parent_session_id,
                     "type": "snapshot",
                     "file": ctx.file,
                     "line_no": cutoff,
@@ -2446,6 +2479,8 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                     let is_latest = Some(p.line_no) == latest_line;
                     let obj = json!({
                         "session_id": s.session_id,
+                        "is_subagent": s.is_subagent,
+                        "parent_session_id": s.parent_session_id,
                         "type": "plan_candidate",
                         "line_no": p.line_no,
                         "turn_index": p.turn_index,

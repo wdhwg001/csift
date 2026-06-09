@@ -867,6 +867,23 @@ impl FileOp {
         }
     }
 
+    /// The JSON-idiomatic token (UNDERSCORE-delimited) for the `--timeline` `op` field, so
+    /// the per-mutation `op` value spells a multi-word op the SAME way the grouped
+    /// (`--by-file`/`--by-dir`/`--summary`) per-op COUNT keys do (`notebook_edit`,
+    /// `multi_edit`). [`label`] keeps the hyphenated form for human-readable TEXT output;
+    /// this method is the on-wire spelling so a script normalizing across the two `files`
+    /// JSON modes never special-cases the delimiter. Single-word ops coincide either way.
+    #[must_use]
+    pub fn json_key(self) -> &'static str {
+        match self {
+            FileOp::Write => "write",
+            FileOp::Edit => "edit",
+            FileOp::NotebookEdit => "notebook_edit",
+            FileOp::MultiEdit => "multi_edit",
+            FileOp::BashMutation => "bash",
+        }
+    }
+
     /// True only for [`FileOp::BashMutation`] — drives the explicit "heuristic"
     /// labelling in `files` output (Bash mutations are a best-effort lexical parse,
     /// never authoritative).
@@ -1743,6 +1760,23 @@ mod tests {
         assert_eq!(FileOp::NotebookEdit.label(), "notebook-edit");
         assert_eq!(FileOp::MultiEdit.label(), "multi-edit");
         assert_eq!(FileOp::BashMutation.label(), "bash");
+    }
+
+    #[test]
+    fn file_op_json_key_uses_underscores_for_multiword() {
+        // The on-wire JSON spelling is UNDERSCORE-delimited so the timeline `op` field
+        // matches the grouped per-op COUNT keys; single-word ops coincide with `label`.
+        assert_eq!(FileOp::Write.json_key(), "write");
+        assert_eq!(FileOp::Edit.json_key(), "edit");
+        assert_eq!(FileOp::NotebookEdit.json_key(), "notebook_edit");
+        assert_eq!(FileOp::MultiEdit.json_key(), "multi_edit");
+        assert_eq!(FileOp::BashMutation.json_key(), "bash");
+        // The two multi-word ops are the only ones that DIFFER from `label` (hyphen vs `_`).
+        assert_ne!(
+            FileOp::NotebookEdit.json_key(),
+            FileOp::NotebookEdit.label()
+        );
+        assert_ne!(FileOp::MultiEdit.json_key(), FileOp::MultiEdit.label());
     }
 
     #[test]

@@ -2490,6 +2490,217 @@ fn files_timeline_json_marks_subagent_rows_with_refeedable_parent() {
 }
 
 #[test]
+fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
+    // The r6 id-domain fix extends is_subagent + parent_session_id to the GROUPED views
+    // (not just --timeline): a --by-file subagent row carries the discriminator in JSON and
+    // is branded `SUBAGENT <hex> · parent SESSION <uuid>` in text (never a bare-hex SESSION).
+    let h = Home::new();
+    subagents_only_scenario(&h);
+
+    let j = h.run(&["files", "--session", SESS, "--by-file", "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let objs = json_lines(&j.stdout);
+    let sub = objs
+        .iter()
+        .find(|o| o["file"] == "/sub/s.md")
+        .expect("subagent grouped row present");
+    assert_eq!(sub["is_subagent"], serde_json::json!(true));
+    assert_eq!(sub["session_id"], serde_json::json!("sub111"));
+    assert_eq!(sub["parent_session_id"], serde_json::json!(SESS));
+    let parent = objs
+        .iter()
+        .find(|o| o["file"] == "/parent/p.md")
+        .expect("parent grouped row present");
+    assert_eq!(parent["is_subagent"], serde_json::json!(false));
+    assert_eq!(parent["parent_session_id"], serde_json::json!(SESS));
+
+    let t = h.run(&["files", "--session", SESS, "--by-file"]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    // The subagent group's header is branded SUBAGENT + the re-feedable parent uuid.
+    assert!(
+        t.stdout
+            .contains(&format!("SUBAGENT sub111  ·  parent SESSION {SESS}")),
+        "subagent group not branded: {}",
+        t.stdout
+    );
+    // The parent group's header keeps the plain SESSION <uuid> form.
+    assert!(
+        t.stdout.contains(&format!("SESSION {SESS}")),
+        "top-level group lost its SESSION header: {}",
+        t.stdout
+    );
+}
+
+#[test]
+fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
+    // `list` spans subagents by default: a bare `csift list <uuid>` returns the top-level row
+    // + each subagent row. JSON carries is_subagent + the re-feedable parent_session_id; text
+    // leads with a SCOPE banner and brands subagent rows SUBAGENT … · parent SESSION ….
+    let h = Home::new();
+    subagents_only_scenario(&h);
+
+    let j = h.run(&["list", SESS, "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let objs = json_lines(&j.stdout);
+    let top = objs
+        .iter()
+        .find(|o| o["session_id"] == serde_json::json!(SESS))
+        .expect("top-level row present");
+    assert_eq!(top["is_subagent"], serde_json::json!(false));
+    assert_eq!(top["parent_session_id"], serde_json::json!(SESS));
+    let sub = objs
+        .iter()
+        .find(|o| o["session_id"] == serde_json::json!("sub111"))
+        .expect("subagent row present");
+    assert_eq!(sub["is_subagent"], serde_json::json!(true));
+    assert_eq!(sub["parent_session_id"], serde_json::json!(SESS));
+
+    let t = h.run(&["list", SESS]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    assert!(
+        t.stdout
+            .contains("SCOPE  2 sessions in scope (1 top-level + 1 subagent)"),
+        "missing scope banner: {}",
+        t.stdout
+    );
+    assert!(
+        t.stdout
+            .contains(&format!("SUBAGENT  sub111  ·  parent SESSION {SESS}")),
+        "subagent row not branded: {}",
+        t.stdout
+    );
+
+    // --no-subagents drops the banner + the subagent row entirely.
+    let top_only = h.run(&["list", SESS, "--no-subagents"]);
+    assert!(top_only.success, "stderr: {}", top_only.stderr);
+    assert!(
+        !top_only.stdout.contains("SCOPE"),
+        "no banner when no subagents in scope: {}",
+        top_only.stdout
+    );
+    assert!(
+        !top_only.stdout.contains("SUBAGENT"),
+        "no subagent row under --no-subagents: {}",
+        top_only.stdout
+    );
+}
+
+#[test]
+fn recover_plan_json_carries_id_domain_discriminators() {
+    // recover JSON records gain is_subagent + parent_session_id (the r6 extension). Use a
+    // top-level plan-file Write so a plan_candidate record is emitted; assert the new fields.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/plans/refactor.md","content":"the plan body"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/refactor.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", SESS, "--plan", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let cand = objs
+        .iter()
+        .find(|o| o["type"] == "plan_candidate")
+        .expect("a plan_candidate record present");
+    assert_eq!(cand["is_subagent"], serde_json::json!(false));
+    assert_eq!(cand["session_id"], serde_json::json!(SESS));
+    assert_eq!(cand["parent_session_id"], serde_json::json!(SESS));
+}
+
+#[test]
+fn recover_coverage_out_is_noop_with_stderr_note() {
+    // `--out` is a no-op in --coverage mode: no file is written, and a stderr note makes the
+    // no-op visible (the help truth-up for r6).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/app.rs","content":"line\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/app.rs"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out_path = h.root.join("cov-out.md");
+    let out = h.run(&[
+        "recover",
+        SESS,
+        "--file",
+        "/p/app.rs",
+        "--coverage",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stderr.contains("--out is ignored in --coverage mode"),
+        "missing the no-op note: {}",
+        out.stderr
+    );
+    assert!(
+        !out_path.exists(),
+        "coverage --out must not create a file, but it did"
+    );
+}
+
+#[test]
+fn turns_json_units_carry_id_domain_discriminators() {
+    // turns per-unit JSON gains is_subagent + parent_session_id (top-level run here).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"ask a real question"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"a substantive reply"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["turns", SESS, "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let unit = objs
+        .iter()
+        .find(|o| o["role"] == "user" || o["role"] == "assistant")
+        .expect("a per-unit record present");
+    assert_eq!(unit["is_subagent"], serde_json::json!(false));
+    assert_eq!(unit["session_id"], serde_json::json!(SESS));
+    assert_eq!(unit["parent_session_id"], serde_json::json!(SESS));
+}
+
+#[test]
+fn files_timeline_op_uses_underscore_spelling() {
+    // The timeline `op` value is UNDERSCORE-delimited (notebook_edit/multi_edit) so it matches
+    // the grouped per-op COUNT keys — one on-wire spelling across both files JSON modes.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"m1","name":"MultiEdit","input":{"file_path":"/p/multi.rs","edits":[{"old_string":"a","new_string":"b"}]}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"n1","name":"NotebookEdit","input":{"notebook_path":"/p/nb.ipynb","new_source":"x"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["files", "--session", SESS, "--timeline", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let ops: Vec<&str> = objs.iter().filter_map(|o| o["op"].as_str()).collect();
+    assert!(
+        ops.contains(&"multi_edit"),
+        "expected underscore multi_edit, got: {ops:?}"
+    );
+    assert!(
+        ops.contains(&"notebook_edit"),
+        "expected underscore notebook_edit, got: {ops:?}"
+    );
+    // The hyphenated spelling must NOT appear on the wire.
+    assert!(
+        !ops.iter().any(|o| o.contains('-')),
+        "no hyphenated op token on the wire, got: {ops:?}"
+    );
+}
+
+#[test]
 fn search_subagent_hit_json_marks_refeedable_parent() {
     // A search hit inside a subagent transcript: JSON carries is_subagent + the re-feedable
     // parent uuid (the bare-hex session_id is not a --session target).

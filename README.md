@@ -132,8 +132,9 @@ csift search "panic" --session <uuid> --max-count 5
 Resolves the current Claude Code session id from `$CLAUDE_CODE_SESSION_ID` (the primary trusted signal
 — per-session, version-independent, survives bash), falling back to `CODEX_COMPANION_SESSION_ID` (the
 Codex companion plugin's alias) when the canonical var is absent. Use it to anchor the other
-subcommands to "this session". `--show-path` (boolean; legacy alias `--path`) also prints the resolved
-jsonl path.
+subcommands to "this session". The resolved `path` line is ALREADY printed by default whenever it
+resolves; `--show-path` (boolean; legacy alias `--path`) only FORCES a `path` line in the unresolved
+case (printing `path <not found …>` instead of omitting it).
 
 > **Subagent caveat:** inside a Task/Agent subagent, `$CLAUDE_CODE_SESSION_ID` is the SUBAGENT's own
 > id, not the parent/root session — run `agents`/`list` on the project path to find the parent uuid.
@@ -157,8 +158,12 @@ The returned message is resolved **three ways**: a **sync** built-in → the par
 an **async** built-in (the parent result is the `Async agent launched …` sentinel) → the child
 transcript tail; a **workflow** agent → its `journal.jsonl` `result` payload. `--tree` renders the
 parent→child tree with **WorkflowRun** nodes (read from the top-level `workflows/wf_*.json` manifests)
-as the parents of their workflow agents. A subagent's printed id is the **bare hex** everywhere
-(`agents` / `files` / `recover` / `list`), so a file mutation joins back to its node.
+as the parents of their workflow agents. A subagent transcript's bare-hex id is NOT a re-feedable
+`--session` target, so every JSON surface that emits a per-transcript identity (`list` / `search` /
+`files` / `recover` / `turns`) carries the discriminators `is_subagent` + the re-feedable
+`parent_session_id` (the owning uuid; `agents` itself keys on `agent_id` + `parent_session_id`). So a
+file mutation — or any per-transcript record — joins back to its node by structured field on every
+surface, and the matching text views brand a subagent block `SUBAGENT <hex> · parent SESSION <uuid>`.
 
 ```bash
 csift agents --session <uuid>                         # the topology (flat list; trigger-ordered)
@@ -180,7 +185,10 @@ concrete, resolvable paths (an unexpandable `$VAR`/`~`, a `/dev/null` sink with 
 never fabricated). The parser is **quote/backtick/procsub/arith-aware**: a `>`/`<` inside a quoted
 echo/printf or regex (`echo "idle >8min"`), inside a backtick command substitution (`` `date >f` ``),
 or inside an arithmetic/test comparison (`(( a > b ))` / `[[ a > b ]]`) is masked before redirect
-detection, so it never fabricates a file. A write inside an embedded-language
+detection, so it never fabricates a file. A trailing **`#` shell comment** (an unquoted `#` at a word
+boundary → end-of-line) is likewise masked, so `cp src dst  # x` reports `dst` (not the comment word),
+an in-comment `> /x` fabricates nothing, and a real cp/mv/ln destination is never displaced by the
+comment; an in-path `#` (`/tmp/a#b`) is preserved. A write inside an embedded-language
 body (heredoc / `python -c`) is out of scope and missed — but **never mis-reported** (heredoc body
 lines are lexically skipped and quoted/procsub spans masked before scanning). The four detail levels
 **strictly coarsen**: `--summary` is a top-level-PREFIX rollup (a whole project tree → one row;
@@ -260,7 +268,10 @@ csift turns [PATH...] [--session ID] [--budget N] [--budget-unit chars|tokens]
 ### Budget model
 
 - **`--budget`** (default 40000) bounds each session's reconstruction in chars, or tokens via
-  `--budget-unit tokens` (≈4 chars/token). It is applied **PER session in scope**. UNLIKE
+  `--budget-unit tokens` (≈4 chars/token). NOTE: the default `40000` is read as 40000 TOKENS ≈ 160000
+  chars the moment you pass `--budget-unit tokens` without also lowering `--budget` (a 4× larger
+  output) — pass an explicit `--budget` when flipping to tokens. The JSON `budget_chars`/`max_total_chars`
+  are ALWAYS in CHARS (a token budget is pre-multiplied ×4). It is applied **PER session in scope**. UNLIKE
   `files`/`search`, `turns` defaults to the **top-level thread only** — a single-thread recovery tool
   whose per-session budget MULTIPLIES, so spanning hundreds of fan-out subagents by default would bury
   the thread you asked to restore. A bare `turns <uuid>` reconstructs just that conversation at `budget`

@@ -420,11 +420,19 @@ pub enum OutputFormat {
           csift list ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype\n  \
           csift list <uuid> --no-subagents                            # JUST the one top-level session row\n  \
           csift list --format json .                                  # machine-readable index\n\n\
+        SCOPE: because the default SPANS subagents, a bare `csift list <uuid>` can return 1 \
+        top-level + N subagent rows. The text output then leads with a `SCOPE  N sessions in \
+        scope (1 top-level + M subagent)` banner, brands each subagent row \
+        `SUBAGENT <hex> · parent SESSION <uuid>` (a bare hex is NOT a re-feedable target — \
+        re-feed the parent uuid), and a top-level row keeps the plain `SESSION <uuid>` header.\n\n\
         JSON SCHEMA (per --format json)\n  \
           One BARE object per session (JSONL — one record per line, no envelope): \
-        {session_id, path, cwd, git_branch, version, first_user, last_user, last_agent, \
-        skipped_lines}. The `first_user`/`last_user`/`last_agent` fields are \
-        {excerpt, ts_utc, ts_local} sub-objects (or null when absent)."
+        {session_id, is_subagent, parent_session_id, path, cwd, git_branch, version, \
+        first_user, last_user, last_agent, skipped_lines}. `is_subagent` flags a bare-hex \
+        subagent row; `parent_session_id` is the re-feedable owning uuid (= session_id for a \
+        top-level row) — never re-feed a subagent `session_id`. The \
+        `first_user`/`last_user`/`last_agent` fields are {excerpt, ts_utc, ts_local} \
+        sub-objects (or null when absent)."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, or a direct
@@ -950,7 +958,11 @@ pub enum FilesDetail {
           csift files . --format json --by-dir        # machine-readable per-dir rollup\n\n\
         ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
           csift files --session <uuid> --by-file              # count rows ending in gaps-style docs\n  \
-          csift files --session <uuid> --timeline --format json  # filter op==write/create, path under /tmp\n  \
+          csift files --session <uuid> --timeline --format json  # filter is_create==true (path under /tmp)\n  \
+          (there is NO `op` value `create` — `op` is one of {bash,edit,write,multi_edit,\n   \
+           notebook_edit}; create-vs-edit is the SEPARATE `is_create` boolean, so a /tmp-doc\n   \
+           CREATE test filters `is_create==true` [optionally AND op in {write,multi_edit,\n   \
+           notebook_edit}], never `op==\"create\"`.)\n  \
         (NOTE: BOTH the per-mutation `op` AND `is_create` keys live ONLY in `--timeline`\n   \
          JSON; a `--by-file` row carries per-op COUNT fields (write/edit/bash/multi_edit/\n   \
          notebook_edit/total) + first/last timestamps, NOT `op`/`is_create` — so use\n   \
@@ -965,12 +977,16 @@ pub enum FilesDetail {
                        guessed path/op lexically parsed from a shell command, lower confidence;\n             \
                        false = a definitive Edit/Write/Notebook/MultiEdit tool call with an\n             \
                        exact file_path. Filter heuristic==false for confirmed mutations only.)\n  \
-          --by-file  : one object per file — {session_id, file, write, edit, bash,\n             \
-                       multi_edit, notebook_edit, total, distinct_files, first_utc,\n             \
-                       first_local, last_utc, last_local} + a trailing summary object.\n  \
-          --by-dir / --summary : the same per-op count keys, grouped under a `dir`/`bucket`\n             \
-                       key, + a trailing summary {distinct_files, total_mutations,\n             \
-                       skipped_lines, detail_level}."
+          --by-file  : one object per file — {session_id, is_subagent, parent_session_id,\n             \
+                       file, write, edit, bash, multi_edit, notebook_edit, total,\n             \
+                       distinct_files, first_utc, first_local, last_utc, last_local} + a\n             \
+                       trailing summary object. (is_subagent + parent_session_id discriminate\n             \
+                       the id-domain on EVERY grouped view, same as --timeline — a subagent\n             \
+                       row's session_id is a bare hex; re-feed parent_session_id.)\n  \
+          --by-dir / --summary : the same per-op count keys + the same {session_id,\n             \
+                       is_subagent, parent_session_id} discriminators, grouped under a\n             \
+                       `dir`/`bucket` key, + a trailing summary {distinct_files,\n             \
+                       total_mutations, skipped_lines, detail_level}."
 )]
 pub struct FilesArgs {
     /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to
@@ -1163,9 +1179,12 @@ pub enum RecoverMode {
           Per-MODE record objects (each tagged by a `type`/`mode`-specific shape — \
         `--patches` emits `{type:\"segment\",…}` + `{type:\"boundary\",…}`; `--coverage` emits \
         a `{covered_ranges, boundaries, events, fragments, recoverable_lines, …}` object; \
-        `--at` emits line/gap records; `--plan` emits plan-candidate records) followed by a \
-        UNIFORM trailer `{summary:{file, mode, sessions, skipped_lines}}` that closes every \
-        run regardless of mode."
+        `--at` emits line/gap records; `--plan` emits plan-candidate records). EVERY per-record \
+        object carries the id-domain discriminators `{session_id, is_subagent, \
+        parent_session_id}` (is_subagent flags a bare-hex subagent record; re-feed \
+        parent_session_id, never the bare session_id). Records are followed by a UNIFORM \
+        trailer `{summary:{file, mode, sessions, skipped_lines}}` that closes every run \
+        regardless of mode."
 )]
 pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
@@ -1211,9 +1230,11 @@ pub struct RecoverArgs {
     /// Point-in-time partial snapshot of `--file` as of `<WHEN>`. WHEN uses the SAME
     /// grammar as `--since` — a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw` (`45s`, `90m`, `2h`, `3d`,
     /// `1w`) = that long ago, an ISO8601 datetime (`2026-06-01T05:00:00Z`), or a bare date
-    /// (`2026-06-01`) = LOCAL MIDNIGHT — PLUS the recover-only forms `@turn:<N>` (first line
-    /// after turn N) and `@line:<N>`. Setting this both selects the mode AND supplies its
-    /// cutoff.
+    /// (`2026-06-01`) = LOCAL MIDNIGHT — PLUS the recover-only forms `@turn:<N>` (snapshot as
+    /// of the first line after genuine-user turn N) and `@line:<N>` (snapshot as of JSONL
+    /// TRANSCRIPT line N — the `line_no` shown in this tool's output, NOT a file line of
+    /// `--file`; for a 1-based FILE-line span of `--file` use `--line-range` instead).
+    /// Setting this both selects the mode AND supplies its cutoff.
     #[arg(long, value_name = "WHEN", group = "mode")]
     pub at: Option<String>,
 
@@ -1255,7 +1276,9 @@ pub struct RecoverArgs {
     pub line_range: Option<String>,
 
     /// Write the reconstructed artifact (snapshot / plan / concatenated patches)
-    /// verbatim to this file; the summary still prints to stdout.
+    /// verbatim to this file; the summary still prints to stdout. IGNORED in `--coverage`
+    /// mode (coverage is a scoping summary — there is no artifact to write, so no file is
+    /// created and a stderr note is printed); it writes for `--patches` / `--at` / `--plan`.
     #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
 
@@ -1370,7 +1393,13 @@ impl RecoverArgs {
           never the raw `<task-id>` / `<output-file>` XML. The header reports the\n  \
           human/automation split, e.g. `selected 16 user (3 automation triggers) + 58\n  \
           assistant units`. These pulses are EXCLUDED from the `--round-trip-fraction` HARD\n  \
-          FLOOR (reserved for human exchanges) but can still be selected as Phase-2 fill.\n\n\
+          FLOOR (reserved for human exchanges) but can still be selected as Phase-2 fill.\n  \
+          LIMITATION: only `<task-notification>` COMPLETION pulses are segmented + attributed.\n  \
+          The isMeta ScheduleWakeup WAKEUP-TICK *prompts* (a monitor/cron tick FIRING, e.g.\n  \
+          `MONITOR TICK` / `x tick`) bypass this — they are isMeta records that do NOT open a\n  \
+          turn, so the agent run a tick triggers currently groups under the PRECEDING\n  \
+          genuine-user turn (not yet split into per-tick segments). In an automation-heavy\n  \
+          monitor session this lumps the dominant tick-driven work onto one human turn.\n\n\
         BUDGET FAN-OUT\n  \
           `--budget` is PER session in scope. `turns` defaults to the TOP-LEVEL thread only, so\n  \
           a bare-uuid run is one session at `budget` chars. Add `--include-subagents` to also\n  \
@@ -1384,12 +1413,16 @@ impl RecoverArgs {
           top_level_sessions, subagent_sessions, budget_chars, budget_is_per_session,\n  \
           max_total_chars, selected_user, automation_triggers, automation_by_kind}` object —\n  \
           `sessions_in_scope` is the TRUE scope (every discovered session), `sessions_rendered`\n  \
-          is how many fit the budget, the top_level/subagent split is over ALL in scope, and\n  \
+          is how many fit the budget, the top_level/subagent split is over ALL in scope,\n  \
+          `budget_chars`/`max_total_chars` are ALWAYS in CHARS (a `--budget-unit tokens` budget\n  \
+          is pre-multiplied ×4, so they read 4× `--budget` under tokens mode), and\n  \
           `automation_by_kind` breaks the lumped `automation_triggers` total down per class\n  \
           ({background-command,agent,workflow,monitor,task}). Then one object PER emitted unit:\n  \
-          {session_id, turn_index, line_no, role, ts_utc, ts_local, tool_calls, full_chars,\n  \
-          rendered_chars, truncated, elided_chars, elided_lines, also_in_summary,\n  \
-          compactions_before, text, is_automation}; an automation USER unit additionally\n  \
+          {session_id, is_subagent, parent_session_id, turn_index, line_no, role, ts_utc,\n  \
+          ts_local, tool_calls, full_chars, rendered_chars, truncated, elided_chars,\n  \
+          elided_lines, also_in_summary, compactions_before, text, is_automation} (is_subagent\n  \
+          flags a bare-hex subagent unit; re-feed parent_session_id, never the bare session_id);\n  \
+          an automation USER unit additionally\n  \
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
           {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
@@ -1425,6 +1458,11 @@ pub struct TurnsArgs {
     pub budget: usize,
 
     /// Interpret `--budget` as chars (default) or tokens (≈4 chars/token heuristic).
+    /// NOTE: the DEFAULT `--budget 40000` is read as 40000 TOKENS ≈ 160000 CHARS the moment
+    /// you pass `--budget-unit tokens` WITHOUT also lowering `--budget` — a 4× larger output.
+    /// Pass an explicit `--budget` when flipping to tokens (e.g. `--budget 10000 --budget-unit
+    /// tokens` ≈ 40000 chars). The JSON `budget_chars`/`max_total_chars` are ALWAYS in CHARS
+    /// (a token budget is pre-multiplied ×4), so under tokens mode they read 4× the `--budget`.
     #[arg(long = "budget-unit", value_enum, default_value_t = BudgetUnit::Chars)]
     pub budget_unit: BudgetUnit,
 
@@ -1668,11 +1706,13 @@ impl TurnsArgs {
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}"
 )]
 pub struct WhoamiArgs {
-    /// Print the resolved jsonl path in addition to the session id. This is a BOOLEAN
-    /// toggle (no value). The session-operating subcommands take their target as a
-    /// POSITIONAL `[PATH]...` (no `--path` flag; only `search` keeps a hidden deprecated
-    /// `--path` alias). whoami's old `--path` name is kept here as a hidden alias for this
-    /// boolean toggle.
+    /// FORCE a `path` line even when the jsonl can't be resolved (then it prints
+    /// `path <not found …>`). The path is ALREADY shown by default whenever it resolves —
+    /// plain `whoami` only OMITS the `path` line in the unresolved case; this flag adds the
+    /// explicit not-found line there. A BOOLEAN toggle (no value). The session-operating
+    /// subcommands take their target as a POSITIONAL `[PATH]...` (no `--path` flag; only
+    /// `search` keeps a hidden deprecated `--path` alias). whoami's old `--path` name is kept
+    /// here as a hidden alias for this boolean toggle.
     #[arg(long = "show-path", visible_alias = "with-path", alias = "path")]
     pub show_path: bool,
 

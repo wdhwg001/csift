@@ -453,6 +453,8 @@ fn is_human_round_trip_excludes_automation_notifications() {
 fn scan_with_turns(turns: Vec<TurnSlice>, summaries: Vec<SummaryInfo>) -> ScanResult {
     ScanResult {
         session_id: "s".to_string(),
+        is_subagent: false,
+        parent_session_id: "s".to_string(),
         turns,
         summaries,
         skipped_lines: 0,
@@ -2442,8 +2444,14 @@ fn is_top_level_session_id_distinguishes_uuid_from_bare_hex() {
 /// A ScanResult with a chosen session id + a single trivial round-trip turn (so its plan
 /// is non-empty under any budget).
 fn scan_named(session_id: &str) -> ScanResult {
+    // Keep the id-domain fields self-consistent with the chosen id form: a non-uuid (bare
+    // hex) id is a subagent transcript. parent_session_id is the id itself for a top-level
+    // session (a bare-hex test id has no real parent path, so it points at itself here).
+    let is_subagent = !is_top_level_session_id(session_id);
     ScanResult {
         session_id: session_id.to_string(),
+        is_subagent,
+        parent_session_id: session_id.to_string(),
         turns: vec![mk_turn(0, Some("ask"), Some("reply"), 1, 0)],
         summaries: Vec::new(),
         skipped_lines: 0,

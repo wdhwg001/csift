@@ -43,6 +43,15 @@ const EXCERPT_MAX: usize = 200;
 #[derive(Debug, Clone)]
 pub struct SessionSummary {
     pub session_id: String,
+    /// True when this row is a SUBAGENT transcript (so `session_id` is a bare hex, NOT a
+    /// re-feedable `--session` target). Discriminates the id-domain — the SAME shape
+    /// `search`/`files`/`turns`/`recover` carry, so a `list` JSON consumer can tell a
+    /// subagent row from a top-level uuid row without string-parsing `path`.
+    pub is_subagent: bool,
+    /// The re-feedable PARENT session uuid (the owning top-level session). Equals
+    /// `session_id` for a top-level row; for a subagent row it is the uuid you re-feed
+    /// (`csift turns <parent_session_id>` works; the bare hex does not).
+    pub parent_session_id: String,
     /// Absolute path to the session jsonl.
     pub path: PathBuf,
     /// Decoded human-readable cwd (read from the data, §2.4), if present.
@@ -181,8 +190,18 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         session_id
     };
 
+    // Id-domain discriminator: a subagent transcript's `session_id` is a non-re-feedable
+    // bare hex; carry `is_subagent` + the re-feedable parent uuid (the dir before
+    // `subagents/`) so a `list` consumer can distinguish + re-feed. A top-level file is its
+    // own parent (the same r5 shape `search`/`files`/`turns`/`recover` carry).
+    let is_subagent = crate::subagent::is_subagent_path(path);
+    let parent_session_id =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
+
     Ok(SessionSummary {
         session_id,
+        is_subagent,
+        parent_session_id,
         path: path.to_path_buf(),
         cwd,
         version,
@@ -222,11 +241,37 @@ fn render_text(summaries: &[SessionSummary]) {
         println!("no sessions found");
         return;
     }
+    // SCOPE banner: `list` spans subagents by DEFAULT, so a bare `csift list <uuid>` can
+    // return 1 top-level + N subagent rows — surface that split up front (mirroring
+    // `turns --include-subagents`) so the default-span surprise is announced, not buried.
+    // Printed only when the resolved set actually spans ≥1 subagent.
+    let sub = summaries.iter().filter(|s| s.is_subagent).count();
+    if sub > 0 {
+        let top = summaries.len() - sub;
+        println!(
+            "SCOPE  {} session{} in scope ({} top-level + {} subagent)",
+            summaries.len(),
+            if summaries.len() == 1 { "" } else { "s" },
+            top,
+            sub,
+        );
+        println!();
+    }
     for (i, s) in summaries.iter().enumerate() {
         if i > 0 {
             println!();
         }
-        println!("SESSION  {}", s.session_id);
+        // Brand a SUBAGENT row distinctly (mirroring `search`'s header + `turns`'
+        // `(subagent transcript)` annotation): a subagent hex is NOT a `--session` target,
+        // so label it as such and surface the re-feedable parent uuid inline.
+        if s.is_subagent {
+            println!(
+                "SUBAGENT  {}  ·  parent SESSION {}",
+                s.session_id, s.parent_session_id
+            );
+        } else {
+            println!("SESSION  {}", s.session_id);
+        }
 
         // cwd + (branch, version) on one meta line.
         let cwd = s.cwd.as_deref().unwrap_or("<unknown cwd>");
@@ -281,6 +326,11 @@ fn render_json(summaries: &[SessionSummary]) -> Result<()> {
     for s in summaries {
         let obj = json!({
             "session_id": s.session_id,
+            // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex
+            // subagent row; `parent_session_id` is the always-re-feedable owning uuid
+            // (= session_id for a top-level row). Never re-feed a subagent `session_id`.
+            "is_subagent": s.is_subagent,
+            "parent_session_id": s.parent_session_id,
             "path": s.path.to_string_lossy(),
             "cwd": s.cwd,
             "version": s.version,
@@ -509,6 +559,54 @@ mod tests {
         assert_eq!(
             s.first_user.as_ref().unwrap().excerpt,
             "the genuine first question"
+        );
+    }
+
+    #[test]
+    fn top_level_summary_is_not_subagent_and_is_its_own_parent() {
+        // A plain `<uuid>.jsonl` path is top-level: is_subagent=false and parent==session_id.
+        let p = tmp_session(
+            "toplevel",
+            &[r#"{"type":"user","message":{"role":"user","content":"hi"}}"#],
+        );
+        let s = summarize_session(&p).unwrap();
+        let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
+        std::fs::remove_file(&p).ok();
+        assert!(!s.is_subagent);
+        assert_eq!(s.parent_session_id, stem);
+        assert_eq!(s.parent_session_id, s.session_id);
+    }
+
+    #[test]
+    fn subagent_summary_carries_is_subagent_and_refeedable_parent() {
+        // A subagent transcript path `…/<PARENT-UUID>/subagents/workflows/wf_x/agent-<hex>.jsonl`:
+        // session_id is the bare hex (NOT re-feedable), is_subagent=true, and
+        // parent_session_id is the re-feedable PARENT uuid (the dir before `subagents/`).
+        let dir = std::env::temp_dir().join(format!(
+            "csift-subdir-{}-{}/11111111-2222-3333-4444-555555555555/subagents/workflows/wf_z",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("agent-deadbeefcafe1234.jsonl");
+        {
+            let mut f = std::fs::File::create(&p).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"user","message":{{"role":"user","content":"sub work"}}}}"#
+            )
+            .unwrap();
+        }
+        let s = summarize_session(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(
+            s.session_id, "deadbeefcafe1234",
+            "bare hex (agent- stripped)"
+        );
+        assert!(s.is_subagent, "a subagents/ path is a subagent transcript");
+        assert_eq!(
+            s.parent_session_id, "11111111-2222-3333-4444-555555555555",
+            "parent is the re-feedable uuid dir before subagents/"
         );
     }
 

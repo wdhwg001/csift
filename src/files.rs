@@ -523,7 +523,11 @@ fn render_text(outcome: &Outcome) {
 }
 
 /// Group mutations under their session header, then call `body` per session with that
-/// session's mutations. Sessions render in sorted id order for determinism.
+/// session's mutations. Sessions render in sorted id order for determinism. A SUBAGENT
+/// group's header is branded `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring `search`'s
+/// header + `turns`' `(subagent transcript)` annotation) so a consumer never reads a bare
+/// subagent hex as a re-feedable `--session` target. All mutations in one group share the
+/// same id-domain (same transcript), so the first row's flags brand the whole header.
 fn per_session<F: Fn(&str, &[&TaggedMutation])>(outcome: &Outcome, body: F) {
     let mut by_session: BTreeMap<&str, Vec<&TaggedMutation>> = BTreeMap::new();
     for m in &outcome.mutations {
@@ -535,7 +539,12 @@ fn per_session<F: Fn(&str, &[&TaggedMutation])>(outcome: &Outcome, body: F) {
             println!();
         }
         first = false;
-        println!("SESSION {sid}");
+        match ms.first() {
+            Some(m) if m.is_subagent => {
+                println!("SUBAGENT {sid}  ·  parent SESSION {}", m.parent_session_id);
+            }
+            _ => println!("SESSION {sid}"),
+        }
         body(sid, &ms);
     }
 }
@@ -674,7 +683,10 @@ fn render_json(outcome: &Outcome) -> Result<()> {
                     "is_subagent": m.is_subagent,
                     "parent_session_id": m.parent_session_id,
                     "path": m.mutation.path,
-                    "op": m.mutation.op.label(),
+                    // UNDERSCORE-delimited op token (json_key, NOT the hyphenated text label)
+                    // so the timeline `op` spelling matches the grouped per-op COUNT keys
+                    // (`notebook_edit`/`multi_edit`) — one on-wire spelling across both modes.
+                    "op": m.mutation.op.json_key(),
                     "ts_utc": m.mutation.timestamp_utc,
                     "ts_local": m.mutation.timestamp_utc.as_deref().and_then(local_iso),
                     "turn_index": m.turn_index,
@@ -714,11 +726,21 @@ fn json_grouped<F: Fn(&FileMutation) -> String>(
         by_session.entry(m.session_id.as_str()).or_default().push(m);
     }
     for (sid, ms) in by_session {
+        // All mutations in this group share the id-domain (same transcript); the discriminator
+        // (`is_subagent` + the re-feedable `parent_session_id`) brands every grouped row, the
+        // SAME r5 shape the --timeline arm carries — so a grouped subagent row is now
+        // distinguishable + re-feedable, not a bare hex on `session_id` alone.
+        let (is_subagent, parent_session_id) = ms
+            .first()
+            .map(|m| (m.is_subagent, m.parent_session_id.clone()))
+            .unwrap_or((false, sid.to_string()));
         let owned: Vec<TaggedMutation> = ms.iter().map(|m| (*m).clone()).collect();
         let groups = group_by(&owned, &key);
         for (k, counts) in &groups {
             let obj = json!({
                 "session_id": sid,
+                "is_subagent": is_subagent,
+                "parent_session_id": parent_session_id,
                 key_name: k,
                 "write": counts.write,
                 "edit": counts.edit,
@@ -1334,5 +1356,45 @@ mod tests {
             fr.skipped_lines, 0,
             "noise lines are not malformed, just skipped"
         );
+    }
+
+    #[test]
+    fn subagent_mutation_carries_is_subagent_and_refeedable_parent_in_grouped_views() {
+        // A subagent transcript path stamps is_subagent=true + the re-feedable PARENT uuid
+        // onto every mutation, so the grouped (text + JSON) views can brand the row instead
+        // of leaking the bare hex as a `SESSION` / re-feedable `session_id`.
+        let dir = std::env::temp_dir().join(format!(
+            "csift-files-sub-{}-{}/aaaabbbb-cccc-dddd-eeee-ffff00001111/subagents/workflows/wf_q",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("agent-c0ffee1234567890.jsonl");
+        {
+            let mut f = std::fs::File::create(&p).unwrap();
+            writeln!(f, r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"go"}}}}"#).unwrap();
+            writeln!(f, r#"{{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"w1","name":"Write","input":{{"file_path":"/tmp/sub.md","content":"x"}}}}]}}}}"#).unwrap();
+        }
+        let fr = scan_one_file(&p).expect("scan subagent");
+        std::fs::remove_file(&p).ok();
+        assert_eq!(fr.mutations.len(), 1);
+        let m = &fr.mutations[0];
+        assert_eq!(
+            m.session_id, "c0ffee1234567890",
+            "bare hex (agent- stripped)"
+        );
+        assert!(
+            m.is_subagent,
+            "a subagents/ path tags the mutation subagent"
+        );
+        assert_eq!(
+            m.parent_session_id, "aaaabbbb-cccc-dddd-eeee-ffff00001111",
+            "parent is the re-feedable uuid dir before subagents/"
+        );
+        // Both grouped renders run without panic on a subagent-tagged outcome (covers the
+        // branded SUBAGENT header arm + the json_grouped discriminator arm).
+        let muts = vec![m.clone()];
+        render_text(&outcome(FilesDetail::ByFile, muts.clone()));
+        render_json(&outcome(FilesDetail::ByFile, muts)).expect("grouped json");
     }
 }
