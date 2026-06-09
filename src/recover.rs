@@ -846,13 +846,53 @@ fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk
 
 /// True when a path looks plan-ish (heuristic, for `--plan` plan-file Write detection).
 ///
-/// Note: a dedicated `.claude/plans/` arm is intentionally absent — every such path is a
-/// strict superset of `/plans/`, so that operand would be dead (unreachable) code.
+/// COMPONENT-SCOPED, NOT a raw whole-path substring. The naive `lower.contains("plan")`
+/// rule mis-fired on every `.md` write under a project whose ENCODED dir name contains the
+/// substring `plan` — e.g. `~/.claude/projects/-Users-…-widget-app-prototype/memory/
+/// MEMORY.md`, where `widget-app` contains `plan` — folding unrelated memory notes into
+/// the candidate set so `--out` could restore a non-plan. We instead require `plan` to be a
+/// whole token in the FILENAME (or a `plans` directory component), never a substring of an
+/// ancestor dir like `sample`:
+///   (a) a directory component equals `plans` (the `~/.claude/plans/<id>.md` case), OR
+///   (b) the BASENAME's stem (last path component, minus a trailing extension) is the token
+///       `plan`, or contains `plan` delimited by a `-`/`_`/space boundary on at least one
+///       side (`refactor-plan.md`, `plan_v2.md`, `my plan.md`) — but NOT `sample.md`.
 fn is_plan_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
-    lower.contains("plan.md")
-        || lower.contains("/plans/")
-        || (lower.contains("plan") && lower.ends_with(".md"))
+    let mut components = lower.split('/');
+    // (a) a `plans` directory component anywhere (the `~/.claude/plans/` convention).
+    if components.clone().any(|c| c == "plans") {
+        return true;
+    }
+    // (b) the basename stem carries `plan` as a delimited whole token.
+    let Some(basename) = components.next_back() else {
+        return false;
+    };
+    let stem = basename.rsplit_once('.').map_or(basename, |(s, _)| s);
+    basename_stem_is_plan_token(stem)
+}
+
+/// True when a filename STEM (basename minus extension) carries `plan` as a whole token —
+/// either the stem IS `plan`, or `plan` appears with a `-`/`_`/space delimiter on at least
+/// one side. This is what separates a real `refactor-plan` / `plan_v2` from the false
+/// positive `sample` (where `plan` is a bare substring with an alphabetic neighbour).
+fn basename_stem_is_plan_token(stem: &str) -> bool {
+    if stem == "plan" {
+        return true;
+    }
+    let bytes = stem.as_bytes();
+    let mut search_from = 0usize;
+    while let Some(rel) = stem[search_from..].find("plan") {
+        let start = search_from + rel;
+        let end = start + "plan".len();
+        let before_ok = start == 0 || matches!(bytes[start - 1], b'-' | b'_' | b' ');
+        let after_ok = end == bytes.len() || matches!(bytes[end], b'-' | b'_' | b' ');
+        if before_ok && after_ok {
+            return true;
+        }
+        search_from = start + 1;
+    }
+    false
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1995,6 +2035,23 @@ fn render_at_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Pa
     Ok(())
 }
 
+/// The plan candidates to surface, applying the `--file` selector. WITHOUT `--file`, every
+/// candidate (ExitPlanMode text + plan-file Writes) is kept. WITH `--file <abs>`, only
+/// plan-WRITE candidates whose path matches it survive — ExitPlanMode candidates (which
+/// carry no `path`) are dropped, since the user named a specific file to reconstruct. This
+/// is what makes `--plan --file X --out` write X's latest content rather than the
+/// globally-latest candidate.
+fn plan_candidates_for(plans: &[PlanCandidate], file: Option<&str>) -> Vec<PlanCandidate> {
+    match file {
+        None => plans.to_vec(),
+        Some(_) => plans
+            .iter()
+            .filter(|p| path_matches(file, p.path.as_deref().unwrap_or_default()))
+            .cloned()
+            .collect(),
+    }
+}
+
 fn render_plan_text(
     ctx: &RenderCtx,
     sessions: &[ScanResult],
@@ -2007,13 +2064,16 @@ fn render_plan_text(
     let mut restored: Option<PlanCandidate> = None;
 
     for s in sessions {
-        if s.plans.is_empty() {
+        // With `--file`, restrict to candidates whose Write path matches it — so
+        // `--plan --file X` restores X's latest content, not the globally-latest candidate
+        // (the help promises "reconstruct THAT plan file's Write content").
+        let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
+        if plans.is_empty() {
             continue;
         }
         any = true;
         session_header(&mut first, &s.session_id);
         // Latest plan in this session by jsonl line order.
-        let mut plans = s.plans.clone();
         plans.sort_by_key(|p| p.line_no);
         let latest = plans.last().cloned();
         println!("  plan candidates: {}", plans.len());
@@ -2373,11 +2433,13 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
         RecoverMode::Plan => {
             let mut global_latest: Option<(String, PlanCandidate)> = None;
             for s in sessions {
-                if s.plans.is_empty() {
+                // Same `--file` selector as the text path: with `--file`, restrict to that
+                // file's plan-write candidates so `--out` reconstructs the named file.
+                let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
+                if plans.is_empty() {
                     continue;
                 }
                 session_count += 1;
-                let mut plans = s.plans.clone();
                 plans.sort_by_key(|p| p.line_no);
                 let latest_line = plans.last().map(|p| p.line_no);
                 for p in &plans {

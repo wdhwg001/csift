@@ -1193,10 +1193,14 @@ pub enum AutomationKind {
     Workflow,
     /// An `Agent …` completion pulse (a spawned subagent).
     Agent,
-    /// A `Monitor event: …` / `Monitor …` pulse — the ScheduleWakeup / monitor / cron-tick
-    /// family the P2 turn-segmentation lens names as its own trigger class. Previously this
-    /// collapsed into the opaque `Task` fallback (the only real `Task` instance in either
-    /// oracle WAS a misclassified `Monitor event:` pulse), losing its attribution.
+    /// A `Monitor event: …` / `Monitor …` `<task-notification>` COMPLETION pulse (summary
+    /// opens `monitor`/`scheduled`/`cron`). Previously this collapsed into the opaque `Task`
+    /// fallback (the only real `Task` instance in either oracle WAS a misclassified `Monitor
+    /// event:` pulse), losing its attribution. NOTE: this matches only `<task-notification>`
+    /// pulses — the `ScheduleWakeup` wakeup-tick PROMPTS that drive a monitor/cron cadence
+    /// are `isMeta:true` user records (not `<task-notification>`s) and are NOT segmented here
+    /// (they bypass [`Record::automation_trigger`] entirely via the isMeta gate in
+    /// [`Record::is_genuine_user`]); attributing them is a deferred enhancement.
     Monitor,
     /// Any other / unrecognized classifier — the safe fallback (renders `task`).
     Task,
@@ -1205,9 +1209,10 @@ pub enum AutomationKind {
 impl AutomationKind {
     /// Classify from the `<summary>`'s leading token. Case-insensitive on the known
     /// prefixes; anything else (or a missing summary) is [`AutomationKind::Task`]. The
-    /// `monitor` / `scheduled` / `cron` prefixes route the ScheduleWakeup/monitor/cron-tick
-    /// family to [`AutomationKind::Monitor`] (the lens demands it be a distinct, labeled
-    /// class — verified `Monitor event:`×10 + `Monitor`×6 across the two oracles).
+    /// `monitor` / `scheduled` / `cron` prefixes route a monitor-COMPLETION `<task-notification>`
+    /// to [`AutomationKind::Monitor`] (the lens demands it be a distinct, labeled class —
+    /// verified `Monitor event:`×10 + `Monitor`×6 across the two oracles). This does NOT cover
+    /// `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach this classifier).
     #[must_use]
     pub fn from_summary(summary: Option<&str>) -> Self {
         let s = summary.unwrap_or("").trim_start();
@@ -2466,8 +2471,10 @@ mod tests {
             AutomationKind::from_summary(Some("  background command y")),
             BackgroundCommand
         );
-        // The ScheduleWakeup / monitor / cron-tick family is its own labeled class — the
-        // real `Monitor event: "…"` pulse (10× across the oracles) must NOT fall to `task`.
+        // A monitor-COMPLETION `<task-notification>` (summary opens Monitor/Scheduled/cron)
+        // is its own labeled class — the real `Monitor event: "…"` pulse (10× across the
+        // oracles) must NOT fall to `task`. (This is NOT the isMeta ScheduleWakeup tick PROMPT,
+        // which never reaches this summary classifier; see AutomationKind::Monitor docs.)
         assert_eq!(
             AutomationKind::from_summary(Some("Monitor event: \"full pulse suite re-run\"")),
             Monitor

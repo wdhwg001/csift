@@ -888,6 +888,59 @@ fn is_plan_path_heuristic() {
     assert!(!is_plan_path("/repo/src/main.rs"));
 }
 
+#[test]
+fn is_plan_path_does_not_match_plan_substring_in_ancestor_dir() {
+    // The poison case: the project's ENCODED dir name contains `widget-app`, which
+    // contains the substring `plan`. A memory note written under it must NOT be flagged as
+    // a plan candidate just because an ancestor dir name has `plan` inside `sample`.
+    assert!(
+        !is_plan_path(
+            "/users/x/.claude/projects/-users-x-projects-widget-app-prototype/memory/memory.md"
+        ),
+        "a `plan` substring inside an ancestor `widget-app` dir must not match"
+    );
+    assert!(
+        !is_plan_path(
+            "/users/x/.claude/projects/-users-x-projects-widget-app/memory/speak-chinese.md"
+        ),
+        "a real memory note under widget-app is not a plan"
+    );
+    // `sample.md` (basename whose stem is `sample`, not the token `plan`) must NOT match.
+    assert!(!is_plan_path("/repo/sample.md"));
+    // But a real plan token in the BASENAME still matches (token-delimited).
+    assert!(is_plan_path("/repo/refactor-plan.md"));
+    assert!(is_plan_path("/repo/plan_v2.md"));
+    assert!(is_plan_path("/repo/plan-final.md"));
+    assert!(is_plan_path("/repo/deployment plan.md"));
+    // A `plans` directory component still matches (the ~/.claude/plans/ convention).
+    assert!(is_plan_path("/u/.claude/plans/step1.md"));
+}
+
+#[test]
+fn plan_candidates_for_filters_by_file() {
+    let mk = |path: Option<&str>, text: &str, line: usize| PlanCandidate {
+        line_no: line,
+        turn_index: 0,
+        timestamp_utc: None,
+        source: "plan-write",
+        path: path.map(str::to_string),
+        text: text.to_string(),
+    };
+    let plans = vec![
+        mk(Some("/abs/A.md"), "a", 1),
+        mk(Some("/abs/B.md"), "b", 2),
+        mk(None, "exitplanmode", 3), // ExitPlanMode candidate (no path)
+    ];
+    // No --file → every candidate (incl. the path-less ExitPlanMode one).
+    assert_eq!(plan_candidates_for(&plans, None).len(), 3);
+    // --file selects only the matching plan-write; ExitPlanMode candidates are dropped.
+    let only_b = plan_candidates_for(&plans, Some("/abs/B.md"));
+    assert_eq!(only_b.len(), 1);
+    assert_eq!(only_b[0].text, "b");
+    // A --file that matches nothing yields an empty set (not the global latest).
+    assert!(plan_candidates_for(&plans, Some("/abs/Z.md")).is_empty());
+}
+
 // ── coverage / spans / counts formatting ──
 
 #[test]

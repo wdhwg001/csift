@@ -2384,10 +2384,13 @@ fn render_json(
         }
     }
 
-    if ctx.skipped_lines > 0 {
-        let obj = json!({"kind":"skipped_lines","count": ctx.skipped_lines});
-        println!("{}", serde_json::to_string(&obj)?);
-    }
+    // Trailing terminator object, emitted UNCONDITIONALLY (even when 0) so a JSONL consumer
+    // can reliably detect end-of-stream for turns — matching search/files/recover, which
+    // always close with a trailing summary. The key is `skipped_lines` (was a one-off `count`
+    // alias, emitted only when > 0; both divergences are now removed for cross-subcommand
+    // consistency).
+    let term = json!({"kind":"skipped_lines","skipped_lines": ctx.skipped_lines});
+    println!("{}", serde_json::to_string(&term)?);
     if let Some(p) = out_path {
         std::fs::write(p, &out_blob)
             .with_context(|| format!("cannot write --out file {}", p.display()))?;

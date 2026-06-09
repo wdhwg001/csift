@@ -65,7 +65,16 @@ pub struct Hit {
 /// hit(s).
 #[derive(Debug, Clone)]
 pub struct Exchange {
+    /// The transcript's own id: a top-level session uuid, OR a bare SUBAGENT hex when the
+    /// hit came from a subagent transcript. A subagent hex is NOT a `--session` target — use
+    /// `parent_session_id` to re-feed (`csift turns <parent>`). `is_subagent` discriminates.
     pub session_id: String,
+    /// True when this exchange came from a subagent transcript (so `session_id` is a
+    /// non-re-feedable bare hex). When true, `parent_session_id` carries the re-feedable uuid.
+    pub is_subagent: bool,
+    /// The re-feedable PARENT session uuid (the owning top-level session). Equal to
+    /// `session_id` for a top-level hit; the subagent's parent uuid for a subagent hit.
+    pub parent_session_id: String,
     /// 0-based turn index (turns delimited by genuine-user messages).
     pub turn_index: usize,
     pub hits: Vec<Hit>,
@@ -226,11 +235,45 @@ fn json_escapes_in_string(c: char) -> bool {
 }
 
 /// Entry point for `csift search`.
+/// Resolve a bare-uuid SOLE positional into (effective pattern, effective session). When
+/// `pattern` is a canonical session-uuid AND nothing else scopes (no PATH positional, no
+/// `--path` alias, no `--session`), the uuid is treated as the SESSION scope (mirroring the
+/// `files <uuid>` / `turns <uuid>` idiom) — returning an empty pattern + the uuid as the
+/// session filter, plus a one-line stderr note. Otherwise the inputs pass through unchanged.
+fn resolve_uuid_scope(args: &SearchArgs) -> (String, Option<String>) {
+    let lone_positional = args.targets().is_empty() && args.session.is_none();
+    if lone_positional && path::is_session_uuid(&args.pattern) {
+        eprintln!(
+            "csift: note: `{}` is a session id, not a pattern — scoping to that session \
+             (its first positional is PATTERN). For a literal-uuid search add a scope target, \
+             e.g. `csift search {} .`",
+            args.pattern, args.pattern
+        );
+        return (String::new(), Some(args.pattern.clone()));
+    }
+    (args.pattern.clone(), args.session.clone())
+}
+
 pub fn run_search(args: &SearchArgs) -> Result<()> {
     // ── Validate flag combinations up front (SPEC §6.2 validation) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
     }
+
+    // ── Bare-uuid SOLE positional → SCOPE, not pattern (sibling-idiom parity) ──
+    // Unlike files/turns/list/agents/recover (whose first positional is the PATH target),
+    // search's FIRST positional is PATTERN, so a copied `search <uuid>` would regex-search
+    // the uuid string across EVERY project instead of scoping to that session — silently
+    // wrong. When the pattern is a bare session-uuid and nothing else scopes (no PATH, no
+    // `--path`, no `--session`), route it to the session filter and clear the pattern, with
+    // an explicit note. A genuine literal-uuid search stays available by adding a scope
+    // positional (`csift search <uuid> .`, where `.` is the PATH and the uuid stays PATTERN).
+    let (effective_pattern, effective_session) = resolve_uuid_scope(args);
+    let args = &SearchArgs {
+        pattern: effective_pattern,
+        session: effective_session,
+        ..args.clone()
+    };
     let turn_range = args
         .turn_range
         .as_deref()
@@ -390,6 +433,12 @@ fn reconstruct_and_match(
     // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
     // unaffected). See [`crate::subagent::session_id_from_path`].
     let session_id = crate::subagent::session_id_from_path(path);
+    // A subagent transcript's `session_id` is a non-re-feedable bare hex; its re-feedable
+    // owner is the parent uuid (the dir before `subagents/`). For a top-level file there is
+    // no parent, so the parent IS the session id.
+    let is_subagent = crate::subagent::is_subagent_path(path);
+    let parent_session_id =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
     // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
@@ -436,6 +485,8 @@ fn reconstruct_and_match(
 
         out.push(Exchange {
             session_id: session_id.clone(),
+            is_subagent,
+            parent_session_id: parent_session_id.clone(),
             turn_index: turn.index,
             hits,
             record_uuids,
@@ -678,11 +729,19 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         if i > 0 {
             println!();
         }
-        // Print the FULL session id (not a truncated head): this header is the surface a user
-        // copies from to re-feed another csift command (`csift turns <id>`), so a truncated id
-        // would break that copy-paste workflow. Every other subcommand's SESSION header prints
-        // the full uuid; search now matches.
-        println!("═══ SESSION {} · TURN {} ═══", ex.session_id, ex.turn_index);
+        // Print the FULL id (not a truncated head): this header is the surface a user copies
+        // from to re-feed another csift command (`csift turns <id>`). A SUBAGENT hit is
+        // labeled `SUBAGENT <hex>` (the hex is NOT a `--session` target — it is a subagent
+        // transcript id); we append the re-feedable parent uuid so the copy-paste workflow
+        // still works. A top-level hit stays `SESSION <uuid>`.
+        if ex.is_subagent {
+            println!(
+                "═══ SUBAGENT {} · parent SESSION {} · TURN {} ═══",
+                ex.session_id, ex.parent_session_id, ex.turn_index
+            );
+        } else {
+            println!("═══ SESSION {} · TURN {} ═══", ex.session_id, ex.turn_index);
+        }
         for hit in &ex.hits {
             let glyph = category_glyph(hit.category);
             let label = category_label(hit.category);
@@ -747,6 +806,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
             .collect();
         let obj = json!({
             "session_id": ex.session_id,
+            // Discriminate the id-domain so a consumer can tell a re-feedable parent UUID
+            // from a non-re-feedable subagent transcript hex: `is_subagent` + the always-
+            // re-feedable `parent_session_id` (= session_id for a top-level hit).
+            "is_subagent": ex.is_subagent,
+            "parent_session_id": ex.parent_session_id,
             "turn_index": ex.turn_index,
             "hits": hits,
             "record_uuids": ex.record_uuids,
@@ -797,6 +861,45 @@ mod tests {
         let m = build_matcher(&args("carry")).unwrap();
         assert!(m.is_match("the CARRY logic"));
         assert!(m.is_match("the carry logic"));
+    }
+
+    #[test]
+    fn lone_uuid_pattern_routes_to_session_scope() {
+        // `search <uuid>` with nothing else → the uuid becomes the SESSION scope and the
+        // pattern is cleared (parity with the `files <uuid>` / `turns <uuid>` idiom).
+        let uuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+        let (pat, sess) = resolve_uuid_scope(&args(uuid));
+        assert_eq!(pat, "", "the uuid must not stay as a regex pattern");
+        assert_eq!(sess.as_deref(), Some(uuid));
+    }
+
+    #[test]
+    fn uuid_pattern_with_path_scope_stays_a_literal_pattern() {
+        // `search <uuid> .` → the user explicitly scoped with a PATH, so the uuid is a
+        // genuine literal pattern (the escape hatch for a literal-uuid search).
+        let uuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+        let mut a = args(uuid);
+        a.paths = vec![std::path::PathBuf::from(".")];
+        let (pat, sess) = resolve_uuid_scope(&a);
+        assert_eq!(pat, uuid, "with a PATH scope the uuid stays the pattern");
+        assert_eq!(sess, None);
+    }
+
+    #[test]
+    fn uuid_pattern_with_explicit_session_stays_a_literal_pattern() {
+        // `search <uuid> --session <other>` → already scoped; uuid stays a literal pattern.
+        let uuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+        let mut a = args(uuid);
+        a.session = Some("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string());
+        let (pat, _sess) = resolve_uuid_scope(&a);
+        assert_eq!(pat, uuid);
+    }
+
+    #[test]
+    fn non_uuid_pattern_passes_through_unchanged() {
+        let (pat, sess) = resolve_uuid_scope(&args("venv"));
+        assert_eq!(pat, "venv");
+        assert_eq!(sess, None);
     }
 
     #[test]

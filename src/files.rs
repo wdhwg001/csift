@@ -48,7 +48,16 @@ use crate::timez::{format_timestamp, local_iso};
 /// One extracted mutation tagged with the turn it belongs to + its owning session.
 #[derive(Debug, Clone)]
 struct TaggedMutation {
+    /// The transcript's own id: a top-level session uuid, OR a bare SUBAGENT hex when the
+    /// mutation came from a subagent transcript. A subagent hex is NOT a `--session` target;
+    /// use `parent_session_id` to re-feed. `is_subagent` discriminates the id-domain.
     session_id: String,
+    /// True when this mutation came from a subagent transcript (so `session_id` is a bare
+    /// hex, not a re-feedable uuid). Defaults false; set per-file in `scan_one_file`.
+    is_subagent: bool,
+    /// The re-feedable PARENT session uuid (the owning top-level session). Equals
+    /// `session_id` for a top-level mutation. Defaults to `session_id`; set in `scan_one_file`.
+    parent_session_id: String,
     turn_index: usize,
     mutation: FileMutation,
 }
@@ -156,7 +165,20 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
         }
     })?;
 
-    let mutations = extract_mutations(&session_id, &records);
+    // A subagent transcript's `session_id` is a non-re-feedable bare hex; stamp the
+    // id-domain discriminator + the re-feedable parent uuid (the dir before `subagents/`)
+    // onto every mutation, so the timeline JSON can distinguish a parent UUID from a
+    // subagent transcript hex. A top-level file is its own parent.
+    let is_subagent = crate::subagent::is_subagent_path(path);
+    let parent_session_id =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
+    let mut mutations = extract_mutations(&session_id, &records);
+    if is_subagent {
+        for tm in &mut mutations {
+            tm.is_subagent = true;
+            tm.parent_session_id = parent_session_id.clone();
+        }
+    }
     Ok(FileResult {
         mutations,
         skipped_lines: skipped,
@@ -223,9 +245,12 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
 
 /// Heuristic create-vs-touch guess for a Bash mutation verb. A verb that names a fresh
 /// output target (`>` truncate, `mkdir`/`touch`/`tee`/`cp`/`mv`/`install`/`ln`/`rsync`
-/// dest, a download to a path, a `dd`/`zip`/flag-specified output) is treated as a create;
-/// an append (`>>`), `rm`, `sed -i`, `mv-from`, and `git` are NOT. Lexical-only, so it is
-/// just a heuristic (its `FileOp::BashMutation` is_heuristic() gates the label everywhere).
+/// dest, a download to a path, a `dd`/`zip`/`tar`-create/flag-specified output) is treated
+/// as a create; an append (`>>`, `tee-a`), `rm`, `sed -i`, `mv-from`, and `git` are NOT.
+/// (`emit_tar` only emits on a `-c`/`--create` flag, so the `tar` verb is unconditionally a
+/// create; `tee-a` is `tee --append`, the non-truncating sibling of `tee`, mirroring `>>`
+/// vs `>`.) Lexical-only, so it is just a heuristic (its `FileOp::BashMutation`
+/// is_heuristic() gates the label everywhere).
 fn bash_verb_is_create(verb: &str) -> bool {
     matches!(
         verb,
@@ -242,6 +267,7 @@ fn bash_verb_is_create(verb: &str) -> bool {
             | "wget"
             | "dd"
             | "zip"
+            | "tar"
             | "flag-output"
     )
 }
@@ -280,6 +306,10 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
                 }
                 out.push(TaggedMutation {
                     session_id: session_id.to_string(),
+                    // is_subagent / parent default here; `scan_one_file` stamps the real
+                    // per-file values once (the path-derived discriminator lives there).
+                    is_subagent: false,
+                    parent_session_id: session_id.to_string(),
                     turn_index,
                     mutation: m,
                 });
@@ -290,6 +320,8 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
                 for bm in parse_bash_mutations(cmd) {
                     out.push(TaggedMutation {
                         session_id: session_id.to_string(),
+                        is_subagent: false,
+                        parent_session_id: session_id.to_string(),
                         turn_index,
                         mutation: FileMutation {
                             path: bm.path,
@@ -636,6 +668,11 @@ fn render_json(outcome: &Outcome) -> Result<()> {
             for m in &outcome.mutations {
                 let obj = json!({
                     "session_id": m.session_id,
+                    // Discriminate the id-domain: `is_subagent` + the always-re-feedable
+                    // `parent_session_id` (= session_id for a top-level mutation) so a
+                    // consumer can `csift turns <parent_session_id>` even on a subagent row.
+                    "is_subagent": m.is_subagent,
+                    "parent_session_id": m.parent_session_id,
                     "path": m.mutation.path,
                     "op": m.mutation.op.label(),
                     "ts_utc": m.mutation.timestamp_utc,
@@ -764,12 +801,14 @@ mod tests {
             "wget",
             "dd",
             "zip",
+            "tar",
             "flag-output",
         ] {
             assert!(bash_verb_is_create(v), "{v} should be a create");
         }
-        // Append / delete / in-place / source / git are NOT creates.
-        for v in [">>", "rm", "sed-i", "mv-from", "git", "unknown"] {
+        // Append / delete / in-place / source / git are NOT creates (`tee-a` is the
+        // non-truncating `tee --append`, the `>>` analogue of `>`).
+        for v in [">>", "tee-a", "rm", "sed-i", "mv-from", "git", "unknown"] {
             assert!(!bash_verb_is_create(v), "{v} should NOT be a create");
         }
     }

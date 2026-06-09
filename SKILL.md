@@ -421,9 +421,13 @@ file's Read / Write / Edit stream in transcript order. Four mutually-exclusive m
   ranges, where the boundaries sit, per-op counts (reads / edits / writes / bash / external-edits),
   fragment count.
 - **`--plan`** — restore a plan (an `ExitPlanMode` text or a plan-file `Write`). TWO paths: **with
-  `--file <abs>`** it reconstructs THAT plan file's `Write` content; **without `--file`** it
-  ENUMERATES every plan candidate in range (prints `plan candidates: N`) and `--out` then writes the
-  single latest heuristic-matched candidate. `--file` is optional only here, with `Lnnn`/turn/
+  `--file <abs>`** it restricts to THAT file's plan-write candidates and `--out` reconstructs the
+  named file's latest `Write` content (path-less `ExitPlanMode` candidates are excluded); **without
+  `--file`** it ENUMERATES every plan candidate in range (prints `plan candidates: N`) and `--out`
+  then writes the single latest candidate. A `Write` qualifies as a plan-file by a **component-scoped**
+  heuristic (not a raw substring): a `plans/` directory component (the `~/.claude/plans/` convention),
+  or the filename stem being/carrying the token `plan` delimited by `-`/`_`/space — so `sample.md` and a
+  `widget-app` ancestor dir do **not** match. `--file` is optional only here, with `Lnnn`/turn/
   timestamp provenance.
 
 `--file` is **required** for `--patches`/`--at`/`--coverage`, optional for `--plan`. `--out` writes
@@ -477,11 +481,16 @@ injects `<task-notification>` records that LOOK like user turns (they open a tur
 completion notices, not the operator's prose. `turns` (and `search -t user`) CLASSIFY these: the opener
 renders as a parsed `[<kind> <task-id> <status>] <summary>` ATTRIBUTION label — where `<kind>` is the
 TRUE trigger class read from the summary (`background-command` / `workflow` / `agent` / `monitor` /
-`task`, where `monitor` is the ScheduleWakeup / monitor / cron-tick family), NOT a hardcoded
+`task`, where `monitor` matches a `<task-notification>` whose summary opens `Monitor`/`scheduled`/`cron`
+— a monitor-COMPLETION pulse), NOT a hardcoded
 `workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob. For a **monitor**
 pulse the real outcome lives in `<event>` and there is frequently NO `<status>`, so the label surfaces
 the event (`[monitor b718g3gqq STAGE2_OUTPUT_READY]`, or a timeout notice) rather than fabricating
-`completed`. The `turns` per-session header reports the human/automation split WITH a per-class
+`completed`. **Limitation:** the `monitor` class covers only `<task-notification>` completion pulses;
+the **`ScheduleWakeup` wakeup-tick prompts** that drive a monitor/cron *cadence* arrive as
+`isMeta:true` user records (NOT `<task-notification>`s), so they are **not yet segmented or attributed**
+— the assistant run a tick triggers currently groups under the preceding genuine-user turn. The
+`turns` per-session header reports the human/automation split WITH a per-class
 breakdown (e.g. `selected 20 user (3 automation triggers: 2 background-command, 1 agent) + 52
 assistant units`). The trigger still opens a turn, but it is EXCLUDED from the
 `--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) — it can still be picked

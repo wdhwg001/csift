@@ -469,12 +469,12 @@ fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutation>) {
     match verb_tok {
         "rm" => emit_operands(operands, "rm", out),
         "mkdir" => emit_operands(operands, "mkdir", out),
-        "touch" => emit_operands(operands, "touch", out),
-        "tee" => emit_operands(operands, "tee", out),
+        "touch" => emit_touch(operands, out),
+        "tee" => emit_tee(operands, out),
         "cp" => emit_copy_like(operands, "cp", out),
         "mv" => emit_mv(operands, out),
         "install" => emit_copy_like(operands, "install", out),
-        "ln" => emit_last_operand(operands, "ln", out),
+        "ln" => emit_ln(operands, out),
         "rsync" => emit_last_operand(operands, "rsync", out),
         "sed" => emit_sed(operands, out),
         "git" => emit_git(operands, out),
@@ -531,6 +531,69 @@ fn emit_operands(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutati
     }
 }
 
+/// `touch [opts] file…` — like [`emit_operands`] but with `touch`'s VALUE-taking flags
+/// stripped first. `touch -d DATE`, `--date=DATE`, `-r REFFILE`, `--reference=REFFILE`,
+/// and `-t STAMP` each consume a FOLLOWING token that is NOT a created path: `-r`'s value
+/// is a READ-ONLY reference file, `-d`/`-t`'s value is a timestamp string. Without this,
+/// `touch -r /ref/file out` would fabricate `/ref/file` as a created path (a phantom
+/// mutation indistinguishable from a real one). `-t`'s pure-digit stamp is also caught by
+/// `has_syntax_noise`'s number filter, but `-d`/`-r` values are not, so the skip is needed.
+fn emit_touch(operands: &[&str], out: &mut Vec<BashMutation>) {
+    /// Touch flags whose VALUE is the next token (not a created path).
+    const VALUE_FLAGS: &[&str] = &["-d", "--date", "-r", "--reference", "-t"];
+    let kept = strip_value_flags(strip_input_redirects(operands), VALUE_FLAGS);
+    for op in &kept {
+        if let Some(path) = path_operand(op) {
+            out.push(BashMutation {
+                path,
+                verb: "touch",
+            });
+        }
+    }
+}
+
+/// `tee [opts] file…` — every non-flag operand is a WRITTEN sink. The append form
+/// (`tee -a` / `tee --append`) does NOT truncate (the file may pre-exist), mirroring
+/// `>>` vs `>`; emit it under the `tee-a` verb so [`bash_verb_is_create`] maps it to
+/// `is_create=false` (the truncating `tee` stays a create). tee has no value-taking
+/// flag that consumes a following path (`-a`/`-i` are booleans), so no value-flag skip.
+fn emit_tee(operands: &[&str], out: &mut Vec<BashMutation>) {
+    let append = operands.iter().any(|t| *t == "-a" || *t == "--append");
+    let verb = if append { "tee-a" } else { "tee" };
+    let kept = strip_input_redirects(operands);
+    for op in &kept {
+        if let Some(path) = path_operand(op) {
+            out.push(BashMutation { path, verb });
+        }
+    }
+}
+
+/// Drop each VALUE-taking flag token AND the token that follows it. A flag is matched in
+/// two shapes: the spaced form (`-r ref` → drop both `-r` and `ref`) and the inline
+/// `--flag=value` form (`--reference=ref` → drop the single token). Used so a flag's
+/// argument is never mistaken for a positional path operand.
+fn strip_value_flags<'a>(operands: Vec<&'a str>, value_flags: &[&str]) -> Vec<&'a str> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < operands.len() {
+        let tok = operands[i];
+        if value_flags.contains(&tok) {
+            i += 2; // skip the flag AND its value token
+            continue;
+        }
+        // The `--flag=value` inline form: drop the whole token (value rides on it).
+        if let Some((name, _)) = tok.split_once('=') {
+            if name.starts_with("--") && value_flags.contains(&name) {
+                i += 1;
+                continue;
+            }
+        }
+        out.push(tok);
+        i += 1;
+    }
+    out
+}
+
 /// Drop input-redirect operators (`<`, `<file`) AND the filename following a bare `<`
 /// (an input file is READ, never mutated, so it must not be reported as a target).
 fn strip_input_redirects<'a>(operands: &[&'a str]) -> Vec<&'a str> {
@@ -573,6 +636,24 @@ fn emit_last_operand(operands: &[&str], verb: &'static str, out: &mut Vec<BashMu
             out.push(BashMutation { path, verb });
         }
     }
+}
+
+/// `ln` destination resolution, GNU `-t DIR` / `--target-directory` aware (the same
+/// inversion `cp`/`mv` have). The default form (`ln [-s] target… linkname`) writes the
+/// LAST positional (the link). But `ln -t DIR target…` / `--target-directory DIR` puts
+/// the destination DIRECTORY after `-t` with the link TARGETS last — so blindly taking
+/// the last positional would wrongly report a read-only source target as the created link
+/// AND miss the real destination dir. When `-t` is present we emit ITS value as the
+/// destination and treat every positional as a (read) source; else the last-positional
+/// default applies.
+fn emit_ln(operands: &[&str], out: &mut Vec<BashMutation>) {
+    if let Some(dir) = target_directory_value(operands) {
+        if let Some(path) = path_operand(dir) {
+            out.push(BashMutation { path, verb: "ln" });
+        }
+        return; // sources are reads; the `-t` DIR is the sole written destination.
+    }
+    emit_last_operand(operands, "ln", out);
 }
 
 /// `cp` / `install` destination resolution, GNU `-t DIR` aware. The default form
@@ -1222,6 +1303,79 @@ mod tests {
     fn touch_and_tee() {
         assert_eq!(paths("touch a.txt"), vec![("a.txt".to_string(), "touch")]);
         assert_eq!(paths("tee out.log"), vec![("out.log".to_string(), "tee")]);
+    }
+
+    #[test]
+    fn touch_value_flags_skip_their_arguments() {
+        // `-r REFFILE`: the reference file is READ-ONLY — only the real target is created.
+        assert_eq!(
+            paths("touch -r /ref/file /tmp/out.txt"),
+            vec![("/tmp/out.txt".to_string(), "touch")],
+            "the -r reference file must not be fabricated as a created path"
+        );
+        // `-d DATE`: the date string must not be emitted as a path.
+        assert_eq!(
+            paths("touch -d '2020-01-01' /tmp/out.txt"),
+            vec![("/tmp/out.txt".to_string(), "touch")]
+        );
+        // `--reference=REF` inline form.
+        assert_eq!(
+            paths("touch --reference=/ref/f /tmp/out.txt"),
+            vec![("/tmp/out.txt".to_string(), "touch")]
+        );
+        // `-t STAMP`: the timestamp is dropped (also caught by the digit-noise filter, but
+        // the explicit skip is the precise reason).
+        assert_eq!(
+            paths("touch -t 202001010000 /tmp/out.txt"),
+            vec![("/tmp/out.txt".to_string(), "touch")]
+        );
+    }
+
+    #[test]
+    fn tee_append_is_not_a_create() {
+        // `tee -a` / `tee --append` do not truncate (mirrors `>>` vs `>`): verb `tee-a`.
+        assert_eq!(
+            paths("echo hi | tee -a /tmp/a.log"),
+            vec![("/tmp/a.log".to_string(), "tee-a")]
+        );
+        assert_eq!(
+            paths("echo hi | tee --append /tmp/b.log"),
+            vec![("/tmp/b.log".to_string(), "tee-a")]
+        );
+        // Plain `tee` (truncate) stays a `tee` create.
+        assert_eq!(
+            paths("echo hi | tee /tmp/c.log"),
+            vec![("/tmp/c.log".to_string(), "tee")]
+        );
+    }
+
+    #[test]
+    fn ln_target_directory_emits_dest_not_source() {
+        // `ln -s -t DIR target`: the real destination is DIR; `target` is the read source.
+        assert_eq!(
+            paths("ln -s -t /tmp/linkdir /target"),
+            vec![("/tmp/linkdir".to_string(), "ln")],
+            "the -t DIR is the link destination; the source target must not be reported"
+        );
+        // `--target-directory=DIR` inline form.
+        assert_eq!(
+            paths("ln --target-directory=/tmp/d /src"),
+            vec![("/tmp/d".to_string(), "ln")]
+        );
+        // Plain `ln -s target linkname`: last positional (the link) is the destination.
+        assert_eq!(
+            paths("ln -s /target /tmp/link"),
+            vec![("/tmp/link".to_string(), "ln")]
+        );
+    }
+
+    #[test]
+    fn tar_create_emits_archive() {
+        // `tar czf` creates the archive (verb `tar`); the source dir is not a written path.
+        assert_eq!(
+            paths("tar czf /tmp/a.tar.gz src/"),
+            vec![("/tmp/a.tar.gz".to_string(), "tar")]
+        );
     }
 
     #[test]

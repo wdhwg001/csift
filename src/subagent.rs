@@ -71,6 +71,34 @@ pub fn session_id_from_path(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// The re-feedable PARENT session uuid for a transcript path, or `None` when the path is a
+/// top-level `<uuid>.jsonl` (which IS its own session). A subagent transcript lives at
+/// `…/<PARENT-UUID>/subagents/[workflows/wf_*/]agent-<hex>.jsonl`, so the parent uuid is the
+/// directory component immediately BEFORE the `subagents` segment. This is what makes a
+/// search/files subagent match re-feedable: its bare-hex `session_id` is NOT a `--session`
+/// target, but the `parent_session_id` this returns is (`csift turns <parent>` works).
+#[must_use]
+pub fn parent_session_id_from_path(path: &Path) -> Option<String> {
+    let mut prev: Option<&str> = None;
+    for comp in path.components() {
+        let c = comp.as_os_str().to_str()?;
+        if c == "subagents" {
+            // The component just before `subagents` is the parent-session dir name.
+            return prev.map(str::to_string);
+        }
+        prev = Some(c);
+    }
+    None
+}
+
+/// True when `path` is a SUBAGENT transcript (lives under a `subagents/` segment) rather
+/// than a top-level `<uuid>.jsonl` session file.
+#[must_use]
+pub fn is_subagent_path(path: &Path) -> bool {
+    path.components()
+        .any(|c| c.as_os_str().to_str() == Some("subagents"))
+}
+
 /// Subagent kind, keyed off the on-disk path location (authoritative; see module
 /// docs — `agentType` is descriptive only, not the discriminator).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1954,5 +1982,31 @@ mod tests {
         );
         // A root path with no file stem → empty (never panics).
         assert_eq!(session_id_from_path(Path::new("/")), "");
+    }
+
+    #[test]
+    fn parent_session_id_and_is_subagent_from_path() {
+        let sub = Path::new(
+            "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/agent-a585e25a580c59e7a.jsonl",
+        );
+        let wf = Path::new(
+            "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/workflows/wf_abc/agent-aaa.jsonl",
+        );
+        let top = Path::new("/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl");
+        // A subagent path → parent is the dir before `subagents`, and is_subagent is true.
+        assert_eq!(
+            parent_session_id_from_path(sub).as_deref(),
+            Some("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")
+        );
+        assert!(is_subagent_path(sub));
+        // A workflow subagent path → same parent (the segment before `subagents`).
+        assert_eq!(
+            parent_session_id_from_path(wf).as_deref(),
+            Some("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")
+        );
+        assert!(is_subagent_path(wf));
+        // A top-level path → no parent (it IS its own session), is_subagent false.
+        assert_eq!(parent_session_id_from_path(top), None);
+        assert!(!is_subagent_path(top));
     }
 }

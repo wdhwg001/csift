@@ -406,6 +406,15 @@ pub fn looks_like_session_id(s: &str) -> bool {
     is_uuid(s) || is_bare_subagent_hex(s)
 }
 
+/// True for a canonical `8-4-4-4-12` hex UUID (a top-level session jsonl basename). Public
+/// so `search` can detect a bare-uuid SOLE positional (its first positional is PATTERN, not
+/// PATH, so a lone uuid would otherwise be regex-searched instead of scoping — see
+/// `SearchArgs` routing).
+#[must_use]
+pub fn is_session_uuid(s: &str) -> bool {
+    is_uuid(s)
+}
+
 /// True for a canonical `8-4-4-4-12` hex UUID (the top-level session jsonl basename).
 fn is_uuid(s: &str) -> bool {
     let groups = [8usize, 4, 4, 4, 12];

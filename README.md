@@ -84,11 +84,16 @@ identity), lazy `serde_json` only on candidate lines, and rayon parallelism ACRO
 Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `turns`) takes
 optional `PATH...` targets and an optional `--session <uuid>` (a bare session-UUID in the positional
 slot is routed to `--session`; a bare **subagent hex** is NOT accepted there — inspect one with `csift
-agents --agent <hex>`), and — where it spans transcripts — `--include-subagents` /
-`--no-subagents` (default ON for `list`/`search`/`files`/`recover`; **OFF for `turns`**, which is a
-single-thread recovery tool with a per-session budget that multiplies, so it spans subagents only on
-explicit `--include-subagents`). The argv pre-pass routes declared flags (long and the search short flags `-t`/`-i`)
-away from the positional, so a flag works in any position, including trailing. `whoami` is the
+agents --agent <hex>`). For `search` the first positional is the **PATTERN**, so a lone-uuid `search
+<uuid>` is routed to `--session` (a one-line note reports it); pass a scope target to keep a literal
+search (`csift search <uuid> .`). The subagent-span flags `--include-subagents` / `--no-subagents`
+apply to the **four** transcript-spanning subcommands `list`/`search`/`files`/`recover` (default **ON**)
+and `turns` (default **OFF** — a single-thread recovery tool with a per-session budget that multiplies,
+so it spans subagents only on explicit `--include-subagents`). `agents` has **no** subagent-span flag:
+it *discovers* a session's subagents as its primary output, so there is nothing to span over (passing
+`--no-subagents`/`--include-subagents` errors with that note). The argv pre-pass routes declared flags
+(long and the search short flags `-t`/`-i`) away from the positional, so a flag works in any position,
+including trailing. `whoami` is the
 exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to
 `CODEX_COMPANION_SESSION_ID`) and its only flags are `--show-path` / `--format`. All support
 `--format text|json`.
@@ -195,12 +200,16 @@ Rebuilds a file's content by replaying its Read / Write / Edit stream in transcr
 mutually-exclusive modes: `--patches` (DEFAULT, segmented unified-diff history split at integrity
 boundaries), `--at WHEN` (the partial line-numbered snapshot as the LLM saw it; gaps are explicit, never
 fabricated), `--coverage`/`--dry-run` (scope without dumping), and `--plan` (restore a dropped plan).
+`--plan` matches plan-files by a **component-scoped** heuristic — a `plans/` directory component or a
+filename stem being/carrying the token `plan` (delimited), so `sample.md` / a `widget-app` ancestor
+dir do **not** match; pass `--file <abs>` to pin an exact file (its latest `Write` is then restored).
 
 ```bash
 csift recover . --file /abs/PLAN.md --coverage              # scope first: covered ranges + boundaries
 csift recover <uuid> --file /abs/app.py --patches           # segmented unified diffs
 csift recover <uuid> --file /abs/app.py --at @turn:42       # partial snapshot as of turn 42
 csift recover . --plan --out /tmp/restored-plan.md          # list plan candidates; write the latest to a file
+csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md  # restore THAT plan file's latest Write content
 ```
 
 ### `turns`
@@ -209,10 +218,15 @@ Reconstruct the verbatim user/assistant back-and-forth a compaction summary clip
 command. In automation-heavy sessions, machine-injected `<task-notification>` triggers open turns;
 `turns` (and `search -t user`) label them as `[<kind> <id> <status>] <summary>` (kind =
 `background-command` / `workflow` / `agent` / `monitor` / `task`, read from the summary — never the
-raw XML; `monitor` is the ScheduleWakeup / monitor / cron-tick family) and the header reports the
+raw XML; `monitor` matches a `<task-notification>` whose summary opens `Monitor`/`scheduled`/`cron`,
+i.e. a monitor-COMPLETION pulse) and the header reports the
 human/automation split WITH a per-class breakdown (`N user (M automation triggers: 2 background-command,
 1 agent)`). A monitor pulse's real outcome lives in `<event>` (often with no `<status>`), so its label
-surfaces the event (`[monitor … STAGE2_OUTPUT_READY]`) rather than fabricating `completed`. In
+surfaces the event (`[monitor … STAGE2_OUTPUT_READY]`) rather than fabricating `completed`. **Note:**
+the `monitor` class covers only these `<task-notification>` pulses; the **`ScheduleWakeup` wakeup-tick
+prompts** that drive a monitor/cron *cadence* arrive as `isMeta:true` user records (not
+`<task-notification>`s) and are **not yet segmented or attributed** — they currently group under the
+preceding genuine-user turn. In
 `--format json` the attribution is structural (`is_automation` / `trigger_kind` / `task_id` / `status` /
 `event`) on the user-segment object, with a leading `{kind:"session_header",…}` object carrying the
 lumped `automation_triggers` + per-class `automation_by_kind` + `sessions_in_scope` vs

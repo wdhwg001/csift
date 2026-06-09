@@ -7,11 +7,13 @@
 //! recovery tool whose per-session budget MULTIPLIES, so it defaults to the TOP-LEVEL thread
 //! only and opts INTO spanning via `--include-subagents`. `agents` reports a session's
 //! subagent lifecycle (it lists subagents as targets, so it has no subagent-span flag).
-//! The five session-operating subcommands (`search`/`agents`/`files`/`recover`/`turns`)
-//! plus `list` resolve their target through ONE shared resolver
+//! The six session-operating subcommands (`list`/`search`/`agents`/`files`/`recover`/`turns`)
+//! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` (cwd / encoded dir),
-//! an optional `--session <uuid>`, and a bare-uuid/bare-hex POSITIONAL that routes to the
-//! session filter. `whoami` is the exception (no target — it reads `$CLAUDE_CODE_SESSION_ID`).
+//! an optional `--session <uuid>`, and a bare-uuid POSITIONAL that routes to the session
+//! filter. (For `search` the first positional is PATTERN, so the bare-uuid routing fires on
+//! a lone-uuid pattern — see [`SearchArgs::pattern`].) `whoami` is the exception (no target —
+//! it reads `$CLAUDE_CODE_SESSION_ID`).
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
@@ -482,7 +484,7 @@ impl ListArgs {
     }
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 #[command(
     long_about = "Regex-search transcripts, returning the COMPLETE round-trip exchange \
         containing each hit — never a bare fragment. A turn is delimited by a genuine \
@@ -552,15 +554,26 @@ impl ListArgs {
         nothing, not that a category was excluded.\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
-        {session_id, turn_index, record_uuids:[…], hits:[{category, excerpt, tool_name, \
-        ts_utc, ts_local}, …]} — the per-hit objects carry no session_id; it lives on the \
-        envelope. A trailing footer object {matched, dropped_by_cap, skipped_lines} closes \
-        the stream. (Whole-document `json.load` fails — parse line-by-line as JSONL: N \
-        envelopes then the footer.)"
+        {session_id, is_subagent, parent_session_id, turn_index, record_uuids:[…], \
+        hits:[{category, excerpt, tool_name, ts_utc, ts_local}, …]} — the per-hit objects \
+        carry no session_id; it lives on the envelope. `session_id` is the transcript's own \
+        id: a re-feedable top-level uuid, OR a bare SUBAGENT hex when `is_subagent` is true \
+        (that hex is NOT a `--session` target — re-feed `parent_session_id`, which is always \
+        the owning top-level uuid). A trailing footer object {matched, dropped_by_cap, \
+        skipped_lines} closes the stream. (Whole-document `json.load` fails — parse \
+        line-by-line as JSONL: N envelopes then the footer.)"
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
     /// pure filter (use `--category` / time / turn filters alone).
+    ///
+    /// BARE-UUID ROUTING: search's FIRST positional is PATTERN (unlike files/turns/list/
+    /// agents/recover, whose first positional is the PATH target). So a lone `csift search
+    /// <uuid>` — a session-uuid as the SOLE positional with no PATH/`--path`/`--session` —
+    /// is treated as the SESSION SCOPE (matching the `files <uuid>` idiom), not regex-searched
+    /// as the literal uuid string across every project. A one-line note reports the routing.
+    /// For a genuine literal-uuid search, add a scope target so the uuid stays the pattern:
+    /// `csift search <uuid> .` (`.` is the PATH, the uuid is PATTERN).
     #[arg(value_name = "PATTERN", default_value = "")]
     pub pattern: String,
 
@@ -725,15 +738,20 @@ pub enum AgentKindFilter {
         `result` event (or the transcript terminates cleanly), else `running`/`unknown`. \
         `--tree` renders the parent→child topology (workflow runs as parents of their \
         agents). `--agent <hex>` grabs ONE subagent by its bare-hex id (full node + returned \
-        message).\n\n\
+        message); it is a DIRECT lookup that IGNORES --since/--until/--by/--kind/--tree, and \
+        a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
+        `--kind` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
+        axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
+        by `turns`/`search -t user` — they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
           csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagents\n  \
           csift agents .                                                   # every session under this project\n  \
-          csift agents . --kind workflow                                   # only workflow agents\n  \
+          csift agents . --kind workflow                                   # only workflow-shape agents (NOT the automation kind)\n  \
           csift agents --session <uuid> --since 2h                         # subagents TRIGGERED in the last 2h\n  \
           csift agents --session <uuid> --since 6h --by completion         # COMPLETED in the last 6h\n  \
           csift agents --session <uuid> --since 2026-06-01T09:00:00Z --by completion  # COMPLETED since an ISO bound\n  \
-          csift agents --agent <hex>                                       # grab ONE subagent by its bare-hex id (full node + returned message)\n  \
+          csift agents --session <uuid>                                    # discover ids, then grab one:\n  \
+          csift agents --agent <hex>                                       #   grab ONE subagent (direct lookup; ignores time/kind/tree)\n  \
           csift agents . --tree                                            # parent→child topology (workflow runs as parents of their agents)\n  \
           csift agents --session <uuid> --with-files                       # each node + its files-changed list\n  \
           csift agents --session <uuid> --returned-message                 # add the 3-way-resolved returned message to every row\n  \
@@ -745,7 +763,10 @@ pub enum AgentKindFilter {
         trigger_local, started_utc, started_local, completed_utc, completed_local, duration, \
         skipped_lines}. `--with-files` adds a `files_changed` array; `--returned-message` \
         (implied by a single `--agent`) adds `returned_message` + `returned_message_source`. \
-        The malformed-line count rides on each node's `skipped_lines`."
+        Under `--tree`, a workflow RUN parent object is {run_id, task_id, workflow_name, \
+        status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, \
+        started_utc, started_local, children}. Every `_utc` field carries a paired `_local` \
+        (system-local ISO). The malformed-line count rides on each node's `skipped_lines`."
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list.
@@ -762,7 +783,25 @@ pub struct AgentsArgs {
     #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
-    /// Only show subagents of this kind (repeatable). Default: all kinds.
+    /// HIDDEN no-op subagent-span flags. `agents` has NO subagent-span control: it DISCOVERS
+    /// subagents as its primary output, so `--include-subagents`/`--no-subagents` are
+    /// meaningless here (unlike list/search/files/recover, which span their session's
+    /// subagent transcripts). They are accepted only to emit a pointed error instead of
+    /// letting `allow_hyphen_values` swallow them as a bogus PATH value (the misleading
+    /// `invalid value '--no-subagents' for '[PATH]...'`). See [`AgentsArgs::reject_span_flags`].
+    #[arg(long = "include-subagents", hide = true)]
+    pub include_subagents: bool,
+
+    /// HIDDEN no-op (see `include_subagents`).
+    #[arg(long = "no-subagents", hide = true)]
+    pub no_subagents: bool,
+
+    /// Only show subagents of this kind (repeatable). Default: all kinds. This is the
+    /// subagent TRANSCRIPT-SHAPE filter — its values are `builtin-task` | `workflow`. It is
+    /// NOT the automation-TRIGGER `kind` taxonomy (`background-command`/`agent`/`monitor`/
+    /// `task`/`workflow`) that `turns`/`search -t user` use; the two axes share only the
+    /// literal token `workflow` (different meaning). `csift agents --kind monitor` is a
+    /// parse error for this reason. Ignored when `--agent <hex>` is given (a direct grab).
     #[arg(long = "kind", value_enum)]
     pub kinds: Vec<AgentKindFilter>,
 
@@ -785,11 +824,18 @@ pub struct AgentsArgs {
 
     /// Render the parent→child topology TREE (workflow runs as parent nodes of their
     /// agents) instead of a flat list. JSON nests `children`; text indents by depth.
+    /// IGNORED when `--agent <hex>` is set — a single-node grab takes precedence (so
+    /// `--agent <hex> --tree` renders just that node, not the whole workflow).
     #[arg(long)]
     pub tree: bool,
 
     /// Grab ONE subagent by its bare-hex id: prints its full node incl. the returned
     /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
+    /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--by` and `--kind` (a
+    /// known id resolves regardless of when it ran or its shape), and `--tree` is ignored
+    /// (just the node is rendered). If the hex matches nothing in scope, it is a hard ERROR
+    /// with discovery guidance — not the ambiguous `no subagents found`. Discover ids first
+    /// with `csift agents --session <uuid>` (the `agent_id` column / JSON field).
     #[arg(long, value_name = "HEX")]
     pub agent: Option<String>,
 
@@ -806,6 +852,27 @@ pub struct AgentsArgs {
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+}
+
+impl AgentsArgs {
+    /// The error string when a (no-op) subagent-span flag is passed to `agents`, or `None`
+    /// when neither was. `agents` has no subagent-span control (it lists subagents AS its
+    /// output), so these flags are meaningless — but accepting + rejecting them gives a
+    /// pointed message instead of the misleading `allow_hyphen_values` PATH-swallow error.
+    #[must_use]
+    pub fn span_flag_error(&self) -> Option<&'static str> {
+        if self.include_subagents || self.no_subagents {
+            Some(
+                "`agents` has no --include-subagents / --no-subagents flag: it DISCOVERS a \
+                 session's subagents as its primary output (there is nothing to span over). \
+                 Drop the flag. To list a session's subagents run `csift agents --session \
+                 <uuid>`; to scope another subcommand's subagent span use that subcommand's \
+                 flag (e.g. `csift files --no-subagents <uuid>`).",
+            )
+        } else {
+            None
+        }
+    }
 }
 
 /// Which lifecycle timestamp the `agents` time window filters on.
@@ -889,12 +956,15 @@ pub enum FilesDetail {
          notebook_edit/total) + first/last timestamps, NOT `op`/`is_create` — so use\n   \
          `--timeline` to test create-vs-edit or filter by op.)\n\n\
         JSON SCHEMAS (per --format json)\n  \
-          --timeline : one object per mutation — {session_id, path, op, ts_utc, ts_local,\n             \
-                       turn_index, is_create, heuristic} + a trailing summary object.\n             \
-                       (heuristic=true ONLY for a bash-derived mutation — a guessed path/op\n             \
-                       lexically parsed from a shell command, lower confidence; false = a\n             \
-                       definitive Edit/Write/Notebook/MultiEdit tool call with an exact\n             \
-                       file_path. Filter heuristic==false for confirmed mutations only.)\n  \
+          --timeline : one object per mutation — {session_id, is_subagent, parent_session_id,\n             \
+                       path, op, ts_utc, ts_local, turn_index, is_create, heuristic} + a\n             \
+                       trailing summary object. (session_id is the transcript's own id — a\n             \
+                       top-level uuid, or a bare SUBAGENT hex when is_subagent=true, which is\n             \
+                       NOT a --session target; re-feed parent_session_id, always the owning\n             \
+                       top-level uuid. heuristic=true ONLY for a bash-derived mutation — a\n             \
+                       guessed path/op lexically parsed from a shell command, lower confidence;\n             \
+                       false = a definitive Edit/Write/Notebook/MultiEdit tool call with an\n             \
+                       exact file_path. Filter heuristic==false for confirmed mutations only.)\n  \
           --by-file  : one object per file — {session_id, file, write, edit, bash,\n             \
                        multi_edit, notebook_edit, total, distinct_files, first_utc,\n             \
                        first_local, last_utc, last_local} + a trailing summary object.\n  \
@@ -1057,9 +1127,15 @@ pub enum RecoverMode {
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
         counts (reads / edits / writes / bash / external-edits).\n  \
           --plan      restore a PLAN (ExitPlanMode text or a plan-file Write). TWO paths: \
-        WITH `--file <abs>` it reconstructs THAT plan-file's Write content; WITHOUT \
-        `--file` it ENUMERATES every plan candidate in range (printing `plan candidates: \
-        N`) and `--out` writes the single latest heuristic-matched candidate.\n\n\
+        WITH `--file <abs>` it restricts to THAT file's plan-write candidates and `--out` \
+        reconstructs the named file's latest Write content (ExitPlanMode candidates, which \
+        have no path, are excluded); WITHOUT `--file` it ENUMERATES every plan candidate in \
+        range (printing `plan candidates: N`) and `--out` writes the single latest candidate. \
+        A WRITE qualifies as a plan-file by a COMPONENT-scoped heuristic (not a raw substring): \
+        a `plans/` directory component (the `~/.claude/plans/` convention), OR the filename's \
+        stem being the token `plan` / carrying `plan` delimited by `-`/`_`/space \
+        (`refactor-plan.md`, `plan_v2.md`) — so `sample.md` and a `widget-app` ancestor dir \
+        do NOT match. Use `--file` to pin an exact file when the heuristic is too broad.\n\n\
         The TARGET selects the session(s): `--session <uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
@@ -1145,10 +1221,13 @@ pub struct RecoverArgs {
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
 
-    /// Restore a plan (ExitPlanMode text / plan-file Write). WITH `--file <abs>`:
-    /// reconstruct THAT plan file's Write content. WITHOUT `--file`: enumerate every plan
-    /// candidate in range (`plan candidates: N`); `--out` then writes the single latest
-    /// heuristic-matched candidate. `--file` is optional ONLY for `--plan`.
+    /// Restore a plan (ExitPlanMode text / plan-file Write). WITH `--file <abs>`: restrict to
+    /// THAT file's plan-write candidates and reconstruct its latest Write content (path-less
+    /// ExitPlanMode candidates are excluded). WITHOUT `--file`: enumerate every plan candidate
+    /// in range (`plan candidates: N`); `--out` then writes the single latest candidate. A
+    /// Write qualifies via a COMPONENT-scoped heuristic — a `plans/` dir component, or the
+    /// filename stem being/carrying the token `plan` (delimited), so `sample.md` and a
+    /// `widget-app` ancestor dir do NOT match. `--file` is optional ONLY for `--plan`.
     #[arg(long, group = "mode")]
     pub plan: bool,
 
@@ -1314,7 +1393,8 @@ impl RecoverArgs {
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
           {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
-          {kind:\"skipped_lines\", count} closes the stream when any line was malformed."
+          {kind:\"skipped_lines\", skipped_lines:N} ALWAYS closes the stream (even when N=0),\n  \
+          so a JSONL consumer can detect end-of-stream — matching search/files/recover."
 )]
 pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
@@ -1557,12 +1637,14 @@ impl TurnsArgs {
         whoami to often say \"ambiguous, pass --session\".\n\n\
         SUBAGENT CAVEAT: inside a Task/Agent SUBAGENT, $CLAUDE_CODE_SESSION_ID is the \
         SUBAGENT's own id, NOT the parent/root session — so `whoami` there identifies the \
-        subagent, not the main session. To reach the ROOT session from inside a subagent, \
-        run `agents`/`list` on the project PATH to find the parent uuid.\n\n\
-        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). The \
-        session-operating subcommands (`search`/`agents`/`files`/`recover`/`turns`) take \
-        their target as a POSITIONAL `[PATH]...` — there is NO `--path <PATH>` flag on them \
-        (only `search` keeps a hidden, DEPRECATED `--path` alias). whoami's old `--path` \
+        subagent, not the main session. whoami there prints THIS subagent's id; to get the \
+        ROOT, run `csift agents --agent <that-id> --format json` and read `parent_session_id` \
+        (one call). (Or, without the id, scan `csift agents .` / `csift list .` on the \
+        project PATH and find the parent uuid.)\n\n\
+        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). The six \
+        session-operating subcommands (`list`/`search`/`agents`/`files`/`recover`/`turns`) \
+        take their target as a POSITIONAL `[PATH]...` — there is NO `--path <PATH>` flag on \
+        them (only `search` keeps a hidden, DEPRECATED `--path` alias). whoami's old `--path` \
         spelling still works here as a hidden alias for `--show-path`.",
     after_help = "SESSION-ID SOURCE\n  \
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
@@ -1571,13 +1653,14 @@ impl TurnsArgs {
         whoami errors with guidance to pass --session — it never guesses by mtime.\n\n\
         SUBAGENT CAVEAT\n  \
           Inside a Task/Agent SUBAGENT, the env var holds the SUBAGENT's OWN id, NOT the \
-        parent/root session — so `whoami` there identifies the subagent. To reach the ROOT \
-        session from inside a subagent, run `agents`/`list` on the project PATH to find the \
-        parent uuid.\n\n\
+        parent/root session — so `whoami` there identifies the subagent. whoami there prints \
+        THIS subagent's id; to get the ROOT in ONE call run `csift agents --agent <that-id> \
+        --format json` and read `parent_session_id`. (Or, without the id, scan `csift agents \
+        .` / `csift list .` on the project PATH to find the parent uuid.)\n\n\
         FLAG NOTE\n  \
-          `--show-path` is a BOOLEAN toggle (no value). The session-operating subcommands \
-        (search/agents/files/recover/turns) take their target as a POSITIONAL [PATH]... — \
-        there is NO `--path <PATH>` flag on them (only `search` keeps a hidden, deprecated \
+          `--show-path` is a BOOLEAN toggle (no value). The six session-operating subcommands \
+        (list/search/agents/files/recover/turns) take their target as a POSITIONAL [PATH]... \
+        — there is NO `--path <PATH>` flag on them (only `search` keeps a hidden, deprecated \
         `--path` alias). whoami's old `--path` spelling is a hidden alias for --show-path.\n\n\
         EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \

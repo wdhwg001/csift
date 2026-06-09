@@ -15,7 +15,7 @@
 
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use rayon::prelude::*;
 
 use crate::cli::{AgentKindFilter, AgentTimeAxis, AgentsArgs, OutputFormat};
@@ -34,6 +34,12 @@ struct SessionTopology {
 
 /// Entry point for `csift agents`.
 pub fn run_agents(args: &AgentsArgs) -> Result<()> {
+    // `agents` has no subagent-span flag — reject the (hidden, no-op) ones with a pointed
+    // message instead of letting `allow_hyphen_values` swallow them as a bogus PATH value.
+    if let Some(msg) = args.span_flag_error() {
+        bail!(msg);
+    }
+
     // Resolve the target session files (PATH(s) + optional --session). With neither,
     // every project is scanned — the same target model as list/search. `agents`
     // discovers each session's subagents itself, so it never spans subagent TRANSCRIPT
@@ -66,12 +72,24 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         workflow_runs.extend(t.workflow_runs);
     }
 
-    // Filter: single-agent grab first (exact bare-hex id), then kind, then time window.
+    // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--by time
+    // window AND the --kind filter (a known id should resolve regardless of when it ran or
+    // its shape), and a no-match is a hard error with discovery guidance — never the
+    // ambiguous `no subagents found` (which a zero-subagent session also prints). The grab
+    // also wins over --tree: a single node is rendered, not the whole workflow tree.
     if let Some(want_id) = args.agent.as_deref() {
         nodes.retain(|n| n.agent_id == want_id);
+        if nodes.is_empty() {
+            bail!(
+                "no subagent matched id `{want_id}` in scope. List valid ids first with \
+                 `csift agents --session <uuid>` (or `csift agents <project-path>`) and read \
+                 the `agent_id` column / JSON field, then pass one to `--agent`."
+            );
+        }
+    } else {
+        nodes.retain(|n| kind_allowed(n.kind, &args.kinds));
+        nodes.retain(|n| window_admits(n, &time_window, args.by));
     }
-    nodes.retain(|n| kind_allowed(n.kind, &args.kinds));
-    nodes.retain(|n| window_admits(n, &time_window, args.by));
 
     // Deterministic order: by (parent session, trigger time, agent id).
     nodes.sort_by(|a, b| {
@@ -98,7 +116,9 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     let view = View {
         want_returned,
         want_files,
-        tree: args.tree,
+        // A single `--agent` grab renders just that node — `--tree` (whole-workflow
+        // topology) is ignored, so `--agent <hex> --tree` no longer dumps every sibling.
+        tree: args.tree && args.agent.is_none(),
     };
 
     match args.format {
@@ -516,6 +536,9 @@ fn workflow_run_json(run: &WorkflowRun, children: Vec<serde_json::Value>) -> ser
         "total_tool_calls": run.total_tool_calls,
         "default_model": run.default_model,
         "started_utc": run.started_utc,
+        // Pair every `_utc` with its system-local companion, matching node_json and every
+        // other ts-emission site (the run object was the lone exception with a bare _utc).
+        "started_local": run.started_utc.as_deref().and_then(local_iso),
         "children": children,
     })
 }

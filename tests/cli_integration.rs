@@ -1505,6 +1505,79 @@ fn agents_single_agent_grab_text() {
 }
 
 #[test]
+fn agents_agent_grab_bypasses_time_and_kind_filters() {
+    // `--agent <hex>` is a DIRECT lookup: even with a --since window that would exclude the
+    // agent's trigger time AND a --kind that does not match, the grab still resolves.
+    let h = populated_home();
+    // aaa111 is a builtin-task triggered ~05:00; this window + kind would normally exclude it.
+    let out = h.run(&[
+        "agents",
+        "--session",
+        SESS,
+        "--agent",
+        "aaa111",
+        "--since",
+        "2026-06-08T00:00:00Z",
+        "--kind",
+        "workflow",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("aaa111"),
+        "direct --agent lookup must bypass time/kind filters: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn agents_bad_hex_errors_with_discovery_guidance() {
+    // A typo'd / non-existent --agent hex is a HARD error (non-zero) with discovery
+    // guidance — NOT the ambiguous `no subagents found` that a zero-subagent session prints.
+    let h = populated_home();
+    let out = h.run(&["agents", "--session", SESS, "--agent", "deadbeefcafe"]);
+    assert!(!out.success, "a bad hex must be a hard error");
+    assert!(
+        out.stderr.contains("no subagent matched") && out.stderr.contains("agents --session"),
+        "error must name the bad id + the discovery path; stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn agents_agent_with_tree_renders_single_node_not_whole_workflow() {
+    // `--agent <hex> --tree`: the single-node grab wins; the whole workflow tree is NOT
+    // dumped. bbb222 is in workflow wf_abc alongside no other agent here, but the grab must
+    // render bbb222 and NOT the WORKFLOW run header.
+    let h = populated_home();
+    let out = h.run(&["agents", "--session", SESS, "--agent", "bbb222", "--tree"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("bbb222"),
+        "node grabbed: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("WORKFLOW"),
+        "--agent must suppress the whole-workflow tree: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn agents_rejects_subagent_span_flags_with_pointed_error() {
+    // `agents --no-subagents` (a flag it does not have) is rejected with a pointed message,
+    // NOT swallowed as a bogus PATH value by allow_hyphen_values.
+    let h = populated_home();
+    let out = h.run(&["agents", "--session", SESS, "--no-subagents"]);
+    assert!(!out.success, "the no-op span flag must error");
+    assert!(
+        out.stderr.contains("no --include-subagents") || out.stderr.contains("no subagent-span"),
+        "stderr should explain agents has no span flag; got: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn agents_json_rows() {
     let h = populated_home();
     let out = h.run(&["agents", "--session", SESS, "--format", "json"]);
@@ -2385,6 +2458,82 @@ fn files_subagents_only_returns_set_difference() {
         !sub.stdout.contains("/parent/p.md"),
         "--subagents-only must exclude the parent file: {}",
         sub.stdout
+    );
+}
+
+#[test]
+fn files_timeline_json_marks_subagent_rows_with_refeedable_parent() {
+    // The timeline JSON discriminates the id-domain: a subagent row carries is_subagent=true
+    // + the re-feedable parent uuid; a top-level row carries is_subagent=false and
+    // parent_session_id == session_id (so a consumer can always `csift turns <parent>`).
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["files", "--session", SESS, "--timeline", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let parent_row = objs
+        .iter()
+        .find(|o| o["path"] == "/parent/p.md")
+        .expect("parent row present");
+    assert_eq!(parent_row["is_subagent"], serde_json::json!(false));
+    assert_eq!(parent_row["session_id"], serde_json::json!(SESS));
+    assert_eq!(parent_row["parent_session_id"], serde_json::json!(SESS));
+
+    let sub_row = objs
+        .iter()
+        .find(|o| o["path"] == "/sub/s.md")
+        .expect("subagent row present");
+    assert_eq!(sub_row["is_subagent"], serde_json::json!(true));
+    assert_eq!(sub_row["session_id"], serde_json::json!("sub111"));
+    // The hex session_id is NOT re-feedable; the parent uuid IS.
+    assert_eq!(sub_row["parent_session_id"], serde_json::json!(SESS));
+}
+
+#[test]
+fn search_subagent_hit_json_marks_refeedable_parent() {
+    // A search hit inside a subagent transcript: JSON carries is_subagent + the re-feedable
+    // parent uuid (the bare-hex session_id is not a --session target).
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    // The subagent's user seed contains "write a file".
+    let out = h.run(&[
+        "search",
+        "write a file",
+        "--session",
+        SESS,
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs = json_lines(&out.stdout);
+    let sub = objs
+        .iter()
+        .find(|o| o["is_subagent"] == serde_json::json!(true))
+        .expect("a subagent hit present");
+    assert_eq!(sub["session_id"], serde_json::json!("sub111"));
+    assert_eq!(sub["parent_session_id"], serde_json::json!(SESS));
+}
+
+#[test]
+fn search_lone_uuid_routes_to_session_scope() {
+    // `search <uuid>` (sole positional) scopes to that session (parity with `files <uuid>`)
+    // rather than regex-searching the uuid string across every project. The fixture's
+    // top-level turn contains "go"; scoping to the uuid + an empty pattern returns its turns.
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["search", SESS]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The scope note is emitted on stderr.
+    assert!(
+        out.stderr.contains("is a session id, not a pattern"),
+        "expected the scope-routing note; stderr: {}",
+        out.stderr
+    );
+    // And the session's own content is returned (empty pattern = pure filter over scope).
+    assert!(
+        out.stdout.contains("SESSION") || out.stdout.contains("SUBAGENT"),
+        "scoped search should return the session's exchanges: {}",
+        out.stdout
     );
 }
 
@@ -5666,8 +5815,10 @@ fn turns_clean_session_reports_no_skipped_lines() {
 }
 
 #[test]
-fn turns_json_clean_session_has_no_skipped_record() {
-    // JSON: a clean session emits no {"kind":"skipped_lines"} record.
+fn turns_json_clean_session_emits_zero_skipped_terminator() {
+    // JSON: a clean session now ALWAYS closes with a {"kind":"skipped_lines",
+    // "skipped_lines":0} terminator (so a consumer can detect end-of-stream) — the record is
+    // unconditional, mirroring search/files/recover.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-000000000004";
     let mut s = String::new();
@@ -5688,10 +5839,11 @@ fn turns_json_clean_session_has_no_skipped_record() {
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
-    assert!(
-        !objs.iter().any(|o| o["kind"] == "skipped_lines"),
-        "no skipped_lines record for a clean session"
-    );
+    let term = objs
+        .iter()
+        .find(|o| o["kind"] == "skipped_lines")
+        .expect("clean session still emits the skipped_lines terminator");
+    assert_eq!(term["skipped_lines"].as_u64().unwrap(), 0);
     assert!(objs.iter().any(|o| o["role"] == "user"));
 }
 
@@ -5733,8 +5885,8 @@ fn turns_json_main_fixture_has_skipped_record() {
     let objs = json_lines(&out.stdout);
     assert!(
         objs.iter()
-            .any(|o| o["kind"] == "skipped_lines" && o["count"].as_u64().unwrap() >= 1),
-        "the malformed line is surfaced in JSON"
+            .any(|o| o["kind"] == "skipped_lines" && o["skipped_lines"].as_u64().unwrap() >= 1),
+        "the malformed line is surfaced in JSON under the `skipped_lines` key"
     );
 }
 
