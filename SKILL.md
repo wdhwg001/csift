@@ -281,7 +281,7 @@ If `whoami` errors that `CLAUDE_CODE_SESSION_ID is not set`, install the remedia
 ### `files` — which files/dirs a session modified
 
 ```
-csift files [PATH...] [--session ID] [--no-subagents]
+csift files [PATH...] [--session ID] [--no-subagents | --subagents-only]
             [--summary | --by-dir | --by-file | --timeline]
             [--turn-range START..END] [--since WHEN] [--until WHEN] [--format text|json]
 ```
@@ -293,9 +293,21 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
 - **Authoritative** — `Edit` / `Write` / `MultiEdit` (`input.file_path`) + `NotebookEdit`
   (`input.notebook_path`). create-vs-edit is resolved from the paired `tool_result`
   (`toolUseResult.type == "create"` = a new file).
-- **Heuristic** — `Bash` file mutations, parsed **lexically** from the command string
-  (`rm`/`mv`/`cp`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/redirection). Bash carries no path field in
-  its result, so these are best-effort and **always labelled `(heuristic)`**.
+- **Heuristic** — `Bash` file mutations, parsed **lexically** from the command string. Covers the
+  verb allowlist (`rm`/`mv`/`cp`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/`dd of=`/`zip`), plain **and
+  fd-qualified** redirects (`>`/`>>`, plus `2>`/`1>`/`&>` and their appends — a `2>&1` fd-dup and
+  `/dev/null` sinks are correctly ignored), `curl`/`wget` output flags (`-o`/`-O`/`--output`), and
+  allowlisted flag outputs (`--junit-xml=`/`--junitxml=`/`--report-path`/…). Only **concrete,
+  resolvable** paths are emitted — an unexpandable `$VAR` pseudo-path is dropped, never fabricated.
+  **Known limitation:** a write inside an embedded-language body (a heredoc, or `python -c
+  "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser, so such writes are
+  missed (but never mis-reported). Bash carries no path field in its result, so all of the above are
+  best-effort and **always labelled `(heuristic)`**.
+
+**Subagent scope** (mutually exclusive): default spans subagents; `--no-subagents` reports only the
+top-level session's own mutations; `--subagents-only` is the **complement** — only the files the
+session's subagents created/modified, with the top-level session excluded (one command for the
+"what did the fan-out touch?" set-difference that previously needed two runs).
 
 Exactly one **detail level** applies (mutually exclusive; default `--summary`):
 
@@ -312,6 +324,7 @@ Examples:
 ```bash
 csift files <uuid>                          # default summary: per-top-level-dir op rollup
 csift files <uuid> --by-file                # per-file op counts + first/last touch
+csift files <uuid> --subagents-only --by-file   # ONLY what the session's subagents touched
 csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
 csift files . --format json --by-dir        # machine-readable per-dir rollup
 ```

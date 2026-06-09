@@ -72,9 +72,10 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    // ── Resolve targets → session files (spanning subagents by default) ──
+    // ── Resolve targets → session files (subagent span per --no-subagents /
+    //    --subagents-only; default spans subagents) ──
     let session_files =
-        path::resolve_session_files(&args.paths, args.session.as_deref(), args.want_subagents())?;
+        path::resolve_session_files(&args.paths, args.session.as_deref(), args.scope())?;
 
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<FileResult> = session_files
@@ -209,17 +210,38 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
         }
         if let Some(cmd) = rec.bash_command() {
             for bm in parse_bash_mutations(cmd) {
-                let is_create = matches!(bm.verb, "mkdir" | "touch" | "tee" | ">" | "cp" | "mv");
                 out.push(FileMutation {
                     path: bm.path,
                     op: FileOp::BashMutation,
                     timestamp_utc: rec.timestamp.clone(),
-                    is_create,
+                    is_create: bash_verb_is_create(bm.verb),
                 });
             }
         }
     }
     out
+}
+
+/// Heuristic create-vs-touch guess for a Bash mutation verb. A verb that names a fresh
+/// output target (`>` truncate, `mkdir`/`touch`/`tee`/`cp`/`mv` dest, a download to a
+/// path, a `dd`/`zip`/flag-specified output) is treated as a create; an append (`>>`),
+/// `rm`, `sed -i`, `mv-from`, and `git` are NOT. Lexical-only, so it is just a heuristic
+/// (its `FileOp::BashMutation` is_heuristic() gates the label everywhere).
+fn bash_verb_is_create(verb: &str) -> bool {
+    matches!(
+        verb,
+        "mkdir"
+            | "touch"
+            | "tee"
+            | ">"
+            | "cp"
+            | "mv"
+            | "curl"
+            | "wget"
+            | "dd"
+            | "zip"
+            | "flag-output"
+    )
 }
 
 /// Delimit turns over the parsed records, then for each turn extract structured + Bash
@@ -264,8 +286,6 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
             // Bash (heuristic) mutations.
             if let Some(cmd) = rec.bash_command() {
                 for bm in parse_bash_mutations(cmd) {
-                    let is_create =
-                        matches!(bm.verb, "mkdir" | "touch" | "tee" | ">" | "cp" | "mv");
                     out.push(TaggedMutation {
                         session_id: session_id.to_string(),
                         turn_index,
@@ -275,7 +295,7 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
                             timestamp_utc: rec.timestamp.clone(),
                             // Bash create-vs-overwrite is NOT knowable lexically — this is
                             // a heuristic flag; the op's is_heuristic() gates the label.
-                            is_create,
+                            is_create: bash_verb_is_create(bm.verb),
                         },
                     });
                 }

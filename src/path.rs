@@ -210,26 +210,60 @@ pub fn all_project_dirs() -> Result<Vec<ProjectDir>> {
     Ok(dirs)
 }
 
-/// Resolve `--path` targets (+ optional `--session`) into the concrete, sorted,
-/// de-duplicated list of top-level session `*.jsonl` files to operate on, optionally
-/// spanning each session's SUBAGENT transcripts.
+/// Whether a session-file resolution spans subagent transcripts, and how.
 ///
-/// This is the SINGLE shared target resolver for `search` / `agents` / `files` (each
-/// previously carried a near-identical copy): 0 `paths` ⇒ every project under the
-/// projects root; a `--session` restricts to the parent session whose jsonl basename
-/// matches. When `include_subagents` is set, each selected top-level session's subagent
-/// transcripts (built-in Task/Agent-tool + workflow / OMC agents under `subagents/**`)
-/// are appended so a session-scoped operation also covers work a subagent performed;
-/// workflow `journal.jsonl` event logs are never transcripts and are excluded (see
-/// [`crate::subagent::subagent_transcript_files`]).
+/// `search` / `agents` / `recover` / `turns` / `list` only ever need the two-state
+/// include/exclude decision (built from a `--no-subagents` bool via `From<bool>`).
+/// `files` additionally offers `--subagents-only`, the COMPLEMENT of `--no-subagents`:
+/// dump ONLY the files a session's subagents touched, with the top-level session's own
+/// `<uuid>.jsonl` excluded — previously reachable only by a two-run set-difference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubagentScope {
+    /// Top-level session jsonl(s) PLUS each one's subagent transcripts (the default).
+    WithSubagents,
+    /// Only the top-level `<uuid>.jsonl` session(s); no subagent transcripts.
+    TopLevelOnly,
+    /// Only the subagent transcripts; the top-level `<uuid>.jsonl` itself is excluded.
+    SubagentsOnly,
+}
+
+impl From<bool> for SubagentScope {
+    /// `true` (the historical `include_subagents`) ⇒ `WithSubagents`; `false` ⇒
+    /// `TopLevelOnly`. There is no bool that maps to `SubagentsOnly` — that mode is
+    /// only reachable by constructing the variant directly (the `files` surface).
+    fn from(include_subagents: bool) -> Self {
+        if include_subagents {
+            SubagentScope::WithSubagents
+        } else {
+            SubagentScope::TopLevelOnly
+        }
+    }
+}
+
+/// Resolve `--path` targets (+ optional `--session`) into the concrete, sorted,
+/// de-duplicated list of session `*.jsonl` files to operate on, with the subagent span
+/// governed by `scope`.
+///
+/// This is the SINGLE shared target resolver for `search` / `agents` / `files` /
+/// `recover` / `turns` (each previously carried a near-identical copy): 0 `paths` ⇒
+/// every project under the projects root; a `--session` restricts to the parent session
+/// whose jsonl basename matches. The subagent transcripts of a selected session (built-in
+/// Task/Agent-tool + workflow / OMC agents under `subagents/**`) are gathered from the
+/// already-`--session`-filtered top-level set; workflow `journal.jsonl` event logs are
+/// never transcripts and are excluded (see [`crate::subagent::subagent_transcript_files`]).
+/// Per [`SubagentScope`]:
+/// - `WithSubagents` — top-level session(s) + their subagents (the default).
+/// - `TopLevelOnly` — only the top-level `<uuid>.jsonl` session(s).
+/// - `SubagentsOnly` — only the subagent transcripts (the top-level jsonl is dropped).
 ///
 /// Bails (never returns an empty silent result) when a `--session` was given but no
-/// matching file exists under the resolved target(s). With no `--session`, an empty
+/// matching file exists under the resolved target(s) — in `SubagentsOnly` this fires
+/// when the session exists but spawned no subagents. With no `--session`, an empty
 /// result is allowed (the caller renders an honest "nothing found").
 pub fn resolve_session_files(
     paths: &[std::path::PathBuf],
     session: Option<&str>,
-    include_subagents: bool,
+    scope: SubagentScope,
 ) -> Result<Vec<PathBuf>> {
     let dirs: Vec<ProjectDir> = if paths.is_empty() {
         all_project_dirs()?
@@ -241,7 +275,11 @@ pub fn resolve_session_files(
         d
     };
 
-    let mut files: Vec<PathBuf> = Vec::new();
+    // The top-level `<uuid>.jsonl` session files (after the optional --session filter).
+    // These ALWAYS drive subagent discovery — even in `SubagentsOnly`, where they are
+    // not themselves emitted — so the `--session` restriction still selects the right
+    // parent whose subagents to dump.
+    let mut top_level: Vec<PathBuf> = Vec::new();
     for pd in &dirs {
         let read = match std::fs::read_dir(&pd.dir) {
             Ok(r) => r,
@@ -258,21 +296,31 @@ pub fn resolve_session_files(
                         continue;
                     }
                 }
-                files.push(p);
+                top_level.push(p);
             }
         }
     }
 
-    // The --session restriction applies to the PARENT session (the top-level jsonl
-    // basename). Subagent transcripts of a selected session are still in scope — they
-    // belong to it — so they are gathered from the already-filtered `files` set.
-    if include_subagents {
-        let mut sub_files: Vec<PathBuf> = Vec::new();
-        for sf in &files {
+    // Subagent transcripts of each selected top-level session (empty unless the scope
+    // asks for them). The --session restriction already applied to the parent above.
+    let mut sub_files: Vec<PathBuf> = Vec::new();
+    if matches!(
+        scope,
+        SubagentScope::WithSubagents | SubagentScope::SubagentsOnly
+    ) {
+        for sf in &top_level {
             sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
         }
-        files.extend(sub_files);
     }
+
+    let mut files: Vec<PathBuf> = match scope {
+        SubagentScope::TopLevelOnly => top_level,
+        SubagentScope::SubagentsOnly => sub_files,
+        SubagentScope::WithSubagents => {
+            top_level.extend(sub_files);
+            top_level
+        }
+    };
 
     files.sort();
     files.dedup();

@@ -423,8 +423,11 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    let session_files =
-        path::resolve_session_files(&args.paths, args.session.as_deref(), args.want_subagents())?;
+    let session_files = path::resolve_session_files(
+        &args.paths,
+        args.session.as_deref(),
+        args.want_subagents().into(),
+    )?;
 
     // Parallel scan across files (default rayon pool = CPU count).
     let per_file: Vec<ScanResult> = session_files

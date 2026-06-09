@@ -656,7 +656,11 @@ pub enum FilesDetail {
           --timeline  full chronological list, one line per mutation (HEAVY — opt-in only)\n\n\
         The TARGET selects the session(s): `--session <uuid>` for one, or a project \
         PATH/encoded-dir for every session under it; with neither, all projects are \
-        scanned. `--no-subagents` restricts to the top-level session.\n\n\
+        scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
+        in subagents): `--no-subagents` restricts to the TOP-LEVEL session only; \
+        `--subagents-only` is its COMPLEMENT — ONLY the files the session's subagents \
+        touched, with the top-level session's own mutations excluded (one command for \
+        the subagent set-difference). The two are mutually exclusive.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on genuine-user order) \
         is mutually exclusive with `--since`/`--until`. Time bounds accept ISO8601 \
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
@@ -666,6 +670,7 @@ pub enum FilesDetail {
     after_help = "EXAMPLES\n  \
           csift files <uuid>                          # default summary: per-top-level-dir op rollup\n  \
           csift files <uuid> --by-file                # per-file op counts + first/last touch\n  \
+          csift files <uuid> --subagents-only --by-file   # ONLY files the session's subagents touched\n  \
           csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)\n  \
           csift files . --format json --by-dir        # machine-readable per-dir rollup\n\n\
         ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
@@ -699,9 +704,18 @@ pub struct FilesArgs {
     pub include_subagents: bool,
 
     /// Exclude subagent transcripts — report only the top-level `<uuid>.jsonl`
-    /// session's mutations. Overrides `--include-subagents`.
-    #[arg(long = "no-subagents")]
+    /// session's mutations. Overrides `--include-subagents`. Mutually exclusive with
+    /// `--subagents-only`.
+    #[arg(long = "no-subagents", group = "subagent_scope")]
     pub no_subagents: bool,
+
+    /// The COMPLEMENT of `--no-subagents`: report ONLY files the session's SUBAGENTS
+    /// created/modified, with the top-level session's own mutations excluded. One
+    /// command for "what did the fan-out subagents touch?" — previously reachable only
+    /// as a two-run set-difference (default minus `--no-subagents`). Mutually exclusive
+    /// with `--no-subagents`.
+    #[arg(long = "subagents-only", group = "subagent_scope")]
+    pub subagents_only: bool,
 
     /// DEFAULT detail level: compact per-top-level-dir op rollup (the smallest output).
     #[arg(long, group = "detail")]
@@ -739,10 +753,21 @@ pub struct FilesArgs {
 }
 
 impl FilesArgs {
-    /// Resolve the include/exclude flags into a single decision (default include).
+    /// Resolve the three subagent-span flags into a single [`SubagentScope`]. clap's
+    /// `group = "subagent_scope"` (multiple=false) rejects `--no-subagents` AND
+    /// `--subagents-only` together at parse time, so at most one is set:
+    /// `--subagents-only` ⇒ `SubagentsOnly`; `--no-subagents` ⇒ `TopLevelOnly`; neither
+    /// ⇒ the default `WithSubagents`.
     #[must_use]
-    pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+    pub fn scope(&self) -> crate::path::SubagentScope {
+        use crate::path::SubagentScope;
+        if self.subagents_only {
+            SubagentScope::SubagentsOnly
+        } else if self.no_subagents {
+            SubagentScope::TopLevelOnly
+        } else {
+            SubagentScope::WithSubagents
+        }
     }
 
     /// Resolve the four detail-level bool flags into the active [`FilesDetail`]. clap's
@@ -1512,7 +1537,11 @@ mod tests {
         match cli.command {
             Command::Files(a) => {
                 assert_eq!(a.detail(), FilesDetail::Summary, "default is summary");
-                assert!(a.want_subagents(), "subagents spanned by default");
+                assert_eq!(
+                    a.scope(),
+                    crate::path::SubagentScope::WithSubagents,
+                    "subagents spanned by default"
+                );
                 assert_eq!(a.session.as_deref(), Some("abc"));
             }
             _ => panic!("expected files"),
@@ -1565,9 +1594,29 @@ mod tests {
     fn files_no_subagents_excludes() {
         let cli = parse(&["csift", "files", ".", "--no-subagents"]).unwrap();
         match cli.command {
-            Command::Files(a) => assert!(!a.want_subagents()),
+            Command::Files(a) => {
+                assert_eq!(a.scope(), crate::path::SubagentScope::TopLevelOnly)
+            }
             _ => panic!("expected files"),
         }
+    }
+
+    #[test]
+    fn files_subagents_only_scope() {
+        let cli = parse(&["csift", "files", ".", "--subagents-only"]).unwrap();
+        match cli.command {
+            Command::Files(a) => {
+                assert_eq!(a.scope(), crate::path::SubagentScope::SubagentsOnly)
+            }
+            _ => panic!("expected files"),
+        }
+    }
+
+    #[test]
+    fn files_no_subagents_and_subagents_only_conflict() {
+        // The clap `group = "subagent_scope"` (multiple=false) rejects both together.
+        let err = parse(&["csift", "files", ".", "--no-subagents", "--subagents-only"]);
+        assert!(err.is_err(), "the two subagent-scope flags must conflict");
     }
 
     #[test]

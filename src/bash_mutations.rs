@@ -14,6 +14,39 @@
 //! [`crate::model::FileOp::is_heuristic`]. Relative paths are reported VERBATIM (the
 //! session's cwd at command time is not reliably known, so absolutizing would
 //! fabricate a path).
+//!
+//! ## What it catches (recall)
+//!
+//! Beyond the verb allowlist (`rm`/`mkdir`/`touch`/`tee`/`cp`/`mv`/`sed -i`/`git`) and
+//! plain `>`/`>>` redirects, it also reads:
+//! - **fd-qualified redirects** — `2>`/`1>`/`&>` (+ `>>` forms), attached (`2>/tmp/x`)
+//!   and spaced (`2> /tmp/x`); a bare `2>&1` fd-dup and `/dev/null|stderr|stdout` sinks
+//!   are NOT paths and are skipped.
+//! - **`curl`/`wget` output flags** — `-o <path>` / `--output <path>` / `--output=…`
+//!   (and `wget -O <path>`). A `curl -O` that derives the name from the URL has no
+//!   deterministic local path and is skipped.
+//! - **flag-specified outputs** — `--<name>=<path>` / `--<name> <path>` for a small
+//!   allowlist (`junit-xml`, `junitxml`, `report-path`, `output`, `out-file`, …),
+//!   `dd of=<path>`, and a `zip <dest>` archive.
+//!
+//! ## Precision contract (no fabricated rows)
+//!
+//! Only a **concrete, resolvable** path is ever emitted. A token that does not name a
+//! real path is DROPPED, never surfaced as a noisy pseudo-row: an unresolved `$VAR` /
+//! `${VAR}` / `~`-or-`$()`-bearing token (we cannot expand it, so a row would be a
+//! fabricated path), a `/dev/null`-class sink, and a mis-parsed redirect tail all yield
+//! nothing. (Globs like `*.tmp` remain the one informative non-concrete exception, kept
+//! verbatim, because they still name a real touched set and the heuristic label is
+//! explicit.) The `git:<sub>` coarse pseudo-path is intentional and unaffected.
+//!
+//! ## Out of scope (documented limitation)
+//!
+//! Write calls inside an EMBEDDED-LANGUAGE body are NOT parsed — a heredoc
+//! (`python3 - <<'PY' … PY`), an inline `python3 -c "open('/tmp/x','w')…"`, a `Path(…)
+//! .write_text(…)`, etc. This is a deliberate limit of a lexical (non-shell, non-Python)
+//! parser: the body is opaque command TEXT, and reliably parsing arbitrary embedded code
+//! is out of scope. Such writes are missed (a recall gap), but the precision contract
+//! above guarantees they never produce a WRONG row.
 
 /// One heuristically-detected Bash file mutation. `verb` is from the fixed allowlist
 /// below (it is the lexical command/operator that touched the path), and `path` is the
@@ -91,8 +124,13 @@ fn parse_segment(segment: &str, out: &mut Vec<BashMutation>) {
         return;
     }
 
-    // Redirection targets (`>`/`>>`) can appear after any command; scan all tokens.
+    // Redirection targets (`>`/`>>`, incl. fd-qualified `2>`/`1>`/`&>`) can appear after
+    // ANY command; scan all tokens.
     collect_redirections(&tokens, out);
+
+    // Output-path FLAGS (`--junit-xml=…`, `--report-path …`) can likewise appear under
+    // any command, so scan every segment for the allowlisted output flags.
+    collect_flag_outputs(&tokens, out);
 
     // Strip leading `sudo` and `env VAR=val` prefixes to find the real command verb.
     let cmd_tokens = strip_prefixes(&tokens);
@@ -109,6 +147,10 @@ fn parse_segment(segment: &str, out: &mut Vec<BashMutation>) {
         "mv" => emit_mv(operands, out),
         "sed" => emit_sed(operands, out),
         "git" => emit_git(operands, out),
+        "curl" => emit_download_output(operands, "curl", out),
+        "wget" => emit_download_output(operands, "wget", out),
+        "dd" => emit_dd(operands, out),
+        "zip" => emit_zip(operands, out),
         _ => {}
     }
 }
@@ -176,36 +218,50 @@ fn strip_input_redirects<'a>(operands: &[&'a str]) -> Vec<&'a str> {
     out
 }
 
-/// Emit only the LAST non-flag operand (the destination of `cp`).
+/// The positional non-flag, non-input-redirect operand TOKENS, in order. Unlike a
+/// `filter_map(path_operand)` collapse, this preserves POSITION across a token that
+/// `path_operand` will later drop (a `$VAR` pseudo-path), so `cp`/`mv` can identify the
+/// destination POSITIONALLY (the last token) and validate THAT token — instead of
+/// silently promoting an earlier source to "destination" when the real dest is dropped.
+fn non_flag_operands<'a>(operands: &[&'a str]) -> Vec<&'a str> {
+    strip_input_redirects(operands)
+        .into_iter()
+        .filter(|t| !t.starts_with('-'))
+        .collect()
+}
+
+/// Emit only the destination of `cp` — the LAST positional operand. Validating that
+/// specific token (not "the last token that happens to be a valid path") means a `cp src
+/// $DEST/x` whose real destination is an unexpandable `$VAR` emits NOTHING, rather than
+/// wrongly reporting `src` as the destination.
 fn emit_last_operand(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutation>) {
-    let kept = strip_input_redirects(operands);
-    let paths: Vec<String> = kept.iter().filter_map(|o| path_operand(o)).collect();
-    if let Some(dest) = paths.last() {
-        out.push(BashMutation {
-            path: dest.clone(),
-            verb,
-        });
+    let positional = non_flag_operands(operands);
+    if let Some(dest_tok) = positional.last() {
+        if let Some(path) = path_operand(dest_tok) {
+            out.push(BashMutation { path, verb });
+        }
     }
 }
 
-/// `mv` — the last operand is the destination (created/overwritten); earlier operands
-/// are sources (moved-from). Emit the destination as `mv` and, with 2+ operands, each
-/// source as `mv-from`.
+/// `mv` — the LAST positional operand is the destination (created/overwritten); earlier
+/// positionals are sources (moved-from). The destination is taken POSITIONALLY then
+/// validated, so a dropped `$VAR` destination suppresses only the `mv` dest row (the
+/// real source moves are still reported as `mv-from`).
 fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
-    let kept = strip_input_redirects(operands);
-    let paths: Vec<String> = kept.iter().filter_map(|o| path_operand(o)).collect();
-    let Some((dest, sources)) = paths.split_last() else {
+    let positional = non_flag_operands(operands);
+    let Some((dest_tok, source_toks)) = positional.split_last() else {
         return;
     };
-    out.push(BashMutation {
-        path: dest.clone(),
-        verb: "mv",
-    });
-    for src in sources {
-        out.push(BashMutation {
-            path: src.clone(),
-            verb: "mv-from",
-        });
+    if let Some(path) = path_operand(dest_tok) {
+        out.push(BashMutation { path, verb: "mv" });
+    }
+    for src in source_toks {
+        if let Some(path) = path_operand(src) {
+            out.push(BashMutation {
+                path,
+                verb: "mv-from",
+            });
+        }
     }
 }
 
@@ -277,30 +333,157 @@ fn git_subcommand<'a>(operands: &[&'a str]) -> Option<&'a str> {
     None
 }
 
-/// Collect `>`/`>>` redirection targets from a token list. Handles both the spaced
-/// form (`cmd > file`) and the attached form (`cmd >file` / `cmd >>file`). The token
-/// FOLLOWING a bare `>`/`>>`, or the suffix of an attached `>file`, is the written path.
+/// The output-flag NAMES (without the leading `--`) whose value is a written path. Kept
+/// CONSERVATIVE so a flag whose value is NOT a path (a number, a format name) is never
+/// misread as a creation. Matched both as `--name=<path>` and `--name <path>`.
+const OUTPUT_FLAGS: &[&str] = &[
+    "junit-xml",
+    "junitxml",
+    "report-path",
+    "output",
+    "out-file",
+    "outfile",
+    "out",
+    "logfile",
+    "log-file",
+];
+
+/// `curl`/`wget` write to a LOCAL path only via an explicit output flag: `-o <path>`,
+/// `--output <path>`/`--output=<path>` (curl + wget), or `wget -O <path>`. A `curl -O`
+/// (uppercase, no path arg — the name is derived from the URL) has NO deterministic
+/// local path, so it is intentionally skipped. The destination is emitted under the
+/// download verb (`curl`/`wget`), is_create true.
+fn emit_download_output(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutation>) {
+    // The long `--output` / `--output=` forms are owned by the generic
+    // [`collect_flag_outputs`] scan (which runs on EVERY segment, `output` is in its
+    // allowlist), so this arm handles ONLY the SHORT flags the generic `--name` scan
+    // cannot see: curl `-o <path>`, and wget `-O <path>` / `--output-document <path>`.
+    // (curl's `-O` derives the name from the URL → no deterministic local path → skip.)
+    let mut i = 0usize;
+    while i < operands.len() {
+        let tok = operands[i];
+        let takes_next =
+            tok == "-o" || (verb == "wget" && matches!(tok, "-O" | "--output-document"));
+        if takes_next {
+            if let Some(next) = operands.get(i + 1) {
+                if let Some(path) = path_operand(next) {
+                    out.push(BashMutation { path, verb });
+                }
+                i += 2;
+                continue;
+            }
+        }
+        i += 1;
+    }
+}
+
+/// `dd … of=<path>` — the output file is named by the `of=` operand. `path_operand`
+/// rejects a `KEY=VALUE` token, so `of=` is parsed specially here (its value after the
+/// `=` is the path). `of=/dev/null`-class sinks are dropped.
+fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
+    for op in operands {
+        if let Some(rest) = strip_quotes(op).strip_prefix("of=") {
+            if is_dev_sink(rest) {
+                continue;
+            }
+            // `rest` is a bare path (no KEY=VALUE wrapper now) — concrete-path filter.
+            if let Some(path) = concrete_path(rest) {
+                out.push(BashMutation { path, verb: "dd" });
+            }
+        }
+    }
+}
+
+/// `zip [opts] <dest.zip> <input…>` — the FIRST non-flag operand is the archive being
+/// created/updated (the only path `zip` writes). Later operands are inputs (read), so
+/// only the destination is emitted.
+fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
+    for op in operands {
+        if op.starts_with('-') {
+            continue; // a zip option flag (`-r`, `-9`, …).
+        }
+        if let Some(path) = path_operand(op) {
+            out.push(BashMutation { path, verb: "zip" });
+        }
+        return; // only the first non-flag operand (the archive dest).
+    }
+}
+
+/// Scan every token for an allowlisted output FLAG and emit its path. Two shapes:
+/// `--name=<path>` (inline) and `--name <path>` (the value is the next token). Only the
+/// [`OUTPUT_FLAGS`] names qualify, keeping precision tight. Independent of the segment's
+/// leading verb (a test runner names its report path the same way regardless of verb).
+fn collect_flag_outputs(tokens: &[&str], out: &mut Vec<BashMutation>) {
+    let mut i = 0usize;
+    while i < tokens.len() {
+        let tok = tokens[i];
+        if let Some(name_eq) = tok.strip_prefix("--") {
+            if let Some((name, value)) = name_eq.split_once('=') {
+                // `--name=<path>` inline form.
+                if OUTPUT_FLAGS.contains(&name) {
+                    if let Some(path) = concrete_path(value) {
+                        out.push(BashMutation {
+                            path,
+                            verb: "flag-output",
+                        });
+                    }
+                }
+                i += 1;
+                continue;
+            }
+            // `--name <path>` spaced form: the value is the NEXT token — but only when
+            // that token is NOT itself a flag (so `--output --verbose` does not consume
+            // `--verbose` as a fabricated path and skip a real flag).
+            if OUTPUT_FLAGS.contains(&name_eq) {
+                if let Some(next) = tokens.get(i + 1) {
+                    if !next.starts_with('-') {
+                        if let Some(path) = concrete_path(next) {
+                            out.push(BashMutation {
+                                path,
+                                verb: "flag-output",
+                            });
+                        }
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Collect redirection targets from a token list. Handles the plain (`>`/`>>`) AND the
+/// fd-qualified forms (`2>`, `1>`, `&>`, and their `>>` appends), in both the spaced
+/// (`cmd 2> file`) and attached (`cmd 2>file`) shapes. The token FOLLOWING a bare
+/// operator, or the suffix of an attached `OP file`, is the written path.
+///
+/// A token's optional leading fd qualifier — `&` or a run of ASCII digits — is stripped
+/// BEFORE the `>`/`>>` test, so `2>`, `1>`, `12>`, `&>` all match. A bare `2>&1`-style
+/// fd-DUP (the redirect target is another fd, not a path) and the `/dev/null`-class
+/// sinks carry no real path and emit nothing (handled by [`path_operand`] +
+/// [`is_dev_sink`]).
 fn collect_redirections(tokens: &[&str], out: &mut Vec<BashMutation>) {
     let mut i = 0usize;
     while i < tokens.len() {
         let tok = tokens[i];
-        if tok == ">>" || tok == ">" {
-            let verb = if tok == ">>" { ">>" } else { ">" };
+        // Peel an optional leading fd qualifier (`&` or digits) to expose a `>`/`>>`.
+        let body = strip_fd_qualifier(tok);
+        if body == ">>" || body == ">" {
+            // A bare (possibly fd-qualified) operator: its path is the NEXT token.
+            let verb = if body == ">>" { ">>" } else { ">" };
             if let Some(next) = tokens.get(i + 1) {
-                if let Some(path) = path_operand(next) {
-                    out.push(BashMutation { path, verb });
-                }
+                push_redirect_target(next, verb, out);
             }
             i += 1;
-        } else if let Some(rest) = tok.strip_prefix(">>") {
-            if let Some(path) = path_operand(rest) {
-                out.push(BashMutation { path, verb: ">>" });
-            }
+        } else if let Some(rest) = body.strip_prefix(">>") {
+            // An attached append `…>>file` (incl. `2>>file`); `rest` is the path.
+            push_redirect_target(rest, ">>", out);
             i += 1;
-        } else if let Some(rest) = tok.strip_prefix('>') {
-            if let Some(path) = path_operand(rest) {
-                out.push(BashMutation { path, verb: ">" });
-            }
+        } else if let Some(rest) = body.strip_prefix('>') {
+            // An attached truncate `…>file` (incl. `2>file`, `&>file`); `rest` is the
+            // path. A bare `2>&1` fd-dup leaves `rest = "&1"`, which is not a path.
+            push_redirect_target(rest, ">", out);
             i += 1;
         } else {
             i += 1;
@@ -308,10 +491,57 @@ fn collect_redirections(tokens: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
+/// Strip an optional leading fd qualifier (`&`, or a run of ASCII digits) from a token,
+/// exposing the bare redirect operator/body. `2>` → `>`, `1>>` → `>>`, `&>` → `>`,
+/// `12>file` → `>file`; a token with no such prefix (or `>`/`>>` itself) is returned
+/// unchanged. Only strips when a `>` actually follows the qualifier, so a plain numeric
+/// or `&`-leading token that is NOT a redirect is left intact.
+fn strip_fd_qualifier(tok: &str) -> &str {
+    let bytes = tok.as_bytes();
+    let mut k = 0usize;
+    if bytes.first() == Some(&b'&') {
+        k = 1;
+    } else {
+        while k < bytes.len() && bytes[k].is_ascii_digit() {
+            k += 1;
+        }
+    }
+    // Only treat the prefix as an fd qualifier if a redirect operator follows it AND we
+    // actually consumed something (k>0). `&1`, `2` alone, etc. stay untouched.
+    if k > 0 && bytes.get(k) == Some(&b'>') {
+        &tok[k..]
+    } else {
+        tok
+    }
+}
+
+/// Emit a redirect target if it resolves to a concrete path — dropping a `/dev/null`-
+/// class sink and any fd-dup remnant (`&1`) that `path_operand` rejects.
+fn push_redirect_target(tail: &str, verb: &'static str, out: &mut Vec<BashMutation>) {
+    if is_dev_sink(tail) || tail.starts_with('&') {
+        return; // a discard sink or an fd-dup (`>&1`/`2>&1`): no real path written.
+    }
+    if let Some(path) = path_operand(tail) {
+        out.push(BashMutation { path, verb });
+    }
+}
+
+/// True for a redirect sink that is NOT a real created file: `/dev/null`, `/dev/stderr`,
+/// `/dev/stdout` (and their quote-stripped forms). These are ubiquitous noise targets.
+fn is_dev_sink(tail: &str) -> bool {
+    matches!(
+        strip_quotes(tail),
+        "/dev/null" | "/dev/stderr" | "/dev/stdout"
+    )
+}
+
 /// Normalize a single operand to a reported path, or `None` when it is not a path:
 /// strip surrounding quotes; reject options (`-…`), `KEY=VALUE` operands, an empty
-/// token, and a bare `-` (stdin/stdout). A glob we cannot expand (`*.tmp`) is KEPT
-/// verbatim — it is still informative and the heuristic label makes that clear.
+/// token, a bare `-` (stdin/stdout), and an UNRESOLVED-variable pseudo-path (any token
+/// bearing a `$`, e.g. `$OUT`, `${DIR}/x`, `/tmp/$run.log` — we cannot expand it, so a
+/// row would fabricate a path; precision rule, dropped). A glob we cannot expand
+/// (`*.tmp`) is KEPT verbatim — it still names a real touched set and the heuristic
+/// label makes that clear.
 fn path_operand(token: &str) -> Option<String> {
     let stripped = strip_quotes(token);
     if stripped.is_empty() || stripped == "-" {
@@ -323,7 +553,30 @@ fn path_operand(token: &str) -> Option<String> {
     if is_assignment(stripped) {
         return None; // a KEY=VALUE operand, not a path.
     }
+    if has_unresolved_var(stripped) {
+        return None; // an unexpandable `$VAR` pseudo-path — never fabricate it.
+    }
     Some(stripped.to_string())
+}
+
+/// Stricter sibling of [`path_operand`] for the precision-sensitive NEW emitters
+/// (`--flag=<path>`, `dd of=`, `curl -o`): in addition to every [`path_operand`]
+/// rejection, it ALSO drops a glob (`*`/`?`/`[`) — those output paths are written by a
+/// single tool to ONE concrete destination, so a wildcard there is a parse artifact,
+/// not a real touched set. Returns only a concrete, resolvable path.
+fn concrete_path(token: &str) -> Option<String> {
+    let path = path_operand(token)?;
+    if path.contains(['*', '?', '[']) {
+        return None; // a glob is not a concrete single destination here.
+    }
+    Some(path)
+}
+
+/// True when a token carries an UNRESOLVED shell variable reference (`$NAME`,
+/// `${NAME}`, `$1`, …) we cannot expand. Such a token can never be turned into a real
+/// path without the runtime environment, so emitting it would fabricate a pseudo-path.
+fn has_unresolved_var(token: &str) -> bool {
+    token.contains('$')
 }
 
 /// Strip a single matched pair of surrounding single or double quotes.
@@ -612,5 +865,315 @@ mod tests {
         assert!(!is_assignment("-flag"));
         assert!(!is_assignment("=noname"));
         assert!(!is_assignment("plain"));
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Regression oracle: the synthetic IDIOM MATRIX from the files-attribution
+    // verdict (csift-files-attribution-verdict.md). Every idiom the verdict marked
+    // CAUGHT must stay caught; every idiom it marked MISSED (Fixes A–C) must now be
+    // caught; the precision cases (Fix D) must stay DROPPED.
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /// Convenience: the set of just the PATHS a command yields (verb-agnostic), for
+    /// idiom tests that only care that the destination surfaced.
+    fn just_paths(cmd: &str) -> Vec<String> {
+        parse_bash_mutations(cmd)
+            .into_iter()
+            .map(|m| m.path)
+            .collect()
+    }
+
+    // ── Fix A — fd-qualified redirects (the dominant previously-missed class) ──
+
+    #[test]
+    fn fd_stderr_redirect_attached_and_spaced() {
+        // `2>/tmp/x.err` (attached) and `2> /tmp/x.err` (spaced) both caught, verb ">".
+        assert_eq!(
+            paths("pytest 2>/tmp/x.err"),
+            vec![("/tmp/x.err".to_string(), ">")]
+        );
+        assert_eq!(
+            paths("pytest 2> /tmp/x.err"),
+            vec![("/tmp/x.err".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn fd_stdout_redirect_one_caught() {
+        // `1>/tmp/x.log` — the stdout fd-redirect form.
+        assert_eq!(
+            paths("pytest 1>/tmp/x.log"),
+            vec![("/tmp/x.log".to_string(), ">")]
+        );
+        assert_eq!(
+            paths("pytest 1> /tmp/x.log"),
+            vec![("/tmp/x.log".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn fd_ampersand_redirect_caught() {
+        // `&>/tmp/x.log` — both-streams redirect (attached + spaced).
+        assert_eq!(
+            paths("make &>/tmp/x.log"),
+            vec![("/tmp/x.log".to_string(), ">")]
+        );
+        assert_eq!(
+            paths("make &> /tmp/x.log"),
+            vec![("/tmp/x.log".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn fd_both_streams_to_two_paths() {
+        // `x 1>/tmp/o.log 2>/tmp/e.err` → BOTH paths caught.
+        let got = just_paths("x 1>/tmp/o.log 2>/tmp/e.err");
+        assert!(got.contains(&"/tmp/o.log".to_string()), "got: {got:?}");
+        assert!(got.contains(&"/tmp/e.err".to_string()), "got: {got:?}");
+        assert_eq!(got.len(), 2, "exactly the two redirect targets: {got:?}");
+    }
+
+    #[test]
+    fn fd_append_redirects_caught() {
+        // `2>>/tmp/e.err` and `&>>/tmp/x.log` — the fd-qualified APPEND forms, verb ">>".
+        assert_eq!(
+            paths("svc 2>>/tmp/e.err"),
+            vec![("/tmp/e.err".to_string(), ">>")]
+        );
+        assert_eq!(
+            paths("svc 1>> /tmp/o.log"),
+            vec![("/tmp/o.log".to_string(), ">>")]
+        );
+    }
+
+    #[test]
+    fn fd_dup_2_to_1_emits_nothing() {
+        // `cmd 2>&1` is a fd-DUP (stderr→stdout), NOT a file write → nothing.
+        assert!(paths("pytest 2>&1").is_empty());
+        // And combined with a real redirect, only the real path surfaces.
+        assert_eq!(
+            just_paths("pytest >/tmp/out.log 2>&1"),
+            vec!["/tmp/out.log".to_string()]
+        );
+    }
+
+    #[test]
+    fn redirect_to_dev_null_class_is_dropped() {
+        // `/dev/null`, `/dev/stderr`, `/dev/stdout` redirect sinks are not real files.
+        assert!(paths("noisy 2>/dev/null").is_empty());
+        assert!(paths("noisy >/dev/null").is_empty());
+        assert!(paths("noisy 1>/dev/stdout").is_empty());
+        assert!(paths("noisy 2> /dev/stderr").is_empty());
+    }
+
+    #[test]
+    fn plain_redirect_still_caught_after_fd_generalization() {
+        // The original plain `>`/`>>` paths must NOT regress.
+        assert_eq!(paths("echo hi > /tmp/x"), vec![("/tmp/x".to_string(), ">")]);
+        assert_eq!(
+            paths("echo hi >>/tmp/x"),
+            vec![("/tmp/x".to_string(), ">>")]
+        );
+    }
+
+    // ── Fix B — curl / wget output flags ──
+
+    #[test]
+    fn curl_dash_o_output_caught() {
+        // `curl -s URL -o /tmp/x.json` — the dominant Smain miss (7/7).
+        assert_eq!(
+            paths("curl -s https://api.example.com/d -o /tmp/x.json"),
+            vec![("/tmp/x.json".to_string(), "curl")]
+        );
+    }
+
+    #[test]
+    fn curl_long_output_flag_both_forms() {
+        // `--output /tmp/x` (spaced) and `--output=/tmp/x` (inline). The LONG `--output`
+        // forms are owned by the generic flag-output scan (verb `flag-output`, NOT
+        // double-emitted under `curl`); only the path is load-bearing. Exactly ONE row.
+        assert_eq!(
+            paths("curl URL --output /tmp/a.json"),
+            vec![("/tmp/a.json".to_string(), "flag-output")]
+        );
+        assert_eq!(
+            paths("curl URL --output=/tmp/b.json"),
+            vec![("/tmp/b.json".to_string(), "flag-output")]
+        );
+    }
+
+    #[test]
+    fn curl_capital_o_no_path_is_skipped() {
+        // `curl -O URL` derives the local name from the URL → no deterministic path.
+        assert!(paths("curl -O https://example.com/file.tar.gz").is_empty());
+        // `curl -sO https://… /tmp/x` — the bundled `-sO` is not our `-O`-takes-next
+        // form (curl's -O takes no path), so no fabricated path either.
+        assert!(paths("curl -sO https://example.com/x").is_empty());
+    }
+
+    #[test]
+    fn wget_capital_o_output_caught() {
+        // `wget -O /tmp/x.bin URL` — wget's capital-O DOES take a path.
+        assert_eq!(
+            paths("wget -O /tmp/x.bin https://example.com/x"),
+            vec![("/tmp/x.bin".to_string(), "wget")]
+        );
+    }
+
+    #[test]
+    fn wget_output_document_caught() {
+        assert_eq!(
+            paths("wget --output-document /tmp/y.bin https://example.com/y"),
+            vec![("/tmp/y.bin".to_string(), "wget")]
+        );
+    }
+
+    // ── Fix C — flag-specified outputs, dd, zip ──
+
+    #[test]
+    fn junit_xml_flag_both_dashes_caught() {
+        // `--junit-xml=/tmp/x.xml` and `--junitxml=/tmp/x.xml` (the two pytest spellings).
+        assert_eq!(
+            paths("pytest --junit-xml=/tmp/r.xml"),
+            vec![("/tmp/r.xml".to_string(), "flag-output")]
+        );
+        assert_eq!(
+            paths("pytest --junitxml=/tmp/r2.xml"),
+            vec![("/tmp/r2.xml".to_string(), "flag-output")]
+        );
+    }
+
+    #[test]
+    fn report_path_flag_spaced_caught() {
+        // `gitleaks --report-path /tmp/x.json` (spaced value form).
+        assert_eq!(
+            paths("gitleaks detect --report-path /tmp/leaks.json"),
+            vec![("/tmp/leaks.json".to_string(), "flag-output")]
+        );
+    }
+
+    #[test]
+    fn generic_output_flags_caught() {
+        // `--output=/tmp/o` under a non-curl/wget verb still resolves via the generic scan.
+        assert_eq!(
+            paths("sometool --output=/tmp/o.txt"),
+            vec![("/tmp/o.txt".to_string(), "flag-output")]
+        );
+        assert_eq!(
+            paths("sometool --logfile /tmp/run.log"),
+            vec![("/tmp/run.log".to_string(), "flag-output")]
+        );
+    }
+
+    #[test]
+    fn dd_of_output_caught() {
+        // `dd if=/dev/zero of=/tmp/x.bin` — `of=` parsed specially (KEY=VALUE otherwise
+        // rejected); `if=` (input) is NOT emitted.
+        assert_eq!(
+            paths("dd if=/dev/zero of=/tmp/x.bin bs=1M count=4"),
+            vec![("/tmp/x.bin".to_string(), "dd")]
+        );
+    }
+
+    #[test]
+    fn dd_of_dev_null_dropped() {
+        // `of=/dev/null` is a sink, not a created file.
+        assert!(paths("dd if=/tmp/src of=/dev/null").is_empty());
+    }
+
+    #[test]
+    fn zip_dest_is_first_operand_only() {
+        // `zip /tmp/x.zip a b` — only the archive dest, NOT the input members.
+        assert_eq!(
+            paths("zip /tmp/x.zip a b c"),
+            vec![("/tmp/x.zip".to_string(), "zip")]
+        );
+        // With flags before the dest, the flag is skipped and the first non-flag wins.
+        assert_eq!(
+            paths("zip -r /tmp/y.zip dir/"),
+            vec![("/tmp/y.zip".to_string(), "zip")]
+        );
+    }
+
+    // ── Fix D — PRECISION: noisy pseudo-paths are DROPPED, never fabricated ──
+
+    #[test]
+    fn unresolved_var_redirect_is_dropped() {
+        // `> $OUT` / `>${DIR}/x` — an unexpandable variable pseudo-path is dropped.
+        assert!(paths("echo hi > $OUT").is_empty());
+        assert!(paths("echo hi >${DIR}/x.log").is_empty());
+        assert!(paths("svc 2>/tmp/$run.err").is_empty());
+    }
+
+    #[test]
+    fn unresolved_var_verb_operand_is_dropped() {
+        // A `$VAR`-bearing operand of a normal verb is also dropped (no fabrication).
+        assert!(paths("touch $TMPFILE").is_empty());
+        assert!(paths("cp src $DEST/out").is_empty());
+        assert!(paths("mkdir -p $WORK/sub").is_empty());
+    }
+
+    #[test]
+    fn unresolved_var_flag_and_dd_dropped() {
+        // The precision rule applies to the new emitters too.
+        assert!(paths("pytest --junit-xml=$REPORT").is_empty());
+        assert!(paths("curl URL -o $OUT").is_empty());
+        assert!(paths("dd if=/dev/zero of=$IMG").is_empty());
+    }
+
+    #[test]
+    fn flag_output_glob_is_dropped() {
+        // A glob as a single output destination is a parse artifact → concrete_path drops.
+        assert!(paths("tool --output=/tmp/*.json").is_empty());
+        assert!(paths("dd if=x of=/tmp/?.bin").is_empty());
+    }
+
+    #[test]
+    fn concrete_path_helper_rules() {
+        // Direct coverage: rejects globs + vars; keeps a concrete path.
+        assert_eq!(concrete_path("/tmp/x.json").as_deref(), Some("/tmp/x.json"));
+        assert!(concrete_path("/tmp/*.json").is_none());
+        assert!(concrete_path("/tmp/$v").is_none());
+        assert!(concrete_path("-flag").is_none());
+    }
+
+    #[test]
+    fn strip_fd_qualifier_rules() {
+        // Direct coverage of the fd-prefix peeler.
+        assert_eq!(strip_fd_qualifier("2>"), ">");
+        assert_eq!(strip_fd_qualifier("1>>"), ">>");
+        assert_eq!(strip_fd_qualifier("&>"), ">");
+        assert_eq!(strip_fd_qualifier("12>file"), ">file");
+        // No redirect after the qualifier → unchanged.
+        assert_eq!(strip_fd_qualifier("&1"), "&1");
+        assert_eq!(strip_fd_qualifier("2"), "2");
+        assert_eq!(strip_fd_qualifier(">"), ">");
+        assert_eq!(strip_fd_qualifier("plain"), "plain");
+    }
+
+    #[test]
+    fn previously_caught_idioms_all_still_caught() {
+        // The verdict's CAUGHT column — a regression guard in one place.
+        assert_eq!(just_paths("echo hi > /tmp/x"), vec!["/tmp/x"]);
+        assert_eq!(just_paths("echo hi >> /tmp/x"), vec!["/tmp/x"]);
+        assert_eq!(just_paths("cmd | tee /tmp/x"), vec!["/tmp/x"]);
+        assert_eq!(just_paths("touch /tmp/x"), vec!["/tmp/x"]);
+        assert_eq!(just_paths("mkdir -p /tmp/x"), vec!["/tmp/x"]);
+        assert_eq!(just_paths("cp src /tmp/x"), vec!["/tmp/x"]);
+        assert_eq!(just_paths("mv src /tmp/x"), vec!["/tmp/x", "src"]); // dest + mv-from
+        assert_eq!(just_paths("sed -i s/a/b/ /tmp/x"), vec!["/tmp/x"]);
+    }
+
+    #[test]
+    fn heredoc_python_open_is_out_of_scope_documented() {
+        // Fix E: an inline `python3 -c "open('/tmp/x','w')…"` body is NOT parsed — a
+        // documented lexical-parser limitation. The precision contract still holds: the
+        // miss produces NO wrong row (the `python3` verb is not in the allowlist and the
+        // quoted body never resolves to a redirect/flag). This test PINS that contract:
+        // a recall miss, never a precision violation.
+        assert!(
+            paths(r#"python3 -c "open('/tmp/out.json','w').write('x')""#).is_empty(),
+            "heredoc/python body is out of scope — and must not fabricate a row"
+        );
     }
 }

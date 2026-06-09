@@ -255,8 +255,11 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
 
     // ── Resolve targets → session files (optionally spanning subagents) ──
     // Shared resolver (path::resolve_session_files), used identically by agents/files.
-    let session_files =
-        path::resolve_session_files(&args.paths, args.session.as_deref(), args.want_subagents())?;
+    let session_files = path::resolve_session_files(
+        &args.paths,
+        args.session.as_deref(),
+        args.want_subagents().into(),
+    )?;
 
     // ── Parallel scan across files; collect order-stable, then merge ──
     let per_file: Vec<FileResult> = session_files

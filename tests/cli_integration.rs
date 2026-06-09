@@ -1716,6 +1716,169 @@ fn files_spans_subagent_mutations() {
     );
 }
 
+/// A session whose TOP-LEVEL turn writes `/parent/p.md` and whose SUBAGENT writes
+/// `/sub/s.md`. `--subagents-only` returns the exact set-difference (subagent file
+/// only, parent file excluded) — the complement of `--no-subagents` (parent only).
+fn subagents_only_scenario(h: &Home) {
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/parent/p.md","content":"x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/parent/p.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub111.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"sub111","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"sub: write a file"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/sub/s.md","content":"z"}}]}}"#, "\n",
+        ),
+    );
+}
+
+#[test]
+fn files_subagents_only_returns_set_difference() {
+    let h = Home::new();
+    subagents_only_scenario(&h);
+
+    // Default (spans subagents): BOTH the parent and subagent files surface.
+    let with = h.run(&["files", "--session", SESS, "--by-file"]);
+    assert!(with.success, "stderr: {}", with.stderr);
+    assert!(with.stdout.contains("/parent/p.md"), "got: {}", with.stdout);
+    assert!(with.stdout.contains("/sub/s.md"), "got: {}", with.stdout);
+
+    // --no-subagents: ONLY the parent file.
+    let top = h.run(&["files", "--session", SESS, "--by-file", "--no-subagents"]);
+    assert!(top.success, "stderr: {}", top.stderr);
+    assert!(top.stdout.contains("/parent/p.md"), "got: {}", top.stdout);
+    assert!(
+        !top.stdout.contains("/sub/s.md"),
+        "--no-subagents must exclude the subagent file: {}",
+        top.stdout
+    );
+
+    // --subagents-only: the COMPLEMENT — ONLY the subagent file, parent excluded.
+    let sub = h.run(&["files", "--session", SESS, "--by-file", "--subagents-only"]);
+    assert!(sub.success, "stderr: {}", sub.stderr);
+    assert!(sub.stdout.contains("/sub/s.md"), "got: {}", sub.stdout);
+    assert!(
+        !sub.stdout.contains("/parent/p.md"),
+        "--subagents-only must exclude the parent file: {}",
+        sub.stdout
+    );
+}
+
+#[test]
+fn files_subagents_only_with_no_subagent_says_none() {
+    // A session that spawned NO subagents → --subagents-only finds nothing for it.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"touch /tmp/only-parent"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["files", "--session", SESS, "--subagents-only"]);
+    // No subagents under the session → the --session resolver bails (nothing to dump).
+    assert!(
+        !out.success,
+        "stdout: {}\nstderr: {}",
+        out.stdout, out.stderr
+    );
+    assert!(
+        out.stderr.contains("no session file found"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn files_no_subagents_and_subagents_only_are_mutually_exclusive() {
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&[
+        "files",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--subagents-only",
+    ]);
+    assert!(!out.success, "clap must reject the two together");
+    assert!(
+        out.stderr.contains("cannot be used with")
+            || out.stderr.to_lowercase().contains("subagents-only"),
+        "expected a clap conflict error: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn files_detects_new_bash_idioms_end_to_end() {
+    // The previously-MISSED idiom classes (fd-redirects, curl -o, --junit-xml=, dd of=,
+    // zip) reach the real CLI surface and surface their /tmp destinations; the noisy
+    // precision cases ($VAR, /dev/null) are dropped.
+    let h = Home::new();
+    let cmds = [
+        ("pytest 2>/tmp/err.log", "/tmp/err.log"),
+        ("make 1> /tmp/out.log", "/tmp/out.log"),
+        ("svc &>/tmp/all.log", "/tmp/all.log"),
+        ("curl https://x -o /tmp/dl.json", "/tmp/dl.json"),
+        ("wget -O /tmp/w.bin https://y", "/tmp/w.bin"),
+        ("pytest --junit-xml=/tmp/r.xml", "/tmp/r.xml"),
+        ("dd if=/dev/zero of=/tmp/d.bin", "/tmp/d.bin"),
+        ("zip /tmp/a.zip f1 f2", "/tmp/a.zip"),
+    ];
+    let mut lines = String::new();
+    lines.push_str(
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+    );
+    lines.push('\n');
+    for (n, (cmd, _)) in cmds.iter().enumerate() {
+        lines.push_str(&format!(
+            r#"{{"type":"assistant","uuid":"a{n}","timestamp":"2026-06-07T05:00:0{n}.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b{n}","name":"Bash","input":{{"command":{}}}}}]}}}}"#,
+            serde_json_string(cmd)
+        ));
+        lines.push('\n');
+    }
+    // A noisy command whose targets must be DROPPED (var + /dev/null sink).
+    lines.push_str(
+        r#"{"type":"assistant","uuid":"az","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"bz","name":"Bash","input":{"command":"noisy 2>/dev/null > $OUT"}}]}}"#,
+    );
+    lines.push('\n');
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &lines);
+
+    let out = h.run(&["files", "--session", SESS, "--by-file", "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    for (cmd, want) in cmds {
+        assert!(
+            out.stdout.contains(want),
+            "idiom {cmd:?} should surface {want}: {}",
+            out.stdout
+        );
+    }
+    // Precision: the dropped pseudo-paths never appear.
+    assert!(!out.stdout.contains("/dev/null"), "got: {}", out.stdout);
+    assert!(!out.stdout.contains("$OUT"), "got: {}", out.stdout);
+}
+
+/// Minimal JSON-string encoder for embedding a Bash command verbatim into a fixture
+/// (escapes `"` and `\`). Sufficient for the simple commands used above.
+fn serde_json_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 #[test]
 fn files_unknown_session_errors() {
     let h = files_scenario_home();
@@ -1745,6 +1908,11 @@ fn files_help_mentions_detail_levels_and_heuristic() {
     assert!(out.stdout.contains("--by-dir"));
     assert!(out.stdout.contains("--by-file"));
     assert!(out.stdout.contains("--timeline"));
+    assert!(
+        out.stdout.contains("--subagents-only"),
+        "help must document the --subagents-only flag: {}",
+        out.stdout
+    );
     assert!(
         out.stdout.to_lowercase().contains("heuristic"),
         "help must flag the Bash-heuristic caveat: {}",

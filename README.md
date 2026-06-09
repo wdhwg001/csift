@@ -149,11 +149,17 @@ csift agents --session <uuid> --returned-message --format json   # every node's 
 ### `files` — which files/dirs a session modified, when
 
 The set of files a session Read / Wrote / Edited (+ Bash mutations), with timestamps. `files` reports
-THAT a file changed; `recover` rebuilds its content.
+THAT a file changed; `recover` rebuilds its content. Bash mutations are parsed lexically and flagged
+`(heuristic)`: the verb allowlist plus fd-qualified redirects (`2>`/`1>`/`&>`), `curl`/`wget` output
+flags, and allowlisted flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only concrete,
+resolvable paths (an unexpandable `$VAR` is dropped, never fabricated). Subagent scope is mutually
+exclusive: default spans subagents, `--no-subagents` is the top-level session only, and
+`--subagents-only` is its complement (only the files the session's subagents touched).
 
 ```bash
 csift files --session <uuid>
 csift files . --no-subagents
+csift files <uuid> --subagents-only --by-file   # only what the session's subagents touched
 ```
 
 ### `recover` — reconstruct a file's content (or restore a plan)
