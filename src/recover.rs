@@ -212,6 +212,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         &args.paths,
         args.session.as_deref(),
         args.want_subagents().into(),
+        path::Caller::Other,
     )?;
 
     // ── Parallel scan across files (default rayon pool = CPU count) ──

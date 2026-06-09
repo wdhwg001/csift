@@ -71,8 +71,10 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 ## Command surface
 
 Seven subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `turns`.
-`list`/`search`/`files`/`recover`/`turns` span each session's subagent transcripts **by default**
-(`--no-subagents` opts out; `agents` LISTS subagents as its targets, so it has no span flag).
+`list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
+(`--no-subagents` opts out). `turns` is the exception — a single-thread recovery tool whose per-session
+budget MULTIPLIES, so it defaults to the **top-level thread only** and opts INTO spanning via
+`--include-subagents`. (`agents` LISTS subagents as its targets, so it has no span flag.)
 Every subcommand takes `--format text|json` (default `text`).
 
 A **target** is EITHER a real filesystem cwd (csift path-encodes it for you) OR an already-encoded
@@ -389,7 +391,10 @@ JSON: one object per emitted unit (bucket / dir / file with `{session_id, <key>,
 notebook_edit, multi_edit, bash, total, distinct_files, first_utc, first_local, last_utc,
 last_local}`; or per mutation for `--timeline` with `{session_id, path, op, ts_utc, ts_local,
 turn_index, is_create, heuristic}`), then a trailing summary object
-`{distinct_files, total_mutations, skipped_lines, detail_level}`.
+`{distinct_files, total_mutations, skipped_lines, detail_level}`. **`heuristic`** is `true` ONLY for a
+bash-derived mutation (a guessed path/op lexically parsed from a shell command, lower confidence);
+`false` = a definitive Edit/Write/Notebook/MultiEdit tool call with an exact `file_path`. Filter
+`heuristic==false` for confirmed mutations only.
 
 ### `recover` — reconstruct a file's content (or restore a plan)
 
@@ -473,21 +478,30 @@ completion notices, not the operator's prose. `turns` (and `search -t user`) CLA
 renders as a parsed `[<kind> <task-id> <status>] <summary>` ATTRIBUTION label — where `<kind>` is the
 TRUE trigger class read from the summary (`background-command` / `workflow` / `agent` / `monitor` /
 `task`, where `monitor` is the ScheduleWakeup / monitor / cron-tick family), NOT a hardcoded
-`workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob, and the `turns`
-per-session header reports the human/automation split (e.g. `selected 20 user (3 automation
-triggers) + 52 assistant units`). The trigger still opens a turn, but it is EXCLUDED from the
+`workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob. For a **monitor**
+pulse the real outcome lives in `<event>` and there is frequently NO `<status>`, so the label surfaces
+the event (`[monitor b718g3gqq STAGE2_OUTPUT_READY]`, or a timeout notice) rather than fabricating
+`completed`. The `turns` per-session header reports the human/automation split WITH a per-class
+breakdown (e.g. `selected 20 user (3 automation triggers: 2 background-command, 1 agent) + 52
+assistant units`). The trigger still opens a turn, but it is EXCLUDED from the
 `--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) — it can still be picked
 as Phase-2 fill. So a consumer sees at a glance which "user turns" were machine pulses, and the human
 round-trip floor is never silently spent on a pulse→ack pair. In `--format json` the automation
 attribution is STRUCTURAL on the user-segment object (`is_automation` + `trigger_kind` + `task_id` +
-`status`), not only a text prefix; the stream opens with a `{kind:"session_header",…}` object carrying
-the human/automation split + budget fan-out.
+`status` + `event`), not only a text prefix; the stream opens with a `{kind:"session_header",…}` object
+carrying the human/automation split (lumped `automation_triggers` + per-class `automation_by_kind`) +
+budget fan-out (`sessions_in_scope` = true scope, `sessions_rendered` = how many fit the budget).
 
 **Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) is applied
-**PER session in scope** — and a bare-uuid target SPANS that session's subagents by default, so the
-realized total is `budget × (sessions in scope)`. When more than one session renders, a top-of-output
-`SCOPE` banner names the count + the top-level/subagent split + the realized multiplier; the
-single-thread recovery use case (`turns <my-uuid>`) usually wants `--no-subagents`. Selection is
+**PER session in scope**. UNLIKE `files`/`search`, `turns` defaults to the **top-level thread only** —
+it is a single-thread recovery tool whose per-session budget MULTIPLIES, so spanning hundreds of
+unrelated fan-out subagents by default would bury the thread you asked to restore. A bare `turns <uuid>`
+therefore reconstructs just that conversation at `budget` chars; add `--include-subagents` for the rare
+cross-fan-out reconstruction, where the realized total is `budget × (sessions in scope)` and a
+top-of-output `SCOPE` banner names the TRUE scope (all top-level + subagent sessions discovered), how
+many rendered within budget, and the realized multiplier. A targeted top-level session that does not fit
+the budget is reported with an explicit `SESSION <uuid>  skipped — its first round-trip needs ≥ N chars`
+note, never silently dropped. Selection is
 recency-first (most-recent turns win the budget); the emitted document is sorted ascending so it reads
 forward. `--round-trip-fraction` (default 0.5) is a HARD FLOOR:
 that fraction of the budget can only be spent on COMPLETE round-trips (user → `[N tool calls]` →
@@ -556,8 +570,8 @@ you are supplementing — pick `heavy` when its errors/decisions narrative is TH
 back-and-forth restored), `light` when it is already rich (restore user phrasings + the substance, skip
 the intermediate chatter).
 
-Subagent transcripts (`--include-subagents`, default ON) get the SAME richness treatment via the shared
-code path.
+Subagent transcripts (`--include-subagents`, **default OFF for `turns`** — opt in) get the SAME richness
+treatment via the shared code path when spanned.
 
 Examples:
 
@@ -570,11 +584,15 @@ csift turns <uuid> --agent-msgs rich              # the keep-on-doubt keep-set (
 csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)
 csift turns <uuid> --agent-msgs all --budget 60000  # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
+csift turns <uuid> --include-subagents            # ALSO span subagents (budget × N; rare cross-fan-out recon)
 ```
 
-JSON (`--format json`) emits one VERBATIM (un-truncated) object per emitted unit, interleaved
+JSON (`--format json`) opens with a `{kind:"session_header",…}` object (`sessions_in_scope` vs
+`sessions_rendered`, top-level/subagent split, lumped `automation_triggers` + per-class
+`automation_by_kind`), then one VERBATIM (un-truncated) object per emitted unit, interleaved
 compaction-boundary records, and a `collapsed_agents` placeholder record (with `agent_messages` /
-`tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span.
+`tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span. An automation user unit
+additionally carries `trigger_kind` / `task_id` / `status` / `event`.
 
 ---
 

@@ -2462,22 +2462,186 @@ fn scope_summary_counts_top_level_and_subagents() {
         .iter()
         .map(|sr| plan_session(sr, 8000, 0.5, 0, &cfg()))
         .collect();
-    let (rendered, top, sub) = scope_summary(&sessions, &plans);
-    assert_eq!((rendered, top, sub), (3, 1, 2));
+    let sc = scope_summary(&sessions, &plans);
+    assert_eq!(sc.in_scope, 3);
+    assert_eq!(sc.in_scope_top, 1);
+    assert_eq!(sc.in_scope_sub, 2);
+    assert_eq!(sc.rendered, 3);
 }
 
 #[test]
-fn scope_summary_ignores_empty_plans() {
-    // A session whose plan selects nothing (budget 0-effect via empty turns) is not counted.
-    let mut empty = scan_named("a00ea52f023afd9ce");
-    empty.turns.clear();
-    let sessions = vec![scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"), empty];
+fn scope_summary_reports_true_scope_not_rendered() {
+    // CRITICAL: a session whose plan selects nothing (budget too small) is STILL counted in
+    // the TRUE scope and its top-level/subagent split — only `rendered` shrinks. This is what
+    // stops a targeted top-level uuid from reading as `0 top-level` and a budget knob from
+    // silently rewriting "scope".
+    let mut empty = scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d");
+    empty.turns.clear(); // its plan will be empty (nothing fits)
+    let rendered_sub = scan_named("a00ea52f023afd9ce");
+    let sessions = vec![empty, rendered_sub];
     let plans: Vec<SessionPlan> = sessions
         .iter()
         .map(|sr| plan_session(sr, 8000, 0.5, 0, &cfg()))
         .collect();
-    let (rendered, top, sub) = scope_summary(&sessions, &plans);
-    assert_eq!((rendered, top, sub), (1, 1, 0));
+    let sc = scope_summary(&sessions, &plans);
+    // Both sessions are in scope; the top-level one is counted even though it rendered nothing.
+    assert_eq!(sc.in_scope, 2);
+    assert_eq!(
+        sc.in_scope_top, 1,
+        "targeted top-level must NOT read as 0 top-level"
+    );
+    assert_eq!(sc.in_scope_sub, 1);
+    assert_eq!(sc.rendered, 1, "only the subagent fit the budget");
+}
+
+#[test]
+fn min_render_chars_is_a_lower_bound_or_none_for_empty() {
+    // A non-empty session reports a positive lower bound; an empty one reports None.
+    let full = scan_with_turns(
+        vec![mk_turn(0, Some("ask"), Some("reply"), 1, 0)],
+        Vec::new(),
+    );
+    let min = min_render_chars(&full, 40000, &cfg());
+    assert!(min.is_some_and(|m| m > 0));
+    let mut empty = full;
+    empty.turns.clear();
+    assert_eq!(min_render_chars(&empty, 40000, &cfg()), None);
+
+    // A user-ONLY turn (no agents) and an agent-ONLY turn (no user) each take only their
+    // respective fold arm of the cheapest-side computation; both still yield a positive bound.
+    let user_only = scan_with_turns(vec![mk_turn(0, Some("ask"), None, 0, 0)], Vec::new());
+    assert!(min_render_chars(&user_only, 40000, &cfg()).is_some_and(|m| m > 0));
+    let agent_only = scan_with_turns(vec![mk_turn(0, None, Some("reply"), 0, 0)], Vec::new());
+    assert!(min_render_chars(&agent_only, 40000, &cfg()).is_some_and(|m| m > 0));
+}
+
+/// Build an AUTOMATION-opener turn of a given kind (a `<task-notification>` pulse) for the
+/// per-class breakdown tests. `user` is the rendered opener text; the slice is flagged
+/// `is_automation` and carries a parsed trigger of `kind`.
+fn mk_automation_turn(
+    turn_index: usize,
+    kind: crate::model::AutomationKind,
+    user: &str,
+) -> TurnSlice {
+    let mut t = mk_turn(turn_index, Some(user), Some("ack"), 0, 0);
+    t.is_automation = true;
+    t.automation = Some(crate::model::AutomationTrigger {
+        kind,
+        task_id: Some(format!("id{turn_index}")),
+        status: Some("completed".to_string()),
+        summary: Some(user.to_string()),
+        event: None,
+    });
+    t
+}
+
+#[test]
+fn automation_by_kind_breaks_down_per_class_not_lumped() {
+    use crate::model::AutomationKind::*;
+    // A session mixing 2 background-command + 1 agent + 1 monitor automation pulses plus a
+    // human turn. The breakdown must report the composition, not a lumped scalar.
+    let sr = scan_with_turns(
+        vec![
+            mk_turn(0, Some("human ask"), Some("human reply"), 1, 0),
+            mk_automation_turn(1, BackgroundCommand, "bg one done"),
+            mk_automation_turn(2, BackgroundCommand, "bg two done"),
+            mk_automation_turn(3, Agent, "agent done"),
+            mk_automation_turn(4, Monitor, "monitor fired"),
+        ],
+        Vec::new(),
+    );
+    let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
+    let by = automation_by_kind(std::slice::from_ref(&plan));
+    // Order is [BackgroundCommand, Agent, Workflow, Monitor, Task].
+    assert_eq!(by, [2, 1, 0, 1, 0]);
+    let text = automation_breakdown_text(&by);
+    assert_eq!(text, "2 background-command, 1 agent, 1 monitor");
+    // The lumped total still agrees with the per-class sum.
+    assert_eq!(count_automation(&plan), by.iter().sum::<usize>());
+}
+
+#[test]
+fn automation_by_kind_covers_workflow_task_and_unparsed_fallback() {
+    use crate::model::AutomationKind::*;
+    // Exercise the remaining classes (Workflow, Task) AND the `automation == None` fallback —
+    // an `is_automation` turn whose trigger failed to parse is attributed to `task`.
+    let mut unparsed = mk_turn(3, Some("mystery pulse"), Some("ack"), 0, 0);
+    unparsed.is_automation = true; // flagged, but .automation stays None
+    let sr = scan_with_turns(
+        vec![
+            mk_automation_turn(0, Workflow, "wf done"),
+            mk_automation_turn(1, Task, "task done"),
+            mk_automation_turn(2, Workflow, "wf two done"),
+            unparsed,
+        ],
+        Vec::new(),
+    );
+    let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
+    let by = automation_by_kind(std::slice::from_ref(&plan));
+    // [BackgroundCommand, Agent, Workflow, Monitor, Task] — 2 workflow, 1 task (parsed) + 1
+    // task (the None-fallback) = 2 task.
+    assert_eq!(by, [0, 0, 2, 0, 2]);
+    assert_eq!(automation_breakdown_text(&by), "2 workflow, 2 task");
+}
+
+#[test]
+fn automation_breakdown_text_empty_when_no_triggers() {
+    assert_eq!(automation_breakdown_text(&[0, 0, 0, 0, 0]), "");
+}
+
+#[test]
+fn automation_by_kind_skips_non_user_and_missing_turns() {
+    // Exercise the two guard arms in `automation_by_kind`: an AssistantOnly selection (does not
+    // SHOW the user side → skipped) and a selection pointing at a turn_index that is not present
+    // in `plan.turns` (find_turn None → skipped). Neither contributes to the breakdown.
+    let mut auto = mk_turn(0, Some("pulse"), Some("ack"), 0, 0);
+    auto.is_automation = true;
+    auto.automation = Some(crate::model::AutomationTrigger {
+        kind: crate::model::AutomationKind::Agent,
+        task_id: Some("id0".to_string()),
+        status: Some("completed".to_string()),
+        summary: Some("pulse".to_string()),
+        event: None,
+    });
+    let plan = SessionPlan {
+        selected: vec![
+            // AssistantOnly over the automation turn → the !shows_user guard skips it.
+            Selected {
+                turn_index: 0,
+                sides: SelSides::AssistantOnly,
+            },
+            // A Both selection at a turn_index NOT in `turns` → the find_turn None guard skips it.
+            Selected {
+                turn_index: 99,
+                sides: SelSides::Both,
+            },
+        ],
+        turns: vec![auto],
+        spanned_boundaries: 0,
+        rendered_chars: 0,
+        newest_summary_line: None,
+        dedup_demoted: 0,
+    };
+    let by = automation_by_kind(std::slice::from_ref(&plan));
+    assert_eq!(by, [0, 0, 0, 0, 0], "both selections must be skipped");
+}
+
+#[test]
+fn min_render_chars_none_when_turn_has_no_sides() {
+    // A turn with NEITHER a user side NOR any agent message contributes `usize::MAX` to the
+    // min fold; with that being the only turn, `min_render_chars` returns None (the
+    // `cheapest == usize::MAX` guard), distinct from a positive lower bound.
+    let sideless = TurnSlice {
+        turn_index: 0,
+        user: None,
+        tool_calls: 0,
+        agents: Vec::new(),
+        compactions_before: 0,
+        is_automation: false,
+        automation: None,
+    };
+    let sr = scan_with_turns(vec![sideless], Vec::new());
+    assert_eq!(min_render_chars(&sr, 40000, &cfg()), None);
 }
 
 #[test]

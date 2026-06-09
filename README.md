@@ -84,8 +84,10 @@ identity), lazy `serde_json` only on candidate lines, and rayon parallelism ACRO
 Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `turns`) takes
 optional `PATH...` targets and an optional `--session <uuid>` (a bare session-UUID in the positional
 slot is routed to `--session`; a bare **subagent hex** is NOT accepted there — inspect one with `csift
-agents --agent <hex>`), and — where it spans transcripts — `--include-subagents` (default ON) /
-`--no-subagents`. The argv pre-pass routes declared flags (long and the search short flags `-t`/`-i`)
+agents --agent <hex>`), and — where it spans transcripts — `--include-subagents` /
+`--no-subagents` (default ON for `list`/`search`/`files`/`recover`; **OFF for `turns`**, which is a
+single-thread recovery tool with a per-session budget that multiplies, so it spans subagents only on
+explicit `--include-subagents`). The argv pre-pass routes declared flags (long and the search short flags `-t`/`-i`)
 away from the positional, so a flag works in any position, including trailing. `whoami` is the
 exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to
 `CODEX_COMPANION_SESSION_ID`) and its only flags are `--show-path` / `--format`. All support
@@ -208,9 +210,13 @@ command. In automation-heavy sessions, machine-injected `<task-notification>` tr
 `turns` (and `search -t user`) label them as `[<kind> <id> <status>] <summary>` (kind =
 `background-command` / `workflow` / `agent` / `monitor` / `task`, read from the summary — never the
 raw XML; `monitor` is the ScheduleWakeup / monitor / cron-tick family) and the header reports the
-human/automation split (`N user (M automation triggers)`). In `--format json` the attribution is
-structural (`is_automation` / `trigger_kind` / `task_id` / `status`) on the user-segment object, with
-a leading `{kind:"session_header",…}` object. These pulses are
+human/automation split WITH a per-class breakdown (`N user (M automation triggers: 2 background-command,
+1 agent)`). A monitor pulse's real outcome lives in `<event>` (often with no `<status>`), so its label
+surfaces the event (`[monitor … STAGE2_OUTPUT_READY]`) rather than fabricating `completed`. In
+`--format json` the attribution is structural (`is_automation` / `trigger_kind` / `task_id` / `status` /
+`event`) on the user-segment object, with a leading `{kind:"session_header",…}` object carrying the
+lumped `automation_triggers` + per-class `automation_by_kind` + `sessions_in_scope` vs
+`sessions_rendered`. These pulses are
 excluded from the `--round-trip-fraction` human-reserved floor. See the [budget model](#budget-model)
 and [richness model](#richness-model) below.
 
@@ -240,11 +246,16 @@ csift turns [PATH...] [--session ID] [--budget N] [--budget-unit chars|tokens]
 ### Budget model
 
 - **`--budget`** (default 40000) bounds each session's reconstruction in chars, or tokens via
-  `--budget-unit tokens` (≈4 chars/token). It is applied **PER session in scope** — a bare-uuid target
-  spans subagents by default, so the realized total is `budget × (sessions in scope)`; a top-of-output
-  `SCOPE` banner surfaces the multiplier, and `--no-subagents` scopes to the single top-level thread
-  (the recovery use case). The summed cost of every emitted line equals the real emitted length — the
-  per-session budget is never overshot.
+  `--budget-unit tokens` (≈4 chars/token). It is applied **PER session in scope**. UNLIKE
+  `files`/`search`, `turns` defaults to the **top-level thread only** — a single-thread recovery tool
+  whose per-session budget MULTIPLIES, so spanning hundreds of fan-out subagents by default would bury
+  the thread you asked to restore. A bare `turns <uuid>` reconstructs just that conversation at `budget`
+  chars; add `--include-subagents` for the rare cross-fan-out reconstruction, where the realized total
+  is `budget × (sessions in scope)` and a top-of-output `SCOPE` banner names the TRUE scope (all
+  top-level + subagent sessions discovered), how many rendered within budget, and the multiplier. A
+  targeted top-level session that does not fit the budget is reported with an explicit `SESSION <uuid>
+  skipped — its first round-trip needs ≥ N chars` note, never silently dropped. The summed cost of every
+  emitted line equals the real emitted length — the per-session budget is never overshot.
 - **Selection is recency-first** (most-recent turns win the budget, what a resumed agent most needs);
   the emitted document is sorted ascending so it reads as a forward transcript.
 - **`--round-trip-fraction`** (default 0.5) is a HARD FLOOR: that fraction of the budget can only be
@@ -329,8 +340,8 @@ errors/decisions narrative is THIN (you need the debugging back-and-forth restor
 it is already rich (restore the user phrasings + the substance, skip the intermediate chatter); use
 `--agent-msgs eot-only` for the smallest, last-message-only supplement.
 
-Subagent transcripts (default `--include-subagents`) get the SAME richness treatment via the shared code
-path.
+Subagent transcripts (spanned only on explicit `--include-subagents` for `turns`) get the SAME richness
+treatment via the shared code path when spanned.
 
 ### Output
 

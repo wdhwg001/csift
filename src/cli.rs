@@ -2,8 +2,10 @@
 //!
 //! Seven subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `turns`.
 //! Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
-//! invocations. `list`/`search`/`files`/`recover`/`turns` span each session's subagent
-//! transcripts by default (`--no-subagents` opts out); `agents` reports a session's
+//! invocations. `list`/`search`/`files`/`recover` span each session's subagent transcripts
+//! by default (`--no-subagents` opts out); `turns` is the exception — a single-thread
+//! recovery tool whose per-session budget MULTIPLIES, so it defaults to the TOP-LEVEL thread
+//! only and opts INTO spanning via `--include-subagents`. `agents` reports a session's
 //! subagent lifecycle (it lists subagents as targets, so it has no subagent-span flag).
 //! The five session-operating subcommands (`search`/`agents`/`files`/`recover`/`turns`)
 //! plus `list` resolve their target through ONE shared resolver
@@ -21,6 +23,16 @@
 use std::path::PathBuf;
 
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
+
+/// The ONE canonical `--session` help string, applied verbatim to all six session-operating
+/// subcommands so the flag reads identically everywhere (it previously diverged: `list`/
+/// `agents` carried the full guidance, the other four only a bare one-liner, and the
+/// `session id` vs `parent session id` terminology flipped inconsistently). The flag scopes
+/// to the PARENT session whose subagents the other plumbing may span, so it names the parent
+/// explicitly; a bare-uuid positional is the equivalent shorthand.
+const SESSION_FLAG_HELP: &str = "Restrict to a single (parent) session id (uuid). Use alone \
+    to find that one session across all projects, or with a PATH to scope to it; a bare-uuid \
+    POSITIONAL is equivalent.";
 
 /// Parse + normalize the process argv into a [`Cli`] (the real entrypoint).
 ///
@@ -295,10 +307,12 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
                    point-in-time partial snapshot, coverage scoping, or plan restoration\n  \
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
                    back-and-forth a compaction summary clipped, within a char/token budget\n\n\
-        list/search/files/recover/turns span each session's subagent transcripts by \
+        list/search/files/recover span each session's subagent transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
-        to restrict to top-level sessions. (`agents` is the exception — it LISTS subagents \
-        as its targets rather than spanning them as inputs, so it has no subagent flag.)\n\n\
+        to restrict to top-level sessions. `turns` is the exception among the file-operating \
+        commands — it defaults to the TOP-LEVEL thread only (single-thread recovery) and \
+        opts INTO spanning via `--include-subagents`. (`agents` LISTS subagents as its \
+        targets rather than spanning them as inputs, so it has no subagent flag.)\n\n\
         A target is EITHER a real filesystem cwd (it gets path-encoded) OR an \
         already-encoded `-Users-...` projects-dir token; with no target, every \
         project under ~/.claude/projects is scanned.",
@@ -307,7 +321,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift list .                                # just this cwd's project\n  \
           csift search \"carry\"                        # smart-case regex, all projects\n  \
           csift search \"\" -t user --since 2h .        # pure filter: user turns, last 2h, here\n  \
-          csift agents --session <uuid> --since 2h    # subagents started in the last 2h\n  \
+          csift agents --session <uuid> --since 2h    # subagents TRIGGERED in the last 2h\n  \
           csift whoami                                # who am I (this CC session)?\n  \
           csift files <uuid> --by-file                # which files this session modified, when\n  \
           csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
@@ -359,8 +373,8 @@ pub enum Category {
     Thinking,
     /// GENUINE human input + AskUserQuestion answers + machine AUTOMATION-TRIGGER openers
     /// (`<task-notification>`, rendered as the parsed `[<kind> <id> <status>] <summary>`
-    /// attribution label, where `<kind>` is background-command / workflow / agent / task) —
-    /// NOT tool_result carriers. The automation openers DO open a turn, so they surface
+    /// attribution label, where `<kind>` is background-command / workflow / agent / monitor /
+    /// task) — NOT tool_result carriers. The automation openers DO open a turn, so they surface
     /// under `user`; recognize them by the `[<kind> …]` prefix.
     User,
     /// `tool_use` blocks (agent calling a tool); AskUserQuestion is a tool_use.
@@ -435,10 +449,7 @@ pub struct ListArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Restrict to a single session id (uuid) — the SAME `--session` filter every other
-    /// session-operating subcommand carries. Combine with a PATH to scope, or use alone to
-    /// find that one session across all projects. A bare uuid POSITIONAL is equivalent.
-    #[arg(long, value_name = "SESSION_ID")]
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
     /// Also discover + list each session's SUBAGENT transcripts (built-in
@@ -584,8 +595,7 @@ pub struct SearchArgs {
     )]
     pub path_flag: Vec<PathBuf>,
 
-    /// Restrict to a single session id (uuid).
-    #[arg(long, value_name = "SESSION_ID")]
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
     /// Also search each in-scope session's SUBAGENT transcripts (built-in
@@ -749,9 +759,7 @@ pub struct AgentsArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Restrict to a single parent session id (uuid). Combine with a PATH to scope
-    /// the search, or use alone to scan all projects for that session.
-    #[arg(long, value_name = "SESSION_ID")]
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
     /// Only show subagents of this kind (repeatable). Default: all kinds.
@@ -882,7 +890,11 @@ pub enum FilesDetail {
          `--timeline` to test create-vs-edit or filter by op.)\n\n\
         JSON SCHEMAS (per --format json)\n  \
           --timeline : one object per mutation — {session_id, path, op, ts_utc, ts_local,\n             \
-                       turn_index, is_create, heuristic} + a trailing summary object.\n  \
+                       turn_index, is_create, heuristic} + a trailing summary object.\n             \
+                       (heuristic=true ONLY for a bash-derived mutation — a guessed path/op\n             \
+                       lexically parsed from a shell command, lower confidence; false = a\n             \
+                       definitive Edit/Write/Notebook/MultiEdit tool call with an exact\n             \
+                       file_path. Filter heuristic==false for confirmed mutations only.)\n  \
           --by-file  : one object per file — {session_id, file, write, edit, bash,\n             \
                        multi_edit, notebook_edit, total, distinct_files, first_utc,\n             \
                        first_local, last_utc, last_local} + a trailing summary object.\n  \
@@ -906,8 +918,7 @@ pub struct FilesArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Restrict to a single parent session id (uuid).
-    #[arg(long, value_name = "SESSION_ID")]
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
     /// Also attribute file mutations a SUBAGENT performed (built-in Task/Agent-tool,
@@ -1094,8 +1105,7 @@ pub struct RecoverArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Restrict to a single parent session id (uuid).
-    #[arg(long, value_name = "SESSION_ID")]
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
@@ -1218,9 +1228,10 @@ impl RecoverArgs {
         another). `--max-compactions` only caps how far.\n\n\
         BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in chars \
         (or tokens via `--budget-unit tokens`, ≈4 chars/token) — it is applied PER session \
-        in scope, so a bare-uuid target that spans S subagents realizes up to `budget × \
-        (1 + S)` chars total (a SCOPE banner surfaces the multiplier; `--no-subagents` scopes \
-        to the single top-level thread). `--round-trip-fraction` \
+        in scope. `turns` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
+        just `budget` chars; with `--include-subagents` a target that spans S subagents \
+        realizes up to `budget × (1 + S)` chars total (a SCOPE banner surfaces the \
+        multiplier). `--round-trip-fraction` \
         (default 0.5) is a HARD FLOOR: that fraction of the budget can ONLY be spent on \
         COMPLETE round-trips (user → [N tool calls] → assistant EOT), never on user-only / \
         assistant-only fragments — without it an assistant-heavy tail recovers ZERO human \
@@ -1249,20 +1260,21 @@ impl RecoverArgs {
         user (M automation triggers) + …`). These pulses are EXCLUDED from the \
         `--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) but \
         can still be selected as Phase-2 fill.\n\n\
-        BUDGET FAN-OUT: `--budget` is applied PER session in scope, and a bare-uuid target \
-        SPANS that session's subagents by default — so the realized output is `budget × \
-        (sessions in scope)`. When more than one session renders, a top-of-output SCOPE \
-        banner names the count + the top-level/subagent split + the realized multiplier. The \
-        single-thread recovery use case usually wants `--no-subagents`.\n\n\
+        BUDGET FAN-OUT: `--budget` is applied PER session in scope. `turns` defaults to the \
+        top-level thread only, so a bare-uuid run is a single session at `budget` chars. With \
+        `--include-subagents` the target also spans that session's subagents, so the realized \
+        output is `budget × (sessions in scope)`; a top-of-output SCOPE banner then names the \
+        TRUE scope (all discovered top-level + subagent sessions), how many rendered within \
+        budget, and the realized multiplier.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
         mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). \
         `--out <PATH>` writes the full (un-terminal-truncated) reconstruction to a file \
         while the summary still prints to stdout. `--format json` emits one VERBATIM \
         (un-truncated) object per unit plus interleaved compaction-boundary records.",
     after_help = "EXAMPLES\n  \
-          csift turns .                                     # default 40K-char reconstruction, this project\n  \
-          csift turns <uuid> --no-subagents --budget 12000  # recover JUST my thread (~10-15K, no fan-out)\n  \
-          csift turns <uuid> --budget 40000 --format json   # machine-readable, line-numbered (spans subagents)\n  \
+          csift turns .                                     # default 40K-char reconstruction, top-level thread\n  \
+          csift turns <uuid> --budget 12000                 # recover JUST my thread (~10-15K, no fan-out)\n  \
+          csift turns <uuid> --include-subagents --format json  # ALSO span subagents (budget × N, line-numbered)\n  \
           csift turns <uuid> --round-trip-fraction 0.6      # weight harder toward complete round-trips\n  \
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
           csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary\n  \
@@ -1281,19 +1293,26 @@ impl RecoverArgs {
           assistant units`. These pulses are EXCLUDED from the `--round-trip-fraction` HARD\n  \
           FLOOR (reserved for human exchanges) but can still be selected as Phase-2 fill.\n\n\
         BUDGET FAN-OUT\n  \
-          `--budget` is PER session in scope; a bare-uuid target spans that session's\n  \
-          subagents by default, so the realized output is budget × (sessions in scope). When\n  \
-          more than one session renders, a top-of-output `SCOPE` line names the session count,\n  \
-          the top-level/subagent split, and the realized multiplier. Use `--no-subagents` to\n  \
-          scope to just the top-level thread (the recovery use case).\n\n\
+          `--budget` is PER session in scope. `turns` defaults to the TOP-LEVEL thread only, so\n  \
+          a bare-uuid run is one session at `budget` chars. Add `--include-subagents` to also\n  \
+          span that session's subagents — the realized output is then budget × (sessions in\n  \
+          scope), and a top-of-output `SCOPE` line names the TRUE scope (all top-level +\n  \
+          subagent sessions discovered), how many rendered within budget, and the multiplier.\n  \
+          A targeted top-level session that does not fit `budget` is reported with an explicit\n  \
+          `skipped — needs ≥ N chars` note, never silently dropped.\n\n\
         JSON SCHEMA (per --format json)\n  \
-          A leading `{kind:\"session_header\", sessions_in_scope, top_level_sessions,\n  \
-          subagent_sessions, budget_chars, budget_is_per_session, max_total_chars,\n  \
-          selected_user, automation_triggers}` object, then one object PER emitted unit:\n  \
+          A leading `{kind:\"session_header\", sessions_in_scope, sessions_rendered,\n  \
+          top_level_sessions, subagent_sessions, budget_chars, budget_is_per_session,\n  \
+          max_total_chars, selected_user, automation_triggers, automation_by_kind}` object —\n  \
+          `sessions_in_scope` is the TRUE scope (every discovered session), `sessions_rendered`\n  \
+          is how many fit the budget, the top_level/subagent split is over ALL in scope, and\n  \
+          `automation_by_kind` breaks the lumped `automation_triggers` total down per class\n  \
+          ({background-command,agent,workflow,monitor,task}). Then one object PER emitted unit:\n  \
           {session_id, turn_index, line_no, role, ts_utc, ts_local, tool_calls, full_chars,\n  \
           rendered_chars, truncated, elided_chars, elided_lines, also_in_summary,\n  \
           compactions_before, text, is_automation}; an automation USER unit additionally\n  \
-          carries {trigger_kind, task_id, status}. Boundary objects are tagged\n  \
+          carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
+          outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
           {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
           {kind:\"skipped_lines\", count} closes the stream when any line was malformed."
 )]
@@ -1303,9 +1322,10 @@ pub struct TurnsArgs {
     /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) routed
     /// to the `--session` filter, so `csift turns <uuid>` works as the EXAMPLES show. A bare
     /// SUBAGENT hex is NOT accepted here — inspect one subagent with `csift agents --agent
-    /// <hex>`. NOTE: a bare-uuid target SPANS that session's subagents by default and
-    /// `--budget` is applied PER session in scope (see `--budget`), so the recovery use case
-    /// (`turns <my-uuid>` for one thread) usually wants `--no-subagents`.
+    /// <hex>`. NOTE: `turns` defaults to the TOP-LEVEL thread only (the single-thread recovery
+    /// use case), so a bare `csift turns <uuid>` reconstructs just that conversation; add
+    /// `--include-subagents` for the rare cross-fan-out reconstruction (`--budget` is then
+    /// applied PER session in scope — see `--budget`).
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1313,14 +1333,14 @@ pub struct TurnsArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Restrict to a single parent session id (uuid).
-    #[arg(long, value_name = "SESSION_ID")]
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
     /// Character (default) or token budget applied PER session in scope. Each session's
-    /// reconstruction is bounded by this; a bare-uuid target spans subagents by default, so
-    /// the realized total is `budget × (sessions in scope)` (a SCOPE banner surfaces the
-    /// multiplier — pass `--no-subagents` for just the top-level thread). Default 40000.
+    /// reconstruction is bounded by this; `turns` defaults to the top-level thread only, so a
+    /// bare-uuid run realizes just `budget` chars. With `--include-subagents` the realized
+    /// total is `budget × (sessions in scope)` and a SCOPE banner surfaces the multiplier.
+    /// Default 40000.
     #[arg(long, value_name = "N", default_value_t = 40000)]
     pub budget: usize,
 
@@ -1335,17 +1355,21 @@ pub struct TurnsArgs {
     pub round_trip_fraction: f64,
 
     /// Also span each in-scope session's SUBAGENT transcripts (built-in Task/Agent-tool,
-    /// OMC, and Workflow agents) under `subagents/**`. Default ON; pass `--no-subagents`
-    /// to restrict to top-level sessions.
+    /// OMC, and Workflow agents) under `subagents/**`. Default OFF for `turns` (UNLIKE
+    /// files/search): `turns` is a SINGLE-THREAD recovery tool and `--budget` MULTIPLIES per
+    /// session in scope, so spanning hundreds of unrelated fan-out subagents by default would
+    /// bury the thread you asked to restore under megabytes of noise. Opt in with
+    /// `--include-subagents` only for the rare cross-fan-out reconstruction.
     #[arg(
         long = "include-subagents",
         overrides_with = "no_subagents",
-        default_value_t = true
+        default_value_t = false
     )]
     pub include_subagents: bool,
 
-    /// Exclude subagent transcripts — reconstruct only from the top-level session.
-    /// Overrides `--include-subagents`.
+    /// Exclude subagent transcripts — reconstruct only from the top-level session. This is
+    /// already the `turns` DEFAULT; the flag is kept for symmetry with the other subcommands
+    /// and to explicitly cancel an earlier `--include-subagents`.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
@@ -1447,10 +1471,13 @@ pub struct TurnsArgs {
 }
 
 impl TurnsArgs {
-    /// Resolve the include/exclude flags into a single decision (default include).
+    /// Resolve the include/exclude flags into a single decision. UNLIKE the other
+    /// subcommands, `turns` defaults to TOP-LEVEL-ONLY (`include_subagents` defaults false):
+    /// spanning is opt-in via `--include-subagents`, and a trailing `--no-subagents` still
+    /// forces it off. So a bare `csift turns <uuid>` reconstructs just that one thread.
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.include_subagents && !self.no_subagents
     }
 
     /// Resolve the agent-message policy into a [`crate::turns::RichnessCfg`]. A `--profile`

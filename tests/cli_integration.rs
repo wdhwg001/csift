@@ -642,15 +642,52 @@ fn turns_bare_uuid_positional_routes_to_session() {
 #[test]
 fn bare_subagent_hex_positional_gives_guided_error() {
     // A bare-hex SUBAGENT id (no top-level jsonl) yields a GUIDED error pointing at
-    // `agents --agent` / `--subagents-only`, not a misleading "session absent".
+    // `agents --agent`, not a misleading "session absent". The remediation is SUBCOMMAND-
+    // AWARE: only `files` (which has `--subagents-only`) may advise that flag; turns/search/
+    // recover/list/agents must NOT (the flag does not exist there, so following the advice
+    // would be a parse error).
     let h = populated_home();
-    let out = h.run(&["files", "aaa111bbb222ccc333", "--summary"]);
-    assert!(!out.success, "a subagent hex has no top-level session");
+    let files = h.run(&["files", "aaa111bbb222ccc333", "--summary"]);
+    assert!(!files.success, "a subagent hex has no top-level session");
     assert!(
-        out.stderr.contains("SUBAGENT id") && out.stderr.contains("agents --agent"),
-        "error must guide to the subagent surfaces; stderr: {}",
-        out.stderr
+        files.stderr.contains("SUBAGENT id") && files.stderr.contains("agents --agent"),
+        "files error must guide to the subagent surfaces; stderr: {}",
+        files.stderr
     );
+    assert!(
+        files.stderr.contains("--subagents-only"),
+        "files (which HAS the flag) may advise --subagents-only; stderr: {}",
+        files.stderr
+    );
+    // The other five must guide to `agents --agent` WITHOUT advising the files-only flag.
+    for sub in [
+        vec!["turns", "aaa111bbb222ccc333"],
+        vec!["search", "x", "aaa111bbb222ccc333"],
+        // recover requires --plan (or --file) before it reaches the resolver; --plan is the
+        // mode that does not require a --file, so it exercises the resolver's guided error.
+        vec!["recover", "aaa111bbb222ccc333", "--plan"],
+        vec!["list", "aaa111bbb222ccc333"],
+        vec!["agents", "aaa111bbb222ccc333"],
+    ] {
+        let out = h.run(&sub);
+        assert!(
+            !out.success,
+            "{:?} a subagent hex has no top-level session",
+            sub
+        );
+        assert!(
+            out.stderr.contains("agents --agent"),
+            "{:?} error must guide to `agents --agent`; stderr: {}",
+            sub,
+            out.stderr
+        );
+        assert!(
+            !out.stderr.contains("--subagents-only"),
+            "{:?} must NOT advise the files-only --subagents-only flag; stderr: {}",
+            sub,
+            out.stderr
+        );
+    }
 }
 
 #[test]
@@ -679,10 +716,13 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
         "--subagents-only",
     ]);
     let search = h.run(&["search", "", ENC, "--session", SESS, "--format", "json"]);
+    // turns now defaults to top-level-only, so opt INTO spanning subagents to exercise the
+    // cross-surface id-form check on the turns surface too.
     let turns = h.run(&[
         "turns",
         "--session",
         SESS,
+        "--include-subagents",
         "--budget",
         "8000",
         "--format",
@@ -833,8 +873,9 @@ fn turns_and_search_label_automation_triggers() {
     ]);
     assert!(t.success, "stderr: {}", t.stderr);
     assert!(
-        t.stdout.contains("(2 automation triggers)"),
-        "header must report the plural automation count; got: {}",
+        t.stdout
+            .contains("(2 automation triggers: 2 background-command)"),
+        "header must report the plural automation count + per-class breakdown; got: {}",
         t.stdout
     );
     assert!(
@@ -898,8 +939,15 @@ fn turns_single_automation_trigger_uses_singular_header() {
     ]);
     assert!(t.success, "stderr: {}", t.stderr);
     assert!(
-        t.stdout.contains("(1 automation trigger)") && !t.stdout.contains("triggers)"),
+        t.stdout.contains("(1 automation trigger:") && !t.stdout.contains("triggers:"),
         "header must use the SINGULAR form; got: {}",
+        t.stdout
+    );
+    // The per-class breakdown names the class (here `task`, the fallback for a generic
+    // "background job" summary), not just the lumped count.
+    assert!(
+        t.stdout.contains("(1 automation trigger: 1 task)"),
+        "header must carry the per-class breakdown; got: {}",
         t.stdout
     );
 }
@@ -5478,6 +5526,114 @@ fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
     );
     // The clean session's content is present.
     assert!(out.stdout.contains("clean session ask"), "{}", out.stdout);
+}
+
+#[test]
+fn turns_defaults_to_top_level_only_no_subagent_span() {
+    // FOOTGUN FIX: `turns <uuid>` with NO flags must reconstruct ONLY the top-level thread —
+    // it must NOT span the session's subagents (unlike files/search). So a bare run prints no
+    // `(subagent transcript)` blocks and no SCOPE banner (one session in scope, rendered).
+    let h = populated_home();
+    let out = h.run(&["turns", SESS, "--budget", "40000"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(&format!("SESSION {SESS}")),
+        "the top-level thread must render: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("(subagent transcript)"),
+        "turns must NOT span subagents by default: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("SCOPE"),
+        "a single top-level session prints no scope banner: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_include_subagents_opts_into_span_with_scope_banner() {
+    // `--include-subagents` is the explicit opt-in for the rare cross-fan-out reconstruction;
+    // it spans the subagents AND prints a SCOPE banner that reports the TRUE top-level/subagent
+    // split (never `0 top-level`, even though the budget applies per session).
+    let h = populated_home();
+    let out = h.run(&["turns", SESS, "--include-subagents", "--budget", "40000"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("(subagent transcript)"),
+        "--include-subagents must span subagents: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("SCOPE") && out.stdout.contains("1 top-level"),
+        "scope banner must report the targeted top-level (never 0 top-level): {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_targeted_top_level_skipped_at_tiny_budget_is_reported_not_silent() {
+    // CRITICAL: at a budget too small for the targeted top-level session's first round-trip,
+    // the session must be reported with an explicit skip note (never silently absent), and the
+    // scope banner must still count it as `1 top-level` in scope — not `0`.
+    let h = populated_home();
+    let out = h.run(&["turns", SESS, "--include-subagents", "--budget", "120"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(&format!("SESSION {SESS}  skipped")),
+        "the targeted top-level session must be reported as skipped, not silently dropped: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("1 top-level"),
+        "scope banner must still report 1 top-level in scope (not 0): {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("raise --budget"),
+        "the skip note must tell the user to raise --budget: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_json_header_carries_true_scope_and_rendered_and_by_kind() {
+    // The JSON session_header distinguishes TRUE scope (sessions_in_scope) from rendered
+    // (sessions_rendered), and carries the per-class automation_by_kind breakdown.
+    let h = populated_home();
+    let out = h.run(&[
+        "turns",
+        SESS,
+        "--include-subagents",
+        "--budget",
+        "40000",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let first = out.stdout.lines().next().unwrap_or("");
+    let v: serde_json::Value = serde_json::from_str(first).expect("header json");
+    assert_eq!(v["kind"], "session_header");
+    assert!(
+        v.get("sessions_in_scope").is_some(),
+        "missing sessions_in_scope: {first}"
+    );
+    assert!(
+        v.get("sessions_rendered").is_some(),
+        "missing sessions_rendered: {first}"
+    );
+    assert_eq!(
+        v["top_level_sessions"], 1,
+        "targeted top-level counted: {first}"
+    );
+    let by = v
+        .get("automation_by_kind")
+        .expect("automation_by_kind present");
+    for k in ["background-command", "agent", "workflow", "monitor", "task"] {
+        assert!(by.get(k).is_some(), "by_kind missing class {k}: {first}");
+    }
 }
 
 #[test]

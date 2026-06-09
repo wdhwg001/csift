@@ -74,8 +74,12 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
 
     // ── Resolve targets → session files (subagent span per --no-subagents /
     //    --subagents-only; default spans subagents) ──
-    let session_files =
-        path::resolve_session_files(&args.paths, args.session.as_deref(), args.scope())?;
+    let session_files = path::resolve_session_files(
+        &args.paths,
+        args.session.as_deref(),
+        args.scope(),
+        path::Caller::Files,
+    )?;
 
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<FileResult> = session_files

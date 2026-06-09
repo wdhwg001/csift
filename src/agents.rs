@@ -38,8 +38,12 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // every project is scanned — the same target model as list/search. `agents`
     // discovers each session's subagents itself, so it never spans subagent TRANSCRIPT
     // files here (include_subagents=false).
-    let session_files =
-        path::resolve_session_files(&args.paths, args.session.as_deref(), false.into())?;
+    let session_files = path::resolve_session_files(
+        &args.paths,
+        args.session.as_deref(),
+        false.into(),
+        path::Caller::Other,
+    )?;
 
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 

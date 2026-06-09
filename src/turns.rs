@@ -454,6 +454,7 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
         &args.paths,
         args.session.as_deref(),
         args.want_subagents().into(),
+        path::Caller::Other,
     )?;
 
     // Parallel scan across files (default rayon pool = CPU count).
@@ -1850,21 +1851,51 @@ fn render_text(
     let mut any = false;
     let mut out_blob = String::new();
 
-    // Fan-out scope banner: `--budget` is applied PER session in scope, and a bare-uuid
-    // target SPANS that session's subagents by default — so the realized output is
-    // `budget × (rendered sessions)`. When more than one session renders, surface the
-    // multiplier + the top-level/subagent split up front so the fan-out is never a surprise
-    // (the recovery use case usually wants `--no-subagents`). A single-session run is the
-    // common case and prints no banner (zero added noise).
-    let (rendered, n_top, n_sub) = scope_summary(sessions, plans);
-    if rendered > 1 {
+    // Fan-out scope banner. The banner reports the TRUE scope (EVERY discovered session,
+    // split top-level/subagent) and — separately — how many rendered WITHIN budget, so the
+    // budget value can never silently rewrite "scope" and a targeted top-level uuid can never
+    // read as `0 top-level`. Printed whenever more than one session is in scope OR some
+    // in-scope session was skipped by the budget; a lone session that rendered cleanly stays
+    // silent (the common single-thread recovery case, zero added noise).
+    let sc = scope_summary(sessions, plans);
+    let any_skipped = sc.rendered < sc.in_scope;
+    if sc.in_scope > 1 || any_skipped {
         println!(
-            "SCOPE  {rendered} sessions in scope ({n_top} top-level + {n_sub} subagent) · \
-             budget {} chars is PER session → up to {} chars total · pass --no-subagents \
-             to scope to the top-level thread only",
+            "SCOPE  {} session{} in scope ({} top-level + {} subagent) · {} rendered within \
+             budget · budget {} chars is PER session → up to {} chars total",
+            sc.in_scope,
+            if sc.in_scope == 1 { "" } else { "s" },
+            sc.in_scope_top,
+            sc.in_scope_sub,
+            sc.rendered,
             ctx.budget_chars,
-            ctx.budget_chars.saturating_mul(rendered)
+            ctx.budget_chars.saturating_mul(sc.rendered.max(1))
         );
+        println!();
+    }
+
+    // A TARGETED top-level session that has restorable content but does NOT fit the budget
+    // must be reported explicitly — never silently absent while unrelated subagents fill
+    // stdout. Emit a per-session skip note (top-level sessions only; a skipped subagent is
+    // fan-out noise the user did not ask for) carrying the budget it would need. A GENUINELY
+    // EMPTY session (no restorable turns at all → `min_render_chars` is None) is left to the
+    // terminal "no turns selected (empty session set …)" fallback — that case is already
+    // honest and not a budget problem. `skipped_any` tracks only the budget-too-small notes,
+    // separate from `any`, so the fallback still keys on whether a real block rendered.
+    let mut skipped_any = false;
+    for (sr, plan) in sessions.iter().zip(plans.iter()) {
+        if plan.selected.is_empty() && is_top_level_session_id(&sr.session_id) {
+            if let Some(min) = min_render_chars(sr, ctx.budget_chars, &ctx.cfg) {
+                println!(
+                    "SESSION {}  skipped — its first round-trip needs ≥ {} chars; \
+                     raise --budget (now {})",
+                    sr.session_id, min, ctx.budget_chars
+                );
+                skipped_any = true;
+            }
+        }
+    }
+    if skipped_any {
         println!();
     }
 
@@ -1892,9 +1923,14 @@ fn render_text(
             "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
             ctx.budget_chars, ctx.rt_fraction, plan.spanned_boundaries
         );
+        // Header automation note carries a PER-CLASS breakdown, not just the lumped scalar,
+        // so a reader sees the composition (`2 background-command, 1 agent`) without scanning
+        // every `[kind …]` label line in the body.
         let automation_note = if n_automation > 0 {
+            let breakdown =
+                automation_breakdown_text(&automation_by_kind(std::slice::from_ref(plan)));
             format!(
-                " ({n_automation} automation trigger{})",
+                " ({n_automation} automation trigger{}: {breakdown})",
                 if n_automation == 1 { "" } else { "s" }
             )
         } else {
@@ -1942,7 +1978,9 @@ fn render_text(
         }
     }
 
-    if !any {
+    // The terminal fallback fires only when NOTHING rendered AND no per-session skip note
+    // already explained why (a skip note is the more specific, actionable message).
+    if !any && !skipped_any {
         println!("no turns selected (empty session set or budget too small)");
     }
     if ctx.skipped_lines > 0 {
@@ -2094,24 +2132,72 @@ fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usize) {
     (u, a)
 }
 
-/// The fan-out scope of an in-scope-session set: how many sessions rendered (non-empty
-/// plans), split into top-level (`<uuid>.jsonl`) vs subagent (bare-hex) transcripts. Used
-/// to surface the budget MULTIPLIER honestly — `--budget` is applied PER session, so a
-/// bare-uuid query that spans S subagents realizes up to `budget × (1 + S)` chars. Returns
-/// `(rendered, top_level, subagents)`.
-fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> (usize, usize, usize) {
+/// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a
+/// `--include-subagents` query that spans S subagents realizes up to `budget × (1 + S)`
+/// chars. The banner must report the TRUE scope (every discovered session) — NOT only what
+/// fit in the budget — so a rendering knob (`--budget`) can never silently rewrite "scope"
+/// and a targeted top-level uuid can never read as `0 top-level`. Returns the full
+/// breakdown: how many sessions are in scope (split top-level vs subagent over ALL of them)
+/// and how many actually rendered within budget.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ScopeCounts {
+    /// All discovered sessions in scope (regardless of whether they fit the budget).
+    in_scope: usize,
+    /// Top-level (`<uuid>.jsonl`) sessions among those in scope.
+    in_scope_top: usize,
+    /// Subagent (bare-hex) transcripts among those in scope.
+    in_scope_sub: usize,
+    /// How many of the in-scope sessions produced a non-empty plan (rendered within budget).
+    rendered: usize,
+}
+
+fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> ScopeCounts {
+    let mut in_scope = 0usize;
+    let mut in_scope_top = 0usize;
     let mut rendered = 0usize;
-    let mut top_level = 0usize;
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
-        if plan.selected.is_empty() {
-            continue;
-        }
-        rendered += 1;
+        in_scope += 1;
         if is_top_level_session_id(&sr.session_id) {
-            top_level += 1;
+            in_scope_top += 1;
+        }
+        if !plan.selected.is_empty() {
+            rendered += 1;
         }
     }
-    (rendered, top_level, rendered - top_level)
+    ScopeCounts {
+        in_scope,
+        in_scope_top,
+        in_scope_sub: in_scope - in_scope_top,
+        rendered,
+    }
+}
+
+/// The minimum char cost to render a targeted session's FIRST (most-recent) complete
+/// round-trip, used to tell a user how much to raise `--budget` when their targeted session
+/// was skipped (its plan came back empty). Returns `None` when the session has no turn at
+/// all (an empty session — a different, honest "nothing to restore" case). The estimate is
+/// the doc-header reservation + the cheapest single side of the most-recent turn, a true
+/// lower bound on what any non-empty plan for this session would cost.
+fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg) -> Option<usize> {
+    let header = doc_header_block_max_chars(sr, budget);
+    let cheapest = sr
+        .turns
+        .iter()
+        .map(|t| {
+            let mut costs = Vec::new();
+            if t.user.is_some() {
+                costs.push(turn_cost(t, SelSides::UserOnly, cfg));
+            }
+            if !t.agents.is_empty() {
+                costs.push(turn_cost(t, SelSides::AssistantOnly, cfg));
+            }
+            costs.into_iter().min().unwrap_or(usize::MAX)
+        })
+        .min()?;
+    if cheapest == usize::MAX {
+        return None;
+    }
+    Some(header + cheapest)
 }
 
 /// True when a session id is a TOP-LEVEL `<uuid>.jsonl` basename (canonical 8-4-4-4-12
@@ -2142,6 +2228,61 @@ fn count_automation(plan: &SessionPlan) -> usize {
         .count()
 }
 
+/// The fixed automation-trigger classes, in stable render order, paired with their slug. The
+/// per-class breakdown (text + JSON) iterates THIS so a reader sees the composition of the
+/// lumped `(N automation triggers)` total — the lens demands segments be labeled by trigger
+/// attribution at the SUMMARY level, not just per-unit.
+const AUTOMATION_KINDS: [crate::model::AutomationKind; 5] = [
+    crate::model::AutomationKind::BackgroundCommand,
+    crate::model::AutomationKind::Agent,
+    crate::model::AutomationKind::Workflow,
+    crate::model::AutomationKind::Monitor,
+    crate::model::AutomationKind::Task,
+];
+
+/// Per-class counts of the SELECTED automation triggers across a plan set, keyed by the
+/// `AUTOMATION_KINDS` order. A trigger with no parsed `automation` (a malformed pulse still
+/// flagged `is_automation`) is attributed to `Task` (its rendered slug). Returns a fixed-len
+/// array aligned with `AUTOMATION_KINDS`.
+fn automation_by_kind(plans: &[SessionPlan]) -> [usize; 5] {
+    let mut by = [0usize; 5];
+    for plan in plans.iter().filter(|p| !p.selected.is_empty()) {
+        for s in &plan.selected {
+            if !shows_user(s.sides) {
+                continue;
+            }
+            let Some(t) = find_turn(plan, s.turn_index) else {
+                continue;
+            };
+            if !(t.user.is_some() && t.is_automation) {
+                continue;
+            }
+            let kind = t
+                .automation
+                .as_ref()
+                .map(|a| a.kind)
+                .unwrap_or(crate::model::AutomationKind::Task);
+            if let Some(idx) = AUTOMATION_KINDS.iter().position(|k| *k == kind) {
+                by[idx] += 1;
+            }
+        }
+    }
+    by
+}
+
+/// Render a per-class automation breakdown as `kind:count` pairs for the non-zero classes,
+/// e.g. `2 background-command, 1 agent`. Empty when no class has a count (the caller then
+/// shows just the total). Used by BOTH the text header detail and as the JSON `by_kind`
+/// source.
+fn automation_breakdown_text(by: &[usize; 5]) -> String {
+    by.iter()
+        .zip(AUTOMATION_KINDS.iter())
+        .filter(|(n, _)| **n > 0)
+        .map(|(n, k)| format!("{n} {}", k.slug()))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn render_json(
     ctx: &RenderCtx,
     sessions: &[ScanResult],
@@ -2156,7 +2297,7 @@ fn render_json(
     // triggers)` line (which was previously absent from the JSON stream entirely). It is the
     // FIRST line; its `kind` discriminator (`session_header`) matches the existing
     // `compaction_boundary` / `collapsed_agents` boundary-object convention.
-    let (rendered, n_top, n_sub) = scope_summary(sessions, plans);
+    let sc = scope_summary(sessions, plans);
     let total_user: usize = plans
         .iter()
         .filter(|p| !p.selected.is_empty())
@@ -2167,16 +2308,30 @@ fn render_json(
         .filter(|p| !p.selected.is_empty())
         .map(count_automation)
         .sum();
+    // Per-class automation breakdown (the lens-required attribution composition), keyed by
+    // the stable `AUTOMATION_KINDS` order, emitted as a `by_kind` object so a consumer never
+    // re-derives it from the per-unit `trigger_kind` fields.
+    let by = automation_by_kind(plans);
+    let by_kind: serde_json::Map<String, serde_json::Value> = AUTOMATION_KINDS
+        .iter()
+        .zip(by.iter())
+        .map(|(k, n)| (k.slug().to_string(), json!(n)))
+        .collect();
+    // `sessions_in_scope` is the TRUE scope (every discovered session); `sessions_rendered` is
+    // how many fit the budget. Keeping them distinct stops a `--budget` knob from silently
+    // rewriting "scope" and keeps a targeted top-level uuid from reading as `0 top-level`.
     let header = json!({
         "kind": "session_header",
-        "sessions_in_scope": rendered,
-        "top_level_sessions": n_top,
-        "subagent_sessions": n_sub,
+        "sessions_in_scope": sc.in_scope,
+        "sessions_rendered": sc.rendered,
+        "top_level_sessions": sc.in_scope_top,
+        "subagent_sessions": sc.in_scope_sub,
         "budget_chars": ctx.budget_chars,
         "budget_is_per_session": true,
-        "max_total_chars": ctx.budget_chars.saturating_mul(rendered),
+        "max_total_chars": ctx.budget_chars.saturating_mul(sc.rendered.max(1)),
         "selected_user": total_user,
         "automation_triggers": total_automation,
+        "automation_by_kind": by_kind,
     });
     {
         let s = serde_json::to_string(&header)?;
@@ -2282,6 +2437,10 @@ fn emit_unit_json(
                 map.insert("trigger_kind".into(), json!(t.kind.slug()));
                 map.insert("task_id".into(), json!(t.task_id));
                 map.insert("status".into(), json!(t.status));
+                // `event` is the Monitor/ScheduleWakeup real-outcome tag (null on non-monitor
+                // pulses). Surfaced so a JSON consumer sees a timed-out / event-bearing monitor
+                // verbatim rather than inferring `completed` from an absent status.
+                map.insert("event".into(), json!(t.event));
             }
         }
     }

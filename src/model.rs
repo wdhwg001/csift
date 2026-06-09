@@ -390,12 +390,18 @@ impl Record {
         let task_id = extract_xml_tag(s, "task-id");
         let status = extract_xml_tag(s, "status");
         let summary = extract_xml_tag(s, "summary");
+        // Monitor-class pulses carry their real outcome in `<event>` (e.g.
+        // `STAGE2_OUTPUT_READY`, `[Monitor timed out — re-arm if needed.]`) and frequently have
+        // NO `<status>` tag, so the label must read the event rather than defaulting status to
+        // a fabricated `completed`.
+        let event = extract_xml_tag(s, "event");
         let kind = AutomationKind::from_summary(summary.as_deref());
         Some(AutomationTrigger {
             kind,
             task_id,
             status,
             summary,
+            event,
         })
     }
 
@@ -410,7 +416,22 @@ impl Record {
     pub fn automation_label(&self) -> Option<String> {
         let t = self.automation_trigger()?;
         let id = t.task_id.as_deref().unwrap_or("?");
-        let status = t.status.as_deref().unwrap_or("completed");
+        // The status slot prefers the explicit `<status>`; when it is absent (the common
+        // Monitor/ScheduleWakeup case) the real outcome lives in `<event>` — so render THAT
+        // (e.g. `STAGE2_OUTPUT_READY`, a timeout notice) rather than fabricating `completed`,
+        // which would invert a timed-out monitor's attribution. Only when BOTH are missing do
+        // we fall back to `completed`. An event payload is whitespace-normalized for the label.
+        let event_norm = t
+            .event
+            .as_deref()
+            .filter(|e| !e.is_empty())
+            .map(normalize_line);
+        let status = t
+            .status
+            .as_deref()
+            .map(str::to_string)
+            .or(event_norm)
+            .unwrap_or_else(|| "completed".to_string());
         let head = format!("[{} {id} {status}]", t.kind.slug());
         Some(match t.summary.as_deref() {
             Some(sum) if !sum.is_empty() => format!("{head} {}", normalize_line(sum)),
@@ -1237,6 +1258,11 @@ pub struct AutomationTrigger {
     pub status: Option<String>,
     /// The `<summary>` (the human-readable "what completed" line), if present.
     pub summary: Option<String>,
+    /// The `<event>` payload, if present — where a Monitor / ScheduleWakeup pulse carries its
+    /// real outcome (`STAGE2_OUTPUT_READY`, `[Monitor timed out — re-arm if needed.]`). Often
+    /// the only outcome signal on a Monitor pulse (which usually has no `<status>`), so the
+    /// label falls back to it instead of fabricating `completed`.
+    pub event: Option<String>,
 }
 
 /// Extract the text between `<tag>` and `</tag>` in `s`, trimmed, or `None` when the tag
@@ -2368,6 +2394,56 @@ mod tests {
             .automation_label()
             .unwrap()
             .starts_with("[background-command b0855naiz failed]"));
+    }
+
+    #[test]
+    fn monitor_cadence_event_replaces_fabricated_completed_status() {
+        // The real captured monitor line-34408 shape: a Monitor pulse with NO <status> but a real
+        // <event> outcome. The label must surface the EVENT (STAGE2_OUTPUT_READY), not fabricate
+        // `completed` — which would invert a timed-out monitor's attribution.
+        let mon = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b718g3gqq</task-id>\n<summary>Monitor event: \"full pulse suite re-run completion\"</summary>\n<event>STAGE2_OUTPUT_READY</event>\n</task-notification>"}}"#,
+        );
+        let t = mon.automation_trigger().expect("a monitor trigger");
+        assert_eq!(t.kind, AutomationKind::Monitor);
+        assert_eq!(t.status, None, "this monitor pulse carries no <status>");
+        assert_eq!(t.event.as_deref(), Some("STAGE2_OUTPUT_READY"));
+        let label = mon.automation_label().unwrap();
+        assert!(
+            label.starts_with("[monitor b718g3gqq STAGE2_OUTPUT_READY]"),
+            "event must replace fabricated `completed`: {label}"
+        );
+        assert!(
+            !label.contains("completed"),
+            "no fabricated `completed` when an event is present: {label}"
+        );
+
+        // A timed-out monitor carries the timeout notice in <event> — also surfaced, never
+        // inverted to `completed`.
+        let timeout = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>q9</task-id>\n<summary>Monitor tick</summary>\n<event>[Monitor timed out — re-arm if needed.]</event>\n</task-notification>"}}"#,
+        );
+        let label2 = timeout.automation_label().unwrap();
+        assert!(label2.contains("Monitor timed out"), "got: {label2}");
+        assert!(!label2.contains("completed"), "got: {label2}");
+
+        // When BOTH status and event are absent, the label still falls back to `completed`.
+        let bare = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>z</task-id>\n<summary>Monitor tick</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            bare.automation_label().unwrap(),
+            "[monitor z completed] Monitor tick"
+        );
+
+        // An explicit <status> still wins over <event> (status is the more authoritative slot).
+        let both = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w</task-id>\n<status>failed</status>\n<summary>Monitor tick</summary>\n<event>SOME_EVENT</event>\n</task-notification>"}}"#,
+        );
+        assert!(both
+            .automation_label()
+            .unwrap()
+            .starts_with("[monitor w failed]"));
     }
 
     #[test]

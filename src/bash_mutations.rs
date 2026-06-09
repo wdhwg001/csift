@@ -404,21 +404,26 @@ struct MaskedTok<'a> {
     masked: &'a str,
 }
 
-/// Tokenize a segment (and its parallel mask) on whitespace as the mask sees it, returning
-/// `(orig, masked)` token pairs. Whitespace is detected on the ORIGINAL bytes (a masked
-/// interior byte is [`MASK_CHAR`], never whitespace, so a quoted `"a b"` stays ONE token —
-/// matching the prior single-token behavior).
+/// Tokenize a segment (and its parallel mask) on whitespace as the MASK sees it, returning
+/// `(orig, masked)` token pairs. Whitespace is detected on the MASK bytes (NOT the original):
+/// an interior space inside a quoted / backtick / procsub span is [`MASK_BYTE`] (`0x01`) in
+/// the mask — a non-whitespace byte — so a quoted `"a b"` / `'/dest dir/x'` stays ONE token,
+/// and the ORIGINAL (verbatim, with its real space) is sliced for the emitted path. Reading
+/// the boundary off the ORIGINAL bytes here was the bug that severed a quoted space-bearing
+/// path mid-filename (`"…/Application Support/…"` → fabricated `Support/…`); the mask is the
+/// only byte-stream where an in-quote space is non-whitespace. The mask is byte-length-
+/// identical to the segment, so `[start..i]` slices both safely.
 fn masked_tokens<'a>(segment: &'a str, mask: &'a str) -> Vec<MaskedTok<'a>> {
-    let bytes = segment.as_bytes();
+    let mbytes = mask.as_bytes();
     let mut toks = Vec::new();
     let mut i = 0usize;
-    while i < bytes.len() {
-        if bytes[i].is_ascii_whitespace() {
+    while i < mbytes.len() {
+        if mbytes[i].is_ascii_whitespace() {
             i += 1;
             continue;
         }
         let start = i;
-        while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+        while i < mbytes.len() && !mbytes[i].is_ascii_whitespace() {
             i += 1;
         }
         toks.push(MaskedTok {
@@ -1110,6 +1115,15 @@ fn has_syntax_noise(token: &str) -> bool {
     }
     // Regex / escape metacharacters that never appear in a real path token.
     if token.contains('\\') || token.contains('|') || token.contains('^') {
+        return true;
+    }
+    // A BACKTICK command substitution used as a redirect/operand target (`> `mktemp``, a
+    // `cmd 2> `mktemp -t err``): `shell_mask` masks the backtick BODY but leaves the
+    // structural backticks in the original slice, so the verbatim `` `mktemp` `` token can
+    // reach here. A command substitution is never a literal on-disk path — reject any token
+    // bearing a backtick (the verb-dispatch path already drops a FULLY-masked token, but a
+    // redirect target is sliced from the original and never passes through that guard).
+    if token.contains('`') {
         return true;
     }
     // An unbalanced bracket/paren/brace REMAINING after the tail trim → still structural.
@@ -1804,19 +1818,69 @@ mod tests {
 
     #[test]
     fn quoted_path_with_metachar_or_space_does_not_leak_fragment() {
-        // A quote-unaware split severs a quoted path at an in-quote `;` or space; the
-        // resulting `'/tmp/quoted` / `'output` fragment (unbalanced quote) is rejected.
-        for cmd in [
-            "echo x >> '/tmp/quoted; path.txt'",
-            "cmd > 'output (final).txt'",
-        ] {
-            let got = just_paths(cmd);
+        // The mask now makes a quoted in-path `;` and space invisible to the tokenizer, so a
+        // quoted span stays ONE token and the WHOLE path is recovered (no `'…`/`"…` fragment,
+        // and no mid-filename split). Both forms below resolve to their full quoted content.
+        let got = just_paths("echo x >> '/tmp/quoted; path.txt'");
+        assert_eq!(got, vec!["/tmp/quoted; path.txt".to_string()]);
+        let got2 = just_paths("cmd > 'output (final).txt'");
+        assert_eq!(got2, vec!["output (final).txt".to_string()]);
+        for got in [&got, &got2] {
             assert!(
                 !got.iter()
                     .any(|p| p.starts_with('\'') || p.starts_with('"')),
-                "quoted-split fragment leaked for {cmd:?}: {got:?}"
+                "quoted-split fragment leaked: {got:?}"
             );
         }
+    }
+
+    #[test]
+    fn quoted_space_bearing_path_stays_one_token_not_a_partial() {
+        // CRITICAL precision fix: a quoted redirect/operand path CONTAINING A SPACE (the most
+        // common macOS path shape — Library/Application Support, Google Drive, My Documents)
+        // must stay ONE token and be emitted WHOLE, never split mid-filename into a fabricated
+        // partial (the prior `"…/Application Support/x"` → `Support/x` bug). Whitespace is now
+        // read off the MASK, where an in-quote space is `0x01` (non-whitespace).
+        assert_eq!(
+            paths("cp config.json \"/Users/me/Library/Application Support/app/config.json\""),
+            vec![(
+                "/Users/me/Library/Application Support/app/config.json".to_string(),
+                "cp"
+            )]
+        );
+        assert_eq!(
+            paths("rm -rf \"/Users/me/My Project/build\""),
+            vec![("/Users/me/My Project/build".to_string(), "rm")]
+        );
+        assert_eq!(
+            paths("mkdir -p \"/Users/me/Google Drive/notes\""),
+            vec![("/Users/me/Google Drive/notes".to_string(), "mkdir")]
+        );
+        // Single-quoted redirect target with a space → full path via the `>` redirect verb.
+        assert_eq!(
+            paths("echo x > '/tmp/has space.txt'"),
+            vec![("/tmp/has space.txt".to_string(), ">")]
+        );
+        // The bare `rm '/tmp/has space.txt'` operand also recovers the whole path.
+        assert_eq!(
+            paths("rm '/tmp/has space.txt'"),
+            vec![("/tmp/has space.txt".to_string(), "rm")]
+        );
+    }
+
+    #[test]
+    fn backtick_command_substitution_target_is_not_a_path() {
+        // A backtick command substitution used as a redirect/operand TARGET is never an
+        // on-disk path. `shell_mask` masks the backtick body but the structural backticks
+        // survive in the original slice, so `has_syntax_noise` must reject any backtick-
+        // bearing token. No fabricated `` `mktemp` `` / `` `mktemp `` pseudo-path rows.
+        assert!(paths("echo x > `mktemp`").is_empty());
+        assert!(paths("cmd 2> `mktemp -t err`").is_empty());
+        // A real redirect to a normal file alongside the backtick command is unaffected.
+        assert_eq!(
+            paths("echo `date` > /tmp/real.log"),
+            vec![("/tmp/real.log".to_string(), ">")]
+        );
     }
 
     #[test]

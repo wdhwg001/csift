@@ -90,8 +90,12 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     //       only the top-level `<uuid>.jsonl` set. Workflow `journal.jsonl` event logs are
     //       never transcripts and are excluded by the resolver.
     let scope = SubagentScope::from(args.want_subagents());
-    let mut session_files =
-        path::resolve_session_files(&args.paths, args.session.as_deref(), scope)?;
+    let mut session_files = path::resolve_session_files(
+        &args.paths,
+        args.session.as_deref(),
+        scope,
+        path::Caller::Other,
+    )?;
     session_files.sort();
     session_files.dedup();
 

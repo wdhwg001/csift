@@ -227,6 +227,18 @@ pub enum SubagentScope {
     SubagentsOnly,
 }
 
+/// Which subcommand is resolving session files — threaded into [`resolve_session_files`] so
+/// the bare-subagent-hex remediation message is SUBCOMMAND-AWARE. Only `files` offers
+/// `--subagents-only`, so only its error may advise that flag; the other five must not (the
+/// flag does not exist there and would be a parse error if the user followed the advice).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Caller {
+    /// `csift files` — the only subcommand with `--subagents-only`.
+    Files,
+    /// Any of `search` / `agents` / `recover` / `turns` / `list` — no `--subagents-only`.
+    Other,
+}
+
 impl From<bool> for SubagentScope {
     /// `true` (the historical `include_subagents`) ⇒ `WithSubagents`; `false` ⇒
     /// `TopLevelOnly`. There is no bool that maps to `SubagentsOnly` — that mode is
@@ -264,6 +276,7 @@ pub fn resolve_session_files(
     paths: &[std::path::PathBuf],
     session: Option<&str>,
     scope: SubagentScope,
+    caller: Caller,
 ) -> Result<Vec<PathBuf>> {
     // A POSITIONAL target that is a bare SESSION UUID (not a project dir) is routed to the
     // session filter, so the documented `csift files <uuid>` / `recover <uuid>` / `turns
@@ -356,13 +369,25 @@ pub fn resolve_session_files(
     if files.is_empty() && !session_ids.is_empty() {
         let ids = session_ids.join(", ");
         // A bare-hex SUBAGENT id (17 hex, no dashes) never names a TOP-LEVEL jsonl — guide
-        // the caller to the right surface instead of implying the session is gone.
+        // the caller to the right surface instead of implying the session is gone. The
+        // remediation is SUBCOMMAND-AWARE: only `files` has `--subagents-only`, so only its
+        // message may advise that flag (the other five would hit a parse error if the user
+        // followed it). All five fall back to the universally-valid `agents --agent <id>`.
         if session_ids.iter().any(|s| is_bare_subagent_hex(s)) {
-            bail!(
-                "no top-level session matched [{ids}]. If this is a SUBAGENT id from \
-                 `csift agents`, inspect it with `csift agents --agent <id>`, or pass the \
-                 PARENT session uuid with `--subagents-only` to scope its subagents."
-            );
+            match caller {
+                Caller::Files => bail!(
+                    "no top-level session matched [{ids}]. If this is a SUBAGENT id from \
+                     `csift agents`, inspect its lifecycle with `csift agents --agent <id>`, \
+                     or pass the PARENT session uuid with `--subagents-only` to dump the \
+                     files ALL its subagents touched."
+                ),
+                Caller::Other => bail!(
+                    "no top-level session matched [{ids}]. A bare SUBAGENT id never names a \
+                     top-level session; inspect its lifecycle with `csift agents --agent \
+                     <id>`. (Single-subagent transcript scoping is not supported here — pass \
+                     the PARENT session uuid to operate on that whole conversation.)"
+                ),
+            }
         }
         bail!("no session file found for session id [{ids}] under the resolved target(s)");
     }

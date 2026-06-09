@@ -268,6 +268,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         &args.targets(),
         args.session.as_deref(),
         args.want_subagents().into(),
+        path::Caller::Other,
     )?;
 
     // ── Parallel scan across files; collect order-stable, then merge ──
@@ -677,11 +678,11 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         if i > 0 {
             println!();
         }
-        println!(
-            "═══ SESSION {} · TURN {} ═══",
-            short_id(&ex.session_id),
-            ex.turn_index
-        );
+        // Print the FULL session id (not a truncated head): this header is the surface a user
+        // copies from to re-feed another csift command (`csift turns <id>`), so a truncated id
+        // would break that copy-paste workflow. Every other subcommand's SESSION header prints
+        // the full uuid; search now matches.
+        println!("═══ SESSION {} · TURN {} ═══", ex.session_id, ex.turn_index);
         for hit in &ex.hits {
             let glyph = category_glyph(hit.category);
             let label = category_label(hit.category);
@@ -760,14 +761,6 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
     });
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
-}
-
-/// Shorten a uuid to its first segment for compact headers (full id stays in JSON).
-fn short_id(id: &str) -> String {
-    match id.split_once('-') {
-        Some((head, _)) => format!("{head}…"),
-        None => id.to_string(),
-    }
 }
 
 #[cfg(test)]
@@ -1282,13 +1275,6 @@ mod tests {
     }
 
     // ── Branch-completeness for the pure helpers ──
-
-    #[test]
-    fn short_id_with_and_without_dash() {
-        assert_eq!(short_id("0a1b2c3d-4e5f-4a6b"), "0a1b2c3d…");
-        // A uuid-less id with no dash → returned verbatim (the `None` arm).
-        assert_eq!(short_id("nodashes"), "nodashes");
-    }
 
     #[test]
     fn category_label_and_glyph_all_variants() {
