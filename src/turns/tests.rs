@@ -366,6 +366,7 @@ fn mk_turn(
         tool_calls: tools,
         agents,
         compactions_before: comp,
+        is_automation: false,
     }
 }
 
@@ -390,6 +391,7 @@ fn mk_turn_agents(
         tool_calls: agents.len(),
         agents,
         compactions_before: comp,
+        is_automation: false,
     }
 }
 
@@ -2243,6 +2245,7 @@ fn placeholder_attribution_sums_per_message_tool_and_failed() {
         tool_calls: 6,
         agents,
         compactions_before: 0,
+        is_automation: false,
     };
     let lane = select_agent_messages(&t, &rich_cfg());
     let span = lane
@@ -2379,6 +2382,7 @@ fn dedup_flagged_middle_still_richness_gated() {
         tool_calls: 0,
         agents,
         compactions_before: 0,
+        is_automation: false,
     };
     let lane = select_agent_messages(&t, &rich_cfg());
     let kept_flagged = lane

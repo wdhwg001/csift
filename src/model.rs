@@ -90,6 +90,15 @@ pub const LOCAL_COMMAND_STDOUT_PREFIX: &str = "<local-command-stdout>";
 /// separately (see [`Record::slash_command_args`]).
 pub const COMMAND_NAME_PREFIX: &str = "<command-name>";
 
+/// Prefix of a `<task-notification>…</task-notification>` user record — a MACHINE-INJECTED
+/// automation trigger (a background-command / workflow / spawned-task completion notice CC
+/// inserts as a `type:"user"`, non-`isMeta`, STRING-content record). It LOOKS like a human
+/// turn to [`Record::is_genuine_user`] (it passes every gate), so it DOES open a turn — but
+/// it is an automation pulse, not the operator's prose. [`Record::automation_trigger`]
+/// classifies it so surfaces can LABEL the segment (`[workflow <id> completed] <summary>`)
+/// instead of dumping the raw `<task-id>`/`<output-file>`/`<status>` XML wrapper.
+pub const TASK_NOTIFICATION_PREFIX: &str = "<task-notification>";
+
 /// The synthesized marker Claude Code writes into the `tool_result` when the user
 /// REJECTS a tool use (§4.2.4) — fires for ANY rejected tool_use (ExitPlanMode plan
 /// kick-backs AND rejected AskUserQuestion / Edit / etc.). On its own it is NOT a user
@@ -355,6 +364,53 @@ impl Record {
         } else {
             Some(normalize_line(args))
         }
+    }
+
+    /// Classify this record as a MACHINE-INJECTED automation trigger, if it is one.
+    ///
+    /// A `<task-notification>` record is a `type:"user"`, non-`isMeta`, STRING-content
+    /// record CC inserts when a background command / spawned task / workflow completes. It
+    /// passes every [`Record::is_genuine_user`] gate (so it opens a turn like a human
+    /// message), but it is an automation pulse — surfacing its raw `<task-id>` /
+    /// `<output-file>` / `<status>` XML as "user prose" is noise. This parser extracts the
+    /// stable inner tags so a surface can render `[workflow <task-id> completed] <summary>`
+    /// instead. Returns `None` for any non-`<task-notification>` record.
+    ///
+    /// CODEPOINT-SAFE: uses `str::find` on the ASCII tag bounds and slices only on those
+    /// ASCII offsets, so a CJK summary body is never split mid-codepoint.
+    #[must_use]
+    pub fn automation_trigger(&self) -> Option<AutomationTrigger> {
+        let content = self.message.as_ref()?.content.as_ref()?;
+        let Content::Text(s) = content else {
+            return None;
+        };
+        if !s.starts_with(TASK_NOTIFICATION_PREFIX) {
+            return None;
+        }
+        let task_id = extract_xml_tag(s, "task-id");
+        let status = extract_xml_tag(s, "status");
+        let summary = extract_xml_tag(s, "summary");
+        Some(AutomationTrigger {
+            task_id,
+            status,
+            summary,
+        })
+    }
+
+    /// The one-line ATTRIBUTION label for an automation-trigger opener, or `None` when this
+    /// record is not one: `[workflow <task-id> <status>] <summary>` (a missing field is
+    /// elided gracefully). This is what `turns` / `search` render as the segment opener in
+    /// place of the raw `<task-notification>` XML blob.
+    #[must_use]
+    pub fn automation_label(&self) -> Option<String> {
+        let t = self.automation_trigger()?;
+        let id = t.task_id.as_deref().unwrap_or("?");
+        let status = t.status.as_deref().unwrap_or("completed");
+        let head = format!("[workflow {id} {status}]");
+        Some(match t.summary.as_deref() {
+            Some(sum) if !sum.is_empty() => format!("{head} {}", normalize_line(sum)),
+            _ => head,
+        })
     }
 
     /// Plain-text rendering of a GENUINE user message for the `list`/`search`
@@ -1095,6 +1151,37 @@ fn scrape_persisted_path(text: &str) -> Option<String> {
         None
     } else {
         Some(path.to_string())
+    }
+}
+
+/// A parsed `<task-notification>` automation trigger — the stable inner tags of a
+/// machine-injected background-command / workflow / spawned-task completion notice. Every
+/// field is `Option` because a malformed / partial notification must degrade gracefully
+/// (the label still renders with `?`/`completed` fallbacks) rather than be dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutomationTrigger {
+    /// The `<task-id>` (the workflow / background-command id), if present.
+    pub task_id: Option<String>,
+    /// The `<status>` (`completed` / `failed` / …), if present.
+    pub status: Option<String>,
+    /// The `<summary>` (the human-readable "what completed" line), if present.
+    pub summary: Option<String>,
+}
+
+/// Extract the text between `<tag>` and `</tag>` in `s`, trimmed, or `None` when the tag
+/// is absent or empty. Codepoint-safe: `str::find` returns ASCII byte offsets of the
+/// (ASCII) tag delimiters, and the slice is taken on those offsets only — never inside the
+/// (possibly CJK) body. A missing close tag yields `None` (never a runaway slice).
+fn extract_xml_tag(s: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = s.find(&open)? + open.len();
+    let end_rel = s[start..].find(&close)?;
+    let inner = s[start..start + end_rel].trim();
+    if inner.is_empty() {
+        None
+    } else {
+        Some(inner.to_string())
     }
 }
 
@@ -2118,6 +2205,103 @@ mod tests {
             r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
         );
         assert!(!carrier.opens_turn());
+    }
+
+    // ── Automation-trigger classification (`<task-notification>`) ──
+
+    #[test]
+    fn automation_trigger_parses_task_notification() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>wh1it9jlj</task-id>\n<tool-use-id>toolu_x</tool-use-id>\n<output-file>/tmp/x.output</output-file>\n<status>completed</status>\n<summary>Dynamic workflow \"READ-ONLY: verify csift files\" completed</summary>\n</task-notification>"}}"#,
+        );
+        // It STILL opens a turn (it is a real boundary) — but is now classified.
+        assert!(
+            r.is_genuine_user(),
+            "a task-notification passes the genuine-user gate"
+        );
+        assert!(r.opens_turn());
+        let t = r.automation_trigger().expect("classified as automation");
+        assert_eq!(t.task_id.as_deref(), Some("wh1it9jlj"));
+        assert_eq!(t.status.as_deref(), Some("completed"));
+        assert_eq!(
+            t.summary.as_deref(),
+            Some("Dynamic workflow \"READ-ONLY: verify csift files\" completed")
+        );
+        // The rendered ATTRIBUTION label replaces the raw XML blob.
+        let label = r.automation_label().unwrap();
+        assert!(
+            label.starts_with("[workflow wh1it9jlj completed]"),
+            "got: {label}"
+        );
+        assert!(
+            label.contains("Dynamic workflow"),
+            "summary in label: {label}"
+        );
+        assert!(
+            !label.contains("<task-id>"),
+            "raw XML must not leak: {label}"
+        );
+    }
+
+    #[test]
+    fn automation_trigger_none_for_human_and_partial_graceful() {
+        // A plain human message is NOT an automation trigger.
+        let human =
+            parse(r#"{"type":"user","message":{"role":"user","content":"please fix the bug"}}"#);
+        assert!(human.automation_trigger().is_none());
+        assert!(human.automation_label().is_none());
+        // A partial notification (no summary/status) still labels gracefully with fallbacks.
+        let partial = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}}"#,
+        );
+        let label = partial.automation_label().unwrap();
+        assert_eq!(label, "[workflow abc completed]");
+    }
+
+    #[test]
+    fn automation_trigger_cjk_summary_codepoint_safe() {
+        // A CJK summary body must not be split mid-codepoint by the tag extractor.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>zh1</task-id>\n<status>completed</status>\n<summary>x</summary>\n</task-notification>"}}"#,
+        );
+        let t = r.automation_trigger().unwrap();
+        assert_eq!(t.summary.as_deref(), Some("x"));
+    }
+
+    #[test]
+    fn extract_xml_tag_handles_missing_and_empty() {
+        assert_eq!(extract_xml_tag("<a>x</a>", "a").as_deref(), Some("x"));
+        assert_eq!(extract_xml_tag("<a></a>", "a"), None); // empty inner → None
+        assert_eq!(extract_xml_tag("<a>x", "a"), None); // missing close → None
+        assert_eq!(extract_xml_tag("no tags here", "a"), None);
+    }
+
+    #[test]
+    fn automation_label_failed_status_and_no_summary() {
+        // A non-`completed` status is rendered verbatim (the status arm is not hardcoded).
+        let failed = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>bad7</task-id>\n<status>failed</status>\n<summary>The build broke</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            failed.automation_label().as_deref(),
+            Some("[workflow bad7 failed] The build broke")
+        );
+        // A trigger with a status but EMPTY summary → the head-only arm (no trailing text).
+        let no_sum = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>q9</task-id>\n<status>running</status>\n<summary></summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            no_sum.automation_label().as_deref(),
+            Some("[workflow q9 running]")
+        );
+        // A trigger with NO task-id and NO status → both `?`/`completed` fallbacks fire.
+        let bare = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>just a note</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            bare.automation_label().as_deref(),
+            Some("[workflow ? completed] just a note")
+        );
     }
 
     #[test]

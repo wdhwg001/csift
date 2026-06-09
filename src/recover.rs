@@ -288,12 +288,7 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
     // Bare-hex canonical id for a subagent transcript (strip the `agent-` filename
     // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
     // — id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
-    let session_id = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(crate::subagent::bare_agent_id)
-        .map(str::to_string)
-        .unwrap_or_default();
+    let session_id = crate::subagent::session_id_from_path(path);
 
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(ScanResult {

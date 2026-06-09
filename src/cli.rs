@@ -2,9 +2,9 @@
 //!
 //! Six subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`. Each
 //! carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
-//! invocations. `list`/`search`/`files`/`recover` span each session's subagent
+//! invocations. `list`/`search`/`files`/`recover`/`turns` span each session's subagent
 //! transcripts by default (`--no-subagents` opts out); `agents` reports a session's
-//! subagent lifecycle.
+//! subagent lifecycle (it lists subagents as targets, so it has no subagent-span flag).
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
@@ -216,9 +216,10 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
                    point-in-time partial snapshot, coverage scoping, or plan restoration\n  \
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
                    back-and-forth a compaction summary clipped, within a char/token budget\n\n\
-        list/search/files span each session's subagent transcripts by default (built-in \
-        Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` to restrict \
-        to top-level sessions.\n\n\
+        list/search/files/recover/turns span each session's subagent transcripts by \
+        default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
+        to restrict to top-level sessions. (`agents` is the exception — it LISTS subagents \
+        as its targets rather than spanning them as inputs, so it has no subagent flag.)\n\n\
         A target is EITHER a real filesystem cwd (it gets path-encoded) OR an \
         already-encoded `-Users-...` projects-dir token; with no target, every \
         project under ~/.claude/projects is scanned.",
@@ -226,12 +227,12 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift list                                  # index every session, all projects\n  \
           csift list .                                # just this cwd's project\n  \
           csift search \"carry\"                        # smart-case regex, all projects\n  \
-          csift search \"\" -t user --since 2h --path . # pure filter: user turns, last 2h, here\n  \
+          csift search \"\" -t user --since 2h .        # pure filter: user turns, last 2h, here\n  \
           csift agents --session <uuid> --since 2h    # subagents started in the last 2h\n  \
           csift whoami                                # who am I (this CC session)?\n  \
           csift files <uuid> --by-file                # which files this session modified, when\n  \
           csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
-          csift recover . --plan --out /tmp/plan.md   # restore the latest plan text to a file\n  \
+          csift recover . --plan --out /tmp/plan.md   # list plan candidates; write the latest to a file\n  \
           csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
@@ -395,8 +396,9 @@ impl ListArgs {
         NO silent truncation anywhere.",
     after_help = "EXAMPLES\n  \
           csift search \"carry\"                                  # all projects, smart-case\n  \
+          csift search \"carry\" .                                # this project (positional PATH, like every sibling)\n  \
           csift search -i \"askuserquestion\" -t tool             # tool_use blocks naming AUQ\n  \
-          csift search \"\" -t user --since 2h --path .            # user turns, last 2h, this project\n  \
+          csift search \"\" -t user --since 2h .                  # user turns, last 2h, this project\n  \
           csift search \"tail.read\" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
           csift search \"panic\" -t agent -t thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n\n\
@@ -422,21 +424,32 @@ pub struct SearchArgs {
     #[arg(value_name = "PATTERN", default_value = "")]
     pub pattern: String,
 
-    /// Restrict to a specific project target (actual cwd or encoded dir).
-    /// Repeatable; combine with `--session` to narrow further.
+    /// Project target(s) as a POSITIONAL `[PATH]...` — the SAME scope-target surface every
+    /// sibling subcommand uses (`csift search PATTERN .` now works, matching
+    /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable;
+    /// combine with `--session` to narrow. With none, every project is scanned.
     ///
-    /// `allow_hyphen_values` is REQUIRED: an encoded dir token starts with `-`
-    /// (e.g. `--path -Users-testuser-Projects-foo`); without it clap rejects the
-    /// leading `-` value as an unknown flag (`-U …`). Same fix as `list`'s PATH:
-    /// the `parse_project_target` value parser keeps the leading-`-` tolerance for
-    /// encoded tokens while refusing to absorb a following flag as a value.
+    /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`; the
+    /// `normalize_argv` pre-pass routes declared flags away from the positional so a
+    /// trailing `--format json` is never swallowed.
     #[arg(
-        long = "path",
         value_name = "PATH",
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// DEPRECATED alias for the positional `[PATH]...` target — kept so existing
+    /// `--path <PATH>` invocations keep working. Prefer the positional form (it matches
+    /// every sibling subcommand). Merged with the positional targets by [`SearchArgs::targets`].
+    #[arg(
+        long = "path",
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target,
+        hide = true
+    )]
+    pub path_flag: Vec<PathBuf>,
 
     /// Restrict to a single session id (uuid).
     #[arg(long, value_name = "SESSION_ID")]
@@ -471,17 +484,21 @@ pub struct SearchArgs {
     #[arg(long)]
     pub multiline: bool,
 
-    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
-    /// an answered AskUserQuestion, or a plan-rejection-with-message).
+    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
+    /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
-    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
+    /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
+    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
+    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -503,6 +520,17 @@ impl SearchArgs {
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         !self.no_subagents
+    }
+
+    /// The project targets to scope to: the positional `[PATH]...` plus any DEPRECATED
+    /// `--path` alias values, concatenated (positional first). With both empty, the
+    /// shared resolver scans every project. One surface for the caller — the alias is
+    /// invisible past this point.
+    #[must_use]
+    pub fn targets(&self) -> Vec<PathBuf> {
+        let mut t = self.paths.clone();
+        t.extend(self.path_flag.iter().cloned());
+        t
     }
 }
 
@@ -546,8 +574,9 @@ pub enum AgentKindFilter {
           csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagents\n  \
           csift agents .                                                   # every session under this project\n  \
           csift agents . --kind workflow                                   # only workflow agents\n  \
-          csift agents --session <uuid> --since 2h                         # subagents STARTED in the last 2h\n  \
-          csift agents --session <uuid> --since 09:00 --by completion      # COMPLETED since a bound\n  \
+          csift agents --session <uuid> --since 2h                         # subagents TRIGGERED in the last 2h\n  \
+          csift agents --session <uuid> --since 6h --by completion         # COMPLETED in the last 6h\n  \
+          csift agents --session <uuid> --since 2026-06-01T09:00:00Z --by completion  # COMPLETED since an ISO bound\n  \
           csift agents . --format json                                     # machine-readable lifecycle rows"
 )]
 pub struct AgentsArgs {
@@ -570,12 +599,14 @@ pub struct AgentsArgs {
     #[arg(long = "kind", value_enum)]
     pub kinds: Vec<AgentKindFilter>,
 
-    /// Lower time bound (ISO8601 or relative `2h`/`3d`/…). Filters by TRIGGER time by
-    /// default (`--by start|completion` switches axis).
+    /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
+    /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`); an ISO8601 datetime
+    /// (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL MIDNIGHT. Filters by
+    /// TRIGGER time by default (`--by start|completion` switches axis).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (ISO8601 or relative). Same axis as `--since`.
+    /// Upper time bound (same WHEN grammar as --since). Same axis as `--since`.
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -674,8 +705,10 @@ pub enum FilesDetail {
           csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)\n  \
           csift files . --format json --by-dir        # machine-readable per-dir rollup\n\n\
         ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
-          csift files <uuid> --by-file                # count rows ending in gaps-style docs\n  \
-          csift files <uuid> --by-file --format json  # filter path under /tmp with is_create==true"
+          csift files --session <uuid> --by-file              # count rows ending in gaps-style docs\n  \
+          csift files --session <uuid> --timeline --format json  # filter op==write/create, path under /tmp\n  \
+        (NOTE: per-mutation `is_create` lives ONLY in `--timeline` JSON; `--by-file` rows\n   \
+         carry per-op COUNTS, not the create flag — use `--timeline` to test create-vs-edit.)"
 )]
 pub struct FilesArgs {
     /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to
@@ -733,17 +766,21 @@ pub struct FilesArgs {
     #[arg(long, group = "detail")]
     pub timeline: bool,
 
-    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
-    /// an answered AskUserQuestion, or a plan-rejection-with-message).
+    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
+    /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
-    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
+    /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
+    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
+    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -822,8 +859,10 @@ pub enum RecoverMode {
           --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
         counts (reads / edits / writes / bash / external-edits).\n  \
-          --plan      restore a PLAN (ExitPlanMode text or a plan-file Write) — the \
-        latest in range by default; `--file` is optional here.\n\n\
+          --plan      restore a PLAN (ExitPlanMode text or a plan-file Write). TWO paths: \
+        WITH `--file <abs>` it reconstructs THAT plan-file's Write content; WITHOUT \
+        `--file` it ENUMERATES every plan candidate in range (printing `plan candidates: \
+        N`) and `--out` writes the single latest heuristic-matched candidate.\n\n\
         The TARGET selects the session(s): `--session <uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
@@ -840,7 +879,8 @@ pub enum RecoverMode {
           csift recover <uuid> --file /abs/app.py --patches         # segmented unified diffs over the whole session\n  \
           csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only\n  \
           csift recover <uuid> --file /abs/app.py --at @turn:42     # partial snapshot as the LLM saw it at turn 42\n  \
-          csift recover . --plan --out /tmp/restored-plan.md        # restore the latest plan text to a file\n  \
+          csift recover . --plan --out /tmp/restored-plan.md        # list plan candidates; write the latest to a file\n  \
+          csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md # reconstruct THAT plan file's Write content\n  \
           csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200"
 )]
 pub struct RecoverArgs {
@@ -892,21 +932,28 @@ pub struct RecoverArgs {
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
 
-    /// Restore a plan (ExitPlanMode text / plan-file Write); `--file` optional.
+    /// Restore a plan (ExitPlanMode text / plan-file Write). WITH `--file <abs>`:
+    /// reconstruct THAT plan file's Write content. WITHOUT `--file`: enumerate every plan
+    /// candidate in range (`plan candidates: N`); `--out` then writes the single latest
+    /// heuristic-matched candidate. `--file` is optional ONLY for `--plan`.
     #[arg(long, group = "mode")]
     pub plan: bool,
 
-    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
-    /// an answered AskUserQuestion, or a plan-rejection-with-message).
+    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
+    /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
-    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
+    /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
+    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
+    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1115,17 +1162,21 @@ pub struct TurnsArgs {
     #[arg(long = "profile", value_enum)]
     pub profile: Option<crate::turns::Profile>,
 
-    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
-    /// an answered AskUserQuestion, or a plan-rejection-with-message).
+    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
+    /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
-    /// Lower time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
+    /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
+    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
+    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (ISO8601 or relative). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1218,16 +1269,25 @@ impl TurnsArgs {
         does NOT guess — it errors with guidance to pass `--session <uuid>`. \
         Most-recent-mtime and process-tree walking are FORBIDDEN: many CC sessions \
         may be live at once, so mtime is almost always wrong. It is acceptable for \
-        whoami to often say \"ambiguous, pass --session\".",
+        whoami to often say \"ambiguous, pass --session\".\n\n\
+        SUBAGENT CAVEAT: inside a Task/Agent SUBAGENT, $CLAUDE_CODE_SESSION_ID is the \
+        SUBAGENT's own id, NOT the parent/root session — so `whoami` there identifies the \
+        subagent, not the main session. To reach the ROOT session from inside a subagent, \
+        run `agents`/`list` on the project PATH to find the parent uuid.\n\n\
+        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). This differs from \
+        the scope-target `--path <PATH>` on the session-operating subcommands; the old \
+        `--path` spelling still works here as a hidden alias.",
     after_help = "EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
-          csift whoami --path           # always show the resolved jsonl path (or a not-found note)\n  \
+          csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}"
 )]
 pub struct WhoamiArgs {
-    /// Print the resolved jsonl path in addition to the session id.
-    #[arg(long)]
-    pub path: bool,
+    /// Print the resolved jsonl path in addition to the session id. This is a BOOLEAN
+    /// toggle (no value) — unlike the scope-target `--path <PATH>` on the
+    /// session-operating subcommands. The old name `--path` is kept as a hidden alias.
+    #[arg(long = "show-path", visible_alias = "with-path", alias = "path")]
+    pub show_path: bool,
 
     /// Emit JSON instead of text.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
@@ -1304,7 +1364,8 @@ mod tests {
 
     #[test]
     fn search_path_flag_ordering_fixed() {
-        // Same latent risk on `search --path <encoded> --format json` (cli.rs:162).
+        // The DEPRECATED `--path` alias still parses (backward compat); its value lands in
+        // `path_flag` and `targets()` merges it. `--format json` after it still parses.
         let cli = parse(&[
             "csift",
             "search",
@@ -1318,8 +1379,41 @@ mod tests {
         match cli.command {
             Command::Search(a) => {
                 assert_eq!(a.format, OutputFormat::Json);
-                assert_eq!(a.paths.len(), 1);
+                assert_eq!(a.path_flag.len(), 1, "--path alias feeds path_flag");
+                assert_eq!(a.targets().len(), 1, "targets() merges the alias");
                 assert_eq!(a.pattern, "carry");
+            }
+            _ => panic!("expected search"),
+        }
+    }
+
+    #[test]
+    fn search_positional_path_like_siblings() {
+        // The fix: `csift search PATTERN .` — a POSITIONAL path, the SAME surface every
+        // sibling subcommand uses. Previously errored "unexpected argument '.'".
+        let cli = parse(&["csift", "search", "carry", "."]).expect("positional PATH must parse");
+        match cli.command {
+            Command::Search(a) => {
+                assert_eq!(a.pattern, "carry");
+                assert_eq!(a.paths.len(), 1);
+                assert_eq!(a.paths[0].to_string_lossy(), ".");
+                assert_eq!(a.targets().len(), 1);
+            }
+            _ => panic!("expected search"),
+        }
+    }
+
+    #[test]
+    fn search_positional_and_path_alias_merge() {
+        // Both surfaces feed `targets()` — positional first, then the `--path` alias.
+        let cli = parse(&["csift", "search", "carry", ".", "--path", "-Enc-Token"])
+            .expect("positional + alias parse");
+        match cli.command {
+            Command::Search(a) => {
+                let t = a.targets();
+                assert_eq!(t.len(), 2);
+                assert_eq!(t[0].to_string_lossy(), ".");
+                assert_eq!(t[1].to_string_lossy(), "-Enc-Token");
             }
             _ => panic!("expected search"),
         }

@@ -21,9 +21,9 @@ or `cargo run -- <subcommand>` during development).
 
 ## When to use this skill
 
-- **"What did session X say / decide / do about Y?"** → `csift search "Y" --session <uuid>` (or
-  `--path <project>`). Returns the *complete round-trip exchange* (the matched record plus its
-  paired request/response), never a bare fragment.
+- **"What did session X say / decide / do about Y?"** → `csift search "Y" --session <uuid>` (or a
+  positional project `PATH`, like every sibling subcommand). Returns the *complete round-trip
+  exchange* (the matched record plus its paired request/response), never a bare fragment.
 - **"Which session is this transcript / which session was working on Z?"** → `csift list <path>`
   emits a fast identity tuple per session (first user msg, last user msg, last agent msg, cwd,
   branch, CC version) without parsing whole files.
@@ -119,7 +119,7 @@ JSON: one object per session (`session_id`, `path`, `cwd`, `version`, `git_branc
 ### `search` — regex over transcripts, complete round-trip per hit
 
 ```
-csift search [PATTERN] [--path PATH...] [--session ID] [--no-subagents]
+csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
              [-t|--category thinking|user|tool|tool-response|agent]...
              [-i|--ignore-case] [--multiline]
              [--turn-range START..END] [--since WHEN] [--until WHEN]
@@ -131,6 +131,9 @@ csift search [PATTERN] [--path PATH...] [--session ID] [--no-subagents]
   newlines. PATTERN MAY be empty — then it is a pure filter, matching every category-eligible
   record (combine with `--category` / `--since` / `--turn-range`; a bare empty pattern with no
   other filter warns it will emit a lot).
+- **Scope target** is a POSITIONAL `[PATH]...` — the SAME surface as `list`/`files`/`recover`/
+  `turns` (`csift search PATTERN .`). The legacy `--path <PATH>` flag still works as a hidden
+  deprecated alias. A bare session uuid in the positional slot is routed to `--session`.
 - On a hit, csift returns the **whole turn** (a turn opens on a genuine user message, an answered
   AskUserQuestion, or a plan-rejection-with-message): a matched `tool_use` comes WITH its
   `tool_result`; a matched user turn WITH the agent's response.
@@ -150,8 +153,9 @@ Examples:
 
 ```bash
 csift search "carry"                                  # all projects, smart-case
+csift search "carry" .                                # this project (positional PATH, like every sibling)
 csift search -i "askuserquestion" -t tool             # tool_use blocks naming AUQ
-csift search "" -t user --since 2h --path .            # user turns, last 2h, this project
+csift search "" -t user --since 2h .                  # user turns, last 2h, this project
 csift search "tail.read" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
 csift search "persisted-output" --resolve-persisted --format json
@@ -225,7 +229,7 @@ Examples:
 csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagent topology
 csift agents . --kind workflow                                   # only workflow agents
 csift agents --session <uuid> --since 2h                         # subagents TRIGGERED in the last 2h
-csift agents --session <uuid> --since 09:00 --by completion      # filtered on COMPLETION time
+csift agents --session <uuid> --since 6h --by completion         # filtered on COMPLETION time (last 6h)
 csift agents --session <uuid> --tree                             # parent→child tree (runs as parents)
 csift agents --session <uuid> --agent <hex> --with-files         # grab one subagent: returned msg + files
 csift agents --session <uuid> --returned-message --format json   # every node's returned message
@@ -257,7 +261,7 @@ object per session: `{session_id, workflow_runs:[{…, children:[node]}], agents
 ### `whoami` — identify the calling session
 
 ```
-csift whoami [--path] [--format text|json]
+csift whoami [--show-path] [--format text|json]
 ```
 
 Resolves the calling Claude Code session from **`$CLAUDE_CODE_SESSION_ID`** (Claude Code exports it
@@ -266,12 +270,18 @@ exactly). That is the ONLY signal csift trusts — per-session, version-independ
 false-positives. `CODEX_COMPANION_SESSION_ID` is accepted only as a fallback. When the var is
 absent/empty (an old CC build, or running outside CC) whoami **does NOT guess** — most-recent-mtime
 is a false-positive trap with concurrent sessions — it exits non-zero with guidance to pass
-`--session <uuid>`. `--path` prints the resolved jsonl path; `--format json` emits
-`{"session_id":"…","path":"…"}`.
+`--session <uuid>`. `--show-path` (boolean; legacy alias `--path`) prints the resolved jsonl path;
+`--format json` emits `{"session_id":"…","path":"…"}`.
+
+> **SUBAGENT CAVEAT:** inside a Task/Agent subagent, `$CLAUDE_CODE_SESSION_ID` is the SUBAGENT's own
+> id, not the parent/root session — so `whoami` there identifies the subagent. To reach the root
+> session from inside a subagent, run `agents`/`list` on the project path to find the parent uuid.
+> Note `whoami --show-path` is a BOOLEAN toggle, unlike the scope-target `--path <PATH>` on the
+> session-operating subcommands.
 
 ```bash
 csift whoami                  # print the calling session's uuid (+ its jsonl path if found)
-csift whoami --path           # always show the resolved jsonl path (or a not-found note)
+csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)
 csift whoami --format json
 ```
 
@@ -294,15 +304,20 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
   (`input.notebook_path`). create-vs-edit is resolved from the paired `tool_result`
   (`toolUseResult.type == "create"` = a new file).
 - **Heuristic** — `Bash` file mutations, parsed **lexically** from the command string. Covers the
-  verb allowlist (`rm`/`mv`/`cp`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/`dd of=`/`zip`), plain **and
-  fd-qualified** redirects (`>`/`>>`, plus `2>`/`1>`/`&>` and their appends — a `2>&1` fd-dup and
-  `/dev/null` sinks are correctly ignored), `curl`/`wget` output flags (`-o`/`-O`/`--output`), and
-  allowlisted flag outputs (`--junit-xml=`/`--junitxml=`/`--report-path`/…). Only **concrete,
-  resolvable** paths are emitted — an unexpandable `$VAR` pseudo-path is dropped, never fabricated.
-  **Known limitation:** a write inside an embedded-language body (a heredoc, or `python -c
-  "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser, so such writes are
-  missed (but never mis-reported). Bash carries no path field in its result, so all of the above are
-  best-effort and **always labelled `(heuristic)`**.
+  verb allowlist (`rm`/`mv`/`cp`/`install`/`ln`/`rsync`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/`dd
+  of=`/`zip`), plain **and fd-qualified** redirects (`>`/`>>`, plus `2>`/`1>`/`&>` and their appends
+  and the noclobber-override `>|` — a `2>&1` fd-dup and `/dev/null` sinks are correctly ignored),
+  `curl`/`wget` output flags (`-o`/`-O`/`--output`), and allowlisted flag outputs
+  (`--junit-xml=`/`--junitxml=`/`--report-path`/…). GNU `-t DIR` (cp/mv/install) is handled — the
+  destination is the `-t` value, the positionals are read sources. Only **concrete, resolvable**
+  paths are emitted — an unexpandable `$VAR` pseudo-path, a `/dev/null`-class sink (even with a glued
+  command-substitution `)`), a process-substitution `>(…)`, and a quote-severed fragment are all
+  dropped, never fabricated. **Known limitation:** a write inside an embedded-language body (a
+  heredoc, or `python -c "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser,
+  so such writes are missed. The precision contract holds (the miss is **never mis-reported**):
+  heredoc BODY lines are lexically skipped before redirect/verb scanning, so a `>` or quote inside
+  the body can no longer fabricate a redirect row. Bash carries no path field in its result, so all
+  of the above are best-effort and **always labelled `(heuristic)`**.
 
 **Subagent scope** (mutually exclusive): default spans subagents; `--no-subagents` reports only the
 top-level session's own mutations; `--subagents-only` is the **complement** — only the files the
@@ -331,9 +346,10 @@ csift files . --format json --by-dir        # machine-readable per-dir rollup
 
 **Acid test — "how many distinct gap docs did this session touch, and how many `/tmp` docs did it
 create?"** — `csift files <uuid> --by-file` lists one row per file (count rows ending in a
-`gaps`-style doc), and `--by-file --format json` lets a consumer filter `file` under `/tmp` with a
-non-zero `write` count (a `Write` op is an authoritative create; Bash creates are flagged heuristic).
-The `--summary` view shows the same as bucket op-counts + distinct-file counts.
+`gaps`-style doc). For the create count, use `--timeline --format json` and filter `op` over `/tmp`
+rows with `is_create == true` — the per-mutation `is_create` flag lives **only** in the `--timeline`
+JSON; `--by-file` rows carry per-op COUNTS (`write`/`edit`/`bash`/…), not the create flag. The
+`--summary` view shows the same as bucket op-counts + distinct-file counts.
 
 Text output shape (Bash counts suffixed `(heuristic)`):
 
@@ -376,8 +392,11 @@ file's Read / Write / Edit stream in transcript order. Four mutually-exclusive m
 - **`--coverage`** (alias `--dry-run`) — scope a recovery without dumping content: recoverable line
   ranges, where the boundaries sit, per-op counts (reads / edits / writes / bash / external-edits),
   fragment count.
-- **`--plan`** — restore a plan (an `ExitPlanMode` text or a plan-file `Write`); the latest in range
-  by default, with `Lnnn`/turn/timestamp provenance. `--file` is optional here.
+- **`--plan`** — restore a plan (an `ExitPlanMode` text or a plan-file `Write`). TWO paths: **with
+  `--file <abs>`** it reconstructs THAT plan file's `Write` content; **without `--file`** it
+  ENUMERATES every plan candidate in range (prints `plan candidates: N`) and `--out` then writes the
+  single latest heuristic-matched candidate. `--file` is optional only here, with `Lnnn`/turn/
+  timestamp provenance.
 
 `--file` is **required** for `--patches`/`--at`/`--coverage`, optional for `--plan`. `--out` writes
 the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to a file while the
@@ -392,7 +411,8 @@ Examples:
 csift recover . --file /abs/PLAN.md --coverage          # scope first: covered ranges + boundaries
 csift recover <uuid> --file /abs/app.py --patches       # segmented unified diffs over the session
 csift recover <uuid> --file /abs/app.py --at @turn:42   # partial snapshot as the LLM saw it at turn 42
-csift recover . --plan --out /tmp/restored-plan.md      # restore the latest plan verbatim
+csift recover . --plan --out /tmp/restored-plan.md      # list plan candidates; write the latest to a file
+csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md  # reconstruct THAT plan file's Write content
 ```
 
 JSON is NDJSON: one object per segment / boundary / snapshot / plan-candidate (every object carries
@@ -423,6 +443,15 @@ section clips real prose turns to `...`-truncated bullets, and the assistant sid
 phrasings + the substantive agent replies, in original order, each line carrying the jsonl `Lnnnnn` so
 you can `Read` the raw record. Per turn the default surfaces the LONGEST agent message rather than the
 last — see the richness model below for why.
+
+**Automation triggers.** In automation-heavy sessions (OMC workflows, background commands), Claude Code
+injects `<task-notification>` records that LOOK like user turns (they open a turn) but are machine
+completion notices, not the operator's prose. `turns` (and `search -t user`) CLASSIFY these: the opener
+renders as a parsed `[workflow <task-id> <status>] <summary>` ATTRIBUTION label instead of the raw
+`<task-id>`/`<output-file>`/`<status>` XML blob, and the `turns` per-session header reports the
+human/automation split (e.g. `selected 20 user (3 automation triggers) + 52 assistant units`). The
+trigger still opens a turn and is budgeted normally — only its rendering and the header accounting
+change — so a consumer sees at a glance which "user turns" were machine pulses.
 
 **Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) bounds the
 WHOLE reconstruction. Selection is recency-first (most-recent turns win the budget); the emitted

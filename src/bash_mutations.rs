@@ -17,11 +17,14 @@
 //!
 //! ## What it catches (recall)
 //!
-//! Beyond the verb allowlist (`rm`/`mkdir`/`touch`/`tee`/`cp`/`mv`/`sed -i`/`git`) and
-//! plain `>`/`>>` redirects, it also reads:
+//! Beyond the verb allowlist (`rm`/`mkdir`/`touch`/`tee`/`cp`/`mv`/`install`/`ln`/`rsync`/
+//! `sed -i`/`git`) and plain `>`/`>>` redirects, it also reads:
 //! - **fd-qualified redirects** — `2>`/`1>`/`&>` (+ `>>` forms), attached (`2>/tmp/x`)
-//!   and spaced (`2> /tmp/x`); a bare `2>&1` fd-dup and `/dev/null|stderr|stdout` sinks
-//!   are NOT paths and are skipped.
+//!   and spaced (`2> /tmp/x`), and the noclobber-override `>|`; a bare `2>&1` fd-dup and
+//!   `/dev/null|stderr|stdout` sinks are NOT paths and are skipped.
+//! - **`-t DIR` destination flag** — `cp`/`mv`/`install -t DIR src…` puts the written
+//!   destination right after `-t` (sources LAST), so the `-t` value is the dest and every
+//!   positional is a read source (without `-t`, the last positional is the dest).
 //! - **`curl`/`wget` output flags** — `-o <path>` / `--output <path>` / `--output=…`
 //!   (and `wget -O <path>`). A `curl -O` that derives the name from the URL has no
 //!   deterministic local path and is skipped.
@@ -46,7 +49,10 @@
 //! .write_text(…)`, etc. This is a deliberate limit of a lexical (non-shell, non-Python)
 //! parser: the body is opaque command TEXT, and reliably parsing arbitrary embedded code
 //! is out of scope. Such writes are missed (a recall gap), but the precision contract
-//! above guarantees they never produce a WRONG row.
+//! above guarantees they never produce a WRONG row — heredoc BODY lines are lexically
+//! skipped ([`strip_heredoc_bodies`]) BEFORE redirect/verb scanning, so a `>` or quote
+//! inside the body can no longer be mis-read as a redirect (only the opener LINE, which
+//! may carry a real trailing `> file`, is scanned).
 
 /// One heuristically-detected Bash file mutation. `verb` is from the fixed allowlist
 /// below (it is the lexical command/operator that touched the path), and `path` is the
@@ -75,11 +81,116 @@ const GIT_MUTATING: &[&str] = &[
 /// in-place flag, `git status`, …) contribute nothing.
 #[must_use]
 pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
+    // Strip heredoc BODY lines first: a `<<DELIM` body is opaque TEXT (often containing a
+    // `>` or quote that a lexer would mis-read as a redirect, fabricating a path — a
+    // DOUBLE failure since the real write inside the body is still missed). The opener
+    // LINE is kept (a `… <<DELIM > file` carries a real redirect on the opener itself).
+    let command = strip_heredoc_bodies(command);
     let mut out = Vec::new();
-    for segment in split_segments(command) {
+    for segment in split_segments(&command) {
         parse_segment(segment, &mut out);
     }
     out
+}
+
+/// Remove heredoc BODY lines from a multi-line command, keeping every non-body line
+/// (including each heredoc OPENER line, which may carry its own trailing `> file`
+/// redirect). A heredoc opens on a `<<DELIM` / `<<-DELIM` / `<<'DELIM'` / `<<"DELIM"`
+/// token (quoted or not) and closes on a line whose trimmed content equals `DELIM` (a
+/// `<<-` opener also accepts a tab-indented closer). Multiple heredocs on one line open
+/// in left-to-right order. This is a lexical best-effort — sufficient to stop the body's
+/// `>`/quote characters from fabricating redirect rows.
+fn strip_heredoc_bodies(command: &str) -> String {
+    if !command.contains("<<") {
+        return command.to_string(); // fast path: no heredoc at all.
+    }
+    let mut out = String::with_capacity(command.len());
+    let mut pending: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+    let mut active: Option<String> = None;
+    let mut first = true;
+    for line in command.split('\n') {
+        if !first {
+            out.push('\n');
+        }
+        first = false;
+        if let Some(delim) = &active {
+            // Inside a heredoc body: drop the line; the closer (trimmed == delim) ends it.
+            if line.trim() == delim.as_str() {
+                active = pending.pop_front();
+            }
+            continue; // body line (and the closer line) are not commands.
+        }
+        // Not inside a body: this is a command/opener line — keep it, and queue any
+        // heredoc delimiters it opens so the FOLLOWING lines are dropped as bodies.
+        out.push_str(line);
+        for delim in heredoc_delims(line) {
+            pending.push_back(delim);
+        }
+        if active.is_none() {
+            active = pending.pop_front();
+        }
+    }
+    out
+}
+
+/// The heredoc delimiters opened on one line, in order. Recognizes `<<WORD`, `<<-WORD`,
+/// and quoted `<<'WORD'` / `<<"WORD"` (the quotes are stripped from the closer-comparison
+/// delimiter, matching bash). A `<<<` here-STRING is NOT a heredoc (no body line) and is
+/// ignored.
+fn heredoc_delims(line: &str) -> Vec<String> {
+    let mut delims = Vec::new();
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'<' && bytes[i + 1] == b'<' {
+            // `<<<` is a here-string, not a heredoc — skip it.
+            if bytes.get(i + 2) == Some(&b'<') {
+                i += 3;
+                continue;
+            }
+            let mut j = i + 2;
+            if bytes.get(j) == Some(&b'-') {
+                j += 1; // `<<-` strips leading tabs from the closer (delim text unchanged).
+            }
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            // The delimiter WORD: a quoted `'WORD'`/`"WORD"` or a bare run up to whitespace
+            // or a shell metacharacter.
+            let (delim, next) = read_heredoc_word(&line[j..]);
+            if !delim.is_empty() {
+                delims.push(delim);
+            }
+            i = j + next;
+        } else {
+            i += 1;
+        }
+    }
+    delims
+}
+
+/// Read one heredoc delimiter word starting at `s`, returning (delimiter, bytes-consumed).
+/// A quoted word strips its surrounding quotes (bash compares the closer to the unquoted
+/// text); a bare word runs until whitespace or a shell metacharacter (`;|&<>` ).
+fn read_heredoc_word(s: &str) -> (String, usize) {
+    let bytes = s.as_bytes();
+    if let Some(&q) = bytes.first() {
+        if q == b'\'' || q == b'"' {
+            if let Some(end_rel) = s[1..].find(q as char) {
+                let word = &s[1..1 + end_rel];
+                return (word.to_string(), 1 + end_rel + 1);
+            }
+        }
+    }
+    let mut k = 0usize;
+    while k < bytes.len() {
+        let c = bytes[k];
+        if c.is_ascii_whitespace() || matches!(c, b';' | b'|' | b'&' | b'<' | b'>' | b'(' | b')') {
+            break;
+        }
+        k += 1;
+    }
+    (s[..k].to_string(), k)
 }
 
 /// Split a command into segments on the shell sequencing/pipe operators and newlines.
@@ -94,6 +205,13 @@ fn split_segments(command: &str) -> Vec<&str> {
     let mut i = 0usize;
     while i < bytes.len() {
         let two = bytes.get(i..i + 2);
+        // `>|` is bash's noclobber-OVERRIDE truncate redirect, NOT a pipe — the `|` must
+        // not split the segment (else the redirect path is orphaned). Skip both bytes so
+        // the `>|<path>` stays intact for `collect_redirections` to read.
+        if matches!(two, Some(b">|")) {
+            i += 2;
+            continue;
+        }
         let is_two_op = matches!(two, Some(b"&&") | Some(b"||"));
         let is_one_op = matches!(bytes[i], b';' | b'|' | b'\n');
         if is_two_op {
@@ -143,8 +261,11 @@ fn parse_segment(segment: &str, out: &mut Vec<BashMutation>) {
         "mkdir" => emit_operands(operands, "mkdir", out),
         "touch" => emit_operands(operands, "touch", out),
         "tee" => emit_operands(operands, "tee", out),
-        "cp" => emit_last_operand(operands, "cp", out),
+        "cp" => emit_copy_like(operands, "cp", out),
         "mv" => emit_mv(operands, out),
+        "install" => emit_copy_like(operands, "install", out),
+        "ln" => emit_last_operand(operands, "ln", out),
+        "rsync" => emit_last_operand(operands, "rsync", out),
         "sed" => emit_sed(operands, out),
         "git" => emit_git(operands, out),
         "curl" => emit_download_output(operands, "curl", out),
@@ -230,10 +351,10 @@ fn non_flag_operands<'a>(operands: &[&'a str]) -> Vec<&'a str> {
         .collect()
 }
 
-/// Emit only the destination of `cp` — the LAST positional operand. Validating that
-/// specific token (not "the last token that happens to be a valid path") means a `cp src
-/// $DEST/x` whose real destination is an unexpandable `$VAR` emits NOTHING, rather than
-/// wrongly reporting `src` as the destination.
+/// Emit only the destination of a last-operand-dest verb (`ln`, `rsync`) — the LAST
+/// positional operand. Validating that specific token (not "the last token that happens
+/// to be a valid path") means a `… $DEST/x` whose real destination is an unexpandable
+/// `$VAR` emits NOTHING, rather than wrongly reporting an earlier source.
 fn emit_last_operand(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutation>) {
     let positional = non_flag_operands(operands);
     if let Some(dest_tok) = positional.last() {
@@ -243,11 +364,67 @@ fn emit_last_operand(operands: &[&str], verb: &'static str, out: &mut Vec<BashMu
     }
 }
 
+/// `cp` / `install` destination resolution, GNU `-t DIR` aware. The default form
+/// (`cp src… dest`) writes the LAST positional. But `cp -t DIR src…` / `--target-directory
+/// DIR` puts the destination right after `-t` with the SOURCES last — so blindly taking
+/// the last positional would wrongly report a read-only SOURCE as written. When `-t`/
+/// `--target-directory` is present we emit ITS value as the destination and treat every
+/// positional as a source (read). `-T`/`--no-target-directory` forces the plain
+/// 2-operand semantics (last positional is the dest), which the default already does.
+fn emit_copy_like(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutation>) {
+    if let Some(dir) = target_directory_value(operands) {
+        if let Some(path) = path_operand(dir) {
+            out.push(BashMutation { path, verb });
+        }
+        return; // sources are reads; the `-t` DIR is the sole written destination.
+    }
+    emit_last_operand(operands, verb, out);
+}
+
+/// The value of a GNU `-t DIR` / `--target-directory DIR` / `--target-directory=DIR`
+/// destination-directory flag among `operands`, or `None` if absent. Used by cp / mv /
+/// install where the flag inverts the usual "last positional is the destination" rule.
+fn target_directory_value<'a>(operands: &[&'a str]) -> Option<&'a str> {
+    let mut i = 0usize;
+    while i < operands.len() {
+        let tok = operands[i];
+        if tok == "-t" || tok == "--target-directory" {
+            return operands.get(i + 1).copied();
+        }
+        if let Some(v) = tok.strip_prefix("--target-directory=") {
+            return Some(v);
+        }
+        i += 1;
+    }
+    None
+}
+
 /// `mv` — the LAST positional operand is the destination (created/overwritten); earlier
 /// positionals are sources (moved-from). The destination is taken POSITIONALLY then
 /// validated, so a dropped `$VAR` destination suppresses only the `mv` dest row (the
 /// real source moves are still reported as `mv-from`).
 fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
+    // GNU `mv -t DIR src…`: the destination is the `-t` value, every positional is a
+    // source — the same inversion `cp -t` has. Without `-t` the last positional is the
+    // destination and earlier positionals are sources.
+    if let Some(dir) = target_directory_value(operands) {
+        if let Some(path) = path_operand(dir) {
+            out.push(BashMutation { path, verb: "mv" });
+        }
+        // The `-t DIR` value is also a non-flag positional; exclude it from the sources.
+        for src in non_flag_operands(operands) {
+            if src == dir {
+                continue;
+            }
+            if let Some(path) = path_operand(src) {
+                out.push(BashMutation {
+                    path,
+                    verb: "mv-from",
+                });
+            }
+        }
+        return;
+    }
     let positional = non_flag_operands(operands);
     let Some((dest_tok, source_toks)) = positional.split_last() else {
         return;
@@ -469,7 +646,17 @@ fn collect_redirections(tokens: &[&str], out: &mut Vec<BashMutation>) {
         let tok = tokens[i];
         // Peel an optional leading fd qualifier (`&` or digits) to expose a `>`/`>>`.
         let body = strip_fd_qualifier(tok);
-        if body == ">>" || body == ">" {
+        // A bash noclobber-override `>|` is a plain truncate redirect (the `|` only
+        // disables noclobber): `>|` reads as `>`, `>|file` as `>file`.
+        if body == ">|" {
+            if let Some(next) = tokens.get(i + 1) {
+                push_redirect_target(next, ">", out);
+            }
+            i += 1;
+        } else if let Some(rest) = body.strip_prefix(">|") {
+            push_redirect_target(rest, ">", out);
+            i += 1;
+        } else if body == ">>" || body == ">" {
             // A bare (possibly fd-qualified) operator: its path is the NEXT token.
             let verb = if body == ">>" { ">>" } else { ">" };
             if let Some(next) = tokens.get(i + 1) {
@@ -544,6 +731,11 @@ fn is_dev_sink(tail: &str) -> bool {
 /// label makes that clear.
 fn path_operand(token: &str) -> Option<String> {
     let stripped = strip_quotes(token);
+    // Peel trailing shell-structural punctuation glued on by a command/process
+    // substitution or sequencing (`…2>/dev/null)`, `…>file;`) BEFORE the path tests, so
+    // the sink/var/syntax filters see the bare path. A leading `'`/`"` that survived an
+    // unbalanced split is also handled by [`has_syntax_noise`] below.
+    let stripped = trim_structural_tail(stripped);
     if stripped.is_empty() || stripped == "-" {
         return None;
     }
@@ -556,7 +748,98 @@ fn path_operand(token: &str) -> Option<String> {
     if has_unresolved_var(stripped) {
         return None; // an unexpandable `$VAR` pseudo-path — never fabricate it.
     }
+    // After the trailing-tail trim, the sink test must run AGAIN: `2>/dev/null)` trims to
+    // `/dev/null`, the dominant fabricated-path class (a `)` glued on by a command
+    // substitution). A bare fd-dup remnant (`&1`) is likewise not a path.
+    if is_dev_sink(stripped) || stripped.starts_with('&') {
+        return None;
+    }
+    // Reject a token still carrying shell SYNTAX NOISE that no real path contains — an
+    // unbalanced quote/paren (a quote-unaware split severed a quoted operand), an
+    // embedded redirect operator (`/1>`, `2>&1`), a process-substitution head (`>(`,
+    // `<(`), or a regex/escape metachar. These are parse artifacts, never files.
+    if has_syntax_noise(stripped) {
+        return None;
+    }
     Some(stripped.to_string())
+}
+
+/// Strip trailing shell-STRUCTURAL punctuation a quote-unaware lexer may have glued onto
+/// a path: the close-delimiters of a command/process substitution (`)`/`}`), a statement
+/// terminator (`;`/`,`), and a trailing unmatched quote. Applied repeatedly (a token can
+/// end in several, e.g. `/dev/null))`). A `)` is only trimmed when the token has NO
+/// matching `(` (an unbalanced close glued on by `$(… )`); a balanced `(…)` is left so a
+/// genuinely parenthesized name is untouched. This is the single fix for the dominant
+/// `/dev/null)` / `>(tee` garbage class.
+fn trim_structural_tail(token: &str) -> &str {
+    let mut s = token;
+    loop {
+        // Each matching arm strips exactly one trailing byte; `_ => break` ends the loop.
+        s = match s.as_bytes().last() {
+            Some(b';' | b',') => &s[..s.len() - 1],
+            Some(b'"' | b'\'') => &s[..s.len() - 1],
+            Some(b')') if s.matches('(').count() < s.matches(')').count() => &s[..s.len() - 1],
+            Some(b'}') if s.matches('{').count() < s.matches('}').count() => &s[..s.len() - 1],
+            _ => break,
+        };
+    }
+    s
+}
+
+/// True when a candidate path still carries shell SYNTAX a real filesystem path never
+/// has — proof the token is a lexer artifact, not a file:
+/// - an unbalanced surrounding quote (`'/tmp/x` from a severed quoted operand);
+/// - an embedded redirect operator (`>` / a `<(`/`>(` process-substitution head);
+/// - a regex/escape metachar (`\`, `(?`, `|`, `^`, a stray `?`/`*` mixed with `)` or `]`);
+/// - a comparison/value fragment (`=1.94`, a `=`-led token), a pure number (`7000`), or an
+///   embedded-code shard (a `,` or a trailing `:` inside a token with no `/` separator).
+///
+/// Conservative: a plain glob (`*.tmp`, `?.bin`) is NOT noise — it is still a real
+/// touched set and is kept verbatim by `path_operand` (only `concrete_path` drops it). A
+/// genuine RELATIVE path (`src/main.rs`, `Cargo.toml`, `paper.pdf`) is NOT noise either —
+/// the code-shard tests only fire on tokens with NO `/` (a bare relative FILE is allowed).
+fn has_syntax_noise(token: &str) -> bool {
+    // An unbalanced single/double quote anywhere (the quote-split tell).
+    if token.matches('"').count() % 2 == 1 || token.matches('\'').count() % 2 == 1 {
+        return true;
+    }
+    // A process-substitution head (`>(` / `<(`) or a bare `(` — each maps to a distinct
+    // precision-contract bullet, so keep them explicit (1:1 with the doc above).
+    if token.starts_with(">(") || token.starts_with("<(") || token.starts_with('(') {
+        return true;
+    }
+    // An embedded redirect operator inside a "path" (`/1>`, `2>&1`, `b>c`).
+    if token.contains('>') || token.contains('<') {
+        return true;
+    }
+    // Regex / escape metacharacters that never appear in a real path token.
+    if token.contains('\\') || token.contains('|') || token.contains('^') {
+        return true;
+    }
+    // An unbalanced bracket/paren/brace REMAINING after the tail trim → still structural.
+    if token.matches('(').count() != token.matches(')').count()
+        || token.matches('[').count() != token.matches(']').count()
+        || token.matches('{').count() != token.matches('}').count()
+    {
+        return true;
+    }
+    // A `=`-led comparison/value fragment (`=1.94`, `=2980`, `=`) is never a path.
+    if token.starts_with('=') {
+        return true;
+    }
+    // A pure number (`0`, `7000`) is never a path (a bare integer reaching the path slot
+    // is always a mis-attributed numeric arg, e.g. `head -c 9`).
+    if !token.is_empty() && token.bytes().all(|b| b.is_ascii_digit()) {
+        return true;
+    }
+    // An embedded-CODE shard: a `,` (function-call arg list) or a trailing `:` (a dict /
+    // label) inside a token that has NO `/` separator — a real bare relative FILE never
+    // carries these. Tokens WITH a `/` are paths and are left alone (a path may legally
+    // contain a `,` or `:` in rare cases).
+    if !token.contains('/') && (token.contains(',') || token.ends_with(':')) {
+        return true;
+    }
+    false
 }
 
 /// Stricter sibling of [`path_operand`] for the precision-sensitive NEW emitters
@@ -1175,5 +1458,400 @@ mod tests {
             paths(r#"python3 -c "open('/tmp/out.json','w').write('x')""#).is_empty(),
             "heredoc/python body is out of scope — and must not fabricate a row"
         );
+    }
+
+    // ── R1: the DOMINANT garbage class — fd-redirect close-paren / process-sub leaks ──
+
+    #[test]
+    fn devnull_with_glued_close_paren_is_dropped() {
+        // `$(… 2>/dev/null)` glues a `)` onto the sink → `/dev/null)`. The single most
+        // common idiom in real sessions; it must NOT fabricate a `/dev/null)` row.
+        assert!(paths(r#"RESOLVED="$(readlink -f x 2>/dev/null || true)""#).is_empty());
+        assert!(paths("x=$(cmd 2>/dev/null)").is_empty());
+        assert!(paths("diff <(a) <(b 2>/dev/null)").is_empty());
+        // Doubled close parens (nested substitution) also drop.
+        assert!(paths("y=$(f $(g 2>/dev/null))").is_empty());
+    }
+
+    #[test]
+    fn real_redirect_path_with_trailing_struct_punct_kept_clean() {
+        // A genuine redirect path with a glued statement terminator keeps the CLEAN path.
+        assert_eq!(
+            paths("echo x > /tmp/real.log;"),
+            vec![("/tmp/real.log".to_string(), ">")]
+        );
+        assert_eq!(
+            paths("(echo x > /tmp/sub.log)"),
+            vec![("/tmp/sub.log".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn process_substitution_redirect_emits_no_fragment() {
+        // `> >(tee /tmp/x)` must NOT leak `>(tee` / `(tee` rows (the real inner path is a
+        // documented recall miss, but precision is preserved — no garbage).
+        let got = just_paths("cmd > >(tee /tmp/ps.log)");
+        assert!(
+            !got.iter()
+                .any(|p| p.contains("tee") || p.contains('(') || p.contains('>')),
+            "process-sub fragments leaked: {got:?}"
+        );
+        let got2 = just_paths("make 2> >(tee /tmp/err.log >&2)");
+        assert!(
+            !got2.iter().any(|p| p.contains("tee") || p.contains('(')),
+            "process-sub fragments leaked: {got2:?}"
+        );
+    }
+
+    #[test]
+    fn quoted_path_with_metachar_or_space_does_not_leak_fragment() {
+        // A quote-unaware split severs a quoted path at an in-quote `;` or space; the
+        // resulting `'/tmp/quoted` / `'output` fragment (unbalanced quote) is rejected.
+        for cmd in [
+            "echo x >> '/tmp/quoted; path.txt'",
+            "cmd > 'output (final).txt'",
+        ] {
+            let got = just_paths(cmd);
+            assert!(
+                !got.iter()
+                    .any(|p| p.starts_with('\'') || p.starts_with('"')),
+                "quoted-split fragment leaked for {cmd:?}: {got:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn redirect_metachar_and_fd_dup_tokens_are_not_paths() {
+        // `2>&1` and a bare `>` never become file rows even when they reach path_operand.
+        assert!(paths("pytest 2>&1").is_empty());
+        assert_eq!(path_operand("2>&1"), None);
+        assert_eq!(path_operand("/tmp/a>b"), None); // embedded redirect → noise.
+    }
+
+    // ── R1: cp/mv/install `-t DIR` correctness (source-vs-dest inversion) ──
+
+    #[test]
+    fn cp_target_directory_flag_dest_is_the_t_value_not_a_source() {
+        // `cp -t DIR src…`: the DEST is DIR; the sources are reads, never reported as cp.
+        assert_eq!(
+            paths("cp -t /tmp/destdir /home/a.txt /home/b.txt"),
+            vec![("/tmp/destdir".to_string(), "cp")]
+        );
+        // `--target-directory=DIR` inline form.
+        assert_eq!(
+            paths("cp --target-directory=/tmp/d /home/a.txt"),
+            vec![("/tmp/d".to_string(), "cp")]
+        );
+        // install behaves the same.
+        assert_eq!(
+            paths("install -m755 -t /usr/local/bin a b"),
+            vec![("/usr/local/bin".to_string(), "install")]
+        );
+    }
+
+    #[test]
+    fn mv_target_directory_flag_dest_and_sources() {
+        // `mv -t DIR a b`: DIR is the destination (mv); a + b are mv-from sources; DIR is
+        // NOT also listed as a source.
+        let got = paths("mv -t /tmp/destdir /home/a.txt /home/b.txt");
+        assert!(
+            got.contains(&("/tmp/destdir".to_string(), "mv")),
+            "got: {got:?}"
+        );
+        assert!(
+            got.contains(&("/home/a.txt".to_string(), "mv-from")),
+            "got: {got:?}"
+        );
+        assert!(
+            got.contains(&("/home/b.txt".to_string(), "mv-from")),
+            "got: {got:?}"
+        );
+        assert!(
+            !got.iter()
+                .any(|(p, v)| p == "/tmp/destdir" && *v == "mv-from"),
+            "the -t DIR must not also be a source: {got:?}"
+        );
+    }
+
+    // ── R1: recall — ln / install / rsync / >| ──
+
+    #[test]
+    fn ln_install_rsync_destinations_caught() {
+        assert_eq!(
+            paths("ln -s /src /tmp/link"),
+            vec![("/tmp/link".to_string(), "ln")]
+        );
+        assert_eq!(
+            paths("install -m755 bin /usr/local/bin/tool"),
+            vec![("/usr/local/bin/tool".to_string(), "install")]
+        );
+        assert_eq!(
+            paths("rsync -a src/ /tmp/dest/"),
+            vec![("/tmp/dest/".to_string(), "rsync")]
+        );
+    }
+
+    #[test]
+    fn noclobber_override_redirect_caught() {
+        // `>|` is a force-truncate redirect; the `|` must not split off the path.
+        assert_eq!(
+            paths("echo x >| /tmp/forced.txt"),
+            vec![("/tmp/forced.txt".to_string(), ">")]
+        );
+        // Attached form.
+        assert_eq!(
+            paths("echo x >|/tmp/forced2.txt"),
+            vec![("/tmp/forced2.txt".to_string(), ">")]
+        );
+        // fd-qualified `2>|`.
+        assert_eq!(
+            paths("svc 2>| /tmp/e.log"),
+            vec![("/tmp/e.log".to_string(), ">")]
+        );
+    }
+
+    // ── R1: heredoc body is SKIPPED, not mis-reported (the never-mis-reported contract) ──
+
+    #[test]
+    fn heredoc_body_redirect_char_does_not_fabricate_a_row() {
+        // A `>` inside a heredoc body must NOT become a redirect row, and the opener's own
+        // real trailing redirect (if any) IS still caught.
+        let body_only = "python3 - <<'PY'\nprint('a > b')\nopen('/tmp/real.json','w')\nPY";
+        let got = just_paths(body_only);
+        assert!(
+            !got.iter()
+                .any(|p| p.contains("b'") || p.contains('>') || p == "/tmp/real.json"),
+            "heredoc body leaked a row: {got:?}"
+        );
+        // Opener-line redirect survives heredoc-body stripping.
+        let with_redirect = "cat <<EOF > /tmp/out.txt\nbody > not a redirect\nEOF";
+        assert_eq!(
+            just_paths(with_redirect),
+            vec!["/tmp/out.txt".to_string()],
+            "opener-line redirect must be caught; body `>` must not"
+        );
+    }
+
+    #[test]
+    fn heredoc_quoted_and_dash_delim_forms() {
+        // Quoted delimiter `<<'EOF'` and tab-stripping `<<-EOF` both close correctly.
+        let q = "cat <<'EOF'\n> garbage > here\nEOF\ntouch /tmp/after.txt";
+        let got = just_paths(q);
+        assert!(
+            got.contains(&"/tmp/after.txt".to_string()),
+            "post-heredoc cmd lost: {got:?}"
+        );
+        assert!(
+            !got.iter().any(|p| p.contains("garbage")),
+            "body leaked: {got:?}"
+        );
+        // here-string `<<<` is NOT a heredoc (no body) — the command still parses normally.
+        assert_eq!(
+            just_paths("grep x <<< 'data' > /tmp/hs.txt"),
+            vec!["/tmp/hs.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn trim_structural_tail_and_syntax_noise_helpers() {
+        // Direct coverage of the two precision helpers.
+        assert_eq!(trim_structural_tail("/dev/null)"), "/dev/null");
+        assert_eq!(trim_structural_tail("/tmp/x;"), "/tmp/x");
+        assert_eq!(trim_structural_tail("/tmp/x))"), "/tmp/x");
+        // A balanced paren in the name is left intact.
+        assert_eq!(trim_structural_tail("/tmp/(x)"), "/tmp/(x)");
+        assert!(has_syntax_noise("'/tmp/x")); // unbalanced single quote
+        assert!(has_syntax_noise("\"/tmp/x")); // unbalanced double quote
+        assert!(has_syntax_noise(">(tee")); // process-sub head (`>(`)
+        assert!(has_syntax_noise("<(cat")); // process-sub head (`<(`)
+        assert!(has_syntax_noise("(subshell")); // bare `(` head
+        assert!(has_syntax_noise("/a>b")); // embedded `>` redirect
+        assert!(has_syntax_noise("/a<b")); // embedded `<` redirect
+        assert!(has_syntax_noise("/a\\b")); // backslash escape
+        assert!(has_syntax_noise("a|b")); // pipe metachar
+        assert!(has_syntax_noise("a^b")); // caret metachar
+        assert!(has_syntax_noise("/tmp/[unbalanced")); // unbalanced bracket
+        assert!(has_syntax_noise("/tmp/{unbalanced")); // unbalanced brace
+        assert!(has_syntax_noise("=value")); // `=`-led fragment
+        assert!(has_syntax_noise("12345")); // pure number
+        assert!(has_syntax_noise("a,b")); // comma, no slash → code shard
+        assert!(has_syntax_noise("label:")); // trailing colon, no slash
+        assert!(!has_syntax_noise("/tmp/clean.txt"));
+        assert!(!has_syntax_noise("*.tmp")); // a plain glob is NOT noise
+        assert!(!has_syntax_noise("src/main.rs")); // a real relative path with `/`
+        assert!(!has_syntax_noise("")); // empty is not (pure-number guard skips empty)
+    }
+
+    #[test]
+    fn residual_noise_classes_rejected_real_relpaths_kept() {
+        // `=`-led value fragments, pure numbers, and code shards (comma / trailing colon
+        // with no `/`) are rejected — the residual `by-file` garbage classes.
+        assert!(has_syntax_noise("=1.94"));
+        assert!(has_syntax_noise("=2980"));
+        assert!(has_syntax_noise("="));
+        assert!(has_syntax_noise("7000"));
+        assert!(has_syntax_noise("0"));
+        assert!(has_syntax_noise("o.get('x',0):")); // comma + trailing colon, no slash → code shard
+        assert!(has_syntax_noise("turn,t.get")); // comma, no slash → code shard
+        assert!(has_syntax_noise("label:")); // trailing colon, no slash
+                                             // Genuine RELATIVE paths must survive (no `/`-free code-shard false positive).
+        assert!(!has_syntax_noise("src/main.rs"));
+        assert!(!has_syntax_noise("Cargo.toml"));
+        assert!(!has_syntax_noise("paper.pdf"));
+        assert!(!has_syntax_noise("err.log"));
+        assert!(!has_syntax_noise("build_turns_fixture.py"));
+        // A path containing a colon/comma WITH a slash is left alone (rare but legal).
+        assert!(!has_syntax_noise("/tmp/a:b"));
+    }
+
+    #[test]
+    fn version_compare_and_numeric_args_do_not_become_files() {
+        // End-to-end: a `=`-led or numeric token never surfaces as a redirect/operand row.
+        assert!(just_paths("python -c 'x' > =1.94").is_empty());
+        // A real path on the same redirect still surfaces.
+        assert_eq!(
+            just_paths("echo x > /tmp/ok.txt"),
+            vec!["/tmp/ok.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn path_operand_post_trim_rejections() {
+        // After the trailing-tail trim, the re-checked sink + fd-dup-remnant + syntax-noise
+        // rejections each fire (the `/dev/null)` family, a `&1` remnant, a noisy token).
+        assert_eq!(path_operand("2>/dev/null)"), None); // trims `)` → sink → None
+        assert_eq!(path_operand("/dev/stderr)"), None);
+        assert_eq!(path_operand("&1"), None); // fd-dup remnant
+        assert_eq!(path_operand("'/tmp/x"), None); // unbalanced quote noise
+                                                   // A clean path passes (with a trailing `;` peeled).
+        assert_eq!(path_operand("/tmp/clean;").as_deref(), Some("/tmp/clean"));
+        // A bare `-` (stdin/stdout) and an empty token are not paths.
+        assert_eq!(path_operand("-"), None);
+        assert_eq!(path_operand(""), None);
+    }
+
+    #[test]
+    fn trim_structural_tail_brace_and_balanced_cases() {
+        // The `}` unbalanced-brace arm (a `${VAR}`-substitution close glued on).
+        assert_eq!(trim_structural_tail("/tmp/x}"), "/tmp/x");
+        // A balanced `{…}` is left intact (no over-trim).
+        assert_eq!(trim_structural_tail("/tmp/{a}"), "/tmp/{a}");
+        // Mixed trailing punctuation peeled in sequence.
+        assert_eq!(trim_structural_tail("/tmp/x;}"), "/tmp/x");
+        // A clean path with no trailing structure is returned unchanged.
+        assert_eq!(trim_structural_tail("/tmp/clean"), "/tmp/clean");
+    }
+
+    #[test]
+    fn target_directory_value_all_forms() {
+        // `-t DIR`, `--target-directory DIR`, `--target-directory=DIR`, and absent.
+        assert_eq!(target_directory_value(&["-t", "/d", "a"]), Some("/d"));
+        assert_eq!(
+            target_directory_value(&["--target-directory", "/d", "a"]),
+            Some("/d")
+        );
+        assert_eq!(
+            target_directory_value(&["--target-directory=/d", "a"]),
+            Some("/d")
+        );
+        assert_eq!(target_directory_value(&["a", "b"]), None);
+        // `-t` at the very end with no value → None (the `get(i+1)` None arm).
+        assert_eq!(target_directory_value(&["a", "-t"]), None);
+    }
+
+    #[test]
+    fn cp_install_without_t_flag_uses_last_operand() {
+        // The non-`-t` path of emit_copy_like (last positional is the dest).
+        assert_eq!(paths("cp a b /dest"), vec![("/dest".to_string(), "cp")]);
+        assert_eq!(
+            paths("install -m644 src /etc/conf"),
+            vec![("/etc/conf".to_string(), "install")]
+        );
+        // `-T`/`--no-target-directory` (forces 2-operand) → default last-operand path.
+        assert_eq!(
+            paths("cp -T src /dest/file"),
+            vec![("/dest/file".to_string(), "cp")]
+        );
+    }
+
+    #[test]
+    fn heredoc_multiple_delims_and_unclosed_quote() {
+        // Two heredocs opened on one line: both bodies dropped, in order.
+        let multi = "cat <<A <<B\nbodyA\nA\nbodyB\nB\ntouch /tmp/end.txt";
+        let got = just_paths(multi);
+        assert!(
+            got.contains(&"/tmp/end.txt".to_string()),
+            "trailing cmd lost: {got:?}"
+        );
+        assert!(
+            !got.iter().any(|p| p.contains("body")),
+            "body leaked: {got:?}"
+        );
+        // A simple heredoc whose body carries a stray `>` → no real path, no fabrication.
+        let unterminated = "cat <<EOF\nx > y\nEOF";
+        assert!(just_paths(unterminated).is_empty(), "no real path here");
+    }
+
+    #[test]
+    fn mv_target_dir_when_dir_token_repeats_in_sources() {
+        // The `src == dir` skip arm of emit_mv's `-t` path: the `-t` value is excluded
+        // from the mv-from sources even though it is also a non-flag positional.
+        let got = paths("mv -t /tmp/d /tmp/a /tmp/b");
+        // /tmp/d is the destination (mv); a + b are sources; /tmp/d is NOT a source.
+        assert!(got.contains(&("/tmp/d".to_string(), "mv")));
+        assert!(got.contains(&("/tmp/a".to_string(), "mv-from")));
+        assert!(got.contains(&("/tmp/b".to_string(), "mv-from")));
+        assert_eq!(
+            got.iter().filter(|(p, _)| p == "/tmp/d").count(),
+            1,
+            "the -t DIR appears exactly once (as mv), never as a source: {got:?}"
+        );
+    }
+
+    #[test]
+    fn heredoc_body_then_more_commands_after_closer() {
+        // A heredoc whose closer is followed by MORE commands exercises the active→None
+        // transition inside strip_heredoc_bodies (pop the body, resume scanning).
+        let cmd =
+            "cat <<EOF\nline one > fake\nline two\nEOF\nmkdir -p /tmp/after && touch /tmp/also";
+        let got = just_paths(cmd);
+        assert!(
+            got.contains(&"/tmp/after".to_string()),
+            "post-closer cmd lost: {got:?}"
+        );
+        assert!(
+            got.contains(&"/tmp/also".to_string()),
+            "post-closer cmd lost: {got:?}"
+        );
+        assert!(
+            !got.iter().any(|p| p.contains("fake")),
+            "body leaked: {got:?}"
+        );
+    }
+
+    #[test]
+    fn heredoc_here_string_is_not_a_heredoc() {
+        // `<<<` is a here-STRING (no body line) — heredoc_delims must skip it, so a
+        // following command on the next line is NOT swallowed as a body.
+        let hs = "grep x <<< 'data'\ntouch /tmp/post.txt";
+        assert!(just_paths(hs).contains(&"/tmp/post.txt".to_string()));
+    }
+
+    #[test]
+    fn heredoc_delims_direct_coverage() {
+        // Direct coverage of the delimiter scanner's shapes.
+        assert_eq!(heredoc_delims("cat <<EOF"), vec!["EOF".to_string()]);
+        assert_eq!(heredoc_delims("cat <<-EOF"), vec!["EOF".to_string()]);
+        assert_eq!(heredoc_delims("cat <<'Q'"), vec!["Q".to_string()]);
+        assert_eq!(heredoc_delims("cat <<\"D\""), vec!["D".to_string()]);
+        assert!(heredoc_delims("cat <<< here-string").is_empty());
+        assert!(heredoc_delims("no heredoc here").is_empty());
+        // `read_heredoc_word` bare-word stop at a metachar.
+        assert_eq!(read_heredoc_word("EOF;rest").0, "EOF");
+        // An unterminated quote has no closing `'`, so it falls through to the bare-word
+        // scan, which keeps the leading `'` and runs to the end (no metachar).
+        assert_eq!(read_heredoc_word("'unterminated").0, "'unterminated");
+        // A command with NO `<<` at all → strip_heredoc_bodies fast path (no change).
+        assert_eq!(strip_heredoc_bodies("echo hi > /tmp/x"), "echo hi > /tmp/x");
     }
 }

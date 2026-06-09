@@ -130,14 +130,9 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
 
     // The session id is the jsonl basename, but for a SUBAGENT transcript the on-disk
     // stem is `agent-<hex>` whereas the canonical id (the record `agentId`, and what the
-    // `agents` topology prints) is the BARE hex. Strip the prefix so a `files` subagent
-    // row's `session_id` is joinable to `agents` (id-form unification).
-    let session_id = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(crate::subagent::bare_agent_id)
-        .map(str::to_string)
-        .unwrap_or_default();
+    // `agents` topology prints) is the BARE hex. The shared helper strips the prefix so a
+    // `files` subagent row's `session_id` is joinable to `agents` (id-form unification).
+    let session_id = crate::subagent::session_id_from_path(path);
 
     // Retain transcript records in file order. The mutation prefilter gates the parse
     // on raw bytes (pre-JSON): a line is kept only if it could carry a mutation
@@ -223,10 +218,10 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
 }
 
 /// Heuristic create-vs-touch guess for a Bash mutation verb. A verb that names a fresh
-/// output target (`>` truncate, `mkdir`/`touch`/`tee`/`cp`/`mv` dest, a download to a
-/// path, a `dd`/`zip`/flag-specified output) is treated as a create; an append (`>>`),
-/// `rm`, `sed -i`, `mv-from`, and `git` are NOT. Lexical-only, so it is just a heuristic
-/// (its `FileOp::BashMutation` is_heuristic() gates the label everywhere).
+/// output target (`>` truncate, `mkdir`/`touch`/`tee`/`cp`/`mv`/`install`/`ln`/`rsync`
+/// dest, a download to a path, a `dd`/`zip`/flag-specified output) is treated as a create;
+/// an append (`>>`), `rm`, `sed -i`, `mv-from`, and `git` are NOT. Lexical-only, so it is
+/// just a heuristic (its `FileOp::BashMutation` is_heuristic() gates the label everywhere).
 fn bash_verb_is_create(verb: &str) -> bool {
     matches!(
         verb,
@@ -236,6 +231,9 @@ fn bash_verb_is_create(verb: &str) -> bool {
             | ">"
             | "cp"
             | "mv"
+            | "install"
+            | "ln"
+            | "rsync"
             | "curl"
             | "wget"
             | "dd"
@@ -693,6 +691,66 @@ mod tests {
 
     fn rec(line: &str) -> Record {
         serde_json::from_slice(line.as_bytes()).expect("valid fixture record")
+    }
+
+    #[test]
+    fn mutations_in_records_carrier_join_backfill_and_bash() {
+        // A structured Write + its create carrier (is_create true joined by tool_use_id),
+        // and a Bash `touch` (the heuristic arm). Covers the carrier-join + bash branches
+        // of mutations_in_records (the shared subagent-topology extractor).
+        let recs = vec![
+            rec(
+                r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/tmp/new.md","content":"x"}}]}}"#,
+            ),
+            rec(
+                r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"type":"create","filePath":"/tmp/new.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#,
+            ),
+            rec(
+                r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"touch /tmp/bashed.txt"}}]}}"#,
+            ),
+        ];
+        let muts = mutations_in_records(&recs);
+        let new_md = muts
+            .iter()
+            .find(|m| m.path == "/tmp/new.md")
+            .expect("Write surfaced");
+        assert!(
+            new_md.is_create,
+            "the create carrier joined → is_create true"
+        );
+        let bashed = muts
+            .iter()
+            .find(|m| m.path == "/tmp/bashed.txt")
+            .expect("Bash mutation surfaced");
+        assert_eq!(bashed.op, FileOp::BashMutation);
+        assert!(bashed.is_create, "touch is a create verb");
+    }
+
+    #[test]
+    fn bash_verb_is_create_classification() {
+        // Fresh-target verbs (incl. the new ln/install/rsync) are creates.
+        for v in [
+            "mkdir",
+            "touch",
+            "tee",
+            ">",
+            "cp",
+            "mv",
+            "install",
+            "ln",
+            "rsync",
+            "curl",
+            "wget",
+            "dd",
+            "zip",
+            "flag-output",
+        ] {
+            assert!(bash_verb_is_create(v), "{v} should be a create");
+        }
+        // Append / delete / in-place / source / git are NOT creates.
+        for v in [">>", "rm", "sed-i", "mv-from", "git", "unknown"] {
+            assert!(!bash_verb_is_create(v), "{v} should NOT be a create");
+        }
     }
 
     /// A synthetic multi-turn session: turn 0 Writes two /tmp docs + Edits a gaps doc;

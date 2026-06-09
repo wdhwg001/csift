@@ -345,6 +345,12 @@ struct TurnSlice {
     /// How many compaction boundaries sit between this turn and EOF (drives the
     /// boundary banners + dedup scope).
     compactions_before: usize,
+    /// True when this turn's opener is a MACHINE-INJECTED automation trigger
+    /// (`<task-notification>`) rather than a human message. The turn is still a real
+    /// boundary (it opens a turn) and is selected/budgeted normally, but the header
+    /// reports the automation/human split so a consumer sees which "user turns" were
+    /// machine pulses (e.g. `selected 19 user units (3 automation triggers)`).
+    is_automation: bool,
 }
 
 impl TurnSlice {
@@ -513,11 +519,11 @@ fn window_admits(
 /// mandatory (NOT head/tail): it visits every line including blanks, so the local
 /// counter == the true jsonl line (the recover discipline, reused verbatim).
 fn scan_one_file(path: &Path) -> Result<ScanResult> {
-    let session_id = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(str::to_string)
-        .unwrap_or_default();
+    // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
+    // every other surface uses, so a `turns` subagent unit's `session_id` is joinable to
+    // `files`/`search`/`recover`/`agents` (id-form unification; a top-level uuid is
+    // unaffected). See [`crate::subagent::session_id_from_path`].
+    let session_id = crate::subagent::session_id_from_path(path);
 
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(ScanResult {
@@ -598,6 +604,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
     let mut slices: Vec<TurnSlice> = Vec::with_capacity(turns.len());
     for (turn_index, idxs) in turns.iter().enumerate() {
         let mut user: Option<TurnUnit> = None;
+        let mut is_automation = false;
         let mut agents: Vec<AgentMsg> = Vec::new();
         let mut tool_calls = 0usize;
         // Per-message attribution: tool_use / erroring tool_result blocks seen since the
@@ -635,7 +642,15 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
             // body is the unified reconstruction (Q+options+answer for an AUQ; the typed
             // instruction + a `[plan: …]` pointer for a rejection).
             if user.is_none() && rec.opens_turn() {
-                if let Some(text) = rec.reconstructed_user_text(Some(&plan_index)) {
+                // An automation trigger (`<task-notification>`) opens a turn like a human
+                // message, but its body must render as the parsed `[workflow <id> …]
+                // <summary>` ATTRIBUTION label — never the raw `<task-id>`/`<output-file>`
+                // XML wrapper. `automation_label` wins; otherwise the normal user-text
+                // reconstruction applies.
+                if let Some(label) = rec.automation_label() {
+                    is_automation = true;
+                    user = Some(make_unit(line_no, Role::User, &label, rec));
+                } else if let Some(text) = rec.reconstructed_user_text(Some(&plan_index)) {
                     user = Some(make_unit(line_no, Role::User, &text, rec));
                 }
             }
@@ -689,6 +704,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
             tool_calls,
             agents,
             compactions_before,
+            is_automation,
         });
     }
 
@@ -1423,10 +1439,22 @@ fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usize {
         "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
         budget, 0.0_f64, summaries
     );
-    let line_selected = format!(
-        "  selected {} user + {} assistant units across {} turns · {} / {} chars used",
-        turns, max_agent_units, turns, budget, budget
-    );
+    // The `selected` line carries the automation note ` (N automation triggers)` ONLY when
+    // the session actually HAS automation-trigger turns (N ≤ turns). Reserve that space
+    // only then, so a session with no automation pulses keeps the exact pre-feature header
+    // budget (the note is a no-op string otherwise).
+    let has_automation = sr.turns.iter().any(|t| t.is_automation);
+    let line_selected = if has_automation {
+        format!(
+            "  selected {} user ({} automation triggers) + {} assistant units across {} turns · {} / {} chars used",
+            turns, turns, max_agent_units, turns, budget, budget
+        )
+    } else {
+        format!(
+            "  selected {} user + {} assistant units across {} turns · {} / {} chars used",
+            turns, max_agent_units, turns, budget, budget
+        )
+    };
     let line_dedup = format!(
         "  dedup: {} units also present in summary L{} (demoted, flagged)",
         2 * turns,
@@ -1821,14 +1849,24 @@ fn render_text(
         first = false;
 
         let (n_user, n_asst) = count_sides(plan, &ctx.cfg);
+        let n_automation = count_automation(plan);
         println!("SESSION {}", sr.session_id);
         println!(
             "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
             ctx.budget_chars, ctx.rt_fraction, plan.spanned_boundaries
         );
+        let automation_note = if n_automation > 0 {
+            format!(
+                " ({n_automation} automation trigger{})",
+                if n_automation == 1 { "" } else { "s" }
+            )
+        } else {
+            String::new()
+        };
         println!(
-            "  selected {} user + {} assistant units across {} turns · {} / {} chars used",
+            "  selected {} user{} + {} assistant units across {} turns · {} / {} chars used",
             n_user,
+            automation_note,
             n_asst,
             plan.selected.len(),
             plan.rendered_chars,
@@ -2017,6 +2055,20 @@ fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usize) {
         }
     }
     (u, a)
+}
+
+/// How many of the SELECTED user-showing units are MACHINE automation triggers
+/// (`<task-notification>` openers) rather than human messages — the header's
+/// human/automation split (`N user (M automation triggers)`).
+fn count_automation(plan: &SessionPlan) -> usize {
+    plan.selected
+        .iter()
+        .filter(|s| {
+            shows_user(s.sides)
+                && find_turn(plan, s.turn_index)
+                    .is_some_and(|t| t.user.is_some() && t.is_automation)
+        })
+        .count()
 }
 
 fn render_json(

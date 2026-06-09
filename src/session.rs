@@ -176,14 +176,9 @@ fn session_files_in(dir: &Path) -> Result<Vec<PathBuf>> {
 pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // The session id is authoritatively the jsonl basename (== uuid; verified the
     // env var CLAUDE_CODE_SESSION_ID equals it). For a SUBAGENT transcript the stem is
-    // `agent-<hex>`; strip the prefix to the bare-hex canonical id (the record `agentId`,
-    // what `agents` prints) so a `list` subagent row is joinable — id-form unification.
-    let session_id = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(crate::subagent::bare_agent_id)
-        .map(str::to_string)
-        .unwrap_or_default();
+    // `agent-<hex>`; the shared helper strips the prefix to the bare-hex canonical id
+    // (the record `agentId`, what `agents` prints) so a `list` subagent row is joinable.
+    let session_id = crate::subagent::session_id_from_path(path);
 
     // ── HEAD read: first genuine-user message + identity fields ──
     let mut first_user: Option<MessagePreview> = None;

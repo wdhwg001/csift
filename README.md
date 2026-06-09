@@ -106,8 +106,8 @@ fragment. `-t/--category` (repeatable) narrows to `thinking` / `user` / `tool` /
 plan-rejection's typed message with a `[plan: …]` pointer.
 
 ```bash
-csift search "carry logic" --path .                         # this project
-csift search "" -t user --since 2h --path .                 # user turns in the last 2h
+csift search "carry logic" .                                # this project (positional PATH, like every sibling)
+csift search "" -t user --since 2h .                        # user turns in the last 2h
 csift search "panic" --session <uuid> --max-count 5
 ```
 
@@ -115,10 +115,14 @@ csift search "panic" --session <uuid> --max-count 5
 
 Resolves the current Claude Code session id from `$CLAUDE_CODE_SESSION_ID` (the only trusted signal —
 per-session, version-independent, survives bash). Use it to anchor the other subcommands to "this
-session".
+session". `--show-path` (boolean; legacy alias `--path`) also prints the resolved jsonl path.
+
+> **Subagent caveat:** inside a Task/Agent subagent, `$CLAUDE_CODE_SESSION_ID` is the SUBAGENT's own
+> id, not the parent/root session — run `agents`/`list` on the project path to find the parent uuid.
 
 ```bash
 csift whoami
+csift whoami --show-path
 ```
 
 ### `agents` — a session's subagent TOPOLOGY
@@ -150,11 +154,15 @@ csift agents --session <uuid> --returned-message --format json   # every node's 
 
 The set of files a session Read / Wrote / Edited (+ Bash mutations), with timestamps. `files` reports
 THAT a file changed; `recover` rebuilds its content. Bash mutations are parsed lexically and flagged
-`(heuristic)`: the verb allowlist plus fd-qualified redirects (`2>`/`1>`/`&>`), `curl`/`wget` output
-flags, and allowlisted flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only concrete,
-resolvable paths (an unexpandable `$VAR` is dropped, never fabricated). Subagent scope is mutually
-exclusive: default spans subagents, `--no-subagents` is the top-level session only, and
-`--subagents-only` is its complement (only the files the session's subagents touched).
+`(heuristic)`: the verb allowlist (incl. `ln`/`install`/`rsync` and GNU `-t DIR`) plus fd-qualified
+redirects (`2>`/`1>`/`&>`, and the noclobber-override `>|`), `curl`/`wget` output flags, and allowlisted
+flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only concrete, resolvable paths (an
+unexpandable `$VAR`, a `/dev/null` sink with a glued substitution `)`, a `>(…)` process substitution,
+and a quote-severed fragment are all dropped, never fabricated). A write inside an embedded-language
+body (heredoc / `python -c`) is out of scope and missed — but **never mis-reported** (heredoc body
+lines are lexically skipped before scanning). Subagent scope is mutually exclusive: default spans
+subagents, `--no-subagents` is the top-level session only, and `--subagents-only` is its complement
+(only the files the session's subagents touched).
 
 ```bash
 csift files --session <uuid>
@@ -173,13 +181,16 @@ fabricated), `--coverage`/`--dry-run` (scope without dumping), and `--plan` (res
 csift recover . --file /abs/PLAN.md --coverage              # scope first: covered ranges + boundaries
 csift recover <uuid> --file /abs/app.py --patches           # segmented unified diffs
 csift recover <uuid> --file /abs/app.py --at @turn:42       # partial snapshot as of turn 42
-csift recover . --plan --out /tmp/restored-plan.md          # restore the latest plan verbatim
+csift recover . --plan --out /tmp/restored-plan.md          # list plan candidates; write the latest to a file
 ```
 
 ### `turns`
 
 Reconstruct the verbatim user/assistant back-and-forth a compaction summary clipped — the headline
-command. See the [budget model](#budget-model) and [richness model](#richness-model) below.
+command. In automation-heavy sessions, machine-injected `<task-notification>` triggers open turns;
+`turns` (and `search -t user`) label them as `[workflow <id> <status>] <summary>` (never the raw XML)
+and the header reports the human/automation split (`N user (M automation triggers)`). See the
+[budget model](#budget-model) and [richness model](#richness-model) below.
 
 ```bash
 csift turns .                                               # default 40K-char recon (longest agent msg + rich members/turn)

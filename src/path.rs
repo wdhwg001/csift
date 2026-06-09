@@ -265,19 +265,47 @@ pub fn resolve_session_files(
     session: Option<&str>,
     scope: SubagentScope,
 ) -> Result<Vec<PathBuf>> {
-    let dirs: Vec<ProjectDir> = if paths.is_empty() {
+    // A POSITIONAL target that is a bare SESSION UUID (not a project dir) is routed to the
+    // session filter, so the documented `csift files <uuid>` / `recover <uuid>` / `turns
+    // <uuid>` forms work as written (a uuid is NOT a filesystem path — encoding+looking it
+    // up as a project dir is what used to error). Project-shaped targets stay project
+    // targets; uuid-shaped ones join the --session set. The result selects sessions whose
+    // basename matches ANY collected id.
+    let mut session_ids: Vec<String> = Vec::new();
+    if let Some(s) = session {
+        session_ids.push(s.to_string());
+    }
+    let mut project_paths: Vec<&std::path::PathBuf> = Vec::new();
+    for p in paths {
+        match p.to_str() {
+            // A session-id-shaped positional routes to the session filter. This can never
+            // collide with a real project dir: an encoded projects-dir basename ALWAYS
+            // starts with `-` (an absolute cwd's leading `/` encodes to `-`) and carries
+            // `-` separators, whereas a uuid has no leading `-` and a bare-hex agent id has
+            // no `-` at all — so `looks_like_session_id` and "is a project dir" are
+            // mutually exclusive by construction.
+            Some(s) if looks_like_session_id(s) => {
+                session_ids.push(s.to_string());
+            }
+            _ => project_paths.push(p),
+        }
+    }
+
+    let dirs: Vec<ProjectDir> = if project_paths.is_empty() {
+        // No project target: scan every project (a uuid-only invocation searches all
+        // projects for that session, exactly like `--session <uuid>` with no path).
         all_project_dirs()?
     } else {
-        let mut d = Vec::with_capacity(paths.len());
-        for p in paths {
+        let mut d = Vec::with_capacity(project_paths.len());
+        for p in project_paths {
             d.push(resolve_target(p)?);
         }
         d
     };
 
-    // The top-level `<uuid>.jsonl` session files (after the optional --session filter).
+    // The top-level `<uuid>.jsonl` session files (after the optional session-id filter).
     // These ALWAYS drive subagent discovery — even in `SubagentsOnly`, where they are
-    // not themselves emitted — so the `--session` restriction still selects the right
+    // not themselves emitted — so the session restriction still selects the right
     // parent whose subagents to dump.
     let mut top_level: Vec<PathBuf> = Vec::new();
     for pd in &dirs {
@@ -289,10 +317,10 @@ pub fn resolve_session_files(
             let p = entry.path();
             let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
             if is_file && p.extension().is_some_and(|e| e == "jsonl") {
-                // --session restricts to one uuid (the jsonl basename).
-                if let Some(sid) = session {
+                // The collected session id(s) restrict to those uuids (the jsonl basename).
+                if !session_ids.is_empty() {
                     let stem = p.file_stem().and_then(|s| s.to_str());
-                    if stem != Some(sid) {
+                    if !stem.is_some_and(|st| session_ids.iter().any(|sid| sid == st)) {
                         continue;
                     }
                 }
@@ -325,12 +353,51 @@ pub fn resolve_session_files(
     files.sort();
     files.dedup();
 
-    if files.is_empty() {
-        if let Some(sid) = session {
-            bail!("no session file found for --session {sid} under the resolved target(s)");
+    if files.is_empty() && !session_ids.is_empty() {
+        let ids = session_ids.join(", ");
+        // A bare-hex SUBAGENT id (17 hex, no dashes) never names a TOP-LEVEL jsonl — guide
+        // the caller to the right surface instead of implying the session is gone.
+        if session_ids.iter().any(|s| is_bare_subagent_hex(s)) {
+            bail!(
+                "no top-level session matched [{ids}]. If this is a SUBAGENT id from \
+                 `csift agents`, inspect it with `csift agents --agent <id>`, or pass the \
+                 PARENT session uuid with `--subagents-only` to scope its subagents."
+            );
         }
+        bail!("no session file found for session id [{ids}] under the resolved target(s)");
     }
     Ok(files)
+}
+
+/// True when `s` is shaped like a CC SESSION ID a caller might pass as a positional in
+/// place of a project path: either a full `8-4-4-4-12` lowercase-hex UUID (a top-level
+/// session jsonl basename) or a bare-hex agent id (a subagent transcript basename minus
+/// `agent-`). Used to route such a positional to the session filter rather than encoding
+/// it as a (non-existent) project directory.
+#[must_use]
+fn looks_like_session_id(s: &str) -> bool {
+    is_uuid(s) || is_bare_subagent_hex(s)
+}
+
+/// True for a canonical `8-4-4-4-12` hex UUID (the top-level session jsonl basename).
+fn is_uuid(s: &str) -> bool {
+    let groups = [8usize, 4, 4, 4, 12];
+    let parts: Vec<&str> = s.split('-').collect();
+    if parts.len() != groups.len() {
+        return false;
+    }
+    parts
+        .iter()
+        .zip(groups)
+        .all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// True for a bare-hex SUBAGENT id: a dash-less run of hex digits long enough to be an
+/// agent id (≥12), never a short word. (`agents` prints these; `bare_agent_id` produces
+/// them.) Used only to GUIDE the error, not to resolve — subagent transcripts are not
+/// top-level jsonl basenames.
+fn is_bare_subagent_hex(s: &str) -> bool {
+    s.len() >= 12 && !s.contains('-') && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 #[cfg(test)]
@@ -567,5 +634,41 @@ mod tests {
             err.to_string().contains("no Claude Code project dir named"),
             "expected token bail, got: {err}"
         );
+    }
+
+    // ── Bare-uuid positional routing (so `csift files <uuid>` works as documented) ──
+
+    #[test]
+    fn is_uuid_recognizes_canonical_form() {
+        assert!(is_uuid("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
+        assert!(is_uuid("00000000-0000-0000-0000-000000000000"));
+        // Wrong group lengths, non-hex, missing dashes, real paths → not a uuid.
+        assert!(!is_uuid("0a1b2c3d-4e5f-4a6b-8c7d"));
+        assert!(!is_uuid("zzzzzzzz-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
+        assert!(!is_uuid("-Users-testuser-Projects-foo"));
+        assert!(!is_uuid("/Users/testuser/Projects/foo"));
+        assert!(!is_uuid("."));
+    }
+
+    #[test]
+    fn is_bare_subagent_hex_recognizes_agent_ids() {
+        assert!(is_bare_subagent_hex("ae24045bd6d4bdaff"));
+        assert!(is_bare_subagent_hex("a585e25a580c59e7a"));
+        // Too short, dashed (uuid), or a word → not a bare subagent hex.
+        assert!(!is_bare_subagent_hex("abc123")); // < 12
+        assert!(!is_bare_subagent_hex(
+            "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        ));
+        assert!(!is_bare_subagent_hex("plain-token"));
+    }
+
+    #[test]
+    fn looks_like_session_id_covers_uuid_and_bare_hex() {
+        assert!(looks_like_session_id(
+            "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        ));
+        assert!(looks_like_session_id("ae24045bd6d4bdaff"));
+        assert!(!looks_like_session_id("-Users-testuser-Projects-foo"));
+        assert!(!looks_like_session_id("."));
     }
 }

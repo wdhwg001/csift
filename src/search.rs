@@ -256,7 +256,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // ── Resolve targets → session files (optionally spanning subagents) ──
     // Shared resolver (path::resolve_session_files), used identically by agents/files.
     let session_files = path::resolve_session_files(
-        &args.paths,
+        &args.targets(),
         args.session.as_deref(),
         args.want_subagents().into(),
     )?;
@@ -375,11 +375,11 @@ fn reconstruct_and_match(
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
 ) -> Vec<Exchange> {
-    let session_id = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .map(str::to_string)
-        .unwrap_or_default();
+    // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
+    // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
+    // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
+    // unaffected). See [`crate::subagent::session_id_from_path`].
+    let session_id = crate::subagent::session_id_from_path(path);
 
     // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
@@ -488,7 +488,13 @@ fn collect_record_hits(
     // structured `toolUseResult.answers` (not the noisy synthesized string), and a
     // `[plan: <path>]` pointer for a rejection. ──
     if category_active(want, Category::User) {
-        if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
+        // An automation trigger (`<task-notification>`) opens a user turn but renders as the
+        // parsed `[workflow <id> …] <summary>` ATTRIBUTION label, never the raw XML wrapper —
+        // matched against the LABEL so a `-t user` search surfaces the clean attribution.
+        let text = rec
+            .automation_label()
+            .or_else(|| rec.reconstructed_user_text(Some(plan_index)));
+        if let Some(text) = text {
             if matcher.is_match(&text) {
                 hits.push(make_hit(Category::User, &text, ts.clone(), None));
             }
@@ -786,6 +792,7 @@ mod tests {
         SearchArgs {
             pattern: pattern.to_string(),
             paths: Vec::new(),
+            path_flag: Vec::new(),
             session: None,
             categories: Vec::new(),
             ignore_case: false,

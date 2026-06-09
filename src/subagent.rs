@@ -54,6 +54,23 @@ pub fn bare_agent_id(stem: &str) -> &str {
     stem.strip_prefix("agent-").unwrap_or(stem)
 }
 
+/// The CANONICAL session id for a transcript file: its jsonl basename, with a
+/// subagent's `agent-` filename prefix stripped to the bare-hex id ([`bare_agent_id`]).
+///
+/// This is the SINGLE derivation used by every per-file `session_id` emission
+/// (`list` / `search` / `files` / `recover` / `turns`) so the SAME subagent transcript
+/// always reports the SAME id, whichever subcommand prints it — id-form unification.
+/// A top-level session uuid has no `agent-` prefix and passes through unchanged. An
+/// empty / stem-less path yields an empty string (never panics).
+#[must_use]
+pub fn session_id_from_path(path: &Path) -> String {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .map(bare_agent_id)
+        .map(str::to_string)
+        .unwrap_or_default()
+}
+
 /// Subagent kind, keyed off the on-disk path location (authoritative; see module
 /// docs — `agentType` is descriptive only, not the discriminator).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1915,5 +1932,27 @@ mod tests {
             bare_agent_id("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"),
             "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
         );
+    }
+
+    #[test]
+    fn session_id_from_path_is_canonical_bare_hex() {
+        // The SINGLE per-file id derivation every surface (list/search/files/recover/
+        // turns) now routes through, so the same transcript reports an IDENTICAL id
+        // whichever subcommand prints it. A subagent stem loses its `agent-` prefix; a
+        // top-level uuid passes through; a stem-less path yields an empty string.
+        assert_eq!(
+            session_id_from_path(Path::new(
+                "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d/subagents/agent-a585e25a580c59e7a.jsonl"
+            )),
+            "a585e25a580c59e7a"
+        );
+        assert_eq!(
+            session_id_from_path(Path::new(
+                "/x/-Enc/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl"
+            )),
+            "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        );
+        // A root path with no file stem → empty (never panics).
+        assert_eq!(session_id_from_path(Path::new("/")), "");
     }
 }

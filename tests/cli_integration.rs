@@ -466,11 +466,130 @@ fn search_empty_pattern_with_category_does_not_warn() {
 #[test]
 fn search_with_explicit_path_target() {
     // `--path <encoded>` exercises resolve_search_targets' explicit-paths branch
-    // (`paths.is_empty()` FALSE).
+    // (`paths.is_empty()` FALSE). The DEPRECATED `--path` alias still works.
     let h = populated_home();
     let out = h.run(&["search", "carry", "--path", ENC, "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("matched"), "got: {}", out.stdout);
+}
+
+#[test]
+fn search_with_positional_path_target_like_siblings() {
+    // The fix: `csift search PATTERN <encoded>` — a POSITIONAL path, exactly like
+    // `files`/`recover`/`turns`. Previously errored "unexpected argument".
+    let h = populated_home();
+    let out = h.run(&["search", "carry", ENC, "--no-subagents"]);
+    assert!(
+        out.success,
+        "positional PATH must work; stderr: {}",
+        out.stderr
+    );
+    assert!(out.stdout.contains("matched"), "got: {}", out.stdout);
+}
+
+#[test]
+fn files_bare_uuid_positional_routes_to_session() {
+    // The documented `csift files <uuid>` form (a bare uuid in the positional slot) now
+    // resolves as a session filter across all projects, not as a (nonexistent) project
+    // dir. Previously errored "no Claude Code project dir for …/<uuid>".
+    let h = populated_home();
+    let out = h.run(&["files", SESS, "--summary", "--no-subagents"]);
+    // Routing success = the command resolved the session and ran (exit 0), NOT the old
+    // "no Claude Code project dir for …/<uuid>" hard error.
+    assert!(
+        out.success,
+        "bare-uuid positional must resolve as a session; stderr: {}",
+        out.stderr
+    );
+    assert!(
+        !out.stderr.contains("no Claude Code project dir"),
+        "a bare uuid must NOT be encoded as a project dir; stderr: {}",
+        out.stderr
+    );
+    // It ran the `files` summary over the real session (the synthetic top-level has no
+    // Bash/Edit mutation, so the body is the honest empty rollup — the point is it ran).
+    assert!(
+        out.stdout.contains("detail=summary"),
+        "files summary did not run; got: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn turns_bare_uuid_positional_routes_to_session() {
+    let h = populated_home();
+    let out = h.run(&["turns", SESS, "--budget", "2000", "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains(SESS), "got: {}", out.stdout);
+}
+
+#[test]
+fn bare_subagent_hex_positional_gives_guided_error() {
+    // A bare-hex SUBAGENT id (no top-level jsonl) yields a GUIDED error pointing at
+    // `agents --agent` / `--subagents-only`, not a misleading "session absent".
+    let h = populated_home();
+    let out = h.run(&["files", "aaa111bbb222ccc333", "--summary"]);
+    assert!(!out.success, "a subagent hex has no top-level session");
+    assert!(
+        out.stderr.contains("SUBAGENT id") && out.stderr.contains("agents --agent"),
+        "error must guide to the subagent surfaces; stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn whoami_show_path_and_legacy_path_alias() {
+    // `--show-path` is the canonical boolean; `--path` still works as a hidden alias.
+    let h = populated_home();
+    for flag in ["--show-path", "--path", "--with-path"] {
+        let out = h.run_with_env(&["whoami", flag], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+        assert!(out.success, "{flag} must parse; stderr: {}", out.stderr);
+        assert!(out.stdout.contains(SESS), "{flag} output: {}", out.stdout);
+    }
+}
+
+#[test]
+fn cross_surface_session_id_is_identical_for_a_subagent() {
+    // id-form unification: the SAME subagent transcript reports the SAME bare-hex
+    // session_id from files, search, and turns (search/turns previously kept `agent-`).
+    let h = populated_home();
+    let files = h.run(&[
+        "files",
+        "--session",
+        SESS,
+        "--by-file",
+        "--format",
+        "json",
+        "--subagents-only",
+    ]);
+    let search = h.run(&["search", "", ENC, "--session", SESS, "--format", "json"]);
+    let turns = h.run(&[
+        "turns",
+        "--session",
+        SESS,
+        "--budget",
+        "8000",
+        "--format",
+        "json",
+    ]);
+    // The bare-hex subagent id (no `agent-` prefix) must appear in each surface's JSON,
+    // and the `agent-` prefixed form must NOT.
+    for (name, out) in [("files", &files), ("search", &search), ("turns", &turns)] {
+        assert!(out.success, "{name} stderr: {}", out.stderr);
+        assert!(
+            !out.stdout.contains("\"agent-aaa111\"") && !out.stdout.contains("agent-aaa111"),
+            "{name} leaked an agent- prefixed session_id: {}",
+            out.stdout
+        );
+    }
+    // At least one surface must actually mention the bare id (proves the subagent was
+    // scanned, not just that the prefix is absent).
+    assert!(
+        files.stdout.contains("aaa111") || turns.stdout.contains("aaa111"),
+        "no surface emitted the bare subagent id; files={} turns={}",
+        files.stdout,
+        turns.stdout
+    );
 }
 
 #[test]
@@ -561,6 +680,108 @@ fn search_since_until_window() {
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("TURN 1"));
+}
+
+#[test]
+fn turns_and_search_label_automation_triggers() {
+    // A `<task-notification>` automation trigger opens a turn but must render as the
+    // parsed `[workflow <id> …]` ATTRIBUTION label — never the raw XML blob — and `turns`
+    // must report the automation count in its header.
+    let h = Home::new();
+    let sess = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cwd":"/Users/x/p","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"kick off the build please"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Starting the build now."}]}}"#,
+        r#"{"type":"user","uuid":"n0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf12abc</task-id>\n<tool-use-id>toolu_z</tool-use-id>\n<output-file>/tmp/wf12abc.output</output-file>\n<status>completed</status>\n<summary>Background command \"Run the build\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"n0","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The build finished cleanly."}]}}"#,
+        // A SECOND automation trigger → exercises the PLURAL header arm (N == 2).
+        r#"{"type":"user","uuid":"n1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf34def</task-id>\n<status>completed</status>\n<summary>Background command \"Run the tests\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
+        r#"{"type":"assistant","uuid":"a2","parentUuid":"n1","timestamp":"2026-06-07T05:20:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"All tests passed."}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-p/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    // turns: the header reports the automation count; the body shows the attribution label
+    // and never the raw XML.
+    let t = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--budget",
+        "20000",
+        "--no-subagents",
+    ]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    assert!(
+        t.stdout.contains("(2 automation triggers)"),
+        "header must report the plural automation count; got: {}",
+        t.stdout
+    );
+    assert!(
+        t.stdout.contains("[workflow wf12abc completed]"),
+        "automation opener must render as the attribution label; got: {}",
+        t.stdout
+    );
+    assert!(
+        !t.stdout.contains("<task-notification>") && !t.stdout.contains("<output-file>"),
+        "raw task-notification XML must NOT appear; got: {}",
+        t.stdout
+    );
+
+    // search -t user: the same label is matchable; the raw blob is not surfaced.
+    let s = h.run(&[
+        "search",
+        "workflow",
+        "-t",
+        "user",
+        "--session",
+        sess,
+        "--no-subagents",
+    ]);
+    assert!(s.success, "stderr: {}", s.stderr);
+    assert!(
+        s.stdout.contains("[workflow wf12abc completed]"),
+        "search -t user must surface the attribution label; got: {}",
+        s.stdout
+    );
+    assert!(
+        !s.stdout.contains("<output-file>"),
+        "search must not surface the raw XML wrapper; got: {}",
+        s.stdout
+    );
+}
+
+#[test]
+fn turns_single_automation_trigger_uses_singular_header() {
+    // Exactly ONE automation trigger → the SINGULAR header arm ("1 automation trigger").
+    let h = Home::new();
+    let sess = "11111111-2222-3333-4444-555555555555";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","cwd":"/Users/x/q","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"On it."}]}}"#,
+        r#"{"type":"user","uuid":"n0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>onejob</task-id>\n<status>completed</status>\n<summary>One background job completed</summary>\n</task-notification>"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"n0","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-q/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+    let t = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--budget",
+        "20000",
+        "--no-subagents",
+    ]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    assert!(
+        t.stdout.contains("(1 automation trigger)") && !t.stdout.contains("triggers)"),
+        "header must use the SINGULAR form; got: {}",
+        t.stdout
+    );
 }
 
 #[test]

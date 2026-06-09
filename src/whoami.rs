@@ -122,7 +122,7 @@ fn render_text(me: &WhoAmI, args: &WhoamiArgs) {
     // absence when the user explicitly asked for it.
     match &me.path {
         Some(p) => println!("path     {}", p.display()),
-        None if args.path => {
+        None if args.show_path => {
             println!("path     <not found under projects root for the current cwd>");
         }
         None => {}
