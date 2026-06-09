@@ -86,9 +86,13 @@ fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// - A `--flag=value` token → a flag token (its value is inline).
 /// - A bare `--flag` token → a flag token; if that flag takes a value AND the next
 ///   token does not itself start with `-`, the next token is its value (kept paired).
-/// - A `-x` short token is left in place (clap resolves declared short flags ahead of
-///   an `allow_hyphen_values` positional already; a leading-dash ENCODED token is a
-///   single `-` followed by alphanumerics/dashes and is treated as a positional).
+/// - A `-x` token whose `x` is a DECLARED short flag is hoisted ahead of the positionals
+///   exactly like a long flag (`-t user` keeps its paired value if the flag takes one,
+///   `-tuser`/`-i` are emitted as-is). clap does NOT resolve a trailing declared short
+///   flag ahead of an `allow_hyphen_values` positional — the positional swallows it — so
+///   we reorder it here too. A leading-dash ENCODED token (a single `-` followed by
+///   alphanumerics/dashes, whose first char is NOT a declared short flag, e.g.
+///   `-Users-…`) is NOT a flag and stays a positional.
 /// - Everything else is a positional.
 ///
 /// Flags (with paired values) are emitted first, then positionals, preserving each
@@ -117,6 +121,14 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
     // NEXT flag, e.g. a user typo `--path --format`).
     let mut value_long: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut all_long: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // The declared SHORT flags of this subcommand, and which take a value. A `-x` short
+    // token that is a DECLARED short flag must be hoisted ahead of the `allow_hyphen_values`
+    // positional EXACTLY like a long flag — otherwise `search PATTERN . -t user` lets the
+    // positional greedily swallow `-t` (and `-i`), surfacing the misleading "no project dir
+    // named -t" error. An UNDECLARED `-x` (e.g. an encoded `-Users-…` token, which is a
+    // single dash + alnum/dash) is NOT in this set, so it stays a positional.
+    let mut short_value: std::collections::HashSet<char> = std::collections::HashSet::new();
+    let mut short_all: std::collections::HashSet<char> = std::collections::HashSet::new();
     for a in sub.get_arguments() {
         if let Some(longs) = a.get_long_and_visible_aliases() {
             let takes = flag_takes_value(a);
@@ -126,6 +138,15 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
                     value_long.insert(f.clone());
                 }
                 all_long.insert(f);
+            }
+        }
+        if let Some(shorts) = a.get_short_and_visible_aliases() {
+            let takes = flag_takes_value(a);
+            for c in shorts {
+                short_all.insert(c);
+                if takes {
+                    short_value.insert(c);
+                }
             }
         }
     }
@@ -179,9 +200,30 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
                 flags.push(tok.clone());
                 i += 1;
             }
+        } else if let Some(short_c) = declared_short_flag(tok, &short_all) {
+            // A `-x…` token whose first post-dash char `x` is a DECLARED short flag. Hoist
+            // it ahead of the positionals like a long flag. A BARE `-x` (exactly two chars)
+            // that takes a value consumes the NEXT token as its value (the same pairing
+            // rule as a value-taking long flag); a bundled `-xVALUE` (`-tuser`) or a boolean
+            // `-i` carries everything inline and is emitted as one token. A leading-`-`
+            // ENCODED token (`-Users-…`) never reaches here — its first char is not a
+            // declared short flag, so `declared_short_flag` returns `None` and it falls to
+            // the positional arm below.
+            flags.push(tok.clone());
+            if tok.len() == 2 && short_value.contains(&short_c) {
+                if i + 1 < rest.len() && rest[i + 1] != "--" && !rest[i + 1].starts_with('-') {
+                    flags.push(rest[i + 1].clone());
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            } else {
+                i += 1;
+            }
         } else {
             // Positional: a real path, `.`, or a leading-`-` encoded token (which is a
-            // SINGLE dash; it did not match `--` above).
+            // SINGLE dash; it did not match `--` above and its first char is not a declared
+            // short flag).
             positionals.push(tok.clone());
             i += 1;
         }
@@ -192,6 +234,26 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
     out.extend(positionals);
     out.extend(passthrough);
     out
+}
+
+/// If `tok` is a `-x…` short-flag token whose first post-dash character is a DECLARED
+/// short flag of the active subcommand, return that character; else `None`. Used by
+/// [`normalize_argv`] to distinguish a real short flag (`-t`, `-i`, a bundled `-tuser`)
+/// — which must be hoisted ahead of an `allow_hyphen_values` positional — from a
+/// leading-`-` ENCODED project token (`-Users-…`, whose first char is not a declared
+/// short flag) which stays a positional. A bare `-` or `--`-leading token is never a
+/// short flag here (the caller handles `--` separately; a lone `-` has no flag char).
+fn declared_short_flag(tok: &str, short_all: &std::collections::HashSet<char>) -> Option<char> {
+    let rest = tok.strip_prefix('-')?;
+    if rest.starts_with('-') {
+        return None; // a `--long` token, handled by the long-flag path.
+    }
+    let first = rest.chars().next()?;
+    if short_all.contains(&first) {
+        Some(first)
+    } else {
+        None
+    }
 }
 
 /// True when an arg consumes a value (so its following token is its value, not a
@@ -264,7 +326,8 @@ pub enum Command {
     List(ListArgs),
     /// Regex-search sessions, returning complete request/response round-trip exchanges.
     Search(SearchArgs),
-    /// Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID).
+    /// Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID, falling back
+    /// to CODEX_COMPANION_SESSION_ID).
     Whoami(WhoamiArgs),
     /// List a session's subagents with kind, start/completion timestamps + status.
     Agents(AgentsArgs),
@@ -339,16 +402,25 @@ pub enum OutputFormat {
           csift list /Users/testuser/Projects/widget_app_prototype  # a real path (gets encoded)\n  \
           csift list -Users-testuser-Projects-widget-app-prototype  # a pre-encoded dir token\n  \
           csift list ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype\n  \
-          csift list --format json .                                  # machine-readable index"
+          csift list <uuid> --no-subagents                            # JUST the one top-level session row\n  \
+          csift list --format json .                                  # machine-readable index\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          One BARE object per session (JSONL — one record per line, no envelope): \
+        {session_id, path, cwd, git_branch, version, first_user, last_user, last_agent, \
+        skipped_lines}. The `first_user`/`last_user`/`last_agent` fields are \
+        {excerpt, ts_utc, ts_local} sub-objects (or null when absent)."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, or a direct
     /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir. Repeatable.
-    /// Defaults to all projects. A target may ALSO be a bare session-uuid
-    /// (8-4-4-4-12 hex) or a bare subagent-hex id — it is routed to the `--session`
-    /// filter (and searched across all projects when no project path is given), so
-    /// `csift list <uuid>` identifies that ONE session — the SAME positional surface
-    /// `files`/`recover`/`turns` use.
+    /// Defaults to all projects. A target may ALSO be a bare session-UUID
+    /// (8-4-4-4-12 hex) — it is routed to the `--session` filter (and searched across all
+    /// projects when no project path is given), so `csift list <uuid>` scopes to that one
+    /// top-level session — the SAME positional surface `files`/`recover`/`turns` use. NOTE:
+    /// the default still SPANS that session's subagents, so a fan-out session lists 1 + N
+    /// rows; add `--no-subagents` for just the single top-level row. A bare SUBAGENT hex is
+    /// NOT accepted here (it never names a top-level jsonl) — inspect one subagent with
+    /// `csift agents --agent <hex>`, or pass the PARENT session uuid.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`
     /// (an absolute cwd's leading `/` encodes to `-`), e.g.
@@ -423,8 +495,8 @@ impl ListArgs {
         spawned-agent COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
         OPENS a turn like a human message, so it surfaces under `-t user`. It renders as a \
         parsed attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
-        background-command | workflow | agent | task, read from the summary) — never the raw \
-        `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
+        background-command | workflow | agent | monitor | task, read from the summary) — \
+        never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
         `search 'background-command' -t user`).\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on turn-boundary \
         order) is mutually exclusive with `--since`/`--until`. Time bounds accept \
@@ -456,12 +528,24 @@ impl ListArgs {
         letter); -i forces insensitive. --multiline lives in the SAME dialect (it sets \
         the (?s)(?m) flags).\n\n\
         AUTOMATION TRIGGERS (under `-t user`)\n  \
-          A machine `<task-notification>` (a background-command / workflow / spawned-agent \
-        COMPLETION pulse) OPENS a user turn, so it surfaces under `-t user`. It renders as a \
-        PARSED attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
-        background-command | workflow | agent | task, read from the summary) — never the raw \
-        XML. Match it like any text, e.g. `csift search 'background-command' -t user`. The \
-        `<kind>` prefix distinguishes a machine opener from a genuine human message."
+          A machine `<task-notification>` (a background-command / workflow / spawned-agent / \
+        monitor-tick COMPLETION pulse) OPENS a user turn, so it surfaces under `-t user`. It \
+        renders as a PARSED attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
+        background-command | workflow | agent | monitor | task, read from the summary) — \
+        never the raw XML. Match it like any text, e.g. `csift search 'background-command' -t \
+        user`. The `<kind>` prefix distinguishes a machine opener from a genuine human \
+        message.\n\n\
+        CATEGORY DEFAULT\n  \
+          With NO `-t`/`--category`, ALL FIVE categories are searched (thinking, user, tool, \
+        tool-response, agent) — a zero-hit result then means the pattern truly matched \
+        nothing, not that a category was excluded.\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          One ENVELOPE object PER matched exchange (NOT one bare record per line): \
+        {session_id, turn_index, record_uuids:[…], hits:[{category, excerpt, tool_name, \
+        ts_utc, ts_local}, …]} — the per-hit objects carry no session_id; it lives on the \
+        envelope. A trailing footer object {matched, dropped_by_cap, skipped_lines} closes \
+        the stream. (Whole-document `json.load` fails — parse line-by-line as JSONL: N \
+        envelopes then the footer.)"
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
@@ -473,12 +557,14 @@ pub struct SearchArgs {
     /// sibling subcommand uses (`csift search PATTERN .` now works, matching
     /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable;
     /// combine with `--session` to narrow. With none, every project is scanned. A target may
-    /// ALSO be a bare session-uuid (8-4-4-4-12 hex) or a bare subagent-hex id routed to the
-    /// `--session` filter (so `csift search PATTERN <uuid>` scopes to that one session).
+    /// ALSO be a bare session-UUID (8-4-4-4-12 hex) routed to the `--session` filter (so
+    /// `csift search PATTERN <uuid>` scopes to that one session). A bare SUBAGENT hex is NOT
+    /// accepted here — inspect one subagent with `csift agents --agent <hex>`.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`; the
-    /// `normalize_argv` pre-pass routes declared flags away from the positional so a
-    /// trailing `--format json` is never swallowed.
+    /// `normalize_argv` pre-pass routes declared flags — LONG and the short `-t`/`-i` —
+    /// away from the positional, so a trailing flag (`… <path> --format json` or
+    /// `… <path> -t user`) is never swallowed.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -617,7 +703,20 @@ pub enum AgentKindFilter {
         of their agents). `--agent <hex>` grabs ONE subagent with its returned message; \
         `--returned-message` adds the 3-way-resolved returned message to every row; \
         `--with-files` attaches each node's files-changed list.",
-    after_help = "EXAMPLES\n  \
+    after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
+          The TARGET selects the PARENT session whose subagents to list: pass `--session \
+        <uuid>` (or a bare-uuid POSITIONAL) for ONE session, or a project PATH/encoded-dir \
+        to cover every session under it (each session's subagents grouped under it). Three \
+        on-disk subagent shapes are discovered under `<session>/subagents/**`:\n    \
+            • builtin-task  subagents/agent-<hex>.jsonl                       (Task/Agent tool)\n    \
+            • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl     (OMC workflows)\n  \
+          Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
+        status, never listed). Status is `completed` when a workflow journal carries a \
+        `result` event (or the transcript terminates cleanly), else `running`/`unknown`. \
+        `--tree` renders the parent→child topology (workflow runs as parents of their \
+        agents). `--agent <hex>` grabs ONE subagent by its bare-hex id (full node + returned \
+        message).\n\n\
+        EXAMPLES\n  \
           csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagents\n  \
           csift agents .                                                   # every session under this project\n  \
           csift agents . --kind workflow                                   # only workflow agents\n  \
@@ -628,7 +727,15 @@ pub enum AgentKindFilter {
           csift agents . --tree                                            # parent→child topology (workflow runs as parents of their agents)\n  \
           csift agents --session <uuid> --with-files                       # each node + its files-changed list\n  \
           csift agents --session <uuid> --returned-message                 # add the 3-way-resolved returned message to every row\n  \
-          csift agents . --format json                                     # machine-readable lifecycle rows"
+          csift agents . --format json                                     # machine-readable lifecycle rows\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          One object per subagent node (under `--tree`, children nest in a `children` \
+        array): {agent_id, agent_type, kind, status, parent_session_id, parent_agent_id, \
+        workflow_id, depth, description, spawn_tool, spawn_tool_use_id, trigger_utc, \
+        trigger_local, started_utc, started_local, completed_utc, completed_local, duration, \
+        skipped_lines}. `--with-files` adds a `files_changed` array; `--returned-message` \
+        (implied by a single `--agent`) adds `returned_message` + `returned_message_source`. \
+        The malformed-line count rides on each node's `skipped_lines`."
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list.
@@ -755,7 +862,12 @@ pub enum FilesDetail {
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
         with no timestamp never falls inside a bounded window.\n\n\
         No silent truncation: skipped malformed lines are counted and surfaced.",
-    after_help = "EXAMPLES\n  \
+    after_help = "DETAIL LEVEL (choose AT MOST ONE; default --summary, strictly coarsening)\n  \
+          --summary (coarse top-level-prefix rollup) < --by-dir (full parent dir) < --by-file \
+        (per file) < --timeline (per mutation). They are MUTUALLY EXCLUSIVE — passing two \
+        (e.g. `--by-file --timeline`) is a parse error. SUBAGENT SCOPE: --no-subagents and \
+        --subagents-only are likewise mutually exclusive (default spans subagents).\n\n\
+        EXAMPLES\n  \
           csift files <uuid>                          # default summary: coarse top-level-prefix op rollup\n  \
           csift files <uuid> --by-file                # per-file op counts + first/last touch\n  \
           csift files <uuid> --subagents-only --by-file   # ONLY files the session's subagents touched\n  \
@@ -781,10 +893,12 @@ pub enum FilesDetail {
 pub struct FilesArgs {
     /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to
     /// report. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) or a
-    /// bare subagent-hex id — it is routed to the `--session` filter (searched across all
-    /// projects when no project path is given), so `csift files <uuid>` works as the
-    /// EXAMPLES show (a uuid is neither a cwd nor an encoded `-Users-…` dir).
+    /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) — it is
+    /// routed to the `--session` filter (searched across all projects when no project path is
+    /// given), so `csift files <uuid>` works as the EXAMPLES show (a uuid is neither a cwd nor
+    /// an encoded `-Users-…` dir). A bare SUBAGENT hex is NOT accepted here — inspect one
+    /// subagent with `csift agents --agent <hex>`, or pass the PARENT session uuid with
+    /// `--subagents-only` to scope its subagents.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -946,21 +1060,33 @@ pub enum RecoverMode {
         Reconstruction is NECESSARILY PARTIAL and NEVER fabricates: an unseen line is \
         an explicit gap, an un-anchorable edit is a coverage hole, a Bash touch is a \
         heuristic (not authoritative) boundary. No silent truncation.",
-    after_help = "EXAMPLES\n  \
+    after_help = "MODE (choose AT MOST ONE; default --patches)\n  \
+          --patches / --at <WHEN> / --coverage / --plan are MUTUALLY EXCLUSIVE — passing two \
+        (e.g. `--plan --patches`) is a parse error. With none, `--patches` applies. `--file` \
+        is REQUIRED for --patches / --at / --coverage and OPTIONAL for --plan.\n\n\
+        EXAMPLES\n  \
           csift recover . --file /abs/PLAN.md --coverage            # scope first: covered ranges + boundaries, no dump\n  \
           csift recover <uuid> --file /abs/app.py --patches         # segmented unified diffs over the whole session\n  \
           csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only\n  \
           csift recover <uuid> --file /abs/app.py --at @turn:42     # partial snapshot as the LLM saw it at turn 42\n  \
           csift recover . --plan --out /tmp/restored-plan.md        # list plan candidates; write the latest to a file\n  \
           csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md # reconstruct THAT plan file's Write content\n  \
-          csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200"
+          csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          Per-MODE record objects (each tagged by a `type`/`mode`-specific shape — \
+        `--patches` emits `{type:\"segment\",…}` + `{type:\"boundary\",…}`; `--coverage` emits \
+        a `{covered_ranges, boundaries, events, fragments, recoverable_lines, …}` object; \
+        `--at` emits line/gap records; `--plan` emits plan-candidate records) followed by a \
+        UNIFORM trailer `{summary:{file, mode, sessions, skipped_lines}}` that closes every \
+        run regardless of mode."
 )]
 pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// from. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) or a
-    /// bare subagent-hex id routed to the `--session` filter, so `csift recover <uuid>
-    /// --file …` works as the EXAMPLES show.
+    /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) routed
+    /// to the `--session` filter, so `csift recover <uuid> --file …` works as the EXAMPLES
+    /// show. A bare SUBAGENT hex is NOT accepted here — inspect one subagent with
+    /// `csift agents --agent <hex>`.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1090,8 +1216,11 @@ impl RecoverArgs {
         record is a turn MEMBER, never a delimiter — so a 40K-char budget reaches back \
         across multiple boundaries by default (verified: 3 on one real sample, 2 on \
         another). `--max-compactions` only caps how far.\n\n\
-        BUDGET (`--budget`, default 40000) bounds the WHOLE reconstruction in chars (or \
-        tokens via `--budget-unit tokens`, ≈4 chars/token). `--round-trip-fraction` \
+        BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in chars \
+        (or tokens via `--budget-unit tokens`, ≈4 chars/token) — it is applied PER session \
+        in scope, so a bare-uuid target that spans S subagents realizes up to `budget × \
+        (1 + S)` chars total (a SCOPE banner surfaces the multiplier; `--no-subagents` scopes \
+        to the single top-level thread). `--round-trip-fraction` \
         (default 0.5) is a HARD FLOOR: that fraction of the budget can ONLY be spent on \
         COMPLETE round-trips (user → [N tool calls] → assistant EOT), never on user-only / \
         assistant-only fragments — without it an assistant-heavy tail recovers ZERO human \
@@ -1113,13 +1242,18 @@ impl RecoverArgs {
         summary)` and DEMOTED (selected only after non-dup turns) — never silently dropped \
         (a false positive must not lose a real turn).\n\n\
         AUTOMATION TRIGGERS: a machine `<task-notification>` (a background-command / \
-        workflow / spawned-agent COMPLETION pulse) OPENS a turn just like a human message, \
-        and is rendered as a parsed attribution label `[<kind> <task-id> <status>] \
-        <summary>` (kind = background-command | workflow | agent | task) instead of the raw \
-        XML. The header reports the human/automation split (`selected N user (M automation \
-        triggers) + …`). These pulses are EXCLUDED from the `--round-trip-fraction` HARD \
-        FLOOR (that lane is reserved for human exchanges) but can still be selected as \
-        Phase-2 fill.\n\n\
+        workflow / spawned-agent / monitor-tick COMPLETION pulse) OPENS a turn just like a \
+        human message, and is rendered as a parsed attribution label `[<kind> <task-id> \
+        <status>] <summary>` (kind = background-command | workflow | agent | monitor | task) \
+        instead of the raw XML. The header reports the human/automation split (`selected N \
+        user (M automation triggers) + …`). These pulses are EXCLUDED from the \
+        `--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) but \
+        can still be selected as Phase-2 fill.\n\n\
+        BUDGET FAN-OUT: `--budget` is applied PER session in scope, and a bare-uuid target \
+        SPANS that session's subagents by default — so the realized output is `budget × \
+        (sessions in scope)`. When more than one session renders, a top-of-output SCOPE \
+        banner names the count + the top-level/subagent split + the realized multiplier. The \
+        single-thread recovery use case usually wants `--no-subagents`.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
         mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). \
         `--out <PATH>` writes the full (un-terminal-truncated) reconstruction to a file \
@@ -1127,8 +1261,8 @@ impl RecoverArgs {
         (un-truncated) object per unit plus interleaved compaction-boundary records.",
     after_help = "EXAMPLES\n  \
           csift turns .                                     # default 40K-char reconstruction, this project\n  \
-          csift turns <uuid> --budget 12000                 # a 200K-context-sized recovery (~10-15K)\n  \
-          csift turns <uuid> --budget 40000 --format json   # machine-readable, line-numbered\n  \
+          csift turns <uuid> --no-subagents --budget 12000  # recover JUST my thread (~10-15K, no fan-out)\n  \
+          csift turns <uuid> --budget 40000 --format json   # machine-readable, line-numbered (spans subagents)\n  \
           csift turns <uuid> --round-trip-fraction 0.6      # weight harder toward complete round-trips\n  \
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
           csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary\n  \
@@ -1137,22 +1271,41 @@ impl RecoverArgs {
           csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)\n  \
           csift turns <uuid> --agent-msgs all               # every agent message, no filtering\n\n\
         AUTOMATION TRIGGERS\n  \
-          A machine `<task-notification>` (a background-command / workflow / spawned-agent\n  \
-          COMPLETION pulse Claude Code injects as a `type:\"user\"` record) OPENS a turn like\n  \
-          a human message, so it appears in the reconstruction. It renders as a PARSED\n  \
-          attribution label `[<kind> <task-id> <status>] <summary>` (kind = background-command\n  \
-          | workflow | agent | task, read from the summary) — never the raw `<task-id>` /\n  \
-          `<output-file>` XML. The header reports the human/automation split, e.g.\n  \
-          `selected 16 user (3 automation triggers) + 58 assistant units`. These pulses are\n  \
-          EXCLUDED from the `--round-trip-fraction` HARD FLOOR (reserved for human exchanges)\n  \
-          but can still be selected as Phase-2 fill."
+          A machine `<task-notification>` (a background-command / workflow / spawned-agent /\n  \
+          monitor-tick COMPLETION pulse Claude Code injects as a `type:\"user\"` record) OPENS\n  \
+          a turn like a human message, so it appears in the reconstruction. It renders as a\n  \
+          PARSED attribution label `[<kind> <task-id> <status>] <summary>` (kind =\n  \
+          background-command | workflow | agent | monitor | task, read from the summary) —\n  \
+          never the raw `<task-id>` / `<output-file>` XML. The header reports the\n  \
+          human/automation split, e.g. `selected 16 user (3 automation triggers) + 58\n  \
+          assistant units`. These pulses are EXCLUDED from the `--round-trip-fraction` HARD\n  \
+          FLOOR (reserved for human exchanges) but can still be selected as Phase-2 fill.\n\n\
+        BUDGET FAN-OUT\n  \
+          `--budget` is PER session in scope; a bare-uuid target spans that session's\n  \
+          subagents by default, so the realized output is budget × (sessions in scope). When\n  \
+          more than one session renders, a top-of-output `SCOPE` line names the session count,\n  \
+          the top-level/subagent split, and the realized multiplier. Use `--no-subagents` to\n  \
+          scope to just the top-level thread (the recovery use case).\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          A leading `{kind:\"session_header\", sessions_in_scope, top_level_sessions,\n  \
+          subagent_sessions, budget_chars, budget_is_per_session, max_total_chars,\n  \
+          selected_user, automation_triggers}` object, then one object PER emitted unit:\n  \
+          {session_id, turn_index, line_no, role, ts_utc, ts_local, tool_calls, full_chars,\n  \
+          rendered_chars, truncated, elided_chars, elided_lines, also_in_summary,\n  \
+          compactions_before, text, is_automation}; an automation USER unit additionally\n  \
+          carries {trigger_kind, task_id, status}. Boundary objects are tagged\n  \
+          {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
+          {kind:\"skipped_lines\", count} closes the stream when any line was malformed."
 )]
 pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// turns from. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) or a
-    /// bare subagent-hex id routed to the `--session` filter, so `csift turns <uuid>` works
-    /// as the EXAMPLES show.
+    /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) routed
+    /// to the `--session` filter, so `csift turns <uuid>` works as the EXAMPLES show. A bare
+    /// SUBAGENT hex is NOT accepted here — inspect one subagent with `csift agents --agent
+    /// <hex>`. NOTE: a bare-uuid target SPANS that session's subagents by default and
+    /// `--budget` is applied PER session in scope (see `--budget`), so the recovery use case
+    /// (`turns <my-uuid>` for one thread) usually wants `--no-subagents`.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1164,8 +1317,10 @@ pub struct TurnsArgs {
     #[arg(long, value_name = "SESSION_ID")]
     pub session: Option<String>,
 
-    /// Character (default) or token budget for the WHOLE reconstruction. The rendered
-    /// text length is bounded by this. Default 40000.
+    /// Character (default) or token budget applied PER session in scope. Each session's
+    /// reconstruction is bounded by this; a bare-uuid target spans subagents by default, so
+    /// the realized total is `budget × (sessions in scope)` (a SCOPE banner surfaces the
+    /// multiplier — pass `--no-subagents` for just the top-level thread). Default 40000.
     #[arg(long, value_name = "N", default_value_t = 40000)]
     pub budget: usize,
 
@@ -1362,11 +1517,13 @@ impl TurnsArgs {
 #[command(
     long_about = "Identify the CALLING Claude Code session, false-positive-safe.\n\n\
         Claude Code exports `CLAUDE_CODE_SESSION_ID` into every Bash-tool environment, \
-        and its value equals the calling session's own jsonl basename exactly. That is \
-        the ONLY signal csift trusts: per-session, version-independent, survives bash \
-        nesting, zero false positives. (The exact var name is matched — never a loose \
-        /session/i regex, which would false-positive on macOS's SECURITYSESSIONID.)\n\n\
-        When the var is absent/empty (an old CC build, or running outside CC), whoami \
+        and its value equals the calling session's own jsonl basename exactly. That \
+        canonical var is the signal csift trusts: per-session, version-independent, \
+        survives bash nesting, zero false positives. When it is absent, csift falls back \
+        to `CODEX_COMPANION_SESSION_ID` (the alias the Codex companion plugin sets) before \
+        giving up. (The exact var names are matched — never a loose /session/i regex, which \
+        would false-positive on macOS's SECURITYSESSIONID.)\n\n\
+        When NEITHER var is set (an old CC build, or running outside CC/Codex), whoami \
         does NOT guess — it errors with guidance to pass `--session <uuid>`. \
         Most-recent-mtime and process-tree walking are FORBIDDEN: many CC sessions \
         may be live at once, so mtime is almost always wrong. It is acceptable for \
@@ -1380,7 +1537,22 @@ impl TurnsArgs {
         their target as a POSITIONAL `[PATH]...` — there is NO `--path <PATH>` flag on them \
         (only `search` keeps a hidden, DEPRECATED `--path` alias). whoami's old `--path` \
         spelling still works here as a hidden alias for `--show-path`.",
-    after_help = "EXAMPLES\n  \
+    after_help = "SESSION-ID SOURCE\n  \
+          The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
+        its value IS the calling session's jsonl basename). If absent, csift falls back to \
+        CODEX_COMPANION_SESSION_ID (the Codex companion plugin's alias). If NEITHER is set, \
+        whoami errors with guidance to pass --session — it never guesses by mtime.\n\n\
+        SUBAGENT CAVEAT\n  \
+          Inside a Task/Agent SUBAGENT, the env var holds the SUBAGENT's OWN id, NOT the \
+        parent/root session — so `whoami` there identifies the subagent. To reach the ROOT \
+        session from inside a subagent, run `agents`/`list` on the project PATH to find the \
+        parent uuid.\n\n\
+        FLAG NOTE\n  \
+          `--show-path` is a BOOLEAN toggle (no value). The session-operating subcommands \
+        (search/agents/files/recover/turns) take their target as a POSITIONAL [PATH]... — \
+        there is NO `--path <PATH>` flag on them (only `search` keeps a hidden, deprecated \
+        `--path` alias). whoami's old `--path` spelling is a hidden alias for --show-path.\n\n\
+        EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
           csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}"
@@ -1690,6 +1862,106 @@ mod tests {
             out,
             vec!["csift", "search", "--since", "--format", "json", "x"]
         );
+    }
+
+    #[test]
+    fn normalize_hoists_short_value_flag_after_positional() {
+        // The reported critical bug: `search PATTERN <path> -t user` let the
+        // `allow_hyphen_values` positional swallow `-t` ("no project dir named -t").
+        // The pre-pass must now hoist the declared short flag `-t` AND pair its value.
+        let out = normalize_argv(
+            ["csift", "search", "spec", ".", "-t", "user"]
+                .map(String::from)
+                .to_vec(),
+        );
+        assert_eq!(out, vec!["csift", "search", "-t", "user", "spec", "."]);
+    }
+
+    #[test]
+    fn normalize_hoists_short_bool_flag_after_positional() {
+        // `-i` is a boolean short flag → hoisted but NOT paired with a value.
+        let out = normalize_argv(
+            ["csift", "search", "spec", ".", "-i"]
+                .map(String::from)
+                .to_vec(),
+        );
+        assert_eq!(out, vec!["csift", "search", "-i", "spec", "."]);
+    }
+
+    #[test]
+    fn normalize_hoists_bundled_short_flag_after_positional() {
+        // A bundled `-tuser` carries its value inline (len != 2) → emitted as one token,
+        // never pairing the next positional.
+        let out = normalize_argv(
+            ["csift", "search", "spec", ".", "-tuser"]
+                .map(String::from)
+                .to_vec(),
+        );
+        assert_eq!(out, vec!["csift", "search", "-tuser", "spec", "."]);
+    }
+
+    #[test]
+    fn normalize_short_value_flag_at_end_has_no_following_value() {
+        // `-t` with nothing after it → the no-value arm (clap reports the missing value).
+        let out = normalize_argv(
+            ["csift", "search", "spec", ".", "-t"]
+                .map(String::from)
+                .to_vec(),
+        );
+        assert_eq!(out, vec!["csift", "search", "-t", "spec", "."]);
+    }
+
+    #[test]
+    fn normalize_short_value_flag_followed_by_flag_does_not_consume_it() {
+        // `-t -i`: `-t` is value-taking but the next token starts with `-` → not consumed.
+        let out = normalize_argv(
+            ["csift", "search", "spec", ".", "-t", "-i"]
+                .map(String::from)
+                .to_vec(),
+        );
+        assert_eq!(out, vec!["csift", "search", "-t", "-i", "spec", "."]);
+    }
+
+    #[test]
+    fn normalize_leaves_encoded_token_with_letter_short_collision_as_positional() {
+        // An encoded `-Users-…` token's first char `U` is NOT a declared short flag, so it
+        // stays a positional even though `-t`/`-i` exist. The short-flag set is per-char.
+        let out = normalize_argv(
+            ["csift", "search", "spec", "-Users-testuser-Projects-foo", "-i"]
+                .map(String::from)
+                .to_vec(),
+        );
+        assert_eq!(
+            out,
+            vec!["csift", "search", "-i", "spec", "-Users-testuser-Projects-foo"]
+        );
+    }
+
+    #[test]
+    fn parse_search_short_t_after_positional_sets_category() {
+        // End-to-end through clap: the hoisted `-t user` lands as a category, positional intact.
+        let cli =
+            parse(&["csift", "search", "spec", ".", "-t", "user"]).expect("short flag after path");
+        match cli.command {
+            Command::Search(a) => {
+                assert_eq!(a.categories, vec![Category::User]);
+                assert_eq!(a.paths.len(), 1);
+                assert_eq!(a.pattern, "spec");
+            }
+            _ => panic!("expected search"),
+        }
+    }
+
+    #[test]
+    fn parse_search_short_i_after_positional_sets_ignore_case() {
+        let cli = parse(&["csift", "search", "SPEC", ".", "-i"]).expect("short -i after path");
+        match cli.command {
+            Command::Search(a) => {
+                assert!(a.ignore_case);
+                assert_eq!(a.paths.len(), 1);
+            }
+            _ => panic!("expected search"),
+        }
     }
 
     #[test]

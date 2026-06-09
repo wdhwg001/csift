@@ -380,8 +380,8 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     }
     if n.skipped_lines > 0 {
         println!(
-            "{ind2}note       {} malformed line(s) skipped",
-            n.skipped_lines
+            "{ind2}note     {}",
+            crate::text::malformed_note(n.skipped_lines)
         );
     }
 }

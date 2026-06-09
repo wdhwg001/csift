@@ -37,6 +37,19 @@ pub fn collapse_and_truncate(s: &str, max: usize) -> String {
     truncate_excerpt(&collapsed, max)
 }
 
+/// The ONE canonical "malformed lines skipped" note fragment, e.g.
+/// `3 malformed line(s) skipped`. Every subcommand surfaces the same malformed-line event;
+/// it was previously phrased three different ways (`(N malformed line(s) skipped)` on
+/// files/recover/search, a `note`-prefixed form on list/agents, and a reordered
+/// `(skipped N malformed jsonl line(s))` on turns), which made a scripted grep over the note
+/// fragile. Callers wrap this in their own delimiter (a parenthesized standalone line, or a
+/// `note`-prefixed header row) but the WORDING is now singular. Returns the bare fragment
+/// (no surrounding parens) so each caller controls its own framing.
+#[must_use]
+pub fn malformed_note(n: usize) -> String {
+    format!("{n} malformed line(s) skipped")
+}
+
 /// Parse an inclusive `START..END` index range. Both bounds parse as `usize`; `END < START`
 /// is an error. When `one_based` is true the start must be ≥ 1 (file LINE ranges are
 /// 1-based); when false a 0 start is allowed (TURN ranges are 0-based). `label` names the
@@ -119,6 +132,17 @@ mod tests {
             out.contains("… (+") && out.ends_with("chars)"),
             "collapse path must mark the elision count, not drop silently: {out}"
         );
+    }
+
+    #[test]
+    fn malformed_note_is_canonical() {
+        assert_eq!(malformed_note(3), "3 malformed line(s) skipped");
+        assert_eq!(malformed_note(0), "0 malformed line(s) skipped");
+        // No SURROUNDING parens / `note` prefix / `jsonl` token — callers frame it. (The
+        // `(s)` plural-marker parens ARE part of the canonical wording.)
+        assert!(!malformed_note(1).starts_with('('));
+        assert!(!malformed_note(1).contains("jsonl"));
+        assert!(!malformed_note(1).contains("note"));
     }
 
     #[test]

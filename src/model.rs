@@ -1172,13 +1172,21 @@ pub enum AutomationKind {
     Workflow,
     /// An `Agent …` completion pulse (a spawned subagent).
     Agent,
+    /// A `Monitor event: …` / `Monitor …` pulse — the ScheduleWakeup / monitor / cron-tick
+    /// family the P2 turn-segmentation lens names as its own trigger class. Previously this
+    /// collapsed into the opaque `Task` fallback (the only real `Task` instance in either
+    /// oracle WAS a misclassified `Monitor event:` pulse), losing its attribution.
+    Monitor,
     /// Any other / unrecognized classifier — the safe fallback (renders `task`).
     Task,
 }
 
 impl AutomationKind {
     /// Classify from the `<summary>`'s leading token. Case-insensitive on the known
-    /// prefixes; anything else (or a missing summary) is [`AutomationKind::Task`].
+    /// prefixes; anything else (or a missing summary) is [`AutomationKind::Task`]. The
+    /// `monitor` / `scheduled` / `cron` prefixes route the ScheduleWakeup/monitor/cron-tick
+    /// family to [`AutomationKind::Monitor`] (the lens demands it be a distinct, labeled
+    /// class — verified `Monitor event:`×10 + `Monitor`×6 across the two oracles).
     #[must_use]
     pub fn from_summary(summary: Option<&str>) -> Self {
         let s = summary.unwrap_or("").trim_start();
@@ -1189,6 +1197,11 @@ impl AutomationKind {
             AutomationKind::BackgroundCommand
         } else if lower.starts_with("dynamic workflow") || lower.starts_with("workflow") {
             AutomationKind::Workflow
+        } else if lower.starts_with("monitor")
+            || lower.starts_with("scheduled")
+            || lower.starts_with("cron")
+        {
+            AutomationKind::Monitor
         } else if lower.starts_with("agent") {
             AutomationKind::Agent
         } else {
@@ -1203,6 +1216,7 @@ impl AutomationKind {
             AutomationKind::BackgroundCommand => "background-command",
             AutomationKind::Workflow => "workflow",
             AutomationKind::Agent => "agent",
+            AutomationKind::Monitor => "monitor",
             AutomationKind::Task => "task",
         }
     }
@@ -2376,6 +2390,18 @@ mod tests {
             AutomationKind::from_summary(Some("  background command y")),
             BackgroundCommand
         );
+        // The ScheduleWakeup / monitor / cron-tick family is its own labeled class — the
+        // real `Monitor event: "…"` pulse (10× across the oracles) must NOT fall to `task`.
+        assert_eq!(
+            AutomationKind::from_summary(Some("Monitor event: \"full pulse suite re-run\"")),
+            Monitor
+        );
+        assert_eq!(AutomationKind::from_summary(Some("Monitor tick")), Monitor);
+        assert_eq!(
+            AutomationKind::from_summary(Some("Scheduled wakeup fired")),
+            Monitor
+        );
+        assert_eq!(AutomationKind::from_summary(Some("cron run")), Monitor);
         assert_eq!(AutomationKind::from_summary(Some("something else")), Task);
         assert_eq!(AutomationKind::from_summary(None), Task);
         assert_eq!(AutomationKind::from_summary(Some("")), Task);
@@ -2383,6 +2409,7 @@ mod tests {
         assert_eq!(BackgroundCommand.slug(), "background-command");
         assert_eq!(Workflow.slug(), "workflow");
         assert_eq!(Agent.slug(), "agent");
+        assert_eq!(Monitor.slug(), "monitor");
         assert_eq!(Task.slug(), "task");
     }
 

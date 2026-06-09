@@ -135,10 +135,16 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
 - **Scope target** is a POSITIONAL `[PATH]...` — the SAME unified surface every session-operating
   subcommand uses (`list`/`agents`/`files`/`recover`/`turns`; `csift search PATTERN .`). The legacy
   `--path <PATH>` flag still works on `search` as a hidden deprecated alias (no other subcommand has
-  a `--path` flag). A bare session-uuid (or bare subagent-hex id) in the positional slot is routed
-  to `--session` on ALL of them — including `list` (now unified; `csift list <uuid>` identifies that
-  one session) — and is searched across all projects when no project path is given. `whoami` is the
-  exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`).
+  a `--path` flag). A bare session-UUID (8-4-4-4-12 hex) in the positional slot is routed to
+  `--session` on ALL of them — including `list` (now unified; `csift list <uuid>` scopes to that one
+  top-level session, spanning its subagents by default — add `--no-subagents` for just the single
+  row) — and is searched across all projects when no project path is given. A bare **subagent hex**
+  is NOT accepted as a positional (it never names a top-level jsonl); inspect one subagent with
+  `csift agents --agent <hex>`, or pass the PARENT session uuid. `whoami` is the exception: it takes
+  NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to `CODEX_COMPANION_SESSION_ID`).
+- **Flag ordering** — the argv pre-pass routes declared flags (LONG and the search short flags
+  `-t`/`-i`) away from the `[PATH]...` positional, so a flag works in ANY position, including
+  trailing: `search PATTERN <path> -t user` and `search PATTERN <path> --format json` both parse.
 - On a hit, csift returns the **whole turn** (a turn opens on a genuine user message, an answered
   AskUserQuestion, or a plan-rejection-with-message): a matched `tool_use` comes WITH its
   `tool_result`; a matched user turn WITH the agent's response.
@@ -271,8 +277,9 @@ csift whoami [--show-path] [--format text|json]
 
 Resolves the calling Claude Code session from **`$CLAUDE_CODE_SESSION_ID`** (Claude Code exports it
 into every Bash-tool environment; its value equals the calling session's own jsonl basename
-exactly). That is the ONLY signal csift trusts — per-session, version-independent, zero
-false-positives. `CODEX_COMPANION_SESSION_ID` is accepted only as a fallback. When the var is
+exactly). That is the PRIMARY signal csift trusts — per-session, version-independent, zero
+false-positives — with `CODEX_COMPANION_SESSION_ID` (the Codex companion plugin's alias) accepted only
+as a fallback when the canonical var is absent. When NEITHER var is
 absent/empty (an old CC build, or running outside CC) whoami **does NOT guess** — most-recent-mtime
 is a false-positive trap with concurrent sessions — it exits non-zero with guidance to pass
 `--session <uuid>`. `--show-path` (boolean; legacy alias `--path`) prints the resolved jsonl path;
@@ -310,17 +317,20 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
   (`toolUseResult.type == "create"` = a new file).
 - **Heuristic** — `Bash` file mutations, parsed **lexically** from the command string. Covers the
   verb allowlist (`rm`/`mv`/`cp`/`install`/`ln`/`rsync`/`mkdir`/`touch`/`tee`/`sed -i`/`git`/`dd
-  of=`/`zip`), plain **and fd-qualified** redirects (`>`/`>>`, plus `2>`/`1>`/`&>` and their appends
+  of=`/`zip`/`tar -c` (a create flag → the `-f` archive is the written path; extract/list write
+  nothing)), plain **and fd-qualified** redirects (`>`/`>>`, plus `2>`/`1>`/`&>` and their appends
   and the noclobber-override `>|` — a `2>&1` fd-dup and `/dev/null` sinks are correctly ignored),
   `curl`/`wget` output flags (`-o`/`-O`/`--output`), and allowlisted flag outputs
   (`--junit-xml=`/`--junitxml=`/`--report-path`/…). GNU `-t DIR` (cp/mv/install) is handled — the
   destination is the `-t` value, the positionals are read sources. Only **concrete, resolvable**
   paths are emitted — an unexpandable `$VAR`/`~` pseudo-path, a `/dev/null`-class sink (even with a
   glued command-substitution `)`), a process-substitution `>(…)` (its body args too), and a
-  quote-severed fragment are all dropped, never fabricated. The parser is **quote/procsub-aware**: a
-  `>`/`<` (or a word) inside a quoted echo/printf prose or a quoted regex (`echo "idle >8min"`,
-  `grep 'cur > base'`) is masked before redirect detection, so it no longer fabricates a file — the
-  dominant remaining leak. **Known limitation:** a write inside an embedded-language body (a heredoc,
+  quote-severed fragment are all dropped, never fabricated. The parser is
+  **quote/backtick/procsub/arith-aware**: a `>`/`<` (or a word) inside a quoted echo/printf prose or
+  a quoted regex (`echo "idle >8min"`, `grep 'cur > base'`), inside a backtick command substitution
+  (`` `date > /tmp/f` `` — the inner redirect is masked AND the closing backtick never glues onto a
+  path), or inside an arithmetic/test comparison (`(( a > b ))` / `[[ a > b ]]` — the `>` is a
+  comparison, not a redirect) is masked before redirect detection, so none of them fabricate a file. **Known limitation:** a write inside an embedded-language body (a heredoc,
   or `python -c "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser, so such
   writes are missed. The precision contract holds (the miss is **never mis-reported**): heredoc BODY
   lines are lexically skipped before redirect/verb scanning, and quoted/procsub spans are masked, so
@@ -461,17 +471,25 @@ last — see the richness model below for why.
 injects `<task-notification>` records that LOOK like user turns (they open a turn) but are machine
 completion notices, not the operator's prose. `turns` (and `search -t user`) CLASSIFY these: the opener
 renders as a parsed `[<kind> <task-id> <status>] <summary>` ATTRIBUTION label — where `<kind>` is the
-TRUE trigger class read from the summary (`background-command` / `workflow` / `agent` / `task`), NOT a
-hardcoded `workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob, and the
-`turns` per-session header reports the human/automation split (e.g. `selected 20 user (3 automation
+TRUE trigger class read from the summary (`background-command` / `workflow` / `agent` / `monitor` /
+`task`, where `monitor` is the ScheduleWakeup / monitor / cron-tick family), NOT a hardcoded
+`workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob, and the `turns`
+per-session header reports the human/automation split (e.g. `selected 20 user (3 automation
 triggers) + 52 assistant units`). The trigger still opens a turn, but it is EXCLUDED from the
 `--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) — it can still be picked
 as Phase-2 fill. So a consumer sees at a glance which "user turns" were machine pulses, and the human
-round-trip floor is never silently spent on a pulse→ack pair.
+round-trip floor is never silently spent on a pulse→ack pair. In `--format json` the automation
+attribution is STRUCTURAL on the user-segment object (`is_automation` + `trigger_kind` + `task_id` +
+`status`), not only a text prefix; the stream opens with a `{kind:"session_header",…}` object carrying
+the human/automation split + budget fan-out.
 
-**Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) bounds the
-WHOLE reconstruction. Selection is recency-first (most-recent turns win the budget); the emitted
-document is sorted ascending so it reads forward. `--round-trip-fraction` (default 0.5) is a HARD FLOOR:
+**Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) is applied
+**PER session in scope** — and a bare-uuid target SPANS that session's subagents by default, so the
+realized total is `budget × (sessions in scope)`. When more than one session renders, a top-of-output
+`SCOPE` banner names the count + the top-level/subagent split + the realized multiplier; the
+single-thread recovery use case (`turns <my-uuid>`) usually wants `--no-subagents`. Selection is
+recency-first (most-recent turns win the budget); the emitted document is sorted ascending so it reads
+forward. `--round-trip-fraction` (default 0.5) is a HARD FLOOR:
 that fraction of the budget can only be spent on COMPLETE round-trips (user → `[N tool calls]` →
 assistant), never on user-only / assistant-only fragments. Over-cap units are middle-truncated
 (head+tail kept) with an explicit `… [+K chars, L lines elided] …` marker (the assistant head is larger

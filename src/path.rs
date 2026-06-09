@@ -373,9 +373,11 @@ pub fn resolve_session_files(
 /// place of a project path: either a full `8-4-4-4-12` lowercase-hex UUID (a top-level
 /// session jsonl basename) or a bare-hex agent id (a subagent transcript basename minus
 /// `agent-`). Used to route such a positional to the session filter rather than encoding
-/// it as a (non-existent) project directory.
+/// it as a (non-existent) project directory — and reused by the `search` empty-pattern
+/// warning gate so a uuid POSITIONAL counts as a session filter (the warning must not claim
+/// "no session filter" when a bare-uuid positional effectively IS one).
 #[must_use]
-fn looks_like_session_id(s: &str) -> bool {
+pub fn looks_like_session_id(s: &str) -> bool {
     is_uuid(s) || is_bare_subagent_hex(s)
 }
 

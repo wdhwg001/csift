@@ -229,28 +229,42 @@ const MASK_CHAR: char = '\u{1}';
 const MASK_BYTE: u8 = 0x01;
 
 /// Build the [`MASK_CHAR`] mask for a command (BYTE-length-identical to the input, so any
-/// offset/slice valid on one is valid on the other). Quote state and process-sub depth are
-/// tracked with a tiny lexical scanner: a quote opens on an unescaped `'`/`"` and closes on
-/// the matching quote; a `>(`/`<(` opens a procsub body whose depth is balanced by `(`/`)`.
-/// Inside EITHER, EVERY byte is masked to [`MASK_BYTE`] (so a multi-byte UTF-8 char inside a
-/// quote masks to N mask-bytes — the span boundaries are ASCII quotes/parens, which sit on
+/// offset/slice valid on one is valid on the other). Quote state and several bracket spans
+/// are tracked with a tiny lexical scanner:
+/// - a QUOTE / BACKTICK-cmdsub span opens on an unescaped `'`/`"`/`` ` `` and closes on the
+///   matching delimiter (a backtick command substitution is masked like a quote, so an
+///   inner `>` redirect never leaks and the closing backtick never glues onto a path);
+/// - a `>(`/`<(` PROCSUB body opens and its depth is balanced by `(`/`)`;
+/// - a `((` ARITHMETIC span and a `[[` TEST span open on the double bracket and mask their
+///   interior `>`/`<` (which are comparison operators there, never redirects, so
+///   `(( a > b ))` / `[[ a > b ]]` neither fabricate a file nor read a redirect).
+///
+/// Inside ANY span, EVERY byte is masked to [`MASK_BYTE`] (so a multi-byte UTF-8 char inside
+/// a span masks to N mask-bytes — the span boundaries are ASCII delimiters, which sit on
 /// char boundaries, so the result is still valid UTF-8). Outside spans, the ORIGINAL bytes
 /// are copied verbatim (the whole multi-byte char, never `byte as char` which would corrupt
-/// the length). Best-effort: it does not model `\`-escapes outside double quotes precisely,
-/// acceptable for a heuristic.
+/// the length). A single-paren subshell / `$(…)` command substitution is intentionally NOT
+/// masked (its body may legitimately mutate files, e.g. `(touch f)`). Best-effort: it does
+/// not model `\`-escapes outside double quotes precisely, acceptable for a heuristic.
 fn shell_mask(command: &str) -> String {
     let bytes = command.as_bytes();
     let mut mask: Vec<u8> = Vec::with_capacity(command.len());
-    let mut quote: Option<u8> = None; // the open quote byte, if inside a quoted span
+    let mut quote: Option<u8> = None; // the open quote byte (`'`/`"`/backtick), if in a span
     let mut procsub_depth: usize = 0; // `(` nesting inside an open `>(`/`<(` body
+    let mut arith_depth: usize = 0; // `(` nesting inside an open `((` arithmetic span
+    let mut test_depth: usize = 0; // `[` nesting inside an open `[[` test span
     let mut i = 0usize;
     while i < bytes.len() {
         let c = bytes[i];
         if let Some(q) = quote {
-            // Inside a quoted span: mask every interior byte; the closing quote ends it.
+            // Inside a quoted / backtick-command-substitution span: mask every interior byte;
+            // the matching close (same byte) ends it. A backtick command substitution
+            // (`` `date > f` ``) is masked exactly like a quote, so an embedded `>` redirect
+            // INSIDE it never reaches `collect_redirections` — and the closing backtick never
+            // survives glued onto a path (the `/tmp/bt.log\`` corruption class).
             if c == q {
                 quote = None;
-                mask.push(c); // the closing quote itself is structural, not masked.
+                mask.push(c); // the closing delimiter itself is structural, not masked.
             } else {
                 mask.push(MASK_BYTE);
             }
@@ -272,6 +286,34 @@ fn shell_mask(command: &str) -> String {
             i += 1;
             continue;
         }
+        if arith_depth > 0 {
+            // Inside a `(( … ))` arithmetic span: the `>`/`<` are COMPARISON operators, never
+            // redirects, and the operands are numbers/identifiers, never files. Mask every
+            // interior byte (incl. the balancing parens) so `(( a > b ))` neither fabricates a
+            // file `b` nor reads `>` as a redirect. Depth tracks `(`/`)` so a nested
+            // `(( (a) > b ))` closes correctly.
+            match c {
+                b'(' => arith_depth += 1,
+                b')' => arith_depth -= 1,
+                _ => {}
+            }
+            mask.push(MASK_BYTE);
+            i += 1;
+            continue;
+        }
+        if test_depth > 0 {
+            // Inside a `[[ … ]]` test span: `>`/`<` are lexicographic comparisons, not
+            // redirects; mask the interior (incl. the balancing brackets) so a `[[ a > b ]]`
+            // never surfaces a redirect/fabricated file. Depth tracks `[`/`]`.
+            match c {
+                b'[' => test_depth += 1,
+                b']' => test_depth -= 1,
+                _ => {}
+            }
+            mask.push(MASK_BYTE);
+            i += 1;
+            continue;
+        }
         // Outside any span. A `>(`/`<(` opens a process-sub body.
         if (c == b'>' || c == b'<') && bytes.get(i + 1) == Some(&b'(') {
             mask.push(c); // keep the `>(`/`<(` head so `has_syntax_noise` still sees it.
@@ -280,9 +322,27 @@ fn shell_mask(command: &str) -> String {
             i += 2;
             continue;
         }
-        if c == b'\'' || c == b'"' {
+        // A `((` opens an arithmetic span (NOT a `$((` — but the leading `$` is copied
+        // verbatim above this and the `((` still opens here, which is correct: the interior
+        // is masked either way). The two parens are kept structural; the body is masked.
+        if c == b'(' && bytes.get(i + 1) == Some(&b'(') {
+            mask.push(b'(');
+            mask.push(b'(');
+            arith_depth = 1;
+            i += 2;
+            continue;
+        }
+        // A `[[` opens a test span.
+        if c == b'[' && bytes.get(i + 1) == Some(&b'[') {
+            mask.push(b'[');
+            mask.push(b'[');
+            test_depth = 1;
+            i += 2;
+            continue;
+        }
+        if c == b'\'' || c == b'"' || c == b'`' {
             quote = Some(c);
-            mask.push(c); // the opening quote is structural.
+            mask.push(c); // the opening delimiter is structural.
             i += 1;
             continue;
         }
@@ -417,6 +477,7 @@ fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutation>) {
         "wget" => emit_download_output(operands, "wget", out),
         "dd" => emit_dd(operands, out),
         "zip" => emit_zip(operands, out),
+        "tar" => emit_tar(operands, out),
         _ => {}
     }
 }
@@ -728,6 +789,82 @@ fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
             out.push(BashMutation { path, verb: "zip" });
         }
         return; // only the first non-flag operand (the archive dest).
+    }
+}
+
+/// `tar` with a CREATE flag writes an archive; emit that archive path (the inputs that
+/// follow are READ, never mutated, so only the destination is reported — symmetric with
+/// `zip`). Three idioms are handled:
+/// - bundled short flags WITHOUT a dash: `tar czf <archive> …` — a create+file token like
+///   `czf`/`cJf`/`tzf`(no `c`→skip). The archive is the NEXT operand;
+/// - bundled short flags WITH a dash: `tar -czf <archive> …` — same, the archive is next;
+/// - long flags: `tar --create --file=<archive>` (inline) or `--create --file <archive>`
+///   (spaced).
+///
+/// A `-f<archive>`/`f<archive>` form where the path is glued to the flag bundle is also
+/// supported (the path is the bundle tail after `f`). Only emits when a `c`/`--create` flag
+/// is present, so `tar -xzf …` (extract) and `tar -tzf …` (list) write nothing.
+fn emit_tar(operands: &[&str], out: &mut Vec<BashMutation>) {
+    // Pass 1: detect a create flag and find where the archive path is.
+    let mut has_create = false;
+    let mut file_long_inline: Option<&str> = None; // `--file=<archive>`
+    let mut want_file_next = false; // a `-…f` / `czf` / `--file` expects the NEXT operand
+    let mut glued_file: Option<&str> = None; // `-czfARCHIVE` / `czfARCHIVE` tail after `f`
+    let mut archive: Option<&str> = None;
+
+    for op in operands {
+        if want_file_next {
+            archive = Some(op);
+            want_file_next = false;
+            continue;
+        }
+        if let Some(rest) = op.strip_prefix("--file=") {
+            file_long_inline = Some(rest);
+            continue;
+        }
+        if *op == "--file" {
+            want_file_next = true;
+            continue;
+        }
+        if *op == "--create" {
+            has_create = true;
+            continue;
+        }
+        if op.starts_with("--") {
+            continue; // another long flag (`--gzip`, `--verbose`, …)
+        }
+        // A bundled short-flag group: `-czf`, `czf`, `-cf`, `cJf`, possibly with a glued
+        // archive tail after `f` (`-czfARCHIVE`). Strip an optional leading `-`.
+        let bundle = op.strip_prefix('-').unwrap_or(op);
+        // Only treat it as a flag bundle if it is all flag letters (or has an `f`-glued
+        // path). A bare input path (`src/`) has a `/` or is not a known flag-letter run.
+        if let Some(fpos) = bundle.find('f') {
+            // Letters before `f` are flags; bytes after `f` are a glued archive path (if any).
+            let flags_part = &bundle[..fpos];
+            if flags_part.contains('c') {
+                has_create = true;
+            }
+            let tail = &bundle[fpos + 1..];
+            if tail.is_empty() {
+                want_file_next = true;
+            } else {
+                glued_file = Some(tail);
+            }
+        } else if bundle.chars().all(|c| c.is_ascii_alphabetic()) && bundle.contains('c') {
+            // A create bundle with no `f` (archive goes to stdout) — nothing to emit, but
+            // record the create so a separate `--file` could still apply.
+            has_create = true;
+        }
+    }
+
+    if !has_create {
+        return;
+    }
+    let dest = archive.or(glued_file).or(file_long_inline);
+    if let Some(d) = dest {
+        if let Some(path) = concrete_path(d) {
+            out.push(BashMutation { path, verb: "tar" });
+        }
     }
 }
 
@@ -2214,5 +2351,121 @@ mod tests {
         assert_eq!(read_heredoc_word("'unterminated").0, "'unterminated");
         // A command with NO `<<` at all → strip_heredoc_bodies fast path (no change).
         assert_eq!(strip_heredoc_bodies("echo hi > /tmp/x"), "echo hi > /tmp/x");
+    }
+
+    // ── Backtick command-substitution: an inner redirect must not corrupt a path ──
+
+    #[test]
+    fn backtick_cmdsub_inner_redirect_not_fabricated() {
+        // A `>` redirect INSIDE a backtick command substitution is masked, so neither the
+        // redirect target NOR a backtick-glued path (`/tmp/bt.log\``) is ever emitted.
+        assert!(just_paths("echo `date > /tmp/bt.log`").is_empty());
+        // An assignment whose RHS is a backtick cmdsub with an inner `>>` likewise emits
+        // nothing (the whole backtick body is invisible to redirect detection).
+        assert!(just_paths("x=`wc -l < f >> /tmp/bt2.log`").is_empty());
+    }
+
+    #[test]
+    fn backtick_does_not_swallow_a_real_following_redirect() {
+        // A real redirect OUTSIDE the backtick span is still detected: `echo \`date\` > f`
+        // writes `f` (the backtick closes before the `>`).
+        assert_eq!(
+            just_paths("echo `date` > /tmp/real.log"),
+            vec!["/tmp/real.log".to_string()]
+        );
+    }
+
+    // ── Arithmetic `(( ))` and test `[[ ]]` comparison operators are not redirects ──
+
+    #[test]
+    fn arithmetic_comparison_does_not_fabricate_identifier() {
+        // `(( a > b ))` is a comparison — the `>` is NOT a redirect, so the bare identifier
+        // `b` must NOT be fabricated as a written file. (Before the arith-mask the `>` was
+        // read as a redirect and `b` emitted.) The masked span emits NOTHING.
+        assert!(
+            just_paths("(( a > b ))").is_empty(),
+            "arithmetic comparison must not fabricate a file"
+        );
+        // The same inside an `if … then … fi` wrapper: still no fabricated `b`.
+        assert!(!just_paths("if (( a > b )); then echo hi; fi").contains(&"b".to_string()));
+        // A numeric RHS likewise fabricates nothing.
+        assert!(!just_paths("(( count > 5 ))").contains(&"5".to_string()));
+        // A REAL redirect alongside the arithmetic is still detected (the `>` outside the
+        // `(( ))` span writes `/tmp/r.log`).
+        assert_eq!(
+            just_paths("(( a > b )); echo done > /tmp/r.log"),
+            vec!["/tmp/r.log".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_double_bracket_comparison_is_not_a_redirect() {
+        // `[[ a > b ]]` is a lexicographic comparison; the `>` is not a redirect and `y`
+        // must not be fabricated. The masked test span emits nothing.
+        assert!(
+            just_paths("[[ x > y ]]").is_empty(),
+            "[[ ]] comparison must not fabricate a file"
+        );
+        assert!(!just_paths("if [[ x > y ]]; then echo hi; fi").contains(&"y".to_string()));
+    }
+
+    // ── tar archive creation recall ──
+
+    #[test]
+    fn tar_create_emits_archive_dest() {
+        // `-czf <archive>` (dashed bundle, spaced archive).
+        assert_eq!(
+            paths("tar -czf /tmp/arch.tar.gz src/"),
+            vec![("/tmp/arch.tar.gz".to_string(), "tar")]
+        );
+        // `czf <archive>` (bundle without a leading dash).
+        assert_eq!(
+            paths("tar czf backup.tar.gz ."),
+            vec![("backup.tar.gz".to_string(), "tar")]
+        );
+        // `-cf <archive>` (no compression flag).
+        assert_eq!(
+            paths("tar -cf out.tar a b c"),
+            vec![("out.tar".to_string(), "tar")]
+        );
+        // Long-flag inline + spaced forms.
+        assert_eq!(
+            paths("tar --create --file=/tmp/x.tar dir/"),
+            vec![("/tmp/x.tar".to_string(), "tar")]
+        );
+        assert_eq!(
+            paths("tar --create --file /tmp/y.tar dir/"),
+            vec![("/tmp/y.tar".to_string(), "tar")]
+        );
+        // A glued archive (`-czfARCHIVE`).
+        assert_eq!(
+            paths("tar -czf/tmp/glued.tgz src/"),
+            vec![("/tmp/glued.tgz".to_string(), "tar")]
+        );
+    }
+
+    #[test]
+    fn tar_extract_or_list_writes_nothing() {
+        // No create flag → no archive is written, so nothing is emitted.
+        assert!(just_paths("tar -xzf /tmp/arch.tar.gz").is_empty());
+        assert!(just_paths("tar -tzf /tmp/arch.tar.gz").is_empty());
+        assert!(just_paths("tar tf archive.tar").is_empty());
+    }
+
+    #[test]
+    fn tar_create_to_stdout_emits_nothing() {
+        // A create bundle with NO `f` (archive → stdout, e.g. piped) writes no named file.
+        assert!(just_paths("tar cz src/").is_empty());
+        // `--create` long flag with no `--file` likewise has no destination to emit.
+        assert!(just_paths("tar --create --gzip dir/").is_empty());
+    }
+
+    #[test]
+    fn tar_file_without_create_writes_nothing() {
+        // `-f <archive>` but NO create flag (`-rf` append is not a create) → no emit, since
+        // `has_create` is false.
+        assert!(just_paths("tar -rf /tmp/x.tar extra").is_empty());
+        // A spaced `--file <archive>` with no `--create` likewise emits nothing.
+        assert!(just_paths("tar --list --file /tmp/x.tar").is_empty());
     }
 }

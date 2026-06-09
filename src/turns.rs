@@ -351,6 +351,12 @@ struct TurnSlice {
     /// reports the automation/human split so a consumer sees which "user turns" were
     /// machine pulses (e.g. `selected 19 user units (3 automation triggers)`).
     is_automation: bool,
+    /// The parsed automation trigger (kind / task-id / status / summary) when
+    /// `is_automation` — `None` for a human turn. Carried so the JSON user-segment object
+    /// can surface the trigger CLASS as STRUCTURED fields (`is_automation` / `trigger_kind`
+    /// / `task_id` / `status`), not only as the inline `[<kind> …]` text prefix a consumer
+    /// would otherwise have to regex out of the prose.
+    automation: Option<crate::model::AutomationTrigger>,
 }
 
 impl TurnSlice {
@@ -620,6 +626,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
     for (turn_index, idxs) in turns.iter().enumerate() {
         let mut user: Option<TurnUnit> = None;
         let mut is_automation = false;
+        let mut automation: Option<crate::model::AutomationTrigger> = None;
         let mut agents: Vec<AgentMsg> = Vec::new();
         let mut tool_calls = 0usize;
         // Per-message attribution: tool_use / erroring tool_result blocks seen since the
@@ -664,6 +671,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
                 // reconstruction applies.
                 if let Some(label) = rec.automation_label() {
                     is_automation = true;
+                    automation = rec.automation_trigger();
                     user = Some(make_unit(line_no, Role::User, &label, rec));
                 } else if let Some(text) = rec.reconstructed_user_text(Some(&plan_index)) {
                     user = Some(make_unit(line_no, Role::User, &text, rec));
@@ -720,6 +728,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
             agents,
             compactions_before,
             is_automation,
+            automation,
         });
     }
 
@@ -1841,6 +1850,24 @@ fn render_text(
     let mut any = false;
     let mut out_blob = String::new();
 
+    // Fan-out scope banner: `--budget` is applied PER session in scope, and a bare-uuid
+    // target SPANS that session's subagents by default — so the realized output is
+    // `budget × (rendered sessions)`. When more than one session renders, surface the
+    // multiplier + the top-level/subagent split up front so the fan-out is never a surprise
+    // (the recovery use case usually wants `--no-subagents`). A single-session run is the
+    // common case and prints no banner (zero added noise).
+    let (rendered, n_top, n_sub) = scope_summary(sessions, plans);
+    if rendered > 1 {
+        println!(
+            "SCOPE  {rendered} sessions in scope ({n_top} top-level + {n_sub} subagent) · \
+             budget {} chars is PER session → up to {} chars total · pass --no-subagents \
+             to scope to the top-level thread only",
+            ctx.budget_chars,
+            ctx.budget_chars.saturating_mul(rendered)
+        );
+        println!();
+    }
+
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         if plan.selected.is_empty() {
             continue;
@@ -1853,7 +1880,14 @@ fn render_text(
 
         let (n_user, n_asst) = count_sides(plan, &ctx.cfg);
         let n_automation = count_automation(plan);
-        println!("SESSION {}", sr.session_id);
+        // Label a spanned SUBAGENT block so a caller can tell it apart from the top-level
+        // session they queried (otherwise 600+ bare-hex `SESSION` blocks look identical to
+        // the one they asked for). A top-level uuid block carries no suffix.
+        if is_top_level_session_id(&sr.session_id) {
+            println!("SESSION {}", sr.session_id);
+        } else {
+            println!("SESSION {}  (subagent transcript)", sr.session_id);
+        }
         println!(
             "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
             ctx.budget_chars, ctx.rt_fraction, plan.spanned_boundaries
@@ -1913,7 +1947,7 @@ fn render_text(
     }
     if ctx.skipped_lines > 0 {
         println!();
-        println!("(skipped {} malformed jsonl line(s))", ctx.skipped_lines);
+        println!("({})", crate::text::malformed_note(ctx.skipped_lines));
     }
     if let Some(p) = out_path {
         std::fs::write(p, &out_blob)
@@ -2060,6 +2094,40 @@ fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usize) {
     (u, a)
 }
 
+/// The fan-out scope of an in-scope-session set: how many sessions rendered (non-empty
+/// plans), split into top-level (`<uuid>.jsonl`) vs subagent (bare-hex) transcripts. Used
+/// to surface the budget MULTIPLIER honestly — `--budget` is applied PER session, so a
+/// bare-uuid query that spans S subagents realizes up to `budget × (1 + S)` chars. Returns
+/// `(rendered, top_level, subagents)`.
+fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> (usize, usize, usize) {
+    let mut rendered = 0usize;
+    let mut top_level = 0usize;
+    for (sr, plan) in sessions.iter().zip(plans.iter()) {
+        if plan.selected.is_empty() {
+            continue;
+        }
+        rendered += 1;
+        if is_top_level_session_id(&sr.session_id) {
+            top_level += 1;
+        }
+    }
+    (rendered, top_level, rendered - top_level)
+}
+
+/// True when a session id is a TOP-LEVEL `<uuid>.jsonl` basename (canonical 8-4-4-4-12
+/// hex), as opposed to a bare-hex SUBAGENT transcript id. The two id forms are mutually
+/// exclusive by construction (a uuid carries dashes in fixed positions; a subagent id is a
+/// dash-less hex run).
+fn is_top_level_session_id(id: &str) -> bool {
+    let groups = [8usize, 4, 4, 4, 12];
+    let parts: Vec<&str> = id.split('-').collect();
+    parts.len() == groups.len()
+        && parts
+            .iter()
+            .zip(groups)
+            .all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 /// How many of the SELECTED user-showing units are MACHINE automation triggers
 /// (`<task-notification>` openers) rather than human messages — the header's
 /// human/automation split (`N user (M automation triggers)`).
@@ -2082,6 +2150,40 @@ fn render_json(
 ) -> Result<()> {
     use serde_json::json;
     let mut out_blob = String::new();
+
+    // A machine-readable HEADER object so a JSON consumer can recover the human/automation
+    // split + the budget fan-out WITHOUT the text-only `selected N user (M automation
+    // triggers)` line (which was previously absent from the JSON stream entirely). It is the
+    // FIRST line; its `kind` discriminator (`session_header`) matches the existing
+    // `compaction_boundary` / `collapsed_agents` boundary-object convention.
+    let (rendered, n_top, n_sub) = scope_summary(sessions, plans);
+    let total_user: usize = plans
+        .iter()
+        .filter(|p| !p.selected.is_empty())
+        .map(|p| count_sides(p, &ctx.cfg).0)
+        .sum();
+    let total_automation: usize = plans
+        .iter()
+        .filter(|p| !p.selected.is_empty())
+        .map(count_automation)
+        .sum();
+    let header = json!({
+        "kind": "session_header",
+        "sessions_in_scope": rendered,
+        "top_level_sessions": n_top,
+        "subagent_sessions": n_sub,
+        "budget_chars": ctx.budget_chars,
+        "budget_is_per_session": true,
+        "max_total_chars": ctx.budget_chars.saturating_mul(rendered),
+        "selected_user": total_user,
+        "automation_triggers": total_automation,
+    });
+    {
+        let s = serde_json::to_string(&header)?;
+        println!("{s}");
+        out_blob.push_str(&s);
+        out_blob.push('\n');
+    }
 
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         if plan.selected.is_empty() {
@@ -2149,7 +2251,7 @@ fn emit_unit_json(
 ) -> Result<()> {
     use serde_json::json;
     let r = render_unit_body(unit);
-    let obj = json!({
+    let mut obj = json!({
         "session_id": sr.session_id,
         "turn_index": turn.turn_index,
         "line_no": unit.line_no,
@@ -2166,6 +2268,23 @@ fn emit_unit_json(
         "compactions_before": turn.compactions_before,
         "text": unit.text,
     });
+    // STRUCTURED automation attribution on a USER segment: a machine pulse opener carries
+    // `is_automation:true` + the parsed trigger CLASS / id / status as fields, so a JSON
+    // consumer distinguishes a human turn from an automation pulse WITHOUT regexing the
+    // `[<kind> …]` text prefix out of the prose. A human user turn carries
+    // `is_automation:false` and omits the trigger fields. (An assistant unit is never an
+    // automation opener, so it always renders `is_automation:false`.)
+    if let Some(map) = obj.as_object_mut() {
+        let is_user_automation = unit.role == Role::User && turn.is_automation;
+        map.insert("is_automation".into(), json!(is_user_automation));
+        if is_user_automation {
+            if let Some(t) = turn.automation.as_ref() {
+                map.insert("trigger_kind".into(), json!(t.kind.slug()));
+                map.insert("task_id".into(), json!(t.task_id));
+                map.insert("status".into(), json!(t.status));
+            }
+        }
+    }
     let s = serde_json::to_string(&obj)?;
     println!("{s}");
     out_blob.push_str(&s);

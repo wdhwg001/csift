@@ -531,6 +531,55 @@ fn search_empty_pattern_with_category_does_not_warn() {
 }
 
 #[test]
+fn search_empty_pattern_with_uuid_positional_does_not_warn() {
+    // A bare-uuid POSITIONAL routes to the SAME session filter as `--session` (via
+    // resolve_session_files), so the empty-pattern warning — which claims "no session
+    // filter" — must be SUPPRESSED. Previously the gate only inspected `--session` and
+    // printed the misleading warning here.
+    let h = populated_home();
+    let out = h.run(&["search", "", SESS, "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stderr.contains("empty pattern with no category"),
+        "a bare-uuid positional scopes to one session and must suppress the warning; \
+         stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn search_short_t_after_positional_parses_and_filters() {
+    // The reported critical bug: a trailing short flag after the positional path used to
+    // be swallowed ("no project dir named -t"). End-to-end through the real binary, a
+    // `-t user` after the path must now parse and filter to user turns.
+    let h = populated_home();
+    let out = h.run(&["search", "carry", ENC, "-t", "user", "--no-subagents"]);
+    assert!(
+        out.success,
+        "short flag after positional must parse; stderr: {}",
+        out.stderr
+    );
+    assert!(
+        !out.stderr.contains("no Claude Code project dir named"),
+        "the short flag must not be misrouted as a project dir; stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn search_short_i_after_positional_parses() {
+    // The trailing boolean short flag `-i` likewise must parse, not error.
+    let h = populated_home();
+    let out = h.run(&["search", "CARRY", ENC, "-i", "--no-subagents"]);
+    assert!(
+        out.success,
+        "trailing -i must parse; stderr: {}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains("no Claude Code project dir named"));
+}
+
+#[test]
 fn search_with_explicit_path_target() {
     // `--path <encoded>` exercises resolve_search_targets' explicit-paths branch
     // (`paths.is_empty()` FALSE). The DEPRECATED `--path` alias still works.
@@ -851,6 +900,58 @@ fn turns_single_automation_trigger_uses_singular_header() {
     assert!(
         t.stdout.contains("(1 automation trigger)") && !t.stdout.contains("triggers)"),
         "header must use the SINGULAR form; got: {}",
+        t.stdout
+    );
+}
+
+#[test]
+fn turns_json_emits_session_header_and_structured_automation() {
+    // JSON consumers get (a) a leading {kind:"session_header",…} object carrying the
+    // human/automation split + budget fan-out, and (b) STRUCTURED automation attribution on
+    // the user-segment object (is_automation + trigger_kind + task_id + status) — not just a
+    // text prefix to regex. A monitor-tick pulse renders trigger_kind "monitor".
+    let h = Home::new();
+    let sess = "22222222-3333-4444-5555-666666666666";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","cwd":"/Users/x/m","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"On it."}]}}"#,
+        r#"{"type":"user","uuid":"n0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>mon1</task-id>\n<status>completed</status>\n<summary>Monitor event: \"suite re-run completion\"</summary>\n</task-notification>"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"n0","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Noted."}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-m/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+    let t = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--budget",
+        "20000",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    let first = t.stdout.lines().next().unwrap_or("");
+    assert!(
+        first.contains("\"kind\":\"session_header\"")
+            && first.contains("\"budget_is_per_session\":true")
+            && first.contains("\"automation_triggers\":1"),
+        "first JSON line must be the session_header with the automation split; got: {first}"
+    );
+    // The automation USER object carries the STRUCTURED attribution + the monitor kind.
+    assert!(
+        t.stdout.contains("\"is_automation\":true")
+            && t.stdout.contains("\"trigger_kind\":\"monitor\"")
+            && t.stdout.contains("\"task_id\":\"mon1\""),
+        "the automation user segment must carry structured trigger fields; got: {}",
+        t.stdout
+    );
+    // A HUMAN user object carries is_automation:false (and no trigger_kind).
+    assert!(
+        t.stdout.contains("\"is_automation\":false"),
+        "a human user segment must carry is_automation:false; got: {}",
         t.stdout
     );
 }
@@ -4566,7 +4667,11 @@ fn turns_budget_respected_real_emitted_chars() {
         "--budget",
         "8000",
     ]);
-    assert!(any.stdout.contains("skipped 1 malformed"), "{}", any.stdout);
+    assert!(
+        any.stdout.contains("1 malformed line(s) skipped"),
+        "{}",
+        any.stdout
+    );
 }
 
 #[test]
@@ -5448,7 +5553,11 @@ fn turns_main_fixture_text_reports_skipped_line() {
         "40000",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("skipped 1 malformed"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("1 malformed line(s) skipped"),
+        "{}",
+        out.stdout
+    );
 }
 
 #[test]

@@ -2224,7 +2224,7 @@ fn print_footer(ctx: &RenderCtx) {
         "mode={mode}  (reconstruction is partial — unknown lines are explicit, never fabricated)"
     );
     if ctx.skipped_lines > 0 {
-        println!("({} malformed line(s) skipped)", ctx.skipped_lines);
+        println!("({})", crate::text::malformed_note(ctx.skipped_lines));
     }
 }
 

@@ -82,10 +82,13 @@ identity), lazy `serde_json` only on candidate lines, and rayon parallelism ACRO
 ## Subcommands
 
 Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `turns`) takes
-optional `PATH...` targets and an optional `--session <uuid>` (a bare session-uuid / subagent-hex in
-the positional slot is routed to `--session`), and — where it spans transcripts — `--include-subagents`
-(default ON) / `--no-subagents`. `whoami` is the exception: it takes NO target (it reads
-`$CLAUDE_CODE_SESSION_ID`) and its only flags are `--show-path` / `--format`. All support
+optional `PATH...` targets and an optional `--session <uuid>` (a bare session-UUID in the positional
+slot is routed to `--session`; a bare **subagent hex** is NOT accepted there — inspect one with `csift
+agents --agent <hex>`), and — where it spans transcripts — `--include-subagents` (default ON) /
+`--no-subagents`. The argv pre-pass routes declared flags (long and the search short flags `-t`/`-i`)
+away from the positional, so a flag works in any position, including trailing. `whoami` is the
+exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to
+`CODEX_COMPANION_SESSION_ID`) and its only flags are `--show-path` / `--format`. All support
 `--format text|json`.
 
 ### `list` — session identity index
@@ -119,9 +122,11 @@ csift search "panic" --session <uuid> --max-count 5
 
 ### `whoami` — identify the calling session (false-positive-safe)
 
-Resolves the current Claude Code session id from `$CLAUDE_CODE_SESSION_ID` (the only trusted signal —
-per-session, version-independent, survives bash). Use it to anchor the other subcommands to "this
-session". `--show-path` (boolean; legacy alias `--path`) also prints the resolved jsonl path.
+Resolves the current Claude Code session id from `$CLAUDE_CODE_SESSION_ID` (the primary trusted signal
+— per-session, version-independent, survives bash), falling back to `CODEX_COMPANION_SESSION_ID` (the
+Codex companion plugin's alias) when the canonical var is absent. Use it to anchor the other
+subcommands to "this session". `--show-path` (boolean; legacy alias `--path`) also prints the resolved
+jsonl path.
 
 > **Subagent caveat:** inside a Task/Agent subagent, `$CLAUDE_CODE_SESSION_ID` is the SUBAGENT's own
 > id, not the parent/root session — run `agents`/`list` on the project path to find the parent uuid.
@@ -160,13 +165,15 @@ csift agents --session <uuid> --returned-message --format json   # every node's 
 
 The set of files a session Read / Wrote / Edited (+ Bash mutations), with timestamps. `files` reports
 THAT a file changed; `recover` rebuilds its content. Bash mutations are parsed lexically and flagged
-`(heuristic)`: the verb allowlist (incl. `ln`/`install`/`rsync` and GNU `-t DIR`) plus fd-qualified
-redirects (`2>`/`1>`/`&>`, and the noclobber-override `>|`), `curl`/`wget` output flags, and allowlisted
-flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only concrete, resolvable paths (an
-unexpandable `$VAR`/`~`, a `/dev/null` sink with a glued substitution `)`, a `>(…)` process
-substitution and its body args, and a quote-severed fragment are all dropped, never fabricated). The
-parser is **quote/procsub-aware**: a `>`/`<` inside a quoted echo/printf or regex (`echo "idle >8min"`)
-is masked before redirect detection, so it never fabricates a file. A write inside an embedded-language
+`(heuristic)`: the verb allowlist (incl. `ln`/`install`/`rsync`, GNU `-t DIR`, and `tar -c` → its `-f`
+archive) plus fd-qualified redirects (`2>`/`1>`/`&>`, and the noclobber-override `>|`), `curl`/`wget`
+output flags, and allowlisted flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only
+concrete, resolvable paths (an unexpandable `$VAR`/`~`, a `/dev/null` sink with a glued substitution
+`)`, a `>(…)` process substitution and its body args, and a quote-severed fragment are all dropped,
+never fabricated). The parser is **quote/backtick/procsub/arith-aware**: a `>`/`<` inside a quoted
+echo/printf or regex (`echo "idle >8min"`), inside a backtick command substitution (`` `date >f` ``),
+or inside an arithmetic/test comparison (`(( a > b ))` / `[[ a > b ]]`) is masked before redirect
+detection, so it never fabricates a file. A write inside an embedded-language
 body (heredoc / `python -c`) is out of scope and missed — but **never mis-reported** (heredoc body
 lines are lexically skipped and quoted/procsub spans masked before scanning). The four detail levels
 **strictly coarsen**: `--summary` is a top-level-PREFIX rollup (a whole project tree → one row;
@@ -199,8 +206,11 @@ csift recover . --plan --out /tmp/restored-plan.md          # list plan candidat
 Reconstruct the verbatim user/assistant back-and-forth a compaction summary clipped — the headline
 command. In automation-heavy sessions, machine-injected `<task-notification>` triggers open turns;
 `turns` (and `search -t user`) label them as `[<kind> <id> <status>] <summary>` (kind =
-`background-command` / `workflow` / `agent` / `task`, read from the summary — never the raw XML) and
-the header reports the human/automation split (`N user (M automation triggers)`). These pulses are
+`background-command` / `workflow` / `agent` / `monitor` / `task`, read from the summary — never the
+raw XML; `monitor` is the ScheduleWakeup / monitor / cron-tick family) and the header reports the
+human/automation split (`N user (M automation triggers)`). In `--format json` the attribution is
+structural (`is_automation` / `trigger_kind` / `task_id` / `status`) on the user-segment object, with
+a leading `{kind:"session_header",…}` object. These pulses are
 excluded from the `--round-trip-fraction` human-reserved floor. See the [budget model](#budget-model)
 and [richness model](#richness-model) below.
 
@@ -229,9 +239,12 @@ csift turns [PATH...] [--session ID] [--budget N] [--budget-unit chars|tokens]
 
 ### Budget model
 
-- **`--budget`** (default 40000) bounds the WHOLE reconstruction in chars, or tokens via
-  `--budget-unit tokens` (≈4 chars/token). The summed cost of every emitted line equals the real emitted
-  length — the budget is never overshot.
+- **`--budget`** (default 40000) bounds each session's reconstruction in chars, or tokens via
+  `--budget-unit tokens` (≈4 chars/token). It is applied **PER session in scope** — a bare-uuid target
+  spans subagents by default, so the realized total is `budget × (sessions in scope)`; a top-of-output
+  `SCOPE` banner surfaces the multiplier, and `--no-subagents` scopes to the single top-level thread
+  (the recovery use case). The summed cost of every emitted line equals the real emitted length — the
+  per-session budget is never overshot.
 - **Selection is recency-first** (most-recent turns win the budget, what a resumed agent most needs);
   the emitted document is sorted ascending so it reads as a forward transcript.
 - **`--round-trip-fraction`** (default 0.5) is a HARD FLOOR: that fraction of the budget can only be

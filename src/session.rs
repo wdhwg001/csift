@@ -247,7 +247,10 @@ fn render_text(summaries: &[SessionSummary]) {
         print_preview("last ▸ ", s.last_agent.as_ref());
 
         if s.skipped_lines > 0 {
-            println!("  note     {} malformed line(s) skipped", s.skipped_lines);
+            println!(
+                "  note     {}",
+                crate::text::malformed_note(s.skipped_lines)
+            );
         }
     }
 }

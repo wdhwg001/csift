@@ -367,6 +367,7 @@ fn mk_turn(
         agents,
         compactions_before: comp,
         is_automation: false,
+        automation: None,
     }
 }
 
@@ -392,6 +393,7 @@ fn mk_turn_agents(
         agents,
         compactions_before: comp,
         is_automation: false,
+        automation: None,
     }
 }
 
@@ -2271,6 +2273,7 @@ fn placeholder_attribution_sums_per_message_tool_and_failed() {
         agents,
         compactions_before: 0,
         is_automation: false,
+        automation: None,
     };
     let lane = select_agent_messages(&t, &rich_cfg());
     let span = lane
@@ -2408,6 +2411,7 @@ fn dedup_flagged_middle_still_richness_gated() {
         agents,
         compactions_before: 0,
         is_automation: false,
+        automation: None,
     };
     let lane = select_agent_messages(&t, &rich_cfg());
     let kept_flagged = lane
@@ -2417,4 +2421,73 @@ fn dedup_flagged_middle_still_richness_gated() {
         kept_flagged,
         "a rich dedup-flagged middle is kept carrying its flag"
     );
+}
+
+// ── Fan-out scope summary + top-level/subagent id classification ──
+
+#[test]
+fn is_top_level_session_id_distinguishes_uuid_from_bare_hex() {
+    // A canonical 8-4-4-4-12 uuid is top-level; a dash-less bare-hex subagent id is not.
+    assert!(is_top_level_session_id(
+        "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+    ));
+    assert!(!is_top_level_session_id("a00ea52f023afd9ce"));
+    // Wrong group shape / non-hex → not top-level.
+    assert!(!is_top_level_session_id("0a1b2c3d-4e5f-4a6b-8c7d"));
+    assert!(!is_top_level_session_id(
+        "zzzzzzzz-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+    ));
+}
+
+/// A ScanResult with a chosen session id + a single trivial round-trip turn (so its plan
+/// is non-empty under any budget).
+fn scan_named(session_id: &str) -> ScanResult {
+    ScanResult {
+        session_id: session_id.to_string(),
+        turns: vec![mk_turn(0, Some("ask"), Some("reply"), 1, 0)],
+        summaries: Vec::new(),
+        skipped_lines: 0,
+    }
+}
+
+#[test]
+fn scope_summary_counts_top_level_and_subagents() {
+    // One top-level uuid + two bare-hex subagents, all rendering.
+    let sessions = vec![
+        scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"),
+        scan_named("a00ea52f023afd9ce"),
+        scan_named("a01086fb826e1ab0e"),
+    ];
+    let plans: Vec<SessionPlan> = sessions
+        .iter()
+        .map(|sr| plan_session(sr, 8000, 0.5, 0, &cfg()))
+        .collect();
+    let (rendered, top, sub) = scope_summary(&sessions, &plans);
+    assert_eq!((rendered, top, sub), (3, 1, 2));
+}
+
+#[test]
+fn scope_summary_ignores_empty_plans() {
+    // A session whose plan selects nothing (budget 0-effect via empty turns) is not counted.
+    let mut empty = scan_named("a00ea52f023afd9ce");
+    empty.turns.clear();
+    let sessions = vec![scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"), empty];
+    let plans: Vec<SessionPlan> = sessions
+        .iter()
+        .map(|sr| plan_session(sr, 8000, 0.5, 0, &cfg()))
+        .collect();
+    let (rendered, top, sub) = scope_summary(&sessions, &plans);
+    assert_eq!((rendered, top, sub), (1, 1, 0));
+}
+
+#[test]
+fn turn_carries_parsed_automation_trigger_for_json() {
+    // The scan path stores the parsed trigger on the slice when the opener is a
+    // <task-notification>; the JSON emitter reads `trigger_kind`/`task_id`/`status` off it.
+    let line = r#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>wf_42</task-id><status>completed</status><summary>Dynamic workflow \"x\" completed</summary></task-notification>"}}"#;
+    let rec: crate::model::Record = serde_json::from_str(line).expect("record");
+    let trig = rec.automation_trigger().expect("a trigger");
+    assert_eq!(trig.kind.slug(), "workflow");
+    assert_eq!(trig.task_id.as_deref(), Some("wf_42"));
+    assert_eq!(trig.status.as_deref(), Some("completed"));
 }

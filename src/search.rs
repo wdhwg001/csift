@@ -239,13 +239,22 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
     // A truly unbounded search (empty pattern + no filters) will emit a lot. Warn,
-    // but do not refuse — SPEC §6.2 explicitly allows it.
+    // but do not refuse — SPEC §6.2 explicitly allows it. A bare-uuid / bare-hex POSITIONAL
+    // routes to the SAME session filter as `--session` (via resolve_session_files), so it
+    // counts as a session filter here too — otherwise the warning would falsely claim "no
+    // session filter" on a run that is in fact scoped to one session.
+    let has_session_filter = args.session.is_some()
+        || args
+            .targets()
+            .iter()
+            .filter_map(|p| p.to_str())
+            .any(path::looks_like_session_id);
     let matcher = build_matcher(args)?;
     if matcher.is_pure_filter()
         && args.categories.is_empty()
         && turn_range.is_none()
         && time_window.is_unbounded()
-        && args.session.is_none()
+        && !has_session_filter
     {
         eprintln!(
             "csift: warning: empty pattern with no category/time/turn/session filter \
@@ -659,7 +668,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     if outcome.exchanges.is_empty() {
         println!("no matching exchanges");
         if outcome.skipped_lines > 0 {
-            println!("({} malformed line(s) skipped)", outcome.skipped_lines);
+            println!("({})", crate::text::malformed_note(outcome.skipped_lines));
         }
         return;
     }
@@ -715,7 +724,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     }
     println!();
     if outcome.skipped_lines > 0 {
-        println!("({} malformed line(s) skipped)", outcome.skipped_lines);
+        println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
 }
 

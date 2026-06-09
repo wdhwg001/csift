@@ -11,9 +11,11 @@
 //! ```
 //!
 //! This is a **definitive** signal: per-session, version-independent, survives
-//! bash nesting, zero false positives. We use it and nothing else.
+//! bash nesting, zero false positives. It is the primary signal; when it is absent
+//! we fall back to the `CODEX_COMPANION_SESSION_ID` alias (set by the Codex companion
+//! plugin) before giving up.
 //!
-//! When the var is absent or empty (e.g. invoked outside Claude Code, or a future
+//! When NEITHER var is set (e.g. invoked outside Claude Code/Codex, or a future
 //! CC build that drops it) we DO NOT GUESS — multiple CC sessions may run
 //! concurrently with different binaries, and most-recent-mtime is a false-positive
 //! trap. We error with actionable guidance instead. It is acceptable for whoami to

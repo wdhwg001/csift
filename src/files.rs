@@ -603,7 +603,7 @@ fn print_footer(outcome: &Outcome) {
     );
     println!("(Bash mutations are heuristic — parsed from the command string.)");
     if outcome.skipped_lines > 0 {
-        println!("({} malformed line(s) skipped)", outcome.skipped_lines);
+        println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
 }
 
