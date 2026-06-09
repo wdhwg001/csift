@@ -50,6 +50,49 @@ pub fn malformed_note(n: usize) -> String {
     format!("{n} malformed line(s) skipped")
 }
 
+/// The canonical SCOPE-span text fragment, e.g. `4 sessions in scope (1 top-level + 3
+/// subagent)`. EVERY subagent-spanning subcommand (`list`/`files`/`search`/`recover`/`turns`)
+/// reports a bare-uuid fan-out with this SAME wording so an agent reads one format. `turns`
+/// prefixes `SCOPE  ` and appends its budget clause; the others use [`emit_scope_banner`].
+#[must_use]
+pub fn scope_span_fragment(top: usize, sub: usize) -> String {
+    let total = top + sub;
+    format!(
+        "{total} session{} in scope ({top} top-level + {sub} subagent)",
+        if total == 1 { "" } else { "s" }
+    )
+}
+
+/// Emit the `SCOPE  N sessions in scope (X top-level + Y subagent)` banner + a trailing blank
+/// line to stdout — but ONLY when the resolved set actually spans ≥1 subagent (`sub > 0`).
+/// This is the ONE emit site for the four non-turns spanning subcommands
+/// (`list`/`files`/`search`/`recover`): a bare `csift <cmd> <uuid>` that silently balloons
+/// from 1 transcript to N must announce the fan-out up front, identically across surfaces,
+/// and stay silent (no banner) under `--no-subagents` or a genuinely single-transcript scope.
+/// `turns` keeps its own richer banner (it folds in the per-session budget math) but reuses
+/// [`scope_span_fragment`] for the wording.
+pub fn emit_scope_banner(top: usize, sub: usize) {
+    if sub > 0 {
+        println!("SCOPE  {}", scope_span_fragment(top, sub));
+        println!();
+    }
+}
+
+/// The canonical leading `{kind:"session_header", …}` JSON record disclosing the SCOPE span,
+/// reusing `turns`' field names so a JSON consumer detects the span identically on every
+/// spanning subcommand. Emitted as the FIRST line of `list`/`files`/`search`/`recover` JSON
+/// when the scope spans ≥1 subagent (`sub > 0`); `turns` builds a RICHER `session_header`
+/// inline (it adds budget/automation fields) but the three span fields match exactly.
+#[must_use]
+pub fn scope_header_json(top: usize, sub: usize) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "session_header",
+        "sessions_in_scope": top + sub,
+        "top_level_sessions": top,
+        "subagent_sessions": sub,
+    })
+}
+
 /// Parse an inclusive `START..END` index range. Both bounds parse as `usize`; `END < START`
 /// is an error. When `one_based` is true the start must be ≥ 1 (file LINE ranges are
 /// 1-based); when false a 0 start is allowed (TURN ranges are 0-based). `label` names the

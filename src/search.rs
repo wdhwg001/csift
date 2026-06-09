@@ -90,6 +90,11 @@ pub struct SearchOutcome {
     pub dropped_by_cap: usize,
     /// Total malformed lines skipped while scanning (surfaced, never hidden).
     pub skipped_lines: usize,
+    /// SCOPE-span counts of the RESOLVED transcript set (top-level + subagent files), from
+    /// `resolve_session_files` — so the fan-out is announced even when a spanned subagent
+    /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).
+    pub scope_top: usize,
+    pub scope_sub: usize,
 }
 
 /// A compiled pattern + flags, plus the optional literal prefilter needle.
@@ -255,6 +260,10 @@ fn resolve_uuid_scope(args: &SearchArgs) -> (String, Option<String>) {
 }
 
 pub fn run_search(args: &SearchArgs) -> Result<()> {
+    // Pointed error if the files-only `--subagents-only` was mistyped here.
+    if let Some(msg) = args.span_flag_error() {
+        bail!(msg);
+    }
     // ── Validate flag combinations up front (SPEC §6.2 validation) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
@@ -320,9 +329,20 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         .map(|p| search_one_file(p, args, &matcher, turn_range.as_ref(), &time_window))
         .collect::<Result<Vec<_>>>()?;
 
+    // SCOPE span of the resolved set (every transcript, incl. hit-free subagents).
+    let scope_sub = session_files
+        .iter()
+        .filter(|p| crate::subagent::is_subagent_path(p))
+        .count();
+    let scope_top = session_files.len() - scope_sub;
+
     // Deterministic merge: by (path order already sorted) → flatten exchanges in
     // file order, applying the GLOBAL --max-count cap across the whole corpus.
-    let mut outcome = SearchOutcome::default();
+    let mut outcome = SearchOutcome {
+        scope_top,
+        scope_sub,
+        ..SearchOutcome::default()
+    };
     for fr in per_file {
         outcome.skipped_lines += fr.skipped_lines;
         for ex in fr.exchanges {
@@ -717,6 +737,9 @@ fn category_glyph(c: Category) -> char {
 }
 
 fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
+    // SCOPE banner FIRST (before the empty check) so a bare `csift search '' <uuid>` fan-out
+    // announces it spanned N subagents up front — same disclosure as list/files/turns.
+    crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     if outcome.exchanges.is_empty() {
         println!("no matching exchanges");
         if outcome.skipped_lines > 0 {
@@ -790,6 +813,17 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
 
 fn render_json(outcome: &SearchOutcome) -> Result<()> {
     use serde_json::json;
+    // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
+    // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
+    if outcome.scope_sub > 0 {
+        println!(
+            "{}",
+            serde_json::to_string(&crate::text::scope_header_json(
+                outcome.scope_top,
+                outcome.scope_sub
+            ))?
+        );
+    }
     for ex in &outcome.exchanges {
         let hits: Vec<_> = ex
             .hits
@@ -848,6 +882,7 @@ mod tests {
             resolve_persisted: false,
             include_subagents: true,
             no_subagents: false,
+            subagents_only: false,
             format: OutputFormat::Text,
         }
     }

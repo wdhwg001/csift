@@ -1210,25 +1210,31 @@ pub enum AutomationKind {
     Workflow,
     /// An `Agent …` completion pulse (a spawned subagent).
     Agent,
-    /// A `Monitor event: …` / `Monitor …` `<task-notification>` COMPLETION pulse (summary
-    /// opens `monitor`/`scheduled`/`cron`). Previously this collapsed into the opaque `Task`
-    /// fallback (the only real `Task` instance in either oracle WAS a misclassified `Monitor
-    /// event:` pulse), losing its attribution. NOTE: this matches only `<task-notification>`
-    /// pulses — the `ScheduleWakeup` wakeup-tick PROMPTS that drive a monitor/cron cadence
-    /// are `isMeta:true` user records (not `<task-notification>`s) and are NOT segmented here
-    /// (they bypass [`Record::automation_trigger`] entirely via the isMeta gate in
-    /// [`Record::is_genuine_user`]); attributing them is a deferred enhancement.
+    /// A monitor / cron cadence COMPLETION pulse. Matches a `<task-notification>` whose summary
+    /// EITHER opens `Monitor`/`scheduled`/`cron` (the captured-monitor shape: `Monitor event: …`)
+    /// OR opens `Background command "…"` with a monitor-cadence token in the quoted command NAME
+    /// (the captured-monitor shape: `Relaunch monitor timer (cycle N)`, `Re-arm corrected monitor …`,
+    /// `nightly monitor tick (25min)`). The captured session's monitor loop is implemented as `&`-detached
+    /// background commands, so without the quoted-name scan it ALL read as `background-command`
+    /// and this class matched zero of it. NOTE: this still matches only `<task-notification>`
+    /// pulses — the `ScheduleWakeup` wakeup-tick PROMPTS that drive a monitor/cron cadence are
+    /// `isMeta:true` user records (not `<task-notification>`s) and are NOT segmented here (they
+    /// bypass [`Record::automation_trigger`] entirely via the isMeta gate in
+    /// [`Record::is_genuine_user`]); attributing those is a deferred enhancement.
     Monitor,
     /// Any other / unrecognized classifier — the safe fallback (renders `task`).
     Task,
 }
 
 impl AutomationKind {
-    /// Classify from the `<summary>`'s leading token. Case-insensitive on the known
-    /// prefixes; anything else (or a missing summary) is [`AutomationKind::Task`]. The
-    /// `monitor` / `scheduled` / `cron` prefixes route a monitor-COMPLETION `<task-notification>`
-    /// to [`AutomationKind::Monitor`] (the lens demands it be a distinct, labeled class —
-    /// verified `Monitor event:`×10 + `Monitor`×6 across the two oracles). This does NOT cover
+    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything
+    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`
+    /// LEADING prefixes route a monitor-COMPLETION `<task-notification>` to
+    /// [`AutomationKind::Monitor`] (the captured-monitor `Monitor event:` shape). ADDITIONALLY, a
+    /// `Background command "…"` pulse whose QUOTED NAME carries a monitor-cadence token
+    /// (`monitor`/`re-arm`/`relaunch monitor`/`liveness`) routes to `Monitor` too — the
+    /// captured-monitor shape, where the monitor loop is a `&`-detached background command (a pure
+    /// leading-prefix check disguised ALL of it as `background-command`). This does NOT cover
     /// `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach this classifier).
     #[must_use]
     pub fn from_summary(summary: Option<&str>) -> Self {
@@ -1237,7 +1243,19 @@ impl AutomationKind {
         // prefix case-insensitively so a `Background command "…"` is not mistaken for `task`.
         let lower = s.to_ascii_lowercase();
         if lower.starts_with("background command") {
-            AutomationKind::BackgroundCommand
+            // A monitor/cron cadence is FREQUENTLY implemented as a `&`-detached background
+            // command whose QUOTED NAME is the monitor mechanism (`Background command
+            // "Relaunch monitor timer (cycle 2)"` / `"Re-arm corrected monitor …"` /
+            // `"nightly monitor tick (25min)"`). The leading classifier is `Background command`, so
+            // a pure prefix check buried EVERY such pulse under `background-command` and the
+            // `Monitor` class matched zero of them on the captured session. Route to `Monitor` when
+            // the quoted command NAME carries a monitor-cadence token, so the dominant monitor
+            // activity is attributed to its own class instead of disguised as generic bg-cmd.
+            if quoted_name_is_monitor_cadence(s) {
+                AutomationKind::Monitor
+            } else {
+                AutomationKind::BackgroundCommand
+            }
         } else if lower.starts_with("dynamic workflow") || lower.starts_with("workflow") {
             AutomationKind::Workflow
         } else if lower.starts_with("monitor")
@@ -1263,6 +1281,32 @@ impl AutomationKind {
             AutomationKind::Task => "task",
         }
     }
+}
+
+/// True when a `Background command "<name>" …` summary's QUOTED command name names a
+/// monitor / cron cadence — so the pulse is attributed to [`AutomationKind::Monitor`] rather
+/// than the generic [`AutomationKind::BackgroundCommand`]. Extracts the substring between the
+/// FIRST pair of double quotes (the command name) and matches a conservative set of
+/// monitor-cadence tokens against it (case-insensitive): the standalone word `monitor`, or
+/// `re-arm`, `relaunch monitor`, `liveness`. The match is restricted to the quoted NAME (never
+/// the whole summary) so a background command that merely mentions "monitor" in trailing prose
+/// is not over-captured; absent quotes, nothing matches (stays `BackgroundCommand`). Tokens
+/// chosen to be strongly monitor-specific — `tick`/`cadence` alone are too broad and excluded.
+fn quoted_name_is_monitor_cadence(summary: &str) -> bool {
+    let Some(open) = summary.find('"') else {
+        return false;
+    };
+    let rest = &summary[open + 1..];
+    let Some(close) = rest.find('"') else {
+        return false;
+    };
+    let name = rest[..close].to_ascii_lowercase();
+    // The standalone word `monitor` (not a substring of a larger word) is the dominant signal;
+    // `re-arm` / `relaunch monitor` / `liveness` cover the re-arming-loop names.
+    name.split(|c: char| !c.is_alphanumeric())
+        .any(|w| w == "monitor" || w == "liveness")
+        || name.contains("re-arm")
+        || name.contains("relaunch monitor")
 }
 
 /// A parsed `<task-notification>` automation trigger — the stable inner tags of a
@@ -2519,6 +2563,44 @@ mod tests {
             Monitor
         );
         assert_eq!(AutomationKind::from_summary(Some("cron run")), Monitor);
+        // The captured-monitor shape: a monitor/cron cadence implemented as a `&`-detached
+        // `Background command "<monitor-named>"`. The quoted command NAME carrying a
+        // monitor-cadence token routes to Monitor (not the generic BackgroundCommand), so the
+        // dominant monitor activity is not disguised. (Verified against the captured session, where
+        // the monitor loop is `Relaunch monitor timer` / `Re-arm corrected monitor` bg-cmds.)
+        assert_eq!(
+            AutomationKind::from_summary(Some(
+                "Background command \"Relaunch monitor timer (cycle 2)\" completed"
+            )),
+            Monitor
+        );
+        assert_eq!(
+            AutomationKind::from_summary(Some(
+                "Background command \"Re-arm corrected monitor (full-tree liveness)\" completed"
+            )),
+            Monitor
+        );
+        assert_eq!(
+            AutomationKind::from_summary(Some("Background command \"nightly monitor tick (25min)\"")),
+            Monitor
+        );
+        // PRECISION: a background command that merely mentions monitoring in PROSE (outside the
+        // quoted name) or names an unrelated command stays BackgroundCommand — no over-capture.
+        assert_eq!(
+            AutomationKind::from_summary(Some(
+                "Background command \"Run pre-commit gate\" completed (monitor it for failures)"
+            )),
+            BackgroundCommand
+        );
+        assert_eq!(
+            AutomationKind::from_summary(Some("Background command \"Baseline release build\"")),
+            BackgroundCommand
+        );
+        // The standalone-word guard: `monitoring`/`demonitor` are NOT the word `monitor`.
+        assert_eq!(
+            AutomationKind::from_summary(Some("Background command \"resource monitoring agent\"")),
+            BackgroundCommand
+        );
         assert_eq!(AutomationKind::from_summary(Some("something else")), Task);
         assert_eq!(AutomationKind::from_summary(None), Task);
         assert_eq!(AutomationKind::from_summary(Some("")), Task);

@@ -90,6 +90,11 @@ fn truncate_excerpt(s: &str) -> String {
 
 /// Entry point for `csift list`.
 pub fn run_list(args: &ListArgs) -> Result<()> {
+    // Pointed error if a sibling's scope flag (`--subagents-only`, a files-only flag) was
+    // mistyped here — instead of clap's misleading generic PATH-swallow.
+    if let Some(msg) = args.span_flag_error() {
+        anyhow::bail!(msg);
+    }
     // 1+2. Resolve targets → the concrete session jsonl files, via the SAME shared resolver
     //       every other session-operating subcommand uses (`path::resolve_session_files`).
     //       This routes a bare-uuid / bare-hex POSITIONAL (and the new `--session` flag) to
@@ -243,20 +248,12 @@ fn render_text(summaries: &[SessionSummary]) {
     }
     // SCOPE banner: `list` spans subagents by DEFAULT, so a bare `csift list <uuid>` can
     // return 1 top-level + N subagent rows — surface that split up front (mirroring
-    // `turns --include-subagents`) so the default-span surprise is announced, not buried.
-    // Printed only when the resolved set actually spans ≥1 subagent.
+    // `turns --include-subagents` + now `files`/`search`/`recover`) so the default-span
+    // surprise is announced, not buried. Printed only when the resolved set actually spans
+    // ≥1 subagent. ONE shared emitter / wording across every spanning surface.
     let sub = summaries.iter().filter(|s| s.is_subagent).count();
-    if sub > 0 {
-        let top = summaries.len() - sub;
-        println!(
-            "SCOPE  {} session{} in scope ({} top-level + {} subagent)",
-            summaries.len(),
-            if summaries.len() == 1 { "" } else { "s" },
-            top,
-            sub,
-        );
-        println!();
-    }
+    let top = summaries.len() - sub;
+    crate::text::emit_scope_banner(top, sub);
     for (i, s) in summaries.iter().enumerate() {
         if i > 0 {
             println!();
@@ -323,6 +320,18 @@ fn print_preview(label: &str, preview: Option<&MessagePreview>) {
 
 fn render_json(summaries: &[SessionSummary]) -> Result<()> {
     use serde_json::json;
+    // Leading `{kind:"session_header", sessions_in_scope, top_level_sessions,
+    // subagent_sessions}` record so a JSON consumer learns the fan-out span WITHOUT counting
+    // is_subagent itself — same shape `turns` emits, now on every spanning surface. Emitted
+    // only when the set spans ≥1 subagent (matching the text SCOPE banner's suppression).
+    let sub = summaries.iter().filter(|s| s.is_subagent).count();
+    let top = summaries.len() - sub;
+    if sub > 0 {
+        println!(
+            "{}",
+            serde_json::to_string(&crate::text::scope_header_json(top, sub))?
+        );
+    }
     for s in summaries {
         let obj = json!({
             "session_id": s.session_id,

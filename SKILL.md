@@ -72,10 +72,22 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 Seven subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `turns`.
 `list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
-(`--no-subagents` opts out). `turns` is the exception — a single-thread recovery tool whose per-session
-budget MULTIPLIES, so it defaults to the **top-level thread only** and opts INTO spanning via
-`--include-subagents`. (`agents` LISTS subagents as its targets, so it has no span flag.)
-Every subcommand takes `--format text|json` (default `text`).
+(`--no-subagents` opts out). On these four `--include-subagents` is a **default-ON no-op** kept only
+for symmetry/explicitness — it never changes the result, and `--no-subagents` is **DOMINANT**: when
+present it always wins, regardless of flag order (passing `--include-subagents` last no longer
+re-enables the fan-out you suppressed). `turns` is the exception — a single-thread recovery tool whose
+per-session budget MULTIPLIES, so it defaults to the **top-level thread only** and opts INTO spanning
+via `--include-subagents` (there it is load-bearing, last-flag-wins). (`agents` LISTS subagents as its
+targets, so it has no span flag.) Every subcommand takes `--format text|json` (default `text`).
+
+**Span disclosure (uniform across every spanning subcommand).** Whenever a bare-uuid invocation
+fans out across ≥1 subagent, the surface announces the span UP FRONT, identically:
+- TEXT: a leading `SCOPE  N sessions in scope (X top-level + Y subagent)` banner (on
+  `list`/`files`/`search`/`recover`; `turns` uses the same wording plus its budget clause).
+- JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
+  record (on `list`/`files`/`search`/`recover`/`turns`).
+Both are SUPPRESSED under `--no-subagents` / a single-transcript scope. A `--subagents-only` flag
+mistyped onto a non-`files` subcommand gives a pointed "that's a `files`-only flag" error.
 
 A **target** is EITHER a real filesystem cwd (csift path-encodes it for you) OR an already-encoded
 `-Users-...` projects-dir token OR a direct `~/.claude/projects/<encoded>` path. With no target,
@@ -116,10 +128,11 @@ SESSION  0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
            …
 ```
 
-JSON: one object per session (`session_id`, `is_subagent`, `parent_session_id`, `path`, `cwd`,
-`version`, `git_branch`, `first_user`, `last_user`, `last_agent`, `skipped_lines`). A subagent
-row carries `is_subagent:true` + the re-feedable `parent_session_id`; the default spans subagents,
-so the text output leads with a `SCOPE` banner and brands each subagent row
+JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
+scope record when the scope spans subagents, then one object per session (`session_id`, `is_subagent`,
+`parent_session_id`, `path`, `cwd`, `version`, `git_branch`, `first_user`, `last_user`, `last_agent`,
+`skipped_lines`). A subagent row carries `is_subagent:true` + the re-feedable `parent_session_id`; the
+default spans subagents, so the text output leads with a `SCOPE` banner and brands each subagent row
 `SUBAGENT <hex> · parent SESSION <uuid>` (add `--no-subagents` for just the top-level row).
 
 ### `search` — regex over transcripts, complete round-trip per hit
@@ -187,9 +200,10 @@ Text output shape:
 matched 2 exchanges (category=user)  ·  18 dropped by --max-count
 ```
 
-JSON: one object per exchange (`session_id`, `turn_index`, `hits[]` with
-`{category, excerpt, ts_utc, ts_local, tool_name}`, `record_uuids[]`), then a trailing summary
-object `{matched, dropped_by_cap, skipped_lines}`.
+JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
+scope record when the scope spans subagents, then one object per exchange (`session_id`, `turn_index`,
+`hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name}`, `record_uuids[]`), then a trailing
+summary object `{matched, dropped_by_cap, skipped_lines}`.
 
 #### Regex dialect — linear-time (RE2-class)
 
@@ -247,9 +261,10 @@ re-feedable **owning uuid**:
   own id — a top-level uuid, or a bare subagent hex) **plus** `is_subagent` + `parent_session_id`
   (the always-re-feedable owning uuid; `== session_id` for a top-level record). Re-feed
   `parent_session_id`, never a subagent `session_id`.
-- Text headers brand a subagent block distinctly: `search` → `SUBAGENT <hex> · parent SESSION
-  <uuid>`; `files` grouped views + `list` → the same `SUBAGENT <hex> · parent SESSION <uuid>`
-  header (with a `SCOPE` banner on `list`); `turns` → `SESSION <hex>  (subagent transcript)`.
+- Text headers brand a subagent block **uniformly** as `SUBAGENT <hex> · parent SESSION <uuid>` on
+  ALL of `search` / `files` grouped views / `list` / `turns` (turns appends a `(subagent transcript)`
+  suffix). The bare subagent hex is never tokened `SESSION`. `list`/`files`/`search`/`recover`/`turns`
+  lead with a `SCOPE` banner when the scope spans subagents.
 
 So a file mutation (or any per-transcript record) is joinable back to its node by structured field
 on **all** surfaces — no `path`-string parsing required.
@@ -289,6 +304,11 @@ JSON: one object per node (`agent_id`, `kind`, `parent_session_id`, `parent_agen
 `--returned-message`/`--agent`, `files_changed[]` with `--with-files`). `--tree` JSON emits one
 object per session: `{session_id, workflow_runs:[{…, children:[node]}], agents:[node]}`.
 
+`agent_type` is the semantic agent **ROLE** / subagent-type string (e.g. `Explore`,
+`general-purpose`, `oh-my-claudecode:critic`, `workflow-subagent`) — DISTINCT from `kind`, which is the
+on-disk transcript **SHAPE** (`builtin-task` | `workflow`). There is no role filter today (only
+`--kind` filters, by shape).
+
 ### `whoami` — identify the calling session
 
 ```
@@ -303,7 +323,11 @@ as a fallback when the canonical var is absent. When NEITHER var is
 absent/empty (an old CC build, or running outside CC) whoami **does NOT guess** — most-recent-mtime
 is a false-positive trap with concurrent sessions — it exits non-zero with guidance to pass
 `--session <uuid>`. `--show-path` (boolean; legacy alias `--path`) prints the resolved jsonl path;
-`--format json` emits `{"session_id":"…","path":"…"}`.
+`--format json` emits `{"session_id":"…","path":"…"}`. whoami JSON INTENTIONALLY carries only
+`{session_id, path}` — it does NOT include `is_subagent`/`parent_session_id` (unlike
+list/search/files/recover/turns JSON). Inside a subagent the resolved id is the SUBAGENT's own id;
+to learn whether it is a subagent + find its parent, feed it to `csift agents --agent <id> --format
+json` and read `parent_session_id`.
 
 > **SUBAGENT CAVEAT:** inside a Task/Agent subagent, `$CLAUDE_CODE_SESSION_ID` is the SUBAGENT's own
 > id, not the parent/root session — so `whoami` there identifies the subagent. To reach the root
@@ -354,8 +378,12 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
   or `python -c "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser, so such
   writes are missed. The precision contract holds (the miss is **never mis-reported**): heredoc BODY
   lines are lexically skipped before redirect/verb scanning, and quoted/procsub spans are masked, so
-  a `>` or quote inside them can no longer fabricate a redirect row. Bash carries no path field in
-  its result, so all of the above are best-effort and **always labelled `(heuristic)`**.
+  a `>` or quote inside them can no longer fabricate a redirect row. A trailing OUTPUT redirect
+  (`2>&1`, `2>/dev/null`, a spaced `> /tmp/log`/`>> /tmp/log`) is **removed from the operand stream**
+  before verb dispatch (symmetric to input-redirect `<` handling), so it no longer displaces a real
+  `cp`/`mv`/`ln`/`install`/`rsync` destination, mislabels a source, or double-emits the redirect path.
+  Bash carries no path field in its result, so all of the above are best-effort and **always labelled
+  `(heuristic)`**.
 
 **Subagent scope** (mutually exclusive): default spans subagents; `--no-subagents` reports only the
 top-level session's own mutations; `--subagents-only` is the **complement** — only the files the
@@ -407,7 +435,9 @@ SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 (Bash mutations are heuristic — parsed from the command string.)
 ```
 
-JSON: one object per emitted unit (bucket / dir / file with `{session_id, is_subagent,
+JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
+scope record when the scope spans subagents (uniform with list/search/recover/turns), then one object
+per emitted unit (bucket / dir / file with `{session_id, is_subagent,
 parent_session_id, <key>, write, edit, notebook_edit, multi_edit, bash, total, distinct_files,
 first_utc, first_local, last_utc, last_local}`; or per mutation for `--timeline` with `{session_id,
 is_subagent, parent_session_id, path, op, ts_utc, ts_local, turn_index, is_create, heuristic}`), then
@@ -463,7 +493,14 @@ file's Read / Write / Edit stream in transcript order. Four mutually-exclusive m
 `--file` is **required** for `--patches`/`--at`/`--coverage`, optional for `--plan`. `--out` writes
 the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to a file while the
 summary still prints to stdout — but is **ignored in `--coverage` mode** (coverage is a scoping
-summary, no artifact; a stderr note makes the no-op visible). **Every output line carries the JSONL line number** (`Lnnnnn`) so you
+summary, no artifact; a stderr note makes the no-op visible). `--out` is **data-safe on an empty
+result**: when nothing is reconstructed (no recoverable history / over-budget), the destination is
+left UNTOUCHED (never truncated to 0 bytes) and no false `(wrote …)` line is printed — a stderr
+`note: nothing reconstructed … left untouched` fires instead (same guard across `--patches`/`--at`,
+their JSON twins, and `turns`). `--line-range` (a 1-based FILE-line span of `--file`) applies in
+`--patches`/`--at`/`--coverage` but is a **no-op in `--plan` mode** (a restored plan is verbatim Write
+content, not a line-addressable buffer; a stderr note flags it — `--out` then slice the file).
+**Every output line carries the JSONL line number** (`Lnnnnn`) so you
 can `Read` the raw jsonl directly. Reconstruction is necessarily PARTIAL: an un-anchorable edit (its
 old text over an unknown gap, or whose context disagrees with the buffer) is a counted coverage hole,
 never a fabricated line — so the contiguous-from-line-1 prefix matches the on-disk file exactly.
@@ -478,10 +515,12 @@ csift recover . --plan --out /tmp/restored-plan.md      # list plan candidates; 
 csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md  # reconstruct THAT plan file's Write content
 ```
 
-JSON is NDJSON: one object per segment / boundary / snapshot / plan-candidate (every object carries
-`session_id` + the id-domain discriminators `is_subagent` + `parent_session_id`, plus `line_no` +
-`ts_utc`/`ts_local`; `--at` lines carry `set_at_line` provenance), then a trailing summary. Re-feed
-`parent_session_id`, never a subagent `session_id`.
+JSON is NDJSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions,
+subagent_sessions}` scope record when the scope spans subagents, then one object per segment /
+boundary / snapshot / plan-candidate (every object carries `session_id` + the id-domain discriminators
+`is_subagent` + `parent_session_id`, plus `line_no` + `ts_utc`/`ts_local`; `--at` lines carry
+`set_at_line` provenance), then a trailing summary. Re-feed `parent_session_id`, never a subagent
+`session_id`.
 
 **Use it to** restore a plan a compaction or bad-recovery dropped, extract a file's diff-history over a
 turn/time range, or check (via `--coverage`) whether a file is even worth attempting to reconstruct
@@ -515,7 +554,9 @@ completion notices, not the operator's prose. `turns` (and `search -t user`) CLA
 renders as a parsed `[<kind> <task-id> <status>] <summary>` ATTRIBUTION label — where `<kind>` is the
 TRUE trigger class read from the summary (`background-command` / `workflow` / `agent` / `monitor` /
 `task`, where `monitor` matches a `<task-notification>` whose summary opens `Monitor`/`scheduled`/`cron`
-— a monitor-COMPLETION pulse), NOT a hardcoded
+OR a `Background command "…"` whose quoted command NAME carries a monitor-cadence token
+(`monitor`/`re-arm`/`relaunch monitor`/`liveness`) — so a monitor loop implemented as `&`-detached
+background commands is attributed to `monitor`, not disguised as generic `background-command`), NOT a hardcoded
 `workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob. For a **monitor**
 pulse the real outcome lives in `<event>` and there is frequently NO `<status>`, so the label surfaces
 the event (`[monitor b718g3gqq STAGE2_OUTPUT_READY]`, or a timeout notice) rather than fabricating

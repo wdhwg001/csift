@@ -90,6 +90,14 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         path::Caller::Files,
     )?;
 
+    // SCOPE span of the resolved set (every transcript, incl. mutation-free subagents) so the
+    // fan-out is announced from the true file set, not just the mutation-bearing subset.
+    let scope_sub = session_files
+        .iter()
+        .filter(|p| crate::subagent::is_subagent_path(p))
+        .count();
+    let scope_top = session_files.len() - scope_sub;
+
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<FileResult> = session_files
         .par_iter()
@@ -122,6 +130,8 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         skipped_lines,
         turn_range,
         time_window_bounded: !time_window.is_unbounded(),
+        scope_top,
+        scope_sub,
     };
 
     match args.format {
@@ -360,6 +370,12 @@ struct Outcome {
     skipped_lines: usize,
     turn_range: Option<(usize, usize)>,
     time_window_bounded: bool,
+    /// SCOPE-span counts of the RESOLVED transcript set (top-level + subagent files),
+    /// computed from `resolve_session_files` BEFORE the mutation scan — so a subagent
+    /// transcript with zero mutations still counts toward the announced fan-out. Drives the
+    /// shared SCOPE banner / JSON `session_header`, suppressed when `scope_sub == 0`.
+    scope_top: usize,
+    scope_sub: usize,
 }
 
 impl Outcome {
@@ -507,6 +523,9 @@ fn group_by<F: Fn(&FileMutation) -> String>(
 // ── Rendering ──
 
 fn render_text(outcome: &Outcome) {
+    // SCOPE banner FIRST (before the empty check) so a fan-out that touched no files still
+    // announces it spanned N subagents — the same up-front disclosure `list`/`turns` give.
+    crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     if outcome.mutations.is_empty() {
         println!("no file mutations found");
         print_footer(outcome);
@@ -665,6 +684,17 @@ fn filter_context(outcome: &Outcome) -> String {
 
 fn render_json(outcome: &Outcome) -> Result<()> {
     use serde_json::json;
+    // Leading `{kind:"session_header", …}` scope record (same three span fields as `turns`),
+    // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
+    if outcome.scope_sub > 0 {
+        println!(
+            "{}",
+            serde_json::to_string(&crate::text::scope_header_json(
+                outcome.scope_top,
+                outcome.scope_sub
+            ))?
+        );
+    }
     match outcome.detail {
         FilesDetail::Summary => json_grouped(outcome, |m| bucket_key(&m.path), "bucket")?,
         FilesDetail::ByDir => json_grouped(
@@ -1035,6 +1065,8 @@ mod tests {
             skipped_lines: 0,
             turn_range: None,
             time_window_bounded: false,
+            scope_top: 1,
+            scope_sub: 0,
         };
         // Distinct paths: /tmp/a.md, /tmp/b.md, /p/spec/gaps.md, /p/src/lib.rs = 4.
         assert_eq!(outcome.distinct_files(), 4);
@@ -1201,12 +1233,27 @@ mod tests {
     //    integration-binary merge; output goes to test stdout, harmless). ──
 
     fn outcome(detail: FilesDetail, muts: Vec<TaggedMutation>) -> Outcome {
+        // Derive the scope span from the mutations' distinct transcripts (test-only proxy for
+        // the real `resolve_session_files` span) so a subagent fixture still drives the banner.
+        // Compute the owned counts BEFORE moving `muts` into the struct.
+        let mut subs = std::collections::BTreeSet::new();
+        let mut tops = std::collections::BTreeSet::new();
+        for m in &muts {
+            if m.is_subagent {
+                subs.insert(m.session_id.clone());
+            } else {
+                tops.insert(m.session_id.clone());
+            }
+        }
+        let (scope_top, scope_sub) = (tops.len(), subs.len());
         Outcome {
             detail,
             mutations: muts,
             skipped_lines: 0,
             turn_range: None,
             time_window_bounded: false,
+            scope_top,
+            scope_sub,
         }
     }
 

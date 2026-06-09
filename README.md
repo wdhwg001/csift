@@ -89,9 +89,16 @@ agents --agent <hex>`). For `search` the first positional is the **PATTERN**, so
 search (`csift search <uuid> .`). The subagent-span flags `--include-subagents` / `--no-subagents`
 apply to the **four** transcript-spanning subcommands `list`/`search`/`files`/`recover` (default **ON**)
 and `turns` (default **OFF** — a single-thread recovery tool with a per-session budget that multiplies,
-so it spans subagents only on explicit `--include-subagents`). `agents` has **no** subagent-span flag:
-it *discovers* a session's subagents as its primary output, so there is nothing to span over (passing
-`--no-subagents`/`--include-subagents` errors with that note). The argv pre-pass routes declared flags
+so it spans subagents only on explicit `--include-subagents`). On the four default-ON subcommands
+`--include-subagents` is a **no-op** (the default already spans) and `--no-subagents` is **DOMINANT** —
+present, it always wins regardless of flag order; on `turns` `--include-subagents` is the load-bearing
+opt-in (last-flag-wins). A `--subagents-only` flag (a `files`-only scope flag) mistyped onto a sibling
+gives a pointed "that's a `files`-only flag" error. Every spanning subcommand discloses a subagent
+fan-out the SAME way: a leading `SCOPE  N sessions in scope (X top-level + Y subagent)` text banner and
+a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}` JSON
+record (both suppressed under `--no-subagents` / a single-transcript scope). `agents` has **no**
+subagent-span flag: it *discovers* a session's subagents as its primary output, so there is nothing to
+span over (passing `--no-subagents`/`--include-subagents` errors with that note). The argv pre-pass routes declared flags
 (long and the search short flags `-t`/`-i`) away from the positional, so a flag works in any position,
 including trailing. `whoami` is the
 exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to
@@ -138,6 +145,10 @@ case (printing `path <not found …>` instead of omitting it).
 
 > **Subagent caveat:** inside a Task/Agent subagent, `$CLAUDE_CODE_SESSION_ID` is the SUBAGENT's own
 > id, not the parent/root session — run `agents`/`list` on the project path to find the parent uuid.
+> whoami JSON intentionally carries only `{session_id, path}` — it does NOT include
+> `is_subagent`/`parent_session_id` (unlike the other surfaces), so to learn whether the resolved id is
+> a subagent + find its parent, feed it to `csift agents --agent <id> --format json` and read
+> `parent_session_id`.
 
 ```bash
 csift whoami
@@ -163,7 +174,9 @@ as the parents of their workflow agents. A subagent transcript's bare-hex id is 
 `files` / `recover` / `turns`) carries the discriminators `is_subagent` + the re-feedable
 `parent_session_id` (the owning uuid; `agents` itself keys on `agent_id` + `parent_session_id`). So a
 file mutation — or any per-transcript record — joins back to its node by structured field on every
-surface, and the matching text views brand a subagent block `SUBAGENT <hex> · parent SESSION <uuid>`.
+surface, and ALL the matching text views (`list` / `search` / `files` grouped / `turns`) brand a
+subagent block uniformly `SUBAGENT <hex> · parent SESSION <uuid>` — the bare subagent hex is never
+tokened `SESSION`.
 
 ```bash
 csift agents --session <uuid>                         # the topology (flat list; trigger-ordered)
@@ -211,6 +224,11 @@ fabricated), `--coverage`/`--dry-run` (scope without dumping), and `--plan` (res
 `--plan` matches plan-files by a **component-scoped** heuristic — a `plans/` directory component or a
 filename stem being/carrying the token `plan` (delimited), so `sample.md` / a `widget-app` ancestor
 dir do **not** match; pass `--file <abs>` to pin an exact file (its latest `Write` is then restored).
+`--out` writes the artifact verbatim and is **data-safe on an empty result** (leaves the destination
+UNTOUCHED, prints no false `(wrote …)` line — a stderr `note: … left untouched` fires instead); it is a
+no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`) applies in
+`--patches`/`--at`/`--coverage` but is a **no-op in `--plan` mode** (a restored plan is verbatim Write
+content; a stderr note flags it).
 
 ```bash
 csift recover . --file /abs/PLAN.md --coverage              # scope first: covered ranges + boundaries
@@ -226,8 +244,11 @@ Reconstruct the verbatim user/assistant back-and-forth a compaction summary clip
 command. In automation-heavy sessions, machine-injected `<task-notification>` triggers open turns;
 `turns` (and `search -t user`) label them as `[<kind> <id> <status>] <summary>` (kind =
 `background-command` / `workflow` / `agent` / `monitor` / `task`, read from the summary — never the
-raw XML; `monitor` matches a `<task-notification>` whose summary opens `Monitor`/`scheduled`/`cron`,
-i.e. a monitor-COMPLETION pulse) and the header reports the
+raw XML; `monitor` matches a `<task-notification>` whose summary opens `Monitor`/`scheduled`/`cron`
+OR a `Background command "…"` whose quoted command NAME carries a monitor-cadence token
+(`monitor`/`re-arm`/`relaunch monitor`/`liveness`) — so a monitor loop implemented as `&`-detached
+background commands is attributed to `monitor`, not disguised as generic `background-command`) and the
+header reports the
 human/automation split WITH a per-class breakdown (`N user (M automation triggers: 2 background-command,
 1 agent)`). A monitor pulse's real outcome lives in `<event>` (often with no `<status>`), so its label
 surfaces the event (`[monitor … STAGE2_OUTPUT_READY]`) rather than fabricating `completed`. **Note:**
@@ -378,7 +399,10 @@ treatment via the shared code path when spanned.
   `compaction_boundary` records, and a `collapsed_agents` placeholder record (`agent_messages` /
   `tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span.
 - **`--out PATH`** writes the full (un-terminal-truncated) reconstruction verbatim to a file while the
-  summary still prints to stdout.
+  summary still prints to stdout. **Data-safe on an empty result:** when nothing renders within budget
+  the destination is left UNTOUCHED (never truncated to 0 bytes) and no false `(wrote …)` line is
+  printed — a stderr `note: … left untouched` fires instead (the same guard `recover --patches`/`--at`
+  apply on a no-history result).
 
 ---
 

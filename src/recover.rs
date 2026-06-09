@@ -181,6 +181,10 @@ struct ScanResult {
 
 /// Entry point for `csift recover`.
 pub fn run_recover(args: &RecoverArgs) -> Result<()> {
+    // Pointed error if the files-only `--subagents-only` was mistyped here.
+    if let Some(msg) = args.span_flag_error() {
+        bail!(msg);
+    }
     // ── Validate window mutual-exclusion (same rule + wording as `files`/`search`) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
@@ -194,6 +198,16 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         eprintln!(
             "note: --out is ignored in --coverage mode (a scoping summary has no artifact \
              to write); use --patches / --at / --plan to write a file."
+        );
+    }
+
+    // ── `--line-range` is a no-op in `--plan` mode (a plan restoration is the VERBATIM Write
+    //    content, not a line-addressable file buffer) — surface the no-op at runtime, mirroring
+    //    the --out-in-coverage note. It applies in --patches / --at / --coverage.
+    if matches!(mode, RecoverMode::Plan) && args.line_range.is_some() {
+        eprintln!(
+            "note: --line-range is ignored in --plan mode (a restored plan is the verbatim \
+             Write content, not a line-addressable buffer); use --out then slice the file."
         );
     }
 
@@ -1847,7 +1861,37 @@ fn apply_line_range(
 // Text rendering
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Write the `--out` artifact ONLY when it has content. An EMPTY reconstruction (no
+/// recoverable history / over-budget) must NOT clobber the destination — a user reusing a
+/// scratch path (the advertised `--out /tmp/restored.md` idiom) would otherwise lose
+/// pre-existing content AND read a false `(wrote …)` success line. Returns `true` when a
+/// write happened (so the caller prints its `(wrote …)` line) and `false` (with a stderr
+/// note) when the blob was empty and the file was left untouched. The same data-loss guard
+/// the `--plan` modes already enforce via their `!any`/`global_latest` early-returns, now
+/// uniform across patches/at + their JSON twins + turns.
+pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
+    if blob.is_empty() {
+        eprintln!(
+            "note: nothing reconstructed in range — --out file {} left untouched",
+            p.display()
+        );
+        return Ok(false);
+    }
+    std::fs::write(p, blob).with_context(|| format!("cannot write --out file {}", p.display()))?;
+    Ok(true)
+}
+
+/// SCOPE-span counts of the resolved transcript set (one `ScanResult` per resolved file,
+/// incl. empty/no-history subagents) — `(top_level, subagent)`. Drives the shared SCOPE
+/// banner / JSON header so a bare `csift recover <uuid>` fan-out is announced like list/turns.
+fn scope_span(sessions: &[ScanResult]) -> (usize, usize) {
+    let sub = sessions.iter().filter(|s| s.is_subagent).count();
+    (sessions.len() - sub, sub)
+}
+
 fn render_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>) -> Result<()> {
+    let (top, sub) = scope_span(sessions);
+    crate::text::emit_scope_banner(top, sub);
     match ctx.mode {
         RecoverMode::Plan => render_plan_text(ctx, sessions, out_path),
         RecoverMode::Coverage => render_coverage_text(ctx, sessions),
@@ -2005,10 +2049,10 @@ fn render_patches_text(
         println!("no recoverable history for {file} in range");
     }
     if let Some(p) = out_path {
-        std::fs::write(p, &out_blob)
-            .with_context(|| format!("cannot write --out file {}", p.display()))?;
-        println!();
-        println!("(wrote concatenated patches to {})", p.display());
+        if write_out_guarded(p, &out_blob)? {
+            println!();
+            println!("(wrote concatenated patches to {})", p.display());
+        }
     }
     print_footer(ctx);
     Ok(())
@@ -2051,10 +2095,10 @@ fn render_at_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Pa
         println!("no recoverable history for {file} as of {when}");
     }
     if let Some(p) = out_path {
-        std::fs::write(p, &out_blob)
-            .with_context(|| format!("cannot write --out file {}", p.display()))?;
-        println!();
-        println!("(wrote partial snapshot to {})", p.display());
+        if write_out_guarded(p, &out_blob)? {
+            println!();
+            println!("(wrote partial snapshot to {})", p.display());
+        }
     }
     print_footer(ctx);
     Ok(())
@@ -2329,6 +2373,16 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
     use serde_json::json;
     let mut session_count = 0usize;
 
+    // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
+    // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
+    let (scope_top, scope_sub) = scope_span(sessions);
+    if scope_sub > 0 {
+        println!(
+            "{}",
+            serde_json::to_string(&crate::text::scope_header_json(scope_top, scope_sub))?
+        );
+    }
+
     match ctx.mode {
         RecoverMode::Coverage => {
             for s in sessions {
@@ -2411,8 +2465,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 }
             }
             if let Some(p) = out_path {
-                std::fs::write(p, &out_blob)
-                    .with_context(|| format!("cannot write --out file {}", p.display()))?;
+                write_out_guarded(p, &out_blob)?;
             }
         }
         RecoverMode::At => {
@@ -2459,8 +2512,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 out_blob.push('\n');
             }
             if let Some(p) = out_path {
-                std::fs::write(p, &out_blob)
-                    .with_context(|| format!("cannot write --out file {}", p.display()))?;
+                write_out_guarded(p, &out_blob)?;
             }
         }
         RecoverMode::Plan => {

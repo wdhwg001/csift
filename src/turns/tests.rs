@@ -2428,15 +2428,18 @@ fn dedup_flagged_middle_still_richness_gated() {
 // ── Fan-out scope summary + top-level/subagent id classification ──
 
 #[test]
-fn is_top_level_session_id_distinguishes_uuid_from_bare_hex() {
-    // A canonical 8-4-4-4-12 uuid is top-level; a dash-less bare-hex subagent id is not.
-    assert!(is_top_level_session_id(
+fn shared_uuid_validator_distinguishes_uuid_from_bare_hex() {
+    // turns no longer rolls its own `is_top_level_session_id`; it now discriminates via the
+    // authoritative path-derived `is_subagent` field, and any id-SHAPE check reuses the ONE
+    // canonical validator `path::is_session_uuid` (the DRY fix). Spot-check that validator's
+    // contract holds for the id forms turns' tests construct.
+    assert!(crate::path::is_session_uuid(
         "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     ));
-    assert!(!is_top_level_session_id("a00ea52f023afd9ce"));
-    // Wrong group shape / non-hex → not top-level.
-    assert!(!is_top_level_session_id("0a1b2c3d-4e5f-4a6b-8c7d"));
-    assert!(!is_top_level_session_id(
+    assert!(!crate::path::is_session_uuid("a00ea52f023afd9ce"));
+    // Wrong group shape / non-hex → not a uuid.
+    assert!(!crate::path::is_session_uuid("0a1b2c3d-4e5f-4a6b-8c7d"));
+    assert!(!crate::path::is_session_uuid(
         "zzzzzzzz-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     ));
 }
@@ -2447,7 +2450,7 @@ fn scan_named(session_id: &str) -> ScanResult {
     // Keep the id-domain fields self-consistent with the chosen id form: a non-uuid (bare
     // hex) id is a subagent transcript. parent_session_id is the id itself for a top-level
     // session (a bare-hex test id has no real parent path, so it points at itself here).
-    let is_subagent = !is_top_level_session_id(session_id);
+    let is_subagent = !crate::path::is_session_uuid(session_id);
     ScanResult {
         session_id: session_id.to_string(),
         is_subagent,

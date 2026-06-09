@@ -179,14 +179,30 @@ fn list_json_is_one_object_per_session() {
     let h = populated_home();
     let out = h.run(&["list", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // Every non-empty line must be a JSON object with a session_id.
+    // A leading {kind:"session_header", …} scope record precedes the per-session objects
+    // whenever the set spans ≥1 subagent (uniform JSON scope disclosure, same as turns).
+    // Every OTHER non-empty line must be a JSON object with a session_id.
     let mut count = 0;
+    let mut saw_header = false;
     for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
         let v: serde_json::Value = serde_json::from_str(line).expect("valid json line");
+        if v.get("kind").and_then(|k| k.as_str()) == Some("session_header") {
+            saw_header = true;
+            // The header discloses the span with turns' field names.
+            assert!(v.get("sessions_in_scope").is_some(), "header span: {line}");
+            assert!(v.get("top_level_sessions").is_some(), "header span: {line}");
+            assert!(v.get("subagent_sessions").is_some(), "header span: {line}");
+            continue;
+        }
         assert!(v.get("session_id").is_some(), "missing session_id: {line}");
         count += 1;
     }
     assert!(count >= 1, "expected at least the top-level session");
+    // populated_home spans a subagent, so the header is emitted.
+    assert!(
+        saw_header,
+        "expected a leading session_header in spanning list JSON"
+    );
 }
 
 #[test]
@@ -3828,8 +3844,16 @@ fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
         "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let first = out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap();
-    let snap: serde_json::Value = serde_json::from_str(first).unwrap();
+    // A leading {kind:"session_header"} scope record may precede the snapshot when the scope
+    // spans subagents — find the first snapshot object (the one carrying `lines`), not just
+    // the first non-empty line.
+    let snap: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .find(|v| v.get("lines").is_some())
+        .expect("a snapshot object with a `lines` array");
     let mut known: std::collections::BTreeMap<usize, String> = std::collections::BTreeMap::new();
     for l in snap.get("lines").and_then(|v| v.as_array()).unwrap() {
         let n = l.get("n").and_then(|v| v.as_u64()).unwrap() as usize;
@@ -6862,5 +6886,290 @@ fn interrupt_does_not_split_a_turn() {
         !lst.stdout.contains("[Request interrupted by user]"),
         "interrupt leaked into the list preview:\n{}",
         lst.stdout
+    );
+}
+
+// ── round 7: SCOPE-disclosure uniformity, wrong-flag diagnostics, --out data-safety ──
+
+/// The shared `SCOPE  N sessions in scope (X top-level + Y subagent)` banner is now emitted
+/// by EVERY subagent-spanning text surface (list/files/search/recover/turns), not just
+/// list/turns. populated_home spans 2 subagents under 1 top-level session.
+#[test]
+fn scope_banner_uniform_across_spanning_subcommands() {
+    let h = populated_home();
+    let f = h.run(&["files", SESS, "--by-file"]);
+    assert!(
+        f.stdout.contains("sessions in scope"),
+        "files banner:\n{}",
+        f.stdout
+    );
+    let s = h.run(&["search", "carry", SESS]);
+    assert!(
+        s.stdout.contains("sessions in scope"),
+        "search banner:\n{}",
+        s.stdout
+    );
+    let r = h.run(&["recover", SESS, "--coverage", "--file", "/tmp/x"]);
+    assert!(
+        r.stdout.contains("sessions in scope"),
+        "recover banner:\n{}",
+        r.stdout
+    );
+    let l = h.run(&["list", SESS]);
+    assert!(
+        l.stdout.contains("sessions in scope"),
+        "list banner:\n{}",
+        l.stdout
+    );
+    // The banner is SUPPRESSED under --no-subagents (single top-level transcript).
+    let f2 = h.run(&["files", SESS, "--by-file", "--no-subagents"]);
+    assert!(
+        !f2.stdout.contains("sessions in scope"),
+        "files --no-subagents banner leaked:\n{}",
+        f2.stdout
+    );
+}
+
+/// The leading `{kind:"session_header", …}` JSON scope record is emitted by every spanning
+/// subcommand's JSON, reusing turns' three span field names.
+#[test]
+fn scope_json_header_uniform_across_spanning_subcommands() {
+    let h = populated_home();
+    for args in [
+        vec!["list", SESS, "--format", "json"],
+        vec!["files", SESS, "--by-file", "--format", "json"],
+        vec!["search", "carry", SESS, "--format", "json"],
+        vec![
+            "recover",
+            SESS,
+            "--coverage",
+            "--file",
+            "/tmp/x",
+            "--format",
+            "json",
+        ],
+    ] {
+        let out = h.run(&args);
+        assert!(out.success, "{:?} stderr: {}", args, out.stderr);
+        let first = out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap();
+        let v: serde_json::Value = serde_json::from_str(first).unwrap();
+        assert_eq!(
+            v.get("kind").and_then(|k| k.as_str()),
+            Some("session_header"),
+            "{:?} first JSON line is not a session_header:\n{}",
+            args,
+            out.stdout
+        );
+        assert!(
+            v.get("sessions_in_scope").is_some(),
+            "{:?} header span",
+            args
+        );
+        assert!(
+            v.get("top_level_sessions").is_some(),
+            "{:?} header span",
+            args
+        );
+        assert!(
+            v.get("subagent_sessions").is_some(),
+            "{:?} header span",
+            args
+        );
+    }
+}
+
+/// `--no-subagents` is DOMINANT regardless of flag order (the r6→r7 `overrides_with` removal):
+/// passing `--include-subagents` LAST no longer re-enables the fan-out the user suppressed.
+#[test]
+fn no_subagents_dominant_regardless_of_order_end_to_end() {
+    let h = populated_home();
+    let span = |out: &Output| out.stdout.contains("sessions in scope");
+    // Both orders must suppress the banner (top-level only).
+    assert!(!span(&h.run(&[
+        "list",
+        SESS,
+        "--no-subagents",
+        "--include-subagents"
+    ])));
+    assert!(!span(&h.run(&[
+        "list",
+        SESS,
+        "--include-subagents",
+        "--no-subagents"
+    ])));
+    assert!(!span(&h.run(&[
+        "files",
+        SESS,
+        "--by-file",
+        "--no-subagents",
+        "--include-subagents"
+    ])));
+    assert!(!span(&h.run(&[
+        "search",
+        "carry",
+        SESS,
+        "--no-subagents",
+        "--include-subagents"
+    ])));
+}
+
+/// `--subagents-only` is a `files`-only flag; mistyped onto a sibling it now produces a
+/// POINTED error (naming the right flag), not the generic clap PATH-swallow.
+#[test]
+fn subagents_only_misplaced_gives_pointed_error() {
+    let h = populated_home();
+    for sub in ["turns", "recover", "list"] {
+        let out = h.run(&[sub, SESS, "--subagents-only"]);
+        assert!(!out.success, "{sub} --subagents-only should fail");
+        assert!(
+            out.stderr.contains("`files`-only flag") && out.stderr.contains("--no-subagents"),
+            "{sub}: expected pointed error, got: {}",
+            out.stderr
+        );
+    }
+    // search too (pattern positional first).
+    let out = h.run(&["search", "x", SESS, "--subagents-only"]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("`files`-only flag"),
+        "search: {}",
+        out.stderr
+    );
+    // files itself still accepts it as the real flag.
+    let ok = h.run(&["files", SESS, "--subagents-only", "--by-file"]);
+    assert!(
+        ok.success,
+        "files --subagents-only must work: {}",
+        ok.stderr
+    );
+}
+
+/// CRITICAL data-safety: an empty reconstruction (no recoverable history / over-budget) must
+/// NOT clobber the `--out` destination and must NOT print a false `(wrote …)` line. Covers
+/// recover --patches, recover --at, and turns over-budget.
+#[test]
+fn empty_out_never_clobbers_or_lies() {
+    let h = populated_home();
+    let scratch = h.root.join("precious.md");
+    let seed = "PRECIOUS USER CONTENT\n";
+
+    // recover --patches on a non-existent file → empty → must leave the file untouched.
+    std::fs::write(&scratch, seed).unwrap();
+    let out = h.run(&[
+        "recover",
+        SESS,
+        "--file",
+        "/tmp/no_such_file_xyz.md",
+        "--patches",
+        "--out",
+        scratch.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("wrote concatenated patches"),
+        "false write line:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("left untouched"),
+        "missing untouched note:\n{}",
+        out.stderr
+    );
+    assert_eq!(
+        std::fs::read_to_string(&scratch).unwrap(),
+        seed,
+        "recover --patches clobbered --out"
+    );
+
+    // recover --at on a non-existent file → empty → untouched.
+    std::fs::write(&scratch, seed).unwrap();
+    let out = h.run(&[
+        "recover",
+        SESS,
+        "--file",
+        "/tmp/no_such_file_xyz.md",
+        "--at",
+        "1w",
+        "--out",
+        scratch.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("wrote partial snapshot"),
+        "false write line:\n{}",
+        out.stdout
+    );
+    assert_eq!(
+        std::fs::read_to_string(&scratch).unwrap(),
+        seed,
+        "recover --at clobbered --out"
+    );
+
+    // turns with an impossibly small budget → nothing rendered → untouched + no false write.
+    std::fs::write(&scratch, seed).unwrap();
+    let out = h.run(&[
+        "turns",
+        SESS,
+        "--budget",
+        "5",
+        "--out",
+        scratch.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("wrote full reconstruction"),
+        "false write line:\n{}",
+        out.stdout
+    );
+    assert_eq!(
+        std::fs::read_to_string(&scratch).unwrap(),
+        seed,
+        "turns clobbered --out"
+    );
+
+    // CONTROL: a NON-empty reconstruction DOES write (guard is not over-eager).
+    std::fs::write(&scratch, seed).unwrap();
+    let out = h.run(&["turns", SESS, "--out", scratch.to_str().unwrap()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("wrote full reconstruction"),
+        "real write missing:\n{}",
+        out.stdout
+    );
+    let written = std::fs::read_to_string(&scratch).unwrap();
+    assert_ne!(
+        written, seed,
+        "a non-empty turns reconstruction must overwrite --out"
+    );
+    assert!(!written.is_empty(), "written artifact is empty");
+}
+
+/// turns text now brands a subagent block `SUBAGENT <hex> · parent SESSION <uuid>` (uniform
+/// with list/files/search), never tokening a bare subagent hex as `SESSION`.
+#[test]
+fn turns_text_brands_subagent_uniformly() {
+    let h = populated_home();
+    let out = h.run(&["turns", SESS, "--include-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The subagent block carries the SUBAGENT token + the re-feedable parent uuid.
+    assert!(
+        out.stdout.contains("SUBAGENT") && out.stdout.contains(&format!("parent SESSION {SESS}")),
+        "turns subagent branding missing:\n{}",
+        out.stdout
+    );
+}
+
+/// recover --line-range is a no-op in --plan mode; the runtime emits a stderr note (it is
+/// honored in --patches/--at/--coverage).
+#[test]
+fn recover_line_range_plan_noop_note() {
+    let h = populated_home();
+    let out = h.run(&["recover", SESS, "--plan", "--line-range", "1..3"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stderr
+            .contains("--line-range is ignored in --plan mode"),
+        "missing --line-range plan no-op note:\n{}",
+        out.stderr
     );
 }

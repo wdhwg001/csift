@@ -69,7 +69,7 @@
 
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use memchr::memmem;
 use rayon::prelude::*;
 
@@ -428,6 +428,10 @@ struct ScanResult {
 
 /// Entry point for `csift turns`.
 pub fn run_turns(args: &TurnsArgs) -> Result<()> {
+    // Pointed error if the files-only `--subagents-only` was mistyped here.
+    if let Some(msg) = args.span_flag_error() {
+        bail!(msg);
+    }
     // ── Validate window mutual-exclusion (same rule + wording as recover/files) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
@@ -1876,13 +1880,12 @@ fn render_text(
     let sc = scope_summary(sessions, plans);
     let any_skipped = sc.rendered < sc.in_scope;
     if sc.in_scope > 1 || any_skipped {
+        // Reuse the shared `N session(s) in scope (X top-level + Y subagent)` wording (the same
+        // fragment list/files/search/recover emit), then append turns' own budget clause.
         println!(
-            "SCOPE  {} session{} in scope ({} top-level + {} subagent) · {} rendered within \
-             budget · budget {} chars is PER session → up to {} chars total",
-            sc.in_scope,
-            if sc.in_scope == 1 { "" } else { "s" },
-            sc.in_scope_top,
-            sc.in_scope_sub,
+            "SCOPE  {} · {} rendered within budget · budget {} chars is PER session → up to {} \
+             chars total",
+            crate::text::scope_span_fragment(sc.in_scope_top, sc.in_scope_sub),
             sc.rendered,
             ctx.budget_chars,
             ctx.budget_chars.saturating_mul(sc.rendered.max(1))
@@ -1900,7 +1903,7 @@ fn render_text(
     // separate from `any`, so the fallback still keys on whether a real block rendered.
     let mut skipped_any = false;
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
-        if plan.selected.is_empty() && is_top_level_session_id(&sr.session_id) {
+        if plan.selected.is_empty() && !sr.is_subagent {
             if let Some(min) = min_render_chars(sr, ctx.budget_chars, &ctx.cfg) {
                 println!(
                     "SESSION {}  skipped — its first round-trip needs ≥ {} chars; \
@@ -1927,13 +1930,18 @@ fn render_text(
 
         let (n_user, n_asst) = count_sides(plan, &ctx.cfg);
         let n_automation = count_automation(plan);
-        // Label a spanned SUBAGENT block so a caller can tell it apart from the top-level
-        // session they queried (otherwise 600+ bare-hex `SESSION` blocks look identical to
-        // the one they asked for). A top-level uuid block carries no suffix.
-        if is_top_level_session_id(&sr.session_id) {
-            println!("SESSION {}", sr.session_id);
+        // Brand a spanned SUBAGENT block with the SAME shape every other session-emitting
+        // surface uses (`list`/`files`/`search`): `SUBAGENT <hex>  ·  parent SESSION <uuid>`
+        // — never token a bare non-re-feedable subagent hex as `SESSION` (the id-domain
+        // overload r6 removed elsewhere), and surface the re-feedable parent uuid inline so a
+        // turns-text reader has a re-feed path. A top-level uuid block stays `SESSION <uuid>`.
+        if sr.is_subagent {
+            println!(
+                "SUBAGENT {}  ·  parent SESSION {}  (subagent transcript)",
+                sr.session_id, sr.parent_session_id
+            );
         } else {
-            println!("SESSION {}  (subagent transcript)", sr.session_id);
+            println!("SESSION {}", sr.session_id);
         }
         println!(
             "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
@@ -2004,10 +2012,10 @@ fn render_text(
         println!("({})", crate::text::malformed_note(ctx.skipped_lines));
     }
     if let Some(p) = out_path {
-        std::fs::write(p, &out_blob)
-            .with_context(|| format!("cannot write --out file {}", p.display()))?;
-        println!();
-        println!("(wrote full reconstruction to {})", p.display());
+        if crate::recover::write_out_guarded(p, &out_blob)? {
+            println!();
+            println!("(wrote full reconstruction to {})", p.display());
+        }
     }
     Ok(())
 }
@@ -2173,7 +2181,10 @@ fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> ScopeCounts 
     let mut rendered = 0usize;
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         in_scope += 1;
-        if is_top_level_session_id(&sr.session_id) {
+        // Discriminate via the AUTHORITATIVE path-derived `is_subagent` field (set from
+        // subagent::is_subagent_path at scan time) — NOT a re-derived id-shape heuristic. This
+        // is the same signal turns' own JSON, and every other surface, already brands on.
+        if !sr.is_subagent {
             in_scope_top += 1;
         }
         if !plan.selected.is_empty() {
@@ -2214,20 +2225,6 @@ fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg) -> Option
         return None;
     }
     Some(header + cheapest)
-}
-
-/// True when a session id is a TOP-LEVEL `<uuid>.jsonl` basename (canonical 8-4-4-4-12
-/// hex), as opposed to a bare-hex SUBAGENT transcript id. The two id forms are mutually
-/// exclusive by construction (a uuid carries dashes in fixed positions; a subagent id is a
-/// dash-less hex run).
-fn is_top_level_session_id(id: &str) -> bool {
-    let groups = [8usize, 4, 4, 4, 12];
-    let parts: Vec<&str> = id.split('-').collect();
-    parts.len() == groups.len()
-        && parts
-            .iter()
-            .zip(groups)
-            .all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
 /// How many of the SELECTED user-showing units are MACHINE automation triggers
@@ -2408,8 +2405,7 @@ fn render_json(
     let term = json!({"kind":"skipped_lines","skipped_lines": ctx.skipped_lines});
     println!("{}", serde_json::to_string(&term)?);
     if let Some(p) = out_path {
-        std::fs::write(p, &out_blob)
-            .with_context(|| format!("cannot write --out file {}", p.display()))?;
+        crate::recover::write_out_guarded(p, &out_blob)?;
     }
     Ok(())
 }

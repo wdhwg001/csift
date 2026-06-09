@@ -475,20 +475,28 @@ fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutation>) {
 
     // Redirection targets (`>`/`>>`, incl. fd-qualified `2>`/`1>`/`&>`) can appear after
     // ANY command; scan all tokens (operator detection reads the MASK so an in-quote `>`
-    // is invisible; the emitted path is sliced from the original).
-    collect_redirections(&toks, out);
+    // is invisible; the emitted path is sliced from the original). The returned index set
+    // is every token CONSUMED as redirect syntax (the operator AND, for a bare `> file`
+    // form, the following path token) so those tokens are dropped before verb dispatch —
+    // symmetric to how `strip_input_redirects` removes `<`/`<file`. Without this drop a
+    // surviving `2>&1` / `> /tmp/log` token poisons every positional-dest verb
+    // (`cp`/`mv`/`ln`/`install`/`rsync`): it can BECOME the bogus `positional.last()` dest
+    // (real dest dropped / source mislabeled) or double-emit the redirect path.
+    let redirect_consumed = collect_redirections(&toks, out);
 
     // Output-path FLAGS (`--junit-xml=…`, `--report-path …`) can likewise appear under
     // any command, so scan every segment for the allowlisted output flags.
     collect_flag_outputs(&toks, out);
 
-    // Drop pure-mask tokens (a process-sub body word like `foo` from `>(grep foo)`) BEFORE
-    // verb dispatch — they are not real operands. The remaining tokens carry at least one
-    // unmasked byte, so their original text is a genuine command/operand.
+    // Drop pure-mask tokens (a process-sub body word like `foo` from `>(grep foo)`) AND the
+    // redirect-syntax tokens recorded above BEFORE verb dispatch — neither is a real command
+    // operand. The remaining tokens carry at least one unmasked byte, so their original text
+    // is a genuine command/operand.
     let cmd_all: Vec<&str> = toks
         .iter()
-        .filter(|t| !is_fully_masked(t.masked))
-        .map(|t| t.orig)
+        .enumerate()
+        .filter(|(idx, t)| !is_fully_masked(t.masked) && !redirect_consumed.contains(idx))
+        .map(|(_, t)| t.orig)
         .collect();
 
     // Strip leading `sudo` and `env VAR=val` prefixes to find the real command verb.
@@ -1044,7 +1052,11 @@ fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
 /// fd-DUP (the redirect target is another fd, not a path) and the `/dev/null`-class
 /// sinks carry no real path and emit nothing (handled by [`path_operand`] +
 /// [`is_dev_sink`]).
-fn collect_redirections(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
+fn collect_redirections(
+    tokens: &[MaskedTok],
+    out: &mut Vec<BashMutation>,
+) -> std::collections::BTreeSet<usize> {
+    let mut consumed: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
     let mut i = 0usize;
     while i < tokens.len() {
         let tok = tokens[i];
@@ -1055,8 +1067,12 @@ fn collect_redirections(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
         // A bash noclobber-override `>|` is a plain truncate redirect (the `|` only
         // disables noclobber): `>|` reads as `>`, `>|file` as `>file`.
         if body == ">|" {
+            // Bare operator: it AND its following path token are both redirect syntax, not
+            // command operands — record both indices so the verb dispatch never sees them.
+            consumed.insert(i);
             if let Some(next) = tokens.get(i + 1) {
                 push_redirect_target(next.orig, ">", out);
+                consumed.insert(i + 1);
             }
             i += 1;
         } else if body.starts_with(">|") {
@@ -1064,12 +1080,18 @@ fn collect_redirections(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
             // path follows it in the ORIGINAL token at the qualifier+`>|` byte offset.
             let off = tok.masked.len() - body.len() + 2;
             push_redirect_target(&tok.orig[off..], ">", out);
+            consumed.insert(i);
             i += 1;
         } else if body == ">>" || body == ">" {
-            // A bare (mask-confirmed) operator: its path is the NEXT token.
+            // A bare (mask-confirmed) operator: its path is the NEXT token. BOTH the operator
+            // and its path token are consumed redirect syntax (even when the target is an
+            // fd-dup `&1` / `/dev/null` sink that emits no path — it is still NOT a command
+            // operand and must not poison a positional-dest verb like `cp`/`mv`/`ln`).
             let verb = if body == ">>" { ">>" } else { ">" };
+            consumed.insert(i);
             if let Some(next) = tokens.get(i + 1) {
                 push_redirect_target(next.orig, verb, out);
+                consumed.insert(i + 1);
             }
             i += 1;
         } else if body.starts_with(">>") {
@@ -1078,17 +1100,21 @@ fn collect_redirections(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
             // operator are ASCII single-byte, so the mask offset is the original offset).
             let off = tok.masked.len() - body.len() + 2;
             push_redirect_target(&tok.orig[off..], ">>", out);
+            consumed.insert(i);
             i += 1;
         } else if body.starts_with('>') {
             // An attached truncate `…>file` (incl. `2>file`, `&>file`). A bare `2>&1` fd-dup
-            // leaves the rest = `&1`, which `push_redirect_target` rejects.
+            // leaves the rest = `&1`, which `push_redirect_target` rejects — but the WHOLE
+            // attached token (`2>&1`, `2>/dev/null`) is still redirect syntax, so consume it.
             let off = tok.masked.len() - body.len() + 1;
             push_redirect_target(&tok.orig[off..], ">", out);
+            consumed.insert(i);
             i += 1;
         } else {
             i += 1;
         }
     }
+    consumed
 }
 
 /// Strip an optional leading fd qualifier (`&`, or a run of ASCII digits) from a token,
@@ -2231,6 +2257,84 @@ mod tests {
         assert_eq!(
             paths("svc 2>| /tmp/e.log"),
             vec![("/tmp/e.log".to_string(), ">")]
+        );
+    }
+
+    // ── R7: a trailing OUTPUT redirect must not poison a positional-dest verb ──
+    // collect_redirections now REMOVES the redirect tokens (operator + its spaced path) from
+    // the operand stream before verb dispatch — symmetric to strip_input_redirects for `<`.
+    // Without this, the surviving `2>&1` / `2>/dev/null` / spaced `> file` token displaced the
+    // real cp/mv/ln/install/rsync destination (RECALL MISS), got mislabeled as a source
+    // (SEMANTIC LEAK), or double-emitted the redirect path (DOUBLE-EMIT).
+
+    #[test]
+    fn cp_dest_survives_trailing_fd_dup_redirect() {
+        // `2>&1` is an fd-dup (no path); it must NOT become cp's positional.last() dest. The
+        // REAL dest `/tmp/CP_DEST.txt` is emitted exactly once, the source is a read.
+        assert_eq!(
+            paths("cp src.txt /tmp/CP_DEST.txt 2>&1"),
+            vec![("/tmp/CP_DEST.txt".to_string(), "cp")]
+        );
+    }
+
+    #[test]
+    fn install_ln_rsync_dest_survive_trailing_redirect() {
+        // install with `2>&1`: the real dest /etc/DEST.conf survives.
+        assert_eq!(
+            paths("install -m 644 s /etc/DEST.conf 2>&1"),
+            vec![("/etc/DEST.conf".to_string(), "install")]
+        );
+        // ln -s with `2>/dev/null`: the link name survives (the dev-sink emits no row).
+        assert_eq!(
+            paths("ln -s t /tmp/LINKNAME 2>/dev/null"),
+            vec![("/tmp/LINKNAME".to_string(), "ln")]
+        );
+        // rsync with `2>&1`: the dest dir survives.
+        assert_eq!(
+            paths("rsync -a src/ /tmp/RSYNC_DEST/ 2>&1"),
+            vec![("/tmp/RSYNC_DEST/".to_string(), "rsync")]
+        );
+    }
+
+    #[test]
+    fn mv_into_dir_not_leaked_as_source_by_trailing_redirect() {
+        // `mv /a /b /tmp/DESTDIR/ 2>/dev/null`: the spaced/attached `2>/dev/null` is a dev-sink
+        // (emits no row) AND is removed from operands, so DESTDIR stays the dest (verb `mv`) and
+        // /a,/b stay sources (mv-from). Before the fix, `2>/dev/null` became the dest_tok
+        // (rejected as a sink → NO mv dest) and ALL of /a,/b,DESTDIR leaked as mv-from reads.
+        assert_eq!(
+            paths("mv /a /b /tmp/DESTDIR/ 2>/dev/null"),
+            vec![
+                ("/tmp/DESTDIR/".to_string(), "mv"),
+                ("/a".to_string(), "mv-from"),
+                ("/b".to_string(), "mv-from")
+            ]
+        );
+    }
+
+    #[test]
+    fn cp_dest_survives_trailing_append_redirect_no_double_emit() {
+        // `cp a b /tmp/CDEST/ >> /tmp/log.txt`: the `>>` and its spaced path are both consumed,
+        // so /tmp/log.txt is emitted ONCE (by the redirect collector, verb `>>`) and the real
+        // dest /tmp/CDEST/ stays cp's last positional — no double-emit, no dropped dest.
+        assert_eq!(
+            paths("cp a b /tmp/CDEST/ >> /tmp/log.txt"),
+            vec![
+                ("/tmp/log.txt".to_string(), ">>"),
+                ("/tmp/CDEST/".to_string(), "cp")
+            ]
+        );
+    }
+
+    #[test]
+    fn cp_dest_survives_spaced_truncate_redirect() {
+        // The spaced `> /tmp/log` form (operator + path are two tokens): both consumed.
+        assert_eq!(
+            paths("cp src /tmp/CP2/ > /tmp/log"),
+            vec![
+                ("/tmp/log".to_string(), ">"),
+                ("/tmp/CP2/".to_string(), "cp")
+            ]
         );
     }
 
