@@ -1793,16 +1793,20 @@ impl TurnsArgs {
         Most-recent-mtime and process-tree walking are FORBIDDEN: many CC sessions \
         may be live at once, so mtime is almost always wrong. It is acceptable for \
         whoami to often say \"ambiguous, pass --session\".\n\n\
-        SUBAGENT CAVEAT: inside a Task/Agent SUBAGENT, $CLAUDE_CODE_SESSION_ID is the \
-        SUBAGENT's own id, NOT the parent/root session — so `whoami` there identifies the \
-        subagent, not the main session. whoami there prints THIS subagent's id; to get the \
-        ROOT, run `csift agents --agent <that-id> --format json` and read `parent_session_id` \
-        (one call). (Or, without the id, scan `csift agents .` / `csift list .` on the \
-        project PATH and find the parent uuid.) whoami JSON INTENTIONALLY carries only \
-        {session_id, path} — it does NOT include is_subagent / parent_session_id (unlike \
-        list/search/files/recover/turns JSON), so you cannot branch on \"am I a subagent?\" \
-        from whoami alone; feed the id to `csift agents --agent <id> --format json` and read \
-        is_subagent / parent_session_id there.\n\n\
+        SUBAGENT CAVEAT: which session $CLAUDE_CODE_SESSION_ID names depends on HOW the \
+        subagent was spawned. In a built-in Task/Agent SUBAGENT it is the SUBAGENT's OWN id \
+        (so `whoami` identifies the subagent, not the main session). In an \
+        ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) it is the PARENT \
+        session's id (so `whoami` resolves the ROOT, not a subagent). Do NOT assume which — \
+        disambiguate via the recovery: feed the resolved id to `csift agents --agent <id> \
+        --format json`; if it returns the node, read `parent_session_id` for the ROOT (one \
+        call); if it errors `no subagent matched`, the id is ALREADY top-level — use it \
+        directly. (Or scan `csift agents .` / `csift list .` on the project PATH and find the \
+        parent uuid.) whoami JSON INTENTIONALLY carries only {session_id, path} — it does NOT \
+        include is_subagent / parent_session_id (unlike list/search/files/recover/turns \
+        JSON), so you cannot branch on \"am I a subagent?\" from whoami alone; feed the id to \
+        `csift agents --agent <id> --format json` and read is_subagent / parent_session_id \
+        there.\n\n\
         FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). The six \
         session-operating subcommands (`list`/`search`/`agents`/`files`/`recover`/`turns`) \
         take their target as a POSITIONAL `[PATH]...` — there is NO `--path <PATH>` flag on \
@@ -1814,15 +1818,17 @@ impl TurnsArgs {
         CODEX_COMPANION_SESSION_ID (the Codex companion plugin's alias). If NEITHER is set, \
         whoami errors with guidance to pass --session — it never guesses by mtime.\n\n\
         SUBAGENT CAVEAT\n  \
-          Inside a Task/Agent SUBAGENT, the env var holds the SUBAGENT's OWN id, NOT the \
-        parent/root session — so `whoami` there identifies the subagent. whoami there prints \
-        THIS subagent's id; to get the ROOT in ONE call run `csift agents --agent <that-id> \
-        --format json` and read `parent_session_id`. (Or, without the id, scan `csift agents \
-        .` / `csift list .` on the project PATH to find the parent uuid.) whoami JSON \
-        INTENTIONALLY carries only {session_id, path} — it does NOT include is_subagent / \
-        parent_session_id (unlike list/search/files/recover/turns JSON). To learn whether the \
-        resolved id is a subagent + find its parent, feed it to `csift agents --agent <id> \
-        --format json` and read `parent_session_id`.\n\n\
+          What the env var names depends on HOW the subagent was spawned. In a built-in \
+        Task/Agent SUBAGENT it holds the SUBAGENT's OWN id (so `whoami` identifies the \
+        subagent). In an ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) it \
+        holds the PARENT session id (so `whoami` resolves the ROOT instead). Don't assume \
+        which — disambiguate via the recovery: feed the resolved id to `csift agents --agent \
+        <id> --format json`; if it returns the node, read `parent_session_id` for the ROOT \
+        (one call); if it errors `no subagent matched`, the id is ALREADY top-level — use it \
+        directly. (Or scan `csift agents .` / `csift list .` on the project PATH to find the \
+        parent uuid.) whoami JSON INTENTIONALLY carries only {session_id, path} — it does NOT \
+        include is_subagent / parent_session_id (unlike list/search/files/recover/turns \
+        JSON).\n\n\
         FLAG NOTE\n  \
           `--show-path` is a BOOLEAN toggle (no value). The six session-operating subcommands \
         (list/search/agents/files/recover/turns) take their target as a POSITIONAL [PATH]... \
