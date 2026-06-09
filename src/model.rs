@@ -390,7 +390,9 @@ impl Record {
         let task_id = extract_xml_tag(s, "task-id");
         let status = extract_xml_tag(s, "status");
         let summary = extract_xml_tag(s, "summary");
+        let kind = AutomationKind::from_summary(summary.as_deref());
         Some(AutomationTrigger {
+            kind,
             task_id,
             status,
             summary,
@@ -398,15 +400,18 @@ impl Record {
     }
 
     /// The one-line ATTRIBUTION label for an automation-trigger opener, or `None` when this
-    /// record is not one: `[workflow <task-id> <status>] <summary>` (a missing field is
-    /// elided gracefully). This is what `turns` / `search` render as the segment opener in
-    /// place of the raw `<task-notification>` XML blob.
+    /// record is not one: `[<kind> <task-id> <status>] <summary>` where `<kind>` is the TRUE
+    /// trigger class parsed from the summary's leading classifier (`background-command` /
+    /// `workflow` / `agent` / fallback `task`) — NOT the hardcoded literal `workflow` that
+    /// mislabeled 81% of triggers on the oracle (85 background-command + 2 agent). A missing
+    /// field is elided gracefully. This is what `turns` / `search` render as the segment
+    /// opener in place of the raw `<task-notification>` XML blob.
     #[must_use]
     pub fn automation_label(&self) -> Option<String> {
         let t = self.automation_trigger()?;
         let id = t.task_id.as_deref().unwrap_or("?");
         let status = t.status.as_deref().unwrap_or("completed");
-        let head = format!("[workflow {id} {status}]");
+        let head = format!("[{} {id} {status}]", t.kind.slug());
         Some(match t.summary.as_deref() {
             Some(sum) if !sum.is_empty() => format!("{head} {}", normalize_line(sum)),
             _ => head,
@@ -1154,12 +1159,64 @@ fn scrape_persisted_path(text: &str) -> Option<String> {
     }
 }
 
+/// The TRUE class of a `<task-notification>` automation trigger, parsed from the leading
+/// classifier of its `<summary>` (verified against real sessions: the summary opens with
+/// `Background command "…"`, `Dynamic workflow "…"`, or `Agent …`). This is the attribution
+/// the P2 turn-segmentation lens demands — the old code hardcoded the literal `workflow` for
+/// EVERY trigger, mislabeling background-command + agent pulses (81% on the captured session).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutomationKind {
+    /// A `Background command "…"` completion pulse (a `&`-detached shell command CC ran).
+    BackgroundCommand,
+    /// A `Dynamic workflow "…"` completion pulse (an OMC / dynamic workflow run).
+    Workflow,
+    /// An `Agent …` completion pulse (a spawned subagent).
+    Agent,
+    /// Any other / unrecognized classifier — the safe fallback (renders `task`).
+    Task,
+}
+
+impl AutomationKind {
+    /// Classify from the `<summary>`'s leading token. Case-insensitive on the known
+    /// prefixes; anything else (or a missing summary) is [`AutomationKind::Task`].
+    #[must_use]
+    pub fn from_summary(summary: Option<&str>) -> Self {
+        let s = summary.unwrap_or("").trim_start();
+        // The classifiers are a fixed leading phrase; match the longest-distinguishing
+        // prefix case-insensitively so a `Background command "…"` is not mistaken for `task`.
+        let lower = s.to_ascii_lowercase();
+        if lower.starts_with("background command") {
+            AutomationKind::BackgroundCommand
+        } else if lower.starts_with("dynamic workflow") || lower.starts_with("workflow") {
+            AutomationKind::Workflow
+        } else if lower.starts_with("agent") {
+            AutomationKind::Agent
+        } else {
+            AutomationKind::Task
+        }
+    }
+
+    /// The stable lowercase slug rendered in the `[<kind> <id> <status>]` label.
+    #[must_use]
+    pub fn slug(self) -> &'static str {
+        match self {
+            AutomationKind::BackgroundCommand => "background-command",
+            AutomationKind::Workflow => "workflow",
+            AutomationKind::Agent => "agent",
+            AutomationKind::Task => "task",
+        }
+    }
+}
+
 /// A parsed `<task-notification>` automation trigger — the stable inner tags of a
 /// machine-injected background-command / workflow / spawned-task completion notice. Every
 /// field is `Option` because a malformed / partial notification must degrade gracefully
 /// (the label still renders with `?`/`completed` fallbacks) rather than be dropped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutomationTrigger {
+    /// The TRUE trigger class (parsed from the `<summary>` classifier) — the attribution the
+    /// label renders, replacing the prior hardcoded `workflow`.
+    pub kind: AutomationKind,
     /// The `<task-id>` (the workflow / background-command id), if present.
     pub task_id: Option<String>,
     /// The `<status>` (`completed` / `failed` / …), if present.
@@ -2224,10 +2281,16 @@ mod tests {
         assert_eq!(t.task_id.as_deref(), Some("wh1it9jlj"));
         assert_eq!(t.status.as_deref(), Some("completed"));
         assert_eq!(
+            t.kind,
+            AutomationKind::Workflow,
+            "Dynamic workflow → workflow"
+        );
+        assert_eq!(
             t.summary.as_deref(),
             Some("Dynamic workflow \"READ-ONLY: verify csift files\" completed")
         );
-        // The rendered ATTRIBUTION label replaces the raw XML blob.
+        // The rendered ATTRIBUTION label replaces the raw XML blob; a `Dynamic workflow`
+        // summary keeps the `workflow` kind.
         let label = r.automation_label().unwrap();
         assert!(
             label.starts_with("[workflow wh1it9jlj completed]"),
@@ -2254,8 +2317,73 @@ mod tests {
         let partial = parse(
             r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}}"#,
         );
+        // No summary → kind falls back to `task` (NOT the old hardcoded `workflow`).
         let label = partial.automation_label().unwrap();
-        assert_eq!(label, "[workflow abc completed]");
+        assert_eq!(label, "[task abc completed]");
+    }
+
+    #[test]
+    fn automation_kind_classifies_background_command_and_agent() {
+        // The mislabel fix: a `Background command "…"` summary renders `background-command`,
+        // an `Agent …` summary renders `agent` — NOT the old blanket `workflow`.
+        let bg = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b497m4ncp</task-id>\n<status>completed</status>\n<summary>Background command \"build venvs\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
+        );
+        let t = bg.automation_trigger().unwrap();
+        assert_eq!(t.kind, AutomationKind::BackgroundCommand);
+        assert!(
+            bg.automation_label()
+                .unwrap()
+                .starts_with("[background-command b497m4ncp completed]"),
+            "got: {:?}",
+            bg.automation_label()
+        );
+        let ag = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>ag1</task-id>\n<status>completed</status>\n<summary>Agent executor finished its task</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(ag.automation_trigger().unwrap().kind, AutomationKind::Agent);
+        assert!(ag
+            .automation_label()
+            .unwrap()
+            .starts_with("[agent ag1 completed]"));
+        // A failed background command keeps its kind + status.
+        let bgf = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b0855naiz</task-id>\n<status>failed</status>\n<summary>Background command \"Launch the overnight guard\" failed with exit code 1</summary>\n</task-notification>"}}"#,
+        );
+        assert!(bgf
+            .automation_label()
+            .unwrap()
+            .starts_with("[background-command b0855naiz failed]"));
+    }
+
+    #[test]
+    fn automation_kind_from_summary_direct() {
+        use AutomationKind::*;
+        assert_eq!(
+            AutomationKind::from_summary(Some("Background command \"x\"")),
+            BackgroundCommand
+        );
+        assert_eq!(
+            AutomationKind::from_summary(Some("Dynamic workflow \"x\"")),
+            Workflow
+        );
+        assert_eq!(
+            AutomationKind::from_summary(Some("workflow run done")),
+            Workflow
+        );
+        assert_eq!(AutomationKind::from_summary(Some("Agent x done")), Agent);
+        assert_eq!(
+            AutomationKind::from_summary(Some("  background command y")),
+            BackgroundCommand
+        );
+        assert_eq!(AutomationKind::from_summary(Some("something else")), Task);
+        assert_eq!(AutomationKind::from_summary(None), Task);
+        assert_eq!(AutomationKind::from_summary(Some("")), Task);
+        // Slugs round-trip.
+        assert_eq!(BackgroundCommand.slug(), "background-command");
+        assert_eq!(Workflow.slug(), "workflow");
+        assert_eq!(Agent.slug(), "agent");
+        assert_eq!(Task.slug(), "task");
     }
 
     #[test]
@@ -2282,9 +2410,10 @@ mod tests {
         let failed = parse(
             r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>bad7</task-id>\n<status>failed</status>\n<summary>The build broke</summary>\n</task-notification>"}}"#,
         );
+        // "The build broke" carries no kind classifier → `task` fallback.
         assert_eq!(
             failed.automation_label().as_deref(),
-            Some("[workflow bad7 failed] The build broke")
+            Some("[task bad7 failed] The build broke")
         );
         // A trigger with a status but EMPTY summary → the head-only arm (no trailing text).
         let no_sum = parse(
@@ -2292,7 +2421,7 @@ mod tests {
         );
         assert_eq!(
             no_sum.automation_label().as_deref(),
-            Some("[workflow q9 running]")
+            Some("[task q9 running]")
         );
         // A trigger with NO task-id and NO status → both `?`/`completed` fallbacks fire.
         let bare = parse(
@@ -2300,7 +2429,7 @@ mod tests {
         );
         assert_eq!(
             bare.automation_label().as_deref(),
-            Some("[workflow ? completed] just a note")
+            Some("[task ? completed] just a note")
         );
     }
 

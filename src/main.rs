@@ -16,6 +16,7 @@ mod recover;
 mod search;
 mod session;
 mod subagent;
+mod text;
 mod time_window;
 mod timez;
 mod turns;

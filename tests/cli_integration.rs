@@ -296,6 +296,73 @@ fn list_unknown_target_errors_nonzero() {
 }
 
 #[test]
+fn list_bare_uuid_positional_routes_to_session() {
+    // The scope-unification win: `csift list <uuid>` now identifies THAT one session via
+    // the shared resolver (it previously encoded the uuid as a project dir and errored).
+    let h = populated_home();
+    let out = h.run(&["list", SESS]);
+    assert!(
+        out.success,
+        "bare-uuid positional must resolve via the shared resolver; stderr: {}",
+        out.stderr
+    );
+    assert!(
+        !out.stderr.contains("no Claude Code project dir"),
+        "a bare uuid must NOT be encoded as a project dir; stderr: {}",
+        out.stderr
+    );
+    assert!(out.stdout.contains(SESS), "the session row is missing");
+}
+
+#[test]
+fn list_session_flag_filters_like_siblings() {
+    // `list --session <uuid>` is the SAME filter every other subcommand carries — it must
+    // parse (it previously errored "no Claude Code project dir named --session") and scope.
+    let h = populated_home();
+    let out = h.run(&["list", "--session", SESS, "--no-subagents"]);
+    assert!(
+        out.success,
+        "list --session must parse; stderr: {}",
+        out.stderr
+    );
+    assert!(out.stdout.contains(SESS));
+    // Top-level-only: the subagent ids must NOT appear with --no-subagents.
+    assert!(
+        !out.stdout.contains("aaa111") && !out.stdout.contains("bbb222"),
+        "--no-subagents must exclude subagent rows; got: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn unknown_flag_reports_clean_error_not_project_dir_error() {
+    // A typo'd / unknown flag on any scope-operating subcommand must surface as an
+    // "unexpected argument" message (NOT the misleading "no Claude Code project dir named
+    // --xxx"). The `--`-leading value-parser reject makes this uniform tool-wide.
+    let h = populated_home();
+    for args in [
+        vec!["files", SESS, "--by-fil"],
+        vec!["turns", SESS, "--budgett", "5000"],
+        vec!["recover", "--bogus-flag"],
+        vec!["agents", ENC, "--bogus"],
+        vec!["list", "--by-fil"],
+    ] {
+        let out = h.run(&args);
+        assert!(!out.success, "a bad flag must exit nonzero: {args:?}");
+        assert!(
+            out.stderr.contains("unexpected argument"),
+            "expected an 'unexpected argument' message for {args:?}; got: {}",
+            out.stderr
+        );
+        assert!(
+            !out.stderr.contains("no Claude Code project dir named"),
+            "the misleading project-dir error must NOT appear for {args:?}; got: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
 fn list_session_without_branch_or_version_prints_cwd_only() {
     // A session whose first user record carries cwd but NEITHER gitBranch NOR version
     // → the meta string stays empty, so the render takes the `meta.is_empty()` TRUE
@@ -685,8 +752,10 @@ fn search_since_until_window() {
 #[test]
 fn turns_and_search_label_automation_triggers() {
     // A `<task-notification>` automation trigger opens a turn but must render as the
-    // parsed `[workflow <id> …]` ATTRIBUTION label — never the raw XML blob — and `turns`
-    // must report the automation count in its header.
+    // parsed `[<kind> <id> …]` ATTRIBUTION label — with the TRUE kind parsed from the
+    // summary (a `Background command "…"` summary renders `background-command`, NOT the old
+    // blanket `workflow`) — never the raw XML blob — and `turns` reports the automation
+    // count in its header.
     let h = Home::new();
     let sess = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
     let lines = [
@@ -720,8 +789,8 @@ fn turns_and_search_label_automation_triggers() {
         t.stdout
     );
     assert!(
-        t.stdout.contains("[workflow wf12abc completed]"),
-        "automation opener must render as the attribution label; got: {}",
+        t.stdout.contains("[background-command wf12abc completed]"),
+        "automation opener must render with its TRUE kind (background-command); got: {}",
         t.stdout
     );
     assert!(
@@ -730,10 +799,12 @@ fn turns_and_search_label_automation_triggers() {
         t.stdout
     );
 
-    // search -t user: the same label is matchable; the raw blob is not surfaced.
+    // search -t user: the same label is matchable; the raw blob is not surfaced. The label
+    // now reflects the TRUE kind, so `-t user 'background-command'` matches it (the prior
+    // mislabel meant the prefix and the summary disagreed).
     let s = h.run(&[
         "search",
-        "workflow",
+        "background-command",
         "-t",
         "user",
         "--session",
@@ -742,7 +813,7 @@ fn turns_and_search_label_automation_triggers() {
     ]);
     assert!(s.success, "stderr: {}", s.stderr);
     assert!(
-        s.stdout.contains("[workflow wf12abc completed]"),
+        s.stdout.contains("[background-command wf12abc completed]"),
         "search -t user must surface the attribution label; got: {}",
         s.stdout
     );
@@ -780,6 +851,51 @@ fn turns_single_automation_trigger_uses_singular_header() {
     assert!(
         t.stdout.contains("(1 automation trigger)") && !t.stdout.contains("triggers)"),
         "header must use the SINGULAR form; got: {}",
+        t.stdout
+    );
+}
+
+#[test]
+fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
+    // The round-trip HARD FLOOR is reserved for HUMAN exchanges. A session whose RECENT
+    // turns are machine automation pulses (each with an agent ack) plus ONE older human
+    // round-trip, at a small budget, must still recover the human turn — the pulses must NOT
+    // crowd it out of the protected floor (the prior `is_round_trip` ignored is_automation).
+    let h = Home::new();
+    let sess = "22222222-3333-4444-5555-666666666666";
+    let mut lines = vec![
+        // The OLDER human round-trip (the one the floor must protect).
+        r#"{"type":"user","uuid":"u0","cwd":"/Users/x/r","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"HUMAN-QUESTION-MARKER please explain the carry-propagation bug in detail"}}"#.to_string(),
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The carry is the partial line held across a chunk boundary; here is the full explanation of the propagation path and the fix."}]}}"#.to_string(),
+    ];
+    // SEVEN newer automation pulses (each a round-trip pulse→ack) — recency-first, these
+    // would be picked before the human turn and (under the bug) consume the floor.
+    for i in 0..7 {
+        lines.push(format!(
+            r#"{{"type":"user","uuid":"n{i}","timestamp":"2026-06-07T06:0{i}:00.000Z","message":{{"role":"user","content":"<task-notification>\n<task-id>auto{i}</task-id>\n<status>completed</status>\n<summary>Background command \"job {i}\" completed (exit code 0)</summary>\n</task-notification>"}}}}"#
+        ));
+        lines.push(format!(
+            r#"{{"type":"assistant","uuid":"m{i}","parentUuid":"n{i}","timestamp":"2026-06-07T06:0{i}:05.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"Acknowledged pulse {i}."}}]}}}}"#
+        ));
+    }
+    h.write(
+        &format!("-Users-x-r/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+    // A budget small enough that, if the floor were spent on pulses, the human turn would be
+    // crowded out — but large enough to fit the human round-trip in its protected lane.
+    let t = h.run(&[
+        "turns",
+        "--session",
+        sess,
+        "--budget",
+        "1200",
+        "--no-subagents",
+    ]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    assert!(
+        t.stdout.contains("HUMAN-QUESTION-MARKER"),
+        "the human round-trip must survive the floor despite newer automation pulses; got: {}",
         t.stdout
     );
 }
@@ -1104,6 +1220,139 @@ fn agents_text_lists_lifecycle_rows() {
     assert!(out.stdout.contains("subagent(s)"));
     // The built-in carries a description line.
     assert!(out.stdout.contains("run the carry task"));
+}
+
+#[test]
+fn agents_text_returned_files_and_tree_render() {
+    // Exercise the TEXT-render branches for `--returned-message` / `--with-files` / `--tree`
+    // (the print_node `returned`/`files`/topology arms) and the one_line returned-message
+    // preview path. A node with no resolvable returned message renders `(unresolved)`; a
+    // node with no files renders `files (none)`.
+    let h = populated_home();
+    let out = h.run(&[
+        "agents",
+        "--session",
+        SESS,
+        "--tree",
+        "--returned-message",
+        "--with-files",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The returned-message line renders (resolved or `(unresolved)`).
+    assert!(
+        out.stdout.contains("returned"),
+        "returned line missing: {}",
+        out.stdout
+    );
+    // The with-files line renders (`files … changed` or `files (none)`).
+    assert!(
+        out.stdout.contains("files"),
+        "files line missing: {}",
+        out.stdout
+    );
+    // Tree topology: the workflow run parents its agent.
+    assert!(
+        out.stdout.contains("wf_abc") || out.stdout.contains("workflow"),
+        "tree topology missing: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
+    // `--kind builtin-task --format json` hits the BuiltinTask JSON-label arm; `--tree
+    // --format json` nests `children`; a flat multi-node text render hits the inter-node
+    // blank-line arm. All on the populated home (a builtin + a workflow subagent).
+    let h = populated_home();
+    let bt = h.run(&[
+        "agents",
+        "--session",
+        SESS,
+        "--kind",
+        "builtin-task",
+        "--format",
+        "json",
+    ]);
+    assert!(bt.success, "stderr: {}", bt.stderr);
+    assert!(
+        bt.stdout.contains("\"builtin-task\""),
+        "builtin-task JSON label missing: {}",
+        bt.stdout
+    );
+    let tree = h.run(&["agents", "--session", SESS, "--tree", "--format", "json"]);
+    assert!(tree.success, "stderr: {}", tree.stderr);
+    assert!(
+        tree.stdout.contains("children"),
+        "tree JSON must nest children: {}",
+        tree.stdout
+    );
+    // Flat text render with BOTH subagents → the inter-node blank line fires.
+    let flat = h.run(&["agents", "--session", SESS]);
+    assert!(flat.success && flat.stdout.matches("triggered").count() >= 2);
+}
+
+#[test]
+fn agents_with_files_renders_changed_list_and_summary_json() {
+    // A subagent that ACTUALLY changed a file → the `--with-files` text path renders the
+    // `files N changed` + per-file create/op tag lines (vs the `(none)` arm), and `--by
+    // start` exercises the start-axis label. Also covers files `--summary --format json`.
+    let h = Home::new();
+    let sess = "33333333-4444-5555-6666-777777777777";
+    h.write(
+        &format!("-Users-x-w/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","cwd":"/Users/x/w","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tk","name":"Task","input":{"description":"sub task"}}]}}"#, "\n",
+        ),
+    );
+    // A subagent transcript that Writes a new file (so files_changed is non-empty).
+    h.write(
+        &format!("-Users-x-w/{sess}/subagents/agent-fff999.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"fff999","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"sub: write the file"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"sa","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/Users/x/w/new.rs","content":"x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"sc","parentUuid":"sa","timestamp":"2026-06-07T05:00:04.000Z","toolUseResult":{"type":"create","filePath":"/Users/x/w/new.rs"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("-Users-x-w/{sess}/subagents/agent-fff999.meta.json"),
+        r#"{"agentType":"executor","toolUseId":"tk"}"#,
+    );
+    let out = h.run(&["agents", "--session", sess, "--with-files", "--by", "start"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("changed") && out.stdout.contains("new.rs"),
+        "files-changed list not rendered: {}",
+        out.stdout
+    );
+    // The summary JSON path (the `json_grouped` summary arm + trailing summary object).
+    let f = h.run(&["files", "--session", sess, "--summary", "--format", "json"]);
+    assert!(f.success, "stderr: {}", f.stderr);
+    let last = f
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .next_back()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(
+        v.get("detail_level").and_then(|d| d.as_str()),
+        Some("summary")
+    );
+}
+
+#[test]
+fn agents_single_agent_grab_text() {
+    // `--agent <hex>` grabs ONE subagent (implies --returned-message), exercising the
+    // single-node text path + the guided-error landing flag documented in the EXAMPLES.
+    let h = populated_home();
+    let out = h.run(&["agents", "--session", SESS, "--agent", "aaa111"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("aaa111"),
+        "node not grabbed: {}",
+        out.stdout
+    );
 }
 
 #[test]

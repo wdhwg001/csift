@@ -81,8 +81,12 @@ identity), lazy `serde_json` only on candidate lines, and rayon parallelism ACRO
 
 ## Subcommands
 
-Every subcommand takes optional `PATH...` targets, an optional `--session <uuid>`, and (where it spans
-transcripts) `--include-subagents` (default ON) / `--no-subagents`. Most support `--format text|json`.
+Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `turns`) takes
+optional `PATH...` targets and an optional `--session <uuid>` (a bare session-uuid / subagent-hex in
+the positional slot is routed to `--session`), and — where it spans transcripts — `--include-subagents`
+(default ON) / `--no-subagents`. `whoami` is the exception: it takes NO target (it reads
+`$CLAUDE_CODE_SESSION_ID`) and its only flags are `--show-path` / `--format`. All support
+`--format text|json`.
 
 ### `list` — session identity index
 
@@ -95,6 +99,8 @@ file, so it stays fast on 200 MB+ transcripts.
 csift list                                                  # every session, all projects
 csift list .                                                # sessions for the current cwd's project
 csift list /Users/me/Projects/foo                           # a real path (gets encoded)
+csift list <uuid>                                           # identify ONE session (bare-uuid positional, like its siblings)
+csift list --session <uuid>                                 # same, via the explicit flag
 ```
 
 ### `search` — regex over transcripts, complete round-trip per hit
@@ -157,12 +163,16 @@ THAT a file changed; `recover` rebuilds its content. Bash mutations are parsed l
 `(heuristic)`: the verb allowlist (incl. `ln`/`install`/`rsync` and GNU `-t DIR`) plus fd-qualified
 redirects (`2>`/`1>`/`&>`, and the noclobber-override `>|`), `curl`/`wget` output flags, and allowlisted
 flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only concrete, resolvable paths (an
-unexpandable `$VAR`, a `/dev/null` sink with a glued substitution `)`, a `>(…)` process substitution,
-and a quote-severed fragment are all dropped, never fabricated). A write inside an embedded-language
+unexpandable `$VAR`/`~`, a `/dev/null` sink with a glued substitution `)`, a `>(…)` process
+substitution and its body args, and a quote-severed fragment are all dropped, never fabricated). The
+parser is **quote/procsub-aware**: a `>`/`<` inside a quoted echo/printf or regex (`echo "idle >8min"`)
+is masked before redirect detection, so it never fabricates a file. A write inside an embedded-language
 body (heredoc / `python -c`) is out of scope and missed — but **never mis-reported** (heredoc body
-lines are lexically skipped before scanning). Subagent scope is mutually exclusive: default spans
-subagents, `--no-subagents` is the top-level session only, and `--subagents-only` is its complement
-(only the files the session's subagents touched).
+lines are lexically skipped and quoted/procsub spans masked before scanning). The four detail levels
+**strictly coarsen**: `--summary` is a top-level-PREFIX rollup (a whole project tree → one row;
+smallest output) < `--by-dir` (full parent dir) < `--by-file` < `--timeline`. Subagent scope is
+mutually exclusive: default spans subagents, `--no-subagents` is the top-level session only, and
+`--subagents-only` is its complement (only the files the session's subagents touched).
 
 ```bash
 csift files --session <uuid>
@@ -188,9 +198,11 @@ csift recover . --plan --out /tmp/restored-plan.md          # list plan candidat
 
 Reconstruct the verbatim user/assistant back-and-forth a compaction summary clipped — the headline
 command. In automation-heavy sessions, machine-injected `<task-notification>` triggers open turns;
-`turns` (and `search -t user`) label them as `[workflow <id> <status>] <summary>` (never the raw XML)
-and the header reports the human/automation split (`N user (M automation triggers)`). See the
-[budget model](#budget-model) and [richness model](#richness-model) below.
+`turns` (and `search -t user`) label them as `[<kind> <id> <status>] <summary>` (kind =
+`background-command` / `workflow` / `agent` / `task`, read from the summary — never the raw XML) and
+the header reports the human/automation split (`N user (M automation triggers)`). These pulses are
+excluded from the `--round-trip-fraction` human-reserved floor. See the [budget model](#budget-model)
+and [richness model](#richness-model) below.
 
 ```bash
 csift turns .                                               # default 40K-char recon (longest agent msg + rich members/turn)

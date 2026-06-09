@@ -1,10 +1,15 @@
 //! Command-line surface (clap derive).
 //!
-//! Six subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`. Each
-//! carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
+//! Seven subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `turns`.
+//! Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
 //! invocations. `list`/`search`/`files`/`recover`/`turns` span each session's subagent
 //! transcripts by default (`--no-subagents` opts out); `agents` reports a session's
 //! subagent lifecycle (it lists subagents as targets, so it has no subagent-span flag).
+//! The five session-operating subcommands (`search`/`agents`/`files`/`recover`/`turns`)
+//! plus `list` resolve their target through ONE shared resolver
+//! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` (cwd / encoded dir),
+//! an optional `--session <uuid>`, and a bare-uuid/bare-hex POSITIONAL that routes to the
+//! session filter. `whoami` is the exception (no target — it reads `$CLAUDE_CODE_SESSION_ID`).
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
@@ -34,13 +39,25 @@ pub fn parse_argv() -> Cli {
     Cli::parse_from(normalized)
 }
 
-/// Permissive value parser for a project-target positional/option: accepts ANY token
-/// (a real cwd, an encoded `-Users-…` token, `.`). It does NOT reject flag-shaped
-/// tokens — the [`normalize_argv`] pre-pass has already routed declared flags away
-/// from the positional, so anything reaching here is a genuine target. (Rejecting
-/// here would hard-abort clap instead of letting it reconsider the token as a flag,
-/// which is why the earlier reject-based attempt failed; see `normalize_argv`.)
+/// Value parser for a project-target positional/option. Accepts a real cwd, an encoded
+/// `-Users-…` token (SINGLE leading `-`), or `.`. It REJECTS a `--`-leading token: an
+/// encoded projects-dir basename always starts with a SINGLE `-` (an absolute cwd's leading
+/// `/` encodes to one `-`), so a DOUBLE-dash token can never be a real target — it is an
+/// unknown / typo'd flag the `allow_hyphen_values` positional would otherwise swallow,
+/// surfacing the misleading `no project dir named "--xxx"` error instead of clap's clean
+/// `unexpected argument '--xxx'` + `did you mean --by-file?` suggestion. Returning `Err`
+/// here makes clap reconsider the token and emit that standard message uniformly across
+/// every scope-operating subcommand (search/whoami already did; the rest did not). A SINGLE
+/// `-` token is still accepted (it is a genuine encoded target). The [`normalize_argv`]
+/// pre-pass has already routed DECLARED flags away, so a `--`-token reaching here is by
+/// construction undeclared.
 fn parse_project_target(s: &str) -> Result<PathBuf, String> {
+    if s.starts_with("--") {
+        return Err(format!(
+            "unexpected argument '{s}' — not a project target (encoded dirs start with a \
+             single '-', never '--'); did you mistype a flag?"
+        ));
+    }
     Ok(PathBuf::from(s))
 }
 
@@ -277,7 +294,11 @@ pub enum BudgetUnit {
 pub enum Category {
     /// Assistant thinking blocks.
     Thinking,
-    /// GENUINE human input + user answers to AskUserQuestion (NOT tool_result carriers).
+    /// GENUINE human input + AskUserQuestion answers + machine AUTOMATION-TRIGGER openers
+    /// (`<task-notification>`, rendered as the parsed `[<kind> <id> <status>] <summary>`
+    /// attribution label, where `<kind>` is background-command / workflow / agent / task) —
+    /// NOT tool_result carriers. The automation openers DO open a turn, so they surface
+    /// under `user`; recognize them by the `[<kind> …]` prefix.
     User,
     /// `tool_use` blocks (agent calling a tool); AskUserQuestion is a tool_use.
     Tool,
@@ -323,7 +344,11 @@ pub enum OutputFormat {
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, or a direct
     /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir. Repeatable.
-    /// Defaults to all projects.
+    /// Defaults to all projects. A target may ALSO be a bare session-uuid
+    /// (8-4-4-4-12 hex) or a bare subagent-hex id — it is routed to the `--session`
+    /// filter (and searched across all projects when no project path is given), so
+    /// `csift list <uuid>` identifies that ONE session — the SAME positional surface
+    /// `files`/`recover`/`turns` use.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`
     /// (an absolute cwd's leading `/` encodes to `-`), e.g.
@@ -337,6 +362,12 @@ pub struct ListArgs {
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// Restrict to a single session id (uuid) — the SAME `--session` filter every other
+    /// session-operating subcommand carries. Combine with a PATH to scope, or use alone to
+    /// find that one session across all projects. A bare uuid POSITIONAL is equivalent.
+    #[arg(long, value_name = "SESSION_ID")]
+    pub session: Option<String>,
 
     /// Also discover + list each session's SUBAGENT transcripts (built-in
     /// Task/Agent-tool, OMC, and Workflow agents) found under
@@ -385,9 +416,16 @@ impl ListArgs {
         CATEGORIES (`-t`, repeatable): thinking | user | tool | tool-response | agent. \
         With none given, all five are eligible. `user` is the genuine human turn PLUS \
         the answer to an AskUserQuestion (the full Q+options+answer unit) PLUS a \
-        plan-rejection-with-message (+ a [plan: …] pointer); it excludes plain \
-        tool_result carriers, interrupts, and slash-command wrappers. `tool` includes \
-        AskUserQuestion tool_use calls.\n\n\
+        plan-rejection-with-message (+ a [plan: …] pointer) PLUS a machine AUTOMATION \
+        trigger; it excludes plain tool_result carriers, interrupts, and slash-command \
+        wrappers. `tool` includes AskUserQuestion tool_use calls.\n\n\
+        AUTOMATION TRIGGERS: a `<task-notification>` (a background-command / workflow / \
+        spawned-agent COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
+        OPENS a turn like a human message, so it surfaces under `-t user`. It renders as a \
+        parsed attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
+        background-command | workflow | agent | task, read from the summary) — never the raw \
+        `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
+        `search 'background-command' -t user`).\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on turn-boundary \
         order) is mutually exclusive with `--since`/`--until`. Time bounds accept \
         ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
@@ -416,7 +454,14 @@ impl ListArgs {
         error — by design, not a bug.\n  \
           Case: smart-case by default (insensitive unless the pattern has an uppercase \
         letter); -i forces insensitive. --multiline lives in the SAME dialect (it sets \
-        the (?s)(?m) flags)."
+        the (?s)(?m) flags).\n\n\
+        AUTOMATION TRIGGERS (under `-t user`)\n  \
+          A machine `<task-notification>` (a background-command / workflow / spawned-agent \
+        COMPLETION pulse) OPENS a user turn, so it surfaces under `-t user`. It renders as a \
+        PARSED attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
+        background-command | workflow | agent | task, read from the summary) — never the raw \
+        XML. Match it like any text, e.g. `csift search 'background-command' -t user`. The \
+        `<kind>` prefix distinguishes a machine opener from a genuine human message."
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
@@ -427,7 +472,9 @@ pub struct SearchArgs {
     /// Project target(s) as a POSITIONAL `[PATH]...` — the SAME scope-target surface every
     /// sibling subcommand uses (`csift search PATTERN .` now works, matching
     /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable;
-    /// combine with `--session` to narrow. With none, every project is scanned.
+    /// combine with `--session` to narrow. With none, every project is scanned. A target may
+    /// ALSO be a bare session-uuid (8-4-4-4-12 hex) or a bare subagent-hex id routed to the
+    /// `--session` filter (so `csift search PATTERN <uuid>` scopes to that one session).
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`; the
     /// `normalize_argv` pre-pass routes declared flags away from the positional so a
@@ -577,12 +624,17 @@ pub enum AgentKindFilter {
           csift agents --session <uuid> --since 2h                         # subagents TRIGGERED in the last 2h\n  \
           csift agents --session <uuid> --since 6h --by completion         # COMPLETED in the last 6h\n  \
           csift agents --session <uuid> --since 2026-06-01T09:00:00Z --by completion  # COMPLETED since an ISO bound\n  \
+          csift agents --agent <hex>                                       # grab ONE subagent by its bare-hex id (full node + returned message)\n  \
+          csift agents . --tree                                            # parent→child topology (workflow runs as parents of their agents)\n  \
+          csift agents --session <uuid> --with-files                       # each node + its files-changed list\n  \
+          csift agents --session <uuid> --returned-message                 # add the 3-way-resolved returned message to every row\n  \
           csift agents . --format json                                     # machine-readable lifecycle rows"
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list.
     /// Optional when `--session` is given; with neither, every project is scanned.
-    /// Repeatable.
+    /// Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) routed to the
+    /// `--session` filter, so `csift agents <uuid>` works without `--session`.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -659,9 +711,12 @@ pub enum AgentTimeAxis {
 /// The aggregation detail level for `files` (exactly one is active; default summary).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilesDetail {
-    /// Per-top-level-dir op rollup (the smallest output; the DEFAULT).
+    /// Coarse TOP-LEVEL-prefix op rollup — buckets each path on its first few directory
+    /// segments (so a whole project tree collapses to one row), the smallest output and the
+    /// DEFAULT. Strictly coarser than `--by-dir` (which keys on the FULL parent dir).
     Summary,
-    /// One row per distinct directory (full path) with per-op + distinct-file counts.
+    /// One row per distinct directory (the FULL parent path) with per-op + distinct-file
+    /// counts — finer than `--summary`'s top-level-prefix rollup.
     ByDir,
     /// One row per distinct file with per-op counts + first/last touch timestamps.
     ByFile,
@@ -680,9 +735,11 @@ pub enum FilesDetail {
           • HEURISTIC      Bash file mutations, parsed LEXICALLY from the command \
         string (rm/mv/cp/mkdir/touch/tee/sed -i/git/redirection). Bash carries no path \
         field in its result, so these are best-effort and ALWAYS labelled `(heuristic)`.\n\n\
-        DETAIL LEVELS (mutually exclusive; exactly one applies):\n  \
-          --summary   (DEFAULT) compact per-top-level-dir op rollup — the smallest output\n  \
-          --by-dir    one row per distinct directory (per-op + distinct-file counts + first/last)\n  \
+        DETAIL LEVELS (mutually exclusive; exactly one applies; STRICTLY coarsening):\n  \
+          --summary   (DEFAULT) coarse TOP-LEVEL-PREFIX rollup (first few dir segments — a\n              \
+                      whole project tree collapses to one row); the smallest output\n  \
+          --by-dir    one row per distinct directory (the FULL parent path — finer than\n              \
+                      --summary) with per-op + distinct-file counts + first/last\n  \
           --by-file   one row per distinct file (per-op counts + first/last touch)\n  \
           --timeline  full chronological list, one line per mutation (HEAVY — opt-in only)\n\n\
         The TARGET selects the session(s): `--session <uuid>` for one, or a project \
@@ -699,7 +756,7 @@ pub enum FilesDetail {
         with no timestamp never falls inside a bounded window.\n\n\
         No silent truncation: skipped malformed lines are counted and surfaced.",
     after_help = "EXAMPLES\n  \
-          csift files <uuid>                          # default summary: per-top-level-dir op rollup\n  \
+          csift files <uuid>                          # default summary: coarse top-level-prefix op rollup\n  \
           csift files <uuid> --by-file                # per-file op counts + first/last touch\n  \
           csift files <uuid> --subagents-only --by-file   # ONLY files the session's subagents touched\n  \
           csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)\n  \
@@ -707,13 +764,27 @@ pub enum FilesDetail {
         ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
           csift files --session <uuid> --by-file              # count rows ending in gaps-style docs\n  \
           csift files --session <uuid> --timeline --format json  # filter op==write/create, path under /tmp\n  \
-        (NOTE: per-mutation `is_create` lives ONLY in `--timeline` JSON; `--by-file` rows\n   \
-         carry per-op COUNTS, not the create flag — use `--timeline` to test create-vs-edit.)"
+        (NOTE: BOTH the per-mutation `op` AND `is_create` keys live ONLY in `--timeline`\n   \
+         JSON; a `--by-file` row carries per-op COUNT fields (write/edit/bash/multi_edit/\n   \
+         notebook_edit/total) + first/last timestamps, NOT `op`/`is_create` — so use\n   \
+         `--timeline` to test create-vs-edit or filter by op.)\n\n\
+        JSON SCHEMAS (per --format json)\n  \
+          --timeline : one object per mutation — {session_id, path, op, ts_utc, ts_local,\n             \
+                       turn_index, is_create, heuristic} + a trailing summary object.\n  \
+          --by-file  : one object per file — {session_id, file, write, edit, bash,\n             \
+                       multi_edit, notebook_edit, total, distinct_files, first_utc,\n             \
+                       first_local, last_utc, last_local} + a trailing summary object.\n  \
+          --by-dir / --summary : the same per-op count keys, grouped under a `dir`/`bucket`\n             \
+                       key, + a trailing summary {distinct_files, total_mutations,\n             \
+                       skipped_lines, detail_level}."
 )]
 pub struct FilesArgs {
     /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to
     /// report. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable.
+    /// scanned. Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) or a
+    /// bare subagent-hex id — it is routed to the `--session` filter (searched across all
+    /// projects when no project path is given), so `csift files <uuid>` works as the
+    /// EXAMPLES show (a uuid is neither a cwd nor an encoded `-Users-…` dir).
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -853,9 +924,10 @@ pub enum RecoverMode {
         heuristic Bash mutation). Each segment + boundary carries its jsonl line / turn \
         / timestamp.\n  \
           --at <WHEN> the PARTIAL, line-numbered \"in the LLM's eyes\" snapshot of \
-        `--file` as of <WHEN> (ISO8601, relative `2h`, `@turn:<N>`, or `@line:<N>`). \
-        Known lines carry their number; unknown regions are marked `??? lines A..B \
-        unknown` — gaps are NEVER fabricated.\n  \
+        `--file` as of <WHEN> (the SAME relative/ISO/bare-date grammar as --since — \
+        `45s`/`90m`/`2h`/`3d`/`1w`, ISO8601, bare-date=local-midnight — PLUS the \
+        recover-only `@turn:<N>` / `@line:<N>`). Known lines carry their number; unknown \
+        regions are marked `??? lines A..B unknown` — gaps are NEVER fabricated.\n  \
           --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
         counts (reads / edits / writes / bash / external-edits).\n  \
@@ -886,7 +958,9 @@ pub enum RecoverMode {
 pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// from. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable.
+    /// scanned. Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) or a
+    /// bare subagent-hex id routed to the `--session` filter, so `csift recover <uuid>
+    /// --file …` works as the EXAMPLES show.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -922,9 +996,12 @@ pub struct RecoverArgs {
     #[arg(long, group = "mode")]
     pub patches: bool,
 
-    /// Point-in-time partial snapshot of `--file` as of `<WHEN>` (ISO8601, relative
-    /// `2h`, `@turn:<N>`, or `@line:<N>`). Setting this both selects the mode AND
-    /// supplies its cutoff.
+    /// Point-in-time partial snapshot of `--file` as of `<WHEN>`. WHEN uses the SAME
+    /// grammar as `--since` — a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw` (`45s`, `90m`, `2h`, `3d`,
+    /// `1w`) = that long ago, an ISO8601 datetime (`2026-06-01T05:00:00Z`), or a bare date
+    /// (`2026-06-01`) = LOCAL MIDNIGHT — PLUS the recover-only forms `@turn:<N>` (first line
+    /// after turn N) and `@line:<N>`. Setting this both selects the mode AND supplies its
+    /// cutoff.
     #[arg(long, value_name = "WHEN", group = "mode")]
     pub at: Option<String>,
 
@@ -1035,6 +1112,14 @@ impl RecoverArgs {
         DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
         summary)` and DEMOTED (selected only after non-dup turns) — never silently dropped \
         (a false positive must not lose a real turn).\n\n\
+        AUTOMATION TRIGGERS: a machine `<task-notification>` (a background-command / \
+        workflow / spawned-agent COMPLETION pulse) OPENS a turn just like a human message, \
+        and is rendered as a parsed attribution label `[<kind> <task-id> <status>] \
+        <summary>` (kind = background-command | workflow | agent | task) instead of the raw \
+        XML. The header reports the human/automation split (`selected N user (M automation \
+        triggers) + …`). These pulses are EXCLUDED from the `--round-trip-fraction` HARD \
+        FLOOR (that lane is reserved for human exchanges) but can still be selected as \
+        Phase-2 fill.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
         mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). \
         `--out <PATH>` writes the full (un-terminal-truncated) reconstruction to a file \
@@ -1050,12 +1135,24 @@ impl RecoverArgs {
           csift turns <uuid> --agent-msgs eot-only          # force the old single-EOT (last-message-only) output\n  \
           csift turns <uuid> --agent-rich-min-chars 200     # default mode, lower bar → keep more first/middle messages\n  \
           csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)\n  \
-          csift turns <uuid> --agent-msgs all               # every agent message, no filtering"
+          csift turns <uuid> --agent-msgs all               # every agent message, no filtering\n\n\
+        AUTOMATION TRIGGERS\n  \
+          A machine `<task-notification>` (a background-command / workflow / spawned-agent\n  \
+          COMPLETION pulse Claude Code injects as a `type:\"user\"` record) OPENS a turn like\n  \
+          a human message, so it appears in the reconstruction. It renders as a PARSED\n  \
+          attribution label `[<kind> <task-id> <status>] <summary>` (kind = background-command\n  \
+          | workflow | agent | task, read from the summary) — never the raw `<task-id>` /\n  \
+          `<output-file>` XML. The header reports the human/automation split, e.g.\n  \
+          `selected 16 user (3 automation triggers) + 58 assistant units`. These pulses are\n  \
+          EXCLUDED from the `--round-trip-fraction` HARD FLOOR (reserved for human exchanges)\n  \
+          but can still be selected as Phase-2 fill."
 )]
 pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// turns from. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable.
+    /// scanned. Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) or a
+    /// bare subagent-hex id routed to the `--session` filter, so `csift turns <uuid>` works
+    /// as the EXAMPLES show.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1138,10 +1235,14 @@ pub struct TurnsArgs {
     pub agent_declaration_max_chars: usize,
 
     /// Keep a turn's FIRST agent message by position privilege (first-matters — the
-    /// opening message often states the plan or an early finding; DEFAULT).
-    /// `--no-keep-first` drops the privilege and decides the first as a MIDDLE (kept
-    /// unless it is a proven pure declaration; a rich first still survives). Only
-    /// meaningful in `--agent-msgs rich`.
+    /// opening message often states the plan or an early finding). `--no-keep-first` drops
+    /// the privilege and decides the first as a MIDDLE (kept unless it is a proven pure
+    /// declaration; a rich first still survives). ONLY TAKES EFFECT in `--agent-msgs rich`.
+    /// In the DEFAULT `longest` mode, first-message retention is governed by
+    /// `--agent-rich-min-chars` (keep-the-first-if-substantive), NOT this flag — so
+    /// `--keep-first`/`--no-keep-first` are no-ops there. (The `default_value_t = true`
+    /// only sets the privilege value consulted by `rich`; it does not make the flag active
+    /// in `longest`.)
     #[arg(
         long = "keep-first",
         overrides_with = "no_keep_first",
@@ -1274,9 +1375,11 @@ impl TurnsArgs {
         SUBAGENT's own id, NOT the parent/root session — so `whoami` there identifies the \
         subagent, not the main session. To reach the ROOT session from inside a subagent, \
         run `agents`/`list` on the project PATH to find the parent uuid.\n\n\
-        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). This differs from \
-        the scope-target `--path <PATH>` on the session-operating subcommands; the old \
-        `--path` spelling still works here as a hidden alias.",
+        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). The \
+        session-operating subcommands (`search`/`agents`/`files`/`recover`/`turns`) take \
+        their target as a POSITIONAL `[PATH]...` — there is NO `--path <PATH>` flag on them \
+        (only `search` keeps a hidden, DEPRECATED `--path` alias). whoami's old `--path` \
+        spelling still works here as a hidden alias for `--show-path`.",
     after_help = "EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
           csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
@@ -1284,8 +1387,10 @@ impl TurnsArgs {
 )]
 pub struct WhoamiArgs {
     /// Print the resolved jsonl path in addition to the session id. This is a BOOLEAN
-    /// toggle (no value) — unlike the scope-target `--path <PATH>` on the
-    /// session-operating subcommands. The old name `--path` is kept as a hidden alias.
+    /// toggle (no value). The session-operating subcommands take their target as a
+    /// POSITIONAL `[PATH]...` (no `--path` flag; only `search` keeps a hidden deprecated
+    /// `--path` alias). whoami's old `--path` name is kept here as a hidden alias for this
+    /// boolean toggle.
     #[arg(long = "show-path", visible_alias = "with-path", alias = "path")]
     pub show_path: bool,
 
@@ -1298,6 +1403,9 @@ pub struct WhoamiArgs {
 mod tests {
     use super::*;
     use clap::CommandFactory;
+
+    /// A canonical 8-4-4-4-12 session uuid for the bare-uuid-positional routing tests.
+    const SESS_UUID: &str = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
     /// clap's own internal consistency check — catches duplicate flags, bad
     /// `overrides_with` targets, malformed value parsers at build time.
@@ -1440,14 +1548,62 @@ mod tests {
         }
     }
 
-    // ── Value parser is permissive (the normalizer routes flags, not this) ──
+    // ── Value parser accepts real targets, REJECTS a `--`-leading unknown flag ──
 
     #[test]
-    fn parse_project_target_accepts_any_target() {
+    fn parse_project_target_accepts_real_targets_rejects_double_dash() {
+        // Genuine targets (single-dash encoded token, real path, `.`) parse.
         assert!(parse_project_target("-Users-testuser-Projects-foo").is_ok());
         assert!(parse_project_target("/Users/testuser/Projects/foo").is_ok());
         assert!(parse_project_target(".").is_ok());
         assert!(parse_project_target("-a--claude-b").is_ok());
+        // A `--`-leading token can NEVER be a real encoded dir (those start with ONE `-`),
+        // so it is rejected → clap reports "unexpected argument" instead of the misleading
+        // "no project dir named --xxx". A single `-` token still parses (encoded target).
+        let err = parse_project_target("--by-fil").unwrap_err();
+        assert!(err.contains("unexpected argument"), "got: {err}");
+        assert!(parse_project_target("-singledash").is_ok());
+    }
+
+    #[test]
+    fn unknown_flag_is_rejected_not_swallowed_as_target() {
+        // The unknown-flag-masking fix: a `--`-prefixed unknown/typo token reaching the
+        // positional is rejected so clap surfaces it, on EVERY scope-operating subcommand.
+        for argv in [
+            ["csift", "files", "--by-fil"].as_slice(),
+            ["csift", "turns", "--budgett"].as_slice(),
+            ["csift", "list", "--by-fil"].as_slice(),
+            ["csift", "agents", "--bogus"].as_slice(),
+        ] {
+            let err = parse(argv).expect_err("unknown flag must error");
+            let msg = err.to_string();
+            assert!(
+                !msg.contains("no Claude Code project dir named"),
+                "must not mask as project-dir error for {argv:?}: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn list_has_session_flag_and_bare_uuid_positional() {
+        // list now carries `--session` and routes a bare-uuid positional like its siblings.
+        let cli = parse(&["csift", "list", "--session", SESS_UUID]).unwrap();
+        match cli.command {
+            Command::List(a) => assert_eq!(a.session.as_deref(), Some(SESS_UUID)),
+            _ => panic!("expected list"),
+        }
+        let cli = parse(&["csift", "list", SESS_UUID]).unwrap();
+        match cli.command {
+            Command::List(a) => {
+                assert_eq!(a.paths.len(), 1, "the bare uuid is a positional target");
+                assert_eq!(a.paths[0].to_string_lossy(), SESS_UUID);
+                assert!(
+                    a.session.is_none(),
+                    "the resolver routes it, not the parser"
+                );
+            }
+            _ => panic!("expected list"),
+        }
     }
 
     // ── argv normalizer (the actual fix mechanism) ──

@@ -355,9 +355,24 @@ struct TurnSlice {
 
 impl TurnSlice {
     /// A round-trip-complete turn has BOTH a user opener and at least one agent message
-    /// (the last of which is the EOT anchor).
+    /// (the last of which is the EOT anchor). NOTE: this is the STRUCTURAL test — it counts
+    /// an automation-pulse opener (`<task-notification>`) the same as a human opener; it
+    /// governs Phase-2 fill (whether a `Both` selection is offered). The Phase-1 HARD FLOOR
+    /// uses [`TurnSlice::is_human_round_trip`] instead, so a machine pulse never consumes the
+    /// human-reserved `--round-trip-fraction` budget lane.
     fn is_round_trip(&self) -> bool {
         self.user.is_some() && !self.agents.is_empty()
+    }
+
+    /// A round-trip whose opener is a GENUINE HUMAN message (not an automation pulse). This
+    /// is what the `--round-trip-fraction` HARD FLOOR reserves its budget for — the help /
+    /// SKILL define that lane as "COMPLETE round-trips (user → … → assistant EOT)", i.e.
+    /// human exchanges. An automation `<task-notification>` paired with an agent ack is a
+    /// structural round-trip but NOT a human one, so it is excluded from the floor (it can
+    /// still be picked in Phase-2 fill). Keeps the floor accounting and the header's
+    /// human/automation split in agreement.
+    fn is_human_round_trip(&self) -> bool {
+        self.is_round_trip() && !self.is_automation
     }
 
     /// The EOT anchor: the LAST agent message's unit (the turn's outcome/decision, the
@@ -1631,7 +1646,11 @@ fn plan_session(
                 continue;
             }
             let t = &turns[ti];
-            if !t.is_round_trip() {
+            // The HARD FLOOR reserves its lane for HUMAN round-trips only — a machine
+            // automation pulse is left for Phase-2 fill, so the protected budget the help
+            // documents for "user → … → assistant EOT" is never silently spent on a
+            // pulse→ack pair (which the header already reports as an automation trigger).
+            if !t.is_human_round_trip() {
                 continue;
             }
             if turn_is_dup(t) != dedup_pass {
@@ -1782,28 +1801,12 @@ fn spanned_boundary_count(turns: &[TurnSlice], selected: &[Selected]) -> usize {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Window-range parsing (mirrors recover::parse_turn_range)
+// Window-range parsing (shared parser in `crate::text`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Parse a `--turn-range START..END` into an inclusive, 0-based `(lo, hi)`. Same
-/// wording + shape as `recover`'s parser (kept local so the shared signature is
-/// untouched).
+/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
 fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    let (a, b) = s
-        .split_once("..")
-        .with_context(|| format!("--turn-range must be START..END, got {s:?}"))?;
-    let lo: usize = a
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range start is not a non-negative integer: {a:?}"))?;
-    let hi: usize = b
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range end is not a non-negative integer: {b:?}"))?;
-    if hi < lo {
-        bail!("--turn-range end ({hi}) is before start ({lo})");
-    }
-    Ok((lo, hi))
+    crate::text::parse_range(s, "--turn-range", false)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

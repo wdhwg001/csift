@@ -9,25 +9,25 @@
 //! processed in parallel across the corpus (`rayon`), then sorted for deterministic
 //! output.
 //!
-//! ## Parallelism + the one serial step (honest)
+//! ## Scope resolution + parallelism
 //!
-//! The dominant work — the per-session head+tail parse — runs `rayon` `par_iter()`
-//! across all session files on the default pool (= CPU count). The subagent
-//! PRE-DISCOVERY step (locating each session's `subagents/**` transcripts before the
-//! parallel summarize) is also fanned out with `par_iter().flat_map(...)`; it is a
-//! cheap `read_dir` stat-walk per session, dwarfed by the parallel parses, so even
-//! serial it would be acceptable — it is parallelized here only because the change was
-//! trivial and introduces no new bottleneck.
+//! Target resolution (positional PATH(s) / bare-uuid / `--session`, with subagent spanning)
+//! goes through the SHARED [`crate::path::resolve_session_files`] resolver — the SAME one
+//! `search`/`agents`/`files`/`recover`/`turns` use — so `list` is no longer a separate
+//! scope dialect: a bare `csift list <uuid>` identifies that one session, and `--session`
+//! works, exactly like its siblings. The dominant work — the per-session head+tail parse —
+//! then runs `rayon` `par_iter()` across the resolved files on the default pool (= CPU
+//! count); results are sorted by path for deterministic output.
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rayon::prelude::*;
 
 use crate::cli::{ListArgs, OutputFormat};
 use crate::model::Record;
 use crate::parse::{head_records, tail_records};
-use crate::path::{self, ProjectDir};
+use crate::path::{self, SubagentScope};
 use crate::timez::{format_timestamp, local_iso};
 
 /// Max characters of a message excerpt shown inline before truncation. Truncation
@@ -74,53 +74,26 @@ impl MessagePreview {
     }
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with an explicit `… (+N chars)` marker.
-/// Counts CHARACTERS (not bytes) so multi-byte UTF-8 text truncates cleanly.
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 fn truncate_excerpt(s: &str) -> String {
-    let total = s.chars().count();
-    if total <= EXCERPT_MAX {
-        return s.to_string();
-    }
-    let kept: String = s.chars().take(EXCERPT_MAX).collect();
-    let dropped = total - EXCERPT_MAX;
-    format!("{kept}… (+{dropped} chars)")
+    crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
 
 /// Entry point for `csift list`.
 pub fn run_list(args: &ListArgs) -> Result<()> {
-    // 1. Resolve targets → concrete project dirs. 0 args ⇒ every project.
-    let project_dirs = resolve_list_targets(&args.paths)?;
-
-    // 2. Enumerate every top-level *.jsonl session file under each dir. A dir with
-    //    no session files (childless / subagent-only / memory-only, §1) is fine —
-    //    it simply contributes nothing.
-    let mut session_files: Vec<PathBuf> = Vec::new();
-    for pd in &project_dirs {
-        session_files.extend(session_files_in(&pd.dir)?);
-    }
+    // 1+2. Resolve targets → the concrete session jsonl files, via the SAME shared resolver
+    //       every other session-operating subcommand uses (`path::resolve_session_files`).
+    //       This routes a bare-uuid / bare-hex POSITIONAL (and the new `--session` flag) to
+    //       the session filter, so `csift list <uuid>` identifies that one session instead of
+    //       erroring — and 0 targets ⇒ every project. Subagent transcripts (built-in
+    //       Task/Agent-tool + workflow / OMC agents) span by default; `--no-subagents` keeps
+    //       only the top-level `<uuid>.jsonl` set. Workflow `journal.jsonl` event logs are
+    //       never transcripts and are excluded by the resolver.
+    let scope = SubagentScope::from(args.want_subagents());
+    let mut session_files =
+        path::resolve_session_files(&args.paths, args.session.as_deref(), scope)?;
     session_files.sort();
     session_files.dedup();
-
-    // 2b. By default also span each session's SUBAGENT transcripts (built-in
-    //     Task/Agent-tool + workflow / OMC agents), so a subagent's own first/last
-    //     turn shows up in the index. `--no-subagents` keeps the pre-subagent set.
-    //     Workflow `journal.jsonl` event logs are never transcripts (see
-    //     `subagent::discover_subagents`), so they are excluded here automatically.
-    if args.want_subagents() {
-        // Parallel pre-discovery (a read_dir stat-walk per session). flat_map over the
-        // parallel iterator preserves no order, but we sort+dedup right after, so the
-        // final set is deterministic regardless of completion order.
-        let sub_files: Vec<PathBuf> = session_files
-            .par_iter()
-            .map(|sf| crate::subagent::subagent_transcript_files(sf))
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        session_files.extend(sub_files);
-        session_files.sort();
-        session_files.dedup();
-    }
 
     // 3. Parallel across files (head+tail read each), collect order-stable.
     let mut summaries: Vec<SessionSummary> = session_files
@@ -136,40 +109,6 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
         OutputFormat::Json => render_json(&summaries)?,
     }
     Ok(())
-}
-
-/// Resolve the `list` positional targets into project dirs (0 args ⇒ all).
-fn resolve_list_targets(paths: &[PathBuf]) -> Result<Vec<ProjectDir>> {
-    if paths.is_empty() {
-        return path::all_project_dirs();
-    }
-    let mut dirs = Vec::with_capacity(paths.len());
-    for p in paths {
-        dirs.push(path::resolve_target(p)?);
-    }
-    Ok(dirs)
-}
-
-/// Top-level `*.jsonl` files directly under a project dir (no recursion into the
-/// per-session sidecar dirs — those hold subagent/tool-result artifacts, §1).
-fn session_files_in(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut out = Vec::new();
-    let read = std::fs::read_dir(dir)
-        .with_context(|| format!("cannot read project dir {}", dir.display()))?;
-    for entry in read {
-        let entry =
-            entry.with_context(|| format!("error reading an entry in {}", dir.display()))?;
-        let p = entry.path();
-        let is_file = match entry.file_type() {
-            Ok(ft) => ft.is_file(),
-            Err(_) => p.is_file(),
-        };
-        if is_file && p.extension().is_some_and(|e| e == "jsonl") {
-            out.push(p);
-        }
-    }
-    out.sort();
-    Ok(out)
 }
 
 /// Build a [`SessionSummary`] for one session file via HEAD + TAIL reads only.

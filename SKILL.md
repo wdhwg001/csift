@@ -70,9 +70,10 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 ## Command surface
 
-Six subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`.
-`list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
-(`--no-subagents` opts out). Every subcommand takes `--format text|json` (default `text`).
+Seven subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `turns`.
+`list`/`search`/`files`/`recover`/`turns` span each session's subagent transcripts **by default**
+(`--no-subagents` opts out; `agents` LISTS subagents as its targets, so it has no span flag).
+Every subcommand takes `--format text|json` (default `text`).
 
 A **target** is EITHER a real filesystem cwd (csift path-encodes it for you) OR an already-encoded
 `-Users-...` projects-dir token OR a direct `~/.claude/projects/<encoded>` path. With no target,
@@ -131,9 +132,13 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
   newlines. PATTERN MAY be empty — then it is a pure filter, matching every category-eligible
   record (combine with `--category` / `--since` / `--turn-range`; a bare empty pattern with no
   other filter warns it will emit a lot).
-- **Scope target** is a POSITIONAL `[PATH]...` — the SAME surface as `list`/`files`/`recover`/
-  `turns` (`csift search PATTERN .`). The legacy `--path <PATH>` flag still works as a hidden
-  deprecated alias. A bare session uuid in the positional slot is routed to `--session`.
+- **Scope target** is a POSITIONAL `[PATH]...` — the SAME unified surface every session-operating
+  subcommand uses (`list`/`agents`/`files`/`recover`/`turns`; `csift search PATTERN .`). The legacy
+  `--path <PATH>` flag still works on `search` as a hidden deprecated alias (no other subcommand has
+  a `--path` flag). A bare session-uuid (or bare subagent-hex id) in the positional slot is routed
+  to `--session` on ALL of them — including `list` (now unified; `csift list <uuid>` identifies that
+  one session) — and is searched across all projects when no project path is given. `whoami` is the
+  exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`).
 - On a hit, csift returns the **whole turn** (a turn opens on a genuine user message, an answered
   AskUserQuestion, or a plan-rejection-with-message): a matched `tool_use` comes WITH its
   `tool_result`; a matched user turn WITH the agent's response.
@@ -310,14 +315,17 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
   `curl`/`wget` output flags (`-o`/`-O`/`--output`), and allowlisted flag outputs
   (`--junit-xml=`/`--junitxml=`/`--report-path`/…). GNU `-t DIR` (cp/mv/install) is handled — the
   destination is the `-t` value, the positionals are read sources. Only **concrete, resolvable**
-  paths are emitted — an unexpandable `$VAR` pseudo-path, a `/dev/null`-class sink (even with a glued
-  command-substitution `)`), a process-substitution `>(…)`, and a quote-severed fragment are all
-  dropped, never fabricated. **Known limitation:** a write inside an embedded-language body (a
-  heredoc, or `python -c "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser,
-  so such writes are missed. The precision contract holds (the miss is **never mis-reported**):
-  heredoc BODY lines are lexically skipped before redirect/verb scanning, so a `>` or quote inside
-  the body can no longer fabricate a redirect row. Bash carries no path field in its result, so all
-  of the above are best-effort and **always labelled `(heuristic)`**.
+  paths are emitted — an unexpandable `$VAR`/`~` pseudo-path, a `/dev/null`-class sink (even with a
+  glued command-substitution `)`), a process-substitution `>(…)` (its body args too), and a
+  quote-severed fragment are all dropped, never fabricated. The parser is **quote/procsub-aware**: a
+  `>`/`<` (or a word) inside a quoted echo/printf prose or a quoted regex (`echo "idle >8min"`,
+  `grep 'cur > base'`) is masked before redirect detection, so it no longer fabricates a file — the
+  dominant remaining leak. **Known limitation:** a write inside an embedded-language body (a heredoc,
+  or `python -c "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser, so such
+  writes are missed. The precision contract holds (the miss is **never mis-reported**): heredoc BODY
+  lines are lexically skipped before redirect/verb scanning, and quoted/procsub spans are masked, so
+  a `>` or quote inside them can no longer fabricate a redirect row. Bash carries no path field in
+  its result, so all of the above are best-effort and **always labelled `(heuristic)`**.
 
 **Subagent scope** (mutually exclusive): default spans subagents; `--no-subagents` reports only the
 top-level session's own mutations; `--subagents-only` is the **complement** — only the files the
@@ -326,8 +334,13 @@ session's subagents created/modified, with the top-level session excluded (one c
 
 Exactly one **detail level** applies (mutually exclusive; default `--summary`):
 
-- **`--summary`** (DEFAULT) — compact per-top-level-dir op rollup; the smallest output.
-- **`--by-dir`** — one row per distinct directory (per-op counts + distinct-file count + first/last).
+- **`--summary`** (DEFAULT) — coarse **top-level-prefix** rollup: each path buckets on its first
+  few directory segments, so a whole project tree collapses to ONE row. The smallest output, and
+  **strictly coarser** than `--by-dir` (a real 4-level ladder: summary < by-dir < by-file <
+  timeline). `git:<sub>` pseudo-paths roll up under their own `git:` bucket, out of the `./`
+  relative sink.
+- **`--by-dir`** — one row per distinct directory (the **full** parent path — finer than summary)
+  with per-op counts + distinct-file count + first/last.
 - **`--by-file`** — one row per distinct file (per-op counts + first/last touch).
 - **`--timeline`** — full chronological list, one line per mutation. **Heavy — opt-in only.**
 
@@ -337,7 +350,7 @@ mutation with no timestamp never falls inside a bounded window) and `--format js
 Examples:
 
 ```bash
-csift files <uuid>                          # default summary: per-top-level-dir op rollup
+csift files <uuid>                          # default summary: coarse top-level-prefix op rollup
 csift files <uuid> --by-file                # per-file op counts + first/last touch
 csift files <uuid> --subagents-only --by-file   # ONLY what the session's subagents touched
 csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
@@ -447,11 +460,14 @@ last — see the richness model below for why.
 **Automation triggers.** In automation-heavy sessions (OMC workflows, background commands), Claude Code
 injects `<task-notification>` records that LOOK like user turns (they open a turn) but are machine
 completion notices, not the operator's prose. `turns` (and `search -t user`) CLASSIFY these: the opener
-renders as a parsed `[workflow <task-id> <status>] <summary>` ATTRIBUTION label instead of the raw
-`<task-id>`/`<output-file>`/`<status>` XML blob, and the `turns` per-session header reports the
-human/automation split (e.g. `selected 20 user (3 automation triggers) + 52 assistant units`). The
-trigger still opens a turn and is budgeted normally — only its rendering and the header accounting
-change — so a consumer sees at a glance which "user turns" were machine pulses.
+renders as a parsed `[<kind> <task-id> <status>] <summary>` ATTRIBUTION label — where `<kind>` is the
+TRUE trigger class read from the summary (`background-command` / `workflow` / `agent` / `task`), NOT a
+hardcoded `workflow` — instead of the raw `<task-id>`/`<output-file>`/`<status>` XML blob, and the
+`turns` per-session header reports the human/automation split (e.g. `selected 20 user (3 automation
+triggers) + 52 assistant units`). The trigger still opens a turn, but it is EXCLUDED from the
+`--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) — it can still be picked
+as Phase-2 fill. So a consumer sees at a glance which "user turns" were machine pulses, and the human
+round-trip floor is never silently spent on a pulse→ack pair.
 
 **Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) bounds the
 WHOLE reconstruction. Selection is recency-first (most-recent turns win the budget); the emitted
@@ -591,8 +607,10 @@ user messages that were previously missed).
 
 - **`thinking`** — assistant thinking blocks.
 - **`user`** — genuine human input + the full AskUserQuestion Q+options+answer unit + a
-  plan-rejection-with-message (with a `[plan: …]` pointer). NOT plain tool_result-carriers,
-  interrupts, or slash-command wrappers.
+  plan-rejection-with-message (with a `[plan: …]` pointer) + machine **automation triggers**
+  (`<task-notification>` openers, rendered as the parsed `[<kind> <id> <status>] <summary>` label —
+  recognize a machine opener by the `[<kind> …]` prefix). NOT plain tool_result-carriers, interrupts,
+  or slash-command wrappers.
 - **`tool`** — `tool_use` blocks (AskUserQuestion is a tool_use).
 - **`tool-response`** — `tool_result` blocks.
 - **`agent`** — assistant visible end-of-turn text (the agent message).

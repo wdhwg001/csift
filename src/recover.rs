@@ -1689,59 +1689,20 @@ fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {
     out
 }
 
-/// Parse a `--turn-range START..END` into an inclusive `(lo, hi)`. Both 0-based,
-/// inclusive; `END < START` is an error. Local copy keeps `recover` independent of
-/// `files`/`search` (the same convention those two follow).
+/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
 fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    let (a, b) = s
-        .split_once("..")
-        .with_context(|| format!("--turn-range must be START..END, got {s:?}"))?;
-    let lo: usize = a
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range start is not a non-negative integer: {a:?}"))?;
-    let hi: usize = b
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range end is not a non-negative integer: {b:?}"))?;
-    if hi < lo {
-        bail!("--turn-range end ({hi}) is before start ({lo})");
-    }
-    Ok((lo, hi))
+    crate::text::parse_range(s, "--turn-range", false)
 }
 
-/// Parse a `--line-range START..END` into an inclusive, 1-based `(lo, hi)`. Mirrors
-/// [`parse_turn_range`] but rejects a 0 start (file lines are 1-based).
+/// Parse a `--line-range START..END` into an inclusive 1-based `(lo, hi)` (shared parser;
+/// the 1-based variant rejects a 0 start — file lines are 1-based).
 fn parse_line_range(s: &str) -> Result<(usize, usize)> {
-    let (a, b) = s
-        .split_once("..")
-        .with_context(|| format!("--line-range must be START..END, got {s:?}"))?;
-    let lo: usize = a
-        .trim()
-        .parse()
-        .with_context(|| format!("--line-range start is not a positive integer: {a:?}"))?;
-    let hi: usize = b
-        .trim()
-        .parse()
-        .with_context(|| format!("--line-range end is not a positive integer: {b:?}"))?;
-    if lo == 0 {
-        bail!("--line-range start must be ≥ 1 (file lines are 1-based)");
-    }
-    if hi < lo {
-        bail!("--line-range end ({hi}) is before start ({lo})");
-    }
-    Ok((lo, hi))
+    crate::text::parse_range(s, "--line-range", true)
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with an explicit `… (+N chars)` marker (char-counted
-/// so multi-byte UTF-8 truncates cleanly). Never silent (mirrors `search::truncate_excerpt`).
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 fn truncate_excerpt(s: &str) -> String {
-    let total = s.chars().count();
-    if total <= EXCERPT_MAX {
-        return s.to_string();
-    }
-    let kept: String = s.chars().take(EXCERPT_MAX).collect();
-    format!("{kept}… (+{} chars)", total - EXCERPT_MAX)
+    crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

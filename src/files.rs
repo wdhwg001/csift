@@ -33,7 +33,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use memchr::memmem;
 use rayon::prelude::*;
 
@@ -405,11 +405,44 @@ impl OpCounts {
     }
 }
 
-/// The top-level-dir BUCKET key for a path: its parent directory. `/tmp/x.md` →
-/// `/tmp`; `/p/spec/gaps.md` → `/p/spec`. A path with no parent (a bare relative
-/// filename, or `/`) buckets under `./` so relative Bash paths still group cleanly.
+/// How many leading path SEGMENTS the `--summary` rollup keeps. Depth 4 keeps an absolute
+/// path's project-root level distinct (`/Users/testuser/Projects/widget_app_prototype`)
+/// while COLLAPSING everything deeper into that one bucket — so `--summary` is a genuine
+/// coarse rollup, strictly smaller than `--by-dir` (which keys on the full parent dir). A
+/// shallower path (e.g. `/tmp/x`) keeps all the segments it has.
+const SUMMARY_BUCKET_SEGMENTS: usize = 4;
+
+/// The `--summary` rollup BUCKET key for a path: a COARSE top-level prefix (the first
+/// [`SUMMARY_BUCKET_SEGMENTS`] path segments), NOT the full parent dir. This is what makes
+/// `--summary` the smallest output and a real rollup — distinct from `--by-dir`, which keys
+/// on the full parent. Examples (depth 4): `/Users/testuser/Projects/p/spec/gaps.md` and
+/// `/Users/testuser/Projects/p/src/main.rs` BOTH bucket to `/Users/testuser/Projects/p`;
+/// `/tmp/x.md` → `/tmp`. A `git:<sub>` pseudo-path keeps its own `git:` bucket (it is not a
+/// real file path). A bare relative filename (no `/`) buckets under `./`.
 fn bucket_key(path: &str) -> String {
-    parent_dir(path).unwrap_or_else(|| "./".to_string())
+    // The intentional `git:<sub>` coarse pseudo-path is its own bucket, never split as a dir
+    // (all `git:add`/`git:commit`/… roll up under one `git:` row, out of the `./` sink).
+    if path.starts_with("git:") {
+        return "git:".to_string();
+    }
+    // Roll up the PARENT directory (never the basename) to at most SUMMARY_BUCKET_SEGMENTS
+    // segments. A bare relative filename has no parent → the `./` bucket.
+    let Some(parent) = parent_dir(path) else {
+        return "./".to_string();
+    };
+    let absolute = parent.starts_with('/');
+    let segs: Vec<&str> = parent.split('/').filter(|s| !s.is_empty()).collect();
+    if segs.is_empty() {
+        // Parent is `/` (a top-level file like `/foo`) → the root bucket.
+        return "/".to_string();
+    }
+    let take = segs.len().min(SUMMARY_BUCKET_SEGMENTS);
+    let prefix = segs[..take].join("/");
+    if absolute {
+        format!("/{prefix}")
+    } else {
+        prefix
+    }
 }
 
 /// The parent directory of a path string (lexical only — never touches the
@@ -664,25 +697,9 @@ fn json_grouped<F: Fn(&FileMutation) -> String>(
     Ok(())
 }
 
-/// Parse a `--turn-range START..END` string into an inclusive `(lo, hi)` pair. Both
-/// bounds are 0-based, inclusive; `END < START` is an error. (Identical contract to
-/// `search`'s parser; kept local so the two subcommands stay independent.)
+/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
 fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    let (a, b) = s
-        .split_once("..")
-        .with_context(|| format!("--turn-range must be START..END, got {s:?}"))?;
-    let lo: usize = a
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range start is not a non-negative integer: {a:?}"))?;
-    let hi: usize = b
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range end is not a non-negative integer: {b:?}"))?;
-    if hi < lo {
-        bail!("--turn-range end ({hi}) is before start ({lo})");
-    }
-    Ok((lo, hi))
+    crate::text::parse_range(s, "--turn-range", false)
 }
 
 #[cfg(test)]
@@ -869,12 +886,67 @@ mod tests {
         let tmp = buckets.get("/tmp").expect("/tmp bucket");
         assert_eq!(tmp.write, 2, "two /tmp writes");
         assert_eq!(tmp.bash, 1, "one bash rm under /tmp");
-        // /p/spec bucket: one edit.
+        // /p/spec bucket: one edit (the fixture's parent dirs are ≤4 segments deep, so the
+        // coarse rollup keeps them — the collapse only fires on DEEPER paths, see below).
         let spec = buckets.get("/p/spec").expect("/p/spec bucket");
         assert_eq!(spec.edit, 1);
         // /p/src bucket: one multi-edit.
         let src = buckets.get("/p/src").expect("/p/src bucket");
         assert_eq!(src.multi_edit, 1);
+    }
+
+    #[test]
+    fn summary_rollup_collapses_deep_paths_unlike_by_dir() {
+        // The fix: `--summary` is a COARSE top-level rollup (≤SUMMARY_BUCKET_SEGMENTS
+        // segments), NOT the full parent dir `--by-dir` keys on. Two deeply-nested files
+        // sharing a top-level prefix collapse to ONE summary bucket but stay TWO by-dir rows.
+        let deep_a = "/Users/testuser/Projects/demo_app/components/wireframe/tabs/Foo.tsx";
+        let deep_b = "/Users/testuser/Projects/demo_app/spec/gaps.md";
+        // Summary buckets BOTH under the first 4 segments.
+        assert_eq!(bucket_key(deep_a), "/Users/testuser/Projects/demo_app");
+        assert_eq!(bucket_key(deep_b), "/Users/testuser/Projects/demo_app");
+        // by-dir keeps the full distinct parents.
+        assert_eq!(
+            parent_dir(deep_a).as_deref(),
+            Some("/Users/testuser/Projects/demo_app/components/wireframe/tabs")
+        );
+        assert_eq!(
+            parent_dir(deep_b).as_deref(),
+            Some("/Users/testuser/Projects/demo_app/spec")
+        );
+        assert_ne!(
+            parent_dir(deep_a),
+            parent_dir(deep_b),
+            "by-dir keeps them SEPARATE; summary collapses them — a real 4-level ladder"
+        );
+    }
+
+    #[test]
+    fn summary_git_pseudo_path_is_its_own_bucket_not_the_dot_sink() {
+        // `git:<sub>` pseudo-paths roll up under ONE `git:` bucket (out of the `./` relative
+        // sink), so a genuine-relative-file bucket is not polluted by git subcommands.
+        assert_eq!(bucket_key("git:commit"), "git:");
+        assert_eq!(bucket_key("git:add"), "git:");
+        assert_eq!(bucket_key("git:stash"), "git:");
+        // A real relative file still buckets under `./`.
+        assert_eq!(bucket_key("relative.md"), "./");
+    }
+
+    #[test]
+    fn bucket_key_edge_cases() {
+        // A top-level file `/foo` → parent `/` → the root bucket.
+        assert_eq!(bucket_key("/foo"), "/");
+        // A shallow path keeps all the segments it has (fewer than the cap).
+        assert_eq!(bucket_key("/tmp/x.md"), "/tmp");
+        assert_eq!(bucket_key("/a/b/c.txt"), "/a/b");
+        // A relative MULTI-segment path keeps its (relative) parent prefix.
+        assert_eq!(bucket_key("src/wireframe/Foo.tsx"), "src/wireframe");
+        // A deep path is capped to the first SUMMARY_BUCKET_SEGMENTS segments of the parent.
+        assert_eq!(
+            bucket_key("/a/b/c/d/e/f/g.rs"),
+            "/a/b/c/d",
+            "deep paths cap at the segment limit"
+        );
     }
 
     #[test]

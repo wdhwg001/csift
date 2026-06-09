@@ -419,6 +419,31 @@ fn is_round_trip_requires_both_sides() {
     assert!(!mk_turn(0, None, Some("b"), 0, 0).is_round_trip());
 }
 
+#[test]
+fn is_human_round_trip_excludes_automation_notifications() {
+    // A HUMAN round-trip qualifies for the HARD FLOOR; an automation-pulse round-trip is a
+    // structural round-trip (is_round_trip true) but NOT a human one — so it is excluded
+    // from the protected `--round-trip-fraction` lane (the budget-floor consumer).
+    let human = mk_turn(0, Some("a"), Some("b"), 0, 0);
+    assert!(human.is_round_trip() && human.is_human_round_trip());
+    let mut pulse = mk_turn(
+        1,
+        Some("<task-notification>…</task-notification>"),
+        Some("ack"),
+        0,
+        0,
+    );
+    pulse.is_automation = true;
+    assert!(
+        pulse.is_round_trip(),
+        "an automation pulse + ack is STRUCTURALLY a round-trip"
+    );
+    assert!(
+        !pulse.is_human_round_trip(),
+        "but it is NOT a human round-trip → excluded from the floor"
+    );
+}
+
 // ── Budget allocation (the load-bearing 50% floor) ──
 
 /// Build a session of `n` complete round-trips + a trailing assistant-heavy block, to

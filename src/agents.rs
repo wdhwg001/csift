@@ -516,17 +516,17 @@ fn workflow_run_json(run: &WorkflowRun, children: Vec<serde_json::Value>) -> ser
     })
 }
 
-/// Collapse a (possibly multi-line) returned message to a single line for the text view.
-/// CODEPOINT-SAFE: replaces whitespace runs without ever slicing into a char.
+/// Max chars of a returned-message preview shown inline in the `agents` text view, matching
+/// the scannable-preview cap `list` uses (vs the 400-char context-rich `search`/`recover`).
+const ONE_LINE_MAX: usize = 200;
+
+/// Collapse a (possibly multi-line) returned message to a single line for the text view, via
+/// the SHARED excerpt helper — so the elision is marked with the same explicit `… (+N
+/// chars)` count every other content-excerpt path emits (the never-silent-truncation
+/// contract, SPEC §0/§8.1). This previously emitted a BARE `…` with no count, the lone
+/// silent-truncation violation in the tree.
 fn one_line(s: &str) -> String {
-    let collapsed = s.split_whitespace().collect::<Vec<_>>().join(" ");
-    const MAX: usize = 200;
-    if collapsed.chars().count() <= MAX {
-        return collapsed;
-    }
-    // Truncate on a CHAR boundary (never a byte offset), then mark the elision.
-    let truncated: String = collapsed.chars().take(MAX).collect();
-    format!("{truncated}…")
+    crate::text::collapse_and_truncate(s, ONE_LINE_MAX)
 }
 
 /// Format a millisecond duration compactly (workflow manifest `durationMs`).
@@ -646,13 +646,18 @@ mod tests {
     }
 
     #[test]
-    fn one_line_collapses_and_is_codepoint_safe() {
+    fn one_line_collapses_and_marks_elision_count() {
         assert_eq!(one_line("a\n  b\tc"), "a b c");
-        // A long CJK string truncated on a CHAR boundary never panics.
+        // A long CJK string truncated on a CHAR boundary never panics AND now marks the
+        // dropped-char count explicitly (the never-silent-truncation contract — the old
+        // bare `…` dropped the count). 400 chars in, 200 kept → `… (+200 chars)`.
         let cjk = "x".repeat(100); // 400 chars
         let out = one_line(&cjk);
-        assert!(out.chars().count() <= 201); // 200 + the ellipsis
-        assert!(out.ends_with('…'));
+        assert!(
+            out.ends_with("… (+200 chars)"),
+            "elision must carry the count, not a bare …: {out}"
+        );
+        assert!(out.starts_with(&"x".repeat(50))); // first 200 chars kept
     }
 
     #[test]

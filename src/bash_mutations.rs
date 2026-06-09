@@ -86,11 +86,24 @@ pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
     // DOUBLE failure since the real write inside the body is still missed). The opener
     // LINE is kept (a `… <<DELIM > file` carries a real redirect on the opener itself).
     let command = strip_heredoc_bodies(command);
+    // Build a parallel QUOTE/PROCSUB mask once, then split + tokenize against it so an
+    // in-quote / in-procsub `>`/`<`/word can never be read as a redirect operator or
+    // fabricated as a file (the dominant remaining precision leak). See [`shell_mask`].
+    let mask = shell_mask(&command);
     let mut out = Vec::new();
-    for segment in split_segments(&command) {
-        parse_segment(segment, &mut out);
+    for (segment, seg_mask) in split_segments(&command, &mask)
+        .into_iter()
+        .zip(split_segments(&mask, &mask))
+    {
+        parse_segment(segment, seg_mask, &mut out);
     }
     out
+}
+
+/// True when every byte of a token's mask is [`MASK_CHAR`] — i.e. the whole token
+/// originated inside a quoted span or a process-sub body, so it is not a real operand.
+fn is_fully_masked(masked: &str) -> bool {
+    !masked.is_empty() && masked.chars().all(|c| c == MASK_CHAR)
 }
 
 /// Remove heredoc BODY lines from a multi-line command, keeping every non-body line
@@ -193,18 +206,108 @@ fn read_heredoc_word(s: &str) -> (String, usize) {
     (s[..k].to_string(), k)
 }
 
-/// Split a command into segments on the shell sequencing/pipe operators and newlines.
-/// This is lexical: it does NOT respect quoting of an operator (a `;` inside a quoted
-/// string would still split) — acceptable for a heuristic, and rare in practice.
-fn split_segments(command: &str) -> Vec<&str> {
-    // Replace the multi-char operators with a single sentinel byte we then split on,
-    // without allocating per-segment: walk and cut. We do a simple manual scan.
+/// A "shell mask" of a command: a byte-for-byte parallel string in which every character
+/// that lives INSIDE a single/double-quoted span, or inside a `>(…)` / `<(…)` process-
+/// substitution BODY, is replaced by [`MASK_CHAR`] (a control byte that occurs in no real
+/// command and is whitespace to no tokenizer). The surrounding quotes / procsub head/tail
+/// punctuation are themselves left intact, so token boundaries are preserved.
+///
+/// Why: the parser is otherwise quote-UNAWARE, so a `>`/`<` inside a quoted echo/printf
+/// prose or grep regex (`echo "idle >8min"`, `grep 'cur > base'`) was read as a real
+/// redirect and the next quoted word fabricated as a file; likewise a process-sub body
+/// `tee >(grep foo) /real.log` leaked `foo` as a file. Masking the INTERIOR (not the bytes
+/// length, so positions still line up with the original) lets operator/redirect detection
+/// run on the mask — where those inner `>`/words are now [`MASK_CHAR`], invisible — while
+/// the ORIGINAL bytes are still sliced for the emitted path (so a genuinely-quoted single
+/// redirect target `> "/tmp/a.txt"` still resolves via `strip_quotes`). This kills the
+/// quoted-`>` fabrication class without rewriting the whitespace tokenizer.
+const MASK_CHAR: char = '\u{1}';
+
+/// The masked byte: `0x01` (the `MASK_CHAR` codepoint, one ASCII byte). Used so the mask is
+/// built byte-for-byte (BYTE-LENGTH-PRESERVING vs the input — critical for the parallel
+/// offsets used by `masked_tokens` / `split_segments`).
+const MASK_BYTE: u8 = 0x01;
+
+/// Build the [`MASK_CHAR`] mask for a command (BYTE-length-identical to the input, so any
+/// offset/slice valid on one is valid on the other). Quote state and process-sub depth are
+/// tracked with a tiny lexical scanner: a quote opens on an unescaped `'`/`"` and closes on
+/// the matching quote; a `>(`/`<(` opens a procsub body whose depth is balanced by `(`/`)`.
+/// Inside EITHER, EVERY byte is masked to [`MASK_BYTE`] (so a multi-byte UTF-8 char inside a
+/// quote masks to N mask-bytes — the span boundaries are ASCII quotes/parens, which sit on
+/// char boundaries, so the result is still valid UTF-8). Outside spans, the ORIGINAL bytes
+/// are copied verbatim (the whole multi-byte char, never `byte as char` which would corrupt
+/// the length). Best-effort: it does not model `\`-escapes outside double quotes precisely,
+/// acceptable for a heuristic.
+fn shell_mask(command: &str) -> String {
     let bytes = command.as_bytes();
+    let mut mask: Vec<u8> = Vec::with_capacity(command.len());
+    let mut quote: Option<u8> = None; // the open quote byte, if inside a quoted span
+    let mut procsub_depth: usize = 0; // `(` nesting inside an open `>(`/`<(` body
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if let Some(q) = quote {
+            // Inside a quoted span: mask every interior byte; the closing quote ends it.
+            if c == q {
+                quote = None;
+                mask.push(c); // the closing quote itself is structural, not masked.
+            } else {
+                mask.push(MASK_BYTE);
+            }
+            i += 1;
+            continue;
+        }
+        if procsub_depth > 0 {
+            // Inside a process-sub body: mask EVERY interior byte (incl. the matching close
+            // `)`), tracking `(`/`)` nesting so the outermost close ends the span. Masking the
+            // closing `)` too means a body token like `foo)` from `>(grep foo)` becomes fully
+            // masked and is dropped — without it, the surviving `)` would let
+            // `trim_structural_tail` peel back to `foo` and fabricate a file.
+            match c {
+                b'(' => procsub_depth += 1,
+                b')' => procsub_depth -= 1,
+                _ => {}
+            }
+            mask.push(MASK_BYTE);
+            i += 1;
+            continue;
+        }
+        // Outside any span. A `>(`/`<(` opens a process-sub body.
+        if (c == b'>' || c == b'<') && bytes.get(i + 1) == Some(&b'(') {
+            mask.push(c); // keep the `>(`/`<(` head so `has_syntax_noise` still sees it.
+            mask.push(b'(');
+            procsub_depth = 1;
+            i += 2;
+            continue;
+        }
+        if c == b'\'' || c == b'"' {
+            quote = Some(c);
+            mask.push(c); // the opening quote is structural.
+            i += 1;
+            continue;
+        }
+        mask.push(c); // copy the verbatim byte (whole multi-byte chars stay intact).
+        i += 1;
+    }
+    // Valid UTF-8: unmasked bytes are copied verbatim and masked spans only ever cover whole
+    // chars (their boundaries are ASCII quotes/parens). `from_utf8` therefore never fails;
+    // the fallback keeps us panic-free even on a pathological input.
+    String::from_utf8(mask).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
+}
+
+/// Split a command into segments on the shell sequencing/pipe operators and newlines,
+/// QUOTE/PROCSUB-AWARE via `mask` (a parallel string where in-quote / in-procsub bytes are
+/// [`MASK_CHAR`]). An operator is honored only where the mask still shows it — a `;`/`|`
+/// inside a quoted string is masked, so it no longer splits (fixing the prior "a `;` inside
+/// a quote splits" limitation as a side benefit). Each returned slice is taken from the
+/// ORIGINAL `command` (so the segment text is verbatim).
+fn split_segments<'a>(command: &'a str, mask: &str) -> Vec<&'a str> {
+    let mbytes = mask.as_bytes();
     let mut segments = Vec::new();
     let mut start = 0usize;
     let mut i = 0usize;
-    while i < bytes.len() {
-        let two = bytes.get(i..i + 2);
+    while i < mbytes.len() {
+        let two = mbytes.get(i..i + 2);
         // `>|` is bash's noclobber-OVERRIDE truncate redirect, NOT a pipe — the `|` must
         // not split the segment (else the redirect path is orphaned). Skip both bytes so
         // the `>|<path>` stays intact for `collect_redirections` to read.
@@ -213,7 +316,7 @@ fn split_segments(command: &str) -> Vec<&str> {
             continue;
         }
         let is_two_op = matches!(two, Some(b"&&") | Some(b"||"));
-        let is_one_op = matches!(bytes[i], b';' | b'|' | b'\n');
+        let is_one_op = matches!(mbytes[i], b';' | b'|' | b'\n');
         if is_two_op {
             segments.push(&command[start..i]);
             i += 2;
@@ -230,28 +333,70 @@ fn split_segments(command: &str) -> Vec<&str> {
     segments
 }
 
-/// Parse one segment: handle redirection targets anywhere, then dispatch on the leading
-/// command verb.
-fn parse_segment(segment: &str, out: &mut Vec<BashMutation>) {
-    // Tokenize on ASCII whitespace (lexical — no quote-aware splitting; a quoted path
-    // with spaces is handled by `strip_quotes` only when it is a single token, which is
-    // the common `"a file"` → one token case after the shell would have parsed it; for
-    // a heuristic we accept the limitation and still strip surrounding quotes).
-    let tokens: Vec<&str> = segment.split_whitespace().collect();
-    if tokens.is_empty() {
+/// One whitespace-split token of a segment, paired with its MASK (same length): `orig` is
+/// the verbatim text used for the emitted path, `masked` is what operator/redirect tests
+/// read so an in-quote / in-procsub `>`/`<`/word is invisible. A token whose masked form is
+/// ALL [`MASK_CHAR`] (e.g. the `foo` from `>(grep foo)`) carries no real operand and is
+/// dropped before path emission.
+#[derive(Clone, Copy)]
+struct MaskedTok<'a> {
+    orig: &'a str,
+    masked: &'a str,
+}
+
+/// Tokenize a segment (and its parallel mask) on whitespace as the mask sees it, returning
+/// `(orig, masked)` token pairs. Whitespace is detected on the ORIGINAL bytes (a masked
+/// interior byte is [`MASK_CHAR`], never whitespace, so a quoted `"a b"` stays ONE token —
+/// matching the prior single-token behavior).
+fn masked_tokens<'a>(segment: &'a str, mask: &'a str) -> Vec<MaskedTok<'a>> {
+    let bytes = segment.as_bytes();
+    let mut toks = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        toks.push(MaskedTok {
+            orig: &segment[start..i],
+            masked: &mask[start..i],
+        });
+    }
+    toks
+}
+
+/// Parse one segment (with its parallel mask) — handle redirection targets anywhere, then
+/// dispatch on the leading command verb.
+fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutation>) {
+    let toks = masked_tokens(segment, mask);
+    if toks.is_empty() {
         return;
     }
 
     // Redirection targets (`>`/`>>`, incl. fd-qualified `2>`/`1>`/`&>`) can appear after
-    // ANY command; scan all tokens.
-    collect_redirections(&tokens, out);
+    // ANY command; scan all tokens (operator detection reads the MASK so an in-quote `>`
+    // is invisible; the emitted path is sliced from the original).
+    collect_redirections(&toks, out);
 
     // Output-path FLAGS (`--junit-xml=…`, `--report-path …`) can likewise appear under
     // any command, so scan every segment for the allowlisted output flags.
-    collect_flag_outputs(&tokens, out);
+    collect_flag_outputs(&toks, out);
+
+    // Drop pure-mask tokens (a process-sub body word like `foo` from `>(grep foo)`) BEFORE
+    // verb dispatch — they are not real operands. The remaining tokens carry at least one
+    // unmasked byte, so their original text is a genuine command/operand.
+    let cmd_all: Vec<&str> = toks
+        .iter()
+        .filter(|t| !is_fully_masked(t.masked))
+        .map(|t| t.orig)
+        .collect();
 
     // Strip leading `sudo` and `env VAR=val` prefixes to find the real command verb.
-    let cmd_tokens = strip_prefixes(&tokens);
+    let cmd_tokens = strip_prefixes(&cmd_all);
     let Some((&verb_tok, operands)) = cmd_tokens.split_first() else {
         return;
     };
@@ -590,14 +735,19 @@ fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
 /// `--name=<path>` (inline) and `--name <path>` (the value is the next token). Only the
 /// [`OUTPUT_FLAGS`] names qualify, keeping precision tight. Independent of the segment's
 /// leading verb (a test runner names its report path the same way regardless of verb).
-fn collect_flag_outputs(tokens: &[&str], out: &mut Vec<BashMutation>) {
+fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
     let mut i = 0usize;
     while i < tokens.len() {
         let tok = tokens[i];
-        if let Some(name_eq) = tok.strip_prefix("--") {
-            if let Some((name, value)) = name_eq.split_once('=') {
-                // `--name=<path>` inline form.
+        // Flag NAME detection reads the MASK so a `--output` that is part of a quoted prose
+        // arg is never treated as a real output flag; the path VALUE is sliced from the
+        // original token (a quoted destination stays intact).
+        if let Some(name_eq) = tok.masked.strip_prefix("--") {
+            if let Some((name, _)) = name_eq.split_once('=') {
+                // `--name=<path>` inline form. The `--name=` prefix is unmasked ASCII, so
+                // its byte length is the same in the original — slice the value from there.
                 if OUTPUT_FLAGS.contains(&name) {
+                    let value = &tok.orig[name.len() + 3..]; // `--` + name + `=`
                     if let Some(path) = concrete_path(value) {
                         out.push(BashMutation {
                             path,
@@ -613,8 +763,8 @@ fn collect_flag_outputs(tokens: &[&str], out: &mut Vec<BashMutation>) {
             // `--verbose` as a fabricated path and skip a real flag).
             if OUTPUT_FLAGS.contains(&name_eq) {
                 if let Some(next) = tokens.get(i + 1) {
-                    if !next.starts_with('-') {
-                        if let Some(path) = concrete_path(next) {
+                    if !next.masked.starts_with('-') {
+                        if let Some(path) = concrete_path(next.orig) {
                             out.push(BashMutation {
                                 path,
                                 verb: "flag-output",
@@ -640,37 +790,46 @@ fn collect_flag_outputs(tokens: &[&str], out: &mut Vec<BashMutation>) {
 /// fd-DUP (the redirect target is another fd, not a path) and the `/dev/null`-class
 /// sinks carry no real path and emit nothing (handled by [`path_operand`] +
 /// [`is_dev_sink`]).
-fn collect_redirections(tokens: &[&str], out: &mut Vec<BashMutation>) {
+fn collect_redirections(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
     let mut i = 0usize;
     while i < tokens.len() {
         let tok = tokens[i];
-        // Peel an optional leading fd qualifier (`&` or digits) to expose a `>`/`>>`.
-        let body = strip_fd_qualifier(tok);
+        // Operator detection reads the MASK: an in-quote / in-procsub `>` is [`MASK_CHAR`]
+        // there, so it never matches a redirect operator. The emitted PATH is sliced from
+        // the original (next) token so a genuinely-quoted target still resolves.
+        let body = strip_fd_qualifier(tok.masked);
         // A bash noclobber-override `>|` is a plain truncate redirect (the `|` only
         // disables noclobber): `>|` reads as `>`, `>|file` as `>file`.
         if body == ">|" {
             if let Some(next) = tokens.get(i + 1) {
-                push_redirect_target(next, ">", out);
+                push_redirect_target(next.orig, ">", out);
             }
             i += 1;
-        } else if let Some(rest) = body.strip_prefix(">|") {
-            push_redirect_target(rest, ">", out);
+        } else if body.starts_with(">|") {
+            // The operator is `>|` (possibly fd-qualified like `2>|file`); the attached
+            // path follows it in the ORIGINAL token at the qualifier+`>|` byte offset.
+            let off = tok.masked.len() - body.len() + 2;
+            push_redirect_target(&tok.orig[off..], ">", out);
             i += 1;
         } else if body == ">>" || body == ">" {
-            // A bare (possibly fd-qualified) operator: its path is the NEXT token.
+            // A bare (mask-confirmed) operator: its path is the NEXT token.
             let verb = if body == ">>" { ">>" } else { ">" };
             if let Some(next) = tokens.get(i + 1) {
-                push_redirect_target(next, verb, out);
+                push_redirect_target(next.orig, verb, out);
             }
             i += 1;
-        } else if let Some(rest) = body.strip_prefix(">>") {
-            // An attached append `…>>file` (incl. `2>>file`); `rest` is the path.
-            push_redirect_target(rest, ">>", out);
+        } else if body.starts_with(">>") {
+            // An attached append `…>>file` (incl. `2>>file`). Slice the original token at
+            // the offset the fd-qualifier+`>>` consumed in the MASK (the qualifier and the
+            // operator are ASCII single-byte, so the mask offset is the original offset).
+            let off = tok.masked.len() - body.len() + 2;
+            push_redirect_target(&tok.orig[off..], ">>", out);
             i += 1;
-        } else if let Some(rest) = body.strip_prefix('>') {
-            // An attached truncate `…>file` (incl. `2>file`, `&>file`); `rest` is the
-            // path. A bare `2>&1` fd-dup leaves `rest = "&1"`, which is not a path.
-            push_redirect_target(rest, ">", out);
+        } else if body.starts_with('>') {
+            // An attached truncate `…>file` (incl. `2>file`, `&>file`). A bare `2>&1` fd-dup
+            // leaves the rest = `&1`, which `push_redirect_target` rejects.
+            let off = tok.masked.len() - body.len() + 1;
+            push_redirect_target(&tok.orig[off..], ">", out);
             i += 1;
         } else {
             i += 1;
@@ -746,7 +905,7 @@ fn path_operand(token: &str) -> Option<String> {
         return None; // a KEY=VALUE operand, not a path.
     }
     if has_unresolved_var(stripped) {
-        return None; // an unexpandable `$VAR` pseudo-path — never fabricate it.
+        return None; // an unexpandable `$VAR`/`~` pseudo-path — never fabricate it.
     }
     // After the trailing-tail trim, the sink test must run AGAIN: `2>/dev/null)` trims to
     // `/dev/null`, the dominant fabricated-path class (a `)` glued on by a command
@@ -855,11 +1014,14 @@ fn concrete_path(token: &str) -> Option<String> {
     Some(path)
 }
 
-/// True when a token carries an UNRESOLVED shell variable reference (`$NAME`,
-/// `${NAME}`, `$1`, …) we cannot expand. Such a token can never be turned into a real
-/// path without the runtime environment, so emitting it would fabricate a pseudo-path.
+/// True when a token carries an UNRESOLVED shell expansion we cannot perform — a variable
+/// reference (`$NAME`, `${NAME}`, `$1`, …) OR a leading `~`/`~user` home expansion (`~/x`,
+/// `~`). Such a token can never be turned into the real on-disk path without the runtime
+/// environment, so emitting it verbatim would fabricate a path that does not exist as
+/// written (the module doc's precision contract, line 39). The `~` test fires only on a
+/// LEADING `~` (a mid-path `~` like `/tmp/a~b` is a literal backup-file char, kept).
 fn has_unresolved_var(token: &str) -> bool {
-    token.contains('$')
+    token.contains('$') || token.starts_with('~')
 }
 
 /// Strip a single matched pair of surrounding single or double quotes.
@@ -1827,6 +1989,205 @@ mod tests {
             !got.iter().any(|p| p.contains("fake")),
             "body leaked: {got:?}"
         );
+    }
+
+    // ── R2: quote-aware redirect detection (the dominant remaining fabrication class) ──
+
+    #[test]
+    fn quoted_inline_redirect_does_not_fabricate_a_file() {
+        // The MUST-FIX regression: a `>` inside a quoted echo/printf prose or a quoted regex
+        // is NOT a real redirect, and the next word inside the quote is NOT a file. The
+        // exact oracle commands that fabricated `*dt` / `8min` / `cover` / `base`.
+        // A real redirect AFTER the quoted arg is still caught.
+        assert_eq!(
+            paths(r#"echo "  wf transcript idle >8min OR gone" > /tmp/realfile.txt"#),
+            vec![("/tmp/realfile.txt".to_string(), ">")],
+            "in-quote `>8min` must not fabricate `8min`; the real redirect is kept"
+        );
+        // A quoted grep -E regex carrying `> base` / `cur > base` fabricated `base` before.
+        assert!(
+            just_paths(r#"grep -nE 'cur > base' "$JSONL""#).is_empty(),
+            "in-quote regex `>` must not fabricate a file"
+        );
+        assert!(
+            just_paths(r#"grep -rnE "...|> *dt|interval" file.txt"#).is_empty(),
+            "in-quote regex `> *dt` must not fabricate `*dt`"
+        );
+        // printf prose with a `>` (`x > cover`) — the em-dash / CJK-bearing class.
+        assert!(
+            just_paths(r#"printf 'layout x > cover scaled x'"#).is_empty(),
+            "in-quote prose `>` must not fabricate a file"
+        );
+        // The captured monitor's `echo ">>> NO compact"` / `echo "  >> ABSENT"` family.
+        assert!(just_paths(r#"echo ">>> NO compact""#).is_empty());
+        assert!(just_paths(r#"echo "  >> ABSENT""#).is_empty());
+        assert!(just_paths(r#"echo "  >> NOT assigned""#).is_empty());
+    }
+
+    #[test]
+    fn process_sub_body_operand_does_not_leak() {
+        // `tee >(grep foo) /tmp/real.log`: the real sink is kept; the procsub BODY arg `foo`
+        // must NOT be fabricated as a `tee` file (its surviving `)` previously let
+        // `trim_structural_tail` peel it back to `foo`).
+        let got = paths("tee >(grep foo) /tmp/real.log");
+        assert!(
+            got.contains(&("/tmp/real.log".to_string(), "tee")),
+            "real sink lost: {got:?}"
+        );
+        assert!(
+            !got.iter().any(|(p, _)| p == "foo" || p.contains("grep")),
+            "process-sub body leaked: {got:?}"
+        );
+        // Nested / fd-qualified procsub bodies likewise contribute no file.
+        assert!(
+            !just_paths("make 2> >(tee /tmp/e.log >&2) 1> >(cat)")
+                .iter()
+                .any(|p| p == "cat" || p.contains("tee>") || p == "foo"),
+            "nested procsub body leaked"
+        );
+    }
+
+    #[test]
+    fn tilde_home_path_is_dropped_per_contract() {
+        // The module-doc (line 39) precision contract: a `~`-bearing token yields nothing
+        // (the shell would have expanded `~`; the literal `~/x` is not the real on-disk
+        // path). Previously `has_unresolved_var` checked only `$`, so these leaked.
+        assert!(paths("echo x > ~/notes.txt").is_empty());
+        assert!(paths("cp a.txt ~/dest.txt").is_empty());
+        assert!(paths("touch ~/scratch").is_empty());
+        assert!(paths("dd if=/dev/zero of=~/img.bin").is_empty());
+        // A LEADING `~` only: a mid-path literal `~` (a backup-file char) is still a path.
+        assert_eq!(
+            paths("rm /tmp/file~"),
+            vec![("/tmp/file~".to_string(), "rm")]
+        );
+    }
+
+    #[test]
+    fn shell_mask_input_procsub_and_quote_arms() {
+        // An INPUT process-sub `<(…)` (the `<` open arm of the mask) is masked just like
+        // `>(…)`, so a `diff <(a) <(b)` leaks no inner word.
+        let got = just_paths("diff <(sort x) <(sort y) > /tmp/diff.out");
+        assert!(
+            got.contains(&"/tmp/diff.out".to_string()),
+            "real redirect lost: {got:?}"
+        );
+        assert!(
+            !got.iter()
+                .any(|p| p == "x" || p == "y" || p.contains("sort")),
+            "input-procsub body leaked: {got:?}"
+        );
+        // A single-quoted span inside a double-quoted command and vice-versa: the OUTER
+        // quote governs (the inner quote byte is just masked content), so neither inner
+        // `>` fabricates a file.
+        assert!(just_paths(r#"echo "it's a > test""#).is_empty());
+        assert!(just_paths(r#"echo 'say "a > b"'"#).is_empty());
+        // The mask preserves a real redirect that follows a fully-quoted argument.
+        assert_eq!(
+            paths(r#"printf '%s' "a > b" > /tmp/p.txt"#),
+            vec![("/tmp/p.txt".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn shell_mask_nested_procsub_and_fd_qualified_forms() {
+        // A NESTED process-sub `>( … >(…) …)` exercises the `procsub_depth += 1` arm; the
+        // whole nested body is masked, so no inner word leaks.
+        let got = just_paths("tee >(grep a >(sort) b) /tmp/real.log");
+        assert!(
+            got.contains(&"/tmp/real.log".to_string()),
+            "real sink lost: {got:?}"
+        );
+        assert!(
+            !got.iter()
+                .any(|p| p == "a" || p == "b" || p.contains("sort") || p.contains("grep")),
+            "nested procsub body leaked: {got:?}"
+        );
+        // A fd-qualified `2>|file` attached form (the `>|` offset arm with a qualifier).
+        assert_eq!(
+            paths("svc 2>|/tmp/q.log"),
+            vec![("/tmp/q.log".to_string(), ">")]
+        );
+        // A fd-qualified attached append `2>>file` and truncate `2>file` still slice the
+        // path from the original at the post-qualifier offset.
+        assert_eq!(
+            paths("svc 2>>/tmp/a.log"),
+            vec![("/tmp/a.log".to_string(), ">>")]
+        );
+        assert_eq!(
+            paths("svc 2>/tmp/b.log"),
+            vec![("/tmp/b.log".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn shell_mask_is_byte_length_preserving_with_multibyte_utf8() {
+        // REGRESSION: the mask must be BYTE-length-identical to the input even with CJK /
+        // emoji inside (and outside) quotes — else `masked_tokens` slices on a non-char
+        // boundary and panics (caught by the captured session, which is dense CJK).
+        for cmd in [
+            r#"echo "x x > cover x" > /tmp/out.txt"#,
+            r#"printf 'x >per-mode x' && touch /tmp/x.txt"#,
+            "grep -nE 'cur > base' x.txt",
+            r#"echo "🛠 build >done" > /tmp/x"#,
+            "tee >(grep x) /tmp/real.log",
+        ] {
+            let m = shell_mask(cmd);
+            assert_eq!(
+                m.len(),
+                cmd.len(),
+                "mask byte-length must equal input for {cmd:?}"
+            );
+            // And the parse itself must not panic + must keep only real paths.
+            let got = just_paths(cmd);
+            assert!(
+                got.iter()
+                    .all(|p| p.starts_with('/') || !p.chars().any(|c| c as u32 > 127)),
+                "no CJK-prose fragment should surface as a file: {got:?}"
+            );
+        }
+        // The real redirect after a CJK-bearing quoted arg is still caught.
+        assert_eq!(
+            just_paths(r#"echo "x > cover" > /tmp/cjk-ok.txt"#),
+            vec!["/tmp/cjk-ok.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn quote_aware_split_does_not_break_on_in_quote_sequencing() {
+        // A `;`/`|`/`&&` INSIDE a quoted string no longer splits the segment (a side
+        // benefit of the mask), so a real trailing redirect after the quote is still found
+        // and the in-quote operator fabricates nothing.
+        assert_eq!(
+            paths(r#"echo "a; b | c && d" > /tmp/seq.log"#),
+            vec![("/tmp/seq.log".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn shell_mask_and_helpers_direct_coverage() {
+        // The mask masks quote interiors + procsub bodies, preserving byte length so offsets
+        // line up with the original.
+        let cmd = r#"echo "a>b" > /tmp/x"#;
+        let m = shell_mask(cmd);
+        assert_eq!(m.len(), cmd.len(), "mask is byte-length-preserving");
+        // The in-quote `>` is masked; the real redirect `>` after the quote is intact.
+        assert!(!m.contains("a>b"), "in-quote `>` should be masked: {m:?}");
+        assert!(m.ends_with("> /tmp/x"), "real redirect kept: {m:?}");
+        // A procsub body is fully masked (so its tokens drop).
+        let m2 = shell_mask("tee >(grep foo) /tmp/x");
+        assert!(!m2.contains("grep foo"), "procsub body masked: {m2:?}");
+        assert!(m2.contains(">("), "the `>(` head is kept");
+        // is_fully_masked: a body word is all-mask; a real word is not.
+        let body = shell_mask(">(grep foo)"); // `>(` head kept, rest masked
+        assert!(is_fully_masked(&body[2..]), "body after `>(` is all mask");
+        assert!(!is_fully_masked("abc"));
+        assert!(!is_fully_masked(""), "empty is not fully-masked");
+        // has_unresolved_var now rejects a leading `~` as well as `$`.
+        assert!(has_unresolved_var("~/x"));
+        assert!(has_unresolved_var("$VAR"));
+        assert!(!has_unresolved_var("/tmp/a~b")); // mid-path `~` is a literal
+        assert!(!has_unresolved_var("/tmp/clean"));
     }
 
     #[test]

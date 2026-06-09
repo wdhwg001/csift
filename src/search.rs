@@ -622,36 +622,14 @@ fn make_hit(category: Category, text: &str, ts: Option<String>, tool_name: Optio
     }
 }
 
-/// Truncate to [`EXCERPT_MAX`] chars with an explicit `… (+N chars)` marker
-/// (CHARACTER-counted so multi-byte UTF-8 truncates cleanly). Never silent
-/// (SPEC §0, §8.1).
+/// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 fn truncate_excerpt(s: &str) -> String {
-    let total = s.chars().count();
-    if total <= EXCERPT_MAX {
-        return s.to_string();
-    }
-    let kept: String = s.chars().take(EXCERPT_MAX).collect();
-    format!("{kept}… (+{} chars)", total - EXCERPT_MAX)
+    crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
 
-/// Parse a `--turn-range START..END` string into an inclusive `(lo, hi)` pair.
-/// Both bounds are 0-based, inclusive; `END < START` is an error.
+/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
 fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    let (a, b) = s
-        .split_once("..")
-        .with_context(|| format!("--turn-range must be START..END, got {s:?}"))?;
-    let lo: usize = a
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range start is not a non-negative integer: {a:?}"))?;
-    let hi: usize = b
-        .trim()
-        .parse()
-        .with_context(|| format!("--turn-range end is not a non-negative integer: {b:?}"))?;
-    if hi < lo {
-        bail!("--turn-range end ({hi}) is before start ({lo})");
-    }
-    Ok((lo, hi))
+    crate::text::parse_range(s, "--turn-range", false)
 }
 
 // ── Rendering ──
