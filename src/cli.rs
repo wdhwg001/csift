@@ -383,9 +383,11 @@ impl ListArgs {
         filter warns that it will emit a lot).\n\n\
         CATEGORIES (`-t`, repeatable): thinking | user | tool | tool-response | agent. \
         With none given, all five are eligible. `user` is the genuine human turn PLUS \
-        answers to AskUserQuestion; it excludes tool_result carriers. `tool` includes \
+        the answer to an AskUserQuestion (the full Q+options+answer unit) PLUS a \
+        plan-rejection-with-message (+ a [plan: …] pointer); it excludes plain \
+        tool_result carriers, interrupts, and slash-command wrappers. `tool` includes \
         AskUserQuestion tool_use calls.\n\n\
-        WINDOWING: `--turn-range START..END` (inclusive, 0-based on genuine-user \
+        WINDOWING: `--turn-range START..END` (inclusive, 0-based on turn-boundary \
         order) is mutually exclusive with `--since`/`--until`. Time bounds accept \
         ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
         `3d`, `90m`, `45s`, `1w`) meaning \"that long ago\" in the system local timezone.\n\n\
@@ -469,7 +471,8 @@ pub struct SearchArgs {
     #[arg(long)]
     pub multiline: bool,
 
-    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
+    /// an answered AskUserQuestion, or a plan-rejection-with-message).
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
@@ -532,8 +535,13 @@ pub enum AgentKindFilter {
         a workflow journal carries a `result` event for the agent (or the transcript \
         terminates cleanly), else `running`/`unknown`.\n\n\
         `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
-        timezone) filter to subagents whose START falls in the window by default; \
-        `--by completion` filters on completion time instead.",
+        timezone) filter to subagents whose TRIGGER time (the parent tool_use ts — the \
+        true spawn instant) falls in the window by default; `--by start` uses the \
+        transcript's first-record ts, `--by completion` the last.\n\n\
+        TOPOLOGY: `--tree` renders parent→child structure (workflow runs as parent nodes \
+        of their agents). `--agent <hex>` grabs ONE subagent with its returned message; \
+        `--returned-message` adds the 3-way-resolved returned message to every row; \
+        `--with-files` attaches each node's files-changed list.",
     after_help = "EXAMPLES\n  \
           csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagents\n  \
           csift agents .                                                   # every session under this project\n  \
@@ -562,8 +570,8 @@ pub struct AgentsArgs {
     #[arg(long = "kind", value_enum)]
     pub kinds: Vec<AgentKindFilter>,
 
-    /// Lower time bound (ISO8601 or relative `2h`/`3d`/…). Filters by START time by
-    /// default (`--by completion` switches to completion time).
+    /// Lower time bound (ISO8601 or relative `2h`/`3d`/…). Filters by TRIGGER time by
+    /// default (`--by start|completion` switches axis).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
@@ -571,10 +579,31 @@ pub struct AgentsArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Which timestamp `--since`/`--until` filter on: `start` (default) or
-    /// `completion`.
-    #[arg(long = "by", value_enum, default_value_t = AgentTimeAxis::Start)]
+    /// Which timestamp `--since`/`--until` filter on: `trigger` (DEFAULT — the true
+    /// instant the parent spawned the subagent), `start` (the subagent's first transcript
+    /// record, which LAGS the trigger by seconds), or `completion`.
+    #[arg(long = "by", value_enum, default_value_t = AgentTimeAxis::Trigger)]
     pub by: AgentTimeAxis,
+
+    /// Render the parent→child topology TREE (workflow runs as parent nodes of their
+    /// agents) instead of a flat list. JSON nests `children`; text indents by depth.
+    #[arg(long)]
+    pub tree: bool,
+
+    /// Grab ONE subagent by its bare-hex id: prints its full node incl. the returned
+    /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
+    #[arg(long, value_name = "HEX")]
+    pub agent: Option<String>,
+
+    /// Attach each node's files-changed list (reuses the `files` extractors over the
+    /// subagent's own transcript). Off by default — it re-scans each transcript.
+    #[arg(long = "with-files")]
+    pub with_files: bool,
+
+    /// Include each subagent's RETURNED MESSAGE (3-way resolved). Omitted by default
+    /// (a returned message can be large); always included for a single `--agent` grab.
+    #[arg(long = "returned-message")]
+    pub returned_message: bool,
 
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
@@ -584,8 +613,13 @@ pub struct AgentsArgs {
 /// Which lifecycle timestamp the `agents` time window filters on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum AgentTimeAxis {
-    /// Filter on the subagent's START timestamp (first transcript record).
+    /// Filter on the TRUE TRIGGER instant — the parent `Task`/`Agent` tool_use timestamp
+    /// (the correct "when was it triggered" axis). The DEFAULT. Falls back to the start
+    /// timestamp for a subagent whose spawn could not be located.
     #[default]
+    Trigger,
+    /// Filter on the subagent's START timestamp (first transcript record; lags the
+    /// trigger by seconds).
     Start,
     /// Filter on the subagent's COMPLETION timestamp (last transcript record).
     Completion,
@@ -685,7 +719,8 @@ pub struct FilesArgs {
     #[arg(long, group = "detail")]
     pub timeline: bool,
 
-    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
+    /// an answered AskUserQuestion, or a plan-rejection-with-message).
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
@@ -836,7 +871,8 @@ pub struct RecoverArgs {
     #[arg(long, group = "mode")]
     pub plan: bool,
 
-    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
+    /// an answered AskUserQuestion, or a plan-rejection-with-message).
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
@@ -914,6 +950,16 @@ impl RecoverArgs {
         `… [+K chars, L lines elided] …` marker; the assistant head is larger than the \
         user head (its prose front-loads context, back-loads the decision). Nothing is \
         ever fabricated or silently dropped.\n\n\
+        AGENT MESSAGES (`--agent-msgs`, default `eot-only` = non-breaking): a single \
+        genuine-user turn can own a LONG run of agent messages (a debugging/build chain \
+        the model narrates) that the summary clips to one §9 quote. `eot-only` restores \
+        just the last (today's behavior). `rich` ALSO restores the first/middle messages \
+        that carry important info — a count, a commit hash, a `file.rs:NNN` ref, backtick \
+        code, or a finding/decision lexeme, or that are clearly long — collapsing pure \
+        \"let me look into this\" declarations into a `△ L… [X agent messages, Y tool \
+        calls, Z failed]` placeholder (only on runs longer than `--agent-run-threshold`, \
+        default 6). `all` keeps every agent message. `--profile heavy|light` bundles the \
+        thresholds; explicit threshold flags override the profile.\n\n\
         DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
         summary)` and DEMOTED (selected only after non-dup turns) — never silently dropped \
         (a false positive must not lose a real turn).\n\n\
@@ -928,7 +974,11 @@ impl RecoverArgs {
           csift turns <uuid> --budget 40000 --format json   # machine-readable, line-numbered\n  \
           csift turns <uuid> --round-trip-fraction 0.6      # weight harder toward complete round-trips\n  \
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
-          csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary"
+          csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary\n  \
+          csift turns <uuid> --agent-msgs eot-only          # force the old single-EOT (last-message-only) output\n  \
+          csift turns <uuid> --agent-rich-min-chars 200     # default mode, lower bar → keep more first/middle messages\n  \
+          csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)\n  \
+          csift turns <uuid> --agent-msgs all               # every agent message, no filtering"
 )]
 pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
@@ -980,7 +1030,68 @@ pub struct TurnsArgs {
     #[arg(long = "max-compactions", value_name = "N", default_value_t = 0)]
     pub max_compactions: usize,
 
-    /// Inclusive turn-index range `START..END` (a turn = a genuine-user message).
+    /// Per-turn agent-message policy (MASTER switch for the multi-agent-message model).
+    /// `longest` (DEFAULT) keeps the LONGEST agent message — the substantive Rich Response,
+    /// which is frequently a MIDDLE message, not the last ~50-char throwaway wrap-up that
+    /// the old `agents.last()` default silently kept — PLUS the first message when it is
+    /// substantive (`>= --agent-rich-min-chars`) PLUS each rich middle (a number, commit
+    /// hash, file:line, backtick code, or finding/decision lexeme, or clearly long),
+    /// collapsing the rest into a placeholder. `eot-only` forces the old single-EOT
+    /// behavior (only each turn's last agent message — byte-identical to the pre-feature
+    /// output). `rich` keeps the last always + the first by position privilege + each
+    /// non-droppable middle, only on a long run (`> --agent-run-threshold` agent messages).
+    /// `all` keeps every agent message.
+    #[arg(long = "agent-msgs", value_enum, default_value_t = crate::turns::AgentMsgMode::Longest)]
+    pub agent_msgs: crate::turns::AgentMsgMode,
+
+    /// Only richness-filter a turn whose agent-message count EXCEEDS this (default 6;
+    /// short runs keep every message verbatim). Only consulted in `--agent-msgs rich`.
+    #[arg(long = "agent-run-threshold", value_name = "N", default_value_t = 6)]
+    pub agent_run_threshold: usize,
+
+    /// An agent message at least this many chars is kept on length alone (default 280 ≈
+    /// 1.5× the measured 184-char median middle). Consulted in `--agent-msgs longest`
+    /// (gates the "keep the first if substantive" + the rich middles) AND `rich`.
+    #[arg(long = "agent-rich-min-chars", value_name = "N", default_value_t = 280)]
+    pub agent_rich_min_chars: usize,
+
+    /// A signal-less intent-verb-opening agent message SHORTER than this is droppable;
+    /// at/above it is kept (default 200 — the pure-declaration band). Only consulted in
+    /// `--agent-msgs rich`.
+    #[arg(
+        long = "agent-declaration-max-chars",
+        value_name = "N",
+        default_value_t = 200
+    )]
+    pub agent_declaration_max_chars: usize,
+
+    /// Keep a turn's FIRST agent message by position privilege (first-matters — the
+    /// opening message often states the plan or an early finding; DEFAULT).
+    /// `--no-keep-first` drops the privilege and decides the first as a MIDDLE (kept
+    /// unless it is a proven pure declaration; a rich first still survives). Only
+    /// meaningful in `--agent-msgs rich`.
+    #[arg(
+        long = "keep-first",
+        overrides_with = "no_keep_first",
+        default_value_t = true
+    )]
+    pub keep_first: bool,
+
+    /// Drop the first-message position privilege (see `--keep-first`). Overrides it.
+    #[arg(long = "no-keep-first")]
+    pub no_keep_first: bool,
+
+    /// Convenience threshold bundle, applied BEFORE the individual flags (so an explicit
+    /// flag overrides the profile). `heavy` = maximal fidelity (threshold 4, rich-min 200,
+    /// declaration-max 140); `light` = lean (threshold 8, rich-min 360, declaration-max
+    /// 240). Neither changes the master `--agent-msgs` mode — with no `--agent-msgs` the
+    /// mode stays the default `longest` (with the profile's thresholds); add `--agent-msgs
+    /// rich` to also switch the keep-set.
+    #[arg(long = "profile", value_enum)]
+    pub profile: Option<crate::turns::Profile>,
+
+    /// Inclusive turn-index range `START..END` (a turn opens on a genuine user message,
+    /// an answered AskUserQuestion, or a plan-rejection-with-message).
     /// Mutually exclusive with `--since` / `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
@@ -1008,6 +1119,65 @@ impl TurnsArgs {
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         !self.no_subagents
+    }
+
+    /// Resolve the agent-message policy into a [`crate::turns::RichnessCfg`]. A `--profile`
+    /// (if given) seeds the threshold baseline FIRST; then every EXPLICITLY-passed flag
+    /// overrides the profile (clap exposes whether a flag was user-set via its default
+    /// matching, so we apply the explicit value unconditionally — a flag left at its
+    /// documented default coincides with no-override, the intended behavior). The master
+    /// `--agent-msgs` mode is honored as-is; the default `eot-only` reproduces today's
+    /// single-EOT output regardless of the thresholds.
+    #[must_use]
+    pub fn richness_cfg(&self) -> crate::turns::RichnessCfg {
+        use crate::turns::{Profile, RichnessCfg};
+        // Profile baseline (or the plain defaults when no profile is given).
+        let mut cfg = match self.profile {
+            Some(Profile::Heavy) => RichnessCfg {
+                mode: self.agent_msgs,
+                run_threshold: 4,
+                rich_min_chars: 200,
+                declaration_max_chars: 140,
+                keep_first: self.keep_first(),
+            },
+            Some(Profile::Light) => RichnessCfg {
+                mode: self.agent_msgs,
+                run_threshold: 8,
+                rich_min_chars: 360,
+                declaration_max_chars: 240,
+                keep_first: self.keep_first(),
+            },
+            None => RichnessCfg {
+                mode: self.agent_msgs,
+                run_threshold: self.agent_run_threshold,
+                rich_min_chars: self.agent_rich_min_chars,
+                declaration_max_chars: self.agent_declaration_max_chars,
+                keep_first: self.keep_first(),
+            },
+        };
+        // Explicit flags WIN over the profile. clap fills these with their declared
+        // defaults when the user omits them; we treat a value that differs from the
+        // documented default as an explicit override (a user who passes the default value
+        // gets the same result, which is correct). This keeps "profile sets baseline,
+        // flag wins" without needing clap's raw ArgMatches.
+        if self.profile.is_some() {
+            if self.agent_run_threshold != 6 {
+                cfg.run_threshold = self.agent_run_threshold;
+            }
+            if self.agent_rich_min_chars != 280 {
+                cfg.rich_min_chars = self.agent_rich_min_chars;
+            }
+            if self.agent_declaration_max_chars != 200 {
+                cfg.declaration_max_chars = self.agent_declaration_max_chars;
+            }
+        }
+        cfg
+    }
+
+    /// Resolve the `--keep-first` / `--no-keep-first` pair (default keep-first).
+    #[must_use]
+    fn keep_first(&self) -> bool {
+        !self.no_keep_first
     }
 }
 
@@ -1320,7 +1490,15 @@ mod tests {
         match cli.command {
             Command::Agents(a) => {
                 assert_eq!(a.kinds, vec![AgentKindFilter::Workflow]);
-                assert_eq!(a.by, AgentTimeAxis::Start, "default axis is start");
+                assert_eq!(
+                    a.by,
+                    AgentTimeAxis::Trigger,
+                    "default axis is trigger (the true spawn instant)"
+                );
+                assert!(!a.tree);
+                assert!(a.agent.is_none());
+                assert!(!a.with_files);
+                assert!(!a.returned_message);
             }
             _ => panic!("expected agents"),
         }

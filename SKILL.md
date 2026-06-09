@@ -27,8 +27,11 @@ or `cargo run -- <subcommand>` during development).
 - **"Which session is this transcript / which session was working on Z?"** → `csift list <path>`
   emits a fast identity tuple per session (first user msg, last user msg, last agent msg, cwd,
   branch, CC version) without parsing whole files.
-- **"What subagents did this session spawn, and did they finish?"** → `csift agents --session <uuid>`
-  reports each subagent's kind / start / completion / duration / status.
+- **"What subagents did this session spawn, when, what did they return, what did they change?"** →
+  `csift agents --session <uuid>` builds the toolUseId-linked topology — each subagent's kind / TRUE
+  trigger time / completion / duration / status, plus (on demand) its returned message
+  (`--returned-message` or `--agent <hex>`), its files-changed (`--with-files`), and the parent→child
+  tree with workflow runs as parents (`--tree`).
 - **"Which files/dirs did this session modify, and when?"** → `csift files --session <uuid>` rolls up
   Edit/Write/Notebook (authoritative) + Bash (heuristic) mutations per dir/file, with create-vs-edit
   discrimination and first/last timestamps. Answers "how many distinct gap docs touched / `/tmp` docs
@@ -44,11 +47,14 @@ or `cargo run -- <subcommand>` during development).
 - **"Restore the verbatim back-and-forth a compaction summary clipped."** → `csift turns --session
   <uuid> --budget 40000` reconstructs the verbatim user/assistant TURNS, in original order, that a
   Claude Code compaction summary lossily clipped (its "All user messages" section truncates real prose
-  turns to `...`-clipped bullets; the assistant side collapses to a single quote). Recency-first
-  selection within a char/token budget, ~50% reserved as a HARD FLOOR for complete round-trips, role-
-  asymmetric middle-truncation for over-cap turns, and a backward walk that reaches across multiple
-  compaction boundaries by default. Every line carries the JSONL LINE NUMBER. SUPPLEMENTS the summary
-  (which owns task state) — it does not re-derive intent / the plan / the file ledger.
+  turns to `...`-clipped bullets; the assistant side collapses to a single quote — and that single
+  quote is the turn's LAST message, frequently a throwaway wrap-up rather than the substance). Per
+  genuine-user turn the default keeps the LONGEST agent message (the substantive Rich Response, which
+  often sits in a MIDDLE message) plus a substantive first plus the rich middles — see `--agent-msgs`.
+  Recency-first selection within a char/token budget, ~50% reserved as a HARD FLOOR for complete round-
+  trips, role-asymmetric middle-truncation for over-cap turns, and a backward walk that reaches across
+  multiple compaction boundaries by default. Every line carries the JSONL LINE NUMBER. SUPPLEMENTS the
+  summary (which owns task state) — it does not re-derive intent / the plan / the file ledger.
 - **"Who am I (the calling session)?"** → `csift whoami` resolves the current session id from
   `$CLAUDE_CODE_SESSION_ID`.
 - **Post-compaction recovery** → after a context compaction, diff the compaction summary against the
@@ -125,11 +131,12 @@ csift search [PATTERN] [--path PATH...] [--session ID] [--no-subagents]
   newlines. PATTERN MAY be empty — then it is a pure filter, matching every category-eligible
   record (combine with `--category` / `--since` / `--turn-range`; a bare empty pattern with no
   other filter warns it will emit a lot).
-- On a hit, csift returns the **whole turn** (a turn is delimited by genuine-user messages): a
-  matched `tool_use` comes WITH its `tool_result`; a matched user turn WITH the agent's response.
+- On a hit, csift returns the **whole turn** (a turn opens on a genuine user message, an answered
+  AskUserQuestion, or a plan-rejection-with-message): a matched `tool_use` comes WITH its
+  `tool_result`; a matched user turn WITH the agent's response.
 - **`--category`/`-t`** (repeatable; with none given, all five are eligible) — see the category
   model below.
-- **Windowing**: `--turn-range START..END` (inclusive, 0-based on genuine-user order) is mutually
+- **Windowing**: `--turn-range START..END` (inclusive, 0-based on turn-boundary order) is mutually
   exclusive with `--since`/`--until`. `--since`/`--until` accept ISO8601 (`2026-06-01`,
   `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, `45s`, `1w`) meaning "that long
   ago" in the **system-local timezone**. A record with no timestamp never falls inside a bounded
@@ -182,28 +189,46 @@ pattern using one **fails to compile** with a clear error (by design, not a bug)
 Case is **smart-case** by default (insensitive unless the pattern has an uppercase letter); `-i`
 forces insensitive. `--multiline` lives in the same dialect (it sets the `(?s)(?m)` flags).
 
-### `agents` — a session's subagent lifecycle
+### `agents` — a session's subagent TOPOLOGY
 
 ```
 csift agents [PATH...] [--session ID] [--kind builtin-task|workflow]...
-             [--since WHEN] [--until WHEN] [--by start|completion] [--format text|json]
+             [--since WHEN] [--until WHEN] [--by trigger|start|completion]
+             [--tree] [--agent HEX] [--with-files] [--returned-message]
+             [--format text|json]
 ```
 
-Lists every subagent transcript a session spawned, with id, kind, start + completion timestamps,
-duration, and a determinable status (`completed` / `running` / `unknown`). The TARGET selects the
-parent session: `--session <uuid>` for one session, or a project PATH/encoded-dir to cover every
-session under it (subagents grouped under their parent session). `--since`/`--until` filter by
-START time by default; `--by completion` switches the axis to completion time.
+Builds the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back
+to the parent `Agent`/`Task`/`Workflow` `tool_use` that triggered it. Per node: id, kind, the TRUE
+trigger time (the parent tool_use ts — NOT the lagging child-head ts), start + completion, duration,
+status (`completed`/`running`/`unknown`), and — on demand — the 3-way-resolved returned message and
+files-changed. `--tree` shows workflow RUN nodes (from the top-level `workflows/wf_*.json`
+manifests) as parents of their agents.
+
+The 6 queries this answers: **count/where/when** (flat list + `--since`/`--until`), **the topology
+tree** (`--tree`), **grab one subagent's returned message** (`--agent <hex>`), **every node's
+returned message** (`--returned-message`), **a node's files-changed** (`--with-files`), and the
+**time-filter** on the true trigger axis (the default).
+
+Returned message is resolved 3 ways: **sync built-in** → the parent tool_result text;
+**async built-in** (the `Async agent launched …` sentinel) → the child transcript tail;
+**workflow** → the `journal.jsonl` `result` payload (source reported as `sync-tool-result` /
+`async-child-tail` / `workflow-journal`).
+
+`--since`/`--until` default to the **trigger** axis (the true spawn instant); `--by start|completion`
+switch axis. A subagent's id is the **bare hex** everywhere (`agents`/`files`/`recover`/`list`), so a
+file mutation is joinable back to its node.
 
 Examples:
 
 ```bash
-csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagents
-csift agents .                                                   # every session under this project
+csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagent topology
 csift agents . --kind workflow                                   # only workflow agents
-csift agents --session <uuid> --since 2h                         # subagents STARTED in the last 2h
+csift agents --session <uuid> --since 2h                         # subagents TRIGGERED in the last 2h
 csift agents --session <uuid> --since 09:00 --by completion      # filtered on COMPLETION time
-csift agents . --format json                                     # machine-readable lifecycle rows
+csift agents --session <uuid> --tree                             # parent→child tree (runs as parents)
+csift agents --session <uuid> --agent <hex> --with-files         # grab one subagent: returned msg + files
+csift agents --session <uuid> --returned-message --format json   # every node's returned message
 ```
 
 Text output shape (`(wf_…)` = workflow id, `[…]` = agentType sub-label):
@@ -211,16 +236,23 @@ Text output shape (`(wf_…)` = workflow id, `[…]` = agentType sub-label):
 ```
 SESSION  0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
   ae24045bd6d4bdaff  workflow  (wf_35cd8400-f04)  [Explore]  completed
+    triggered  2026-05-29 19:53:14 AEST (2026-05-29T09:53:14.002Z)
     started    2026-05-29 19:53:16 AEST (2026-05-29T09:53:16.201Z)
     completed  2026-05-29 19:54:34 AEST (2026-05-29T09:54:34.593Z)
-    duration   1m18s
+    duration   1m20s
 
-1 subagent(s)  ·  kind=all  ·  window-axis=start
+1 subagent(s)  ·  kind=all  ·  window-axis=trigger
 ```
 
-JSON: one object per subagent (`agent_id`, `kind`, `parent_session_id`, `workflow_id`,
-`agent_type`, `description`, `started_utc`, `started_local`, `completed_utc`, `completed_local`,
-`duration`, `status`, `skipped_lines`).
+`--tree` adds a `WORKFLOW  wf_<id>  [name]  status` header above each run's agents (with
+`agents`/`duration`/`tokens`/`model` lines).
+
+JSON: one object per node (`agent_id`, `kind`, `parent_session_id`, `parent_agent_id`,
+`spawn_tool_use_id`, `spawn_tool`, `workflow_id`, `agent_type`, `description`, `trigger_utc`,
+`trigger_local`, `started_utc`, `started_local`, `completed_utc`, `completed_local`, `duration`,
+`status`, `depth`, `skipped_lines`; plus `returned_message`/`returned_message_source` with
+`--returned-message`/`--agent`, `files_changed[]` with `--with-files`). `--tree` JSON emits one
+object per session: `{session_id, workflow_runs:[{…, children:[node]}], agents:[node]}`.
 
 ### `whoami` — identify the calling session
 
@@ -359,6 +391,117 @@ and where it will break — before dumping anything.
 
 ---
 
+### `turns` — reconstruct the verbatim back-and-forth a compaction summary clipped
+
+```
+csift turns [PATH...] [--session ID] [--budget N] [--budget-unit chars|tokens]
+            [--round-trip-fraction F] [--max-compactions N]
+            [--agent-msgs longest|eot-only|rich|all] [--agent-run-threshold N]
+            [--agent-rich-min-chars N] [--agent-declaration-max-chars N]
+            [--keep-first | --no-keep-first] [--profile heavy|light]
+            [--include-subagents | --no-subagents]
+            [--turn-range START..END] [--since WHEN] [--until WHEN]
+            [--out PATH] [--format text|json]
+```
+
+A Claude Code compaction summary preserves task STATE but loses TURN fidelity: its "All user messages"
+section clips real prose turns to `...`-truncated bullets, and the assistant side collapses to a single
+§9 quote (the turn's LAST message). `turns` SUPPLEMENTS the summary by re-emitting the clipped user
+phrasings + the substantive agent replies, in original order, each line carrying the jsonl `Lnnnnn` so
+you can `Read` the raw record. Per turn the default surfaces the LONGEST agent message rather than the
+last — see the richness model below for why.
+
+**Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) bounds the
+WHOLE reconstruction. Selection is recency-first (most-recent turns win the budget); the emitted
+document is sorted ascending so it reads forward. `--round-trip-fraction` (default 0.5) is a HARD FLOOR:
+that fraction of the budget can only be spent on COMPLETE round-trips (user → `[N tool calls]` →
+assistant), never on user-only / assistant-only fragments. Over-cap units are middle-truncated
+(head+tail kept) with an explicit `… [+K chars, L lines elided] …` marker (the assistant head is larger
+than the user head). The backward walk is transparent to compaction boundaries — a summary is a turn
+member, never a delimiter — so a 40K budget reaches across multiple boundaries by default;
+`--max-compactions N` caps the reach. A turn the NEWEST summary already quotes verbatim is flagged
+`(also in summary)` and DEMOTED (selected after non-dup turns), never silently dropped.
+
+**Richness model (`--agent-msgs`).** A single user turn can own a LONG run of agent messages — a
+debugging/build chain the model narrates step by step — that the summary clips to one quote.
+
+**Why the default keeps the LONGEST, not the LAST.** The last agent message of a turn is frequently a
+~50-char throwaway wrap-up ("Done.", "Let me know if you want anything else.") while the SUBSTANTIVE
+Rich Response — the actual finding, the committed answer, the design write-up — sits in a MIDDLE
+message. The pre-feature default kept `agents.last()`, so it silently DROPPED the substance of exactly
+those turns. The default now keeps the LONGEST agent message (by char count), the single best
+one-message proxy for "where the substance is". Because more than one message often matters, the
+default ALSO keeps a substantive first and the rich middles (below).
+
+| Mode | Behavior |
+| --- | --- |
+| `longest` | **DEFAULT.** Keep the LONGEST agent message (the substantive Rich Response, often a middle) + the FIRST when substantive (`≥ --agent-rich-min-chars`) + each RICH middle; collapse everything else (including a short, non-rich throwaway last) into a placeholder. Applies to every multi-message turn. |
+| `eot-only` | **Force last-only.** Keep ONLY each turn's last agent message — byte-identical to the pre-feature single-EOT output. Use when you specifically want the old behavior. |
+| `rich` | Keep the last always + the first by position privilege + each non-droppable middle, collapsing pure declarations into a placeholder. Only fires on a run longer than `--agent-run-threshold` (default 6). |
+| `all` | Keep every agent message — maximal fidelity, no collapse. |
+
+**The keep-heuristics (`longest` mode).** Per turn the survivor set is:
+
+- **the LONGEST agent message** — ALWAYS (the substantive Rich Response). On a tie the LAST maximum
+  wins, so an all-equal run coincides with the old `agents.last()` pick.
+- **the FIRST** — kept when SUBSTANTIVE (`≥ --agent-rich-min-chars`, default 280); the opening message
+  often states the plan or an early finding. A short "let me look into this" opener falls below the
+  gate and collapses.
+- **each MIDDLE that is RICH** — a major finding can live mid-run.
+- **the LAST** — kept only when it is itself rich/substantive; a short throwaway wrap-up collapses
+  (THE headline fix — the last is no longer kept unconditionally).
+- **everything else** collapses into a placeholder.
+
+A message is "rich" by a cheap single-pass test: a number-of-substance (`12 passed 3 failed`, `12/40`),
+a commit-hash-like hex, a `file.rs:NNN` ref, a backtick `code` path, a finding/decision lexeme (`found`
+/ `confirmed` / `root cause` / `DEFER` / `x` / `x` / `x` / …), or simply a body ≥
+`--agent-rich-min-chars` (default 280). **`--agent-rich-min-chars` is the tuning knob for both the
+default and `rich`:** in `longest` it gates the "keep the first if substantive" decision AND the rich
+length arm; raise it to keep fewer first/middle messages, lower it to keep more.
+
+In `rich` mode the spine is KEEP-ON-DOUBT instead: only a short (`< --agent-declaration-max-chars`,
+default 200) signal-less intent-verb opener (`let me …` / `now I …` / `x…`) is COLLAPSED; anything
+uncertain is kept, and `--keep-first` (default) keeps the first by position privilege regardless of
+richness (`--no-keep-first` decides it as a middle — `--keep-first` has no effect in `longest` mode,
+where the first is gated on length). A contiguous collapsed run renders as one placeholder line
+carrying the fetchable jsonl range and the per-message attribution:
+
+```
+△ L412–L437  [4 agent messages, 9 tool calls, 1 failed]
+```
+
+(`X agent messages` collapsed, `Y tool calls` owned by the span, `Z failed` erroring tool results — Z
+omitted when 0). `--profile heavy` (threshold 4, rich-min 200, declaration-max 140) and `--profile
+light` (threshold 8, rich-min 360, declaration-max 240) bundle the thresholds — applied before the
+individual flags, so an explicit flag overrides the profile. The profile keeps the master `--agent-msgs`
+mode as-is (so `--profile heavy` alone runs the default `longest` mode with heavier thresholds; add
+`--agent-msgs rich` to also switch the keep-set). **Picking heavy vs light:** read the compaction summary
+you are supplementing — pick `heavy` when its errors/decisions narrative is THIN (you need the debugging
+back-and-forth restored), `light` when it is already rich (restore user phrasings + the substance, skip
+the intermediate chatter).
+
+Subagent transcripts (`--include-subagents`, default ON) get the SAME richness treatment via the shared
+code path.
+
+Examples:
+
+```bash
+csift turns .                                     # default 40K-char recon: longest agent msg + rich members per turn
+csift turns <uuid> --budget 12000                 # a 200K-context-sized recovery
+csift turns <uuid> --agent-msgs eot-only          # force the old single-EOT (last-message-only) output
+csift turns <uuid> --agent-rich-min-chars 200     # default mode, lower bar → keep more first/middle messages
+csift turns <uuid> --agent-msgs rich              # the keep-on-doubt keep-set (last always + non-droppable middles)
+csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)
+csift turns <uuid> --agent-msgs all --budget 60000  # every agent message, no filtering
+csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
+```
+
+JSON (`--format json`) emits one VERBATIM (un-truncated) object per emitted unit, interleaved
+compaction-boundary records, and a `collapsed_agents` placeholder record (with `agent_messages` /
+`tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span.
+
+---
+
 ## The session + subagent model
 
 ### Data location
@@ -398,11 +541,16 @@ completion status.
 
 A single `type:"user"` record is **NOT always a human turn** — `tool_result` blocks ride on
 `role:"user"` records too (in one real session: ~393 genuine users vs ~1619 tool_result-carriers).
-The genuine-user classification is load-bearing and excludes tool_result-carriers, `isMeta`
-pseudo-turns, and compaction summaries.
+The genuine-user classification is load-bearing and excludes plain tool_result-carriers, `isMeta`
+pseudo-turns, compaction summaries, interrupt markers (`[Request interrupted by user]`),
+`<local-command-stdout>` output, and `<command-name>` slash-command wrappers. A turn boundary
+ALSO opens on an answered AskUserQuestion and a tool-use rejection-with-message (both are genuine
+user messages that were previously missed).
 
 - **`thinking`** — assistant thinking blocks.
-- **`user`** — genuine human input + user answers to AskUserQuestion (NOT tool_result-carriers).
+- **`user`** — genuine human input + the full AskUserQuestion Q+options+answer unit + a
+  plan-rejection-with-message (with a `[plan: …]` pointer). NOT plain tool_result-carriers,
+  interrupts, or slash-command wrappers.
 - **`tool`** — `tool_use` blocks (AskUserQuestion is a tool_use).
 - **`tool-response`** — `tool_result` blocks.
 - **`agent`** — assistant visible end-of-turn text (the agent message).

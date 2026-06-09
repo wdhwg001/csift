@@ -202,13 +202,36 @@ A `type:"user"` record is **NOT** always a human turn. `tool_result` blocks ride
 3. **`isMeta` is falsey** ([RESEARCH-EXTEND] — excludes system-injected pseudo-turns, §4.2); AND
 4. content is a **string**, OR content is a block array containing a `text` block and **no** `tool_result` block.
 
-(`text` and `tool_result` never co-occur in one user record in real data, so "has a `text` block" is a clean genuine signal once carriers and meta are excluded.) The current `src/model.rs::is_genuine_user` implements (1),(2),(4); **Phase 2 must add (3) the `isMeta` guard.**
+(`text` and `tool_result` never co-occur in one user record in real data, so "has a `text` block" is a clean genuine signal once carriers and meta are excluded.) `src/model.rs::is_genuine_user` implements (1)–(4); it **additionally** excludes the machine-synthesized markers of §4.2.1–.3 (interrupt strings, `<local-command-stdout>…`, `<command-name>…`) so they never start a turn (codepoint-safe exact `==`/`starts_with`, never a byte-offset slice).
 
-**Documented exception — AskUserQuestion answers count as "user":** the answer to an AUQ arrives as a `tool_result` (§4.4). For the **`user` category** that answer is reported as a user turn (it *is* the user's input). For **turn-delimiting**, it does **not** start a new turn — it belongs to the turn whose assistant `tool_use` posed the question. (I.e. the `user` *category* membership and the *turn boundary* are decided by different predicates — see §5 and §6.4.)
+**Boundary predicate `opens_turn(record)` — the single turn delimiter (§6.4).** Turn-delimiting keys on `opens_turn`, NOT on `is_genuine_user` alone. A turn opens on ANY of:
+1. `is_genuine_user` (above); OR
+2. an **answered AskUserQuestion** carrier (§4.4) — the answer IS the user's message; OR
+3. a **tool-use rejection carrying a typed user message** (§4.2.4) — the typed instruction IS the user's message.
 
-### 4.2 `isMeta:true` pseudo-turns — TRAP, must be excluded ([CORRECTION/EXTEND])
+Cases 2–3 are previously-MISSED genuine user messages that now correctly become boundaries (a documented, intended behavior change — see §6.4). The reconstruction (`reconstructed_user_text`) renders the genuine-user body for each: the plain text, the full AUQ Q+options+answer unit, or the rejection instruction + a `[plan: <path>]` pointer.
+
+### 4.2 `isMeta:true` pseudo-turns + synthesized markers — TRAP, must be excluded ([CORRECTION/EXTEND])
 
 `isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from the `user` category **and** from turn-delimiting. The brief did not mention `isMeta`; it is load-bearing.
+
+**Beyond `isMeta`, four NON-`isMeta` user-record shapes are also machine-synthesized and must NOT open a turn** (verified on real `~/.claude/projects` data; corpus counts in parentheses):
+
+#### 4.2.1 Interrupt markers (116 + 21)
+A `type:"user"` `text`-block (or bare-string) record whose content is **EXACTLY** `"[Request interrupted by user]"` or `"[Request interrupted by user for tool use]"` — a CC-synthesized interrupt marker, not a human turn. None carry extra prose (dropping them as boundaries loses zero user content). Match is **exact `==`** (a real message that merely *quotes* the phrase stays genuine).
+
+#### 4.2.2 `<local-command-stdout>…` (52)
+String content (NOT `isMeta`) starting with `<local-command-stdout>` — local-command OUTPUT (machine), not the user's prose. (Its sibling `<local-command-caveat>` carries `isMeta` and is already excluded.) Excluded via `starts_with`.
+
+#### 4.2.3 `<command-name>…` slash-command wrapper (54)
+String content (NOT `isMeta`) starting with `<command-name>` — the machine-templated EXPANSION of a slash command. The templated wrapper does NOT open a turn; any genuine prose the user typed after the command lives in `<command-args>…</command-args>` and is recovered separately (`slash_command_args`) so it still surfaces under the `user` category.
+
+#### 4.2.4 Tool-use rejection — `is_error:true` tool_result (31 with-message / 36 without)
+When the user REJECTS a tool use (ExitPlanMode plan kick-back, or a rejected AskUserQuestion / Edit / …), the result carrier is `is_error:true` with content beginning `"The user doesn't want to proceed with this tool use…"`. TWO sub-shapes:
+- **With a typed message** — ends `"To tell you how to proceed, the user said:\n<TEXT>"`. `<TEXT>` IS a genuine user message → **opens a turn** (`plan_rejection_message` extracts the tail codepoint-safely via `split_once`). For an ExitPlanMode rejection, the rejected `tool_use_id` resolves through a `PlanIndex` (`tool_use_id → planFilePath`) to append a `[plan: <path>]` pointer so a consuming LLM can Read the plan.
+- **Without a typed message** — ends `"STOP what you are doing and wait for the user to tell you how to proceed."`. The user clicked reject but typed nothing → **NOT a boundary**.
+
+The plan **APPROVAL** carrier (`"User has approved your plan…"`, no `is_error`, no typed message) is the harness greenlight, NOT a user message → never a boundary.
 
 ### 4.3 `tool_use` (assistant calling a tool)
 
@@ -225,7 +248,11 @@ input.questions: [ { question, header, multiSelect: bool,
 ```
 User has answered your questions: "<question>"="<chosen label>". You can now continue…
 ```
-and the carrier's top-level `toolUseResult` echoes the full `questions[]` structure + the selection. **Implication:** csift never needs to render a "pending question" state — if an AUQ `tool_use` is on disk, its answer is too. For round-trip reconstruction (§6.4), an AUQ `tool_use` and its answering `tool_result` are a complete pair like any other tool round-trip; additionally the answer is surfaced under the `user` category (§4.1 exception).
+and the carrier's top-level `toolUseResult` echoes the full `questions[]` structure + a **structured `answers{question → answer}` map** (the CLEAN source — the inline synthesized string is noisy/truncated). **Implication:** csift never needs to render a "pending question" state — if an AUQ `tool_use` is on disk, its answer is too.
+
+**The COMPLETE user message = QUESTION + OPTIONS + ANSWER as one unit.** The user does not click an option — she answers in prose (often a counter-question or a scope-expanding decision), so the answer is her selection *plus* her reasoning. `auq_exchange()` reconstructs the whole exchange as one genuine-user unit: `[AskUserQuestion · N questions]` then, per question, `Qn (header): question  options: a | b | …` and `An: <answer prose>`. It is built from the structured `toolUseResult.questions[]` zipped with `toolUseResult.answers{}` (clean), falling back to parsing the synthesized `"<q>"="<a>"` string only when `toolUseResult` is absent. Codepoint-safe (no byte-offset slice into a CJK question/answer).
+
+**The answer is a genuine-user TURN BOUNDARY** (`is_auq_answer_boundary` — true iff a non-errored `tool_result` carrier with a non-empty `toolUseResult.answers` OR the synthesized marker; a CANCELLED/rejected/validation-errored AUQ has `is_error:true` and no `answers` → NOT a boundary). This is the §6.4 behavior change: the answer (e.g. an AUQ answer that expanded the session scope) was previously folded into the prior turn and invisible; it now opens its own turn on every surface (turns/list/search/recover/budget/topology). The answer is also surfaced under the `user` category (§5).
 
 ### 4.5 `tool_result` (tool's response) → category `tool-response`
 
@@ -275,7 +302,7 @@ Preview (first 2KB):
 | Category (CLI value) | Source | Rule |
 |---|---|---|
 | `thinking` | assistant `thinking` block | always |
-| `user` | genuine human turn **+** AUQ answers | `is_genuine_user(record)` per §4.1 (string or text-only, non-meta, non-carrier, non-compaction); PLUS `tool_result` blocks that are AUQ answers (§4.4) |
+| `user` | genuine human turn **+** AUQ answers **+** plan-rejection messages | `reconstructed_user_text(record)`: `is_genuine_user` per §4.1 (string or text-only, non-meta, non-carrier, non-compaction, non-synthetic-marker), OR the reconstructed AUQ Q+options+answer unit (§4.4), OR a tool-use rejection's typed message + `[plan: …]` pointer (§4.2.4), OR recovered `<command-args>` prose (§4.2.3). The AUQ/rejection cases surface the CLEAN answer (from `toolUseResult.answers` / the `said:` tail), not the noisy synthesized string. |
 | `tool` | assistant `tool_use` block | includes `AskUserQuestion` |
 | `tool-response` | `tool_result` block (on user-carrier records) | excludes AUQ answers *as a category member*? **No** — an AUQ answer IS a `tool_result`, so it belongs to both `tool-response` (it is a tool_result) and `user` (the §4.1 exception). A category filter that names either will surface it; do not double-count within a single emitted exchange. |
 | `agent` | assistant visible `text` block | the agent's end-of-turn message ("agent includes AskUserQuestion" framing — an AUQ `tool_use` is reachable via both `tool` and the `agent` turn it sits in) |
@@ -409,25 +436,36 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 
 ### 6.4 Round-trip (turn / exchange) reconstruction algorithm
 
-**A "turn" is delimited by a GENUINE user message** (§4.1) — a `tool_result`-carrier and an `isMeta` pseudo-turn never start a turn; a compaction summary never starts a turn. Turn index is 0-based in genuine-user order within a session.
+**A "turn" is delimited by a boundary record** — `opens_turn(record)` (§4.1): a genuine human message, an answered AskUserQuestion (§4.4), or a tool-use rejection-with-message (§4.2.4). A non-boundary `tool_result`-carrier, an `isMeta` pseudo-turn, an interrupt / `<local-command-stdout>` / `<command-name>` synthesized marker (§4.2.1–.3), and a compaction summary never start a turn. Turn index is 0-based in boundary order within a session.
+
+**Behavior change (documented, intended).** An AUQ answer and a plan-rejection-with-message are previously-MISSED genuine user messages that now correctly open a turn — this re-indexes turns where such a message exists (e.g. such an AUQ answer becomes its own turn). The interrupt / local-command / slash-wrapper exclusions remove previously-SPURIOUS boundaries. A spurious new boundary would be a regression; these are not.
 
 **Records form a tree via `uuid`/`parentUuid`** (each record's `parentUuid` points at the record it follows). A single turn typically expands to a chain: `genuine-user → assistant(thinking…/tool_use…/text) → user-carrier(tool_result) → assistant(…) → …` until the next genuine-user.
 
 **Reconstruction (per session, single forward pass after collecting records):**
 1. Build `by_uuid: HashMap<uuid, &Record>` and a `children` adjacency (parentUuid → [child uuids]) over the session's records.
-2. Walk records in file order; each `is_genuine_user` record opens a new **Exchange** (turn index ++). All subsequent records up to (but excluding) the next genuine-user belong to that exchange.
+2. Walk records in file order; each `opens_turn` record opens a new **Exchange** (turn index ++). All subsequent records up to (but excluding) the next boundary belong to that exchange.
 3. **Round-trip completeness rules when a hit lands:**
    - A matched **`tool_use`** is returned **with its `tool_result`** — pair by `tool_result.tool_use_id == tool_use.id` (fallback via `toolUseResult`/`sourceToolAssistantUUID`, §4.5). Both blocks appear in the emitted exchange even if only one matched.
    - A matched **genuine-user turn** is returned **with the agent response** — i.e. the assistant `text`/`thinking`/`tool_use` records chained under it in the same turn.
    - A matched **`tool_result`** is returned **with the `tool_use` that produced it** (reverse of the above pairing).
    - A matched **`thinking`/`agent` text** is returned within its full turn (the opening genuine-user + sibling assistant records).
 4. The emitted Exchange carries: `session_id`, `turn_index`, the list of `Hit`s (category + excerpt + UTC timestamp), and `record_uuids` (every record stitched in, for traceability) — matching `search::Exchange`.
-5. **AUQ pairing:** an `AskUserQuestion` `tool_use` and its answering `tool_result` (§4.4) are one pair; the answer is also surfaced under `user` per §4.1 but is **not** a turn boundary.
+5. **AUQ pairing:** an `AskUserQuestion` `tool_use` and its answering `tool_result` (§4.4) are one pair; the answer is surfaced under `user` AND — per the §4.4 boundary rule — **opens its own turn** (`opens_turn`). The reconstructed turn opener is the full Q+options+answer unit (`auq_exchange`).
 6. **Compaction continuity:** a `compact_boundary`'s `logicalParentUuid`/`preservedSegment` may be used (best-effort) to keep turn indices monotonic across a compaction, but turn delimiting still keys on genuine-user records; never crash if these fields are absent.
 
-### 6.5 `agents` — a session's subagent lifecycle (kind, start/completion, status)
+### 6.5 `agents` — a session's subagent TOPOLOGY (kind, trigger/start/completion, returned message, files)
 
-**Purpose.** List the subagent transcripts a session spawned, with per-subagent identity + lifecycle, and an optional time-window filter (which subagents started/completed within a bound). Complements `--include-subagents` on `list`/`search` (which fold subagent *content* into those views); `agents` is the *lifecycle index* of those same subagents.
+**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. `--tree` shows workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) as parents of their agents. Complements `--include-subagents` on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents.
+
+**Topology linkage (the spawn join).** A built-in subagent's `meta.json` carries `toolUseId` — the id of the parent `Task`/`Agent` `tool_use` that spawned it. csift builds a per-session `ParentSpawnIndex` (one forward scan of the parent transcript) mapping `tool_use_id → {spawn tool name, trigger ts, description, subagent_type}` and `tool_use_id → paired tool_result text`. Each subagent joins on its `spawn_tool_use_id`, recovering:
+
+- **TRUE trigger time** = the parent tool_use ts (the real "when was it triggered" instant). The subagent's own first-record ts (`started_utc`) LAGS this by 0.2–4.7 s and cannot order a sibling fan-out, so trigger is the **default** time axis. `started_utc` is retained as a secondary timestamp. (Workflow agents carry no `toolUseId`, so their trigger falls back to the start ts.)
+- **Returned message — resolved 3 ways:** (a) **sync built-in** → the parent tool_result text; (b) **async built-in** (the parent tool_result is the `Async agent launched …` sentinel) → the child transcript's tail assistant text; (c) **workflow** → the `journal.jsonl` `result` event payload (not just the completion bool — the full message). The source is reported (`sync-tool-result` / `async-child-tail` / `workflow-journal`).
+- **WorkflowRun nodes** are read from the UNSCANNED top-level `<session>/workflows/wf_*.json` manifests (NOT `subagents/workflows/`): `{runId, taskId, workflowName, status, agentCount, durationMs, totalTokens, totalToolCalls, defaultModel}`. In `--tree` each run is the parent of its `wf_<id>` agents (joined on `workflow_id == runId`).
+- **Recursion** is uniformly depth-1 on all real data — Claude Code subagents are provisioned without an agent-spawn tool, so there are zero sub-sub-agents (verified across 2348 transcripts). The model carries a `children` slot + `depth` for forward-compatibility; it is empty today.
+
+**Id-form unification:** a subagent transcript's printed `session_id` is the **bare `<hex>`** everywhere (`agents`, `files`, `recover`, `list`) — the `agent-` filename prefix is stripped — so a file mutation or recovered event is joinable back to its `agents` node id. (Previously `files`/`recover`/`list` printed the un-stripped `agent-<hex>` stem, which did not join.)
 
 **Subagent on-disk layout (empirically mapped against `~/.claude/projects`, 0 linkage mismatches across 600+ nested transcripts). Three shapes under a top-level session's sidecar `<ENCODED>/<session-uuid>/`:**
 
@@ -448,23 +486,28 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 | `--session ID` | string | none | restrict to one parent session uuid |
 | `--kind builtin-task\|workflow` | repeatable enum | all | filter to a subagent kind |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local), filters by the `--by` axis |
-| `--by start\|completion` | enum | `start` | which lifecycle timestamp `--since`/`--until` filter on |
+| `--by trigger\|start\|completion` | enum | **`trigger`** | which timestamp `--since`/`--until` filter on — `trigger` is the true spawn instant (the **default**), `start` the child's first-record ts, `completion` its last |
+| `--tree` | bool | off | render the parent→child topology tree (workflow runs as parent nodes of their agents) instead of a flat list; JSON nests `children` |
+| `--agent HEX` | string | none | grab ONE subagent by bare-hex id; prints its full node incl. the returned message (implies `--returned-message`) and, with `--with-files`, its files-changed |
+| `--returned-message` | bool | off | include each subagent's 3-way-resolved returned message (omitted by default — can be large; always on for a single `--agent` grab) |
+| `--with-files` | bool | off | attach each node's files-changed list (reuses the `files` extractors over the subagent's own transcript) |
 | `--format text\|json` | enum | `text` | output format |
 
-**Per-subagent fields emitted:** `agent_id` (bare hex), `kind`, `workflow_id` (workflow only), `agent_type` (meta `agentType`), `description` (built-in meta), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration`, `status`, `parent_session_id`.
+**Per-subagent (node) fields emitted:** `agent_id` (bare hex), `kind`, `parent_session_id`, `parent_agent_id` (nesting; `null` at depth 1), `spawn_tool_use_id`, `spawn_tool` (`Agent`/`Task`/`Workflow`), `workflow_id` (workflow only), `agent_type` (meta `agentType`, fallback the spawn's `subagent_type`), `description` (built-in meta, fallback the spawn's), `trigger_utc`/`trigger_local` (the true spawn instant), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration` (trigger→completion), `status`, `depth`, `skipped_lines`; plus on demand `returned_message` + `returned_message_source`, `files_changed[]`, and `children[]`. The `--tree` JSON emits one object per session: `{session_id, workflow_runs:[{…manifest fields…, children:[node]}], agents:[node]}`.
 
 **Status resolution (honest — never over-claims "failed"):** `completed` when a workflow `journal.jsonl` carries a `result` event for the agent OR the transcript terminates with a visible assistant end-of-turn message; `running` when records exist with a start but no completion signal; `unknown` when no timestamps are determinable.
 
-**Time window** is the same semantics as `search` (§6.2): records/rows with no timestamp on the chosen axis are never admitted by a *bounded* window; an unbounded window admits all.
+**Time window** is the same semantics as `search` (§6.2): records/rows with no timestamp on the chosen axis are never admitted by a *bounded* window; an unbounded window admits all. **Default-axis change (documented behavior change):** `--since`/`--until` now default to the **trigger** axis (the true spawn instant). This only sharpens the filter by seconds vs the old `start` default and is opt-out via `--by start`; it is non-breaking otherwise.
 
 **Example invocations:**
 ```bash
-csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d   # one session's subagents
-csift agents .                                                # every session under this project
+csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d   # one session's subagent topology
 csift agents . --kind workflow                                # only workflow agents
-csift agents --session <uuid> --since 2h                      # subagents STARTED in the last 2h
+csift agents --session <uuid> --since 2h                      # subagents TRIGGERED in the last 2h
 csift agents --session <uuid> --since 09:00 --by completion   # COMPLETED since a bound
-csift agents . --format json                                  # machine-readable lifecycle rows
+csift agents --session <uuid> --tree                          # parent→child topology (runs as parents)
+csift agents --session <uuid> --agent <hex> --with-files      # grab one subagent: its returned msg + files
+csift agents --session <uuid> --returned-message --format json # every node's returned message
 ```
 
 ### 6.6 `files` — which files/dirs a session modified, when
@@ -571,11 +614,13 @@ csift recover . --plan --out /tmp/restored-plan.md      # restore the latest pla
 
 **Budget allocation (two-phase).** `--budget <N>` (default 40000) bounds the whole reconstruction in chars (or tokens via `--budget-unit tokens`, ≈4 chars/token). `--round-trip-fraction <F>` (default 0.5) is a **hard floor**: Phase 1 spends `budget·F` ONLY on round-trip-complete turns (user && assistant-EOT), walking recency-first; Phase 2 fills the rest with whichever single sides remain, user-first (the user wording is the scarcer, higher-signal loss). Without the floor an assistant-heavy tail recovers ZERO user turns (measured on a real pulse-shaped tail). The `[N tool calls]` marker cost is charged per turn (omitted when 0). Determinism: recency = descending line_no, ties by descending turn_index.
 
+**Multi-agent-message richness (`--agent-msgs`).** A single user turn can own a LONG run of agent messages (a debugging/build chain the model narrates step by step) that the summary clips to its single §9 quote. Each `TurnSlice` carries EVERY agent-text record (`agents: Vec<AgentMsg>`); a derived `assistant_eot()` (== `agents.last()`) keeps the EOT anchor for dedup/round-trip/render. `--agent-msgs` decides how much of the run to restore: **`eot-only`** (DEFAULT, non-breaking — keeps only the last message, byte-identical to the pre-expansion output), **`rich`** (keeps the last always + the load-bearing first/middle messages, collapsing pure declarations into a placeholder), or **`all`** (every message). `rich` only filters a LONG run (`agents.len() > --agent-run-threshold`, default 6). A message is **kept when "rich"** — a cheap single-pass OR of a length gate (`>= --agent-rich-min-chars`, default 280) and a signal test (a number-of-substance, a commit-hash-like hex, a `file.rs:NNN`/`src/…` ref, a backtick code span, or a finding/decision lexeme incl. `x`/`x`/`x`/`x`/`x`). **KEEP-ON-DOUBT** is the spine: only a short (`< --agent-declaration-max-chars`, default 200) signal-less intent-verb opener (`let me …`/`now i …`/`x…`) is collapsed; anything uncertain is kept (a wrongly-kept declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A FUSED finding+declaration body trips a signal → kept WHOLE, its trailing declaration shed only by the char-ellipsis. A contiguous collapsed run renders as one `△ L{first}–L{last}  [X agent message(s), Y tool call(s)[, Z failed]]` placeholder carrying the fetchable line range + per-message attribution. `--keep-first` (default) keeps a turn's first message by position privilege; `--no-keep-first` decides it as a middle. `--profile heavy|light` bundles the thresholds (applied before the individual flags, explicit flag wins). Subagent transcripts get the SAME treatment via the shared selection path. The summed-cost == summed-emitted invariant holds with placeholders (the dropped bodies contribute zero cost; the placeholder line is charged like any emitted line).
+
 **Ellipsis (role-asymmetric middle-truncation).** A unit over its role cap (`USER_CAP=600`, `ASST_CAP=900`, sized from measured medians) is **middle-truncated**, keeping head+tail, with an explicit `… [+K chars, L lines elided] …` marker (the line count uses the pre-normalization text; omitted for single-line user messages). The assistant head is both absolutely larger (900 vs 600) and a larger fraction (0.66 vs 0.60 → head 594/tail 306 vs user 360/240), because EOT prose front-loads context and back-loads the decision. Cuts are on `char` boundaries (UTF-8 safe). No content is fabricated; nothing is silently dropped.
 
 **Dedup against the live summary.** The newest in-range summary is already in the resumed model's context (it IS the seed). A live-region turn (compactions_before == 0) whose 80-char normalized prefix matches the summary's §6 user bullets or §9 assistant quote is flagged `(also in summary)` and **demoted** (selected only after non-dup turns) — never silently dropped (a false positive must not lose a real turn). Turns predating an OLDER boundary are genuinely gone from context, so they are pure restoration, never deduped.
 
-**Output.** Text groups under `SESSION <id>`: a budget-accounting header, then turn-by-turn `▽ Lnnnnn USER (ts)` / `[N tool calls]` / `△ Lnnnnn ASSISTANT (ts)`, with `══ compaction boundary · summary at Lnnnnn ══` banners at crossings and `(also in summary)` flags on demoted units. `--out` writes the full (un-terminal-truncated) reconstruction to a file while the summary prints to stdout. JSON (`--format json`) emits one VERBATIM (un-truncated `text`) object per unit (`line_no`, `role`, `ts_utc`/`ts_local`, `tool_calls`, `full_chars`, `rendered_chars`, `truncated`, `elided_chars`/`elided_lines`, `also_in_summary`, `compactions_before`) plus interleaved `{"kind":"compaction_boundary","line_no":…,"summary_chars":…}` records. **No silent truncation** — skipped malformed lines are counted and surfaced.
+**Output.** Text groups under `SESSION <id>`: a budget-accounting header, then turn-by-turn `▽ Lnnnnn USER (ts)` / `[N tool calls]` / `△ Lnnnnn ASSISTANT (ts)` (one `△` line per KEPT agent message under `--agent-msgs rich`/`all`), with `══ compaction boundary · summary at Lnnnnn ══` banners at crossings, `(also in summary)` flags on demoted units, and `△ L{a}–L{b}  [X agent messages, Y tool calls, Z failed]` placeholders for collapsed agent-message runs. `--out` writes the full (un-terminal-truncated) reconstruction to a file while the summary prints to stdout. JSON (`--format json`) emits one VERBATIM (un-truncated `text`) object per unit (`line_no`, `role`, `ts_utc`/`ts_local`, `tool_calls`, `full_chars`, `rendered_chars`, `truncated`, `elided_chars`/`elided_lines`, `also_in_summary`, `compactions_before`) plus interleaved `{"kind":"compaction_boundary","line_no":…,"summary_chars":…}` records and, per collapsed agent-message span, a `{"kind":"collapsed_agents","agent_messages":…,"tool_calls":…,"failed":…,"first_line":…,"last_line":…}` record. **No silent truncation** — skipped malformed lines are counted and surfaced.
 
 **Windowing** matches §6.7: `--turn-range START..END` (inclusive, 0-based genuine-user order) is mutually exclusive with `--since`/`--until` (ISO8601 / relative).
 
@@ -585,6 +630,9 @@ csift turns .                                   # default 40K-char reconstructio
 csift turns <uuid> --budget 12000               # a 200K-context-sized recovery (~10-15K)
 csift turns <uuid> --budget 40000 --format json # machine-readable, line-numbered
 csift turns <uuid> --round-trip-fraction 0.6    # weight harder toward complete round-trips
+csift turns <uuid> --agent-msgs rich            # restore the load-bearing intermediate agent messages
+csift turns <uuid> --profile heavy              # rich mode, lower thresholds (max fidelity)
+csift turns <uuid> --agent-msgs all             # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
 ```
 

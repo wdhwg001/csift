@@ -34,7 +34,8 @@ use regex::bytes::Regex as BytesRegex;
 
 use crate::cli::{Category, OutputFormat, SearchArgs};
 use crate::model::{
-    group_turn_indices, is_auq_answer_text, normalize_line, tool_result_content_text, Block, Record,
+    group_turn_indices, is_auq_answer_text, normalize_line, tool_result_content_text, Block,
+    PlanIndex, Record,
 };
 use crate::parse::{mmap_bytes, scan_lines_bytes};
 use crate::path;
@@ -380,7 +381,10 @@ fn reconstruct_and_match(
     // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
     // the 0-based turn index; map each index group back to its `Kept` borrows.
-    let index_turns = group_turn_indices(records, |k| k.rec.is_genuine_user());
+    let index_turns = group_turn_indices(records, |k| k.rec.opens_turn());
+    // ExitPlanMode plan pointers for this session (§4.2.4) — a rejection-with-message
+    // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
+    let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
     let want_categories = &args.categories;
     let mut out = Vec::new();
@@ -405,6 +409,7 @@ fn reconstruct_and_match(
             matcher,
             time_window,
             args.resolve_persisted,
+            &plan_index,
         );
         if hits.is_empty() {
             continue;
@@ -441,6 +446,7 @@ fn collect_turn_hits(
     matcher: &Matcher,
     time_window: &TimeWindow,
     resolve_persisted: bool,
+    plan_index: &PlanIndex,
 ) -> Vec<Hit> {
     let mut hits = Vec::new();
     for kept in &turn.records {
@@ -457,7 +463,7 @@ fn collect_turn_hits(
         if !time_window.contains(rec.timestamp.as_deref()) {
             continue;
         }
-        collect_record_hits(rec, want, matcher, resolve_persisted, &mut hits);
+        collect_record_hits(rec, want, matcher, resolve_persisted, plan_index, &mut hits);
     }
     hits
 }
@@ -468,22 +474,20 @@ fn collect_record_hits(
     want: &[Category],
     matcher: &Matcher,
     resolve_persisted: bool,
+    plan_index: &PlanIndex,
     hits: &mut Vec<Hit>,
 ) {
     let ts = rec.timestamp.clone();
 
-    // ── user category: genuine-user text OR an AUQ answer (§4.1, §5) ──
+    // ── user category: genuine-user text, an answered AskUserQuestion (Q+options+answer
+    // as one unit), or a tool-use rejection-with-message (+plan pointer) (§4.1, §4.4,
+    // §4.2.4, §5). `reconstructed_user_text` returns the clean answer prose from the
+    // structured `toolUseResult.answers` (not the noisy synthesized string), and a
+    // `[plan: <path>]` pointer for a rejection. ──
     if category_active(want, Category::User) {
-        if let Some(text) = rec.genuine_user_text() {
+        if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
             if matcher.is_match(&text) {
                 hits.push(make_hit(Category::User, &text, ts.clone(), None));
-            }
-        } else if rec.is_auq_answer() {
-            // Surface the AUQ answer string under `user` (§4.1 exception).
-            if let Some(text) = auq_answer_text(rec) {
-                if matcher.is_match(&text) {
-                    hits.push(make_hit(Category::User, &text, ts.clone(), None));
-                }
             }
         }
     }
@@ -579,6 +583,10 @@ fn resolve_persisted_text(path: &str, inline: &str) -> String {
 
 /// The synthesized AUQ-answer string from a carrier's `tool_result` (§4.4). Matches
 /// any known AUQ-answer marker (both shipped phrasings, see `model::AUQ_ANSWER_MARKERS`).
+/// Test-only: production now surfaces the AUQ answer via the model's reconstructed unit
+/// ([`Record::reconstructed_user_text`] → [`Record::auq_exchange`]), which prefers the
+/// clean structured `toolUseResult.answers`; this helper backs the legacy-shape tests.
+#[cfg(test)]
 fn auq_answer_text(rec: &Record) -> Option<String> {
     let blocks = rec.blocks()?;
     for b in blocks {
@@ -942,12 +950,26 @@ mod tests {
         // WITHOUT resolution: the deep token is not in the inline content → no hit.
         let m = build_matcher(&args("wibblewobble")).unwrap();
         let mut no_resolve = Vec::new();
-        collect_record_hits(&r, &[Category::ToolResponse], &m, false, &mut no_resolve);
+        collect_record_hits(
+            &r,
+            &[Category::ToolResponse],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut no_resolve,
+        );
         assert!(no_resolve.is_empty(), "deep token must NOT match inline");
 
         // WITH resolution: the file is read, the token is found → exactly one hit.
         let mut with_resolve = Vec::new();
-        collect_record_hits(&r, &[Category::ToolResponse], &m, true, &mut with_resolve);
+        collect_record_hits(
+            &r,
+            &[Category::ToolResponse],
+            &m,
+            true,
+            &PlanIndex::default(),
+            &mut with_resolve,
+        );
         assert_eq!(with_resolve.len(), 1, "deep token matches after resolution");
         assert_eq!(with_resolve[0].category, Category::ToolResponse);
 
@@ -961,7 +983,14 @@ mod tests {
         );
         let m = build_matcher(&args("carry")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::Thinking], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::Thinking],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].category, Category::Thinking);
         assert!(hits[0].excerpt.contains("carry"));
@@ -974,7 +1003,14 @@ mod tests {
         );
         let m = build_matcher(&args("foo")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::Agent], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::Agent],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].category, Category::Agent);
     }
@@ -986,7 +1022,14 @@ mod tests {
         );
         let m = build_matcher(&args("AskUserQuestion")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::Tool], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::Tool],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].tool_name.as_deref(), Some("AskUserQuestion"));
     }
@@ -998,7 +1041,14 @@ mod tests {
         );
         let m = build_matcher(&args("chosen")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::User], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::User],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].category, Category::User);
     }
@@ -1011,11 +1061,25 @@ mod tests {
         let m = build_matcher(&args("output")).unwrap();
         let mut hits = Vec::new();
         // User category must NOT surface a plain tool_result carrier.
-        collect_record_hits(&r, &[Category::User], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::User],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert_eq!(hits.len(), 0);
         // But the tool-response category does.
         let mut hits2 = Vec::new();
-        collect_record_hits(&r, &[Category::ToolResponse], &m, false, &mut hits2);
+        collect_record_hits(
+            &r,
+            &[Category::ToolResponse],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits2,
+        );
         assert_eq!(hits2.len(), 1);
         assert_eq!(hits2[0].category, Category::ToolResponse);
     }
@@ -1161,10 +1225,12 @@ mod tests {
         let mut a = args("bold option");
         a.categories = vec![Category::User];
         let ex = search(&lines, &a);
-        // The AUQ answer is surfaced under `user` even though it rides on a carrier,
-        // and it did NOT start a new turn (still turn 0).
+        // The AUQ answer is surfaced under `user` (it rides on a carrier) AND — the
+        // sanctioned behavior change (§6.4) — it now OPENS a new turn (the answer is a
+        // genuine user message that was previously missed as a boundary). So the hit
+        // lands in turn 1 (the genuine "pick one" opener is turn 0).
         assert_eq!(ex.len(), 1);
-        assert_eq!(ex[0].turn_index, 0);
+        assert_eq!(ex[0].turn_index, 1);
         assert!(ex[0]
             .hits
             .iter()
@@ -1189,7 +1255,9 @@ mod tests {
             1,
             "alternate AUQ phrasing must surface a user hit"
         );
-        assert_eq!(ex[0].turn_index, 0);
+        // §6.4 behavior change: the answer opens its own turn (turn 1), after the
+        // genuine "pick one" opener (turn 0).
+        assert_eq!(ex[0].turn_index, 1);
         assert!(ex[0]
             .hits
             .iter()
@@ -1289,7 +1357,14 @@ mod tests {
         // Pattern present in NEITHER a genuine-user text (there is none) NOR the answer.
         let m = build_matcher(&args("zzzznomatch")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::User], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::User],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert!(
             hits.is_empty(),
             "non-matching AUQ answer yields no user hit"
@@ -1321,7 +1396,7 @@ mod tests {
             records: vec![&kept],
         };
         let tw = TimeWindow::default();
-        let hits = collect_turn_hits(&turn, &[], &m, &tw, false);
+        let hits = collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default());
         assert!(hits.is_empty(), "a can_hit=false record yields no hits");
     }
 
@@ -1341,10 +1416,10 @@ mod tests {
         };
         // Window starting AFTER the record's timestamp → excluded.
         let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
-        assert!(collect_turn_hits(&turn, &[], &m, &tw, false).is_empty());
+        assert!(collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default()).is_empty());
         // An unbounded window admits it.
         let tw2 = TimeWindow::default();
-        assert!(!collect_turn_hits(&turn, &[], &m, &tw2, false).is_empty());
+        assert!(!collect_turn_hits(&turn, &[], &m, &tw2, false, &PlanIndex::default()).is_empty());
     }
 
     #[test]
@@ -1415,7 +1490,14 @@ mod tests {
         );
         let m = build_matcher(&args("zzinline")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::ToolResponse], &m, true, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::ToolResponse],
+            &m,
+            true,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert_eq!(
             hits.len(),
             1,
@@ -1433,7 +1515,14 @@ mod tests {
         );
         let m = build_matcher(&args("foo")).unwrap();
         let mut hits = Vec::new();
-        collect_record_hits(&r, &[Category::Agent], &m, false, &mut hits);
+        collect_record_hits(
+            &r,
+            &[Category::Agent],
+            &m,
+            false,
+            &PlanIndex::default(),
+            &mut hits,
+        );
         assert!(hits.is_empty(), "a user text block is not an agent hit");
     }
 

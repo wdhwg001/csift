@@ -175,11 +175,13 @@ fn session_files_in(dir: &Path) -> Result<Vec<PathBuf>> {
 /// Build a [`SessionSummary`] for one session file via HEAD + TAIL reads only.
 pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // The session id is authoritatively the jsonl basename (== uuid; verified the
-    // env var CLAUDE_CODE_SESSION_ID equals it). Fall back to the data only if the
-    // filename is somehow not a stem.
+    // env var CLAUDE_CODE_SESSION_ID equals it). For a SUBAGENT transcript the stem is
+    // `agent-<hex>`; strip the prefix to the bare-hex canonical id (the record `agentId`,
+    // what `agents` prints) so a `list` subagent row is joinable — id-form unification.
     let session_id = path
         .file_stem()
         .and_then(|s| s.to_str())
+        .map(crate::subagent::bare_agent_id)
         .map(str::to_string)
         .unwrap_or_default();
 
@@ -191,9 +193,13 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let mut data_session_id: Option<String> = None;
 
     let head_skipped = head_records(path, |rec| {
-        if let Some(text) = rec.genuine_user_text() {
-            // Capture identity off the first genuine-user record (it carries cwd /
-            // version / gitBranch / sessionId in real data).
+        // First user message = a genuine human turn, an answered AskUserQuestion, or a
+        // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
+        // single-record head scan, so a rejection surfaces its typed instruction without
+        // the `[plan: …]` pointer (the pointer is a turns/search affordance).
+        if let Some(text) = rec.reconstructed_user_text(None) {
+            // Capture identity off the first user record (it carries cwd / version /
+            // gitBranch / sessionId in real data).
             cwd = rec.cwd.clone();
             version = rec.version.clone();
             git_branch = rec.git_branch.clone();
@@ -214,7 +220,7 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
             }
         }
         if last_user.is_none() {
-            if let Some(text) = rec.genuine_user_text() {
+            if let Some(text) = rec.reconstructed_user_text(None) {
                 last_user = Some(MessagePreview::from(rec.timestamp.clone(), &text));
                 // Backfill identity from the tail if the head never found a genuine
                 // user (e.g. a session whose only user turns are near the end).

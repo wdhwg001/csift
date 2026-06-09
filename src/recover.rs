@@ -282,9 +282,13 @@ fn window_admits(
 /// plan candidates. The forward `scan_lines_bytes` path is mandatory (NOT head/tail):
 /// it visits every line including blanks, so the local counter == the true jsonl line.
 fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
+    // Bare-hex canonical id for a subagent transcript (strip the `agent-` filename
+    // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
+    // — id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
     let session_id = path
         .file_stem()
         .and_then(|s| s.to_str())
+        .map(crate::subagent::bare_agent_id)
         .map(str::to_string)
         .unwrap_or_default();
 
@@ -356,7 +360,11 @@ fn extract(
     target_file: Option<&str>,
 ) -> (Vec<FileEvent>, Vec<PlanCandidate>) {
     let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices(&recs, |r| r.is_genuine_user());
+    // Turn delimiting keys on the shared boundary predicate (§6.4) so file-event
+    // attribution lines up with `turns`/`search`: an answered AskUserQuestion / a
+    // tool-use rejection-with-message opens a turn, an interrupt / local-command-stdout
+    // does not.
+    let turns = group_turn_indices(&recs, |r| r.opens_turn());
 
     let mut events: Vec<FileEvent> = Vec::new();
     let mut plans: Vec<PlanCandidate> = Vec::new();

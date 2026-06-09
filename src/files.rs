@@ -127,9 +127,14 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
     };
     let bytes: &[u8] = &mmap;
 
+    // The session id is the jsonl basename, but for a SUBAGENT transcript the on-disk
+    // stem is `agent-<hex>` whereas the canonical id (the record `agentId`, and what the
+    // `agents` topology prints) is the BARE hex. Strip the prefix so a `files` subagent
+    // row's `session_id` is joinable to `agents` (id-form unification).
     let session_id = path
         .file_stem()
         .and_then(|s| s.to_str())
+        .map(crate::subagent::bare_agent_id)
         .map(str::to_string)
         .unwrap_or_default();
 
@@ -170,10 +175,57 @@ fn line_is_files_candidate(line: &[u8]) -> bool {
         || memmem::find(line, b"filePath").is_some()
 }
 
+/// Extract the bare file mutations carried by a record slice — the SAME structured +
+/// carrier-join + Bash-heuristic logic [`extract_mutations`] uses, but WITHOUT turn
+/// tagging (no session id, no turn index). Reused by the subagent topology to compute a
+/// node's files-changed over its own transcript ([`crate::subagent::build_topology`]),
+/// so the two surfaces never diverge on what counts as a mutation. Carriers are joined
+/// over the whole slice (a subagent transcript is one logical scope).
+#[must_use]
+pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
+    // Build the carrier join map once over the whole slice: tool_use_id → (filePath,
+    // is_create). A subagent transcript is a single scope, so a global join is correct.
+    let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
+    for rec in records {
+        for (id, file_path, is_create) in rec.carrier_create_paths() {
+            carriers.insert(id, (file_path, is_create));
+        }
+    }
+    let mut out = Vec::new();
+    for rec in records {
+        for mut m in rec.structured_tool_mutations() {
+            if let Some(id) = tool_use_id_for(rec) {
+                if let Some((carrier_path, is_create)) = carriers.get(&id) {
+                    m.is_create = *is_create;
+                    if m.path.is_empty() {
+                        m.path = carrier_path.clone();
+                    }
+                }
+            }
+            if m.path.is_empty() {
+                continue;
+            }
+            out.push(m);
+        }
+        if let Some(cmd) = rec.bash_command() {
+            for bm in parse_bash_mutations(cmd) {
+                let is_create = matches!(bm.verb, "mkdir" | "touch" | "tee" | ">" | "cp" | "mv");
+                out.push(FileMutation {
+                    path: bm.path,
+                    op: FileOp::BashMutation,
+                    timestamp_utc: rec.timestamp.clone(),
+                    is_create,
+                });
+            }
+        }
+    }
+    out
+}
+
 /// Delimit turns over the parsed records, then for each turn extract structured + Bash
 /// mutations and JOIN the structured ones to their carriers for accurate `is_create`.
 fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation> {
-    let index_turns = group_turn_indices(records, Record::is_genuine_user);
+    let index_turns = group_turn_indices(records, Record::opens_turn);
     let mut out = Vec::new();
 
     for (turn_index, idxs) in index_turns.iter().enumerate() {

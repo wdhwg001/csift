@@ -53,6 +53,56 @@ pub fn is_auq_answer_text(text: &str) -> bool {
     AUQ_ANSWER_MARKERS.iter().any(|m| text.contains(m))
 }
 
+/// True when `content` (a user record's string or joined-text body) is a
+/// machine-synthesized marker the user never typed (§4.2.1–.3) and so must NOT count
+/// as a genuine human turn: an exact interrupt marker, a `<local-command-stdout>…`
+/// output, or a `<command-name>…` slash-command wrapper. CODEPOINT-SAFE — exact `==`
+/// (interrupts, whole-token) or `starts_with` (the two ASCII-tag prefixes); never a
+/// byte-offset slice.
+#[must_use]
+pub fn is_synthetic_user_marker(content: &str) -> bool {
+    INTERRUPT_MARKERS.contains(&content)
+        || content.starts_with(LOCAL_COMMAND_STDOUT_PREFIX)
+        || content.starts_with(COMMAND_NAME_PREFIX)
+}
+
+/// The two exact-content synthesized strings Claude Code writes when the user
+/// interrupts (§4.2.1). They are a `type:"user"` `text`-block record whose content is
+/// EXACTLY one of these — a machine-synthesized interrupt marker, NOT a human turn.
+/// Verified across real `~/.claude/projects` data: 116 + 21 occurrences, all
+/// non-`isMeta`, none carrying any extra prose (dropping them as turn boundaries loses
+/// zero user content).
+pub const INTERRUPT_MARKERS: &[&str] = &[
+    "[Request interrupted by user]",
+    "[Request interrupted by user for tool use]",
+];
+
+/// Prefix of a `<local-command-stdout>…` user record (§4.2.2) — local-command OUTPUT
+/// (machine), not the user's prose. Non-`isMeta` string content (its sibling
+/// `<local-command-caveat>` carries `isMeta` and is already excluded). Must NOT open a
+/// turn.
+pub const LOCAL_COMMAND_STDOUT_PREFIX: &str = "<local-command-stdout>";
+
+/// Prefix of a `<command-name>/x…</command-name>` slash-command invocation record
+/// (§4.2.3) — the machine-templated EXPANSION of a slash command, non-`isMeta`. The
+/// templated wrapper must NOT open a turn; any genuine prose the user typed after the
+/// command lives in the `<command-args>…</command-args>` body and is recovered
+/// separately (see [`Record::slash_command_args`]).
+pub const COMMAND_NAME_PREFIX: &str = "<command-name>";
+
+/// The synthesized marker Claude Code writes into the `tool_result` when the user
+/// REJECTS a tool use (§4.2.4) — fires for ANY rejected tool_use (ExitPlanMode plan
+/// kick-backs AND rejected AskUserQuestion / Edit / etc.). On its own it is NOT a user
+/// turn; it becomes one only when followed by the [`PLAN_REJECTION_USER_PREFIX`] tail
+/// (a real typed user instruction).
+pub const PLAN_REJECTION_MARKER: &str = "The user doesn't want to proceed with this tool use";
+
+/// The fixed ASCII delimiter that precedes the user's typed instruction in a
+/// rejection-with-message (§4.2.4): everything AFTER it is the genuine user message.
+/// A rejection WITHOUT this delimiter (the `STOP what you are doing and wait…` form)
+/// carries no typed message and must NOT open a turn.
+pub const PLAN_REJECTION_USER_PREFIX: &str = "To tell you how to proceed, the user said:\n";
+
 /// A single parsed jsonl line. Unknown top-level fields are ignored by serde.
 ///
 /// Several fields below are deserialized for completeness of the documented record
@@ -230,8 +280,15 @@ impl Record {
     /// - must be `type:"user"` with `message.role == "user"`;
     /// - `isCompactSummary` must be falsey (excludes compaction summaries, §4.7);
     /// - `isMeta` must be falsey (excludes system-injected pseudo-turns, §4.2);
+    /// - the content must NOT be a machine-synthesized marker the user never typed
+    ///   (§4.2.1–.3): an interrupt marker (`[Request interrupted by user]` etc.), a
+    ///   `<local-command-stdout>…` output, or a `<command-name>…` slash-command wrapper;
     /// - string content => genuine; block content => genuine iff it contains a
     ///   text block and NO `tool_result` block.
+    ///
+    /// CODEPOINT-SAFE: every synthetic-marker test is exact `==` or `starts_with`
+    /// (whole-token / prefix), never a byte-offset slice, so a CJK body can never be
+    /// split mid-codepoint.
     #[must_use]
     pub fn is_genuine_user(&self) -> bool {
         if !self.is_type("user") {
@@ -244,6 +301,12 @@ impl Record {
         if self.is_meta.unwrap_or(false) {
             return false;
         }
+        // NOTE on `isSidechain`: a subagent transcript's FIRST record is an
+        // `isSidechain:true` user seed. It is NOT gated out here on purpose — `list`'s
+        // per-subagent preview legitimately treats that seed as the subagent's "first
+        // user message", and in TOP-LEVEL transcripts a sidechain seed does not occur in
+        // any real corpus. Gating it would silently blank the subagent preview for zero
+        // real benefit; the per-surface scan owns subagent-vs-parent context instead.
         let Some(msg) = &self.message else {
             return false;
         };
@@ -251,13 +314,46 @@ impl Record {
             return false;
         }
         match &msg.content {
-            Some(Content::Text(_)) => true,
+            Some(Content::Text(s)) => !is_synthetic_user_marker(s),
             Some(Content::Blocks(blocks)) => {
                 let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));
                 let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));
-                has_text && !has_tool_result
+                if !has_text || has_tool_result {
+                    return false;
+                }
+                // §4.2.1: an interrupt marker arrives as a single `text` block whose text
+                // is EXACTLY the marker — exclude it (exact match, codepoint-safe).
+                let joined = flatten_content_text(msg.content.as_ref().unwrap());
+                !is_synthetic_user_marker(&joined)
             }
             None => false,
+        }
+    }
+
+    /// The genuine prose a user typed after a slash command (§4.2.3), recovered from the
+    /// `<command-args>…</command-args>` body of a `<command-name>…` record. Returns the
+    /// trimmed args text, or `None` when the record is not a slash-command wrapper or the
+    /// args are empty. Codepoint-safe: uses `str::find` on the ASCII tag bounds and slices
+    /// only on those ASCII byte offsets (never inside the args text), so a CJK args body
+    /// is never split mid-codepoint.
+    #[must_use]
+    pub fn slash_command_args(&self) -> Option<String> {
+        let content = self.message.as_ref()?.content.as_ref()?;
+        let Content::Text(s) = content else {
+            return None;
+        };
+        if !s.starts_with(COMMAND_NAME_PREFIX) {
+            return None;
+        }
+        const OPEN: &str = "<command-args>";
+        const CLOSE: &str = "</command-args>";
+        let start = s.find(OPEN)? + OPEN.len();
+        let end = s[start..].find(CLOSE).map_or(s.len(), |rel| start + rel);
+        let args = s[start..end].trim();
+        if args.is_empty() {
+            None
+        } else {
+            Some(normalize_line(args))
         }
     }
 
@@ -304,6 +400,285 @@ impl Record {
                 .is_some_and(|t| is_auq_answer_text(&t)),
             _ => false,
         })
+    }
+
+    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a
+    /// turn (§4.4 / §6.4): a `type:"user"` record carrying a `tool_result` block whose
+    /// `is_error` is not true, AND it is a real answer — signalled by a non-empty
+    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback
+    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in
+    /// the tool_result content. The answer is a genuine USER message (the user's
+    /// selection + prose reasoning), so it is a turn boundary.
+    ///
+    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,
+    /// or a `Cancelled…` / `<tool_use_error>…` body) is NOT a boundary — those carry no
+    /// typed user message. Verified on real data: all 81 answered carriers have
+    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the
+    /// rejection/cancel carriers have none of the three.
+    #[must_use]
+    pub fn is_auq_answer_boundary(&self) -> bool {
+        if !self.is_type("user") {
+            return false;
+        }
+        // The carrier must ride on a non-errored tool_result block.
+        let Some(blocks) = self.blocks() else {
+            return false;
+        };
+        let mut has_non_errored_tool_result = false;
+        for b in blocks {
+            if let Block::ToolResult { is_error, .. } = b {
+                if is_error.unwrap_or(false) {
+                    return false; // an errored AUQ result (cancel/reject) is never a boundary
+                }
+                has_non_errored_tool_result = true;
+            }
+        }
+        if !has_non_errored_tool_result {
+            return false;
+        }
+        // Primary signal: structured, non-empty `toolUseResult.answers`.
+        if self.auq_answers_obj().is_some() {
+            return true;
+        }
+        // Fallback (older records without `toolUseResult`): the synthesized marker.
+        self.is_auq_answer()
+    }
+
+    /// The structured `toolUseResult.answers` object (§4.4) when present AND non-empty.
+    /// `None` for a cancelled/rejected AUQ (no answers) or a non-AUQ carrier.
+    fn auq_answers_obj(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        let answers = self.tool_use_result.as_ref()?.get("answers")?.as_object()?;
+        if answers.is_empty() {
+            None
+        } else {
+            Some(answers)
+        }
+    }
+
+    /// Reconstruct the COMPLETE AskUserQuestion exchange (§4.4) as one genuine-user unit:
+    /// `[AskUserQuestion · N questions]` followed by, per question, the header, the
+    /// question, its options, and the user's answer. Built from the structured
+    /// `toolUseResult.questions[]` zipped with `toolUseResult.answers{}`; falls back to
+    /// the synthesized `tool_result` string (parsed for `"<q>"="<a>"`) when
+    /// `toolUseResult` is absent. Returns `None` when this is not an answered AUQ carrier.
+    ///
+    /// CODEPOINT-SAFE: works entirely on owned `String`/`&str` values pulled structurally
+    /// from JSON; the only excerpting is whitespace normalization, never a byte-offset
+    /// slice into a (possibly CJK) question/answer body.
+    #[must_use]
+    pub fn auq_exchange(&self) -> Option<String> {
+        if !self.is_auq_answer_boundary() {
+            return None;
+        }
+        // Structured path: questions[] (ordered) zipped with answers{question -> answer}.
+        if let Some(answers) = self.auq_answers_obj() {
+            let questions = self
+                .tool_use_result
+                .as_ref()
+                .and_then(|t| t.get("questions"))
+                .and_then(serde_json::Value::as_array);
+            let mut out = String::new();
+            let n = questions.map_or(answers.len(), Vec::len);
+            out.push_str(&format!("[AskUserQuestion · {n} question{}]", plural(n)));
+            if let Some(qs) = questions {
+                for (i, q) in qs.iter().enumerate() {
+                    let header = q.get("header").and_then(serde_json::Value::as_str);
+                    let question = q
+                        .get("question")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default();
+                    let opts: Vec<String> = q
+                        .get("options")
+                        .and_then(serde_json::Value::as_array)
+                        .map(|os| {
+                            os.iter()
+                                .filter_map(|o| o.get("label").and_then(serde_json::Value::as_str))
+                                .map(str::to_string)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    // The answer is keyed by the (verbatim) question string in `answers`.
+                    let answer = answers
+                        .get(question)
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("");
+                    out.push_str(&format!("\nQ{} ", i + 1));
+                    if let Some(h) = header {
+                        out.push_str(&format!("({}): ", normalize_line(h)));
+                    }
+                    out.push_str(&normalize_line(question));
+                    if !opts.is_empty() {
+                        out.push_str("  options: ");
+                        out.push_str(&opts.join(" | "));
+                    }
+                    out.push_str(&format!("\nA{}: {}", i + 1, normalize_line(answer)));
+                }
+            } else {
+                // No questions[] array (rare): list the answers map directly.
+                for (i, (q, a)) in answers.iter().enumerate() {
+                    out.push_str(&format!(
+                        "\nQ{}: {}\nA{}: {}",
+                        i + 1,
+                        normalize_line(q),
+                        i + 1,
+                        normalize_line(a.as_str().unwrap_or_default())
+                    ));
+                }
+            }
+            return Some(out);
+        }
+        // Fallback path: the synthesized marker string is the whole exchange.
+        self.auq_answer_marker_text()
+            .map(|t| format!("[AskUserQuestion] {}", normalize_line(&t)))
+    }
+
+    /// The synthesized AUQ-answer string from this carrier's `tool_result` (§4.4) — the
+    /// fallback content when `toolUseResult.answers` is absent. `None` if no AUQ marker.
+    fn auq_answer_marker_text(&self) -> Option<String> {
+        let blocks = self.blocks()?;
+        for b in blocks {
+            if let Block::ToolResult {
+                content: Some(c), ..
+            } = b
+            {
+                let t = tool_result_content_text(c);
+                if is_auq_answer_text(&t) {
+                    return Some(t);
+                }
+            }
+        }
+        None
+    }
+
+    /// When this record is a tool-use REJECTION carrying a typed user instruction
+    /// (§4.2.4), return `(rejected_tool_use_id, user_message)`. The genuine user message
+    /// is everything AFTER the fixed [`PLAN_REJECTION_USER_PREFIX`] delimiter.
+    ///
+    /// `None` when this is not a rejection, or it is a rejection WITHOUT a typed message
+    /// (the `STOP what you are doing and wait…` form — the user clicked reject but typed
+    /// nothing, so there is no user turn).
+    ///
+    /// CODEPOINT-SAFE: the tail is taken with `str::split_once` on the ASCII delimiter
+    /// (UTF-8-safe, never a byte-offset slice); the tail (often CJK) is returned whole.
+    #[must_use]
+    pub fn plan_rejection_message(&self) -> Option<(Option<String>, String)> {
+        if !self.is_type("user") {
+            return None;
+        }
+        let blocks = self.blocks()?;
+        for b in blocks {
+            if let Block::ToolResult {
+                tool_use_id,
+                content: Some(c),
+                is_error,
+            } = b
+            {
+                if !is_error.unwrap_or(false) {
+                    continue;
+                }
+                let text = tool_result_content_text(c);
+                if !text.contains(PLAN_REJECTION_MARKER) {
+                    continue;
+                }
+                // The typed instruction is everything after the fixed ASCII delimiter.
+                if let Some((_, tail)) = text.split_once(PLAN_REJECTION_USER_PREFIX) {
+                    let msg = tail.trim();
+                    if !msg.is_empty() {
+                        return Some((tool_use_id.clone(), msg.to_string()));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// True when this record is a tool-use rejection carrying a typed user instruction
+    /// (§4.2.4) and so should open a turn. A rejection without a typed message is NOT a
+    /// boundary (see [`Record::plan_rejection_message`]).
+    #[must_use]
+    pub fn is_plan_rejection_boundary(&self) -> bool {
+        self.plan_rejection_message().is_some()
+    }
+
+    /// The single boundary predicate (§6.4): this record opens a new turn iff it is a
+    /// genuine human message, an ANSWERED AskUserQuestion (the answer is the user's
+    /// message), or a tool-use rejection carrying a typed user instruction. Every surface
+    /// (turns / search / recover / files) keys turn delimiting on THIS predicate so they
+    /// never drift.
+    #[must_use]
+    pub fn opens_turn(&self) -> bool {
+        self.is_genuine_user() || self.is_auq_answer_boundary() || self.is_plan_rejection_boundary()
+    }
+
+    /// The rendered genuine-user text for any boundary-opening record, normalized to a
+    /// single line — the unified opener body used by `turns` / `search` / `list` /
+    /// `recover`:
+    /// - a plain genuine user → its text (same as [`Record::genuine_user_text`]);
+    /// - an answered AskUserQuestion → the full Q+options+answer unit
+    ///   ([`Record::auq_exchange`]);
+    /// - a tool-use rejection-with-message → the user's typed instruction, optionally
+    ///   suffixed with a `[plan: <path>]` pointer when `plan_index` resolves the rejected
+    ///   `tool_use_id` to an ExitPlanMode plan (§4.2.4). `plan_index` may be `None` (no
+    ///   plan resolution attempted), in which case the rejection text is returned alone.
+    ///
+    /// Returns `None` when this record does not open a turn. CODEPOINT-SAFE throughout
+    /// (delegates to the codepoint-safe accessors).
+    #[must_use]
+    pub fn reconstructed_user_text(&self, plan_index: Option<&PlanIndex>) -> Option<String> {
+        if let Some(text) = self.genuine_user_text() {
+            return Some(text);
+        }
+        if let Some(unit) = self.auq_exchange() {
+            return Some(normalize_line(&unit));
+        }
+        if let Some((rejected_id, msg)) = self.plan_rejection_message() {
+            let mut out = normalize_line(&msg);
+            if let (Some(idx), Some(id)) = (plan_index, rejected_id.as_deref()) {
+                if let Some(path) = idx.plan_path(id) {
+                    out.push_str(&format!(" [plan: {path}]"));
+                }
+            }
+            return Some(out);
+        }
+        // A slash-command wrapper is NOT a turn boundary (§4.2.3), but when the user
+        // typed prose after the command (`/compact <prose>`) that prose IS genuine user
+        // input — surface it so `search -t user` still finds it within its turn.
+        if let Some(args) = self.slash_command_args() {
+            return Some(args);
+        }
+        None
+    }
+
+    /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as
+    /// `(tool_use_id, plan_file_path)` pairs — the raw material a [`PlanIndex`] is built
+    /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields
+    /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty
+    /// for any record carrying no ExitPlanMode tool_use.
+    #[must_use]
+    pub fn exit_plan_pointers(&self) -> Vec<(String, String)> {
+        let Some(blocks) = self.blocks() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for b in blocks {
+            if let Block::ToolUse {
+                id: Some(id),
+                name: Some(name),
+                input,
+            } = b
+            {
+                if name == "ExitPlanMode" {
+                    let path = input
+                        .as_ref()
+                        .and_then(|v| v.get("planFilePath"))
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    out.push((id.clone(), path));
+                }
+            }
+        }
+        out
     }
 
     /// The persisted-output file path for this carrier (§4.6), preferring the
@@ -560,23 +935,74 @@ impl Record {
     }
 }
 
+/// An index of ExitPlanMode `tool_use_id → planFilePath` built from a session's records
+/// (§4.2.4). A tool-use rejection-with-message ([`Record::plan_rejection_message`])
+/// resolves the rejected `tool_use_id` through this index to surface a `[plan: <path>]`
+/// pointer so a consuming LLM can go Read the plan. Built once per session via
+/// [`PlanIndex::from_records`]; cheap (one `BTreeMap` of the few ExitPlanMode calls).
+#[derive(Debug, Clone, Default)]
+pub struct PlanIndex {
+    by_id: std::collections::BTreeMap<String, String>,
+}
+
+impl PlanIndex {
+    /// Build the index from a session's records: every ExitPlanMode tool_use's
+    /// `id → planFilePath` (see [`Record::exit_plan_pointers`]). A block with no
+    /// `planFilePath` is skipped (an empty path is not a useful pointer).
+    #[must_use]
+    pub fn from_records<'a, I>(records: I) -> Self
+    where
+        I: IntoIterator<Item = &'a Record>,
+    {
+        let mut by_id = std::collections::BTreeMap::new();
+        for rec in records {
+            for (id, path) in rec.exit_plan_pointers() {
+                if !path.is_empty() {
+                    by_id.insert(id, path);
+                }
+            }
+        }
+        Self { by_id }
+    }
+
+    /// The plan file path an ExitPlanMode tool_use with `id` pointed to, if known.
+    #[must_use]
+    pub fn plan_path(&self, id: &str) -> Option<&str> {
+        self.by_id.get(id).map(String::as_str)
+    }
+}
+
+/// `"s"` for plural counts, `""` for exactly one — for the `N question(s)` label.
+fn plural(n: usize) -> &'static str {
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
+}
+
 /// Group records (in file order) into TURNS, returning one `Vec<usize>` of record
 /// indices per turn — the outer index IS the 0-based turn index (genuine-user order).
 ///
 /// The single source of truth for turn delimiting (§6.4), shared by `search`'s
 /// exchange reconstruction and `files`'s mutation attribution so the two never drift:
 ///
-/// - A turn opens on a genuine-user record (`is_genuine`); every record after it, up
-///   to the next genuine-user, belongs to that turn (a `tool_result`-carrier, an
+/// - A turn opens on a boundary record (`is_genuine`); every record after it, up to the
+///   next boundary, belongs to that turn (a non-boundary `tool_result`-carrier, an
 ///   `isMeta` pseudo-turn, and a compaction summary are turn MEMBERS, never delimiters).
-/// - Records before the first genuine-user (rare: leading tool noise) seed turn 0 so
-///   they are never lost. When such a synthetic lead exists AND a real user turn
-///   follows, the lead is folded into the first real turn so indices stay 0-based on
-///   genuine users. With NO genuine user at all, the orphans are a standalone turn 0.
+/// - Records before the first boundary (rare: leading tool noise) seed turn 0 so they
+///   are never lost. When such a synthetic lead exists AND a real user turn follows, the
+///   lead is folded into the first real turn so indices stay 0-based on boundary
+///   openers. With NO boundary at all, the orphans are a standalone turn 0.
 ///
-/// `is_genuine` is a closure (rather than calling [`Record::is_genuine_user`]
-/// directly) only so callers can test the grouping over lightweight bool fixtures; in
-/// production it is always `Record::is_genuine_user`.
+/// `is_genuine` is a closure (rather than calling [`Record::opens_turn`] directly) only
+/// so callers can test the grouping over lightweight bool fixtures; in production it is
+/// always [`Record::opens_turn`] — which opens on a genuine human message, an answered
+/// AskUserQuestion (the answer is the user's message, §4.4), OR a tool-use
+/// rejection-with-message (§4.2.4). An AUQ answer / plan rejection becoming a turn
+/// boundary is the sanctioned correct behavior change (a previously-MISSED genuine user
+/// message); interrupts / `<local-command-stdout>` / `<command-name>` wrappers, formerly
+/// spurious boundaries, are excluded by `is_genuine_user` (regression fixes).
 #[must_use]
 pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> Vec<Vec<usize>> {
     let mut turns: Vec<Vec<usize>> = Vec::new();
@@ -816,8 +1242,11 @@ mod tests {
             r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"A\". You can now continue."}]}}"#,
         );
         assert!(r.is_auq_answer());
-        // It is NOT a genuine user (it's a carrier) but IS an AUQ answer.
+        // It is NOT a genuine user (it's a carrier) but IS an AUQ answer — and, per the
+        // §6.4 behavior change, it DOES open a turn (the answer is the user's message).
         assert!(!r.is_genuine_user());
+        assert!(r.is_auq_answer_boundary());
+        assert!(r.opens_turn());
     }
 
     #[test]
@@ -831,6 +1260,9 @@ mod tests {
         );
         assert!(r.is_auq_answer(), "alternate AUQ phrasing must be detected");
         assert!(!r.is_genuine_user());
+        // The dominant phrasing is also a turn boundary (§6.4).
+        assert!(r.is_auq_answer_boundary());
+        assert!(r.opens_turn());
     }
 
     #[test]
@@ -1335,6 +1767,373 @@ mod tests {
         let flags = [true, false, true];
         let turns = group_turn_indices(&flags, |b| *b);
         assert_eq!(turns, vec![vec![0, 1], vec![2]]);
+    }
+
+    #[test]
+    fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
+        // A realistic record sequence over the PRODUCTION predicate (`opens_turn`):
+        //   0 genuine user      → turn 0 opener
+        //   1 assistant AUQ tool_use (member of turn 0)
+        //   2 AUQ answer carrier → turn 1 opener (the behavior change)
+        //   3 assistant reply   (member of turn 1)
+        //   4 interrupt marker  → NOT a boundary (member of turn 1)
+        //   5 genuine user      → turn 2 opener
+        let records: Vec<Record> = [
+            r#"{"type":"user","message":{"role":"user","content":"pick one"}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
+            r#"{"type":"user","toolUseResult":{"answers":{"which?":"the bold one"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"the bold one\"."}]}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#,
+            r#"{"type":"user","message":{"role":"user","content":"next question"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+        let turns = group_turn_indices(&records, |r| r.opens_turn());
+        assert_eq!(
+            turns,
+            vec![vec![0, 1], vec![2, 3, 4], vec![5]],
+            "AUQ answer opens turn 1; interrupt is a member, not a boundary"
+        );
+    }
+
+    // ── §4.2.1 interrupts: synthesized markers are NOT genuine-user (spurious-boundary
+    //    removal). Real shape: a text-block user record whose text is EXACTLY the marker
+    //    (116 + 21 occurrences in the corpus, none isMeta, none carrying extra prose). ──
+
+    #[test]
+    fn interrupt_marker_plain_is_not_genuine_user() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#,
+        );
+        assert!(
+            !r.is_genuine_user(),
+            "interrupt marker must not open a turn"
+        );
+        assert!(!r.opens_turn());
+    }
+
+    #[test]
+    fn interrupt_marker_for_tool_use_is_not_genuine_user() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#,
+        );
+        assert!(!r.is_genuine_user());
+        assert!(!r.opens_turn());
+    }
+
+    #[test]
+    fn interrupt_marker_as_string_content_is_not_genuine_user() {
+        // The same marker can arrive as bare-string content too — still excluded.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"[Request interrupted by user]"}}"#,
+        );
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn text_that_merely_contains_interrupt_phrase_is_still_genuine() {
+        // Exact-match only: a real message that QUOTES the phrase must stay genuine
+        // (codepoint-safe `==`, never a substring/slice).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"why did i see [Request interrupted by user] earlier?"}}"#,
+        );
+        assert!(
+            r.is_genuine_user(),
+            "a message merely containing the phrase is still a human turn"
+        );
+    }
+
+    // ── §4.2.2 / §4.2.3: <local-command-stdout> output + <command-name> slash wrapper
+    //    are machine-templated, NOT genuine-user (string content, non-isMeta). ──
+
+    #[test]
+    fn local_command_stdout_is_not_genuine_user() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<local-command-stdout>✓ Updated oh-my-claudecode.</local-command-stdout>"}}"#,
+        );
+        assert!(!r.is_genuine_user());
+        assert!(!r.opens_turn());
+    }
+
+    #[test]
+    fn command_name_wrapper_is_not_genuine_user() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>"}}"#,
+        );
+        assert!(
+            !r.is_genuine_user(),
+            "slash-command wrapper must not open a turn"
+        );
+        assert!(!r.opens_turn());
+        // Empty args → no recoverable prose.
+        assert!(r.slash_command_args().is_none());
+    }
+
+    #[test]
+    fn command_name_wrapper_with_args_recovers_prose() {
+        // Real shape: `/compact Just shipped spec-batch-14 …` — the typed prose lives in
+        // <command-args>; it is recovered (and is the reconstructed user text), but the
+        // wrapper itself is still not a standalone genuine-user record.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args> Just shipped spec-batch-14, summarize</command-args>"}}"#,
+        );
+        assert!(!r.is_genuine_user());
+        assert_eq!(
+            r.slash_command_args().as_deref(),
+            Some("Just shipped spec-batch-14, summarize")
+        );
+        assert_eq!(
+            r.reconstructed_user_text(None).as_deref(),
+            Some("Just shipped spec-batch-14, summarize")
+        );
+    }
+
+    #[test]
+    fn command_name_wrapper_with_cjk_args_is_codepoint_safe() {
+        // A CJK args body must be recovered whole (codepoint-safe slice on the ASCII tags
+        // only) — the live panic class.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>x</command-args>"}}"#,
+        );
+        assert_eq!(
+            r.slash_command_args().as_deref(),
+            Some("x")
+        );
+    }
+
+    // ── §4.4 AskUserQuestion answer = a genuine-user TURN BOUNDARY (the sanctioned
+    //    behavior change). Real shape verified on a captured sample: a user tool_result
+    //    carrier with toolUseResult.answers + the synthesized marker, is_error absent. ──
+
+    #[test]
+    fn auq_answer_with_structured_answers_is_a_boundary() {
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"questions":[{"question":"which?","header":"FIX","options":[{"label":"opt A"},{"label":"opt B"}]}],"answers":{"which?":"go with opt A and also fix the prod gap"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"go with opt A and also fix the prod gap\". You can now continue."}]}}"#,
+        );
+        // It is still NOT a "genuine user" (it rides on a carrier) but IS a boundary.
+        assert!(!r.is_genuine_user());
+        assert!(r.is_auq_answer_boundary());
+        assert!(r.opens_turn());
+        // The reconstructed exchange carries Q + options + the answer prose.
+        let unit = r.auq_exchange().expect("auq exchange");
+        assert!(unit.contains("AskUserQuestion · 1 question"));
+        assert!(unit.contains("which?"));
+        assert!(unit.contains("FIX"));
+        assert!(unit.contains("opt A | opt B"), "options rendered: {unit}");
+        assert!(unit.contains("go with opt A and also fix the prod gap"));
+        // reconstructed_user_text routes to the same unit.
+        assert!(r
+            .reconstructed_user_text(None)
+            .unwrap()
+            .contains("go with opt A"));
+    }
+
+    #[test]
+    fn auq_answer_cjk_is_codepoint_safe_boundary() {
+        // The exact AUQ answer that expanded the session scope — CJK answer prose. Must
+        // reconstruct whole, no mid-codepoint slice.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"questions":[{"question":"STEP TWO x?","header":"STEP TWO x","options":[{"label":"x+x (x)"}]}],"answers":{"STEP TWO x?":"xsessionxscopex"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"STEP TWO x?\"=\"x\"."}]}}"#,
+        );
+        assert!(r.is_auq_answer_boundary());
+        let unit = r.auq_exchange().expect("cjk auq exchange");
+        assert!(unit.contains("xsessionxscopex"));
+        assert!(unit.contains("STEP TWO x"));
+        assert!(unit.contains("x+x (x)"));
+    }
+
+    #[test]
+    fn auq_answer_marker_only_fallback_is_a_boundary() {
+        // Older-shape carrier: the synthesized marker is present but there is no
+        // toolUseResult.answers → the marker fallback still classifies it a boundary.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"q\"=\"chosen label\". You can now continue."}]}}"#,
+        );
+        assert!(r.is_auq_answer_boundary());
+        assert!(r.opens_turn());
+        let unit = r.auq_exchange().expect("fallback exchange");
+        assert!(unit.contains("AskUserQuestion"));
+        assert!(unit.contains("chosen label"));
+    }
+
+    #[test]
+    fn cancelled_auq_is_not_a_boundary() {
+        // A rejected/cancelled AUQ: is_error:true, no answers, the generic rejection
+        // marker WITHOUT a "the user said" tail → must NOT open a turn (no user message).
+        let r = parse(
+            r#"{"type":"user","toolUseResult":"User rejected tool use","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."}]}}"#,
+        );
+        assert!(
+            !r.is_auq_answer_boundary(),
+            "cancelled AUQ is not a boundary"
+        );
+        assert!(
+            !r.is_plan_rejection_boundary(),
+            "no typed message → not a rejection boundary"
+        );
+        assert!(!r.opens_turn());
+    }
+
+    #[test]
+    fn auq_validation_error_is_not_a_boundary() {
+        // An InputValidationError AUQ result (is_error:true, <tool_use_error>…) is not an
+        // answer → not a boundary.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","is_error":true,"content":"<tool_use_error>InputValidationError: AskUserQuestion failed…</tool_use_error>"}]}}"#,
+        );
+        assert!(!r.is_auq_answer_boundary());
+        assert!(!r.opens_turn());
+    }
+
+    // ── §4.2.4 ExitPlanMode / tool-use rejection WITH a typed message = a genuine-user
+    //    boundary + a plan pointer. Real shape from captured-c (CJK) + the English form. ──
+
+    #[test]
+    fn plan_rejection_with_cjk_message_is_a_boundary() {
+        // Instance A (captured-c): the user rejects the plan and types a CJK instruction.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01KpYZsMm2SaKgw6Qvhd8ST8","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nxsmoke testxOKxscreenshotx"}]}}"#,
+        );
+        assert!(r.is_plan_rejection_boundary());
+        assert!(r.opens_turn());
+        let (id, msg) = r.plan_rejection_message().expect("rejection message");
+        assert_eq!(id.as_deref(), Some("toolu_01KpYZsMm2SaKgw6Qvhd8ST8"));
+        // The genuine message is ONLY the typed tail (CJK, whole), not the synthesized
+        // prefix.
+        assert_eq!(
+            msg,
+            "xsmoke testxOKxscreenshotx"
+        );
+        assert!(!msg.contains("doesn't want to proceed"));
+    }
+
+    #[test]
+    fn plan_rejection_with_english_message_is_a_boundary() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01YKnvDN43RnTQMGcw18HShW","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nRound-4 sign-off: run the e2e once more before declaring done."}]}}"#,
+        );
+        let (_, msg) = r.plan_rejection_message().expect("english rejection");
+        assert_eq!(
+            msg,
+            "Round-4 sign-off: run the e2e once more before declaring done."
+        );
+    }
+
+    #[test]
+    fn plan_rejection_without_message_is_not_a_boundary() {
+        // The `STOP what you are doing and wait…` form carries NO typed message → no
+        // boundary (36 such records in the corpus).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."}]}}"#,
+        );
+        assert!(r.plan_rejection_message().is_none());
+        assert!(!r.is_plan_rejection_boundary());
+        assert!(!r.opens_turn());
+    }
+
+    #[test]
+    fn plan_approval_is_not_a_boundary() {
+        // The approval path is the harness greenlight (no typed message, no is_error) —
+        // must NOT become a turn boundary.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"User has approved your plan. You can now start coding. Your plan has been saved to: /Users/testuser/.claude/plans/elegant-scribbling-dream.md"}]}}"#,
+        );
+        assert!(!r.is_plan_rejection_boundary());
+        assert!(!r.is_auq_answer_boundary());
+        assert!(!r.opens_turn());
+    }
+
+    #[test]
+    fn plan_rejection_surfaces_plan_pointer_via_index() {
+        // The ExitPlanMode tool_use carries planFilePath; the rejection resolves it via
+        // the PlanIndex → the reconstructed user text carries a `[plan: …]` pointer.
+        let tool_use = parse(
+            r##"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN","name":"ExitPlanMode","input":{"plan":"# the plan body","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"##,
+        );
+        let rejection = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nadd a screenshot check first"}]}}"#,
+        );
+        let index = PlanIndex::from_records([&tool_use]);
+        assert_eq!(
+            index.plan_path("toolu_PLAN"),
+            Some("/Users/testuser/.claude/plans/elegant-scribbling-dream.md")
+        );
+        let text = rejection
+            .reconstructed_user_text(Some(&index))
+            .expect("reconstructed");
+        assert!(text.starts_with("add a screenshot check first"));
+        assert!(
+            text.contains("[plan: /Users/testuser/.claude/plans/elegant-scribbling-dream.md]"),
+            "plan pointer surfaced: {text}"
+        );
+    }
+
+    #[test]
+    fn plan_rejection_of_non_exit_plan_tool_has_no_pointer() {
+        // A rejection-with-message whose tool_use_id is NOT an ExitPlanMode → still a
+        // genuine-user boundary, but no plan pointer (the index does not resolve it).
+        let rejection = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_EDIT","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nuse a different file path"}]}}"#,
+        );
+        let index = PlanIndex::default(); // no ExitPlanMode indexed
+        assert!(rejection.is_plan_rejection_boundary());
+        let text = rejection.reconstructed_user_text(Some(&index)).unwrap();
+        assert_eq!(text, "use a different file path");
+        assert!(!text.contains("[plan:"));
+    }
+
+    #[test]
+    fn exit_plan_pointers_extracts_id_and_path() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"x","planFilePath":"/plans/a.md"}}]}}"#,
+        );
+        assert_eq!(
+            r.exit_plan_pointers(),
+            vec![("p1".to_string(), "/plans/a.md".to_string())]
+        );
+        // A non-ExitPlanMode record yields nothing.
+        let other = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Read","input":{"file_path":"/x"}}]}}"#,
+        );
+        assert!(other.exit_plan_pointers().is_empty());
+    }
+
+    #[test]
+    fn plan_index_skips_pointer_without_path() {
+        // An ExitPlanMode with NO planFilePath is not indexed (empty path → no pointer).
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"x"}}]}}"#,
+        );
+        let index = PlanIndex::from_records([&r]);
+        assert!(index.plan_path("p1").is_none());
+    }
+
+    #[test]
+    fn opens_turn_matches_genuine_user() {
+        // A plain genuine user opens a turn; a plain tool_result carrier does not.
+        let genuine = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
+        assert!(genuine.opens_turn());
+        let carrier = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
+        );
+        assert!(!carrier.opens_turn());
+    }
+
+    #[test]
+    fn is_synthetic_user_marker_matches_each_form() {
+        assert!(is_synthetic_user_marker("[Request interrupted by user]"));
+        assert!(is_synthetic_user_marker(
+            "[Request interrupted by user for tool use]"
+        ));
+        assert!(is_synthetic_user_marker("<local-command-stdout>anything"));
+        assert!(is_synthetic_user_marker("<command-name>/x</command-name>"));
+        assert!(!is_synthetic_user_marker("a normal human message"));
+        // Exact-match for interrupts: a longer string merely starting with the marker is
+        // NOT excluded as an interrupt.
+        assert!(!is_synthetic_user_marker(
+            "[Request interrupted by user] and then I said more"
+        ));
     }
 
     #[test]
