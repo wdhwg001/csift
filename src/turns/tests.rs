@@ -2601,6 +2601,45 @@ fn automation_breakdown_text_empty_when_no_triggers() {
 }
 
 #[test]
+fn automation_in_scope_counts_every_notification_regardless_of_selection() {
+    use crate::model::AutomationKind::*;
+    // A monitor-heavy session: many monitor pulses + a couple workflow ones. Plan it under a
+    // budget too small to select them all; `automation_in_scope_by_kind` must still report the
+    // WHOLE-session composition (the fix for a header reading `monitor:0` on a monitor-dominated
+    // session), whereas the SELECTED `automation_by_kind` may report fewer.
+    let mut turns = vec![mk_turn(0, Some("human ask"), Some("human reply"), 1, 0)];
+    for i in 1..=6 {
+        turns.push(mk_automation_turn(i, Monitor, "monitor tick fired"));
+    }
+    turns.push(mk_automation_turn(7, Workflow, "wf done"));
+    let sr = scan_with_turns(turns, Vec::new());
+    let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
+    // In-scope counts ALL pulses: [bg, agent, workflow, monitor, task] = 6 monitor + 1 workflow.
+    let in_scope = automation_in_scope_by_kind(std::slice::from_ref(&plan));
+    assert_eq!(in_scope, [0, 0, 1, 6, 0]);
+    assert_eq!(in_scope.iter().sum::<usize>(), 7);
+    // The selected breakdown is a SUBSET of the in-scope one (never larger in any class).
+    let selected = automation_by_kind(std::slice::from_ref(&plan));
+    for (sel, scope) in selected.iter().zip(in_scope.iter()) {
+        assert!(sel <= scope, "selected per-class must not exceed in-scope");
+    }
+}
+
+#[test]
+fn automation_in_scope_empty_when_no_automation() {
+    // A purely-human session has no in-scope automation in any class.
+    let sr = scan_with_turns(
+        vec![mk_turn(0, Some("ask"), Some("reply"), 0, 0)],
+        Vec::new(),
+    );
+    let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
+    assert_eq!(
+        automation_in_scope_by_kind(std::slice::from_ref(&plan)),
+        [0, 0, 0, 0, 0]
+    );
+}
+
+#[test]
 fn automation_by_kind_skips_non_user_and_missing_turns() {
     // Exercise the two guard arms in `automation_by_kind`: an AssistantOnly selection (does not
     // SHOW the user side → skipped) and a selection pointing at a turn_index that is not present

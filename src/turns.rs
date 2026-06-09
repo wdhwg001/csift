@@ -1969,6 +1969,20 @@ fn render_text(
             plan.rendered_chars,
             ctx.budget_chars
         );
+        // Whole-session automation composition, INDEPENDENT of budget selection — so a
+        // monitor-heavy session isn't silently read as "no automation" when the recency
+        // window selected none of its deep pulses. Shown only when MORE automation exists in
+        // scope than was selected (otherwise the selected note above already tells the truth).
+        let in_scope_by = automation_in_scope_by_kind(std::slice::from_ref(plan));
+        let in_scope_total: usize = in_scope_by.iter().sum();
+        if in_scope_total > n_automation {
+            println!(
+                "  in scope (not all selected): {} automation trigger{} — {}",
+                in_scope_total,
+                if in_scope_total == 1 { "" } else { "s" },
+                automation_breakdown_text(&in_scope_by)
+            );
+        }
         if let (Some(sline), true) = (plan.newest_summary_line, plan.dedup_demoted > 0) {
             println!(
                 "  dedup: {} units also present in summary L{} (demoted, flagged)",
@@ -2283,6 +2297,35 @@ fn automation_by_kind(plans: &[SessionPlan]) -> [usize; 5] {
     by
 }
 
+/// Per-class counts of EVERY in-scope automation trigger — the whole-session composition,
+/// INDEPENDENT of which turns the budget selected. This is the honest denominator behind the
+/// selected [`automation_by_kind`]: at a realistic budget the recency window often selects
+/// ZERO of a monitor-heavy session's deep monitor pulses, so the SELECTED breakdown reads
+/// `monitor:0` and misleads a reader into thinking there was no monitor activity. The header
+/// emits this IN-SCOPE count alongside the selected one so the whole-session truth is never
+/// reported as zero. (NOTE: isMeta ScheduleWakeup wakeup-TICKS do not open turns yet — that
+/// segmentation is a separate deferred item — so they are not yet counted here either; this
+/// captures every turn-OPENING automation pulse, e.g. the monitor `<task-notification>`s.)
+fn automation_in_scope_by_kind(plans: &[SessionPlan]) -> [usize; 5] {
+    let mut by = [0usize; 5];
+    for plan in plans {
+        for t in &plan.turns {
+            if !(t.user.is_some() && t.is_automation) {
+                continue;
+            }
+            let kind = t
+                .automation
+                .as_ref()
+                .map(|a| a.kind)
+                .unwrap_or(crate::model::AutomationKind::Task);
+            if let Some(idx) = AUTOMATION_KINDS.iter().position(|k| *k == kind) {
+                by[idx] += 1;
+            }
+        }
+    }
+    by
+}
+
 /// Render a per-class automation breakdown as `kind:count` pairs for the non-zero classes,
 /// e.g. `2 background-command, 1 agent`. Empty when no class has a count (the caller then
 /// shows just the total). Used by BOTH the text header detail and as the JSON `by_kind`
@@ -2330,6 +2373,16 @@ fn render_json(
         .zip(by.iter())
         .map(|(k, n)| (k.slug().to_string(), json!(n)))
         .collect();
+    // The whole-session composition, INDEPENDENT of budget selection — so a monitor-dominated
+    // session never reports `monitor:0` just because the recency window didn't reach the deep
+    // pulses (the selected `automation_by_kind` can read 0 for a class that has dozens in
+    // scope). A reader compares the two to see "much monitor activity exists, little selected".
+    let in_scope_by = automation_in_scope_by_kind(plans);
+    let in_scope_by_kind: serde_json::Map<String, serde_json::Value> = AUTOMATION_KINDS
+        .iter()
+        .zip(in_scope_by.iter())
+        .map(|(k, n)| (k.slug().to_string(), json!(n)))
+        .collect();
     // `sessions_in_scope` is the TRUE scope (every discovered session); `sessions_rendered` is
     // how many fit the budget. Keeping them distinct stops a `--budget` knob from silently
     // rewriting "scope" and keeps a targeted top-level uuid from reading as `0 top-level`.
@@ -2345,6 +2398,7 @@ fn render_json(
         "selected_user": total_user,
         "automation_triggers": total_automation,
         "automation_by_kind": by_kind,
+        "automation_in_scope_by_kind": in_scope_by_kind,
     });
     {
         let s = serde_json::to_string(&header)?;

@@ -1900,13 +1900,23 @@ fn render_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
     }
 }
 
-/// Print the per-session header, returning whether a blank separator is needed next.
-fn session_header(first: &mut bool, sid: &str) {
+/// Print the per-transcript header. A SUBAGENT transcript is branded
+/// `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring list/files/search/turns text) — its
+/// `session_id` is a bare hex, NOT a re-feedable `--session` target, so it must never be
+/// tokened a bare `SESSION`. A top-level transcript prints `SESSION <uuid>`.
+fn session_header(first: &mut bool, s: &ScanResult) {
     if !*first {
         println!();
     }
     *first = false;
-    println!("SESSION {sid}");
+    if s.is_subagent {
+        println!(
+            "SUBAGENT {}  ·  parent SESSION {}",
+            s.session_id, s.parent_session_id
+        );
+    } else {
+        println!("SESSION {}", s.session_id);
+    }
 }
 
 fn render_coverage_text(ctx: &RenderCtx, sessions: &[ScanResult]) -> Result<()> {
@@ -1919,7 +1929,7 @@ fn render_coverage_text(ctx: &RenderCtx, sessions: &[ScanResult]) -> Result<()> 
         }
         any = true;
         let rep = replay(&s.events, None);
-        session_header(&mut first, &s.session_id);
+        session_header(&mut first, s);
         println!("  file: {file}");
         let ranges = apply_line_range(rep.final_buffer.known_lines(), ctx.line_range);
         let known = ranges.len();
@@ -1983,7 +1993,7 @@ fn render_patches_text(
             continue;
         }
         any = true;
-        session_header(&mut first, &s.session_id);
+        session_header(&mut first, s);
         println!("  file: {file}");
 
         // Interleave segments + boundaries in jsonl-line order.
@@ -2076,7 +2086,7 @@ fn render_at_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Pa
             continue;
         }
         any = true;
-        session_header(&mut first, &s.session_id);
+        session_header(&mut first, s);
         println!("  file: {file}");
         if let Some(c) = cutoff {
             println!("  as of: jsonl line {c}");
@@ -2128,27 +2138,54 @@ fn render_plan_text(
 ) -> Result<()> {
     let dry = false; // --plan dry-run is surfaced via --coverage; here we restore.
     let _ = dry;
-    let mut first = true;
-    let mut any = false;
-    let mut restored: Option<PlanCandidate> = None;
 
+    // FIRST pass: resolve the SINGLE global-latest candidate `--out`/the body actually
+    // restores, across every in-scope session, BEFORE rendering. Identify it by
+    // (session_id, line_no) so the per-session marker can say "restored" on exactly the one
+    // winner — earlier, the per-session "latest" was each tagged "(latest — restored)",
+    // which was a lie on every session but the winner whenever scope spanned >1 session.
+    let mut restored: Option<PlanCandidate> = None;
+    let mut restored_sid: Option<&str> = None;
     for s in sessions {
-        // With `--file`, restrict to candidates whose Write path matches it — so
-        // `--plan --file X` restores X's latest content, not the globally-latest candidate
-        // (the help promises "reconstruct THAT plan file's Write content").
         let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
         if plans.is_empty() {
             continue;
         }
-        any = true;
-        session_header(&mut first, &s.session_id);
-        // Latest plan in this session by jsonl line order.
         plans.sort_by_key(|p| p.line_no);
-        let latest = plans.last().cloned();
+        if let Some(l) = plans.last() {
+            if restored
+                .as_ref()
+                .map(|r| plan_is_later(l, r))
+                .unwrap_or(true)
+            {
+                restored = Some(l.clone());
+                restored_sid = Some(&s.session_id);
+            }
+        }
+    }
+    let winner_key = restored
+        .as_ref()
+        .map(|r| (restored_sid.unwrap_or_default(), r.line_no));
+
+    // SECOND pass: render the listing. Each session's own latest is `(session-latest)`
+    // (neutral); ONLY the single global winner is `(restored — written to --out)`.
+    let mut first = true;
+    let any = restored.is_some();
+    for s in sessions {
+        let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
+        if plans.is_empty() {
+            continue;
+        }
+        session_header(&mut first, s);
+        plans.sort_by_key(|p| p.line_no);
+        let latest_line = plans.last().map(|l| l.line_no);
         println!("  plan candidates: {}", plans.len());
         for p in &plans {
-            let marker = if Some(p.line_no) == latest.as_ref().map(|l| l.line_no) {
-                " (latest — restored)"
+            let is_winner = winner_key == Some((s.session_id.as_str(), p.line_no));
+            let marker = if is_winner {
+                " (restored — written to --out)"
+            } else if Some(p.line_no) == latest_line {
+                " (session-latest)"
             } else {
                 ""
             };
@@ -2164,16 +2201,6 @@ fn render_plan_text(
                     .unwrap_or_default(),
                 marker
             );
-        }
-        if let Some(l) = latest {
-            // Keep the globally-latest across sessions for --out.
-            if restored
-                .as_ref()
-                .map(|r| plan_is_later(&l, r))
-                .unwrap_or(true)
-            {
-                restored = Some(l);
-            }
         }
     }
 
@@ -2516,7 +2543,33 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
             }
         }
         RecoverMode::Plan => {
+            // FIRST pass: resolve the SINGLE global-latest candidate `--out` writes (and the
+            // candidate the text body would show), identified by (session_id, line_no), so
+            // every emitted record can carry an honest `is_restored` flag marking WHICH of
+            // the N session-latest candidates produced the artifact — the deciding fact was
+            // previously computed then discarded (`let _ = sid`).
             let mut global_latest: Option<(String, PlanCandidate)> = None;
+            for s in sessions {
+                let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
+                if plans.is_empty() {
+                    continue;
+                }
+                plans.sort_by_key(|p| p.line_no);
+                if let Some(l) = plans.last() {
+                    if global_latest
+                        .as_ref()
+                        .map(|(_, g)| plan_is_later(l, g))
+                        .unwrap_or(true)
+                    {
+                        global_latest = Some((s.session_id.clone(), l.clone()));
+                    }
+                }
+            }
+            let winner_key = global_latest
+                .as_ref()
+                .map(|(sid, r)| (sid.as_str(), r.line_no));
+
+            // SECOND pass: emit one record per candidate, flagging the single winner.
             for s in sessions {
                 // Same `--file` selector as the text path: with `--file`, restrict to that
                 // file's plan-write candidates so `--out` reconstructs the named file.
@@ -2529,6 +2582,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 let latest_line = plans.last().map(|p| p.line_no);
                 for p in &plans {
                     let is_latest = Some(p.line_no) == latest_line;
+                    let is_restored = winner_key == Some((s.session_id.as_str(), p.line_no));
                     let obj = json!({
                         "session_id": s.session_id,
                         "is_subagent": s.is_subagent,
@@ -2541,24 +2595,15 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                         "source": p.source,
                         "path": p.path,
                         "is_latest_in_session": is_latest,
+                        "is_restored": is_restored,
                         "chars": p.text.chars().count(),
                     });
                     println!("{}", serde_json::to_string(&obj)?);
                 }
-                if let Some(l) = plans.last() {
-                    if global_latest
-                        .as_ref()
-                        .map(|(_, g)| plan_is_later(l, g))
-                        .unwrap_or(true)
-                    {
-                        global_latest = Some((s.session_id.clone(), l.clone()));
-                    }
-                }
             }
-            if let (Some((sid, r)), Some(p)) = (&global_latest, out_path) {
+            if let (Some((_, r)), Some(p)) = (&global_latest, out_path) {
                 std::fs::write(p, &r.text)
                     .with_context(|| format!("cannot write --out file {}", p.display()))?;
-                let _ = sid;
             }
         }
     }

@@ -34,7 +34,11 @@ use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
 /// explicitly; a bare-uuid positional is the equivalent shorthand.
 const SESSION_FLAG_HELP: &str = "Restrict to a single (parent) session id (uuid). Use alone \
     to find that one session across all projects, or with a PATH to scope to it; a bare-uuid \
-    POSITIONAL is equivalent.";
+    POSITIONAL is equivalent. To scope to the CALLING session (there is no --self flag yet), \
+    chain whoami: `--session \"$(csift whoami --format json | jq -r .session_id)\"` — but note \
+    that yields a bare SUBAGENT hex inside a subagent, which is REJECTED here; first map it to \
+    its parent via `csift agents --agent <hex> --format json` (read parent_session_id) and feed \
+    THAT. Default scope (no --session, no PATH) is ALL projects, not the current session.";
 
 /// Parse + normalize the process argv into a [`Cli`] (the real entrypoint).
 ///
@@ -432,7 +436,8 @@ pub enum OutputFormat {
         subagent row; `parent_session_id` is the re-feedable owning uuid (= session_id for a \
         top-level row) — never re-feed a subagent `session_id`. The \
         `first_user`/`last_user`/`last_agent` fields are {excerpt, ts_utc, ts_local} \
-        sub-objects (or null when absent)."
+        sub-objects (or null when absent). UNLIKE search/files/recover/turns, this stream has \
+        NO trailing terminator object — it is pure JSONL, end-of-stream = EOF."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, or a direct
@@ -665,7 +670,9 @@ pub struct SearchArgs {
     /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Mutually exclusive with `--since` / `--until`.
+    /// Discover turn indices from the `TURN N` header in `csift search` text output, or the
+    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
@@ -793,13 +800,19 @@ pub enum AgentKindFilter {
         skipped_lines}. `agent_type` is the semantic agent ROLE / subagent-type string (e.g. \
         `Explore`, `general-purpose`, `oh-my-claudecode:critic`, `workflow-subagent`) — \
         DISTINCT from `kind`, which is the on-disk transcript SHAPE (builtin-task | workflow). \
-        There is no role filter today (only `--kind` for shape). `--with-files` adds a \
+        There is no role filter today (only `--kind` for shape). ID-DOMAIN: `agent_id` IS this \
+        record's transcript-own id — the SAME concept other commands call `session_id` (a bare \
+        SUBAGENT hex here, since `agents` only lists subagents, so an `is_subagent` flag is \
+        implied-true and omitted); re-feed `parent_session_id`, never the bare `agent_id`. \
+        `--with-files` adds a \
         `files_changed` array; `--returned-message` \
         (implied by a single `--agent`) adds `returned_message` + `returned_message_source`. \
         Under `--tree`, a workflow RUN parent object is {run_id, task_id, workflow_name, \
         status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, \
         started_utc, started_local, children}. Every `_utc` field carries a paired `_local` \
-        (system-local ISO). The malformed-line count rides on each node's `skipped_lines`."
+        (system-local ISO). The malformed-line count rides on each node's `skipped_lines`. \
+        UNLIKE search/files/recover/turns, this stream has NO trailing terminator object — it \
+        is pure JSONL, end-of-stream = EOF."
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list.
@@ -1094,7 +1107,9 @@ pub struct FilesArgs {
     /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Mutually exclusive with `--since` / `--until`.
+    /// Discover turn indices from the `TURN N` header in `csift search` text output, or the
+    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
@@ -1189,7 +1204,12 @@ pub enum RecoverMode {
         WITH `--file <abs>` it restricts to THAT file's plan-write candidates and `--out` \
         reconstructs the named file's latest Write content (ExitPlanMode candidates, which \
         have no path, are excluded); WITHOUT `--file` it ENUMERATES every plan candidate in \
-        range (printing `plan candidates: N`) and `--out` writes the single latest candidate. \
+        range (printing `plan candidates: N`) and `--out` writes the single GLOBAL-latest \
+        candidate across all in-scope sessions. In the listing exactly that one winner is \
+        tagged `(restored — written to --out)`; each other session's own newest plan is the \
+        neutral `(session-latest)` — so spanning multiple sessions never claims N plans were \
+        restored. JSON marks the same single winner with `is_restored:true` (alongside the \
+        per-session `is_latest_in_session`). \
         A WRITE qualifies as a plan-file by a COMPONENT-scoped heuristic (not a raw substring): \
         a `plans/` directory component (the `~/.claude/plans/` convention), OR the filename's \
         stem being the token `plan` / carrying `plan` delimited by `-`/`_`/space \
@@ -1222,7 +1242,10 @@ pub enum RecoverMode {
           Per-MODE record objects (each tagged by a `type`/`mode`-specific shape — \
         `--patches` emits `{type:\"segment\",…}` + `{type:\"boundary\",…}`; `--coverage` emits \
         a `{covered_ranges, boundaries, events, fragments, recoverable_lines, …}` object; \
-        `--at` emits line/gap records; `--plan` emits plan-candidate records). EVERY per-record \
+        `--at` emits line/gap records; `--plan` emits plan-candidate records carrying both \
+        `is_latest_in_session` (newest in ITS session) and `is_restored` (the SINGLE \
+        global-latest candidate `--out` actually writes — true on exactly one record)). \
+        EVERY per-record \
         object carries the id-domain discriminators `{session_id, is_subagent, \
         parent_session_id}` (is_subagent flags a bare-hex subagent record; re-feed \
         parent_session_id, never the bare session_id). Records are followed by a UNIFORM \
@@ -1278,9 +1301,11 @@ pub struct RecoverArgs {
     /// grammar as `--since` — a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw` (`45s`, `90m`, `2h`, `3d`,
     /// `1w`) = that long ago, an ISO8601 datetime (`2026-06-01T05:00:00Z`), or a bare date
     /// (`2026-06-01`) = LOCAL MIDNIGHT — PLUS the recover-only forms `@turn:<N>` (snapshot as
-    /// of the first line after genuine-user turn N) and `@line:<N>` (snapshot as of JSONL
-    /// TRANSCRIPT line N — the `line_no` shown in this tool's output, NOT a file line of
-    /// `--file`; for a 1-based FILE-line span of `--file` use `--line-range` instead).
+    /// of the first line after genuine-user turn N — discover N from the `TURN N` header in
+    /// `csift search` text, or `turn_index` in any `--format json` record) and `@line:<N>`
+    /// (snapshot as of JSONL TRANSCRIPT line N — the `line_no` shown in this tool's output,
+    /// NOT a file line of `--file`; for a 1-based FILE-line span of `--file` use `--line-range`
+    /// instead).
     /// Setting this both selects the mode AND supplies its cutoff.
     #[arg(long, value_name = "WHEN", group = "mode")]
     pub at: Option<String>,
@@ -1292,7 +1317,9 @@ pub struct RecoverArgs {
     /// Restore a plan (ExitPlanMode text / plan-file Write). WITH `--file <abs>`: restrict to
     /// THAT file's plan-write candidates and reconstruct its latest Write content (path-less
     /// ExitPlanMode candidates are excluded). WITHOUT `--file`: enumerate every plan candidate
-    /// in range (`plan candidates: N`); `--out` then writes the single latest candidate. A
+    /// in range (`plan candidates: N`); `--out` then writes the single GLOBAL-latest candidate
+    /// across all in-scope sessions — tagged `(restored — written to --out)` in the listing
+    /// (each other session's newest is the neutral `(session-latest)`; JSON: `is_restored`). A
     /// Write qualifies via a COMPONENT-scoped heuristic — a `plans/` dir component, or the
     /// filename stem being/carrying the token `plan` (delimited), so `sample.md` and a
     /// `widget-app` ancestor dir do NOT match. `--file` is optional ONLY for `--plan`.
@@ -1302,7 +1329,9 @@ pub struct RecoverArgs {
     /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Mutually exclusive with `--since` / `--until`.
+    /// Discover turn indices from the `TURN N` header in `csift search` text output, or the
+    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
@@ -1326,9 +1355,11 @@ pub struct RecoverArgs {
     pub line_range: Option<String>,
 
     /// Write the reconstructed artifact (snapshot / plan / concatenated patches)
-    /// verbatim to this file; the summary still prints to stdout. IGNORED in `--coverage`
-    /// mode (coverage is a scoping summary — there is no artifact to write, so no file is
-    /// created and a stderr note is printed); it writes for `--patches` / `--at` / `--plan`.
+    /// verbatim to this file; the summary still prints to stdout. The DIFFERENCE from stdout:
+    /// stdout shortens each over-long line/body to a ~400-char excerpt (a `… (+N chars)`
+    /// marker) for readability, whereas `--out` writes every line in full. IGNORED in
+    /// `--coverage` mode (a scoping summary — no artifact to write, so no file is created and
+    /// a stderr note is printed); it writes for `--patches` / `--at` / `--plan`.
     #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
 
@@ -1426,10 +1457,16 @@ impl RecoverArgs {
         TRUE scope (all discovered top-level + subagent sessions), how many rendered within \
         budget, and the realized multiplier.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
-        mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). \
-        `--out <PATH>` writes the full (un-terminal-truncated) reconstruction to a file \
-        while the summary still prints to stdout. `--format json` emits one VERBATIM \
-        (un-truncated) object per unit plus interleaved compaction-boundary records.",
+        mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). NOTE \
+        `turns` TEXT prints `L<line>` per unit, NOT a `TURN N` marker — to pick a value for \
+        `--turn-range` read the index from `csift search` text (`TURN N` header) or this \
+        command's own `--format json` (`turn_index`). \
+        `--out <PATH>` captures the SAME rendered reconstruction that prints to stdout into a \
+        file (byte-identical — turns does NOT line-truncate stdout, so `--out` differs only in \
+        going to a file rather than the terminal; over-cap units are middle-truncated with an \
+        explicit `… [+K chars, L lines elided] …` marker in BOTH). For UN-truncated unit \
+        bodies use `--format json`, which emits one VERBATIM object per unit (full `text`, no \
+        per-unit cap) plus interleaved compaction-boundary records.",
     after_help = "EXAMPLES\n  \
           csift turns .                                     # default 40K-char reconstruction, top-level thread\n  \
           csift turns <uuid> --budget 12000                 # recover JUST my thread (~10-15K, no fan-out)\n  \
@@ -1468,13 +1505,18 @@ impl RecoverArgs {
         JSON SCHEMA (per --format json)\n  \
           A leading `{kind:\"session_header\", sessions_in_scope, sessions_rendered,\n  \
           top_level_sessions, subagent_sessions, budget_chars, budget_is_per_session,\n  \
-          max_total_chars, selected_user, automation_triggers, automation_by_kind}` object —\n  \
+          max_total_chars, selected_user, automation_triggers, automation_by_kind,\n  \
+          automation_in_scope_by_kind}` object —\n  \
           `sessions_in_scope` is the TRUE scope (every discovered session), `sessions_rendered`\n  \
           is how many fit the budget, the top_level/subagent split is over ALL in scope,\n  \
           `budget_chars`/`max_total_chars` are ALWAYS in CHARS (a `--budget-unit tokens` budget\n  \
-          is pre-multiplied ×4, so they read 4× `--budget` under tokens mode), and\n  \
-          `automation_by_kind` breaks the lumped `automation_triggers` total down per class\n  \
-          ({background-command,agent,workflow,monitor,task}). Then one object PER emitted unit:\n  \
+          is pre-multiplied ×4, so they read 4× `--budget` under tokens mode),\n  \
+          `automation_by_kind` breaks the SELECTED `automation_triggers` total down per class\n  \
+          ({background-command,agent,workflow,monitor,task}), and `automation_in_scope_by_kind`\n  \
+          is the SAME breakdown over EVERY in-scope automation pulse REGARDLESS of budget\n  \
+          selection — so a monitor-heavy session is never read as `monitor:0` just because the\n  \
+          recency window selected none of its deep pulses (compare the two to see how much\n  \
+          automation exists vs was rendered). Then one object PER emitted unit:\n  \
           {session_id, is_subagent, parent_session_id, turn_index, line_no, role, ts_utc,\n  \
           ts_local, tool_calls, full_chars, rendered_chars, truncated, elided_chars,\n  \
           elided_lines, also_in_summary, compactions_before, text, is_automation} (is_subagent\n  \
@@ -1484,7 +1526,13 @@ impl RecoverArgs {
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
           {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
           {kind:\"skipped_lines\", skipped_lines:N} ALWAYS closes the stream (even when N=0),\n  \
-          so a JSONL consumer can detect end-of-stream — matching search/files/recover."
+          so a JSONL consumer can detect end-of-stream. NOTE the terminator SHAPE is NOT yet\n  \
+          uniform tool-wide: turns is the ONLY command whose terminator is `kind`-tagged.\n  \
+          search closes with `{matched,dropped_by_cap,skipped_lines}`, files with\n  \
+          `{total_mutations,distinct_files,skipped_lines,detail_level}`, recover with\n  \
+          `{summary:{…}}` (nested) — all THREE untagged — and list/agents emit NO terminator\n  \
+          (end-of-stream = EOF). Key any portable EOF check on the per-command shape, not on a\n  \
+          shared `kind:\"skipped_lines\"` (a tool-wide `{kind:\"end\",…}` is a planned change)."
 )]
 pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
@@ -1625,7 +1673,9 @@ pub struct TurnsArgs {
     /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Mutually exclusive with `--since` / `--until`.
+    /// Discover turn indices from the `TURN N` header in `csift search` text output, or the
+    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `--until`.
     #[arg(long, value_name = "START..END")]
     pub turn_range: Option<String>,
 
@@ -1640,8 +1690,10 @@ pub struct TurnsArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Write the full (un-terminal-truncated) reconstruction verbatim to this file;
-    /// the summary still prints to stdout.
+    /// Capture the SAME rendered reconstruction that prints to stdout into this file
+    /// (byte-identical — turns does NOT truncate stdout; over-cap units are middle-truncated
+    /// with a `… [+K chars, L lines elided] …` marker in BOTH). The summary still prints to
+    /// stdout. For UN-truncated unit bodies use `--format json` (full verbatim `text`).
     #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
 
@@ -1779,7 +1831,11 @@ impl TurnsArgs {
         EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
           csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
-          csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}"
+          csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
+          # FROM A SUBAGENT — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
+          csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json\n  \
+          # …then scope the whole conversation with that parent uuid:\n  \
+          csift search \"<pattern>\" --session \"$(csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json | jq -r .parent_session_id)\""
 )]
 pub struct WhoamiArgs {
     /// FORCE a `path` line even when the jsonl can't be resolved (then it prints

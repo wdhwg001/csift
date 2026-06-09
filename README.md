@@ -224,6 +224,11 @@ fabricated), `--coverage`/`--dry-run` (scope without dumping), and `--plan` (res
 `--plan` matches plan-files by a **component-scoped** heuristic — a `plans/` directory component or a
 filename stem being/carrying the token `plan` (delimited), so `sample.md` / a `widget-app` ancestor
 dir do **not** match; pass `--file <abs>` to pin an exact file (its latest `Write` is then restored).
+When scope spans multiple sessions, `--out` writes the **single GLOBAL-latest** candidate; in the
+listing exactly that one winner is tagged `(restored — written to --out)`, each other session's newest
+is the neutral `(session-latest)`, and JSON flags the same single winner with `is_restored:true`
+(alongside the per-session `is_latest_in_session`). A SUBAGENT transcript that wrote a plan is branded
+`SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never a bare-hex `SESSION`).
 `--out` writes the artifact verbatim and is **data-safe on an empty result** (leaves the destination
 UNTOUCHED, prints no false `(wrote …)` line — a stderr `note: … left untouched` fires instead); it is a
 no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`) applies in
@@ -258,8 +263,12 @@ prompts** that drive a monitor/cron *cadence* arrive as `isMeta:true` user recor
 preceding genuine-user turn. In
 `--format json` the attribution is structural (`is_automation` / `trigger_kind` / `task_id` / `status` /
 `event`) on the user-segment object, with a leading `{kind:"session_header",…}` object carrying the
-lumped `automation_triggers` + per-class `automation_by_kind` + `sessions_in_scope` vs
-`sessions_rendered`. These pulses are
+lumped `automation_triggers` + per-class `automation_by_kind` (the SELECTED triggers) +
+`automation_in_scope_by_kind` (the SAME breakdown over EVERY in-scope pulse, REGARDLESS of budget — so a
+monitor-heavy session is never read as `monitor:0` just because the recency window selected none of its
+deep pulses) + `sessions_in_scope` vs
+`sessions_rendered`. The text header likewise prints an `in scope (not all selected): N automation
+triggers — …` line when more automation exists than was rendered. These pulses are
 excluded from the `--round-trip-fraction` human-reserved floor. See the [budget model](#budget-model)
 and [richness model](#richness-model) below.
 
@@ -398,8 +407,11 @@ treatment via the shared code path when spanned.
 - **JSON** (`--format json`) — one VERBATIM (un-truncated) object per emitted unit, interleaved
   `compaction_boundary` records, and a `collapsed_agents` placeholder record (`agent_messages` /
   `tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span.
-- **`--out PATH`** writes the full (un-terminal-truncated) reconstruction verbatim to a file while the
-  summary still prints to stdout. **Data-safe on an empty result:** when nothing renders within budget
+- **`--out PATH`** captures the **same** rendered reconstruction that prints to stdout into a file
+  (byte-identical — `turns` does not line-truncate stdout, so over-cap units are middle-truncated with a
+  `… [+K chars, L lines elided] …` marker in BOTH; for **un**-truncated unit bodies use `--format json`,
+  whose `text` is verbatim). The summary still prints to stdout. **Data-safe on an empty result:** when
+  nothing renders within budget
   the destination is left UNTOUCHED (never truncated to 0 bytes) and no false `(wrote …)` line is
   printed — a stderr `note: … left untouched` fires instead (the same guard `recover --patches`/`--at`
   apply on a no-history result).

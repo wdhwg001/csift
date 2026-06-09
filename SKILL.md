@@ -484,7 +484,13 @@ file's Read / Write / Edit stream in transcript order. Four mutually-exclusive m
   `--file <abs>`** it restricts to THAT file's plan-write candidates and `--out` reconstructs the
   named file's latest `Write` content (path-less `ExitPlanMode` candidates are excluded); **without
   `--file`** it ENUMERATES every plan candidate in range (prints `plan candidates: N`) and `--out`
-  then writes the single latest candidate. A `Write` qualifies as a plan-file by a **component-scoped**
+  then writes the **single GLOBAL-latest** candidate across all in-scope sessions. In the listing
+  exactly that one winner is tagged `(restored — written to --out)`; each other session's newest plan is
+  the neutral `(session-latest)` — so spanning multiple sessions never claims N plans were restored.
+  JSON flags the same single winner with `is_restored:true` (alongside the per-session
+  `is_latest_in_session`). A subagent transcript that wrote a plan is branded
+  `SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never a bare-hex `SESSION`). A `Write`
+  qualifies as a plan-file by a **component-scoped**
   heuristic (not a raw substring): a `plans/` directory component (the `~/.claude/plans/` convention),
   or the filename stem being/carrying the token `plan` delimited by `-`/`_`/space — so `sample.md` and a
   `widget-app` ancestor dir do **not** match. `--file` is optional only here, with `Lnnn`/turn/
@@ -572,7 +578,11 @@ as Phase-2 fill. So a consumer sees at a glance which "user turns" were machine 
 round-trip floor is never silently spent on a pulse→ack pair. In `--format json` the automation
 attribution is STRUCTURAL on the user-segment object (`is_automation` + `trigger_kind` + `task_id` +
 `status` + `event`), not only a text prefix; the stream opens with a `{kind:"session_header",…}` object
-carrying the human/automation split (lumped `automation_triggers` + per-class `automation_by_kind`) +
+carrying the human/automation split (lumped `automation_triggers` + per-class `automation_by_kind` = the
+SELECTED triggers, PLUS `automation_in_scope_by_kind` = the SAME breakdown over EVERY in-scope pulse
+regardless of budget — so a monitor-heavy session is never read as `monitor:0` just because the recency
+window selected none of its deep pulses; the text header prints an `in scope (not all selected): …` line
+when more automation exists than was rendered) +
 budget fan-out (`sessions_in_scope` = true scope, `sessions_rendered` = how many fit the budget).
 
 **Budget model.** `--budget` (default 40000, chars or `--budget-unit tokens` ≈4 chars/token) is applied
@@ -672,7 +682,9 @@ csift turns <uuid> --include-subagents            # ALSO span subagents (budget 
 
 JSON (`--format json`) opens with a `{kind:"session_header",…}` object (`sessions_in_scope` vs
 `sessions_rendered`, top-level/subagent split, lumped `automation_triggers` + per-class
-`automation_by_kind`), then one VERBATIM (un-truncated) object per emitted unit, interleaved
+`automation_by_kind` = SELECTED + `automation_in_scope_by_kind` = the SAME breakdown over EVERY in-scope
+pulse regardless of budget, so a monitor-heavy session never reads `monitor:0`), then one VERBATIM
+(un-truncated) object per emitted unit, interleaved
 compaction-boundary records, and a `collapsed_agents` placeholder record (with `agent_messages` /
 `tool_calls` / `failed` / `first_line` / `last_line`) per collapsed span. Each per-unit + collapsed
 record carries `session_id` + the id-domain discriminators `is_subagent` + `parent_session_id`
@@ -891,6 +903,15 @@ search the current session and `csift whoami` is unavailable, read that file and
 # The pattern mixes English directives with a multi-byte CJK token to show that regex
 # search handles arbitrary UTF-8 literals (serde_json emits non-ASCII verbatim):
 csift search "don't stop|keep going|x" -i --session "$(csift whoami --format json | jq -r .session_id)"
+
+# ⚠ SUBAGENT CAVEAT for the recipe above: this whoami→--session chain only works from a
+# TOP-LEVEL session. Inside a subagent, $CLAUDE_CODE_SESSION_ID (and thus whoami) yields the
+# subagent's OWN bare hex, which --session REJECTS as a hard error on every corpus subcommand
+# ("a bare SUBAGENT id never names a top-level session"). Map the hex to its PARENT first and
+# scope to THAT (the parent uuid covers the whole conversation, the subagent transcript
+# included):
+PARENT="$(csift agents --agent "$(csift whoami --format json | jq -r .session_id)" --format json | jq -r .parent_session_id)"
+csift search "don't stop|keep going" -i --session "$PARENT"
 
 # Recover what a specific subagent did, then read its full exchange:
 csift agents --session <uuid> --kind workflow            # find the agent + its time window

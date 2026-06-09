@@ -773,22 +773,45 @@ fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// `sed` mutates a file ONLY with an in-place flag (`-i`, `-i.bak`, `--in-place`); a
-/// `sed` without it streams to stdout and changes no file → record nothing.
+/// `sed` mutates a file ONLY with an in-place flag (`-i`, `-i.bak`, `--in-place`,
+/// `--in-place=.bak`); a `sed` without it streams to stdout and changes no file → record
+/// nothing.
 ///
 /// `sed [opts] '<script>' <file>…` — the FIRST non-option operand is the script (e.g.
 /// `s/a/b/`), NOT a file, so it is skipped; every later non-option operand is a file.
-/// (An `-e <expr>` / `-f <file>` flag would carry its script separately, but the bare
-/// `sed -i s/a/b/ file` form is the dominant case; for a heuristic we handle that.)
+///
+/// Three operand-split subtleties a naive "first bare operand is the script" loop gets
+/// wrong, each fixed here:
+/// - **explicit-script flags** (`-e <expr>`, `--expression=<expr>`, `-f <file>`,
+///   `--file=<file>`): when ANY of these is present the script is carried by the flag, so
+///   there is NO positional script — EVERY remaining bare operand is an edited file. The
+///   flag VALUES are stripped first ([`strip_value_flags`]) so a multi-`-e` script
+///   (`-e 's/a/b/' -e 's/c/d/'`) never leaks its 2nd-and-later expressions as phantom
+///   files.
+/// - **BSD `-i ''` empty suffix**: macOS/BSD sed spells in-place as `-i ''` where the
+///   following `''` token is the (here empty) backup suffix, NOT the script. An
+///   empty-after-quote-strip operand is therefore never the script nor a file → skipped,
+///   so the REAL script no longer slides into the script slot and gets emitted as a file.
 fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
     if !operands.iter().any(|t| is_sed_in_place_flag(t)) {
         return;
     }
-    let kept = strip_input_redirects(operands);
-    let mut seen_script = false;
+    /// sed flags whose VALUE is a SCRIPT (or a script FILE), never an edited file. Their
+    /// presence also means there is no positional script operand.
+    const SCRIPT_FLAGS: &[&str] = &["-e", "--expression", "-f", "--file"];
+    let has_explicit_script = operands
+        .iter()
+        .any(|t| SCRIPT_FLAGS.contains(t) || script_flag_inline(t));
+    let kept = strip_value_flags(strip_input_redirects(operands), SCRIPT_FLAGS);
+    // With an explicit `-e`/`-f` script the first bare operand is already a file (no
+    // positional script to skip); otherwise the first bare operand IS the script.
+    let mut seen_script = has_explicit_script;
     for op in &kept {
         if op.starts_with('-') {
             continue; // an option flag (incl. the in-place flag) — not the script/file.
+        }
+        if strip_quotes(op).is_empty() {
+            continue; // a BSD `-i ''` empty backup-suffix token — not script nor file.
         }
         if !seen_script {
             seen_script = true; // the first bare operand is the sed script, not a file.
@@ -803,10 +826,17 @@ fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// True for a `sed` in-place flag: `--in-place`, or any `-i…` short flag (`-i`,
-/// `-i.bak`, …). `-i<suffix>` is GNU sed's in-place-with-backup form.
+/// True for a sed inline `--expression=…` / `--file=…` script flag (the spaced `-e`/`-f`
+/// and exact `--expression`/`--file` tokens are matched directly by [`emit_sed`]).
+fn script_flag_inline(tok: &str) -> bool {
+    matches!(tok.split_once('='), Some((name, _)) if name == "--expression" || name == "--file")
+}
+
+/// True for a `sed` in-place flag: `--in-place`, the GNU `--in-place=SUFFIX` backup form,
+/// or any `-i…` short flag (`-i`, `-i.bak`, …). `-i<suffix>` / `--in-place=<suffix>` are
+/// sed's in-place-with-backup forms.
 fn is_sed_in_place_flag(tok: &str) -> bool {
-    tok == "--in-place" || tok.starts_with("-i")
+    tok == "--in-place" || tok.starts_with("--in-place=") || tok.starts_with("-i")
 }
 
 /// `git <sub> …` — record a single coarse `git:<sub>` pseudo-path ONLY when `<sub>` is
@@ -841,9 +871,11 @@ fn git_subcommand<'a>(operands: &[&'a str]) -> Option<&'a str> {
     None
 }
 
-/// The output-flag NAMES (without the leading `--`) whose value is a written path. Kept
-/// CONSERVATIVE so a flag whose value is NOT a path (a number, a format name) is never
-/// misread as a creation. Matched both as `--name=<path>` and `--name <path>`.
+/// The output-flag NAMES (without the leading `--`) whose value is a written path. Matched
+/// both as `--name=<path>` and `--name <path>`. The value is run through
+/// [`flag_output_path`], which drops a FORMAT-SELECTOR value (`--output json`,
+/// `--output=yaml`, `kubectl/gh/docker/aws/jq` idioms) — a bare format word is a render
+/// mode, not a file. A path-shaped value (`report.json`, `/tmp/out`, `build/x`) passes.
 const OUTPUT_FLAGS: &[&str] = &[
     "junit-xml",
     "junitxml",
@@ -855,6 +887,43 @@ const OUTPUT_FLAGS: &[&str] = &[
     "logfile",
     "log-file",
 ];
+
+/// Well-known FORMAT-SELECTOR values an `--output`/`--out`/`--logfile` flag commonly takes
+/// instead of a path (`kubectl -o`, `gh`, `docker`, `aws`, `jq` idioms). A bare one of
+/// these — with no `/` and no `.extension` to mark it path-shaped — is a render mode, never
+/// a created file, so it must not fabricate a phantom-file row.
+const FORMAT_SELECTORS: &[&str] = &[
+    "json",
+    "yaml",
+    "yml",
+    "wide",
+    "table",
+    "text",
+    "name",
+    "jsonpath",
+    "go-template",
+    "gotemplate",
+    "template",
+    "csv",
+    "tsv",
+    "summary",
+    "none",
+    "raw",
+    "pretty",
+];
+
+/// Resolve an output-flag VALUE to a written path, rejecting a bare FORMAT-SELECTOR
+/// (`json`/`yaml`/`summary`/…) that carries no `/` and no `.extension` — such a value is a
+/// render mode, not a file (the doc-comment claim on [`OUTPUT_FLAGS`] that a format name is
+/// "never misread" was only true once this guard existed). A path-shaped value
+/// (`report.json` has a `.`, `/tmp/out` has a `/`) is NOT a format selector and passes.
+fn flag_output_path(value: &str) -> Option<String> {
+    let stripped = strip_quotes(value);
+    if !stripped.contains(['/', '.']) && FORMAT_SELECTORS.contains(&stripped) {
+        return None;
+    }
+    concrete_path(value)
+}
 
 /// `curl`/`wget` write to a LOCAL path only via an explicit output flag: `-o <path>`,
 /// `--output <path>`/`--output=<path>` (curl + wget), or `wget -O <path>`. A `curl -O`
@@ -1010,7 +1079,7 @@ fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
                 // its byte length is the same in the original — slice the value from there.
                 if OUTPUT_FLAGS.contains(&name) {
                     let value = &tok.orig[name.len() + 3..]; // `--` + name + `=`
-                    if let Some(path) = concrete_path(value) {
+                    if let Some(path) = flag_output_path(value) {
                         out.push(BashMutation {
                             path,
                             verb: "flag-output",
@@ -1026,7 +1095,7 @@ fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutation>) {
             if OUTPUT_FLAGS.contains(&name_eq) {
                 if let Some(next) = tokens.get(i + 1) {
                     if !next.masked.starts_with('-') {
-                        if let Some(path) = concrete_path(next.orig) {
+                        if let Some(path) = flag_output_path(next.orig) {
                             out.push(BashMutation {
                                 path,
                                 verb: "flag-output",
@@ -1102,6 +1171,29 @@ fn collect_redirections(
             push_redirect_target(&tok.orig[off..], ">>", out);
             consumed.insert(i);
             i += 1;
+        } else if body == ">&" {
+            // A bare `>&` operator. Its NEXT token is the target: a bare fd-NUMBER is an
+            // fd-dup (`>& 2`, no path), but a WORD is a file (`make >& build.log`, the
+            // bash combined-stream redirect, equivalent to `&>file`). Either way both the
+            // operator and its target token are redirect syntax, so consume both.
+            consumed.insert(i);
+            if let Some(next) = tokens.get(i + 1) {
+                if !is_fd_number(next.orig) {
+                    push_redirect_target(next.orig, ">", out);
+                }
+                consumed.insert(i + 1);
+            }
+            i += 1;
+        } else if body.starts_with(">&") {
+            // An attached `>&TARGET`. `>&1`/`>&2` is an fd-dup (no path); `>&file` is the
+            // combined-stream file redirect. Slice the original after the `>&` and classify.
+            let off = tok.masked.len() - body.len() + 2;
+            let tail = &tok.orig[off..];
+            if !is_fd_number(tail) {
+                push_redirect_target(tail, ">", out);
+            }
+            consumed.insert(i);
+            i += 1;
         } else if body.starts_with('>') {
             // An attached truncate `…>file` (incl. `2>file`, `&>file`). A bare `2>&1` fd-dup
             // leaves the rest = `&1`, which `push_redirect_target` rejects — but the WHOLE
@@ -1139,6 +1231,15 @@ fn strip_fd_qualifier(tok: &str) -> &str {
     } else {
         tok
     }
+}
+
+/// True when a `>&` redirect target is a bare file-DESCRIPTOR number (`>&1`, `>&2`, `>& 2`)
+/// — an fd-dup that writes NO file — rather than a filename. A `-` close (`>&-`) is also an
+/// fd op, not a path. Only an all-ASCII-digit (or `-`) target is an fd-dup; any other word
+/// is a file (`make >& build.log`).
+fn is_fd_number(tail: &str) -> bool {
+    let t = strip_quotes(tail);
+    t == "-" || (!t.is_empty() && t.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// Emit a redirect target if it resolves to a concrete path — dropping a `/dev/null`-
@@ -1563,6 +1664,128 @@ mod tests {
             paths("sed --in-place s/a/b/ file.txt"),
             vec![("file.txt".to_string(), "sed-i")]
         );
+    }
+
+    #[test]
+    fn sed_bsd_empty_suffix_in_place() {
+        // BSD/macOS in-place spelling `sed -i '' '<script>' file`: the `''` is the (empty)
+        // backup suffix, NOT the script. The real script must not be fabricated as a file,
+        // and the real file must still be recorded.
+        assert_eq!(
+            paths("sed -i '' 's/a/b/' /real/x.txt"),
+            vec![("/real/x.txt".to_string(), "sed-i")]
+        );
+        assert_eq!(
+            paths("sed -i \"\" '/pattern/d' /real/del.txt"),
+            vec![("/real/del.txt".to_string(), "sed-i")]
+        );
+    }
+
+    #[test]
+    fn sed_multiple_expression_flags() {
+        // Multi `-e` scripts: every `-e`'s VALUE is a script, so the 2nd-and-later must NOT
+        // be fabricated as files; only the real file is recorded. Both GNU `-i` and BSD
+        // `-i ''` forms.
+        assert_eq!(
+            paths("sed -i -e 's/a/b/' -e 's/c/d/' /real/m.txt"),
+            vec![("/real/m.txt".to_string(), "sed-i")]
+        );
+        assert_eq!(
+            paths("sed -i '' -e 's/a/b/' -e 's/c/d/' /real/bm.txt"),
+            vec![("/real/bm.txt".to_string(), "sed-i")]
+        );
+        // The long `--expression=` inline form, and `-f` script-file form.
+        assert_eq!(
+            paths("sed -i --expression='s/a/b/' /real/e.txt"),
+            vec![("/real/e.txt".to_string(), "sed-i")]
+        );
+        assert_eq!(
+            paths("sed -i -f script.sed /real/f.txt"),
+            vec![("/real/f.txt".to_string(), "sed-i")]
+        );
+    }
+
+    #[test]
+    fn sed_in_place_equals_suffix() {
+        // GNU `--in-place=SUFFIX` long backup form must be recognized as in-place (was a
+        // recall miss — the helper only matched `--in-place` / `-i…`).
+        assert_eq!(
+            paths("sed --in-place=.bak 's/a/b/' /real/s.txt"),
+            vec![("/real/s.txt".to_string(), "sed-i")]
+        );
+    }
+
+    #[test]
+    fn output_flag_rejects_format_selector() {
+        // `--output <format>` / `--output=<format>`: a bare format-selector value (kubectl,
+        // gh, docker, aws, jq idioms) is a render mode, never a created file.
+        assert!(paths("gh pr list --output json").is_empty());
+        assert!(paths("kubectl get pods --output=yaml").is_empty());
+        assert!(paths("mytool --output summary").is_empty());
+        // But a path-shaped value (extension or slash) still records.
+        assert_eq!(
+            paths("mytool --output report.json"),
+            vec![("report.json".to_string(), "flag-output")]
+        );
+        assert_eq!(
+            paths("mytool --output=/tmp/out"),
+            vec![("/tmp/out".to_string(), "flag-output")]
+        );
+    }
+
+    #[test]
+    fn redirect_combined_stream_amp_after_gt() {
+        // `>&file` / `>& file` is the combined stdout+stderr file redirect (equivalent to
+        // `&>file`) — a real write. Both spacings, asymmetric-no-longer with `&>`.
+        assert_eq!(
+            paths("make >& /real/a.log"),
+            vec![("/real/a.log".to_string(), ">")]
+        );
+        assert_eq!(
+            paths("make >&/real/b.log"),
+            vec![("/real/b.log".to_string(), ">")]
+        );
+        // `>&N` (N a bare fd number) is an fd-dup, NOT a file → no row. Attached + spaced.
+        assert!(paths("cmd >&1").is_empty());
+        assert!(paths("cmd >&2").is_empty());
+        assert!(paths("cmd >& 2").is_empty());
+        // `>&-` closes an fd — also not a file.
+        assert!(paths("cmd >&-").is_empty());
+        assert!(paths("cmd >& -").is_empty());
+        // A bare `>&` with NO following token emits nothing (degenerate, no panic).
+        assert!(paths("cmd >&").is_empty());
+        // `&>file` (the already-working sibling) is unchanged.
+        assert_eq!(
+            paths("make &> /real/c.log"),
+            vec![("/real/c.log".to_string(), ">")]
+        );
+    }
+
+    #[test]
+    fn output_flag_format_selector_edge_forms() {
+        // The inline `--output=<format>` form is dropped just like the spaced one.
+        assert!(paths("kubectl get pods --out=wide").is_empty());
+        assert!(paths("tool --logfile=none").is_empty());
+        // `--output` followed by ANOTHER flag does not consume the flag as a path (and the
+        // flag is not skipped) — no phantom row, the next flag is still scannable.
+        assert!(paths("tool --output --verbose").is_empty());
+        // A format word that nonetheless carries a path shape (slash/extension) is a real file.
+        assert_eq!(
+            paths("tool --output ./json"),
+            vec![("./json".to_string(), "flag-output")]
+        );
+    }
+
+    #[test]
+    fn is_fd_number_classifies_dup_vs_file() {
+        // Direct helper coverage: digits / `-` are fd ops; a word is a file target.
+        assert!(is_fd_number("1"));
+        assert!(is_fd_number("22"));
+        assert!(is_fd_number("-"));
+        assert!(is_fd_number("'2'")); // quote-stripped digit
+        assert!(!is_fd_number("build.log"));
+        assert!(!is_fd_number("/tmp/x"));
+        assert!(!is_fd_number(""));
     }
 
     #[test]

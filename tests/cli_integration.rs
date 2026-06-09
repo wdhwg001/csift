@@ -2627,6 +2627,163 @@ fn recover_plan_json_carries_id_domain_discriminators() {
 }
 
 #[test]
+fn recover_plan_multi_session_marks_exactly_one_restored_winner() {
+    // Two top-level sessions in ONE project, each with its own plan-file Write. `--plan` over
+    // the project must tag EXACTLY ONE candidate `(restored — written to --out)` (the global
+    // winner) — earlier each session's own latest was wrongly tagged "restored", a lie on every
+    // session but the one `--out` actually writes. The other session's newest is `(session-latest)`.
+    let h = Home::new();
+    const SESS_B: &str = "22222222-bbbb-cccc-dddd-222222222222";
+    // Session A: a plan written at 05:00 (the EARLIER one → not the global winner).
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/plans/aaa.md","content":"plan A body"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/aaa.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    // Session B: a plan written LATER at 06:00 → the global winner `--out` writes.
+    h.write(
+        &format!("{ENC}/{SESS_B}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw2","name":"Write","input":{"file_path":"/p/plans/bbb.md","content":"plan B body"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/bbb.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw2","content":"ok"}]}}"#, "\n",
+        ),
+    );
+
+    // TEXT: exactly one "restored — written to --out", at least one neutral "(session-latest)".
+    let t = h.run(&["recover", ENC, "--plan"]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    let restored_count = t.stdout.matches("(restored — written to --out)").count();
+    assert_eq!(
+        restored_count, 1,
+        "exactly one global winner must be tagged restored, got {restored_count}: {}",
+        t.stdout
+    );
+    assert!(
+        t.stdout.contains("(session-latest)"),
+        "the non-winner session's newest plan must be neutral (session-latest): {}",
+        t.stdout
+    );
+    // The winner is plan B (the later one).
+    assert!(t
+        .stdout
+        .contains("/p/plans/bbb.md (restored — written to --out)"));
+
+    // JSON: exactly one is_restored=true (on plan B), both session-latest candidates flagged.
+    let j = h.run(&["recover", ENC, "--plan", "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let objs = json_lines(&j.stdout);
+    let cands: Vec<_> = objs
+        .iter()
+        .filter(|o| o["type"] == "plan_candidate")
+        .collect();
+    let restored: Vec<_> = cands
+        .iter()
+        .filter(|o| o["is_restored"] == serde_json::json!(true))
+        .collect();
+    assert_eq!(restored.len(), 1, "exactly one is_restored=true record");
+    assert_eq!(restored[0]["path"], serde_json::json!("/p/plans/bbb.md"));
+    let latest: Vec<_> = cands
+        .iter()
+        .filter(|o| o["is_latest_in_session"] == serde_json::json!(true))
+        .collect();
+    assert_eq!(latest.len(), 2, "both sessions' own latest are flagged");
+}
+
+#[test]
+fn recover_plan_file_filter_marks_single_restored() {
+    // `--plan --file <abs>` restricts to THAT file's plan-write candidates; the single latest
+    // such candidate is the restored winner (is_restored=true). Two Writes to the same plan
+    // file across turns: only the LATER one wins.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/PLAN.md","content":"v1"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/PLAN.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw2","name":"Write","input":{"file_path":"/p/PLAN.md","content":"v2 newer"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","toolUseResult":{"type":"update","filePath":"/p/PLAN.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw2","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let j = h.run(&[
+        "recover",
+        SESS,
+        "--plan",
+        "--file",
+        "/p/PLAN.md",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let objs = json_lines(&j.stdout);
+    let restored: Vec<_> = objs
+        .iter()
+        .filter(|o| o["type"] == "plan_candidate" && o["is_restored"] == serde_json::json!(true))
+        .collect();
+    assert_eq!(restored.len(), 1, "exactly one is_restored winner");
+    // The newer Write (v2) is the winner — assert by its higher line_no.
+    let all: Vec<_> = objs
+        .iter()
+        .filter(|o| o["type"] == "plan_candidate")
+        .collect();
+    let max_line = all
+        .iter()
+        .map(|o| o["line_no"].as_u64().unwrap())
+        .max()
+        .unwrap();
+    assert_eq!(restored[0]["line_no"].as_u64().unwrap(), max_line);
+}
+
+#[test]
+fn recover_plan_text_brands_subagent_transcript() {
+    // recover's TEXT session header must brand a SUBAGENT transcript
+    // `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring list/files/turns), NEVER a bare
+    // `SESSION <hex>` — a subagent session_id is not a re-feedable --session target.
+    let h = Home::new();
+    // Top-level session with a plan, plus a subagent that ALSO writes a plan file.
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/plans/top.md","content":"top plan"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/top.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub111.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"sub111","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"sub: write a plan"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/p/plans/sub.md","content":"sub plan"}}]}}"#, "\n",
+            r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/p/plans/sub.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let t = h.run(&["recover", "--session", SESS, "--plan"]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    // The subagent transcript is branded with its parent uuid, NOT a bare-hex SESSION.
+    assert!(
+        t.stdout
+            .contains(&format!("SUBAGENT sub111  ·  parent SESSION {SESS}")),
+        "subagent transcript not branded in recover text: {}",
+        t.stdout
+    );
+    assert!(
+        !t.stdout.contains("SESSION sub111"),
+        "a bare subagent hex must never be tokened SESSION: {}",
+        t.stdout
+    );
+    // The top-level transcript keeps the plain SESSION <uuid> header.
+    assert!(
+        t.stdout.contains(&format!("SESSION {SESS}")),
+        "top-level transcript lost its SESSION header: {}",
+        t.stdout
+    );
+}
+
+#[test]
 fn recover_coverage_out_is_noop_with_stderr_note() {
     // `--out` is a no-op in --coverage mode: no file is written, and a stderr note makes the
     // no-op visible (the help truth-up for r6).
