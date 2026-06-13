@@ -39,6 +39,25 @@ pub fn format_timestamp(raw: Option<&str>) -> String {
     }
 }
 
+/// Render a raw ISO8601 UTC timestamp as a SINGLE compact local instant —
+/// `YYYY-MM-DD HH:MM:SS.mmm±HH:MM` (local time, milliseconds, numeric offset). Unlike
+/// [`format_timestamp`] there is NO trailing `(<raw UTC>)` copy: the offset already pins the
+/// instant, so the UTC half is pure token waste in text output. Absent → `—`; unparseable →
+/// the raw bytes (never a panic, never a fabricated time).
+#[must_use]
+pub fn format_local_compact(raw: Option<&str>) -> String {
+    let Some(raw) = raw else {
+        return "—".to_string();
+    };
+    match raw.parse::<jiff::Timestamp>() {
+        Ok(ts) => ts
+            .to_zoned(local_tz())
+            .strftime("%Y-%m-%d %H:%M:%S.%3f%:z")
+            .to_string(),
+        Err(_) => format!("{raw} (unparsed)"),
+    }
+}
+
 /// System-local time as an ISO8601-with-offset string (for JSON `ts_local`), or
 /// `None` if the raw UTC is missing/unparseable.
 #[must_use]
@@ -78,6 +97,34 @@ mod tests {
     #[test]
     fn format_timestamp_missing_is_em_dash() {
         assert_eq!(format_timestamp(None), "—");
+    }
+
+    #[test]
+    fn format_local_compact_is_single_local_with_ms_and_offset() {
+        let raw = "2026-06-07T05:48:22.880Z";
+        let out = format_local_compact(Some(raw));
+        // Exactly the system-local rendering with millisecond + numeric offset — no UTC copy.
+        let expected = expected_local(raw, "%Y-%m-%d %H:%M:%S.%3f%:z");
+        assert_eq!(out, expected, "compact local form");
+        // Carries milliseconds (a `.` before the offset) and a numeric offset, and does NOT
+        // carry the parenthesised raw-UTC second copy.
+        assert!(out.contains('.'), "milliseconds missing: {out}");
+        assert!(
+            out.contains('+') || out.contains('-'),
+            "offset missing: {out}"
+        );
+        assert!(!out.contains('('), "must not carry a UTC copy: {out}");
+        assert!(!out.contains(raw), "must not echo the raw UTC: {out}");
+    }
+
+    #[test]
+    fn format_local_compact_missing_and_unparseable() {
+        assert_eq!(format_local_compact(None), "—");
+        let out = format_local_compact(Some("not-a-time"));
+        assert!(
+            out.contains("not-a-time") && out.contains("unparsed"),
+            "{out}"
+        );
     }
 
     #[test]

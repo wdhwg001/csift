@@ -444,8 +444,16 @@ fn search_text_returns_round_trip_exchange() {
     let h = populated_home();
     let out = h.run(&["search", "carry"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("SESSION"), "no header:\n{}", out.stdout);
-    assert!(out.stdout.contains("TURN"));
+    assert!(
+        out.stdout.contains("s1 = "),
+        "the session-label table:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("·t"),
+        "exchanges reference the label: {}",
+        out.stdout
+    );
     assert!(out.stdout.contains("matched"));
     assert!(out.stdout.contains("malformed line(s) skipped"));
 }
@@ -488,12 +496,17 @@ fn search_no_match_reports_zero() {
 #[test]
 fn search_category_filter_and_max_count() {
     let h = populated_home();
-    // -t agent restricts to agent text; --max-count 1 forces the cap + drop note.
-    let out = h.run(&["search", "carry", "-t", "agent", "--max-count", "1"]);
+    // -t user restricts to user text; "carry" matches the user record in the top-level session
+    // AND in two subagents, so --max-count 1 caps to one and DROPS the rest (drop note appears
+    // only when something is actually dropped — the footer no longer prints "0 dropped").
+    let out = h.run(&["search", "carry", "-t", "user", "--max-count", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("matched 1"));
-    // With more than one agent hit across turns/subagents, the cap drops some.
-    assert!(out.stdout.contains("dropped"));
+    assert!(out.stdout.contains("matched 1"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("dropped by --max-count"),
+        "{}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -911,7 +924,7 @@ fn search_footer_always_reports_match_and_session_totals() {
     let out = h.run(&["search", "carry", "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("across 1 session "),
+        out.stdout.contains("· 1 session ·"),
         "the footer carries the distinct-session total: {}",
         out.stdout
     );
@@ -941,123 +954,238 @@ fn search_count_and_files_with_matches_are_mutually_exclusive() {
     );
 }
 
-// ── get ──
+// ── search addressing (the folded-in `get`): --line / --uuid fetch specific records, full ──
 
 #[test]
-fn get_by_line_returns_the_record_in_full() {
+fn search_line_address_fetches_the_record_in_full() {
     let h = populated_home();
-    let out = h.run(&["get", "--session", SESS, "--line", "1"]);
+    // Fixture L1 = the opening user record. Addressing it (no pattern) returns it FULL.
+    let out = h.run(&["search", "", SESS, "--no-subagents", "--line", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("◂ user"),
-        "rendered as user: {}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("L1"),
-        "header carries the line: {}",
+        out.stdout.contains("◂ user  L1  "),
+        "the addressed user record, with its L1 address: {}",
         out.stdout
     );
     assert!(
         out.stdout.contains("why is the carry needed?"),
-        "the full message body: {}",
+        "the full body: {}",
         out.stdout
     );
 }
 
 #[test]
-fn get_by_uuid_locates_the_record_anywhere_in_scope() {
+fn search_line_address_renders_uncapped() {
     let h = populated_home();
-    // No scope → scans every project under HOME; the fixture record's uuid is `u0`.
-    let out = h.run(&["get", "--uuid", "u0"]);
+    // L2 = the assistant thinking + agent-text record. Addressed → full (no excerpt cap).
+    let out = h.run(&["search", "", SESS, "--no-subagents", "--line", "2"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("why is the carry needed?"),
-        "got: {}",
         out.stdout
-    );
-    assert!(
-        out.stdout.contains("L1"),
-        "located at line 1: {}",
+            .contains("The carry is the partial line at a chunk boundary."),
+        "the agent block renders end-to-end: {}",
         out.stdout
     );
 }
 
 #[test]
-fn get_json_emits_blocks_and_full_address() {
+fn search_multiple_lines_and_ranges_address_many_records() {
     let h = populated_home();
-    // Fixture line 2 = the assistant thinking + agent-text record (uuid a0).
-    let out = h.run(&["get", "--session", SESS, "--line", "2", "--format", "json"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let o: serde_json::Value = serde_json::from_str(out.stdout.trim()).unwrap();
-    assert_eq!(o["line"], 2);
-    assert_eq!(o["uuid"], "a0");
-    assert_eq!(o["type"], "assistant");
-    let blocks = o["blocks"].as_array().unwrap();
+    // L1 (turn 0) + L6 (turn 1) — distinct turns, both surfaced under the SAME session label.
+    let list = h.run(&["search", "", SESS, "--no-subagents", "--line", "6,1"]);
+    assert!(list.success, "stderr: {}", list.stderr);
     assert!(
-        blocks.iter().any(|b| b["category"] == "agent"
-            && b["text"]
-                .as_str()
-                .unwrap()
-                .contains("partial line at a chunk boundary")),
-        "the agent block renders at full length: {o}"
+        list.stdout.contains("why is the carry needed?")
+            && list.stdout.contains("now explain the panic path"),
+        "both addressed records: {}",
+        list.stdout
+    );
+    // A range expands to every record in span (L1-L7 are records; L8 malformed is skipped).
+    let range = h.run(&["search", "", SESS, "--no-subagents", "--line", "1-7"]);
+    assert!(range.success, "stderr: {}", range.stderr);
+    assert!(
+        range.stdout.contains("why is the carry needed?") && range.stdout.contains("No panic"),
+        "the spanned records: {}",
+        range.stdout
     );
 }
 
 #[test]
-fn get_subagent_line_addresses_the_subagent_transcript() {
+fn search_uuid_address_locates_records_anywhere() {
+    let h = populated_home();
+    // No scope → spans every project; the uuid selector pins exactly the requested record(s).
+    let one = h.run(&["search", "", "--uuid", "u0"]);
+    assert!(one.success, "stderr: {}", one.stderr);
+    assert!(
+        one.stdout.contains("why is the carry needed?"),
+        "by uuid u0: {}",
+        one.stdout
+    );
+    let many = h.run(&["search", "", "--uuid", "u0,u1"]);
+    assert!(many.success, "stderr: {}", many.stderr);
+    assert!(
+        many.stdout.contains("why is the carry needed?")
+            && many.stdout.contains("now explain the panic path"),
+        "both uuids: {}",
+        many.stdout
+    );
+}
+
+#[test]
+fn search_line_address_json_carries_full_address() {
     let h = populated_home();
     let out = h.run(&[
-        "get",
-        "--session",
+        "search",
+        "",
         SESS,
-        "--subagent",
-        "aaa111",
+        "--no-subagents",
         "--line",
-        "1",
+        "2",
+        "--format",
+        "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
+    // The exchange object (the line carrying `hits`); each hit keeps its line + uuid address.
+    let ex: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .find(|v| v.get("hits").is_some())
+        .expect("an exchange object");
+    let hit0 = &ex["hits"][0];
+    assert_eq!(hit0["line"], 2);
+    assert_eq!(hit0["uuid"], "a0");
+}
+
+#[test]
+fn search_explicit_unresolved_line_is_reported() {
+    let h = populated_home();
+    // An EXPLICIT line past EOF resolves to nothing → an `unresolved:` line (text) and an
+    // `unresolved` array (json). `search` itself still exits 0 (a no-match is not an error).
+    let txt = h.run(&["search", "", SESS, "--no-subagents", "--line", "999"]);
+    assert!(txt.success, "stderr: {}", txt.stderr);
     assert!(
-        out.stdout.contains("SUBAGENT aaa111"),
-        "subagent header: {}",
+        txt.stdout.contains("unresolved: L999"),
+        "the miss is reported: {}",
+        txt.stdout
+    );
+    let js = h.run(&[
+        "search",
+        "",
+        SESS,
+        "--no-subagents",
+        "--line",
+        "1,999",
+        "--format",
+        "json",
+    ]);
+    let footer: serde_json::Value = serde_json::from_str(
+        js.stdout
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .next_back()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(footer["unresolved"][0], "L999");
+}
+
+#[test]
+fn search_range_past_eof_is_clamped_not_reported() {
+    let h = populated_home();
+    // 6-1000: L6/L7 are records; L8 malformed; L9-1000 past EOF — all RANGE members, so the
+    // gaps are clamped silently (no `unresolved`), the present records returned.
+    let out = h.run(&["search", "", SESS, "--no-subagents", "--line", "6-1000"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("now explain the panic path"),
+        "{}",
         out.stdout
     );
+    assert!(
+        !out.stdout.contains("unresolved"),
+        "a range never reports its own gaps: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn search_subagent_line_addresses_the_subagent_transcript() {
+    let h = populated_home();
+    let out = h.run(&["search", "", SESS, "--subagent", "aaa111", "--line", "1"]);
+    assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("sub: do the thing about carry"),
         "the subagent record body: {}",
         out.stdout
     );
-}
-
-#[test]
-fn get_requires_exactly_one_address() {
-    let h = populated_home();
-    let both = h.run(&["get", "--session", SESS, "--line", "1", "--uuid", "u0"]);
-    assert!(!both.success);
     assert!(
-        both.stderr.contains("mutually exclusive"),
-        "stderr: {}",
-        both.stderr
-    );
-    let neither = h.run(&["get", "--session", SESS]);
-    assert!(!neither.success);
-    assert!(
-        neither.stderr.contains("give an address"),
-        "stderr: {}",
-        neither.stderr
+        out.stdout.contains("subagent") && out.stdout.contains("aaa111"),
+        "the label table marks it a subagent: {}",
+        out.stdout
     );
 }
 
 #[test]
-fn get_line_on_a_non_record_errors_clearly() {
+fn search_tool_response_names_the_tool_it_answers() {
     let h = populated_home();
-    // Fixture line 8 is the deliberately-malformed line.
-    let out = h.run(&["get", "--session", SESS, "--line", "8"]);
-    assert!(!out.success);
+    // Fixture L4 = a tool_result for tool_use_id `call0`, whose tool_use (L3) is `Read`.
+    let out = h.run(&[
+        "search",
+        "carry",
+        SESS,
+        "--no-subagents",
+        "-t",
+        "tool-response",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stderr.contains("not a transcript message"),
-        "stderr: {}",
-        out.stderr
+        out.stdout.contains("tool-response Read"),
+        "the response names the tool it answers: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn search_text_output_is_token_lean() {
+    let h = populated_home();
+    let out = h.run(&["search", "carry", SESS, "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Session id declared ONCE in an `s1 = <uuid>` table; exchanges reference the `s1·t<n>` label.
+    assert!(
+        out.stdout.contains(&format!("s1 = {SESS}")),
+        "session-label table: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("s1·t"),
+        "exchange references the label: {}",
+        out.stdout
+    );
+    // The old heavyweight header is gone: no `═══` rule, no uppercase `SESSION `/`TURN `.
+    assert!(
+        !out.stdout.contains("═══"),
+        "no rule glyphs: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("TURN "),
+        "no uppercase TURN: {}",
+        out.stdout
+    );
+    // The uuid appears exactly once (in the table), not repeated per exchange.
+    assert_eq!(
+        out.stdout.matches(SESS).count(),
+        1,
+        "the full uuid is printed once, then referenced: {}",
+        out.stdout
+    );
+    // Timestamps are single local+offset (no `(<UTC>)` second copy on the turn header).
+    assert!(
+        !out.stdout.contains(" (2026-"),
+        "no parenthesised UTC copy: {}",
+        out.stdout
     );
 }
 
@@ -1220,8 +1348,12 @@ fn search_session_filter_and_turn_range() {
         "--no-subagents",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("TURN 1"));
-    assert!(!out.stdout.contains("TURN 0"));
+    assert!(out.stdout.contains("·t1"), "turn 1 header: {}", out.stdout);
+    assert!(
+        !out.stdout.contains("·t0"),
+        "turn 0 excluded: {}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -1293,7 +1425,11 @@ fn search_since_until_window() {
         SESS,
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("TURN 1"));
+    assert!(
+        out.stdout.contains("·t1"),
+        "turn 1 surfaced: {}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -3241,7 +3377,7 @@ fn search_lone_uuid_routes_to_session_scope() {
     );
     // And the session's own content is returned (empty pattern = pure filter over scope).
     assert!(
-        out.stdout.contains("SESSION") || out.stdout.contains("SUBAGENT"),
+        out.stdout.contains("s1 = "),
         "scoped search should return the session's exchanges: {}",
         out.stdout
     );

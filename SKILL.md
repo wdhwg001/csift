@@ -76,7 +76,8 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 ## Command surface
 
-Nine subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `get`.
+Eight subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`.
+`search` doubles as the message-fetcher (`--line`/`--uuid` address specific records, rendered full).
 `list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
 (`--no-subagents` opts out). On these four `--include-subagents` is a **default-ON no-op** kept only
 for symmetry/explicitness — it never changes the result, and `--no-subagents` is **DOMINANT**: when
@@ -146,10 +147,11 @@ default spans subagents, so the text output leads with a `SCOPE` banner and bran
 ### `search` — regex over transcripts, complete round-trip per hit
 
 ```
-csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
+csift search [PATTERN] [PATH...] [--session ID] [--no-subagents] [--subagent HEX]
              [-t|--category thinking|user|tool|tool-response|agent]...
              [-i|--ignore-case] [--multiline]
              [--turn-range START..END] [--since WHEN] [--until WHEN]
+             [--line SPEC]... [--uuid U]...   # address specific records (the message-fetcher)
              [--max-count N] [-c|--count] [-l|--files-with-matches]
              [--siblings] [--sibling-category CAT]... [--full|--no-truncate]
              [--resolve-persisted] [--format text|json]
@@ -234,27 +236,36 @@ applied AFTER the sort (it keeps the EARLIEST N and reports the dropped remainde
 result carries its chronological position: the text header appends the turn-opening timestamp, and the JSON
 envelope carries `ts_utc`/`ts_local`.
 
-Text output shape (each hit header carries `L<line>` — the address `csift get` re-fetches):
+Text output shape (token-lean: each session's full id is printed ONCE in a label table, then every
+exchange references the cheap `s<N>·t<turn>` label — an LLM follows the reference for free):
 
 ```
-═══ SESSION 0a1b2c3d · TURN 0 · 2026-06-03 22:51:53 AEST ═══
-◂ user  L412  2026-06-03 22:51:53 AEST (2026-06-03T12:51:53.206Z)
-   Audit harness-correctness in the worktree … (+2958 chars)
+s1 = 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+s2 = 7f3c9e21 (subagent · parent s1)
 
-matched 2 exchanges across 1 session (category=user)  ·  18 dropped by --max-count
+s1·t0  2026-06-03 22:51:53.206+10:00
+  ◂ user  L412  Audit harness-correctness in the worktree … (+2958 chars)
+  ▸ tool-response Edit  L613  the file … was updated successfully
+
+matched 2 exchanges · 1 session · category=user · 18 dropped by --max-count
 ```
 
-The `L412` is the hit record's 1-based physical line in its session jsonl — a stable address (jsonl
-is append-only). Read the truncated tail with `--full`, or fetch that exact message via
-`csift get --session 0a1b2c3d --line 412`.
+`L412` is the hit record's 1-based physical line in its session jsonl — a STABLE address (jsonl is
+append-only). The timestamp is a single local instant with offset + milliseconds (no second UTC copy).
+A `tool-response` row names the tool it answers (`tool-response Edit`). Read a truncated tail with
+`--full`, or **fetch the exact message(s) by address**: `csift search "" 0a1b2c3d --no-subagents
+--line 412` (or `--line 400-420` for the span, or `--uuid <id>`). Addressing renders records FULL and
+reports any explicitly-requested address that resolved to nothing as an `unresolved: L<line>` line.
 
 JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
 scope record when the scope spans subagents, then one object per exchange (`session_id`, `is_subagent`,
 `parent_session_id`, `turn_index`, the envelope-level `ts_utc`/`ts_local` = the turn-opening timestamp
 the timeline is sorted on, `hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name, line, uuid}`
-— `line`/`uuid` are the `csift get` address, and a per-hit `ts_utc` may be LATER than the envelope's
-for a deep tool_use match — and `record_uuids[]` = every record stitched into the round-trip), then a
-trailing summary object `{matched, sessions, dropped_by_cap, skipped_lines}`.
+— `line`/`uuid` are the per-record address, `tool_name` is set on a `tool-response` to the tool it
+answers, and a per-hit `ts_utc` may be LATER than the envelope's for a deep tool_use match — and
+`record_uuids[]` = every record stitched into the round-trip), then a trailing summary object
+`{matched, sessions, dropped_by_cap, skipped_lines, unresolved}` (`unresolved` lists explicit
+`--line`/`--uuid` addresses that matched no record; empty in a normal search).
 With `--siblings` the envelope also carries a `siblings[]` array (same per-hit shape) for the turn's
 non-matched records, present only when there are any. (`-c`/`-l` short-circuit this shape: `-c` prints
 `{"matched":N}`; `-l` prints one `{session_id,is_subagent,parent_session_id}` per line, no footer.)
@@ -805,35 +816,31 @@ hooks — hook `i` runs `csift turns . --budget 36000 --window 9000 --slice i`. 
 
 ---
 
-### `get` — fetch ONE message by its address, in full
+### `search` as a message-fetcher — `--line` / `--uuid` addressing
 
-```
-csift get [PATH...] [--session ID] [--subagent HEX] (--line N | --uuid U) [--format text|json]
-```
+`search` doubles as the message-getter: instead of (or as well as) a pattern, address specific records
+and they render FULL. This is the **in-permission alternative to `Read`-ing the raw jsonl** — an agent
+without broad filesystem access can't `Read` a transcript outside its workspace without the user
+approving each read, but it can `csift search`. Built for batch.
 
-The companion to `search`: every search hit now carries an `L<line>` address (and a record `uuid`).
-You skim with `search`, then `get` the single message whose full body / tail you actually need —
-**no drop to the raw jsonl**. Give exactly one address:
+- **`--line SPEC`** — 1-based PHYSICAL line(s) in ONE resolved transcript. Repeatable AND comma-delimited,
+  each token `N` or `A-B` (inclusive range): `--line 87,495-500,992`. Lines are per-file, so the scope
+  must pin a single transcript: `--session <uuid>` [`--no-subagents`], `--session <uuid> --subagent <hex>`,
+  or a single-session PATH. A range CLAMPS to the file; an EXPLICIT line that resolves to nothing is
+  reported as `unresolved: L<line>` (a `--max-count`-style no-silent-truncation guarantee for addresses).
+- **`--uuid U`** — record uuid(s) (globally unique). Repeatable + comma-delimited; scope optional (a
+  `--session`/PATH scope just makes the scan fast).
 
-- **`--line N`** — the 1-based PHYSICAL line in ONE resolved transcript (a jsonl is append-only, so a
-  line number is stable). The scope must pin a single file: `--session <uuid>` (its top-level
-  transcript), `--session <uuid> --subagent <hex>` (that subagent's transcript), or a PATH that
-  resolves to one session. An ambiguous scope (many sessions, no `--session`) is a clear error, never
-  a guess.
-- **`--uuid U`** — the record's own globally-unique jsonl `uuid`; scope is optional (a `--session`/PATH
-  scope just makes the lookup fast instead of scanning every project).
-
-The record renders like a `search` exchange body: a header (`SESSION <id> · L<line> · <uuid> · <ts>`,
-or `SUBAGENT <hex> · parent SESSION <uuid> · …`) then every category-eligible block at FULL length.
-`--format json` → one object `{session_id, is_subagent, parent_session_id, line, uuid, type, ts_utc,
-ts_local, blocks:[{category, text, tool_name}, …]}`.
+Addressing composes with the normal filters (`-t`, `--since/--until`, `--turn-range`) and emits the same
+exchange shape as any search (text label table + `s·t` rows; JSON exchange objects with full `hits[]`).
 
 ```bash
-# typical flow — skim, then fetch the one you want in full
-csift search "x" -t user            # → hit header shows `SESSION <id>` + `◂ user  L46550 …`
-csift get --session <id> --line 46550    # → that exact message, in full
-csift get --uuid 1f70fc7d-c4b3-4d0e-915c-edf09b32a7c0 .   # by record uuid, scoped for speed
-csift get --session <id> --subagent aaa111 --line 12      # a record inside a subagent transcript
+# skim, then fetch the exact message(s) — full, no drop to raw jsonl
+csift search "x" -t user                        # → a hit row shows `◂ user  L46550 …`
+csift search "" <id> --no-subagents --line 46550     # → that message, in full
+csift search "" <id> --no-subagents --line 46540-46560  # → it plus its surrounding span
+csift search "" --uuid 1f70fc7d-c4b3-4d0e-915c-edf09b32a7c0  # by record uuid (scope optional)
+csift search "" <id> --subagent aaa111 --line 12     # a record inside a subagent transcript
 ```
 
 ---

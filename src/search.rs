@@ -25,9 +25,10 @@
 //! match phase skips regex work on records that provably lack the literal. Turn
 //! reconstruction then runs over the retained transcript records.
 
-use std::path::Path;
+use std::collections::{BTreeSet, HashMap};
+use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use memchr::memmem;
 use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
@@ -38,9 +39,10 @@ use crate::model::{
     Block, PlanIndex, Record,
 };
 use crate::parse::mmap_bytes;
-use crate::path;
+use crate::path::{self, Caller, SubagentScope};
+use crate::subagent::{is_subagent_path, session_id_from_path};
 use crate::time_window::TimeWindow;
-use crate::timez::{format_timestamp, local_iso};
+use crate::timez::{format_local_compact, local_iso};
 
 /// Max characters of a matched excerpt shown inline before truncation. Truncation
 /// is ALWAYS explicit (`… (+N chars)`) — never silent (SPEC §0, §8.1).
@@ -114,6 +116,10 @@ pub struct SearchOutcome {
     /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).
     pub scope_top: usize,
     pub scope_sub: usize,
+    /// EXPLICITLY requested addresses (`--line N` singletons / `--uuid U`) that resolved to no
+    /// record — surfaced as an `unresolved:` line so an addressing batch is gap-aware. Empty
+    /// for a normal (non-addressing) search. Each entry is a render-ready token (`L999` / a uuid).
+    pub unresolved: Vec<String>,
 }
 
 /// A compiled pattern + flags, plus the optional literal prefilter needle.
@@ -294,6 +300,127 @@ fn resolve_uuid_scope(args: &SearchArgs) -> (String, Option<String>) {
     (args.pattern.clone(), args.session.clone())
 }
 
+/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets — the "fetch
+/// THESE records" filter that turns `search` into the in-permission message-getter. Active when
+/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.
+struct AddressSet {
+    lines: BTreeSet<usize>,
+    uuids: BTreeSet<String>,
+}
+
+impl AddressSet {
+    fn is_active(&self) -> bool {
+        !self.lines.is_empty() || !self.uuids.is_empty()
+    }
+
+    fn addresses(&self, kept: &Kept) -> bool {
+        (!self.lines.is_empty() && self.lines.contains(&kept.line_no))
+            || (!self.uuids.is_empty()
+                && kept
+                    .rec
+                    .uuid
+                    .as_deref()
+                    .is_some_and(|u| self.uuids.contains(u)))
+    }
+}
+
+/// Parse `--line` tokens (already comma-split by clap) into ordered `(line, from_range)`
+/// addresses. `N` → one EXPLICIT line; `A-B` → an ascending inclusive RANGE (range members are
+/// non-explicit, so a miss inside a range is silent, not `unresolved`). Duplicates collapse to
+/// their first occurrence.
+fn parse_line_specs(tokens: &[String]) -> Result<Vec<(usize, bool)>> {
+    let mut out: Vec<(usize, bool)> = Vec::new();
+    let mut seen: BTreeSet<usize> = BTreeSet::new();
+    for tok in tokens {
+        let t = tok.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if let Some((a, b)) = t.split_once('-') {
+            let a: usize = a
+                .trim()
+                .parse()
+                .map_err(|_| anyhow!("--line: '{t}' is not a valid range (want A-B, 1-based)"))?;
+            let b: usize = b
+                .trim()
+                .parse()
+                .map_err(|_| anyhow!("--line: '{t}' is not a valid range (want A-B, 1-based)"))?;
+            if a == 0 || b == 0 {
+                bail!("--line: lines are 1-based; '{t}' includes line 0");
+            }
+            if a > b {
+                bail!("--line: range '{t}' is descending — write it ascending (A-B with A ≤ B)");
+            }
+            for n in a..=b {
+                if seen.insert(n) {
+                    out.push((n, true));
+                }
+            }
+        } else {
+            let n: usize = t
+                .parse()
+                .map_err(|_| anyhow!("--line: '{t}' is not a line number or A-B range"))?;
+            if n == 0 {
+                bail!("--line: lines are 1-based; line 0 does not exist");
+            }
+            if seen.insert(n) {
+                out.push((n, false));
+            }
+        }
+    }
+    if out.is_empty() {
+        bail!("--line: no line numbers given");
+    }
+    Ok(out)
+}
+
+/// Resolve the scope to exactly ONE transcript for `--line` addressing (lines are per-file).
+/// `--subagent <hex>` pins that subagent transcript; otherwise the top-level one. A pointed
+/// error explains how to narrow an ambiguous or empty scope.
+fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
+    let scope = if args.subagent.is_some() {
+        SubagentScope::WithSubagents
+    } else {
+        SubagentScope::TopLevelOnly
+    };
+    let files = path::resolve_session_files(
+        &args.targets(),
+        args.session.as_deref(),
+        scope,
+        Caller::Other,
+    )?;
+    let target: Vec<PathBuf> = if let Some(hex) = args.subagent.as_deref() {
+        files
+            .into_iter()
+            .filter(|p| is_subagent_path(p) && session_id_from_path(p) == hex)
+            .collect()
+    } else {
+        files.into_iter().filter(|p| !is_subagent_path(p)).collect()
+    };
+    match target.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => {
+            if args.subagent.is_some() {
+                bail!(
+                    "--line: no subagent transcript `{}` found in scope — pass its parent \
+                     `--session <uuid>` and check the hex with `csift agents`",
+                    args.subagent.as_deref().unwrap_or("")
+                )
+            }
+            bail!(
+                "--line: the scope resolves to no single transcript — add `--session <uuid>` \
+                 (lines of WHICH session?)"
+            )
+        }
+        many => bail!(
+            "--line is ambiguous: the scope resolves to {} transcripts. Narrow it with \
+             `--session <uuid> --no-subagents` (or `--session <uuid> --subagent <hex>`) so the \
+             line numbers name one file.",
+            many.len()
+        ),
+    }
+}
+
 pub fn run_search(args: &SearchArgs) -> Result<()> {
     // Pointed error if the files-only `--subagents-only` was mistyped here.
     if let Some(msg) = args.span_flag_error() {
@@ -345,12 +472,29 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             .iter()
             .filter_map(|p| p.to_str())
             .any(path::looks_like_session_id);
+    // ── Address selectors (`--line` / `--uuid`): "fetch THESE records" (rendered full) ──
+    let line_specs = if args.line.is_empty() {
+        Vec::new()
+    } else {
+        parse_line_specs(&args.line)?
+    };
+    let address = AddressSet {
+        lines: line_specs.iter().map(|&(n, _)| n).collect(),
+        uuids: args
+            .uuid
+            .iter()
+            .map(|u| u.trim().to_string())
+            .filter(|u| !u.is_empty())
+            .collect(),
+    };
+
     let matcher = build_matcher(args)?;
     if matcher.is_pure_filter()
         && args.categories.is_empty()
         && turn_range.is_none()
         && time_window.is_unbounded()
         && !has_session_filter
+        && !address.is_active()
     {
         eprintln!(
             "csift: warning: empty pattern with no category/time/turn/session filter \
@@ -358,19 +502,33 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         );
     }
 
-    // ── Resolve targets → session files (optionally spanning subagents) ──
-    // Shared resolver (path::resolve_session_files), used identically by agents/files.
-    let session_files = path::resolve_session_files(
-        &args.targets(),
-        args.session.as_deref(),
-        args.want_subagents().into(),
-        path::Caller::Other,
-    )?;
+    // ── Resolve targets → session files. `--line` addressing is PER-FILE, so it pins exactly
+    //    ONE transcript; everything else uses the shared (optionally subagent-spanning) resolver. ──
+    let session_files = if !args.line.is_empty() {
+        vec![resolve_single_transcript(args)?]
+    } else {
+        path::resolve_session_files(
+            &args.targets(),
+            args.session.as_deref(),
+            args.want_subagents().into(),
+            path::Caller::Other,
+        )?
+    };
+    let address_opt = address.is_active().then_some(&address);
 
     // ── Parallel scan across files; collect order-stable, then merge ──
     let per_file: Vec<FileResult> = session_files
         .par_iter()
-        .map(|p| search_one_file(p, args, &matcher, turn_range.as_ref(), &time_window))
+        .map(|p| {
+            search_one_file(
+                p,
+                args,
+                &matcher,
+                turn_range.as_ref(),
+                &time_window,
+                address_opt,
+            )
+        })
         .collect::<Result<Vec<_>>>()?;
 
     // SCOPE span of the resolved set (every transcript, incl. hit-free subagents).
@@ -418,6 +576,32 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         }
     }
     outcome.exchanges = all;
+
+    // ── Addressing gap-awareness: which EXPLICITLY-requested addresses produced no record? ──
+    if address.is_active() {
+        let mut hit_lines: BTreeSet<usize> = BTreeSet::new();
+        let mut hit_uuids: BTreeSet<&str> = BTreeSet::new();
+        for ex in &outcome.exchanges {
+            for h in ex.hits.iter().chain(ex.siblings.iter()) {
+                hit_lines.insert(h.line);
+                if let Some(u) = h.uuid.as_deref() {
+                    hit_uuids.insert(u);
+                }
+            }
+        }
+        // Explicit `--line N` singletons (range members are clamped, not reported) …
+        for &(n, from_range) in &line_specs {
+            if !from_range && !hit_lines.contains(&n) {
+                outcome.unresolved.push(format!("L{n}"));
+            }
+        }
+        // … and every requested `--uuid`.
+        for u in &address.uuids {
+            if !hit_uuids.contains(u.as_str()) {
+                outcome.unresolved.push(format!("uuid {u}"));
+            }
+        }
+    }
 
     // `--count`: emit only the TRUE total of matching exchanges (add back any capped by
     // `--max-count`), the ripgrep `-c` idiom — no per-exchange output.
@@ -522,6 +706,7 @@ fn search_one_file(
     matcher: &Matcher,
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
+    address: Option<&AddressSet>,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -559,7 +744,15 @@ fn search_one_file(
         }
     });
 
-    let exchanges = reconstruct_and_match(path, &records, args, matcher, turn_range, time_window);
+    let exchanges = reconstruct_and_match(
+        path,
+        &records,
+        args,
+        matcher,
+        turn_range,
+        time_window,
+        address,
+    );
 
     Ok(FileResult {
         exchanges,
@@ -588,6 +781,7 @@ fn reconstruct_and_match(
     matcher: &Matcher,
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
+    address: Option<&AddressSet>,
 ) -> Vec<Exchange> {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -619,8 +813,16 @@ fn reconstruct_and_match(
         } else {
             None
         };
+    // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
+    // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
+    let tool_names = build_tool_name_index(records);
     // `--full` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
-    let excerpt_max = if args.full { usize::MAX } else { EXCERPT_MAX };
+    // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
+    let excerpt_max = if args.full || address.is_some() {
+        usize::MAX
+    } else {
+        EXCERPT_MAX
+    };
     let mut out = Vec::new();
 
     for (turn_index, idxs) in index_turns.iter().enumerate() {
@@ -646,6 +848,8 @@ fn reconstruct_and_match(
             args.resolve_persisted,
             excerpt_max,
             &plan_index,
+            &tool_names,
+            address,
         );
         if hits.is_empty() {
             continue;
@@ -661,6 +865,7 @@ fn reconstruct_and_match(
                 args.resolve_persisted,
                 excerpt_max,
                 &plan_index,
+                &tool_names,
             ),
             _ => Vec::new(),
         };
@@ -733,6 +938,32 @@ struct Turn<'a> {
 /// Gather the category-eligible, time-windowed, regex-matching hits inside a turn, plus the
 /// indices (into `turn.records`) of the records that produced at least one hit — so
 /// `--siblings` can exclude an already-matched record from the sibling rendering.
+/// Build the `tool_use_id → tool name` index for a file's records: every `tool_use` block's
+/// `{id, name}`. A later `tool_result` (which carries only the `tool_use_id`) looks its tool up
+/// here so a `tool-response` row can say WHICH tool it answers. First write wins (ids are unique).
+fn build_tool_name_index(records: &[Kept]) -> HashMap<String, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    for k in records {
+        if let Some(blocks) = k.rec.blocks() {
+            for b in blocks {
+                if let Block::ToolUse {
+                    id: Some(id),
+                    name: Some(name),
+                    ..
+                } = b
+                {
+                    map.entry(id.clone()).or_insert_with(|| name.clone());
+                }
+            }
+        }
+    }
+    map
+}
+
+// Internal pipeline function: the arg list grew as `tool_names` (tool-response naming) and
+// `address` (--line/--uuid selector) were threaded through the per-turn scan. Bundling into a
+// struct would only relocate the same fields without simplifying the data flow.
+#[allow(clippy::too_many_arguments)]
 fn collect_turn_hits(
     turn: &Turn<'_>,
     want: &[Category],
@@ -741,10 +972,20 @@ fn collect_turn_hits(
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
+    tool_names: &HashMap<String, String>,
+    address: Option<&AddressSet>,
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
+        // Addressing (`--line`/`--uuid`): only the ADDRESSED records are eligible to hit — the
+        // selector that turns `search` into the message-getter. (Applied before the keyword
+        // prefilter so an addressed record is fetched regardless of the pattern literal.)
+        if let Some(addr) = address {
+            if !addr.addresses(kept) {
+                continue;
+            }
+        }
         // §7d keyword prefilter: if the raw line provably lacks the required
         // literal, this record can't be a hit — skip the regex work. (It still
         // stays a member of this turn for the complete round-trip; we just don't
@@ -766,6 +1007,7 @@ fn collect_turn_hits(
             resolve_persisted,
             excerpt_max,
             plan_index,
+            tool_names,
             &mut hits,
         );
         // Backfill the source record's address onto every hit this record produced.
@@ -800,6 +1042,7 @@ fn collect_turn_siblings(
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
+    tool_names: &HashMap<String, String>,
 ) -> Vec<Hit> {
     let pure = Matcher {
         regex: None,
@@ -818,6 +1061,7 @@ fn collect_turn_siblings(
             resolve_persisted,
             excerpt_max,
             plan_index,
+            tool_names,
             &mut sibs,
         );
         backfill_address(&mut sibs[before..], kept);
@@ -826,6 +1070,9 @@ fn collect_turn_siblings(
 }
 
 /// Emit hits for every category-eligible piece of `rec` that matches the regex.
+// Internal pipeline function; `tool_names` was threaded in so a `tool-response` hit can name the
+// tool it answers. Same rationale as `collect_turn_hits` for not bundling into a struct.
+#[allow(clippy::too_many_arguments)]
 fn collect_record_hits(
     rec: &Record,
     want: &[Category],
@@ -833,6 +1080,7 @@ fn collect_record_hits(
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
+    tool_names: &HashMap<String, String>,
     hits: &mut Vec<Hit>,
 ) {
     let ts = rec.timestamp.clone();
@@ -912,7 +1160,9 @@ fn collect_record_hits(
                     }
                 }
                 Block::ToolResult {
-                    content: Some(c), ..
+                    content: Some(c),
+                    tool_use_id,
+                    ..
                 } if category_active(want, Category::ToolResponse) => {
                     let mut text = tool_result_content_text(c);
                     // §5 de-dup: an AUQ answer IS a tool_result, so it is eligible for
@@ -934,12 +1184,16 @@ fn collect_record_hits(
                         }
                     }
                     if let Some(span) = matcher.locate(&text) {
+                        // Name the tool this response answers (joined via `tool_use_id`).
+                        let name = tool_use_id
+                            .as_deref()
+                            .and_then(|id| tool_names.get(id).cloned());
                         hits.push(make_hit(
                             Category::ToolResponse,
                             &text,
                             span,
                             ts.clone(),
-                            None,
+                            name,
                             excerpt_max,
                         ));
                     }
@@ -1081,7 +1335,7 @@ fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
 // Timestamp formatting (system-local + raw UTC) lives in `crate::timez`, shared
 // with `list` so the local-timezone choice is defined once.
 
-pub(crate) fn category_label(c: Category) -> &'static str {
+fn category_label(c: Category) -> &'static str {
     match c {
         Category::Thinking => "thinking",
         Category::User => "user",
@@ -1092,34 +1346,11 @@ pub(crate) fn category_label(c: Category) -> &'static str {
 }
 
 /// Glyph for the side of the exchange a hit sits on (◂ user, ▸ agent-side).
-pub(crate) fn category_glyph(c: Category) -> char {
+fn category_glyph(c: Category) -> char {
     match c {
         Category::User => '◂',
         _ => '▸',
     }
-}
-
-/// Every category-eligible block of ONE record as FULL (uncapped) Hits — the shared content
-/// extraction `csift get` reuses to dump a single record. A pure-filter matcher matches every
-/// record, `usize::MAX` removes the excerpt cap, and all five categories are eligible (empty
-/// `want`). `line`/`uuid` are left at make_hit's placeholders — `get` stamps them from the
-/// address it already holds.
-pub(crate) fn full_record_hits(rec: &Record) -> Vec<Hit> {
-    let pure = Matcher {
-        regex: None,
-        prefilter: None,
-    };
-    let mut hits = Vec::new();
-    collect_record_hits(
-        rec,
-        &[],
-        &pure,
-        false,
-        usize::MAX,
-        &PlanIndex::default(),
-        &mut hits,
-    );
-    hits
 }
 
 fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
@@ -1128,68 +1359,61 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     if outcome.exchanges.is_empty() {
         println!("no matching exchanges");
+        emit_unresolved(&outcome.unresolved);
         if outcome.skipped_lines > 0 {
             println!("({})", crate::text::malformed_note(outcome.skipped_lines));
         }
         return;
     }
 
-    for (i, ex) in outcome.exchanges.iter().enumerate() {
-        if i > 0 {
-            println!();
+    // ── Session-label table: each distinct session's FULL id is printed ONCE here (`s1 = …`),
+    //    then every exchange references the cheap `s1` label. An LLM follows the reference for
+    //    free, so the uuid never repeats per row (the dominant token cost of the old header). ──
+    let mut label: HashMap<&str, String> = HashMap::new();
+    let mut order: Vec<&Exchange> = Vec::new();
+    for ex in &outcome.exchanges {
+        if !label.contains_key(ex.session_id.as_str()) {
+            label.insert(ex.session_id.as_str(), format!("s{}", label.len() + 1));
+            order.push(ex);
         }
-        // Print the FULL id (not a truncated head): this header is the surface a user copies
-        // from to re-feed another csift command (`csift turns <id>`). A SUBAGENT hit is
-        // labeled `SUBAGENT <hex>` (the hex is NOT a `--session` target — it is a subagent
-        // transcript id); we append the re-feedable parent uuid so the copy-paste workflow
-        // still works. A top-level hit stays `SESSION <uuid>`.
-        let when = format_timestamp(ex.started_utc.as_deref());
+    }
+    for ex in &order {
+        let lab = &label[ex.session_id.as_str()];
         if ex.is_subagent {
-            println!(
-                "═══ SUBAGENT {} · parent SESSION {} · TURN {} · {when} ═══",
-                ex.session_id, ex.parent_session_id, ex.turn_index
-            );
+            // The parent's own label if it is in scope, else its bare uuid.
+            let parent = label
+                .get(ex.parent_session_id.as_str())
+                .map(String::as_str)
+                .unwrap_or(ex.parent_session_id.as_str());
+            println!("{lab} = {} (subagent · parent {parent})", ex.session_id);
         } else {
-            println!(
-                "═══ SESSION {} · TURN {} · {when} ═══",
-                ex.session_id, ex.turn_index
-            );
+            println!("{lab} = {}", ex.session_id);
         }
+    }
+
+    for ex in &outcome.exchanges {
+        println!();
+        // `s1·t6` — the session label + 0-based turn index + the single compact local instant
+        // (offset already pins it; no second UTC copy). Per-hit timestamps are omitted in text
+        // (this turn time covers them); the JSON envelope still carries each hit's `ts_utc`.
+        let lab = &label[ex.session_id.as_str()];
+        println!(
+            "{lab}·t{}  {}",
+            ex.turn_index,
+            format_local_compact(ex.started_utc.as_deref())
+        );
         for hit in &ex.hits {
-            let glyph = category_glyph(hit.category);
-            let label = category_label(hit.category);
-            let name = hit
-                .tool_name
-                .as_deref()
-                .map(|n| format!(" {n}"))
-                .unwrap_or_default();
-            // `L<line>` is the per-hit address → `csift get --session <id> --line <line>`.
-            println!(
-                "{glyph} {label}{name}  L{}  {}",
-                hit.line,
-                format_timestamp(hit.timestamp_utc.as_deref())
-            );
-            println!("   {}", hit.excerpt);
+            print_record_line(category_glyph(hit.category), hit);
         }
         // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
         // they read as surrounding back-and-forth, not as matches.
         for sib in &ex.siblings {
-            let label = category_label(sib.category);
-            let name = sib
-                .tool_name
-                .as_deref()
-                .map(|n| format!(" {n}"))
-                .unwrap_or_default();
-            println!(
-                "· {label}{name}  L{}  {}",
-                sib.line,
-                format_timestamp(sib.timestamp_utc.as_deref())
-            );
-            println!("   {}", sib.excerpt);
+            print_record_line('·', sib);
         }
     }
 
-    // Footer with match + drop accounting (no silent truncation).
+    // ── Compact lowercase footer: match + distinct-session totals (both always present — each is
+    //    one cheap number, isolated by `-c`/`-l` only for piping), drop accounting, unresolved. ──
     let cat = if args.categories.is_empty() {
         "all".to_string()
     } else {
@@ -1200,31 +1424,43 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             .join(",")
     };
     println!();
-    let plural = if outcome.exchanges.len() == 1 {
-        "exchange"
-    } else {
-        "exchanges"
-    };
-    // Distinct-session total rides ALONGSIDE the match total in EVERY normal footer — it is one
-    // cheap number (already in hand) and answers "across how many sessions?" without a second
-    // `-l` run. `-c`/`-l` isolate each of these two totals for a pipe; here you get both for free.
+    let n = outcome.exchanges.len();
+    let ex_word = if n == 1 { "exchange" } else { "exchanges" };
     let n_sessions = distinct_session_count(&outcome.exchanges);
-    let sess_plural = if n_sessions == 1 {
+    let sess_word = if n_sessions == 1 {
         "session"
     } else {
         "sessions"
     };
-    print!(
-        "matched {} {plural} across {n_sessions} {sess_plural} (category={cat})  ·  {} dropped",
-        outcome.exchanges.len(),
-        outcome.dropped_by_cap
-    );
+    print!("matched {n} {ex_word} · {n_sessions} {sess_word} · category={cat}");
     if outcome.dropped_by_cap > 0 {
-        print!(" by --max-count");
+        print!(" · {} dropped by --max-count", outcome.dropped_by_cap);
     }
     println!();
+    emit_unresolved(&outcome.unresolved);
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
+    }
+}
+
+/// One hit/sibling line: `<marker> <label>[ <tool>]  L<line>  <excerpt>` (excerpt inline; its
+/// newlines are already collapsed to single spaces). `marker` is the category glyph for a match
+/// or a dim `·` for a `--siblings` context record.
+fn print_record_line(marker: char, h: &Hit) {
+    let label = category_label(h.category);
+    let name = h
+        .tool_name
+        .as_deref()
+        .map(|n| format!(" {n}"))
+        .unwrap_or_default();
+    println!("  {marker} {label}{name}  L{}  {}", h.line, h.excerpt);
+}
+
+/// Print the `unresolved:` line when an EXPLICIT address (`--line N` / `--uuid U`) matched no
+/// record — so an addressing batch is gap-aware. No-op when nothing is unresolved.
+fn emit_unresolved(unresolved: &[String]) {
+    if !unresolved.is_empty() {
+        println!("unresolved: {}", unresolved.join(", "));
     }
 }
 
@@ -1283,12 +1519,14 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         println!("{}", serde_json::to_string(&obj)?);
     }
     // Trailing summary object (SPEC §8.2). `sessions` (distinct matching sessions) rides
-    // alongside `matched` — the same cheap always-on total the text footer carries.
+    // alongside `matched` — the same cheap always-on total the text footer carries; `unresolved`
+    // lists explicit addresses (`--line`/`--uuid`) that matched no record (empty in a normal run).
     let summary = json!({
         "matched": outcome.exchanges.len(),
         "sessions": distinct_session_count(&outcome.exchanges),
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
+        "unresolved": outcome.unresolved,
     });
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
@@ -1317,6 +1555,9 @@ mod tests {
             siblings: false,
             sibling_categories: Vec::new(),
             full: false,
+            line: Vec::new(),
+            uuid: Vec::new(),
+            subagent: None,
             resolve_persisted: false,
             include_subagents: true,
             no_subagents: false,
@@ -1523,6 +1764,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut no_resolve,
         );
         assert!(no_resolve.is_empty(), "deep token must NOT match inline");
@@ -1536,6 +1778,7 @@ mod tests {
             true,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut with_resolve,
         );
         assert_eq!(with_resolve.len(), 1, "deep token matches after resolution");
@@ -1558,6 +1801,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
@@ -1579,6 +1823,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
@@ -1599,6 +1844,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
@@ -1619,6 +1865,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
@@ -1640,6 +1887,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert_eq!(hits.len(), 0);
@@ -1652,6 +1900,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits2,
         );
         assert_eq!(hits2.len(), 1);
@@ -1712,6 +1961,7 @@ mod tests {
             &matcher,
             tr.as_ref(),
             &tw,
+            None,
         )
     }
 
@@ -1978,6 +2228,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert!(
@@ -2122,6 +2373,8 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
+            None,
         );
         assert!(hits.is_empty(), "a can_hit=false record yields no hits");
         assert!(hit_idxs.is_empty(), "no record produced a hit");
@@ -2151,7 +2404,9 @@ mod tests {
             &tw,
             false,
             EXCERPT_MAX,
-            &PlanIndex::default()
+            &PlanIndex::default(),
+            &HashMap::new(),
+            None
         )
         .0
         .is_empty());
@@ -2164,7 +2419,9 @@ mod tests {
             &tw2,
             false,
             EXCERPT_MAX,
-            &PlanIndex::default()
+            &PlanIndex::default(),
+            &HashMap::new(),
+            None
         )
         .0
         .is_empty());
@@ -2245,6 +2502,7 @@ mod tests {
             true,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert_eq!(
@@ -2271,6 +2529,7 @@ mod tests {
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
+            &HashMap::new(),
             &mut hits,
         );
         assert!(hits.is_empty(), "a user text block is not an agent hit");
