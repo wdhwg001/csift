@@ -85,6 +85,11 @@ pub struct Exchange {
     /// the text header so the chronological position is visible per result.
     pub started_utc: Option<String>,
     pub hits: Vec<Hit>,
+    /// Sibling records of this turn that did NOT themselves match — populated only under
+    /// `--siblings`, so a matched user question can surface WITH the agent's reply. Each is
+    /// rendered head-anchored (no match span) and filtered to the effective sibling
+    /// categories; a record that produced a hit is never repeated here. Empty otherwise.
+    pub siblings: Vec<Hit>,
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
 }
@@ -382,6 +387,14 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         timestamp_sort_key(a.started_utc.as_deref())
             .cmp(&timestamp_sort_key(b.started_utc.as_deref()))
     });
+
+    // `-l`/--files-with-matches: list ONLY the distinct sessions that matched — computed
+    // from the FULL set, BEFORE `--max-count` can drop any (ripgrep `-l` ignores `-m`). Wins
+    // over `-c`. Plain/pipeable output: no scope banner, no footer.
+    if args.files_with_matches {
+        return emit_files_with_matches(&all, args.format);
+    }
+
     if let Some(cap) = args.max_count {
         if all.len() > cap {
             outcome.dropped_by_cap = all.len() - cap;
@@ -390,9 +403,53 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     }
     outcome.exchanges = all;
 
+    // `--count`: emit only the TRUE total of matching exchanges (add back any capped by
+    // `--max-count`), the ripgrep `-c` idiom — no per-exchange output.
+    if args.count {
+        let total = outcome.exchanges.len() + outcome.dropped_by_cap;
+        match args.format {
+            OutputFormat::Text => println!("{total}"),
+            OutputFormat::Json => println!("{{\"matched\":{total}}}"),
+        }
+        return Ok(());
+    }
+
     match args.format {
         OutputFormat::Text => render_text(&outcome, args),
         OutputFormat::Json => render_json(&outcome)?,
+    }
+    Ok(())
+}
+
+/// Emit the `-l`/--files-with-matches listing: the DISTINCT sessions that contained ≥1
+/// matching exchange, in first-match chronological order (the sorted timeline's order). A
+/// top-level session prints its re-feedable uuid; a SUBAGENT transcript prints its bare hex
+/// annotated with the re-feedable `parent <uuid>`. `--format json` emits one
+/// `{session_id,is_subagent,parent_session_id}` object per line (pure JSONL, no footer).
+fn emit_files_with_matches(all: &[Exchange], format: OutputFormat) -> Result<()> {
+    let mut seen: Vec<&str> = Vec::new();
+    for ex in all {
+        if seen.contains(&ex.session_id.as_str()) {
+            continue;
+        }
+        seen.push(&ex.session_id);
+        match format {
+            OutputFormat::Text => {
+                if ex.is_subagent {
+                    println!("{}  (parent {})", ex.session_id, ex.parent_session_id);
+                } else {
+                    println!("{}", ex.session_id);
+                }
+            }
+            OutputFormat::Json => {
+                let obj = serde_json::json!({
+                    "session_id": ex.session_id,
+                    "is_subagent": ex.is_subagent,
+                    "parent_session_id": ex.parent_session_id,
+                });
+                println!("{}", serde_json::to_string(&obj)?);
+            }
+        }
     }
     Ok(())
 }
@@ -516,6 +573,15 @@ fn reconstruct_and_match(
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
     let want_categories = &args.categories;
+    // Effective sibling categories (Some ⇒ `--siblings`/`--sibling-category` requested).
+    // An empty Some means "every match category was named so there is nothing else to show"
+    // → render no siblings (NOT "all", which `category_active` would treat an empty list as).
+    let sibling_cats: Option<Vec<Category>> =
+        if args.siblings || !args.sibling_categories.is_empty() {
+            Some(effective_sibling_categories(args))
+        } else {
+            None
+        };
     let mut out = Vec::new();
 
     for (turn_index, idxs) in index_turns.iter().enumerate() {
@@ -531,8 +597,9 @@ fn reconstruct_and_match(
             records: idxs.iter().map(|&i| &records[i]).collect(),
         };
 
-        // Collect the hits in this turn that satisfy category + time + regex.
-        let hits = collect_turn_hits(
+        // Collect the hits in this turn that satisfy category + time + regex, plus the
+        // turn-record indices that produced them (so siblings can exclude matched records).
+        let (hits, hit_idxs) = collect_turn_hits(
             &turn,
             want_categories,
             matcher,
@@ -543,6 +610,15 @@ fn reconstruct_and_match(
         if hits.is_empty() {
             continue;
         }
+
+        // `--siblings`: render the turn's NON-matched records (the rest of the
+        // back-and-forth) so a matched user question surfaces with the agent's reply.
+        let siblings = match &sibling_cats {
+            Some(cats) if !cats.is_empty() => {
+                collect_turn_siblings(&turn, cats, &hit_idxs, args.resolve_persisted, &plan_index)
+            }
+            _ => Vec::new(),
+        };
 
         let record_uuids = turn
             .records
@@ -566,11 +642,40 @@ fn reconstruct_and_match(
             turn_index: turn.index,
             started_utc,
             hits,
+            siblings,
             record_uuids,
         });
     }
 
     out
+}
+
+/// The set of categories `--siblings` renders. An explicit `--sibling-category` list wins
+/// (deduped, order-preserving); otherwise the default is EVERY category except the match
+/// `-t` set (so a `-t user` match shows its non-user siblings), or all five when no `-t`
+/// was given. The result MAY be empty (every category was named under `-t`), which the
+/// caller treats as "render no siblings".
+fn effective_sibling_categories(args: &SearchArgs) -> Vec<Category> {
+    const ALL: [Category; 5] = [
+        Category::Thinking,
+        Category::User,
+        Category::Tool,
+        Category::ToolResponse,
+        Category::Agent,
+    ];
+    if !args.sibling_categories.is_empty() {
+        let mut seen = Vec::new();
+        for c in &args.sibling_categories {
+            if !seen.contains(c) {
+                seen.push(*c);
+            }
+        }
+        return seen;
+    }
+    ALL.iter()
+        .copied()
+        .filter(|c| !args.categories.contains(c))
+        .collect()
 }
 
 /// One reconstructed turn (the opening genuine-user record + every record chained
@@ -580,7 +685,9 @@ struct Turn<'a> {
     records: Vec<&'a Kept>,
 }
 
-/// Gather the category-eligible, time-windowed, regex-matching hits inside a turn.
+/// Gather the category-eligible, time-windowed, regex-matching hits inside a turn, plus the
+/// indices (into `turn.records`) of the records that produced at least one hit — so
+/// `--siblings` can exclude an already-matched record from the sibling rendering.
 fn collect_turn_hits(
     turn: &Turn<'_>,
     want: &[Category],
@@ -588,9 +695,10 @@ fn collect_turn_hits(
     time_window: &TimeWindow,
     resolve_persisted: bool,
     plan_index: &PlanIndex,
-) -> Vec<Hit> {
+) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
-    for kept in &turn.records {
+    let mut hit_idxs = Vec::new();
+    for (i, kept) in turn.records.iter().enumerate() {
         // §7d keyword prefilter: if the raw line provably lacks the required
         // literal, this record can't be a hit — skip the regex work. (It still
         // stays a member of this turn for the complete round-trip; we just don't
@@ -604,9 +712,47 @@ fn collect_turn_hits(
         if !time_window.contains(rec.timestamp.as_deref()) {
             continue;
         }
+        let before = hits.len();
         collect_record_hits(rec, want, matcher, resolve_persisted, plan_index, &mut hits);
+        if hits.len() > before {
+            hit_idxs.push(i);
+        }
     }
-    hits
+    (hits, hit_idxs)
+}
+
+/// Render the SIBLING records of a turn — those that produced NO hit — as head-anchored
+/// Hits restricted to `cats`. Reuses [`collect_record_hits`] with a PURE-FILTER matcher
+/// (matches every record, so each category-eligible block of a sibling surfaces with a
+/// head excerpt). A record that matched (its index is in `hit_idxs`) is never repeated. The
+/// per-record time window is intentionally NOT re-applied: the turn already qualified, and
+/// the siblings are context for that qualifying turn.
+fn collect_turn_siblings(
+    turn: &Turn<'_>,
+    cats: &[Category],
+    hit_idxs: &[usize],
+    resolve_persisted: bool,
+    plan_index: &PlanIndex,
+) -> Vec<Hit> {
+    let pure = Matcher {
+        regex: None,
+        prefilter: None,
+    };
+    let mut sibs = Vec::new();
+    for (i, kept) in turn.records.iter().enumerate() {
+        if hit_idxs.contains(&i) {
+            continue;
+        }
+        collect_record_hits(
+            &kept.rec,
+            cats,
+            &pure,
+            resolve_persisted,
+            plan_index,
+            &mut sibs,
+        );
+    }
+    sibs
 }
 
 /// Emit hits for every category-eligible piece of `rec` that matches the regex.
@@ -902,6 +1048,21 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             );
             println!("   {}", hit.excerpt);
         }
+        // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
+        // they read as surrounding back-and-forth, not as matches.
+        for sib in &ex.siblings {
+            let label = category_label(sib.category);
+            let name = sib
+                .tool_name
+                .as_deref()
+                .map(|n| format!(" {n}"))
+                .unwrap_or_default();
+            println!(
+                "· {label}{name}  {}",
+                format_timestamp(sib.timestamp_utc.as_deref())
+            );
+            println!("   {}", sib.excerpt);
+        }
     }
 
     // Footer with match + drop accounting (no silent truncation).
@@ -934,6 +1095,18 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     }
 }
 
+/// Render one `Hit` (a match OR a `--siblings` context record) to its JSON object — the
+/// shared per-hit shape used by both the `hits` and `siblings` envelope arrays.
+fn hit_json(h: &Hit) -> serde_json::Value {
+    serde_json::json!({
+        "category": category_label(h.category),
+        "excerpt": h.excerpt,
+        "ts_utc": h.timestamp_utc,
+        "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
+        "tool_name": h.tool_name,
+    })
+}
+
 fn render_json(outcome: &SearchOutcome) -> Result<()> {
     use serde_json::json;
     // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
@@ -948,20 +1121,8 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         );
     }
     for ex in &outcome.exchanges {
-        let hits: Vec<_> = ex
-            .hits
-            .iter()
-            .map(|h| {
-                json!({
-                    "category": category_label(h.category),
-                    "excerpt": h.excerpt,
-                    "ts_utc": h.timestamp_utc,
-                    "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
-                    "tool_name": h.tool_name,
-                })
-            })
-            .collect();
-        let obj = json!({
+        let hits: Vec<_> = ex.hits.iter().map(hit_json).collect();
+        let mut obj = json!({
             "session_id": ex.session_id,
             // Discriminate the id-domain so a consumer can tell a re-feedable parent UUID
             // from a non-re-feedable subagent transcript hex: `is_subagent` + the always-
@@ -977,6 +1138,12 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
             "hits": hits,
             "record_uuids": ex.record_uuids,
         });
+        // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
+        // Present only when there are siblings — absent ⇒ none (keeps the common envelope lean).
+        if !ex.siblings.is_empty() {
+            let sibs: Vec<_> = ex.siblings.iter().map(hit_json).collect();
+            obj["siblings"] = json!(sibs);
+        }
         println!("{}", serde_json::to_string(&obj)?);
     }
     // Trailing summary object (SPEC §8.2).
@@ -1007,6 +1174,10 @@ mod tests {
             since: None,
             until: None,
             max_count: None,
+            count: false,
+            files_with_matches: false,
+            siblings: false,
+            sibling_categories: Vec::new(),
             resolve_persisted: false,
             include_subagents: true,
             no_subagents: false,
@@ -1727,6 +1898,37 @@ mod tests {
     }
 
     #[test]
+    fn effective_sibling_categories_default_and_explicit() {
+        use crate::cli::Category;
+        // No `-t`, no explicit list → all five categories are sibling-eligible.
+        assert_eq!(effective_sibling_categories(&args("x")).len(), 5);
+        // `-t user` → default siblings = the other four (the match category is excluded).
+        let mut a = args("x");
+        a.categories = vec![Category::User];
+        let got = effective_sibling_categories(&a);
+        assert_eq!(got.len(), 4);
+        assert!(!got.contains(&Category::User));
+        // An explicit `--sibling-category` list wins and is deduped, order-preserving.
+        let mut a = args("x");
+        a.categories = vec![Category::User];
+        a.sibling_categories = vec![Category::Agent, Category::Agent, Category::Tool];
+        assert_eq!(
+            effective_sibling_categories(&a),
+            vec![Category::Agent, Category::Tool]
+        );
+        // Every category named under `-t` → empty (caller then renders no siblings).
+        let mut a = args("x");
+        a.categories = vec![
+            Category::Thinking,
+            Category::User,
+            Category::Tool,
+            Category::ToolResponse,
+            Category::Agent,
+        ];
+        assert!(effective_sibling_categories(&a).is_empty());
+    }
+
+    #[test]
     fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         // A record marked `can_hit:false` is skipped before any regex work in
         // collect_turn_hits (the `if !kept.can_hit { continue }` arm).
@@ -1743,8 +1945,9 @@ mod tests {
             records: vec![&kept],
         };
         let tw = TimeWindow::default();
-        let hits = collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default());
+        let (hits, hit_idxs) = collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default());
         assert!(hits.is_empty(), "a can_hit=false record yields no hits");
+        assert!(hit_idxs.is_empty(), "no record produced a hit");
     }
 
     #[test]
@@ -1763,10 +1966,18 @@ mod tests {
         };
         // Window starting AFTER the record's timestamp → excluded.
         let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
-        assert!(collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default()).is_empty());
+        assert!(
+            collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default())
+                .0
+                .is_empty()
+        );
         // An unbounded window admits it.
         let tw2 = TimeWindow::default();
-        assert!(!collect_turn_hits(&turn, &[], &m, &tw2, false, &PlanIndex::default()).is_empty());
+        assert!(
+            !collect_turn_hits(&turn, &[], &m, &tw2, false, &PlanIndex::default())
+                .0
+                .is_empty()
+        );
     }
 
     #[test]

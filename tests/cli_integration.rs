@@ -620,6 +620,227 @@ fn search_with_positional_path_target_like_siblings() {
 }
 
 #[test]
+fn search_count_prints_only_the_match_total() {
+    // `-c`/--count: just the integer, no headers — and it must equal the footer `matched`
+    // (the ripgrep `-c` contract). Compare against the JSON summary so the assertion tracks
+    // whatever the fixture actually yields.
+    let h = populated_home();
+    let full = h.run(&["search", "carry", "--no-subagents", "--format", "json"]);
+    let footer: serde_json::Value = serde_json::from_str(
+        full.stdout
+            .lines()
+            .filter(|l| !l.is_empty())
+            .next_back()
+            .unwrap(),
+    )
+    .unwrap();
+    let expected = footer["matched"].as_u64().unwrap();
+
+    let out = h.run(&["search", "carry", "--no-subagents", "-c"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout.trim().parse::<u64>().unwrap(),
+        expected,
+        "-c must print exactly the match total; got {:?}",
+        out.stdout
+    );
+    // No per-exchange output leaked through.
+    assert!(!out.stdout.contains("SESSION"), "got: {}", out.stdout);
+    assert!(!out.stdout.contains("matched "), "got: {}", out.stdout);
+
+    // JSON form is `{"matched":N}`.
+    let j = h.run(&[
+        "search",
+        "carry",
+        "--no-subagents",
+        "-c",
+        "--format",
+        "json",
+    ]);
+    let v: serde_json::Value = serde_json::from_str(j.stdout.trim()).unwrap();
+    assert_eq!(v["matched"].as_u64().unwrap(), expected);
+}
+
+#[test]
+fn search_count_reports_true_total_despite_max_count() {
+    // `-c` reports the TRUE total even when `--max-count` would cap the listing (the count
+    // adds the capped-away remainder back), so the number is never silently shrunk.
+    let h = populated_home();
+    let capped = h.run(&["search", "carry", "-c", "--max-count", "1"]);
+    let uncapped = h.run(&["search", "carry", "-c"]);
+    assert_eq!(
+        capped.stdout.trim(),
+        uncapped.stdout.trim(),
+        "--max-count must not change the -c total"
+    );
+}
+
+#[test]
+fn search_files_with_matches_lists_distinct_sessions() {
+    // `-l`/--files-with-matches: one id per matching session, no exchange bodies, no footer.
+    // "carry" appears in the top-level session AND both subagents, so spanning yields three
+    // distinct ids — the top-level uuid plain, each subagent hex annotated with its parent.
+    let h = populated_home();
+    let out = h.run(&["search", "carry", "-l"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let lines: Vec<&str> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    assert_eq!(
+        lines.len(),
+        3,
+        "three distinct matching transcripts: {lines:?}"
+    );
+    assert!(out.stdout.contains(SESS), "top-level uuid: {}", out.stdout);
+    assert!(
+        out.stdout.contains("aaa111"),
+        "subagent hex: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("(parent"),
+        "subagent rows annotate the re-feedable parent: {}",
+        out.stdout
+    );
+    // No exchange rendering or footer leaks through the plain listing.
+    assert!(!out.stdout.contains("TURN"), "got: {}", out.stdout);
+    assert!(!out.stdout.contains("matched "), "got: {}", out.stdout);
+
+    // `-l --format json`: one discrimination object per line, no footer.
+    let j = h.run(&["search", "carry", "-l", "--format", "json"]);
+    let objs: Vec<serde_json::Value> = j
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(objs.len(), 3);
+    assert!(objs.iter().any(|o| o["is_subagent"] == true));
+    assert!(objs
+        .iter()
+        .all(|o| o.get("parent_session_id").is_some() && o.get("session_id").is_some()));
+}
+
+#[test]
+fn search_files_with_matches_wins_over_count() {
+    // When both `-l` and `-c` are given, `-l` wins (ripgrep parity) — output is the session
+    // listing, not the integer total.
+    let h = populated_home();
+    let out = h.run(&["search", "carry", "--no-subagents", "-l", "-c"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(SESS),
+        "expected a listing, got: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn search_siblings_surface_the_rest_of_the_turn() {
+    // The Q3 shape: a matched USER record should be able to surface WITH the agent reply.
+    // "needed" lives ONLY in the opening user message, so the agent text can reach the
+    // output only as a `--siblings` context record (default sibling set = all-but-`-t`).
+    let h = populated_home();
+    let base = h.run(&["search", "needed", "-t", "user", "--no-subagents"]);
+    assert!(
+        !base.stdout.contains("partial line at a chunk boundary"),
+        "without --siblings the agent reply must NOT appear: {}",
+        base.stdout
+    );
+
+    let out = h.run(&[
+        "search",
+        "needed",
+        "-t",
+        "user",
+        "--no-subagents",
+        "--siblings",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("· agent"),
+        "the agent sibling renders under the `·` marker: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("partial line at a chunk boundary"),
+        "the agent reply text surfaces as a sibling: {}",
+        out.stdout
+    );
+    // The matched user record opens the exchange (◂) and is never repeated as a sibling.
+    assert_eq!(
+        out.stdout.matches("carry needed").count(),
+        1,
+        "the matched user line appears once, not duplicated as a sibling: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn search_sibling_category_narrows_and_implies_siblings() {
+    // `--sibling-category agent` (without `--siblings`) implies siblings AND restricts them
+    // to the agent reply — the tool_use / tool_result siblings are excluded.
+    let h = populated_home();
+    let out = h.run(&[
+        "search",
+        "needed",
+        "-t",
+        "user",
+        "--no-subagents",
+        "--sibling-category",
+        "agent",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("· agent"),
+        "agent sibling present: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("· tool"),
+        "non-agent siblings must be excluded: {}",
+        out.stdout
+    );
+
+    // JSON: the envelope carries a `siblings` array with the agent excerpt; absent without
+    // the flag.
+    let j = h.run(&[
+        "search",
+        "needed",
+        "-t",
+        "user",
+        "--no-subagents",
+        "--sibling-category",
+        "agent",
+        "--format",
+        "json",
+    ]);
+    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let sibs = env["siblings"].as_array().expect("siblings array present");
+    assert_eq!(sibs.len(), 1);
+    assert_eq!(sibs[0]["category"], "agent");
+
+    let plain = h.run(&[
+        "search",
+        "needed",
+        "-t",
+        "user",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let env2: serde_json::Value =
+        serde_json::from_str(plain.stdout.lines().next().unwrap()).unwrap();
+    assert!(
+        env2.get("siblings").is_none(),
+        "no siblings key without the flag: {}",
+        plain.stdout
+    );
+}
+
+#[test]
 fn files_bare_uuid_positional_routes_to_session() {
     // The documented `csift files <uuid>` form (a bare uuid in the positional slot) now
     // resolves as a session filter across all projects, not as a (nonexistent) project

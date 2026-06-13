@@ -552,7 +552,22 @@ impl ListArgs {
           csift search \"\" -t user --since 2h .                  # user turns, last 2h, this project\n  \
           csift search \"tail.read\" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
           csift search \"panic\" -t agent -t thinking --turn-range 10..20 --max-count 50\n  \
-          csift search \"persisted-output\" --resolve-persisted --format json\n\n\
+          csift search \"persisted-output\" --resolve-persisted --format json\n  \
+          csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c)\n  \
+          csift search \"refactor\" -l                            # LIST sessions that match (ripgrep -l)\n  \
+          csift search \"let's chat\" -t user --siblings          # the match WITH the agent's reply (sibling records)\n  \
+          csift search \"let's chat\" -t user --sibling-category agent  # …only the agent-side sibling\n\n\
+        SIBLINGS (`--siblings` / `--sibling-category`)\n  \
+          A match renders only the records that MATCHED. `--siblings` additionally renders the \
+        OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
+        so a matched user question surfaces WITH the agent's reply — no need to drop to the raw \
+        jsonl. Default sibling set = every category EXCEPT the match `-t` (or ALL when no `-t`); \
+        `--sibling-category <cat>` (repeatable) narrows it. A record that itself matched is \
+        never duplicated as a sibling.\n\n\
+        COUNT / LIST (`-c` / `-l`)\n  \
+          `-c`/`--count` prints just the integer match total (ripgrep `-c`); `-l`/\
+        `--files-with-matches` prints just the distinct matching session ids, one per line \
+        (ripgrep `-l`). Both honor every filter; `-l` wins when both are passed.\n\n\
         REGEX DIALECT — linear-time (RE2-class)\n  \
           The pattern is the Rust `regex` crate (regex::bytes), which GUARANTEES \
         linear-time matching in the input length: NO catastrophic backtracking, ever.\n  \
@@ -584,7 +599,9 @@ impl ListArgs {
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{category, excerpt, tool_name, ts_utc, ts_local}, …]} — the \
-        per-hit objects carry no session_id; it lives on the envelope. Envelopes stream in \
+        per-hit objects carry no session_id; it lives on the envelope. With `--siblings`, the \
+        envelope also carries a `siblings:[…]` array (same per-hit shape) for the turn's \
+        non-matched records. Envelopes stream in \
         a COMBINED STABLE CHRONOLOGICAL order (subagent exchanges interleaved with top-level \
         by `ts_utc`, the turn-opening timestamp; timestamp-less exchanges sort last); the \
         per-hit `ts_utc` may be later than the envelope's for a deep tool_use match. \
@@ -700,6 +717,39 @@ pub struct SearchArgs {
     /// Cap emitted exchanges. NO silent truncation — the drop count is reported.
     #[arg(long, value_name = "N")]
     pub max_count: Option<usize>,
+
+    /// Print ONLY the total number of matching exchanges (one integer) — the ripgrep
+    /// `-c` idiom for "how many times X?". Honors every filter (`-t`, time window,
+    /// `--session`, scope) and reports the TRUE total even if `--max-count` would cap
+    /// the listing. With `--format json`, prints `{"matched":N}` instead.
+    #[arg(long, short = 'c')]
+    pub count: bool,
+
+    /// List ONLY the distinct sessions that contain ≥1 match, one id per line — the
+    /// ripgrep `-l`/`--files-with-matches` idiom ("WHICH sessions mention X?"). Prints
+    /// each transcript's own id (a re-feedable top-level session uuid, or a bare
+    /// SUBAGENT hex annotated with its `parent <uuid>`); with `--format json`, one
+    /// `{session_id,is_subagent,parent_session_id}` object per line. Honors every
+    /// filter and is unaffected by `--max-count`. WINS over `-c` when both are given.
+    #[arg(long = "files-with-matches", short = 'l')]
+    pub files_with_matches: bool,
+
+    /// Also render the SIBLING records of every matched turn — the rest of the
+    /// back-and-forth, not only the matched line — so a matched USER question surfaces
+    /// WITH the agent's reply (answers "I said X, what did you say back?"). By default
+    /// the siblings shown are every category EXCEPT the match `-t` categories (so a
+    /// `-t user` match shows its non-user siblings); narrow them with
+    /// `--sibling-category`. A record that itself matched is never repeated as a
+    /// sibling. No effect under `-c`/`-l`.
+    #[arg(long)]
+    pub siblings: bool,
+
+    /// Restrict `--siblings` rendering to these categories (repeatable, same value set
+    /// as `-t`: thinking|user|tool|tool-response|agent). Implies `--siblings`. Default
+    /// (when `--siblings` is set without this) = every category except the match `-t`
+    /// set, or ALL categories when no `-t` was given.
+    #[arg(long = "sibling-category", value_enum)]
+    pub sibling_categories: Vec<Category>,
 
     /// Resolve `<persisted-output>` pointers to their `tool-results/<id>.txt` file.
     #[arg(long)]

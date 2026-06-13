@@ -150,7 +150,9 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
              [-t|--category thinking|user|tool|tool-response|agent]...
              [-i|--ignore-case] [--multiline]
              [--turn-range START..END] [--since WHEN] [--until WHEN]
-             [--max-count N] [--resolve-persisted] [--format text|json]
+             [--max-count N] [-c|--count] [-l|--files-with-matches]
+             [--siblings] [--sibling-category CAT]...
+             [--resolve-persisted] [--format text|json]
 ```
 
 - **PATTERN** is ripgrep-like, **smart-case** by default (case-insensitive unless it contains an
@@ -183,6 +185,19 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
   window.
 - **`--max-count N`** caps emitted exchanges but **reports the dropped count** — there is NO silent
   truncation anywhere.
+- **`-c`/`--count`** prints ONLY the integer match total (the ripgrep `-c` idiom for "how many times
+  X?") — no per-exchange output. Honors every filter and reports the TRUE total even when
+  `--max-count` would cap the listing; `--format json` prints `{"matched":N}`.
+- **`-l`/`--files-with-matches`** prints ONLY the distinct sessions that matched, one id per line
+  (the ripgrep `-l` idiom for "WHICH sessions mention X?") — a re-feedable top-level uuid, or a bare
+  subagent hex annotated with its `parent <uuid>`. Unaffected by `--max-count`; **wins over `-c`**
+  when both are passed. `--format json` emits one `{session_id,is_subagent,parent_session_id}` per line.
+- **`--siblings`** also renders the SIBLING records of each matched turn — the rest of the
+  back-and-forth, not just the matched line — so a matched **user** question surfaces WITH the agent's
+  reply (answers "I said X, what did you ask back?" without dropping to the raw jsonl). Sibling rows
+  render under a `·` marker. By default the siblings shown are every category EXCEPT the match `-t`
+  set (or ALL when no `-t`); **`--sibling-category CAT`** (repeatable, implies `--siblings`) narrows
+  them. A record that itself matched is never repeated as a sibling.
 - **`--resolve-persisted`** resolves `<persisted-output>` pointers to their `tool-results/<id>.txt`
   file (large tool outputs are externalised).
 
@@ -195,6 +210,9 @@ csift search -i "askuserquestion" -t tool             # tool_use blocks naming A
 csift search "" -t user --since 2h .                  # user turns, last 2h, this project
 csift search "tail.read" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
+csift search "refactor" -c                            # COUNT matches only ("how many times?")
+csift search "refactor" -l                            # LIST sessions that match ("which sessions?")
+csift search "let's chat" -t user --sibling-category agent  # the match WITH the agent's reply
 csift search "persisted-output" --resolve-persisted --format json
 ```
 
@@ -222,6 +240,9 @@ scope record when the scope spans subagents, then one object per exchange (`sess
 the timeline is sorted on, `hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name}` — a per-hit
 `ts_utc` may be LATER than the envelope's for a deep tool_use match — and `record_uuids[]` = every record
 stitched into the round-trip), then a trailing summary object `{matched, dropped_by_cap, skipped_lines}`.
+With `--siblings` the envelope also carries a `siblings[]` array (same per-hit shape) for the turn's
+non-matched records, present only when there are any. (`-c`/`-l` short-circuit this shape: `-c` prints
+`{"matched":N}`; `-l` prints one `{session_id,is_subagent,parent_session_id}` per line, no footer.)
 See **Output formats** below for a concrete record + jq/python.
 
 #### Regex dialect — linear-time (RE2-class)
