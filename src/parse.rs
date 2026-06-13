@@ -31,8 +31,9 @@ use std::fs::File;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use memchr::{memchr_iter, memrchr};
+use memchr::{memchr, memchr_iter, memrchr};
 use memmap2::Mmap;
+use rayon::prelude::*;
 
 use crate::model::Record;
 
@@ -113,6 +114,138 @@ where
         visit(&bytes[start..]);
     }
     Ok(())
+}
+
+/// Per-line verdict from a [`scan_lines_parallel`] visitor.
+pub enum LineVerdict<T> {
+    /// A produced item — collected in exact file order.
+    Keep(T),
+    /// A candidate line that failed to parse — counted in the returned malformed total.
+    Skip,
+    /// Not a candidate (or blank) — neither kept nor counted.
+    Ignore,
+}
+
+/// Scan EVERY line of a jsonl byte slice IN PARALLEL, calling `visit(line_bytes, line_no)` with
+/// each line's exact 1-based number (blank/noise lines are visited and counted too, 1:1 with
+/// the file — identical numbering to a serial [`scan_lines_bytes`] pass). Each `Keep(T)` is
+/// collected in file order; each `Skip` increments the returned malformed count. The slice is
+/// split into newline-aligned chunks run on the `rayon` pool, so a single GIANT transcript
+/// (SPEC §7's "200MB+" case) is no longer bottlenecked on one core the way the across-files
+/// fan-out leaves it. Below `MIN_PARALLEL_BYTES` it runs as a single chunk (split/merge overhead
+/// isn't worth it). The `(items, skipped)` result is byte-for-byte equivalent to the serial scan.
+pub fn scan_lines_parallel<T, F>(bytes: &[u8], visit: F) -> (Vec<T>, usize)
+where
+    F: Fn(&[u8], usize) -> LineVerdict<T> + Sync,
+    T: Send,
+{
+    const MIN_PARALLEL_BYTES: usize = 4 * 1024 * 1024;
+    let target_chunks = if bytes.len() < MIN_PARALLEL_BYTES {
+        1
+    } else {
+        // A few chunks per worker keeps load balanced when chunks parse at different rates.
+        (rayon::current_num_threads() * 4).max(1)
+    };
+    scan_lines_parallel_chunked(bytes, &visit, target_chunks)
+}
+
+/// Convenience wrapper over [`scan_lines_parallel`] for the `(line_no, Record)` shape used by
+/// recover/files: parse every PREFILTER-passing line, keeping `(line_no, Record)` in file order.
+pub fn parse_candidates_parallel<F>(bytes: &[u8], prefilter: F) -> (Vec<(usize, Record)>, usize)
+where
+    F: Fn(&[u8]) -> bool + Sync,
+{
+    scan_lines_parallel(bytes, |line, line_no| {
+        if !prefilter(line) {
+            return LineVerdict::Ignore;
+        }
+        match parse_line(line) {
+            Ok(Some(rec)) => LineVerdict::Keep((line_no, rec)),
+            Ok(None) => LineVerdict::Ignore,
+            Err(_) => LineVerdict::Skip,
+        }
+    })
+}
+
+/// Core of [`scan_lines_parallel`] with an explicit chunk target, so a test can force multi-chunk
+/// splitting on a tiny input and assert identical output to a single serial pass.
+fn scan_lines_parallel_chunked<T, F>(
+    bytes: &[u8],
+    visit: &F,
+    target_chunks: usize,
+) -> (Vec<T>, usize)
+where
+    F: Fn(&[u8], usize) -> LineVerdict<T> + Sync,
+    T: Send,
+{
+    if bytes.is_empty() {
+        return (Vec::new(), 0);
+    }
+    // ── Newline-aligned chunk boundaries. Each interior bound is the first byte AFTER a
+    //    newline (a line start), so no line is ever split across a chunk. ──
+    let target_chunks = target_chunks.max(1);
+    let approx = (bytes.len() / target_chunks).max(1);
+    let mut bounds = vec![0usize];
+    let mut pos = approx;
+    while pos < bytes.len() {
+        match memchr(b'\n', &bytes[pos..]) {
+            Some(off) => {
+                let b = pos + off + 1;
+                if b >= bytes.len() {
+                    break;
+                }
+                bounds.push(b);
+                pos = b + approx;
+            }
+            None => break,
+        }
+    }
+    bounds.push(bytes.len());
+    let chunks: Vec<(usize, usize)> = bounds.windows(2).map(|w| (w[0], w[1])).collect();
+
+    // start_line[i] = 1 + (newlines strictly before chunk i's first byte) = the serial scan's
+    // line number for that chunk's first visited line.
+    let nl_per_chunk: Vec<usize> = chunks
+        .iter()
+        .map(|&(s, e)| memchr_iter(b'\n', &bytes[s..e]).count())
+        .collect();
+    let mut start_line = Vec::with_capacity(chunks.len());
+    let mut acc = 1usize;
+    for &n in &nl_per_chunk {
+        start_line.push(acc);
+        acc += n;
+    }
+
+    // ── Parallel scan; rayon's ordered collect keeps chunk order, and each chunk's items are
+    //    already in ascending line order, so the flattened result is in exact file order. ──
+    let per_chunk: Vec<(Vec<T>, usize)> = chunks
+        .par_iter()
+        .enumerate()
+        .map(|(ci, &(s, e))| {
+            let base = start_line[ci];
+            let mut kept: Vec<T> = Vec::new();
+            let mut skipped = 0usize;
+            let mut j = 0usize;
+            let _ = scan_lines_bytes(&bytes[s..e], |line| {
+                let line_no = base + j;
+                j += 1;
+                match visit(line, line_no) {
+                    LineVerdict::Keep(t) => kept.push(t),
+                    LineVerdict::Skip => skipped += 1,
+                    LineVerdict::Ignore => {}
+                }
+            });
+            (kept, skipped)
+        })
+        .collect();
+
+    let mut all: Vec<T> = Vec::new();
+    let mut skipped_total = 0usize;
+    for (kept, sk) in per_chunk {
+        all.extend(kept);
+        skipped_total += sk;
+    }
+    (all, skipped_total)
 }
 
 /// Backward, newest-first line iterator over a byte slice, realized as a
@@ -586,6 +719,54 @@ mod tests {
         })
         .unwrap();
         assert_eq!(seen2, vec!["aa", "bb"]);
+    }
+
+    #[test]
+    fn scan_lines_parallel_chunked_matches_serial_for_any_chunk_count() {
+        // A mix of candidate lines, blank lines (counted in line numbering, never kept) and a
+        // malformed candidate (parsed → skipped). The (kept line_no list, skip count) must be
+        // IDENTICAL across every chunk split — that is the contract that lets recover/search/
+        // files swap in the parallel scan with zero behaviour change.
+        let mut raw = String::new();
+        for i in 0..60 {
+            if i % 7 == 0 {
+                raw.push('\n'); // blank line: counts as a line, visitor ignores it
+            }
+            raw.push_str(&format!(
+                r#"{{"type":"user","uuid":"u{i}","timestamp":"2026-06-07T05:00:0{}.000Z","message":{{"role":"user","content":"keep {i}"}}}}"#,
+                i % 10
+            ));
+            raw.push('\n');
+            if i % 11 == 5 {
+                raw.push_str("{ broken json keep but unparseable\n"); // candidate → skip
+            }
+        }
+        let bytes = raw.as_bytes();
+        // Visitor keeps each parseable "keep" line's NUMBER; a malformed "keep" line → Skip.
+        let visit = |line: &[u8], line_no: usize| -> LineVerdict<usize> {
+            if !line.windows(4).any(|w| w == b"keep") {
+                return LineVerdict::Ignore;
+            }
+            match parse_line(line) {
+                Ok(Some(_)) => LineVerdict::Keep(line_no),
+                Ok(None) => LineVerdict::Ignore,
+                Err(_) => LineVerdict::Skip,
+            }
+        };
+
+        let (serial, serial_skip) = scan_lines_parallel_chunked(bytes, &visit, 1);
+        assert!(
+            !serial.is_empty() && serial_skip > 0,
+            "fixture exercises both arms"
+        );
+        // Line numbers strictly ascending (1:1 with the file, no duplicates/reordering).
+        assert!(serial.windows(2).all(|w| w[0] < w[1]));
+
+        for chunks in [2usize, 3, 5, 9, 17, 60, 500] {
+            let (got, skip) = scan_lines_parallel_chunked(bytes, &visit, chunks);
+            assert_eq!(got, serial, "line numbers diverge at chunks={chunks}");
+            assert_eq!(skip, serial_skip, "skip count diverges at chunks={chunks}");
+        }
     }
 
     #[test]

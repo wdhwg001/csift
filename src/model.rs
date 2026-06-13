@@ -1102,10 +1102,106 @@ fn plural(n: usize) -> &'static str {
 /// boundary is the sanctioned correct behavior change (a previously-MISSED genuine user
 /// message); interrupts / `<local-command-stdout>` / `<command-name>` wrappers, formerly
 /// spurious boundaries, are excluded by `is_genuine_user` (regression fixes).
+///
+/// NOTE: this raw grouper trusts file order and does NOT suppress superseded drafts. The
+/// production surfaces use [`group_turn_indices_deduped`], which additionally drops the
+/// abandoned-draft openers an esc-cancel / edit-resend leaves behind (§6.4.1). This bare
+/// form stays for the lightweight bool-fixture tests and any caller that has no `Record`.
+// Production now routes through `group_turn_indices_deduped`, so in the bin build this bare
+// generic is reached only from `#[cfg(test)]` — kept as the documented base primitive +
+// bool-fixture test entry (same retained-shape rationale as the `#[allow(dead_code)]` on
+// `Record`).
+#[allow(dead_code)]
 #[must_use]
 pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> Vec<Vec<usize>> {
+    group_turn_indices_core(records, is_genuine, &std::collections::HashSet::new())
+}
+
+/// Indices of turn-opening records that are SUPERSEDED DRAFTS — an earlier sibling of a
+/// later turn-opener sharing the SAME non-null `parentUuid` (§6.4.1). This is the on-disk
+/// shape of the "type a message, ESC-cancel / edit, resend" loop (and any rewind that
+/// re-opens a turn from the same point): Claude Code appends every draft as its own
+/// `type:"user"` record, yet only ONE — the last in file order — was actually delivered to
+/// the model. The earlier siblings are abandoned drafts.
+///
+/// WHY last-in-file is the survivor (verified on real `~/.claude/projects` data): distinct
+/// real turns never share a `parentUuid` (each user turn is parented to the assistant
+/// message that preceded it), so same-parent openers are ALWAYS alternative versions of one
+/// logical turn; and across the corpus the last sibling's subtree is the one that reaches
+/// furthest toward the leaf (the live branch). A content-similarity heuristic would miss the
+/// common case where the user *prepended/inserted* text on the edit (`x…` → `x…`),
+/// so the parent-uuid identity — not text — is the load-bearing signal.
+///
+/// `rec` projects each element to its `Record` (works for `&Record`, `Record`, and the
+/// search `Kept` wrapper alike). Records with a null/empty `parentUuid` are NEVER grouped
+/// (grouping on "no parent" would merge unrelated first-message drafts); in real data a
+/// genuine user always carries a parent, so this costs nothing.
+///
+/// HONEST BOUND: only the superseded OPENER is reported, not the downstream of a branch
+/// abandoned AFTER it already drew replies (rewind-after-response). Those rare descendants
+/// (≤2% of turns on the measured corpus) keep their own distinct parents and survive; fully
+/// pruning them needs an active-leaf walk, which a compaction boundary severs — so we do not
+/// risk silently dropping a live turn to chase them.
+#[must_use]
+pub fn superseded_draft_indices<T>(
+    records: &[T],
+    rec: impl Fn(&T) -> &Record,
+) -> std::collections::HashSet<usize> {
+    let mut latest: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut superseded: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for (i, item) in records.iter().enumerate() {
+        let r = rec(item);
+        if !r.opens_turn() {
+            continue;
+        }
+        let Some(parent) = r.parent_uuid.as_deref() else {
+            continue; // null parent: never grouped (would merge unrelated records)
+        };
+        if parent.is_empty() {
+            continue;
+        }
+        // Keep the LAST opener per parent: when a new sibling appears, the previously-seen
+        // one for that parent becomes a superseded draft.
+        if let Some(prev) = latest.insert(parent, i) {
+            superseded.insert(prev);
+        }
+    }
+    superseded
+}
+
+/// [`group_turn_indices`] with esc-cancel / edit-resend DRAFT SUPPRESSION (§6.4.1): a
+/// superseded draft ([`superseded_draft_indices`]) is dropped ENTIRELY — it neither opens a
+/// turn nor folds in as a member — so a message the user edited away before sending can
+/// never resurface as a phantom turn (nor leak its abandoned text into a neighbour). This is
+/// the delimiter every session-operating surface (`turns` / `search` / `files` / `recover`)
+/// uses, so they stay byte-consistent on what counts as a turn.
+#[must_use]
+pub fn group_turn_indices_deduped<T>(
+    records: &[T],
+    rec: impl Fn(&T) -> &Record,
+) -> Vec<Vec<usize>> {
+    let skip = superseded_draft_indices(records, |x| rec(x));
+    group_turn_indices_core(records, |x| rec(x).opens_turn(), &skip)
+}
+
+/// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index
+/// in `skip` is omitted entirely (`continue`) — neither a turn boundary nor a member — which
+/// is how superseded drafts are dropped. With an empty `skip` the behaviour is identical to
+/// the original file-order grouper.
+fn group_turn_indices_core<T>(
+    records: &[T],
+    is_genuine: impl Fn(&T) -> bool,
+    skip: &std::collections::HashSet<usize>,
+) -> Vec<Vec<usize>> {
     let mut turns: Vec<Vec<usize>> = Vec::new();
+    let mut first_emitted: Option<usize> = None;
     for (i, rec) in records.iter().enumerate() {
+        if skip.contains(&i) {
+            continue; // superseded draft: invisible to turn reconstruction
+        }
+        if first_emitted.is_none() {
+            first_emitted = Some(i);
+        }
         if is_genuine(rec) {
             turns.push(vec![i]);
         } else if let Some(last) = turns.last_mut() {
@@ -1116,9 +1212,11 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
             turns.push(vec![i]);
         }
     }
-    // If the first group is a synthetic pre-user lead AND a real user turn follows,
-    // fold the lead into the first real turn so indices align with genuine-user order.
-    let synthetic_lead = records.first().is_some_and(|r| !is_genuine(r));
+    // If the first EMITTED (non-skipped) record is a synthetic pre-user lead AND a real user
+    // turn follows, fold the lead into the first real turn so indices align with genuine-user
+    // order. Basing this on the first non-skipped record keeps behaviour identical when no
+    // draft is skipped (`first_emitted` is then index 0, matching `records.first()`).
+    let synthetic_lead = first_emitted.is_some_and(|i| !is_genuine(&records[i]));
     if synthetic_lead && turns.len() > 1 {
         let lead = turns.remove(0);
         if let Some(first_real) = turns.first_mut() {
@@ -2062,6 +2160,128 @@ mod tests {
             vec![vec![0, 1], vec![2, 3, 4], vec![5]],
             "AUQ answer opens turn 1; interrupt is a member, not a boundary"
         );
+    }
+
+    // ── §6.4.1 esc-cancel / edit-resend DRAFT SUPPRESSION ──
+    // Real shape (verified on ~/.claude/projects): the user submits, ESC-cancels or edits,
+    // and resends; CC appends EACH draft as its own genuine `type:"user"` record sharing the
+    // SAME `parentUuid`. Only the last in file order reached the model. `superseded_draft_indices`
+    // marks the earlier siblings; `group_turn_indices_deduped` drops them so they never become
+    // phantom turns. None of these patterns are reachable through bool fixtures — they need the
+    // real uuid/parentUuid tree, so they parse genuine record JSON.
+
+    #[test]
+    fn superseded_drafts_collapse_same_parent_edit_resend() {
+        // u0 (parent root) → assistant a0 → THREE drafts of one turn under parent a0:
+        // "x" → edited "x" → "x5x" (the one that continued) → assistant a1.
+        // Only the last sibling survives; the two earlier ones are superseded drafts.
+        let records: Vec<Record> = [
+            r#"{"type":"user","uuid":"u0","parentUuid":"root","message":{"role":"user","content":"x"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}"#,
+            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
+            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"x5x"}}"#,
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+
+        let sup = superseded_draft_indices(&records, |r| r);
+        assert_eq!(
+            sup.len(),
+            2,
+            "the two earlier same-parent drafts are superseded"
+        );
+        assert!(
+            sup.contains(&2) && sup.contains(&3),
+            "drafts d1,d2 superseded; u1 (last in file order) survives"
+        );
+        assert!(!sup.contains(&4));
+
+        let turns = group_turn_indices_deduped(&records, |r| r);
+        assert_eq!(
+            turns,
+            vec![vec![0, 1], vec![4, 5]],
+            "two real turns; abandoned drafts vanish entirely (neither boundary nor member)"
+        );
+    }
+
+    #[test]
+    fn superseded_drafts_exact_duplicate_collapses_to_one() {
+        // The same message appears 3× verbatim under one parent (ESC-cancel re-submits) →
+        // exactly one turn, not three.
+        let records: Vec<Record> = [
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"root","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
+            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
+            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+        // Leading assistant (idx0) is a synthetic lead that folds into the first real turn.
+        assert_eq!(
+            group_turn_indices_deduped(&records, |r| r),
+            vec![vec![0, 3]],
+            "3 identical drafts → 1 turn (opener idx3)"
+        );
+    }
+
+    #[test]
+    fn superseded_drafts_distinct_parents_not_merged() {
+        // Two identical-content user records with DIFFERENT parents are two real turns —
+        // distinct turns legitimately share content but never a parentUuid (each is parented
+        // to the assistant message that preceded it).
+        let records: Vec<Record> = [
+            r#"{"type":"user","uuid":"u0","parentUuid":"a0","message":{"role":"user","content":"continue"}}"#,
+            r#"{"type":"assistant","uuid":"x","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"x","message":{"role":"user","content":"continue"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+        assert!(superseded_draft_indices(&records, |r| r).is_empty());
+        assert_eq!(
+            group_turn_indices_deduped(&records, |r| r),
+            vec![vec![0, 1], vec![2]]
+        );
+    }
+
+    #[test]
+    fn superseded_drafts_null_parent_never_grouped() {
+        // No parentUuid → never grouped (grouping on "no parent" would merge unrelated
+        // first-message records). In real data a genuine user always carries a parent.
+        let records: Vec<Record> = [
+            r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"a"}}"#,
+            r#"{"type":"user","uuid":"u1","message":{"role":"user","content":"b"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+        assert!(superseded_draft_indices(&records, |r| r).is_empty());
+        assert_eq!(
+            group_turn_indices_deduped(&records, |r| r),
+            vec![vec![0], vec![1]]
+        );
+    }
+
+    #[test]
+    fn deduped_grouping_matches_plain_when_no_drafts() {
+        // With no same-parent draft siblings, deduped grouping is identical to the plain
+        // delimiter — a regression guard on the shared core.
+        let records: Vec<Record> = [
+            r#"{"type":"user","uuid":"u0","parentUuid":"r","message":{"role":"user","content":"q1"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"r1"}]}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"q2"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+        let plain = group_turn_indices(&records, |r| r.opens_turn());
+        let deduped = group_turn_indices_deduped(&records, |r| r);
+        assert_eq!(plain, deduped);
+        assert_eq!(deduped, vec![vec![0, 1], vec![2]]);
     }
 
     // ── §4.2.1 interrupts: synthesized markers are NOT genuine-user (spurious-boundary

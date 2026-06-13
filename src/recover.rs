@@ -11,7 +11,6 @@
 //! - `--at` the PARTIAL, line-numbered "in the LLM's eyes" snapshot as of a cutoff;
 //!   unknown lines are EXPLICIT gaps, never fabricated.
 //! - `--coverage` scope a recovery (recoverable ranges + boundaries + counts), no dump.
-//! - `--plan` restore a plan (ExitPlanMode text / plan-file Write).
 //!
 //! ## The one new capability: jsonl line numbers
 //!
@@ -36,8 +35,8 @@ use memchr::memmem;
 use rayon::prelude::*;
 
 use crate::cli::{OutputFormat, RecoverArgs, RecoverMode};
-use crate::model::{group_turn_indices, Block, Record};
-use crate::parse::{mmap_bytes, scan_lines_bytes};
+use crate::model::{group_turn_indices_deduped, Block, Record};
+use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -146,22 +145,6 @@ struct PatchHunk {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Plan candidates (--plan mode)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// One restorable plan found in range (an ExitPlanMode block or a plan-file Write).
-#[derive(Debug, Clone)]
-struct PlanCandidate {
-    line_no: usize,
-    turn_index: usize,
-    timestamp_utc: Option<String>,
-    source: &'static str,
-    /// The plan file path when known (ExitPlanMode `planFilePath` / a plan Write path).
-    path: Option<String>,
-    text: String,
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Per-file scan
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -175,7 +158,6 @@ struct ScanResult {
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     parent_session_id: String,
     events: Vec<FileEvent>,
-    plans: Vec<PlanCandidate>,
     skipped_lines: usize,
 }
 
@@ -197,31 +179,13 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     if matches!(mode, RecoverMode::Coverage) && args.out.is_some() {
         eprintln!(
             "note: --out is ignored in --coverage mode (a scoping summary has no artifact \
-             to write); use --patches / --at / --plan to write a file."
+             to write); use --patches / --at to write a file."
         );
     }
 
-    // ── `--line-range` is a no-op in `--plan` mode (a plan restoration is the VERBATIM Write
-    //    content, not a line-addressable file buffer) — surface the no-op at runtime, mirroring
-    //    the --out-in-coverage note. It applies in --patches / --at / --coverage.
-    if matches!(mode, RecoverMode::Plan) && args.line_range.is_some() {
-        eprintln!(
-            "note: --line-range is ignored in --plan mode (a restored plan is the verbatim \
-             Write content, not a line-addressable buffer); use --out then slice the file."
-        );
-    }
-
-    // ── `--file` is required for content reconstruction modes ──
-    let target_file = args.file.as_deref();
-    if matches!(
-        mode,
-        RecoverMode::Patches | RecoverMode::At | RecoverMode::Coverage
-    ) && target_file.is_none()
-    {
-        bail!(
-            "--file <ABS_PATH> is required for --patches / --at / --coverage \
-             (it is optional only for --plan)"
-        );
+    // ── `--file` is required for every mode (an absolute path, or the `@plan` sigil) ──
+    if args.file.is_none() {
+        bail!("--file <ABS_PATH> (or `@plan`) is required for --patches / --at / --coverage");
     }
 
     let turn_range = args
@@ -244,6 +208,26 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         path::Caller::Other,
     )?;
 
+    // ── `--file @plan`: substitute the session-bound plan file (the `plan_mode` attachment's
+    //    `planFilePath`) as the real target, then reconstruct it exactly like any file — every
+    //    Write/Edit on it counts, not just the latest Write. Owns the plan-locating concern so
+    //    a deleted plan is recoverable from the transcript alone. ──
+    let plan_target: Option<String> = match args.file.as_deref() {
+        Some(f) if f == crate::plan::PLAN_SIGIL => {
+            let pref = crate::plan::resolve_plan_target(&session_files)?;
+            eprintln!(
+                "note: {} resolved to {} (bound to session {}{})",
+                crate::plan::PLAN_SIGIL,
+                pref.plan_file,
+                pref.session_id,
+                if pref.is_subagent { ", subagent" } else { "" }
+            );
+            Some(pref.plan_file)
+        }
+        _ => None,
+    };
+    let target_file = plan_target.as_deref().or(args.file.as_deref());
+
     // ── Parallel scan across files (default rayon pool = CPU count) ──
     let per_file: Vec<ScanResult> = session_files
         .par_iter()
@@ -260,7 +244,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     }
     sessions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
-    // ── Apply the turn / time window to events + plans per session ──
+    // ── Apply the turn / time window to events per session ──
     for sr in &mut sessions {
         sr.events.retain(|e| {
             window_admits(
@@ -270,15 +254,27 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
                 &time_window,
             )
         });
-        sr.plans.retain(|p| {
-            window_admits(
-                p.turn_index,
-                p.timestamp_utc.as_deref(),
-                turn_range,
-                &time_window,
-            )
-        });
     }
+
+    // Scope banner reflects the TRUE in-scope transcript set, captured BEFORE the
+    // reconstruction merge folds subagents into their parent.
+    let (scope_top, scope_sub) = scope_span(&sessions);
+
+    // ── Cross-session reconstruction merge (At / Coverage) ──
+    // A file's history spans a top-level session AND its own subagents, interleaved by
+    // wall-clock: main edits a few lines, a subagent edits some, main edits again, a
+    // subagent edits again. Per-session replay sees only fragments — a subagent that
+    // partial-reads then edits is un-anchorable in its OWN transcript (sparse buffer), and
+    // no single transcript holds the whole file. Merge each top-level GROUP (keyed by
+    // parent_session_id — a top-level's own id, shared by its subagents) into one
+    // timestamp-ordered timeline so the file reconstructs as a single COMPLETE artifact.
+    // UNRELATED top-level sessions (different parents) are never merged: separate histories.
+    // Patches stays per-session (per-transcript diff-history provenance is the right view).
+    let sessions = if matches!(mode, RecoverMode::At | RecoverMode::Coverage) {
+        merge_groups_for_reconstruction(sessions)
+    } else {
+        sessions
+    };
 
     let ctx = RenderCtx {
         mode,
@@ -286,6 +282,8 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         line_range,
         at: args.at.clone(),
         skipped_lines,
+        scope_top,
+        scope_sub,
     };
 
     match args.format {
@@ -295,7 +293,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     Ok(())
 }
 
-/// True when an event/plan at `turn_index` / `ts` is admitted by the active window.
+/// True when an event at `turn_index` / `ts` is admitted by the active window.
 /// A timestamp-less item never falls inside a BOUNDED time window (same rule as `files`).
 fn window_admits(
     turn_index: usize,
@@ -311,9 +309,9 @@ fn window_admits(
     time_window.contains(ts)
 }
 
-/// Scan one session file: mmap → forward line-numbered scan → extract `--file` events +
-/// plan candidates. The forward `scan_lines_bytes` path is mandatory (NOT head/tail):
-/// it visits every line including blanks, so the local counter == the true jsonl line.
+/// Scan one session file: mmap → forward line-numbered scan → extract `--file` events.
+/// The forward `scan_lines_bytes` path is mandatory (NOT head/tail): it visits every line
+/// including blanks, so the local counter == the true jsonl line.
 fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
     // Bare-hex canonical id for a subagent transcript (strip the `agent-` filename
     // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
@@ -332,41 +330,29 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
             is_subagent,
             parent_session_id,
             events: Vec::new(),
-            plans: Vec::new(),
             skipped_lines: 0,
         });
     };
     let bytes: &[u8] = &mmap;
 
-    // Carry (line_no, Record) pairs; line_no counts EVERY visited line (1:1 with jsonl).
-    let mut records: Vec<(usize, Record)> = Vec::new();
-    let mut skipped = 0usize;
-    let mut line_no = 0usize;
-    scan_lines_bytes(bytes, |line| {
-        line_no += 1;
-        if !line_is_recover_candidate(line) {
-            return;
-        }
-        match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => records.push((line_no, rec)),
-            Ok(None) => {}          // blank — counted above
-            Err(_) => skipped += 1, // malformed — counted above
-        }
-    })?;
+    // Parse all recover-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool),
+    // preserving each record's exact 1-based line number (counts EVERY visited line, 1:1 with
+    // jsonl) — a single giant transcript is no longer scanned on one core.
+    let (records, skipped) =
+        crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
 
-    let (events, plans) = extract(&records, target_file);
+    let events = extract(&records, target_file);
     Ok(ScanResult {
         session_id,
         is_subagent,
         parent_session_id,
         events,
-        plans,
         skipped_lines: skipped,
     })
 }
 
 /// Pre-JSON byte prefilter — a SUPERSET of `files`' (we need Reads, tool_result bodies,
-/// integrity errors, attachments, history snapshots, ExitPlanMode — not just mutations).
+/// integrity errors, attachments, history snapshots — not just mutations).
 /// Coarse by design; the structural parse decides what each line really is.
 fn line_is_recover_candidate(line: &[u8]) -> bool {
     memmem::find(line, br#""role":"user""#).is_some()
@@ -380,38 +366,66 @@ fn line_is_recover_candidate(line: &[u8]) -> bool {
         || memmem::find(line, b"file-history-snapshot").is_some()
         || memmem::find(line, b"edited_text_file").is_some()
         || memmem::find(line, b"tool_use_error").is_some()
-        || memmem::find(line, b"ExitPlanMode").is_some()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Extraction: (line_no, Record) → FileEvent / PlanCandidate
+// Extraction: (line_no, Record) → FileEvent
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Extract `--file` events + plan candidates from a session's line-numbered records.
+/// Extract `--file` events from a session's line-numbered records.
 ///
 /// Intent↔result is joined by `tool_use_id` WITHIN a turn (never by adjacency — an
 /// integrity error can precede its own tool_use line). We build, per turn, two maps:
 /// `tool_use_id → file_path` (from the originating Read/Edit/Write tool_use) so an
 /// integrity-error carrier with no inline path can be attributed to `--file`.
-fn extract(
-    records: &[(usize, Record)],
-    target_file: Option<&str>,
-) -> (Vec<FileEvent>, Vec<PlanCandidate>) {
+fn extract(records: &[(usize, Record)], target_file: Option<&str>) -> Vec<FileEvent> {
     let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
     // Turn delimiting keys on the shared boundary predicate (§6.4) so file-event
     // attribution lines up with `turns`/`search`: an answered AskUserQuestion / a
     // tool-use rejection-with-message opens a turn, an interrupt / local-command-stdout
     // does not.
-    let turns = group_turn_indices(&recs, |r| r.opens_turn());
+    let turns = group_turn_indices_deduped(&recs, |r| *r);
 
     let mut events: Vec<FileEvent> = Vec::new();
-    let mut plans: Vec<PlanCandidate> = Vec::new();
 
     for (turn_index, idxs) in turns.iter().enumerate() {
         // tool_use_id → file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.
         let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();
+        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo —
+        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and
+        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a
+        // `"File created successfully…"` string), so those ids are absent here and the
+        // input-side fallback below supplies their content (§ subagent recover).
+        let mut ids_with_result: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        // tool_use_ids whose RESULT was an error (`is_error:true`) — e.g. a failed Edit
+        // ("String to replace not found in file", "File has not been read yet"). The op did
+        // NOT mutate the file, so its tool_use INPUT must never be replayed as if it landed.
+        // A failed Edit also has NO `toolUseResult` echo, so its id is absent from
+        // `ids_with_result` — without this set the input-side fallback below would apply the
+        // ghost edit. Captured per-turn; the result block sits in the same turn as its call.
+        let mut failed_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
         for &i in idxs {
-            collect_tool_use_paths(records[i].1.blocks(), &mut id_to_path);
+            let rec = &records[i].1;
+            collect_tool_use_paths(rec.blocks(), &mut id_to_path);
+            let has_structured_result = rec.tool_use_result.is_some();
+            if let Some(blocks) = rec.blocks() {
+                for b in blocks {
+                    if let Block::ToolResult {
+                        tool_use_id: Some(id),
+                        is_error,
+                        ..
+                    } = b
+                    {
+                        if has_structured_result {
+                            ids_with_result.insert(id.clone());
+                        }
+                        if *is_error == Some(true) {
+                            failed_ids.insert(id.clone());
+                        }
+                    }
+                }
+            }
         }
 
         for &i in idxs {
@@ -423,12 +437,25 @@ fn extract(
                 target_file,
                 &id_to_path,
                 &mut events,
-                &mut plans,
+            );
+            // Carrier-less ops (subagent/workflow): reconstruct content from the tool_use
+            // INPUT. Gated on `ids_with_result` so it NEVER double-emits in a top-level
+            // session (whose carriers always carry `toolUseResult`) — main-session
+            // reconstruction stays byte-identical — and on `failed_ids` so a failed Edit's
+            // input is never applied as a phantom mutation.
+            extract_input_fallback(
+                *line_no,
+                turn_index,
+                rec,
+                target_file,
+                &ids_with_result,
+                &failed_ids,
+                &mut events,
             );
         }
     }
 
-    (events, plans)
+    events
 }
 
 /// Record, for each Read/Edit/Write/MultiEdit tool_use block, its `tool_use_id →
@@ -457,6 +484,144 @@ fn collect_tool_use_paths(blocks: Option<&[Block]>, out: &mut BTreeMap<String, S
     }
 }
 
+/// Reconstruct a Write/Edit/MultiEdit content event from the tool_use INPUT when the op
+/// has NO `toolUseResult` carrier (its id is absent from `ids_with_result`).
+///
+/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the
+/// tool RESULT as a bare `tool_result` string (`"File created successfully at: …"`) with
+/// NO structured `toolUseResult` echo — unlike a top-level session, whose carrier carries
+/// `{type:create, filePath, content, …}`. `extract_from_tool_use_result` reads that echo,
+/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`
+/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use
+/// input directly). The authoritative content IS in the input — `Write.content`,
+/// `Edit.{old_string,new_string,replace_all}`, `MultiEdit.edits[]` — present in EVERY
+/// transcript. An Edit reconstructs via `apply_string_edit` (old→new), so the missing
+/// `structuredPatch` is not needed.
+///
+/// Gated on `ids_with_result` so it never double-emits in a top-level session.
+fn extract_input_fallback(
+    line_no: usize,
+    turn_index: usize,
+    rec: &Record,
+    target_file: Option<&str>,
+    ids_with_result: &std::collections::HashSet<String>,
+    failed_ids: &std::collections::HashSet<String>,
+    events: &mut Vec<FileEvent>,
+) {
+    let ts = rec.timestamp.clone();
+    let Some(blocks) = rec.blocks() else { return };
+    for b in blocks {
+        let Block::ToolUse {
+            id,
+            name: Some(name),
+            input: Some(input),
+        } = b
+        else {
+            continue;
+        };
+        // Skip when this op already has a `toolUseResult` carrier to reconstruct from, OR
+        // when its result was an ERROR (a failed Edit/Write never mutated the file, so its
+        // input is a phantom — `is_error:true` covers both "String to replace not found"
+        // and the Edit-before-Read "File has not been read yet" wall, incl. the
+        // Bash-created-then-directly-Edited and the must-re-Read-a-plan cases).
+        if let Some(id) = id {
+            if ids_with_result.contains(id) || failed_ids.contains(id) {
+                continue;
+            }
+        }
+        let path = input
+            .get("file_path")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        if !path_matches(target_file, path) {
+            continue;
+        }
+        match name.as_str() {
+            "Write" => {
+                if let Some(content) = input.get("content").and_then(serde_json::Value::as_str) {
+                    events.push(FileEvent {
+                        line_no,
+                        turn_index,
+                        timestamp_utc: ts.clone(),
+                        kind: EventKind::FullSnapshot {
+                            content: content.to_string(),
+                            total_lines: line_count(content),
+                            source: SnapSource::Write,
+                        },
+                    });
+                }
+            }
+            "Edit" => {
+                let hunks = vec![EditHunk {
+                    old_string: input
+                        .get("old_string")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    new_string: input
+                        .get("new_string")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    replace_all: input
+                        .get("replace_all")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false),
+                }];
+                events.push(FileEvent {
+                    line_no,
+                    turn_index,
+                    timestamp_utc: ts.clone(),
+                    kind: EventKind::Edit {
+                        hunks,
+                        original_file: None,
+                        structured_patch: None,
+                    },
+                });
+            }
+            "MultiEdit" => {
+                let hunks: Vec<EditHunk> = input
+                    .get("edits")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|e| EditHunk {
+                                old_string: e
+                                    .get("old_string")
+                                    .and_then(serde_json::Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                new_string: e
+                                    .get("new_string")
+                                    .and_then(serde_json::Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                replace_all: e
+                                    .get("replace_all")
+                                    .and_then(serde_json::Value::as_bool)
+                                    .unwrap_or(false),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !hunks.is_empty() {
+                    events.push(FileEvent {
+                        line_no,
+                        turn_index,
+                        timestamp_utc: ts.clone(),
+                        kind: EventKind::Edit {
+                            hunks,
+                            original_file: None,
+                            structured_patch: None,
+                        },
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// True when `path` matches `--file`: exact raw-string match, or a basename-suffix
 /// fallback (so a user may pass a short path). `None` target matches nothing (handled
 /// by callers that gate on the mode).
@@ -472,7 +637,7 @@ fn path_matches(target: Option<&str>, path: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Extract every `--file` event + plan candidate carried by ONE record.
+/// Extract every `--file` event carried by ONE record.
 fn extract_from_record(
     line_no: usize,
     turn_index: usize,
@@ -480,7 +645,6 @@ fn extract_from_record(
     target_file: Option<&str>,
     id_to_path: &BTreeMap<String, String>,
     events: &mut Vec<FileEvent>,
-    plans: &mut Vec<PlanCandidate>,
 ) {
     let ts = rec.timestamp.clone();
 
@@ -542,28 +706,6 @@ fn extract_from_record(
                     }
                 }
             }
-            // ExitPlanMode → a plan candidate (independent of `--file`).
-            Block::ToolUse {
-                name: Some(name),
-                input: Some(input),
-                ..
-            } if name == "ExitPlanMode" => {
-                if let Some(plan_text) = input.get("plan").and_then(serde_json::Value::as_str) {
-                    if !plan_text.is_empty() {
-                        plans.push(PlanCandidate {
-                            line_no,
-                            turn_index,
-                            timestamp_utc: ts.clone(),
-                            source: "ExitPlanMode",
-                            path: input
-                                .get("planFilePath")
-                                .and_then(serde_json::Value::as_str)
-                                .map(str::to_string),
-                            text: plan_text.to_string(),
-                        });
-                    }
-                }
-            }
             // (6) Bash heuristic mutation touching `--file`.
             Block::ToolUse {
                 name: Some(name),
@@ -586,38 +728,6 @@ fn extract_from_record(
                 }
             }
             _ => {}
-        }
-    }
-
-    // ── Plan-file Write candidate (a Write to a plan-ish path) ──
-    if let Some(blocks) = rec.blocks() {
-        for b in blocks {
-            if let Block::ToolUse {
-                name: Some(name),
-                input: Some(input),
-                ..
-            } = b
-            {
-                if name == "Write" {
-                    if let Some(p) = input.get("file_path").and_then(serde_json::Value::as_str) {
-                        let is_target = target_file.is_some() && path_matches(target_file, p);
-                        if is_plan_path(p) || is_target {
-                            if let Some(content) =
-                                input.get("content").and_then(serde_json::Value::as_str)
-                            {
-                                plans.push(PlanCandidate {
-                                    line_no,
-                                    turn_index,
-                                    timestamp_utc: ts.clone(),
-                                    source: "plan-write",
-                                    path: Some(p.to_string()),
-                                    text: content.to_string(),
-                                });
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -883,57 +993,6 @@ fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk
     Some(out)
 }
 
-/// True when a path looks plan-ish (heuristic, for `--plan` plan-file Write detection).
-///
-/// COMPONENT-SCOPED, NOT a raw whole-path substring. The naive `lower.contains("plan")`
-/// rule mis-fired on every `.md` write under a project whose ENCODED dir name contains the
-/// substring `plan` — e.g. `~/.claude/projects/-Users-…-widget-app-prototype/memory/
-/// MEMORY.md`, where `widget-app` contains `plan` — folding unrelated memory notes into
-/// the candidate set so `--out` could restore a non-plan. We instead require `plan` to be a
-/// whole token in the FILENAME (or a `plans` directory component), never a substring of an
-/// ancestor dir like `sample`:
-///   (a) a directory component equals `plans` (the `~/.claude/plans/<id>.md` case), OR
-///   (b) the BASENAME's stem (last path component, minus a trailing extension) is the token
-///       `plan`, or contains `plan` delimited by a `-`/`_`/space boundary on at least one
-///       side (`refactor-plan.md`, `plan_v2.md`, `my plan.md`) — but NOT `sample.md`.
-fn is_plan_path(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    let mut components = lower.split('/');
-    // (a) a `plans` directory component anywhere (the `~/.claude/plans/` convention).
-    if components.clone().any(|c| c == "plans") {
-        return true;
-    }
-    // (b) the basename stem carries `plan` as a delimited whole token.
-    let Some(basename) = components.next_back() else {
-        return false;
-    };
-    let stem = basename.rsplit_once('.').map_or(basename, |(s, _)| s);
-    basename_stem_is_plan_token(stem)
-}
-
-/// True when a filename STEM (basename minus extension) carries `plan` as a whole token —
-/// either the stem IS `plan`, or `plan` appears with a `-`/`_`/space delimiter on at least
-/// one side. This is what separates a real `refactor-plan` / `plan_v2` from the false
-/// positive `sample` (where `plan` is a bare substring with an alphabetic neighbour).
-fn basename_stem_is_plan_token(stem: &str) -> bool {
-    if stem == "plan" {
-        return true;
-    }
-    let bytes = stem.as_bytes();
-    let mut search_from = 0usize;
-    while let Some(rel) = stem[search_from..].find("plan") {
-        let start = search_from + rel;
-        let end = start + "plan".len();
-        let before_ok = start == 0 || matches!(bytes[start - 1], b'-' | b'_' | b' ');
-        let after_ok = end == bytes.len() || matches!(bytes[end], b'-' | b'_' | b' ');
-        if before_ok && after_ok {
-            return true;
-        }
-        search_from = start + 1;
-    }
-    false
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Reconstruction — the sparse line-keyed buffer
 // ─────────────────────────────────────────────────────────────────────────────
@@ -952,6 +1011,13 @@ struct SparseBuffer {
     known: BTreeMap<usize, LineCell>,
     /// The file length the model last observed (bounds the trailing gap).
     seen_total_lines: Option<usize>,
+    /// Whether the last full-content anchor ended in a file-final newline. The Read tool
+    /// reports `totalLines` by SEPARATOR count (so a newline-terminated file gets a phantom
+    /// empty last line: 12 content lines → totalLines 13), while `split_lines` uses
+    /// TERMINATOR count (12). When this is set, a windowed read's `total_lines` is
+    /// normalised down by that phantom so the two conventions agree and no spurious trailing
+    /// `??? line N+1 unknown` gap is reported for a fully-recovered file.
+    content_ends_with_newline: bool,
 }
 
 impl SparseBuffer {
@@ -967,7 +1033,21 @@ impl SparseBuffer {
                 },
             );
         }
+        // A full-content anchor is the authority on trailing-newline status (used to
+        // normalise later windowed reads' separator-counted totals).
+        self.content_ends_with_newline = content.ends_with('\n');
         self.seen_total_lines = Some(total_lines.max(self.known.len()));
+    }
+
+    /// Convert a tool-reported `total_lines` (SEPARATOR count) to the TERMINATOR count used
+    /// by `split_lines`, dropping the phantom empty last line a file-final newline adds.
+    /// A no-op until a full-content anchor has confirmed the trailing newline.
+    fn normalize_total(&self, total_lines: usize) -> usize {
+        if self.content_ends_with_newline {
+            total_lines.saturating_sub(1)
+        } else {
+            total_lines
+        }
     }
 
     /// Splice a windowed read: set `known[start+i]` for each line, leave the rest as-is.
@@ -982,7 +1062,8 @@ impl SparseBuffer {
                 },
             );
         }
-        self.seen_total_lines = Some(total_lines.max(self.seen_total_lines.unwrap_or(0)));
+        let norm_total = self.normalize_total(total_lines);
+        self.seen_total_lines = Some(norm_total.max(self.seen_total_lines.unwrap_or(0)));
     }
 
     /// Contiguous runs of currently-known lines, as inclusive `(start, end)` spans.
@@ -1162,8 +1243,16 @@ fn apply_structured_patch(
             );
         }
     }
-    let new_total = buf.known.keys().copied().max().unwrap_or(0);
-    buf.seen_total_lines = Some(new_total.max(buf.seen_total_lines.unwrap_or(0)));
+    let max_known = buf.known.keys().copied().max().unwrap_or(0);
+    // A structured patch is AUTHORITATIVE about the file's new length: adjust the
+    // previously-seen total by this edit's net line delta (`offset` = added − removed
+    // accumulated over the hunks) rather than monotonically maxing it. Maxing left a
+    // phantom trailing gap after a net deletion (e.g. an insert that grew the file to N+1
+    // followed by a delete back to N would still report N+1, emitting a spurious
+    // `??? line N+1 unknown`). Clamp to ≥ the max known line and ≥ 0.
+    let prev_total = buf.seen_total_lines.unwrap_or(0) as isize;
+    let adjusted = (prev_total + offset).max(max_known as isize).max(0) as usize;
+    buf.seen_total_lines = Some(adjusted);
 
     if applied_any {
         EditOutcome::Applied
@@ -1841,6 +1930,11 @@ struct RenderCtx {
     line_range: Option<(usize, usize)>,
     at: Option<String>,
     skipped_lines: usize,
+    /// SCOPE-span counts of the resolved transcript set, captured BEFORE the
+    /// reconstruction merge folds subagents into their parent (so the banner still
+    /// announces the true `1 top-level + N subagent` fan-out).
+    scope_top: usize,
+    scope_sub: usize,
 }
 
 /// Restrict a `(line_no, text)` known-line vector to the `--line-range`, if any.
@@ -1866,9 +1960,8 @@ fn apply_line_range(
 /// scratch path (the advertised `--out /tmp/restored.md` idiom) would otherwise lose
 /// pre-existing content AND read a false `(wrote …)` success line. Returns `true` when a
 /// write happened (so the caller prints its `(wrote …)` line) and `false` (with a stderr
-/// note) when the blob was empty and the file was left untouched. The same data-loss guard
-/// the `--plan` modes already enforce via their `!any`/`global_latest` early-returns, now
-/// uniform across patches/at + their JSON twins + turns.
+/// note) when the blob was empty and the file was left untouched. Uniform across patches/at
+/// + their JSON twins + turns.
 pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
     if blob.is_empty() {
         eprintln!(
@@ -1889,11 +1982,74 @@ fn scope_span(sessions: &[ScanResult]) -> (usize, usize) {
     (sessions.len() - sub, sub)
 }
 
+/// Chronological order of two optional ISO-8601 timestamps. Timestamped events sort before
+/// timestamp-less ones; a stable sort then keeps the within-session order for ties/absent ts.
+fn cmp_ts(a: &Option<String>, b: &Option<String>) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a, b) {
+        (Some(x), Some(y)) => x.cmp(y),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+/// Fold each top-level group (a session + ITS OWN subagents, keyed by `parent_session_id`)
+/// into one cross-session reconstruction timeline. A group whose target-file events come
+/// from <2 transcripts is returned unchanged (byte-identical legacy single-session path).
+/// A group with ≥2 contributing transcripts is collapsed into ONE synthetic `ScanResult`
+/// whose events are the union, stably sorted by wall-clock timestamp, with `line_no`
+/// re-stamped to a monotonic 1..N over the merged order so `--at` cutoffs (`@line` / `@turn`
+/// / datetime) and `replay`'s cutoff stay well-defined across the merged stream.
+fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<ScanResult> {
+    // Group by parent id, preserving BTreeMap key order (== session_id order for top-level
+    // sessions, since a top-level's parent_session_id is its own id) for determinism.
+    let mut groups: BTreeMap<String, Vec<ScanResult>> = BTreeMap::new();
+    for s in sessions {
+        groups
+            .entry(s.parent_session_id.clone())
+            .or_default()
+            .push(s);
+    }
+
+    let mut out: Vec<ScanResult> = Vec::new();
+    for (parent_key, group) in groups {
+        let contributing = group.iter().filter(|s| !s.events.is_empty()).count();
+        if contributing < 2 {
+            // 0 or 1 transcript touched the file in this group → no merge; the renderers
+            // skip the empty members exactly as before.
+            out.extend(group);
+            continue;
+        }
+        // Prefer the top-level session's own uuid as the merged id (re-feedable `--session`
+        // target); fall back to the shared parent key if the group is subagent-only.
+        let merged_id = group
+            .iter()
+            .find(|s| !s.is_subagent)
+            .map(|s| s.session_id.clone())
+            .unwrap_or_else(|| parent_key.clone());
+        let mut events: Vec<FileEvent> = group
+            .iter()
+            .flat_map(|s| s.events.iter().cloned())
+            .collect();
+        events.sort_by(|a, b| cmp_ts(&a.timestamp_utc, &b.timestamp_utc));
+        for (i, e) in events.iter_mut().enumerate() {
+            e.line_no = i + 1;
+        }
+        out.push(ScanResult {
+            session_id: merged_id.clone(),
+            is_subagent: false,
+            parent_session_id: merged_id,
+            events,
+            skipped_lines: 0,
+        });
+    }
+    out
+}
+
 fn render_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>) -> Result<()> {
-    let (top, sub) = scope_span(sessions);
-    crate::text::emit_scope_banner(top, sub);
+    crate::text::emit_scope_banner(ctx.scope_top, ctx.scope_sub);
     match ctx.mode {
-        RecoverMode::Plan => render_plan_text(ctx, sessions, out_path),
         RecoverMode::Coverage => render_coverage_text(ctx, sessions),
         RecoverMode::At => render_at_text(ctx, sessions, out_path),
         RecoverMode::Patches => render_patches_text(ctx, sessions, out_path),
@@ -2114,138 +2270,6 @@ fn render_at_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Pa
     Ok(())
 }
 
-/// The plan candidates to surface, applying the `--file` selector. WITHOUT `--file`, every
-/// candidate (ExitPlanMode text + plan-file Writes) is kept. WITH `--file <abs>`, only
-/// plan-WRITE candidates whose path matches it survive — ExitPlanMode candidates (which
-/// carry no `path`) are dropped, since the user named a specific file to reconstruct. This
-/// is what makes `--plan --file X --out` write X's latest content rather than the
-/// globally-latest candidate.
-fn plan_candidates_for(plans: &[PlanCandidate], file: Option<&str>) -> Vec<PlanCandidate> {
-    match file {
-        None => plans.to_vec(),
-        Some(_) => plans
-            .iter()
-            .filter(|p| path_matches(file, p.path.as_deref().unwrap_or_default()))
-            .cloned()
-            .collect(),
-    }
-}
-
-fn render_plan_text(
-    ctx: &RenderCtx,
-    sessions: &[ScanResult],
-    out_path: Option<&Path>,
-) -> Result<()> {
-    let dry = false; // --plan dry-run is surfaced via --coverage; here we restore.
-    let _ = dry;
-
-    // FIRST pass: resolve the SINGLE global-latest candidate `--out`/the body actually
-    // restores, across every in-scope session, BEFORE rendering. Identify it by
-    // (session_id, line_no) so the per-session marker can say "restored" on exactly the one
-    // winner — earlier, the per-session "latest" was each tagged "(latest — restored)",
-    // which was a lie on every session but the winner whenever scope spanned >1 session.
-    let mut restored: Option<PlanCandidate> = None;
-    let mut restored_sid: Option<&str> = None;
-    for s in sessions {
-        let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
-        if plans.is_empty() {
-            continue;
-        }
-        plans.sort_by_key(|p| p.line_no);
-        if let Some(l) = plans.last() {
-            if restored
-                .as_ref()
-                .map(|r| plan_is_later(l, r))
-                .unwrap_or(true)
-            {
-                restored = Some(l.clone());
-                restored_sid = Some(&s.session_id);
-            }
-        }
-    }
-    let winner_key = restored
-        .as_ref()
-        .map(|r| (restored_sid.unwrap_or_default(), r.line_no));
-
-    // SECOND pass: render the listing. Each session's own latest is `(session-latest)`
-    // (neutral); ONLY the single global winner is `(restored — written to --out)`.
-    let mut first = true;
-    let any = restored.is_some();
-    for s in sessions {
-        let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
-        if plans.is_empty() {
-            continue;
-        }
-        session_header(&mut first, s);
-        plans.sort_by_key(|p| p.line_no);
-        let latest_line = plans.last().map(|l| l.line_no);
-        println!("  plan candidates: {}", plans.len());
-        for p in &plans {
-            let is_winner = winner_key == Some((s.session_id.as_str(), p.line_no));
-            let marker = if is_winner {
-                " (restored — written to --out)"
-            } else if Some(p.line_no) == latest_line {
-                " (session-latest)"
-            } else {
-                ""
-            };
-            println!(
-                "    L{}  turn {}  {}  {}{}{}",
-                p.line_no,
-                p.turn_index,
-                format_timestamp(p.timestamp_utc.as_deref()),
-                p.source,
-                p.path
-                    .as_deref()
-                    .map(|x| format!("  {x}"))
-                    .unwrap_or_default(),
-                marker
-            );
-        }
-    }
-
-    if !any {
-        println!("no restorable plan found in range");
-        print_footer(ctx);
-        return Ok(());
-    }
-
-    if let Some(r) = &restored {
-        println!();
-        println!(
-            "restored from {} @ jsonl line {}, turn {}, {}",
-            r.source,
-            r.line_no,
-            r.turn_index,
-            format_timestamp(r.timestamp_utc.as_deref())
-        );
-        if let Some(p) = out_path {
-            std::fs::write(p, &r.text)
-                .with_context(|| format!("cannot write --out file {}", p.display()))?;
-            println!("(wrote restored plan to {})", p.display());
-        } else {
-            println!("--- plan body ---");
-            println!("{}", truncate_excerpt(&r.text));
-            if r.text.chars().count() > EXCERPT_MAX {
-                println!(
-                    "(pass --out <PATH> to write the full {} chars verbatim)",
-                    r.text.chars().count()
-                );
-            }
-        }
-    }
-    print_footer(ctx);
-    Ok(())
-}
-
-/// Whether plan `a` is later than plan `b` (by timestamp, falling back to line_no).
-fn plan_is_later(a: &PlanCandidate, b: &PlanCandidate) -> bool {
-    match (a.timestamp_utc.as_deref(), b.timestamp_utc.as_deref()) {
-        (Some(ta), Some(tb)) => ta > tb,
-        _ => a.line_no > b.line_no,
-    }
-}
-
 /// Render a partial snapshot body: known lines numbered, gaps explicit. `inline_trunc`
 /// truncates long lines for human stdout (false for the verbatim `--out` artifact).
 fn render_snapshot_body(known: &[(usize, String)], total: usize, inline_trunc: bool) -> String {
@@ -2374,7 +2398,6 @@ fn print_footer(ctx: &RenderCtx) {
         RecoverMode::Patches => "patches",
         RecoverMode::At => "at",
         RecoverMode::Coverage => "coverage",
-        RecoverMode::Plan => "plan",
     };
     println!();
     println!(
@@ -2402,7 +2425,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
 
     // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
     // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
-    let (scope_top, scope_sub) = scope_span(sessions);
+    let (scope_top, scope_sub) = (ctx.scope_top, ctx.scope_sub);
     if scope_sub > 0 {
         println!(
             "{}",
@@ -2542,70 +2565,6 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 write_out_guarded(p, &out_blob)?;
             }
         }
-        RecoverMode::Plan => {
-            // FIRST pass: resolve the SINGLE global-latest candidate `--out` writes (and the
-            // candidate the text body would show), identified by (session_id, line_no), so
-            // every emitted record can carry an honest `is_restored` flag marking WHICH of
-            // the N session-latest candidates produced the artifact — the deciding fact was
-            // previously computed then discarded (`let _ = sid`).
-            let mut global_latest: Option<(String, PlanCandidate)> = None;
-            for s in sessions {
-                let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
-                if plans.is_empty() {
-                    continue;
-                }
-                plans.sort_by_key(|p| p.line_no);
-                if let Some(l) = plans.last() {
-                    if global_latest
-                        .as_ref()
-                        .map(|(_, g)| plan_is_later(l, g))
-                        .unwrap_or(true)
-                    {
-                        global_latest = Some((s.session_id.clone(), l.clone()));
-                    }
-                }
-            }
-            let winner_key = global_latest
-                .as_ref()
-                .map(|(sid, r)| (sid.as_str(), r.line_no));
-
-            // SECOND pass: emit one record per candidate, flagging the single winner.
-            for s in sessions {
-                // Same `--file` selector as the text path: with `--file`, restrict to that
-                // file's plan-write candidates so `--out` reconstructs the named file.
-                let mut plans = plan_candidates_for(&s.plans, ctx.file.as_deref());
-                if plans.is_empty() {
-                    continue;
-                }
-                session_count += 1;
-                plans.sort_by_key(|p| p.line_no);
-                let latest_line = plans.last().map(|p| p.line_no);
-                for p in &plans {
-                    let is_latest = Some(p.line_no) == latest_line;
-                    let is_restored = winner_key == Some((s.session_id.as_str(), p.line_no));
-                    let obj = json!({
-                        "session_id": s.session_id,
-                        "is_subagent": s.is_subagent,
-                        "parent_session_id": s.parent_session_id,
-                        "type": "plan_candidate",
-                        "line_no": p.line_no,
-                        "turn_index": p.turn_index,
-                        "ts_utc": p.timestamp_utc,
-                        "ts_local": p.timestamp_utc.as_deref().and_then(local_iso),
-                        "source": p.source,
-                        "path": p.path,
-                        "is_latest_in_session": is_latest,
-                        "is_restored": is_restored,
-                        "chars": p.text.chars().count(),
-                    });
-                    println!("{}", serde_json::to_string(&obj)?);
-                }
-            }
-            if let (Some((_, r)), Some(p)) = (&global_latest, out_path) {
-                std::fs::write(p, &r.text)
-                    .with_context(|| format!("cannot write --out file {}", p.display()))?;
-            }
-        }
     }
 
     // Trailing summary line.
@@ -2617,7 +2576,6 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 RecoverMode::Patches => "patches",
                 RecoverMode::At => "at",
                 RecoverMode::Coverage => "coverage",
-                RecoverMode::Plan => "plan",
             },
             "skipped_lines": ctx.skipped_lines,
         }

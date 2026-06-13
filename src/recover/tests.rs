@@ -55,7 +55,7 @@ fn line_number_counter_is_one_to_one_with_jsonl_lines() {
 // ── (4) Extraction per EventKind ──
 
 fn extract_events(records: &[(usize, Record)], file: &str) -> Vec<FileEvent> {
-    extract(records, Some(file)).0
+    extract(records, Some(file))
 }
 
 fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
@@ -861,86 +861,6 @@ fn parse_turn_range_matches_files_contract() {
     assert!(parse_turn_range("3..1").is_err());
 }
 
-// ── plan candidate extraction ──
-
-#[test]
-fn extract_plan_candidates_exitplanmode_and_plan_write() {
-    let recs = numbered(&[
-        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
-        r##"{"type":"assistant","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"# Plan café🛠\nstep 1","planFilePath":"/u/.claude/plans/x.md"}}]}}"##,
-        r##"{"type":"assistant","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/u/.claude/plans/x.md","content":"# Plan v2"}}]}}"##,
-    ]);
-    let (_, plans) = extract(&recs, None);
-    assert_eq!(plans.len(), 2, "ExitPlanMode + a plan-ish Write");
-    assert!(plans
-        .iter()
-        .any(|p| p.source == "ExitPlanMode" && p.text.contains("café🛠")));
-    assert!(plans
-        .iter()
-        .any(|p| p.source == "plan-write" && p.text == "# Plan v2"));
-}
-
-#[test]
-fn is_plan_path_heuristic() {
-    assert!(is_plan_path("/u/.claude/plans/x.md"));
-    assert!(is_plan_path("/repo/PLAN.md"));
-    assert!(is_plan_path("/repo/my-plan.md"));
-    assert!(!is_plan_path("/repo/src/main.rs"));
-}
-
-#[test]
-fn is_plan_path_does_not_match_plan_substring_in_ancestor_dir() {
-    // The poison case: the project's ENCODED dir name contains `widget-app`, which
-    // contains the substring `plan`. A memory note written under it must NOT be flagged as
-    // a plan candidate just because an ancestor dir name has `plan` inside `sample`.
-    assert!(
-        !is_plan_path(
-            "/users/x/.claude/projects/-users-x-projects-widget-app-prototype/memory/memory.md"
-        ),
-        "a `plan` substring inside an ancestor `widget-app` dir must not match"
-    );
-    assert!(
-        !is_plan_path(
-            "/users/x/.claude/projects/-users-x-projects-widget-app/memory/speak-chinese.md"
-        ),
-        "a real memory note under widget-app is not a plan"
-    );
-    // `sample.md` (basename whose stem is `sample`, not the token `plan`) must NOT match.
-    assert!(!is_plan_path("/repo/sample.md"));
-    // But a real plan token in the BASENAME still matches (token-delimited).
-    assert!(is_plan_path("/repo/refactor-plan.md"));
-    assert!(is_plan_path("/repo/plan_v2.md"));
-    assert!(is_plan_path("/repo/plan-final.md"));
-    assert!(is_plan_path("/repo/deployment plan.md"));
-    // A `plans` directory component still matches (the ~/.claude/plans/ convention).
-    assert!(is_plan_path("/u/.claude/plans/step1.md"));
-}
-
-#[test]
-fn plan_candidates_for_filters_by_file() {
-    let mk = |path: Option<&str>, text: &str, line: usize| PlanCandidate {
-        line_no: line,
-        turn_index: 0,
-        timestamp_utc: None,
-        source: "plan-write",
-        path: path.map(str::to_string),
-        text: text.to_string(),
-    };
-    let plans = vec![
-        mk(Some("/abs/A.md"), "a", 1),
-        mk(Some("/abs/B.md"), "b", 2),
-        mk(None, "exitplanmode", 3), // ExitPlanMode candidate (no path)
-    ];
-    // No --file → every candidate (incl. the path-less ExitPlanMode one).
-    assert_eq!(plan_candidates_for(&plans, None).len(), 3);
-    // --file selects only the matching plan-write; ExitPlanMode candidates are dropped.
-    let only_b = plan_candidates_for(&plans, Some("/abs/B.md"));
-    assert_eq!(only_b.len(), 1);
-    assert_eq!(only_b[0].text, "b");
-    // A --file that matches nothing yields an empty set (not the global latest).
-    assert!(plan_candidates_for(&plans, Some("/abs/Z.md")).is_empty());
-}
-
 // ── coverage / spans / counts formatting ──
 
 #[test]
@@ -1057,7 +977,6 @@ fn scan_one_file_empty_is_safe() {
     let sr = scan_one_file(&p, Some("/p/a.rs")).expect("scan empty");
     std::fs::remove_file(&p).ok();
     assert!(sr.events.is_empty());
-    assert!(sr.plans.is_empty());
     assert_eq!(sr.skipped_lines, 0);
 }
 
@@ -1278,40 +1197,6 @@ fn snap_source_and_confidence_labels() {
 }
 
 #[test]
-fn plan_is_later_by_timestamp_then_line() {
-    let a = PlanCandidate {
-        line_no: 10,
-        turn_index: 0,
-        timestamp_utc: Some("2026-06-07T06:00:00Z".into()),
-        source: "ExitPlanMode",
-        path: None,
-        text: "a".into(),
-    };
-    let b = PlanCandidate {
-        line_no: 99,
-        turn_index: 0,
-        timestamp_utc: Some("2026-06-07T05:00:00Z".into()),
-        source: "ExitPlanMode",
-        path: None,
-        text: "b".into(),
-    };
-    // a has the later TIMESTAMP despite a lower line_no → a is later.
-    assert!(plan_is_later(&a, &b));
-    // With no timestamps, fall back to line_no.
-    let c = PlanCandidate {
-        timestamp_utc: None,
-        line_no: 5,
-        ..a.clone()
-    };
-    let d = PlanCandidate {
-        timestamp_utc: None,
-        line_no: 3,
-        ..b.clone()
-    };
-    assert!(plan_is_later(&c, &d));
-}
-
-#[test]
 fn render_snapshot_body_empty_known_is_explicit() {
     // No known lines + a seen total → the whole file is one explicit gap, never content.
     let body = render_snapshot_body(&[], 5, false);
@@ -1395,26 +1280,6 @@ fn path_matches_multi_segment_suffix_requires_slash_boundary() {
         !path_matches(Some("engine.py"), "/a/bxengine.py"),
         "mid-component match rejected (prefix 'bx' is non-empty and not slash-aligned)"
     );
-}
-
-#[test]
-fn is_plan_path_each_arm_independently() {
-    // Drive each surviving OR arm in isolation (the redundant `.claude/plans/` arm was
-    // removed as dead — it is a strict subset of `/plans/`).
-    assert!(is_plan_path("/x/PLAN.MD"), "plan.md arm (case-folded)");
-    assert!(
-        is_plan_path("/repo/plans/step1.txt"),
-        "/plans/ arm even when the file is not .md"
-    );
-    assert!(
-        is_plan_path("/repo/refactor-plan.md"),
-        "the (contains 'plan' && ends '.md') arm"
-    );
-    // A '.claude/plans/' path still matches — via the /plans/ arm, proving the removal of
-    // the dedicated operand changed no behavior.
-    assert!(is_plan_path("/u/.claude/plans/x.md"));
-    // No 'plan' token and not under /plans/ → not plan-ish.
-    assert!(!is_plan_path("/repo/readme.md"));
 }
 
 #[test]
@@ -1865,23 +1730,6 @@ fn collect_tool_use_paths_skips_missing_and_empty_file_path() {
 }
 
 #[test]
-fn exitplanmode_with_missing_or_empty_plan_yields_no_candidate() {
-    // ExitPlanMode whose `plan` field is absent → the `if let Some(plan_text)` None side;
-    // and one whose plan is the empty string → the `!plan_text.is_empty()` false side.
-    let recs = numbered(&[
-        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
-        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"planFilePath":"/x.md"}}]}}"#,
-        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"p2","name":"ExitPlanMode","input":{"plan":""}}]}}"#,
-    ]);
-    let (_, plans) = extract(&recs, None);
-    assert!(
-        plans.is_empty(),
-        "a plan-less and an empty-plan ExitPlanMode produce no candidates: {}",
-        plans.len()
-    );
-}
-
-#[test]
 fn bash_tool_use_without_command_is_ignored() {
     // A Bash tool_use with no `command` input → the `if let Some(cmd)` None side; no
     // BashTouch is produced (and nothing panics on the missing field).
@@ -1894,23 +1742,6 @@ fn bash_tool_use_without_command_is_ignored() {
         ev.is_empty(),
         "a Bash tool_use with no command touches nothing: {}",
         ev.len()
-    );
-}
-
-#[test]
-fn write_to_plan_path_without_content_or_file_path_is_ignored() {
-    // A Write to a plan-ish path with NO content → the content `if let Some` None side; and
-    // a Write with no file_path at all → the file_path None side. Neither becomes a plan.
-    let recs = numbered(&[
-        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
-        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/repo/plan.md"}}]}}"#,
-        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"w2","name":"Write","input":{"content":"body"}}]}}"#,
-    ]);
-    let (_, plans) = extract(&recs, None);
-    assert!(
-        plans.is_empty(),
-        "a content-less plan Write and a path-less Write produce no plan candidates: {}",
-        plans.len()
     );
 }
 

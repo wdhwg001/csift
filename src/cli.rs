@@ -1,13 +1,16 @@
 //! Command-line surface (clap derive).
 //!
-//! Seven subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `turns`.
-//! Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
-//! invocations. `list`/`search`/`files`/`recover` span each session's subagent transcripts
-//! by default (`--no-subagents` opts out); `turns` is the exception — a single-thread
-//! recovery tool whose per-session budget MULTIPLIES, so it defaults to the TOP-LEVEL thread
-//! only and opts INTO spanning via `--include-subagents`. `agents` reports a session's
-//! subagent lifecycle (it lists subagents as targets, so it has no subagent-span flag).
-//! The six session-operating subcommands (`list`/`search`/`agents`/`files`/`recover`/`turns`)
+//! Eight subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`,
+//! `turns`. Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
+//! invocations. `list`/`search`/`files`/`recover`/`plan` span each session's subagent
+//! transcripts by default (`--no-subagents` opts out); `turns` is the exception — a
+//! single-thread recovery tool whose per-session budget MULTIPLIES, so it defaults to the
+//! TOP-LEVEL thread only and opts INTO spanning via `--include-subagents`. `agents` reports a
+//! session's subagent lifecycle (it lists subagents as targets, so it has no subagent-span
+//! flag). `plan` resolves the plan file BOUND to a session (its `plan_mode` attachment);
+//! `recover --file @plan` reconstructs that bound plan's content.
+//! The seven session-operating subcommands
+//! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`)
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` (cwd / encoded dir),
 //! an optional `--session <uuid>`, and a bare-uuid POSITIONAL that routes to the session
@@ -310,7 +313,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
           files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n  \
           recover  reconstruct a file's history from the transcript — segmented diff-patches,\n           \
-                   point-in-time partial snapshot, coverage scoping, or plan restoration\n  \
+                   point-in-time partial snapshot, or coverage scoping\n  \
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
                    back-and-forth a compaction summary clipped, within a char/token budget\n\n\
         list/search/files/recover span each session's subagent transcripts by \
@@ -331,7 +334,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift whoami                                # who am I (this CC session)?\n  \
           csift files <uuid> --by-file                # which files this session modified, when\n  \
           csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
-          csift recover . --plan --out /tmp/plan.md   # list plan candidates; write the latest to a file\n  \
+          csift recover . --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42\n  \
           csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
@@ -354,8 +357,10 @@ pub enum Command {
     /// Which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash).
     Files(FilesArgs),
     /// Reconstruct a file's history from the transcript — segmented diff-patches,
-    /// point-in-time partial snapshot, coverage scoping, or plan restoration.
+    /// point-in-time partial snapshot, or coverage scoping.
     Recover(RecoverArgs),
+    /// Locate the Plan-Mode plan file BOUND to a session (via its `plan_mode` attachment).
+    Plan(PlanArgs),
     /// Turn-fidelity reconstruction — restore the verbatim user/assistant
     /// back-and-forth a compaction summary clipped, within a char/token budget.
     Turns(TurnsArgs),
@@ -1174,8 +1179,6 @@ pub enum RecoverMode {
     At,
     /// Coverage / scoping summary — recoverable ranges + boundaries + counts, no dump.
     Coverage,
-    /// Plan restoration (ExitPlanMode / plan-file recovery).
-    Plan,
 }
 
 #[derive(Debug, Args)]
@@ -1185,7 +1188,7 @@ pub enum RecoverMode {
         file's CONTENT line-by-line from the transcript's Reads / Writes / Edits, in \
         transcript order, with every output line carrying the JSONL LINE NUMBER so an \
         LLM can `Read` the raw jsonl directly.\n\n\
-        FOUR MUTUALLY-EXCLUSIVE MODES (exactly one; default `--patches`):\n  \
+        THREE MUTUALLY-EXCLUSIVE MODES (exactly one; default `--patches`):\n  \
           --patches   (DEFAULT) segmented unified-diff history of `--file`. The range \
         is split at INTEGRITY BOUNDARIES — points where reconstruction across them is \
         invalid (a `File has been modified since read` harness error, an `originalFile` \
@@ -1199,52 +1202,35 @@ pub enum RecoverMode {
         regions are marked `??? lines A..B unknown` — gaps are NEVER fabricated.\n  \
           --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
-        counts (reads / edits / writes / bash / external-edits).\n  \
-          --plan      restore a PLAN (ExitPlanMode text or a plan-file Write). TWO paths: \
-        WITH `--file <abs>` it restricts to THAT file's plan-write candidates and `--out` \
-        reconstructs the named file's latest Write content (ExitPlanMode candidates, which \
-        have no path, are excluded); WITHOUT `--file` it ENUMERATES every plan candidate in \
-        range (printing `plan candidates: N`) and `--out` writes the single GLOBAL-latest \
-        candidate across all in-scope sessions. In the listing exactly that one winner is \
-        tagged `(restored — written to --out)`; each other session's own newest plan is the \
-        neutral `(session-latest)` — so spanning multiple sessions never claims N plans were \
-        restored. JSON marks the same single winner with `is_restored:true` (alongside the \
-        per-session `is_latest_in_session`). \
-        A WRITE qualifies as a plan-file by a COMPONENT-scoped heuristic (not a raw substring): \
-        a `plans/` directory component (the `~/.claude/plans/` convention), OR the filename's \
-        stem being the token `plan` / carrying `plan` delimited by `-`/`_`/space \
-        (`refactor-plan.md`, `plan_v2.md`) — so `sample.md` and a `widget-app` ancestor dir \
-        do NOT match. Use `--file` to pin an exact file when the heuristic is too broad.\n\n\
+        counts (reads / edits / writes / bash / external-edits).\n\n\
         The TARGET selects the session(s): `--session <uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
         mutually exclusive with `--since`/`--until` (ISO8601 / relative). `--line-range \
         START..END` further restricts to a 1-based file-line span. `--out <PATH>` writes \
-        the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to \
+        the reconstructed artifact (snapshot / concatenated patches) verbatim to \
         a file while the summary still prints to stdout.\n\n\
         Reconstruction is NECESSARILY PARTIAL and NEVER fabricates: an unseen line is \
         an explicit gap, an un-anchorable edit is a coverage hole, a Bash touch is a \
         heuristic (not authoritative) boundary. No silent truncation.",
     after_help = "MODE (choose AT MOST ONE; default --patches)\n  \
-          --patches / --at <WHEN> / --coverage / --plan are MUTUALLY EXCLUSIVE — passing two \
-        (e.g. `--plan --patches`) is a parse error. With none, `--patches` applies. `--file` \
-        is REQUIRED for --patches / --at / --coverage and OPTIONAL for --plan.\n\n\
+          --patches / --at <WHEN> / --coverage are MUTUALLY EXCLUSIVE — passing two \
+        (e.g. `--coverage --patches`) is a parse error. With none, `--patches` applies. `--file` \
+        is REQUIRED for every mode (--patches / --at / --coverage); its value is an absolute \
+        path OR the magic `@plan` (the session-bound plan file).\n\n\
         EXAMPLES\n  \
           csift recover . --file /abs/PLAN.md --coverage            # scope first: covered ranges + boundaries, no dump\n  \
           csift recover <uuid> --file /abs/app.py --patches         # segmented unified diffs over the whole session\n  \
           csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only\n  \
           csift recover <uuid> --file /abs/app.py --at @turn:42     # partial snapshot as the LLM saw it at turn 42\n  \
-          csift recover . --plan --out /tmp/restored-plan.md        # list plan candidates; write the latest to a file\n  \
-          csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md # reconstruct THAT plan file's Write content\n  \
+          csift recover <uuid> --file @plan --out /tmp/plan.md      # reconstruct the session's bound plan (even if deleted)\n  \
           csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200\n\n\
         JSON SCHEMA (per --format json)\n  \
           Per-MODE record objects (each tagged by a `type`/`mode`-specific shape — \
         `--patches` emits `{type:\"segment\",…}` + `{type:\"boundary\",…}`; `--coverage` emits \
         a `{covered_ranges, boundaries, events, fragments, recoverable_lines, …}` object; \
-        `--at` emits line/gap records; `--plan` emits plan-candidate records carrying both \
-        `is_latest_in_session` (newest in ITS session) and `is_restored` (the SINGLE \
-        global-latest candidate `--out` actually writes — true on exactly one record)). \
+        `--at` emits line/gap records). \
         EVERY per-record \
         object carries the id-domain discriminators `{session_id, is_subagent, \
         parent_session_id}` (is_subagent flags a bare-hex subagent record; re-feed \
@@ -1271,7 +1257,10 @@ pub struct RecoverArgs {
 
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
     /// exactly as written in the transcript (with a basename-suffix fallback). REQUIRED
-    /// for `--patches` / `--at` / `--coverage`; OPTIONAL for `--plan`.
+    /// for every mode (`--patches` / `--at` / `--coverage`). The MAGIC value `@plan`
+    /// (bash-safe, no escaping) instead reconstructs the session-BOUND plan file — the
+    /// path from the session's `plan_mode` attachment — so a deleted plan is recoverable
+    /// from the transcript alone; locate it without dumping via `csift plan`.
     #[arg(long, value_name = "ABS_PATH")]
     pub file: Option<String>,
 
@@ -1314,18 +1303,6 @@ pub struct RecoverArgs {
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
 
-    /// Restore a plan (ExitPlanMode text / plan-file Write). WITH `--file <abs>`: restrict to
-    /// THAT file's plan-write candidates and reconstruct its latest Write content (path-less
-    /// ExitPlanMode candidates are excluded). WITHOUT `--file`: enumerate every plan candidate
-    /// in range (`plan candidates: N`); `--out` then writes the single GLOBAL-latest candidate
-    /// across all in-scope sessions — tagged `(restored — written to --out)` in the listing
-    /// (each other session's newest is the neutral `(session-latest)`; JSON: `is_restored`). A
-    /// Write qualifies via a COMPONENT-scoped heuristic — a `plans/` dir component, or the
-    /// filename stem being/carrying the token `plan` (delimited), so `sample.md` and a
-    /// `widget-app` ancestor dir do NOT match. `--file` is optional ONLY for `--plan`.
-    #[arg(long, group = "mode")]
-    pub plan: bool,
-
     /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
@@ -1348,18 +1325,16 @@ pub struct RecoverArgs {
 
     /// Restrict to a 1-based, inclusive file-line span of `--file` (filters the reconstructed
     /// line space, independent of the turn/time window). Applies in `--patches` / `--at` /
-    /// `--coverage`. NO EFFECT in `--plan` mode — a plan restoration is the VERBATIM Write
-    /// content (not a line-addressable file buffer); a runtime stderr note flags the no-op.
-    /// To slice a restored plan, `--out` it then slice the file.
+    /// `--coverage`.
     #[arg(long, value_name = "START..END")]
     pub line_range: Option<String>,
 
-    /// Write the reconstructed artifact (snapshot / plan / concatenated patches)
+    /// Write the reconstructed artifact (snapshot / concatenated patches)
     /// verbatim to this file; the summary still prints to stdout. The DIFFERENCE from stdout:
     /// stdout shortens each over-long line/body to a ~400-char excerpt (a `… (+N chars)`
     /// marker) for readability, whereas `--out` writes every line in full. IGNORED in
     /// `--coverage` mode (a scoping summary — no artifact to write, so no file is created and
-    /// a stderr note is printed); it writes for `--patches` / `--at` / `--plan`.
+    /// a stderr note is printed); it writes for `--patches` / `--at`.
     #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
 
@@ -1391,11 +1366,62 @@ impl RecoverArgs {
             RecoverMode::At
         } else if self.coverage {
             RecoverMode::Coverage
-        } else if self.plan {
-            RecoverMode::Plan
         } else {
             RecoverMode::Patches
         }
+    }
+}
+
+#[derive(Debug, Args)]
+#[command(
+    long_about = "Locate the Plan-Mode PLAN FILE bound to a session. Claude Code stores plans \
+        flat under `~/.claude/plans/<three-words>.md` (a subagent's gets an `-agent-<hex>` \
+        suffix); the random name is bound to the session by the `plan_mode` ATTACHMENT the \
+        transcript writes on entering Plan Mode. That attachment is the authoritative binding \
+        — a session may also Edit/Write OTHER sessions' plan files, but those are not its own \
+        plan, so this never path-guesses.\n\n\
+        TARGET: a project PATH / encoded-dir / bare session-UUID (positional), or `--session \
+        <uuid>`. With NO target, the CALLING session is resolved from `CLAUDE_CODE_SESSION_ID` \
+        (like `whoami`) — `csift plan` answers \"what is MY plan file\". Subagents are spanned \
+        by default (their own plans surface, flagged); `--no-subagents` restricts to the \
+        top-level session.\n\n\
+        To DUMP the plan's content (even after it was deleted), feed it to recover: \
+        `csift recover --session <uuid> --file @plan` reconstructs the bound plan from the \
+        transcript's Writes/Edits.",
+    after_help = "EXAMPLES\n  \
+          csift plan                                   # the calling session's bound plan file\n  \
+          csift plan <uuid>                            # a specific session's plan file\n  \
+          csift plan . --format json                   # every session under this project (NDJSON)\n  \
+          csift recover --session <uuid> --file @plan  # DUMP the bound plan's reconstructed content"
+)]
+pub struct PlanArgs {
+    /// Project target(s) (actual cwd or encoded dir) whose session(s) to resolve the bound
+    /// plan file for. A target may ALSO be a bare session-UUID routed to `--session`. With
+    /// no target AND no `--session`, the calling session is resolved from the environment.
+    #[arg(
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target
+    )]
+    pub paths: Vec<PathBuf>,
+
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
+    pub session: Option<String>,
+
+    /// Exclude subagent transcripts — resolve only the top-level session's bound plan.
+    #[arg(long = "no-subagents")]
+    pub no_subagents: bool,
+
+    /// Emit NDJSON (one object per resolved plan) instead of the headered text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+}
+
+impl PlanArgs {
+    /// Subagent span is ON by default; `--no-subagents` restricts to the top-level session.
+    #[must_use]
+    pub fn want_subagents(&self) -> bool {
+        !self.no_subagents
     }
 }
 

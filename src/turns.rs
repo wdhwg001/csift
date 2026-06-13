@@ -74,7 +74,7 @@ use memchr::memmem;
 use rayon::prelude::*;
 
 use crate::cli::{BudgetUnit, OutputFormat, TurnsArgs};
-use crate::model::{group_turn_indices, normalize_line, Block, Content, PlanIndex, Record};
+use crate::model::{group_turn_indices_deduped, normalize_line, Block, Content, PlanIndex, Record};
 use crate::parse::{mmap_bytes, scan_lines_bytes};
 use crate::path;
 use crate::time_window::TimeWindow;
@@ -618,11 +618,12 @@ fn line_is_turn_candidate(line: &[u8]) -> bool {
 
 /// Build the per-turn slices + summary dedup sets from a session's line-numbered
 /// records. Turn segmentation reuses the single shared engine
-/// [`group_turn_indices`]; a compaction summary is a turn MEMBER (it is excluded from
+/// [`group_turn_indices_deduped`], so an esc-cancel / edit-resend draft never surfaces as a
+/// phantom turn (§6.4.1); a compaction summary is a turn MEMBER (it is excluded from
 /// genuine-user), so the walk is transparent to it.
 fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
     let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices(&recs, |r| r.opens_turn());
+    let turns = group_turn_indices_deduped(&recs, |r| *r);
     // ExitPlanMode plan pointers for this session, so a rejection-with-message turn
     // opener can surface `[plan: <path>]` (§4.2.4). Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(recs.iter().copied());

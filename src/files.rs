@@ -39,8 +39,8 @@ use rayon::prelude::*;
 
 use crate::bash_mutations::parse_bash_mutations;
 use crate::cli::{FilesArgs, FilesDetail, OutputFormat};
-use crate::model::{group_turn_indices, FileMutation, FileOp, Record};
-use crate::parse::{mmap_bytes, scan_lines_bytes};
+use crate::model::{group_turn_indices_deduped, FileMutation, FileOp, Record};
+use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -162,18 +162,11 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
     // (`Edit`/`Write`/`NotebookEdit`/`MultiEdit`/`Bash`/`filePath`) OR it is a genuine-
     // user delimiter (`"role":"user"`, needed so turns can still be delimited). Skipped
     // malformed lines are counted, never hidden.
-    let mut records: Vec<Record> = Vec::new();
-    let mut skipped = 0usize;
-    scan_lines_bytes(bytes, |line| {
-        if !line_is_files_candidate(line) {
-            return;
-        }
-        match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => records.push(rec),
-            Ok(None) => {}
-            Err(_) => skipped += 1,
-        }
-    })?;
+    // Parse all files-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool) so a
+    // single giant transcript is not scanned on one core; `files` only needs the records in
+    // order, so the parallel scan's exact line numbers are discarded here.
+    let (recs, skipped) = crate::parse::parse_candidates_parallel(bytes, line_is_files_candidate);
+    let records: Vec<Record> = recs.into_iter().map(|(_, rec)| rec).collect();
 
     // A subagent transcript's `session_id` is a non-re-feedable bare hex; stamp the
     // id-domain discriminator + the re-feedable parent uuid (the dir before `subagents/`)
@@ -285,7 +278,7 @@ fn bash_verb_is_create(verb: &str) -> bool {
 /// Delimit turns over the parsed records, then for each turn extract structured + Bash
 /// mutations and JOIN the structured ones to their carriers for accurate `is_create`.
 fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation> {
-    let index_turns = group_turn_indices(records, Record::opens_turn);
+    let index_turns = group_turn_indices_deduped(records, |r| r);
     let mut out = Vec::new();
 
     for (turn_index, idxs) in index_turns.iter().enumerate() {

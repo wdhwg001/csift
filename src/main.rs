@@ -12,6 +12,7 @@ mod files;
 mod model;
 mod parse;
 mod path;
+mod plan;
 mod recover;
 mod search;
 mod session;
@@ -51,6 +52,7 @@ fn run(cli: Cli) -> Result<()> {
         Command::Agents(args) => agents::run_agents(&args),
         Command::Files(args) => files::run_files(&args),
         Command::Recover(args) => recover::run_recover(&args),
+        Command::Plan(args) => plan::run_plan(&args),
         Command::Turns(args) => turns::run_turns(&args),
     }
 }

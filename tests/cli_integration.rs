@@ -679,9 +679,9 @@ fn bare_subagent_hex_positional_gives_guided_error() {
     for sub in [
         vec!["turns", "aaa111bbb222ccc333"],
         vec!["search", "x", "aaa111bbb222ccc333"],
-        // recover requires --plan (or --file) before it reaches the resolver; --plan is the
-        // mode that does not require a --file, so it exercises the resolver's guided error.
-        vec!["recover", "aaa111bbb222ccc333", "--plan"],
+        // recover requires --file before it reaches the resolver; pass one so the subagent-hex
+        // target reaches the resolver's guided error instead of the --file-required bail.
+        vec!["recover", "aaa111bbb222ccc333", "--file", "/x.rs"],
         vec!["list", "aaa111bbb222ccc333"],
         vec!["agents", "aaa111bbb222ccc333"],
     ] {
@@ -2602,188 +2602,6 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
 }
 
 #[test]
-fn recover_plan_json_carries_id_domain_discriminators() {
-    // recover JSON records gain is_subagent + parent_session_id (the r6 extension). Use a
-    // top-level plan-file Write so a plan_candidate record is emitted; assert the new fields.
-    let h = Home::new();
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/plans/refactor.md","content":"the plan body"}}]}}"#, "\n",
-            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/refactor.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    let out = h.run(&["recover", SESS, "--plan", "--format", "json"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let objs = json_lines(&out.stdout);
-    let cand = objs
-        .iter()
-        .find(|o| o["type"] == "plan_candidate")
-        .expect("a plan_candidate record present");
-    assert_eq!(cand["is_subagent"], serde_json::json!(false));
-    assert_eq!(cand["session_id"], serde_json::json!(SESS));
-    assert_eq!(cand["parent_session_id"], serde_json::json!(SESS));
-}
-
-#[test]
-fn recover_plan_multi_session_marks_exactly_one_restored_winner() {
-    // Two top-level sessions in ONE project, each with its own plan-file Write. `--plan` over
-    // the project must tag EXACTLY ONE candidate `(restored — written to --out)` (the global
-    // winner) — earlier each session's own latest was wrongly tagged "restored", a lie on every
-    // session but the one `--out` actually writes. The other session's newest is `(session-latest)`.
-    let h = Home::new();
-    const SESS_B: &str = "22222222-bbbb-cccc-dddd-222222222222";
-    // Session A: a plan written at 05:00 (the EARLIER one → not the global winner).
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/plans/aaa.md","content":"plan A body"}}]}}"#, "\n",
-            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/aaa.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    // Session B: a plan written LATER at 06:00 → the global winner `--out` writes.
-    h.write(
-        &format!("{ENC}/{SESS_B}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw2","name":"Write","input":{"file_path":"/p/plans/bbb.md","content":"plan B body"}}]}}"#, "\n",
-            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/bbb.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw2","content":"ok"}]}}"#, "\n",
-        ),
-    );
-
-    // TEXT: exactly one "restored — written to --out", at least one neutral "(session-latest)".
-    let t = h.run(&["recover", ENC, "--plan"]);
-    assert!(t.success, "stderr: {}", t.stderr);
-    let restored_count = t.stdout.matches("(restored — written to --out)").count();
-    assert_eq!(
-        restored_count, 1,
-        "exactly one global winner must be tagged restored, got {restored_count}: {}",
-        t.stdout
-    );
-    assert!(
-        t.stdout.contains("(session-latest)"),
-        "the non-winner session's newest plan must be neutral (session-latest): {}",
-        t.stdout
-    );
-    // The winner is plan B (the later one).
-    assert!(t
-        .stdout
-        .contains("/p/plans/bbb.md (restored — written to --out)"));
-
-    // JSON: exactly one is_restored=true (on plan B), both session-latest candidates flagged.
-    let j = h.run(&["recover", ENC, "--plan", "--format", "json"]);
-    assert!(j.success, "stderr: {}", j.stderr);
-    let objs = json_lines(&j.stdout);
-    let cands: Vec<_> = objs
-        .iter()
-        .filter(|o| o["type"] == "plan_candidate")
-        .collect();
-    let restored: Vec<_> = cands
-        .iter()
-        .filter(|o| o["is_restored"] == serde_json::json!(true))
-        .collect();
-    assert_eq!(restored.len(), 1, "exactly one is_restored=true record");
-    assert_eq!(restored[0]["path"], serde_json::json!("/p/plans/bbb.md"));
-    let latest: Vec<_> = cands
-        .iter()
-        .filter(|o| o["is_latest_in_session"] == serde_json::json!(true))
-        .collect();
-    assert_eq!(latest.len(), 2, "both sessions' own latest are flagged");
-}
-
-#[test]
-fn recover_plan_file_filter_marks_single_restored() {
-    // `--plan --file <abs>` restricts to THAT file's plan-write candidates; the single latest
-    // such candidate is the restored winner (is_restored=true). Two Writes to the same plan
-    // file across turns: only the LATER one wins.
-    let h = Home::new();
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/PLAN.md","content":"v1"}}]}}"#, "\n",
-            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/PLAN.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw2","name":"Write","input":{"file_path":"/p/PLAN.md","content":"v2 newer"}}]}}"#, "\n",
-            r#"{"type":"user","uuid":"c1","toolUseResult":{"type":"update","filePath":"/p/PLAN.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw2","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    let j = h.run(&[
-        "recover",
-        SESS,
-        "--plan",
-        "--file",
-        "/p/PLAN.md",
-        "--format",
-        "json",
-    ]);
-    assert!(j.success, "stderr: {}", j.stderr);
-    let objs = json_lines(&j.stdout);
-    let restored: Vec<_> = objs
-        .iter()
-        .filter(|o| o["type"] == "plan_candidate" && o["is_restored"] == serde_json::json!(true))
-        .collect();
-    assert_eq!(restored.len(), 1, "exactly one is_restored winner");
-    // The newer Write (v2) is the winner — assert by its higher line_no.
-    let all: Vec<_> = objs
-        .iter()
-        .filter(|o| o["type"] == "plan_candidate")
-        .collect();
-    let max_line = all
-        .iter()
-        .map(|o| o["line_no"].as_u64().unwrap())
-        .max()
-        .unwrap();
-    assert_eq!(restored[0]["line_no"].as_u64().unwrap(), max_line);
-}
-
-#[test]
-fn recover_plan_text_brands_subagent_transcript() {
-    // recover's TEXT session header must brand a SUBAGENT transcript
-    // `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring list/files/turns), NEVER a bare
-    // `SESSION <hex>` — a subagent session_id is not a re-feedable --session target.
-    let h = Home::new();
-    // Top-level session with a plan, plus a subagent that ALSO writes a plan file.
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw1","name":"Write","input":{"file_path":"/p/plans/top.md","content":"top plan"}}]}}"#, "\n",
-            r#"{"type":"user","uuid":"c0","toolUseResult":{"type":"create","filePath":"/p/plans/top.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw1","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    h.write(
-        &format!("{ENC}/{SESS}/subagents/agent-sub111.jsonl"),
-        concat!(
-            r#"{"type":"user","isSidechain":true,"agentId":"sub111","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"sub: write a plan"}}"#, "\n",
-            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/p/plans/sub.md","content":"sub plan"}}]}}"#, "\n",
-            r#"{"type":"user","toolUseResult":{"type":"create","filePath":"/p/plans/sub.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw1","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    let t = h.run(&["recover", "--session", SESS, "--plan"]);
-    assert!(t.success, "stderr: {}", t.stderr);
-    // The subagent transcript is branded with its parent uuid, NOT a bare-hex SESSION.
-    assert!(
-        t.stdout
-            .contains(&format!("SUBAGENT sub111  ·  parent SESSION {SESS}")),
-        "subagent transcript not branded in recover text: {}",
-        t.stdout
-    );
-    assert!(
-        !t.stdout.contains("SESSION sub111"),
-        "a bare subagent hex must never be tokened SESSION: {}",
-        t.stdout
-    );
-    // The top-level transcript keeps the plain SESSION <uuid> header.
-    assert!(
-        t.stdout.contains(&format!("SESSION {SESS}")),
-        "top-level transcript lost its SESSION header: {}",
-        t.stdout
-    );
-}
-
-#[test]
 fn recover_coverage_out_is_noop_with_stderr_note() {
     // `--out` is a no-op in --coverage mode: no file is written, and a stderr note makes the
     // no-op visible (the help truth-up for r6).
@@ -3304,32 +3122,6 @@ fn recover_at_partial_read_marks_explicit_gaps() {
 }
 
 #[test]
-fn recover_plan_restores_latest_with_provenance() {
-    let h = recover_scenario_home();
-    let out_path = h.root.join("restored-plan.md");
-    let out = h.run(&[
-        "recover",
-        "--session",
-        SESS,
-        "--plan",
-        "--out",
-        out_path.to_str().unwrap(),
-    ]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    // The ExitPlanMode plan is listed as a candidate with Lnnn / turn / ts provenance.
-    assert!(out.stdout.contains("ExitPlanMode"), "{}", out.stdout);
-    assert!(
-        out.stdout.contains("restored from"),
-        "provenance line: {}",
-        out.stdout
-    );
-    assert!(out.stdout.contains("jsonl line"), "{}", out.stdout);
-    // The restored file equals the plan text verbatim.
-    let restored = std::fs::read_to_string(&out_path).expect("restored plan written");
-    assert_eq!(restored, "PLAN café🛠\n- step one\n- step two");
-}
-
-#[test]
 fn recover_json_every_object_has_line_no_and_local_ts() {
     let h = recover_scenario_home();
     let out = h.run(&[
@@ -3416,7 +3208,7 @@ fn recover_at_json_lines_carry_provenance_and_gaps() {
 #[test]
 fn recover_two_modes_conflict() {
     let h = Home::new();
-    let out = h.run(&["recover", ".", "--file", RFILE, "--coverage", "--plan"]);
+    let out = h.run(&["recover", ".", "--file", RFILE, "--coverage", "--patches"]);
     assert!(
         !out.success,
         "two modes must be a clap conflict: {}",
@@ -3448,19 +3240,22 @@ fn recover_turn_range_and_since_mutually_exclusive() {
 }
 
 #[test]
-fn recover_file_required_for_patches_optional_for_plan() {
+fn recover_file_required_for_all_modes() {
     let h = recover_scenario_home();
-    // --patches without --file → error.
-    let no_file = h.run(&["recover", "--session", SESS, "--patches"]);
-    assert!(!no_file.success);
-    assert!(
-        no_file.stderr.contains("--file") && no_file.stderr.contains("required"),
-        "file-required bail: {}",
-        no_file.stderr
-    );
-    // --plan without --file → OK.
-    let plan_ok = h.run(&["recover", "--session", SESS, "--plan"]);
-    assert!(plan_ok.success, "plan needs no --file: {}", plan_ok.stderr);
+    // Every mode (patches / at / coverage) requires --file → each bails without it.
+    for mode in [
+        vec!["recover", "--session", SESS, "--patches"],
+        vec!["recover", "--session", SESS, "--at", "@turn:0"],
+        vec!["recover", "--session", SESS, "--coverage"],
+    ] {
+        let no_file = h.run(&mode);
+        assert!(!no_file.success, "{mode:?} must bail without --file");
+        assert!(
+            no_file.stderr.contains("--file") && no_file.stderr.contains("required"),
+            "{mode:?} file-required bail: {}",
+            no_file.stderr
+        );
+    }
 }
 
 #[test]
@@ -3504,12 +3299,11 @@ fn recover_help_mentions_modes() {
     let h = Home::new();
     let out = h.run(&["recover", "--help"]);
     assert!(out.success);
-    // The four mutually-exclusive mode flags and their semantics are documented.
+    // The three mutually-exclusive mode flags and their semantics are documented.
     for needle in [
         "--patches",
         "--at",
         "--coverage",
-        "--plan",
         "segmented unified-diff",
         "partial snapshot",
     ] {
@@ -3665,52 +3459,6 @@ fn recover_at_out_writes_partial_snapshot_with_gaps() {
 }
 
 #[test]
-fn recover_plan_json_lists_candidates_with_line_no() {
-    let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--plan", "--format", "json"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let objs: Vec<serde_json::Value> = out
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).expect("ndjson"))
-        .collect();
-    let cand = objs
-        .iter()
-        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("plan_candidate"))
-        .expect("a plan_candidate object");
-    assert!(
-        cand.get("line_no").and_then(|v| v.as_u64()).is_some(),
-        "{cand}"
-    );
-    assert!(
-        cand.get("source").and_then(|v| v.as_str()).is_some(),
-        "{cand}"
-    );
-    assert!(cand.get("ts_local").is_some(), "local ts present: {cand}");
-    assert!(cand.get("is_latest_in_session").is_some(), "{cand}");
-    assert!(objs.last().unwrap().get("summary").is_some());
-}
-
-#[test]
-fn recover_plan_stdout_without_out_prints_body() {
-    // No --out → the plan body is printed inline (small plan, no truncation marker).
-    let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--plan"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    assert!(
-        out.stdout.contains("--- plan body ---"),
-        "inline body header: {}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("PLAN café🛠"),
-        "plan content inline: {}",
-        out.stdout
-    );
-}
-
-#[test]
 fn recover_patches_via_project_path_target() {
     // Drive recover by a PROJECT PATH (encoded dir) instead of --session, exercising the
     // multi-session merge + sort path.
@@ -3741,28 +3489,6 @@ fn recover_at_json_out_writes_artifact() {
     // stdout is NDJSON; the --out file is the verbatim reconstructed body.
     let body = std::fs::read_to_string(&out_path).expect("at --out artifact");
     assert!(body.contains("import os"), "verbatim known content: {body}");
-}
-
-#[test]
-fn recover_plan_json_out_writes_plan_verbatim() {
-    let h = recover_scenario_home();
-    let out_path = h.root.join("plan.json.md");
-    let out = h.run(&[
-        "recover",
-        "--session",
-        SESS,
-        "--plan",
-        "--format",
-        "json",
-        "--out",
-        out_path.to_str().unwrap(),
-    ]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let body = std::fs::read_to_string(&out_path).expect("plan --out artifact");
-    assert_eq!(
-        body, "PLAN café🛠\n- step one\n- step two",
-        "verbatim plan text"
-    );
 }
 
 #[test]
@@ -3861,82 +3587,6 @@ fn run_real(args: &[&str]) -> Output {
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
     }
-}
-
-#[test]
-fn recover_real_plan_round_trips_to_disk_byte_exact() {
-    let Some((enc, sess, _)) = real_fixture() else {
-        eprintln!("SKIP recover_real_plan_round_trips_to_disk_byte_exact: real fixture absent");
-        return;
-    };
-    // The motivating use-case: restore the latest plan and compare it to the on-disk plan
-    // file `goofy-finding-kettle.md`. The recovered text must match the disk file exactly.
-    let disk_plan = PathBuf::from(std::env::var_os("HOME").unwrap())
-        .join(".claude")
-        .join("plans")
-        .join("goofy-finding-kettle.md");
-    if !disk_plan.is_file() {
-        eprintln!("SKIP: on-disk plan file absent");
-        return;
-    }
-    let out_dir = std::env::temp_dir().join(format!("csift-real-plan-{}", std::process::id()));
-    std::fs::create_dir_all(&out_dir).unwrap();
-    let restored = out_dir.join("restored.md");
-    let out = run_real(&[
-        "recover",
-        &enc,
-        "--session",
-        &sess,
-        "--plan",
-        "--out",
-        restored.to_str().unwrap(),
-    ]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    // Provenance is cited (Lnnn / turn / ts).
-    assert!(
-        out.stdout.contains("restored from"),
-        "provenance: {}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("jsonl line"),
-        "line number cited: {}",
-        out.stdout
-    );
-    let got = std::fs::read_to_string(&restored).expect("restored plan");
-    let want = std::fs::read_to_string(&disk_plan).expect("disk plan");
-    std::fs::remove_dir_all(&out_dir).ok();
-    if got == want {
-        return; // byte-exact round-trip — the asserted success path.
-    }
-    // Not byte-exact. These are LIVE `~/.claude/plans/*.md` files: the plan can be
-    // hand-edited AFTER the session captured it at ExitPlanMode time (mtime is not a
-    // reliable drift signal — the session jsonl is itself still being appended to). The
-    // RECONSTRUCTION is still proven correct iff what `recover` produced is a faithful,
-    // long common-prefix of the current disk file (the captured plan, before later
-    // edits) — drift, not a recover bug → SKIP, mirroring the absent-fixture SKIPs. Only
-    // a SHORT/zero common prefix indicates `recover` actually mis-reconstructed → FAIL.
-    let got_b = got.as_bytes();
-    let want_b = want.as_bytes();
-    let common = got_b.iter().zip(want_b).take_while(|(a, b)| a == b).count();
-    // "Faithful" = the recovered plan agrees with the disk file for the vast majority of
-    // the recovered bytes (>90%); a genuine reconstruction bug diverges early.
-    let faithful = !got_b.is_empty() && common * 10 >= got_b.len() * 9;
-    if faithful {
-        eprintln!(
-            "SKIP: on-disk plan drifted past the captured plan (live fixture) — recover \
-             reproduced {common} byte-exact prefix of {} recovered / {} disk bytes",
-            got_b.len(),
-            want_b.len()
-        );
-        return;
-    }
-    panic!(
-        "restored plan is NOT a faithful reconstruction: only {common} byte-exact prefix \
-         of {} recovered / {} disk bytes",
-        got_b.len(),
-        want_b.len()
-    );
 }
 
 #[test]
@@ -4141,27 +3791,6 @@ fn recover_at_no_history_says_so() {
 }
 
 #[test]
-fn recover_plan_no_history_says_so() {
-    // A session with file events but ZERO plan candidates → the plan-mode `!any` arm
-    // ("no restorable plan found in range"), and the `s.plans.is_empty()` skip.
-    let h = Home::new();
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/x.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":2}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    let out = h.run(&["recover", "--session", SESS, "--plan"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    assert!(
-        out.stdout.contains("no restorable plan found"),
-        "plan honest-empty: {}",
-        out.stdout
-    );
-}
-
-#[test]
 fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
     // A session whose ONLY event for the target is a file-history-snapshot marker. The
     // marker is counted but opens no segment and creates no boundary → the
@@ -4246,6 +3875,214 @@ fn recover_coverage_groups_multiple_sessions_with_separator() {
     );
 }
 
+/// Cross-session interleaved reconstruction: a file is created by the top-level session,
+/// then edited by it AND by two of its subagents, interleaved by wall-clock, with only
+/// PARTIAL reads anywhere (no single transcript ever holds the whole file, and each
+/// subagent's own buffer is too sparse to anchor its string edits). The union of all
+/// transcripts' edits IS the complete file. `--at` must merge the parent+subagents into one
+/// timestamp-ordered timeline and reconstruct EVERY line — including the subagents' own
+/// edits, which are un-anchorable in their isolated transcripts. NO external-edit
+/// attachments are present, so this isolates the merge (not Claude Code's edited_text_file
+/// reconciliation). The 8-line file ends in a newline → the trailing-newline normalisation
+/// must keep seen_total at 8 (no phantom `line 9 unknown`).
+#[test]
+fn recover_at_merges_interleaved_cross_session_edits() {
+    const MSESS: &str = "cccccccc-5555-5555-5555-555555555555";
+    let h = Home::new();
+    // ── Top-level: Write the 8-line file, then (after subagent A) one structured-patch edit.
+    h.write(
+        &format!("{ENC}/{MSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"build doc.md"}}"#, "\n",
+            // Write create result carries the full content (as real Claude Code does).
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w0","name":"Write","input":{"file_path":"/p/doc.md","content":"A1\nA2\nA3\nA4\nA5\nA6\nA7\nA8\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/p/doc.md","content":"A1\nA2\nA3\nA4\nA5\nA6\nA7\nA8\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w0","content":"ok"}]}}"#, "\n",
+            // A PARTIAL read of lines 1-4 (after subagent A's edits land on disk). totalLines
+            // is the SEPARATOR count (9) of the newline-terminated 8-line file.
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:20.000Z","toolUseResult":{"file":{"filePath":"/p/doc.md","content":"A1\nA2\nA3-suba\nA4","startLine":1,"numLines":4,"totalLines":9}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
+            // Top-level structured-patch edit: A1 → A1-main.
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:21.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_main","name":"Edit","input":{"file_path":"/p/doc.md","old_string":"A1","new_string":"A1-main"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:21.500Z","toolUseResult":{"filePath":"/p/doc.md","oldString":"A1","newString":"A1-main","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-A1","+A1-main"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_main","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    // ── Subagent A: partial-read lines 3-6, then two STRING edits (bare tool_result, NO
+    //    toolUseResult → the input-side fallback supplies content). In isolation its buffer
+    //    (lines 3-6) is too sparse to anchor a string edit; only the merge (with the parent's
+    //    Write anchor in scope) makes these edits land.
+    h.write(
+        &format!("{ENC}/{MSESS}/subagents/agent-aaaaaa.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aaaaaa","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"edit lines 3 and 6"}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"aaaaaa","timestamp":"2026-06-07T05:00:10.500Z","toolUseResult":{"file":{"filePath":"/p/doc.md","content":"A3\nA4\nA5\nA6","startLine":3,"numLines":4,"totalLines":9}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rda","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"aaaaaa","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ea1","name":"Edit","input":{"file_path":"/p/doc.md","old_string":"A3","new_string":"A3-suba","replace_all":false}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"aaaaaa","timestamp":"2026-06-07T05:00:11.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ea1","content":"The file /p/doc.md has been updated successfully."}]}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"aaaaaa","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ea2","name":"Edit","input":{"file_path":"/p/doc.md","old_string":"A6","new_string":"A6-suba","replace_all":false}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"aaaaaa","timestamp":"2026-06-07T05:00:12.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ea2","content":"The file /p/doc.md has been updated successfully."}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{MSESS}/subagents/agent-aaaaaa.meta.json"),
+        r#"{"agentType":"general-purpose","description":"edit A","toolUseId":"t_a"}"#,
+    );
+    // ── Subagent B: partial-read lines 5-8, then one STRING edit A8 → A8-subb (latest).
+    h.write(
+        &format!("{ENC}/{MSESS}/subagents/agent-bbbbbb.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"bbbbbb","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":"edit line 8"}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"bbbbbb","timestamp":"2026-06-07T05:00:30.500Z","toolUseResult":{"file":{"filePath":"/p/doc.md","content":"A5\nA6-suba\nA7\nA8","startLine":5,"numLines":4,"totalLines":9}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rdb","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"bbbbbb","timestamp":"2026-06-07T05:00:31.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"eb1","name":"Edit","input":{"file_path":"/p/doc.md","old_string":"A8","new_string":"A8-subb","replace_all":false}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"bbbbbb","timestamp":"2026-06-07T05:00:31.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"eb1","content":"The file /p/doc.md has been updated successfully."}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{MSESS}/subagents/agent-bbbbbb.meta.json"),
+        r#"{"agentType":"general-purpose","description":"edit B","toolUseId":"t_b"}"#,
+    );
+
+    let out = h.run(&[
+        "recover",
+        "--session",
+        MSESS,
+        "--file",
+        "/p/doc.md",
+        "--at",
+        "@line:99999999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Exactly ONE merged snapshot object (the parent+subagents folded into one timeline),
+    // not three per-transcript fragments.
+    let snaps: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .filter(|v| v.get("type").and_then(|t| t.as_str()) == Some("snapshot"))
+        .collect();
+    assert_eq!(
+        snaps.len(),
+        1,
+        "one merged snapshot, got {}: {}",
+        snaps.len(),
+        out.stdout
+    );
+    let snap = &snaps[0];
+    let mut recon: std::collections::BTreeMap<usize, String> = std::collections::BTreeMap::new();
+    for l in snap.get("lines").and_then(|v| v.as_array()).unwrap() {
+        recon.insert(
+            l.get("n").and_then(|v| v.as_u64()).unwrap() as usize,
+            l.get("text").and_then(|v| v.as_str()).unwrap().to_string(),
+        );
+    }
+    let got: Vec<&str> = recon.values().map(String::as_str).collect();
+    // The COMPLETE interleaved file: parent's Write + parent's edit + BOTH subagents' edits.
+    assert_eq!(
+        got,
+        vec!["A1-main", "A2", "A3-suba", "A4", "A5", "A6-suba", "A7", "A8-subb"],
+        "merged reconstruction must carry every cross-session edit: {snap}"
+    );
+    // No phantom trailing gap (the file ends in a newline; seen_total must be 8, not 9).
+    assert_eq!(
+        snap.get("seen_total_lines").and_then(|v| v.as_u64()),
+        Some(8),
+        "trailing-newline normalisation keeps seen_total at 8: {snap}"
+    );
+    assert!(
+        snap.get("gaps")
+            .and_then(|v| v.as_array())
+            .map(|a| a.is_empty())
+            .unwrap_or(false),
+        "a fully-recovered file has no gaps: {snap}"
+    );
+}
+
+/// `--at <datetime>` is time-travel: the same transcript reconstructs a DIFFERENT state of
+/// the file depending on the wall-clock instant asked for. This is the canonical, efficient
+/// way to ask "what did this plan/file look like at 8pm last night" — far better than hunting
+/// line numbers. Three cutoffs across one Write + two timestamped edits must each land on the
+/// exact intervening state: original / after-edit-1 / after-edit-2. Exercises the
+/// `resolve_cutoff` datetime branch (TimeWindow until-bound) end-to-end through reconstruction,
+/// and accepts both an absolute RFC3339 instant and a bare date.
+#[test]
+fn recover_at_datetime_time_travels_across_edits() {
+    const TSESS: &str = "dddddddd-7777-7777-7777-777777777777";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{TSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"draft plan.md"}}"#, "\n",
+            // 05:00 — Write the 3-line original.
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w0","name":"Write","input":{"file_path":"/p/plan.md","content":"L1\nL2\nL3\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/p/plan.md","content":"L1\nL2\nL3\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w0","content":"ok"}]}}"#, "\n",
+            // 08:00 — edit L2.
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T08:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/p/plan.md","old_string":"L2","new_string":"L2-edited"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T08:00:00.500Z","toolUseResult":{"filePath":"/p/plan.md","oldString":"L2","newString":"L2-edited","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":1,"lines":["-L2","+L2-edited"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#, "\n",
+            // 11:00 — edit L3.
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T11:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e2","name":"Edit","input":{"file_path":"/p/plan.md","old_string":"L3","new_string":"L3-edited"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T11:00:00.500Z","toolUseResult":{"filePath":"/p/plan.md","oldString":"L3","newString":"L3-edited","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":3,"oldLines":1,"newStart":3,"newLines":1,"lines":["-L3","+L3-edited"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e2","content":"ok"}]}}"#, "\n",
+        ),
+    );
+
+    // Reconstruct the file as of `when` and return its lines in order.
+    let recon_at = |when: &str| -> Vec<String> {
+        let out = h.run(&[
+            "recover",
+            "--session",
+            TSESS,
+            "--file",
+            "/p/plan.md",
+            "--at",
+            when,
+            "--format",
+            "json",
+        ]);
+        assert!(out.success, "--at {when:?} stderr: {}", out.stderr);
+        let snap = out
+            .stdout
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+            .find(|v| v.get("type").and_then(|t| t.as_str()) == Some("snapshot"))
+            .unwrap_or_else(|| panic!("--at {when:?} produced no snapshot: {}", out.stdout));
+        let mut recon: std::collections::BTreeMap<usize, String> =
+            std::collections::BTreeMap::new();
+        for l in snap.get("lines").and_then(|v| v.as_array()).unwrap() {
+            recon.insert(
+                l.get("n").and_then(|v| v.as_u64()).unwrap() as usize,
+                l.get("text").and_then(|v| v.as_str()).unwrap().to_string(),
+            );
+        }
+        recon.into_values().collect()
+    };
+
+    // 06:00 — after the Write, before any edit → the pristine original.
+    assert_eq!(
+        recon_at("2026-06-07T06:00:00Z"),
+        vec!["L1", "L2", "L3"],
+        "as of 06:00 only the Write has happened"
+    );
+    // 09:00 — between the two edits → L2 edited, L3 still original. THE headline time-travel.
+    assert_eq!(
+        recon_at("2026-06-07T09:00:00Z"),
+        vec!["L1", "L2-edited", "L3"],
+        "as of 09:00 the L2 edit is applied but the 11:00 L3 edit is not"
+    );
+    // 12:00 (and a bare date covering the whole day) — after both edits → fully edited.
+    assert_eq!(
+        recon_at("2026-06-07T12:00:00Z"),
+        vec!["L1", "L2-edited", "L3-edited"],
+        "as of 12:00 both edits are applied"
+    );
+    // A bare date is accepted too (resolves to system-local midnight); pick one several days
+    // past the edits so no timezone shifts the bound before them → both edits applied.
+    assert_eq!(
+        recon_at("2026-06-15"),
+        vec!["L1", "L2-edited", "L3-edited"],
+        "a bare date is a valid --at bound → both edits applied"
+    );
+}
+
 #[test]
 fn recover_at_skips_session_with_no_seen_total() {
     // Two sessions under one project: one reads /p/seen.rs, the other only reads a DIFFERENT
@@ -4280,41 +4117,6 @@ fn recover_at_skips_session_with_no_seen_total() {
     assert!(
         out.stdout.contains("x"),
         "the seen content is rendered: {}",
-        out.stdout
-    );
-}
-
-#[test]
-fn recover_plan_long_body_prints_truncation_hint() {
-    // A plan whose body exceeds the inline excerpt cap → stdout prints the truncated body
-    // AND the "pass --out … to write the full N chars verbatim" hint (the
-    // `r.text.chars().count() > EXCERPT_MAX` arm of the plan text renderer).
-    let big_plan = "STEP ".repeat(200); // 1000 chars, well over the 400-char cap
-    let line = format!(
-        r#"{{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"pl0","name":"ExitPlanMode","input":{{"plan":"{}"}}}}]}}}}"#,
-        big_plan.trim_end()
-    );
-    let h = Home::new();
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        &format!(
-            "{}\n{}\n",
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#,
-            line
-        ),
-    );
-    // No --out → the body is printed inline (truncated) and the hint is shown.
-    let out = h.run(&["recover", "--session", SESS, "--plan"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("--- plan body ---"), "{}", out.stdout);
-    assert!(
-        out.stdout.contains("… (+") && out.stdout.contains("chars)"),
-        "inline truncation marker: {}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("pass --out") && out.stdout.contains("verbatim"),
-        "truncation hint pointing at --out: {}",
         out.stdout
     );
 }
@@ -4368,30 +4170,6 @@ fn recover_patches_json_out_writes_concatenated_diffs() {
     assert!(
         blob.contains("@@ -") && blob.contains("+with open(src) as fh:"),
         "concatenated diff blob from the JSON renderer: {blob}"
-    );
-}
-
-#[test]
-fn recover_plan_json_out_writes_global_latest_verbatim() {
-    // The plan-mode JSON renderer's `--out` arm writes the GLOBALLY latest plan text
-    // verbatim (across sessions) to disk.
-    let h = recover_scenario_home();
-    let out_path = h.root.join("plan-json.md");
-    let out = h.run(&[
-        "recover",
-        "--session",
-        SESS,
-        "--plan",
-        "--format",
-        "json",
-        "--out",
-        out_path.to_str().unwrap(),
-    ]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let got = std::fs::read_to_string(&out_path).expect("plan JSON --out artifact");
-    assert_eq!(
-        got, "PLAN café🛠\n- step one\n- step two",
-        "the latest plan body is written byte-exact from the JSON renderer"
     );
 }
 
@@ -4667,37 +4445,6 @@ fn recover_json_at_skips_session_with_no_seen_total() {
 }
 
 #[test]
-fn recover_json_plan_skips_session_with_no_plans() {
-    // JSON plan mode skip: a session with file events but ZERO plans → `s.plans.is_empty()`
-    // true in the JSON plan branch, so no plan_candidate objects, summary.sessions == 0.
-    let h = Home::new();
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/np.rs","content":"a","startLine":1,"numLines":1,"totalLines":1}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
-        ),
-    );
-    let out = h.run(&["recover", "--session", SESS, "--plan", "--format", "json"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let objs: Vec<serde_json::Value> = out
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).expect("ndjson"))
-        .collect();
-    assert!(
-        objs.iter().all(|o| o.get("type").is_none()),
-        "no plan_candidate objects when there are no plans: {}",
-        out.stdout
-    );
-    assert_eq!(
-        objs.last().unwrap()["summary"]["sessions"].as_u64(),
-        Some(0)
-    );
-}
-
-#[test]
 fn recover_coverage_heuristic_boundary_uses_soft_symbol() {
     // A coverage run over a session with a HEURISTIC (bash) boundary drives the coverage
     // renderer's `~` (soft) boundary symbol arm — distinct from the `⚠` authoritative one.
@@ -4880,48 +4627,6 @@ fn recover_at_json_line_range_outside_known_keeps_seen_total() {
         snap.get("seen_total_lines").and_then(|v| v.as_u64()),
         Some(10),
         "the seen total is preserved: {snap}"
-    );
-}
-
-#[test]
-fn recover_plan_json_global_latest_ignores_earlier_session_plan() {
-    // Two sessions each with a plan; the SECOND-scanned session's plan is EARLIER. The
-    // global-latest selection's `plan_is_later(l, g)` returns false → the outer `if`
-    // condition FALSE side: the earlier plan does NOT replace the already-chosen later one.
-    let h = Home::new();
-    // Sessions sort by id; sess_a sorts first. Give sess_a the LATER timestamp so the
-    // later-scanned sess_b's earlier plan must NOT win.
-    let sess_a = "aaaaaaaa-9999-9999-9999-999999999999";
-    let sess_b = "bbbbbbbb-9999-9999-9999-999999999999";
-    h.write(
-        &format!("{ENC}/{sess_a}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T09:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T09:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"LATER PLAN"}}]}}"#, "\n",
-        ),
-    );
-    h.write(
-        &format!("{ENC}/{sess_b}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p2","name":"ExitPlanMode","input":{"plan":"EARLIER PLAN"}}]}}"#, "\n",
-        ),
-    );
-    let out_path = h.root.join("global-latest.md");
-    let out = h.run(&[
-        "recover",
-        ENC,
-        "--plan",
-        "--format",
-        "json",
-        "--out",
-        out_path.to_str().unwrap(),
-    ]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let got = std::fs::read_to_string(&out_path).expect("global-latest plan written");
-    assert_eq!(
-        got, "LATER PLAN",
-        "the globally latest plan wins; the later-scanned earlier plan does not override it"
     );
 }
 
@@ -7316,17 +7021,582 @@ fn turns_text_brands_subagent_uniformly() {
     );
 }
 
-/// recover --line-range is a no-op in --plan mode; the runtime emits a stderr note (it is
-/// honored in --patches/--at/--coverage).
+// ─────────────────────────────────────────────────────────────────────────────
+// Failed-Edit handling: a tool call whose RESULT was an error (is_error:true) never
+// mutated the file, so reconstruction/coverage must NOT count it. Two triggers:
+//   • "String to replace not found in file." (old_string absent)
+//   • "File has not been read yet."           (Edit-before-Read wall — Bash/Grep don't
+//                                               satisfy CC's Read gate; same wall the
+//                                               must-re-Read-a-plan semi-bug hits)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Extract the line texts (in order) from a `recover --at … --format json` snapshot.
+fn recon_lines_from_at_json(stdout: &str) -> Vec<String> {
+    let snap = stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .find(|v| v.get("type").and_then(|t| t.as_str()) == Some("snapshot"))
+        .unwrap_or_else(|| panic!("no snapshot object in:\n{stdout}"));
+    let mut recon: std::collections::BTreeMap<usize, String> = std::collections::BTreeMap::new();
+    for l in snap.get("lines").and_then(|v| v.as_array()).unwrap() {
+        recon.insert(
+            l.get("n").and_then(|v| v.as_u64()).unwrap() as usize,
+            l.get("text").and_then(|v| v.as_str()).unwrap().to_string(),
+        );
+    }
+    recon.into_values().collect()
+}
+
 #[test]
-fn recover_line_range_plan_noop_note() {
-    let h = populated_home();
-    let out = h.run(&["recover", SESS, "--plan", "--line-range", "1..3"]);
+fn recover_at_skips_failed_string_not_found_edit_top_level() {
+    // Top-level: Write 3 lines, a FAILED Edit (is_error:true, no toolUseResult carrier — so
+    // its id is absent from ids_with_result and the input-side fallback would otherwise apply
+    // the ghost), then a SUCCESSFUL Edit. The ghost must be absent; the good edit applied.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"edit f.md"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w0","name":"Write","input":{"file_path":"/p/f.md","content":"L1\nL2\nL3\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/p/f.md","content":"L1\nL2\nL3\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w0","content":"ok"}]}}"#, "\n",
+            // FAILED edit — old_string not in the file. No toolUseResult; tool_result is_error.
+            r#"{"type":"assistant","uuid":"a_bad","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_bad","name":"Edit","input":{"file_path":"/p/f.md","old_string":"NONEXISTENT","new_string":"GHOST"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c_bad","timestamp":"2026-06-07T05:00:02.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_bad","content":"String to replace not found in file.","is_error":true}]}}"#, "\n",
+            // SUCCESSFUL edit — carrier with structuredPatch.
+            r#"{"type":"assistant","uuid":"a_ok","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_ok","name":"Edit","input":{"file_path":"/p/f.md","old_string":"L2","new_string":"L2-ok"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c_ok","timestamp":"2026-06-07T05:00:03.500Z","toolUseResult":{"filePath":"/p/f.md","oldString":"L2","newString":"L2-ok","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":1,"lines":["-L2","+L2-ok"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_ok","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/f.md",
+        "--at",
+        "@line:99999999",
+        "--format",
+        "json",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
+        !out.stdout.contains("GHOST"),
+        "the failed edit's new_string must never appear: {}",
+        out.stdout
+    );
+    assert_eq!(
+        recon_lines_from_at_json(&out.stdout),
+        vec!["L1", "L2-ok", "L3"],
+        "only the successful edit lands"
+    );
+}
+
+#[test]
+fn recover_subagent_input_fallback_skips_failed_edit() {
+    // The DANGER case: a SUBAGENT records results as bare tool_result strings (no
+    // toolUseResult), so content comes from the input-side fallback. A failed Edit there
+    // (is_error:true) must be skipped, not replayed from its input.
+    const PSESS: &str = "cccccccc-9999-9999-9999-999999999999";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{PSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"spawn a worker"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"on it"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-deadbeef.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"make g.md then fix it"}}"#, "\n",
+            // Write via input fallback (bare success result).
+            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw","name":"Write","input":{"file_path":"/p/g.md","content":"S1\nS2\nS3\n"}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw","content":"File created successfully at: /p/g.md"}]}}"#, "\n",
+            // FAILED edit (is_error) — must NOT be applied from the input.
+            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sbad","name":"Edit","input":{"file_path":"/p/g.md","old_string":"NOPE","new_string":"GHOST"}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:12.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sbad","content":"String to replace not found in file.","is_error":true}]}}"#, "\n",
+            // SUCCESSFUL edit via input fallback (bare success result).
+            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sok","name":"Edit","input":{"file_path":"/p/g.md","old_string":"S2","new_string":"S2-ok"}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:13.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sok","content":"The file /p/g.md has been updated successfully."}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-deadbeef.meta.json"),
+        r#"{"agentType":"general-purpose","description":"worker","toolUseId":"t0"}"#,
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        PSESS,
+        "--file",
+        "/p/g.md",
+        "--at",
+        "@line:99999999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("GHOST"),
+        "ghost edit leaked: {}",
+        out.stdout
+    );
+    assert_eq!(
+        recon_lines_from_at_json(&out.stdout),
+        vec!["S1", "S2-ok", "S3"],
+        "subagent: only the good edit lands"
+    );
+}
+
+#[test]
+fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
+    // The user's explicit case: Bash CREATES a file, then a direct Edit (no Read) FAILS with
+    // "File has not been read yet" (Bash doesn't satisfy CC's Read gate). When coverage
+    // measures "how much can be recovered", that failed Edit must NOT be counted as a
+    // recoverable edit — only the (content-less) Bash touch + the integrity boundary show.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"make a config"}}"#, "\n",
+            // Bash creates the file (heuristic touch, no content captured).
+            r#"{"type":"assistant","uuid":"ab","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"printf 'B1\nB2\nB3\n' > /p/cfg.txt"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"cb","timestamp":"2026-06-07T05:00:01.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b0","content":""}]}}"#, "\n",
+            // Direct Edit with no prior Read → fails.
+            r#"{"type":"assistant","uuid":"ae","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_nr","name":"Edit","input":{"file_path":"/p/cfg.txt","old_string":"B2","new_string":"B2-edited"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"ce","timestamp":"2026-06-07T05:00:02.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_nr","content":"File has not been read yet. Read it first before writing to it.","is_error":true}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/cfg.txt",
+        "--coverage",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("B2-edited"),
+        "failed edit content must not appear anywhere: {}",
+        out.stdout
+    );
+    let cov: serde_json::Value = serde_json::from_str(
+        out.stdout
+            .lines()
+            .find(|l| l.contains("recoverable_lines"))
+            .unwrap(),
+    )
+    .unwrap();
+    let ev = &cov["events"];
+    assert_eq!(
+        ev["edit"].as_u64(),
+        Some(0),
+        "failed edit not counted as a recoverable edit: {cov}"
+    );
+    assert_eq!(
+        ev["edit_unanchorable"].as_u64(),
+        Some(0),
+        "failed edit not even counted as an un-anchorable edit: {cov}"
+    );
+    assert_eq!(
+        ev["bash"].as_u64(),
+        Some(1),
+        "the Bash create IS a (heuristic) touch: {cov}"
+    );
+    assert_eq!(
+        ev["integrity_error"].as_u64(),
+        Some(1),
+        "the Edit-before-Read failure surfaces as an integrity annotation, not an edit: {cov}"
+    );
+    assert_eq!(
+        cov["recoverable_lines"].as_u64(),
+        Some(0),
+        "nothing is recoverable (Bash has no content, the edit failed): {cov}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan-file binding: the `plan` subcommand + the `recover --file @plan` magic resolve
+// the session-bound plan via its `plan_mode` attachment — never a path heuristic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Build a top-level transcript that (a) binds a plan via a `plan_mode` attachment, (b) also
+/// Edits a DIFFERENT plan file (which must NOT be mistaken for the bound one), and (c) has a
+/// Write+Edit history of the bound plan (so `@plan` recover has content to rebuild).
+fn write_planning_session(h: &Home, sess: &str, bound_abs: &str, other_abs: &str) {
+    let jsonl = concat!(
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#, "\n",
+        // plan_mode attachment → the AUTHORITATIVE binding.
+        r#"{"type":"attachment","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"__BOUND__","planExists":true},"uuid":"att0","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+        // An Edit of SOMEONE ELSE's plan file — a red herring for the resolver.
+        r#"{"type":"assistant","uuid":"ax","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ex","name":"Edit","input":{"file_path":"__OTHER__","old_string":"x","new_string":"y"}}]}}"#, "\n",
+        r#"{"type":"user","uuid":"cx","timestamp":"2026-06-07T05:00:02.500Z","toolUseResult":{"filePath":"__OTHER__","oldString":"x","newString":"y","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-x","+y"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ex","content":"ok"}]}}"#, "\n",
+        // The bound plan's own Write + Edit history.
+        r#"{"type":"assistant","uuid":"aw","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pw","name":"Write","input":{"file_path":"__BOUND__","content":"P1\nP2\nP3\n"}}]}}"#, "\n",
+        r#"{"type":"user","uuid":"cw","timestamp":"2026-06-07T05:00:03.500Z","toolUseResult":{"type":"create","filePath":"__BOUND__","content":"P1\nP2\nP3\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pw","content":"ok"}]}}"#, "\n",
+        r#"{"type":"assistant","uuid":"ap","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pe","name":"Edit","input":{"file_path":"__BOUND__","old_string":"P2","new_string":"P2-revised"}}]}}"#, "\n",
+        r#"{"type":"user","uuid":"cp","timestamp":"2026-06-07T05:00:04.500Z","toolUseResult":{"filePath":"__BOUND__","oldString":"P2","newString":"P2-revised","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":1,"lines":["-P2","+P2-revised"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pe","content":"ok"}]}}"#, "\n",
+    )
+    .replace("__BOUND__", bound_abs)
+    .replace("__OTHER__", other_abs);
+    h.write(&format!("{ENC}/{sess}.jsonl"), &jsonl);
+}
+
+#[test]
+fn plan_resolves_bound_plan_not_an_edited_other_plan() {
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let bound = plans_dir.join("nested-prancing-popcorn.md");
+    std::fs::write(&bound, "the plan\n").unwrap();
+    let bound_abs = bound.to_string_lossy().into_owned();
+    let other_abs = plans_dir
+        .join("someone-elses-plan.md")
+        .to_string_lossy()
+        .into_owned();
+    write_planning_session(&h, SESS, &bound_abs, &other_abs);
+
+    let out = h.run(&["plan", "--session", SESS, "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let v: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().next().unwrap_or("")).unwrap();
+    assert_eq!(
+        v["plan_file"].as_str(),
+        Some(bound_abs.as_str()),
+        "resolved the plan_mode-bound plan, NOT the edited-other plan: {}",
+        out.stdout
+    );
+    assert_eq!(v["is_subagent"].as_bool(), Some(false));
+    assert_eq!(
+        v["plan_exists"].as_bool(),
+        Some(true),
+        "bound plan exists on disk"
+    );
+    assert_eq!(v["session_id"].as_str(), Some(SESS));
+}
+
+#[test]
+fn recover_file_plan_magic_reconstructs_the_bound_plan() {
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let bound_abs = plans_dir
+        .join("shimmying-spinning-cascade.md")
+        .to_string_lossy()
+        .into_owned();
+    let other_abs = plans_dir.join("decoy.md").to_string_lossy().into_owned();
+    write_planning_session(&h, SESS, &bound_abs, &other_abs);
+
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "@plan",
+        "--at",
+        "@line:99999999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The stderr note announces the resolution.
+    assert!(
+        out.stderr.contains("@plan resolved to")
+            && out.stderr.contains("shimmying-spinning-cascade.md"),
+        "missing @plan resolution note: {}",
         out.stderr
-            .contains("--line-range is ignored in --plan mode"),
-        "missing --line-range plan no-op note:\n{}",
+    );
+    // The bound plan's full Write+Edit history is reconstructed (not the decoy plan).
+    assert_eq!(
+        recon_lines_from_at_json(&out.stdout),
+        vec!["P1", "P2-revised", "P3"],
+        "recovered the bound plan's content: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_file_plan_errors_when_no_plan_is_bound() {
+    // A session that never entered Plan Mode has no bound plan → @plan must error clearly
+    // (never fall back to guessing a plans/ path).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"just code"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "@plan",
+        "--coverage",
+    ]);
+    assert!(!out.success, "should fail: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no plan file is bound") && out.stderr.contains("plan_mode"),
+        "unhelpful error: {}",
         out.stderr
+    );
+}
+
+#[test]
+fn recover_file_plan_errors_when_ambiguous_across_sessions() {
+    // Two top-level sessions under one project, each bound to a DIFFERENT plan → @plan over
+    // the whole project is ambiguous and must ask for --session, never silently pick one.
+    const SESS2: &str = "abcdef01-2345-6789-abcd-ef0123456789";
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let a = plans_dir.join("plan-a.md").to_string_lossy().into_owned();
+    let b = plans_dir.join("plan-b.md").to_string_lossy().into_owned();
+    let decoy = plans_dir.join("decoy.md").to_string_lossy().into_owned();
+    write_planning_session(&h, SESS, &a, &decoy);
+    write_planning_session(&h, SESS2, &b, &decoy);
+
+    let out = h.run(&["recover", ENC, "--file", "@plan", "--coverage"]);
+    assert!(!out.success, "should be ambiguous: {}", out.stdout);
+    assert!(
+        out.stderr.contains("different bound plan files") && out.stderr.contains("--session"),
+        "unhelpful ambiguity error: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn plan_no_binding_is_honest_not_an_error() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"hi"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", "--session", SESS]);
+    assert!(
+        out.success,
+        "no plan is a valid answer, not an error: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("no plan file is bound"),
+        "should note the empty result: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn plan_surfaces_subagent_bound_plan() {
+    // A SUBAGENT that entered Plan Mode binds a plan with an `-agent-<hex>` path; `plan`
+    // (spanning subagents) must surface it, flagged as a subagent with its parent uuid.
+    const PSESS: &str = "feedface-1111-2222-3333-444455556666";
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let sub_plan = plans_dir
+        .join("goofy-finding-kettle-agent-aaaaaaaaaaaaaaaaa.md")
+        .to_string_lossy()
+        .into_owned();
+    h.write(
+        &format!("{ENC}/{PSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"spawn a planning worker"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+        ),
+    );
+    let sub_jsonl = concat!(
+        r#"{"type":"user","isSidechain":true,"agentId":"feed01","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"plan the thing"}}"#, "\n",
+        r#"{"type":"attachment","isSidechain":true,"agentId":"feed01","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"__SUBPLAN__","planExists":false},"uuid":"satt","timestamp":"2026-06-07T05:00:11.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+    )
+    .replace("__SUBPLAN__", &sub_plan);
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-feed01.jsonl"),
+        &sub_jsonl,
+    );
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-feed01.meta.json"),
+        r#"{"agentType":"general-purpose","description":"planner","toolUseId":"t0"}"#,
+    );
+
+    let out = h.run(&["plan", "--session", PSESS, "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let v: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .find(|v| v["is_subagent"].as_bool() == Some(true))
+        .unwrap_or_else(|| panic!("no subagent plan in:\n{}", out.stdout));
+    assert_eq!(v["plan_file"].as_str(), Some(sub_plan.as_str()));
+    assert_eq!(
+        v["parent_session_id"].as_str(),
+        Some(PSESS),
+        "carries the re-feedable parent"
+    );
+}
+
+#[test]
+fn plan_no_target_resolves_calling_session_from_env() {
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let bound_abs = plans_dir.join("env-plan.md").to_string_lossy().into_owned();
+    let other_abs = plans_dir.join("decoy.md").to_string_lossy().into_owned();
+    write_planning_session(&h, SESS, &bound_abs, &other_abs);
+
+    // With CLAUDE_CODE_SESSION_ID set, `csift plan` (no target) answers "MY plan file".
+    let out = h.run_with_env(
+        &["plan", "--format", "json"],
+        &[("CLAUDE_CODE_SESSION_ID", SESS)],
+    );
+    assert!(out.success, "stderr: {}", out.stderr);
+    let v: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().next().unwrap_or("")).unwrap();
+    assert_eq!(v["plan_file"].as_str(), Some(bound_abs.as_str()));
+    assert_eq!(v["session_id"].as_str(), Some(SESS));
+
+    // Without the env var AND no target, it must NOT guess — it errors with guidance.
+    let out2 = h.run(&["plan"]);
+    assert!(
+        !out2.success,
+        "no env + no target must not guess: {}",
+        out2.stdout
+    );
+    assert!(
+        out2.stderr.contains("CLAUDE_CODE_SESSION_ID"),
+        "should point at the env var: {}",
+        out2.stderr
+    );
+}
+
+#[test]
+fn plan_text_lists_top_level_then_subagent_plans() {
+    // A session AND a subagent both planned → text output lists both, TOP-LEVEL FIRST, with
+    // the subagent flagged and carrying its parent uuid.
+    const PSESS: &str = "11112222-3333-4444-5555-666677778888";
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let top_path = plans_dir.join("top-level-plan.md");
+    // The top-level plan EXISTS on disk; the subagent's does not → the [exists]/[missing]
+    // flag must reflect disk reality, per-row.
+    std::fs::write(&top_path, "the top plan\n").unwrap();
+    let top = top_path.to_string_lossy().into_owned();
+    let sub = plans_dir
+        .join("worker-plan-agent-bbbbbbbbbbbbbbbbb.md")
+        .to_string_lossy()
+        .into_owned();
+    let top_jsonl = concat!(
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan"}}"#, "\n",
+        r#"{"type":"attachment","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"__TOP__","planExists":false},"uuid":"att0","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+    )
+    .replace("__TOP__", &top);
+    h.write(&format!("{ENC}/{PSESS}.jsonl"), &top_jsonl);
+    let sub_jsonl = concat!(
+        r#"{"type":"user","isSidechain":true,"agentId":"bbbb01","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"plan the subtask"}}"#, "\n",
+        r#"{"type":"attachment","isSidechain":true,"agentId":"bbbb01","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"__SUB__","planExists":false},"uuid":"satt","timestamp":"2026-06-07T05:00:11.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+    )
+    .replace("__SUB__", &sub);
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-bbbb01.jsonl"),
+        &sub_jsonl,
+    );
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-bbbb01.meta.json"),
+        r#"{"agentType":"general-purpose","description":"worker","toolUseId":"t0"}"#,
+    );
+
+    let out = h.run(&["plan", "--session", PSESS]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let top_pos = out
+        .stdout
+        .find(&format!("session  {PSESS}"))
+        .expect("top-level line");
+    let sub_pos = out.stdout.find("(subagent)").expect("subagent line");
+    assert!(top_pos < sub_pos, "top-level listed first:\n{}", out.stdout);
+    assert!(out.stdout.contains("top-level-plan.md"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("worker-plan-agent-")
+            && out.stdout.contains(&format!("parent   {PSESS}")),
+        "subagent plan carries its parent:\n{}",
+        out.stdout
+    );
+    // The on-disk top plan reads [exists]; the missing subagent plan reads [missing].
+    assert!(
+        out.stdout.contains("[exists]") && out.stdout.contains("[missing]"),
+        "per-row exists/missing flag tracks disk:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_file_plan_resolves_subagent_only_plan() {
+    // The top-level session never planned, but a SUBAGENT did → @plan falls back to the
+    // subagent's bound plan and reconstructs its Write+Edit history.
+    const PSESS: &str = "99998888-7777-6666-5555-444433332222";
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let sub_plan = plans_dir
+        .join("subagent-only-agent-ccccccccccccccccc.md")
+        .to_string_lossy()
+        .into_owned();
+    h.write(
+        &format!("{ENC}/{PSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"spawn a planning worker"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+        ),
+    );
+    let sub_jsonl = concat!(
+        r#"{"type":"user","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"plan + draft it"}}"#, "\n",
+        r#"{"type":"attachment","isSidechain":true,"agentId":"cccc01","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"__SUB__","planExists":false},"uuid":"satt","timestamp":"2026-06-07T05:00:11.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+        r#"{"type":"assistant","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw","name":"Write","input":{"file_path":"__SUB__","content":"D1\nD2\nD3\n"}}]}}"#, "\n",
+        r#"{"type":"user","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:12.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw","content":"File created successfully at: __SUB__"}]}}"#, "\n",
+        r#"{"type":"assistant","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"se","name":"Edit","input":{"file_path":"__SUB__","old_string":"D2","new_string":"D2-final"}}]}}"#, "\n",
+        r#"{"type":"user","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:13.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"se","content":"The file __SUB__ has been updated successfully."}]}}"#, "\n",
+    )
+    .replace("__SUB__", &sub_plan);
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-cccc01.jsonl"),
+        &sub_jsonl,
+    );
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-cccc01.meta.json"),
+        r#"{"agentType":"general-purpose","description":"planner","toolUseId":"t0"}"#,
+    );
+
+    let out = h.run(&[
+        "recover",
+        "--session",
+        PSESS,
+        "--file",
+        "@plan",
+        "--at",
+        "@line:99999999",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stderr.contains("@plan resolved to")
+            && out.stderr.contains("subagent-only-agent-")
+            && out.stderr.contains("subagent"),
+        "resolved to the subagent plan: {}",
+        out.stderr
+    );
+    assert_eq!(
+        recon_lines_from_at_json(&out.stdout),
+        vec!["D1", "D2-final", "D3"],
+        "subagent-only plan reconstructed: {}",
+        out.stdout
     );
 }

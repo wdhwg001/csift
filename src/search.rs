@@ -34,10 +34,10 @@ use regex::bytes::Regex as BytesRegex;
 
 use crate::cli::{Category, OutputFormat, SearchArgs};
 use crate::model::{
-    group_turn_indices, is_auq_answer_text, normalize_line, tool_result_content_text, Block,
-    PlanIndex, Record,
+    group_turn_indices_deduped, is_auq_answer_text, normalize_line, tool_result_content_text,
+    Block, PlanIndex, Record,
 };
-use crate::parse::{mmap_bytes, scan_lines_bytes};
+use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -403,20 +403,20 @@ fn search_one_file(
     //      It does NOT gate parsing (a non-matching record may still be a sibling in
     //      a matched turn's round-trip); instead it records `can_hit`, letting the
     //      match phase skip regex work on records that provably can't match.
-    let mut records: Vec<Kept> = Vec::new();
-    let mut skipped = 0usize;
-
-    scan_lines_bytes(bytes, |line| {
+    // Parse all transcript-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool)
+    // so a single giant transcript is not scanned on one core. The stage-2 keyword prefilter
+    // (`can_hit`) is computed per line inside the parallel scan, where the raw bytes are in hand.
+    let (records, skipped) = crate::parse::scan_lines_parallel(bytes, |line, _line_no| {
         if !line_is_transcript_candidate(line) {
-            return;
+            return crate::parse::LineVerdict::Ignore;
         }
         let can_hit = matcher.line_may_match(line);
         match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => records.push(Kept { rec, can_hit }),
-            Ok(None) => {}
-            Err(_) => skipped += 1,
+            Ok(Some(rec)) => crate::parse::LineVerdict::Keep(Kept { rec, can_hit }),
+            Ok(None) => crate::parse::LineVerdict::Ignore,
+            Err(_) => crate::parse::LineVerdict::Skip,
         }
-    })?;
+    });
 
     let exchanges = reconstruct_and_match(path, &records, args, matcher, turn_range, time_window);
 
@@ -463,7 +463,7 @@ fn reconstruct_and_match(
     // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
     // the 0-based turn index; map each index group back to its `Kept` borrows.
-    let index_turns = group_turn_indices(records, |k| k.rec.opens_turn());
+    let index_turns = group_turn_indices_deduped(records, |k| &k.rec);
     // ExitPlanMode plan pointers for this session (§4.2.4) — a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
