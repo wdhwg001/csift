@@ -121,10 +121,26 @@ impl Matcher {
     }
 
     /// True if `text` matches the pattern (always true for the pure filter).
+    /// Test-only since production hits go through [`Matcher::locate`] (which also
+    /// yields the span for excerpt-centering); kept as a clean bool API for tests.
+    #[cfg(test)]
     fn is_match(&self, text: &str) -> bool {
         match &self.regex {
             None => true,
             Some(re) => re.is_match(text.as_bytes()),
+        }
+    }
+
+    /// Locate the FIRST match, so the excerpt can be CENTERED on it instead of
+    /// always showing the message head. Returns:
+    /// - `None` — no match (the record is not a hit);
+    /// - `Some(None)` — matches with no specific span (the pure filter matches every
+    ///   record, so there is no offset to center on → excerpt shows the head);
+    /// - `Some(Some((start, end)))` — matches at this BYTE range.
+    fn locate(&self, text: &str) -> Option<Option<(usize, usize)>> {
+        match &self.regex {
+            None => Some(None),
+            Some(re) => re.find(text.as_bytes()).map(|m| Some((m.start(), m.end()))),
         }
     }
 
@@ -617,8 +633,8 @@ fn collect_record_hits(
             .automation_label()
             .or_else(|| rec.reconstructed_user_text(Some(plan_index)));
         if let Some(text) = text {
-            if matcher.is_match(&text) {
-                hits.push(make_hit(Category::User, &text, ts.clone(), None));
+            if let Some(span) = matcher.locate(&text) {
+                hits.push(make_hit(Category::User, &text, span, ts.clone(), None));
             }
         }
     }
@@ -628,23 +644,35 @@ fn collect_record_hits(
         for block in blocks {
             match block {
                 Block::Thinking { thinking, .. } if category_active(want, Category::Thinking) => {
-                    if matcher.is_match(thinking) {
-                        hits.push(make_hit(Category::Thinking, thinking, ts.clone(), None));
+                    if let Some(span) = matcher.locate(thinking) {
+                        hits.push(make_hit(
+                            Category::Thinking,
+                            thinking,
+                            span,
+                            ts.clone(),
+                            None,
+                        ));
                     }
                 }
                 Block::Text { text } if category_active(want, Category::Agent) => {
                     // Only assistant `text` blocks are the agent message; a user
                     // `text` block is genuine-user (handled above).
-                    if rec.is_type("assistant") && matcher.is_match(text) {
-                        hits.push(make_hit(Category::Agent, text, ts.clone(), None));
+                    let span = if rec.is_type("assistant") {
+                        matcher.locate(text)
+                    } else {
+                        None
+                    };
+                    if let Some(span) = span {
+                        hits.push(make_hit(Category::Agent, text, span, ts.clone(), None));
                     }
                 }
                 Block::ToolUse { name, input, .. } if category_active(want, Category::Tool) => {
                     let rendered = render_tool_use(name.as_deref(), input.as_ref());
-                    if matcher.is_match(&rendered) {
+                    if let Some(span) = matcher.locate(&rendered) {
                         hits.push(make_hit(
                             Category::Tool,
                             &rendered,
+                            span,
                             ts.clone(),
                             name.clone(),
                         ));
@@ -672,8 +700,14 @@ fn collect_record_hits(
                             text = resolve_persisted_text(&path, &text);
                         }
                     }
-                    if matcher.is_match(&text) {
-                        hits.push(make_hit(Category::ToolResponse, &text, ts.clone(), None));
+                    if let Some(span) = matcher.locate(&text) {
+                        hits.push(make_hit(
+                            Category::ToolResponse,
+                            &text,
+                            span,
+                            ts.clone(),
+                            None,
+                        ));
                     }
                 }
                 _ => {}
@@ -734,11 +768,17 @@ fn auq_answer_text(rec: &Record) -> Option<String> {
     None
 }
 
-/// Build a hit with a normalized, explicitly-truncated excerpt.
-fn make_hit(category: Category, text: &str, ts: Option<String>, tool_name: Option<String>) -> Hit {
+/// Build a hit with a normalized excerpt CENTERED on the match (`span`).
+fn make_hit(
+    category: Category,
+    text: &str,
+    span: Option<(usize, usize)>,
+    ts: Option<String>,
+    tool_name: Option<String>,
+) -> Hit {
     Hit {
         category,
-        excerpt: truncate_excerpt(&normalize_line(text)),
+        excerpt: match_excerpt(text, span, EXCERPT_MAX),
         timestamp_utc: ts,
         tool_name,
     }
@@ -747,6 +787,44 @@ fn make_hit(category: Category, text: &str, ts: Option<String>, tool_name: Optio
 /// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
+}
+
+/// Build the inline excerpt, CENTERED on the match so a hit DEEP in a long message is
+/// actually visible — not just the message head (the old behavior, which silently hid
+/// any match past the first `max` chars and forced readers back to the raw jsonl).
+///
+/// `span` is the first match's BYTE range, or `None` for the pure filter (no specific
+/// match → show the head). When the message fits in `max` chars it is shown whole.
+/// Otherwise a `max`-char window is taken around the match (a quarter of the budget as
+/// leading context), whitespace-normalized, with a leading `…` when content precedes
+/// the window and the shared `… (+N chars)` marker when content follows — so clipping
+/// on either side is explicit, never silent (SPEC §0).
+fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> String {
+    let total = text.chars().count();
+    // Pure filter, or the whole message already fits: keep the head-anchored form.
+    let start_byte = match span {
+        Some((s, _)) if total > max => s,
+        _ => return truncate_excerpt(&normalize_line(text)),
+    };
+    // Char index of the match start; a non-char-boundary byte offset (possible with a
+    // raw-byte regex) falls back to the head rather than panicking.
+    let Some(prefix) = text.get(..start_byte) else {
+        return truncate_excerpt(&normalize_line(text));
+    };
+    let match_char = prefix.chars().count();
+    let win_start = match_char.saturating_sub(max / 4);
+    let window: String = text.chars().skip(win_start).take(max).collect();
+    let body = normalize_line(&window);
+    let after = total.saturating_sub(win_start + max);
+    let mut out = String::new();
+    if win_start > 0 {
+        out.push('…');
+    }
+    out.push_str(&body);
+    if after > 0 {
+        out.push_str(&format!("… (+{after} chars)"));
+    }
+    out
 }
 
 /// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
@@ -1594,6 +1672,58 @@ mod tests {
         let s = "y".repeat(EXCERPT_MAX + 3);
         let out = truncate_excerpt(&s);
         assert!(out.ends_with("… (+3 chars)"), "got: {out}");
+    }
+
+    #[test]
+    fn match_excerpt_centers_on_a_deep_match() {
+        // The needle sits ~800 chars in — far past EXCERPT_MAX. The OLD head-only
+        // excerpt hid it entirely (the bug that forced raw-jsonl reads); centering
+        // must surface it, with explicit clipping markers on both sides.
+        // Synthetic CJK placeholder (heavenly-stem chars ≈ "A B C D E") + neutral
+        // padding.
+        let needle = "x";
+        let text = format!("{}{needle}{}", "x".repeat(800), "x".repeat(800));
+        let m = build_matcher(&args(needle)).unwrap();
+        let span = m.locate(&text).expect("matches").expect("has a span");
+        let ex = match_excerpt(&text, Some(span), EXCERPT_MAX);
+        assert!(ex.contains(needle), "excerpt must show the match: {ex}");
+        assert!(
+            ex.starts_with('…'),
+            "content precedes the window → leading …: {ex}"
+        );
+        assert!(
+            ex.contains("chars)"),
+            "content follows → trailing count: {ex}"
+        );
+    }
+
+    #[test]
+    fn match_excerpt_short_message_is_shown_whole() {
+        let text = "a short hit here";
+        let m = build_matcher(&args("hit")).unwrap();
+        let span = m.locate(text).unwrap();
+        assert_eq!(match_excerpt(text, span, EXCERPT_MAX), "a short hit here");
+    }
+
+    #[test]
+    fn match_excerpt_early_match_keeps_the_head() {
+        let text = format!("needle {}", "z".repeat(EXCERPT_MAX));
+        let m = build_matcher(&args("needle")).unwrap();
+        let span = m.locate(&text).unwrap();
+        let ex = match_excerpt(&text, span, EXCERPT_MAX);
+        assert!(!ex.starts_with('…'), "match at char 0 → no leading …: {ex}");
+        assert!(ex.starts_with("needle"), "got: {ex}");
+    }
+
+    #[test]
+    fn match_excerpt_pure_filter_falls_back_to_head() {
+        let text = "X".repeat(EXCERPT_MAX + 50);
+        let m = build_matcher(&args("")).unwrap(); // empty pattern = pure filter
+        let span = m.locate(&text).expect("pure filter matches");
+        assert_eq!(span, None, "pure filter has no locatable span");
+        let ex = match_excerpt(&text, span, EXCERPT_MAX);
+        assert!(!ex.starts_with('…'), "head form has no leading …");
+        assert!(ex.ends_with("… (+50 chars)"), "got: {ex}");
     }
 
     #[test]
