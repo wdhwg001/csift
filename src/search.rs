@@ -59,6 +59,13 @@ pub struct Hit {
     pub timestamp_utc: Option<String>,
     /// Tool name when the hit is a `tool`/`tool-response` block, for the header.
     pub tool_name: Option<String>,
+    /// 1-based PHYSICAL line number of the source record in its session jsonl — the stable
+    /// address `csift get --line N` re-fetches. Backfilled by the turn collector (make_hit
+    /// leaves it 0); 0 means "not located" (never happens for a real scanned hit).
+    pub line: usize,
+    /// The source record's `uuid` (jsonl's own globally-unique id), when present — the
+    /// alternative `csift get --uuid U` address. `None` for records that carry no uuid.
+    pub uuid: Option<String>,
 }
 
 /// A complete reconstructed request/response exchange (round-trip) containing the
@@ -296,6 +303,15 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
     }
+    // `-c`/`-l` are each a "return ONLY this" mode — mutually exclusive (the cheap totals
+    // they each isolate are ALSO always in the normal footer, so you rarely need either).
+    if args.count && args.files_with_matches {
+        bail!(
+            "-c/--count and -l/--files-with-matches are mutually exclusive (each returns ONLY \
+             its own thing). Drop one: `-c` for the match total, `-l` for the session list. \
+             Both numbers are already in the normal output's footer."
+        );
+    }
 
     // ── Bare-uuid SOLE positional → SCOPE, not pattern (sibling-idiom parity) ──
     // Unlike files/turns/list/agents/recover (whose first positional is the PATH target),
@@ -389,8 +405,8 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     });
 
     // `-l`/--files-with-matches: list ONLY the distinct sessions that matched — computed
-    // from the FULL set, BEFORE `--max-count` can drop any (ripgrep `-l` ignores `-m`). Wins
-    // over `-c`. Plain/pipeable output: no scope banner, no footer.
+    // from the FULL set, BEFORE `--max-count` can drop any (ripgrep `-l` ignores `-m`).
+    // Mutually exclusive with `-c` (rejected above). Plain/pipeable: no scope banner, no footer.
     if args.files_with_matches {
         return emit_files_with_matches(&all, args.format);
     }
@@ -454,6 +470,19 @@ fn emit_files_with_matches(all: &[Exchange], format: OutputFormat) -> Result<()>
     Ok(())
 }
 
+/// Count of DISTINCT sessions among these exchanges (by transcript `session_id`, in
+/// first-seen order). One cheap always-on number — surfaced in every search footer and the
+/// basis of the `-l` listing.
+fn distinct_session_count(exchanges: &[Exchange]) -> usize {
+    let mut seen: Vec<&str> = Vec::new();
+    for ex in exchanges {
+        if !seen.contains(&ex.session_id.as_str()) {
+            seen.push(&ex.session_id);
+        }
+    }
+    seen.len()
+}
+
 /// Sort key that places timestamp-less exchanges LAST (after all timestamped ones) and
 /// orders timestamped ones chronologically (ISO-8601 UTC sorts as text). Same shape as
 /// `files::timestamp_sort_key`, so `search` and `files --timeline` order identically.
@@ -480,6 +509,10 @@ struct FileResult {
 struct Kept {
     rec: Record,
     can_hit: bool,
+    /// 1-based PHYSICAL line number of this record in its source jsonl (from the scanner) —
+    /// a stable address (jsonl is append-only), surfaced per hit so `csift get --line N` (and
+    /// raw `sed -n 'Np'`) can re-fetch the exact record.
+    line_no: usize,
 }
 
 /// Scan a single session file: prefilter → parse → delimit turns → match → stitch.
@@ -510,13 +543,17 @@ fn search_one_file(
     // Parse all transcript-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool)
     // so a single giant transcript is not scanned on one core. The stage-2 keyword prefilter
     // (`can_hit`) is computed per line inside the parallel scan, where the raw bytes are in hand.
-    let (records, skipped) = crate::parse::scan_lines_parallel(bytes, |line, _line_no| {
+    let (records, skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_transcript_candidate(line) {
             return crate::parse::LineVerdict::Ignore;
         }
         let can_hit = matcher.line_may_match(line);
         match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => crate::parse::LineVerdict::Keep(Kept { rec, can_hit }),
+            Ok(Some(rec)) => crate::parse::LineVerdict::Keep(Kept {
+                rec,
+                can_hit,
+                line_no,
+            }),
             Ok(None) => crate::parse::LineVerdict::Ignore,
             Err(_) => crate::parse::LineVerdict::Skip,
         }
@@ -731,11 +768,23 @@ fn collect_turn_hits(
             plan_index,
             &mut hits,
         );
+        // Backfill the source record's address onto every hit this record produced.
+        backfill_address(&mut hits[before..], kept);
         if hits.len() > before {
             hit_idxs.push(i);
         }
     }
     (hits, hit_idxs)
+}
+
+/// Stamp the source record's line number + uuid onto each hit just appended for it — the
+/// `csift get` address. Done by the turn collector (not `make_hit`) because the line number
+/// lives on the `Kept`, not the `Record`.
+fn backfill_address(hits: &mut [Hit], kept: &Kept) {
+    for h in hits {
+        h.line = kept.line_no;
+        h.uuid = kept.rec.uuid.clone();
+    }
 }
 
 /// Render the SIBLING records of a turn — those that produced NO hit — as head-anchored
@@ -761,6 +810,7 @@ fn collect_turn_siblings(
         if hit_idxs.contains(&i) {
             continue;
         }
+        let before = sibs.len();
         collect_record_hits(
             &kept.rec,
             cats,
@@ -770,6 +820,7 @@ fn collect_turn_siblings(
             plan_index,
             &mut sibs,
         );
+        backfill_address(&mut sibs[before..], kept);
     }
     sibs
 }
@@ -966,6 +1017,10 @@ fn make_hit(
         excerpt: match_excerpt(text, span, excerpt_max),
         timestamp_utc: ts,
         tool_name,
+        // line/uuid are per-RECORD, not known here — the turn collector backfills them onto
+        // every hit it appends (it holds the `Kept`, which carries the line number).
+        line: 0,
+        uuid: None,
     }
 }
 
@@ -1026,7 +1081,7 @@ fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
 // Timestamp formatting (system-local + raw UTC) lives in `crate::timez`, shared
 // with `list` so the local-timezone choice is defined once.
 
-fn category_label(c: Category) -> &'static str {
+pub(crate) fn category_label(c: Category) -> &'static str {
     match c {
         Category::Thinking => "thinking",
         Category::User => "user",
@@ -1037,11 +1092,34 @@ fn category_label(c: Category) -> &'static str {
 }
 
 /// Glyph for the side of the exchange a hit sits on (◂ user, ▸ agent-side).
-fn category_glyph(c: Category) -> char {
+pub(crate) fn category_glyph(c: Category) -> char {
     match c {
         Category::User => '◂',
         _ => '▸',
     }
+}
+
+/// Every category-eligible block of ONE record as FULL (uncapped) Hits — the shared content
+/// extraction `csift get` reuses to dump a single record. A pure-filter matcher matches every
+/// record, `usize::MAX` removes the excerpt cap, and all five categories are eligible (empty
+/// `want`). `line`/`uuid` are left at make_hit's placeholders — `get` stamps them from the
+/// address it already holds.
+pub(crate) fn full_record_hits(rec: &Record) -> Vec<Hit> {
+    let pure = Matcher {
+        regex: None,
+        prefilter: None,
+    };
+    let mut hits = Vec::new();
+    collect_record_hits(
+        rec,
+        &[],
+        &pure,
+        false,
+        usize::MAX,
+        &PlanIndex::default(),
+        &mut hits,
+    );
+    hits
 }
 
 fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
@@ -1085,8 +1163,10 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
                 .as_deref()
                 .map(|n| format!(" {n}"))
                 .unwrap_or_default();
+            // `L<line>` is the per-hit address → `csift get --session <id> --line <line>`.
             println!(
-                "{glyph} {label}{name}  {}",
+                "{glyph} {label}{name}  L{}  {}",
+                hit.line,
                 format_timestamp(hit.timestamp_utc.as_deref())
             );
             println!("   {}", hit.excerpt);
@@ -1101,7 +1181,8 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
                 .map(|n| format!(" {n}"))
                 .unwrap_or_default();
             println!(
-                "· {label}{name}  {}",
+                "· {label}{name}  L{}  {}",
+                sib.line,
                 format_timestamp(sib.timestamp_utc.as_deref())
             );
             println!("   {}", sib.excerpt);
@@ -1124,8 +1205,17 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     } else {
         "exchanges"
     };
+    // Distinct-session total rides ALONGSIDE the match total in EVERY normal footer — it is one
+    // cheap number (already in hand) and answers "across how many sessions?" without a second
+    // `-l` run. `-c`/`-l` isolate each of these two totals for a pipe; here you get both for free.
+    let n_sessions = distinct_session_count(&outcome.exchanges);
+    let sess_plural = if n_sessions == 1 {
+        "session"
+    } else {
+        "sessions"
+    };
     print!(
-        "matched {} {plural} (category={cat})  ·  {} dropped",
+        "matched {} {plural} across {n_sessions} {sess_plural} (category={cat})  ·  {} dropped",
         outcome.exchanges.len(),
         outcome.dropped_by_cap
     );
@@ -1147,6 +1237,9 @@ fn hit_json(h: &Hit) -> serde_json::Value {
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
         "tool_name": h.tool_name,
+        // The `csift get` address: 1-based source line + the record uuid (when present).
+        "line": h.line,
+        "uuid": h.uuid,
     })
 }
 
@@ -1189,9 +1282,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         }
         println!("{}", serde_json::to_string(&obj)?);
     }
-    // Trailing summary object (SPEC §8.2).
+    // Trailing summary object (SPEC §8.2). `sessions` (distinct matching sessions) rides
+    // alongside `matched` — the same cheap always-on total the text footer carries.
     let summary = json!({
         "matched": outcome.exchanges.len(),
+        "sessions": distinct_session_count(&outcome.exchanges),
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
     });
@@ -1594,6 +1689,7 @@ mod tests {
                 Kept {
                     rec: serde_json::from_slice(raw).expect("valid fixture record"),
                     can_hit: matcher.line_may_match(raw),
+                    line_no: 1,
                 }
             })
             .collect()
@@ -2010,6 +2106,7 @@ mod tests {
         let kept = Kept {
             rec: serde_json::from_slice(raw).unwrap(),
             can_hit: m.line_may_match(raw),
+            line_no: 1,
         };
         assert!(!kept.can_hit);
         let turn = Turn {
@@ -2039,6 +2136,7 @@ mod tests {
         let kept = Kept {
             rec: serde_json::from_slice(raw).unwrap(),
             can_hit: m.line_may_match(raw),
+            line_no: 1,
         };
         let turn = Turn {
             index: 0,

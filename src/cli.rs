@@ -1,16 +1,17 @@
 //! Command-line surface (clap derive).
 //!
-//! Eight subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`,
-//! `turns`. Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7 baseline
-//! invocations. `list`/`search`/`files`/`recover`/`plan` span each session's subagent
+//! Nine subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`,
+//! `turns`, `get`. Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7
+//! baseline invocations. `list`/`search`/`files`/`recover`/`plan` span each session's subagent
 //! transcripts by default (`--no-subagents` opts out); `turns` is the exception — a
 //! single-thread recovery tool whose per-session budget MULTIPLIES, so it defaults to the
 //! TOP-LEVEL thread only and opts INTO spanning via `--include-subagents`. `agents` reports a
 //! session's subagent lifecycle (it lists subagents as targets, so it has no subagent-span
 //! flag). `plan` resolves the plan file BOUND to a session (its `plan_mode` attachment);
-//! `recover --file @plan` reconstructs that bound plan's content.
-//! The seven session-operating subcommands
-//! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`)
+//! `recover --file @plan` reconstructs that bound plan's content. `get` fetches ONE message by
+//! its address (a `search` hit's `--line`/`--uuid`) and prints it in full.
+//! The session-operating subcommands
+//! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`/`get`)
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` (cwd / encoded dir),
 //! an optional `--session <uuid>`, and a bare-uuid POSITIONAL that routes to the session
@@ -315,7 +316,8 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           recover  reconstruct a file's history from the transcript — segmented diff-patches,\n           \
                    point-in-time partial snapshot, or coverage scoping\n  \
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
-                   back-and-forth a compaction summary clipped, within a char/token budget\n\n\
+                   back-and-forth a compaction summary clipped, within a char/token budget\n  \
+          get      fetch ONE message by its address (a search hit's --line / --uuid), in full\n\n\
         list/search/files/recover span each session's subagent transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
         to restrict to top-level sessions. `turns` is the exception among the file-operating \
@@ -335,7 +337,8 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift files <uuid> --by-file                # which files this session modified, when\n  \
           csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
           csift recover . --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42\n  \
-          csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n\n\
+          csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
+          csift get --session <uuid> --line 46550     # fetch the exact message a search hit reported, in full\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
 pub struct Cli {
@@ -364,6 +367,9 @@ pub enum Command {
     /// Turn-fidelity reconstruction — restore the verbatim user/assistant
     /// back-and-forth a compaction summary clipped, within a char/token budget.
     Turns(TurnsArgs),
+    /// Fetch ONE message by its address — a `search` hit's `--session <id> --line <N>`
+    /// (or `--uuid <U>`) — and print it IN FULL.
+    Get(GetArgs),
 }
 
 /// How to interpret `--budget`: as raw characters (default) or as tokens (estimated
@@ -722,7 +728,9 @@ pub struct SearchArgs {
     /// Print ONLY the total number of matching exchanges (one integer) — the ripgrep
     /// `-c` idiom for "how many times X?". Honors every filter (`-t`, time window,
     /// `--session`, scope) and reports the TRUE total even if `--max-count` would cap
-    /// the listing. With `--format json`, prints `{"matched":N}` instead.
+    /// the listing. With `--format json`, prints `{"matched":N}` instead. Mutually exclusive
+    /// with `-l`. (You rarely need it: the normal output's footer ALWAYS carries this same
+    /// match total plus the distinct-session total — `-c` just isolates it for a pipe.)
     #[arg(long, short = 'c')]
     pub count: bool,
 
@@ -731,7 +739,9 @@ pub struct SearchArgs {
     /// each transcript's own id (a re-feedable top-level session uuid, or a bare
     /// SUBAGENT hex annotated with its `parent <uuid>`); with `--format json`, one
     /// `{session_id,is_subagent,parent_session_id}` object per line. Honors every
-    /// filter and is unaffected by `--max-count`. WINS over `-c` when both are given.
+    /// filter and is unaffected by `--max-count`. Mutually exclusive with `-c` (each is a
+    /// "return ONLY this" mode); the match total AND the session total are BOTH already in the
+    /// normal output's footer, so you only reach for `-l`/`-c` to isolate one for a pipe.
     #[arg(long = "files-with-matches", short = 'l')]
     pub files_with_matches: bool,
 
@@ -793,6 +803,73 @@ impl SearchArgs {
         t.extend(self.path_flag.iter().cloned());
         t
     }
+}
+
+#[derive(Debug, Args)]
+#[command(
+    long_about = "Fetch exactly ONE message by its address and print it IN FULL — the natural \
+        companion to `search`, which now stamps every hit with an `L<line>` address (and a \
+        record `uuid`). You skim with `search`, then `get` the one message whose tail / full \
+        body you actually need, without dropping to the raw jsonl.\n\n\
+        ADDRESS (give exactly one):\n  \
+          --line N   the 1-based PHYSICAL line number in ONE resolved transcript (jsonl is \
+        append-only, so a line number is a stable address). Needs the scope to resolve to a \
+        SINGLE file: pass `--session <uuid>` (its top-level transcript) or `--session <uuid> \
+        --subagent <hex>` (that subagent's transcript), or a PATH that resolves to one session.\n  \
+          --uuid U   the record's own jsonl `uuid` (globally unique, so scope is optional — \
+        but a `--session`/PATH scope makes the lookup fast instead of scanning every project).\n\n\
+        The record is rendered like a `search` exchange's body: a header \
+        (`SESSION <id> · L<line> · <uuid> · <ts>`) then every category-eligible block \
+        (thinking / user / tool / tool-response / agent) at FULL length — no excerpt cap.",
+    after_help = "EXAMPLES\n  \
+          csift get --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d --line 46550   # the L46550 a search hit reported\n  \
+          csift get --uuid 1f70fc7d-c4b3-4d0e-915c-edf09b32a7c0                   # by record uuid (scope optional)\n  \
+          csift get --uuid 1f70fc7d-c4b3-4d0e-915c-edf09b32a7c0 .                 # …scoped to this project (faster)\n  \
+          csift get --session <uuid> --subagent aaa111 --line 12                  # line 12 of a subagent transcript\n  \
+          csift get --session <uuid> --line 46550 --format json                   # machine-readable single record\n\n\
+        TYPICAL FLOW\n  \
+          csift search \"x\" -t user            # → a hit header shows `SESSION <id>` + `◂ user  L46550 …`\n  \
+          csift get --session <id> --line 46550    # → that exact message, in full\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          One object: {session_id, is_subagent, parent_session_id, line, uuid, type, ts_utc, \
+        ts_local, blocks:[{category, text, tool_name}, …]}. `blocks` is every category-eligible \
+        piece of the record at full length (the same extraction `search` excerpts). \
+        `parent_session_id` is re-feedable; a subagent record's `session_id` is its bare hex."
+)]
+pub struct GetArgs {
+    /// Project target(s) to scope the lookup (an actual cwd or an encoded `-Users-…` dir;
+    /// repeatable; a bare session-UUID positional routes to `--session`, like the siblings).
+    /// Optional for `--uuid` (defaults to all projects); for `--line` the scope must resolve
+    /// to a SINGLE transcript.
+    #[arg(
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target
+    )]
+    pub paths: Vec<PathBuf>,
+
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
+    pub session: Option<String>,
+
+    /// Address a record inside a SUBAGENT transcript (its bare hex id, as shown by
+    /// `csift agents`). Combine with `--session <parent>` + `--line N`. Without it, `--line`
+    /// addresses the top-level session transcript.
+    #[arg(long, value_name = "HEX")]
+    pub subagent: Option<String>,
+
+    /// The 1-based PHYSICAL line number to fetch (within the single resolved transcript).
+    /// Mutually exclusive with `--uuid`; exactly one address is required.
+    #[arg(long, value_name = "N")]
+    pub line: Option<usize>,
+
+    /// The record `uuid` to fetch (globally unique). Mutually exclusive with `--line`;
+    /// exactly one address is required.
+    #[arg(long, value_name = "UUID")]
+    pub uuid: Option<String>,
+
+    /// Emit JSON instead of the headered text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
 }
 
 /// Which subagent kinds to surface in `agents`. Mirrors the on-disk discriminator

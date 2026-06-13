@@ -76,7 +76,7 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 ## Command surface
 
-Eight subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`.
+Nine subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `get`.
 `list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
 (`--no-subagents` opts out). On these four `--include-subagents` is a **default-ON no-op** kept only
 for symmetry/explicitness — it never changes the result, and `--no-subagents` is **DOMINANT**: when
@@ -185,13 +185,17 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
   window.
 - **`--max-count N`** caps emitted exchanges but **reports the dropped count** — there is NO silent
   truncation anywhere.
+- **Always-on totals.** Every normal footer carries BOTH cheap totals: the match count AND the
+  distinct-session count (`matched N exchanges across S sessions …`; JSON footer
+  `{matched, sessions, dropped_by_cap, skipped_lines}`). You rarely need `-c`/`-l` — they just
+  isolate one of those two totals for a pipe, and are **mutually exclusive** with each other.
 - **`-c`/`--count`** prints ONLY the integer match total (the ripgrep `-c` idiom for "how many times
   X?") — no per-exchange output. Honors every filter and reports the TRUE total even when
   `--max-count` would cap the listing; `--format json` prints `{"matched":N}`.
 - **`-l`/`--files-with-matches`** prints ONLY the distinct sessions that matched, one id per line
   (the ripgrep `-l` idiom for "WHICH sessions mention X?") — a re-feedable top-level uuid, or a bare
-  subagent hex annotated with its `parent <uuid>`. Unaffected by `--max-count`; **wins over `-c`**
-  when both are passed. `--format json` emits one `{session_id,is_subagent,parent_session_id}` per line.
+  subagent hex annotated with its `parent <uuid>`. Unaffected by `--max-count`; mutually exclusive
+  with `-c`. `--format json` emits one `{session_id,is_subagent,parent_session_id}` per line.
 - **`--siblings`** also renders the SIBLING records of each matched turn — the rest of the
   back-and-forth, not just the matched line — so a matched **user** question surfaces WITH the agent's
   reply (answers "I said X, what did you ask back?" without dropping to the raw jsonl). Sibling rows
@@ -230,22 +234,27 @@ applied AFTER the sort (it keeps the EARLIEST N and reports the dropped remainde
 result carries its chronological position: the text header appends the turn-opening timestamp, and the JSON
 envelope carries `ts_utc`/`ts_local`.
 
-Text output shape (the `· <ts>` in the header is the turn-opening time the timeline is sorted on):
+Text output shape (each hit header carries `L<line>` — the address `csift get` re-fetches):
 
 ```
 ═══ SESSION 0a1b2c3d · TURN 0 · 2026-06-03 22:51:53 AEST ═══
-◂ user  2026-06-03 22:51:53 AEST (2026-06-03T12:51:53.206Z)
+◂ user  L412  2026-06-03 22:51:53 AEST (2026-06-03T12:51:53.206Z)
    Audit harness-correctness in the worktree … (+2958 chars)
 
-matched 2 exchanges (category=user)  ·  18 dropped by --max-count
+matched 2 exchanges across 1 session (category=user)  ·  18 dropped by --max-count
 ```
+
+The `L412` is the hit record's 1-based physical line in its session jsonl — a stable address (jsonl
+is append-only). Read the truncated tail with `--full`, or fetch that exact message via
+`csift get --session 0a1b2c3d --line 412`.
 
 JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
 scope record when the scope spans subagents, then one object per exchange (`session_id`, `is_subagent`,
 `parent_session_id`, `turn_index`, the envelope-level `ts_utc`/`ts_local` = the turn-opening timestamp
-the timeline is sorted on, `hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name}` — a per-hit
-`ts_utc` may be LATER than the envelope's for a deep tool_use match — and `record_uuids[]` = every record
-stitched into the round-trip), then a trailing summary object `{matched, dropped_by_cap, skipped_lines}`.
+the timeline is sorted on, `hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name, line, uuid}`
+— `line`/`uuid` are the `csift get` address, and a per-hit `ts_utc` may be LATER than the envelope's
+for a deep tool_use match — and `record_uuids[]` = every record stitched into the round-trip), then a
+trailing summary object `{matched, sessions, dropped_by_cap, skipped_lines}`.
 With `--siblings` the envelope also carries a `siblings[]` array (same per-hit shape) for the turn's
 non-matched records, present only when there are any. (`-c`/`-l` short-circuit this shape: `-c` prints
 `{"matched":N}`; `-l` prints one `{session_id,is_subagent,parent_session_id}` per line, no footer.)
@@ -793,6 +802,39 @@ doesn't stall. `--slice` is text-only and is NOT combinable with
 `--out` (which writes the WHOLE document to a file). Example: a 36000-char recon across four 9000-char
 hooks — hook `i` runs `csift turns . --budget 36000 --window 9000 --slice i`. See "Integration recipes →
 (A)" for the wiring and how this composes with compaction re-injection.
+
+---
+
+### `get` — fetch ONE message by its address, in full
+
+```
+csift get [PATH...] [--session ID] [--subagent HEX] (--line N | --uuid U) [--format text|json]
+```
+
+The companion to `search`: every search hit now carries an `L<line>` address (and a record `uuid`).
+You skim with `search`, then `get` the single message whose full body / tail you actually need —
+**no drop to the raw jsonl**. Give exactly one address:
+
+- **`--line N`** — the 1-based PHYSICAL line in ONE resolved transcript (a jsonl is append-only, so a
+  line number is stable). The scope must pin a single file: `--session <uuid>` (its top-level
+  transcript), `--session <uuid> --subagent <hex>` (that subagent's transcript), or a PATH that
+  resolves to one session. An ambiguous scope (many sessions, no `--session`) is a clear error, never
+  a guess.
+- **`--uuid U`** — the record's own globally-unique jsonl `uuid`; scope is optional (a `--session`/PATH
+  scope just makes the lookup fast instead of scanning every project).
+
+The record renders like a `search` exchange body: a header (`SESSION <id> · L<line> · <uuid> · <ts>`,
+or `SUBAGENT <hex> · parent SESSION <uuid> · …`) then every category-eligible block at FULL length.
+`--format json` → one object `{session_id, is_subagent, parent_session_id, line, uuid, type, ts_utc,
+ts_local, blocks:[{category, text, tool_name}, …]}`.
+
+```bash
+# typical flow — skim, then fetch the one you want in full
+csift search "x" -t user            # → hit header shows `SESSION <id>` + `◂ user  L46550 …`
+csift get --session <id> --line 46550    # → that exact message, in full
+csift get --uuid 1f70fc7d-c4b3-4d0e-915c-edf09b32a7c0 .   # by record uuid, scoped for speed
+csift get --session <id> --subagent aaa111 --line 12      # a record inside a subagent transcript
+```
 
 ---
 

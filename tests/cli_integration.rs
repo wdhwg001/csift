@@ -723,19 +723,9 @@ fn search_files_with_matches_lists_distinct_sessions() {
         .all(|o| o.get("parent_session_id").is_some() && o.get("session_id").is_some()));
 }
 
-#[test]
-fn search_files_with_matches_wins_over_count() {
-    // When both `-l` and `-c` are given, `-l` wins (ripgrep parity) — output is the session
-    // listing, not the integer total.
-    let h = populated_home();
-    let out = h.run(&["search", "carry", "--no-subagents", "-l", "-c"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    assert!(
-        out.stdout.contains(SESS),
-        "expected a listing, got: {}",
-        out.stdout
-    );
-}
+// (`-c` + `-l` together are now a hard error — see
+// `search_count_and_files_with_matches_are_mutually_exclusive`. They are each a "return ONLY
+// this" mode and the two totals both live in the normal footer, so there is no "winner".)
 
 #[test]
 fn search_siblings_surface_the_rest_of_the_turn() {
@@ -886,6 +876,188 @@ fn search_full_emits_the_untruncated_record() {
         alias.stdout.contains("taIlToken9z"),
         "--no-truncate alias must surface the tail too: {}",
         alias.stdout
+    );
+}
+
+#[test]
+fn search_hit_carries_line_and_uuid_address() {
+    let h = populated_home();
+    // "needed" lives only in the opening user record (fixture line 1).
+    let out = h.run(&["search", "needed", "-t", "user", "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("user  L1  "),
+        "the hit header carries its `L<line>` address: {}",
+        out.stdout
+    );
+    // JSON: per-hit `line` + `uuid` (the `csift get` address).
+    let j = h.run(&[
+        "search",
+        "needed",
+        "-t",
+        "user",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    assert_eq!(env["hits"][0]["line"], 1);
+    assert_eq!(env["hits"][0]["uuid"], "u0");
+}
+
+#[test]
+fn search_footer_always_reports_match_and_session_totals() {
+    let h = populated_home();
+    let out = h.run(&["search", "carry", "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("across 1 session "),
+        "the footer carries the distinct-session total: {}",
+        out.stdout
+    );
+    // JSON footer gains `sessions` alongside `matched`.
+    let j = h.run(&["search", "carry", "--no-subagents", "--format", "json"]);
+    let footer: serde_json::Value = serde_json::from_str(
+        j.stdout
+            .lines()
+            .filter(|l| !l.is_empty())
+            .next_back()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(footer["sessions"], 1);
+    assert!(footer["matched"].as_u64().unwrap() >= 1);
+}
+
+#[test]
+fn search_count_and_files_with_matches_are_mutually_exclusive() {
+    let h = populated_home();
+    let out = h.run(&["search", "carry", "-c", "-l"]);
+    assert!(!out.success, "passing both must error");
+    assert!(
+        out.stderr.contains("mutually exclusive"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+// ── get ──
+
+#[test]
+fn get_by_line_returns_the_record_in_full() {
+    let h = populated_home();
+    let out = h.run(&["get", "--session", SESS, "--line", "1"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("◂ user"),
+        "rendered as user: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("L1"),
+        "header carries the line: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("why is the carry needed?"),
+        "the full message body: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn get_by_uuid_locates_the_record_anywhere_in_scope() {
+    let h = populated_home();
+    // No scope → scans every project under HOME; the fixture record's uuid is `u0`.
+    let out = h.run(&["get", "--uuid", "u0"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("why is the carry needed?"),
+        "got: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("L1"),
+        "located at line 1: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn get_json_emits_blocks_and_full_address() {
+    let h = populated_home();
+    // Fixture line 2 = the assistant thinking + agent-text record (uuid a0).
+    let out = h.run(&["get", "--session", SESS, "--line", "2", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let o: serde_json::Value = serde_json::from_str(out.stdout.trim()).unwrap();
+    assert_eq!(o["line"], 2);
+    assert_eq!(o["uuid"], "a0");
+    assert_eq!(o["type"], "assistant");
+    let blocks = o["blocks"].as_array().unwrap();
+    assert!(
+        blocks.iter().any(|b| b["category"] == "agent"
+            && b["text"]
+                .as_str()
+                .unwrap()
+                .contains("partial line at a chunk boundary")),
+        "the agent block renders at full length: {o}"
+    );
+}
+
+#[test]
+fn get_subagent_line_addresses_the_subagent_transcript() {
+    let h = populated_home();
+    let out = h.run(&[
+        "get",
+        "--session",
+        SESS,
+        "--subagent",
+        "aaa111",
+        "--line",
+        "1",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("SUBAGENT aaa111"),
+        "subagent header: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("sub: do the thing about carry"),
+        "the subagent record body: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn get_requires_exactly_one_address() {
+    let h = populated_home();
+    let both = h.run(&["get", "--session", SESS, "--line", "1", "--uuid", "u0"]);
+    assert!(!both.success);
+    assert!(
+        both.stderr.contains("mutually exclusive"),
+        "stderr: {}",
+        both.stderr
+    );
+    let neither = h.run(&["get", "--session", SESS]);
+    assert!(!neither.success);
+    assert!(
+        neither.stderr.contains("give an address"),
+        "stderr: {}",
+        neither.stderr
+    );
+}
+
+#[test]
+fn get_line_on_a_non_record_errors_clearly() {
+    let h = populated_home();
+    // Fixture line 8 is the deliberately-malformed line.
+    let out = h.run(&["get", "--session", SESS, "--line", "8"]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("not a transcript message"),
+        "stderr: {}",
+        out.stderr
     );
 }
 
