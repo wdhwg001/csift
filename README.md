@@ -23,7 +23,8 @@ the raw record.
 
 It also does the bread-and-butter transcript work: which session is this (`whoami` / `list`), find every
 exchange matching a regex (`search`), what files a session touched (`files`), reconstruct a file's
-content or a dropped plan (`recover`), and a session's subagent topology (`agents`).
+content — or a dropped plan, via `recover --file @plan` (`recover`), locate the plan file bound to a
+session (`plan`), and a session's subagent topology (`agents`).
 
 ---
 
@@ -81,10 +82,11 @@ identity), lazy `serde_json` only on candidate lines, and rayon parallelism ACRO
 
 ## Subcommands
 
-Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `turns`) takes
-optional `PATH...` targets and an optional `--session <uuid>` (a bare session-UUID in the positional
+Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `plan`, `turns`)
+takes optional `PATH...` targets and an optional `--session <uuid>` (a bare session-UUID in the positional
 slot is routed to `--session`; a bare **subagent hex** is NOT accepted there — inspect one with `csift
-agents --agent <hex>`). For `search` the first positional is the **PATTERN**, so a lone-uuid `search
+agents --agent <hex>`). `plan` additionally resolves the CALLING session from `$CLAUDE_CODE_SESSION_ID`
+when given no target (like `whoami`), and its only flags are `--no-subagents` / `--format`. For `search` the first positional is the **PATTERN**, so a lone-uuid `search
 <uuid>` is routed to `--session` (a one-line note reports it); pass a scope target to keep a literal
 search (`csift search <uuid> .`). The subagent-span flags `--include-subagents` / `--no-subagents`
 apply to the **four** transcript-spanning subcommands `list`/`search`/`files`/`recover` (default **ON**)
@@ -215,32 +217,58 @@ csift files . --no-subagents
 csift files <uuid> --subagents-only --by-file   # only what the session's subagents touched
 ```
 
-### `recover` — reconstruct a file's content (or restore a plan)
+### `recover` — reconstruct a file's content (and `plan` — locate a session's plan)
 
-Rebuilds a file's content by replaying its Read / Write / Edit stream in transcript order. Four
+Rebuilds a file's content by replaying its Read / Write / Edit stream in transcript order. Three
 mutually-exclusive modes: `--patches` (DEFAULT, segmented unified-diff history split at integrity
 boundaries), `--at WHEN` (the partial line-numbered snapshot as the LLM saw it; gaps are explicit, never
-fabricated), `--coverage`/`--dry-run` (scope without dumping), and `--plan` (restore a dropped plan).
-`--plan` matches plan-files by a **component-scoped** heuristic — a `plans/` directory component or a
-filename stem being/carrying the token `plan` (delimited), so `sample.md` / a `widget-app` ancestor
-dir do **not** match; pass `--file <abs>` to pin an exact file (its latest `Write` is then restored).
-When scope spans multiple sessions, `--out` writes the **single GLOBAL-latest** candidate; in the
-listing exactly that one winner is tagged `(restored — written to --out)`, each other session's newest
-is the neutral `(session-latest)`, and JSON flags the same single winner with `is_restored:true`
-(alongside the per-session `is_latest_in_session`). A SUBAGENT transcript that wrote a plan is branded
-`SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never a bare-hex `SESSION`).
+fabricated), and `--coverage`/`--dry-run` (scope without dumping). `--file` is **required** for all
+three. An Edit/Write whose result ERRORED (`is_error:true`) never mutated the file, so reconstruction
+does not apply it and coverage does not count it — this covers both `String to replace not found in file`
+and the Edit-before-Read wall (`File has not been read yet`, e.g. a file created with Bash then directly
+Edited, since Bash/Grep don't satisfy CC's Read-before-Edit gate); a not-read-yet case is surfaced as an
+integrity annotation, not an edit.
+
+**`--file @plan`** is a magic `--file` VALUE (not a mode): bash-safe (no shell metacharacters, like
+`--at`'s `@line:`/`@turn:` sigils), it resolves the session-BOUND plan file (see `plan` below) and
+reconstructs THAT file exactly like any other — its FULL Write+Edit history, edit-aware (not just the
+latest Write). It composes with every mode and with `--out`/`--format`, so it is how you DUMP a plan's
+content — including a DELETED plan rebuilt from the transcript alone. It prefers the top-level session's
+own plan and ERRORS clearly (never guesses) when no plan is bound to the target, or when the target spans
+sessions bound to DIFFERENT plans (asks for `--session`).
+
 `--out` writes the artifact verbatim and is **data-safe on an empty result** (leaves the destination
 UNTOUCHED, prints no false `(wrote …)` line — a stderr `note: … left untouched` fires instead); it is a
-no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`) applies in
-`--patches`/`--at`/`--coverage` but is a **no-op in `--plan` mode** (a restored plan is verbatim Write
-content; a stderr note flags it).
+no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`) applies in all three
+modes. A SUBAGENT transcript surfaces as `SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never
+a bare-hex `SESSION`).
 
 ```bash
-csift recover . --file /abs/PLAN.md --coverage              # scope first: covered ranges + boundaries
-csift recover <uuid> --file /abs/app.py --patches           # segmented unified diffs
-csift recover <uuid> --file /abs/app.py --at @turn:42       # partial snapshot as of turn 42
-csift recover . --plan --out /tmp/restored-plan.md          # list plan candidates; write the latest to a file
-csift recover . --plan --file /abs/PLAN.md --out /tmp/p.md  # restore THAT plan file's latest Write content
+csift recover . --file /abs/PLAN.md --coverage                 # scope first: covered ranges + boundaries
+csift recover <uuid> --file /abs/app.py --patches              # segmented unified diffs
+csift recover <uuid> --file /abs/app.py --at @turn:42          # partial snapshot as of turn 42
+csift recover <uuid> --file @plan --out /tmp/restored-plan.md  # rebuild the session's bound plan (DELETED ok)
+```
+
+The companion **`plan`** subcommand LOCATES (does not dump) the plan file a session is bound to. The
+binding is AUTHORITATIVE: Claude Code writes a `plan_mode` attachment record
+(`{"type":"attachment","attachment":{"type":"plan_mode","planFilePath":"…","isSubAgent":…,"planExists":…}}`)
+when a session enters Plan Mode, and that `planFilePath` IS the bound plan. It is NOT a path heuristic — a
+session may Edit/Write OTHER sessions' plan files (ordinary tool calls on a `~/.claude/plans/…` path), and
+those are not its own. Plans live flat under `~/.claude/plans/` with a random three-word name
+(`nested-prancing-popcorn.md`; a subagent's gets an `-agent-<hex>` suffix) — the name is NOT derivable
+from the session id, only the attachment binds them. Target a project PATH / encoded-dir / bare
+session-UUID (positional) or `--session <uuid>`; with no target it resolves the CALLING session from
+`CLAUDE_CODE_SESSION_ID` (like `whoami`). It spans subagents by default (their own plans surface, flagged
+subagent with the re-feedable parent uuid); `--no-subagents` restricts to the top-level session. Per
+resolved session it emits `session_id`, `is_subagent`, `parent_session_id`, `plan_file`, `plan_exists`
+(on disk), `line_no`; text or `--format json` (NDJSON, one object per plan).
+
+```bash
+csift plan                                  # the calling session's bound plan (resolves CLAUDE_CODE_SESSION_ID)
+csift plan <uuid>                           # a specific session's bound plan
+csift plan . --no-subagents --format json   # this project's top-level sessions, machine-readable
+csift recover --session <uuid> --file @plan # DUMP the plan's content (plan only LOCATES it)
 ```
 
 ### `turns`
@@ -432,7 +460,8 @@ src/
   whoami.rs        # calling-session id resolution
   subagent.rs      # subagent discovery + lifecycle
   files.rs         # files/dirs a session modified
-  recover.rs       # file-content + plan reconstruction
+  recover.rs       # file-content reconstruction (+ @plan resolution lives in plan.rs)
+  plan.rs          # plan-file binding resolver + `plan` subcommand
   turns.rs         # turn-fidelity reconstruction (budget + richness model)
   turns/tests.rs   # turns unit tests
 tests/
