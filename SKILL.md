@@ -1,6 +1,6 @@
 ---
 name: csift
-description: Search and audit Claude Code session + subagent jsonl transcripts. Use when you need to find what was said/done in a past (or the current) Claude Code session — regex-search the transcript corpus under ~/.claude/projects, list sessions to identify "which session is this", inspect a session's subagent lifecycle (built-in Task agents + OMC/workflow agents), see which files/dirs a session modified and when, reconstruct a file's content from the transcript's Read/Write/Edit stream (incl. a deleted plan via recover --file @plan), locate the plan file bound to a session, identify the calling session, or recover standing directives a context-compaction dropped. ripgrep-for-transcripts: pure regex, no embeddings/semantic search.
+description: Search and audit Claude Code session + subagent jsonl transcripts. Use when you need to find what was said/done in a past (or the current) Claude Code session — regex-search the transcript corpus under ~/.claude/projects, list sessions to identify "which session is this", inspect a session's subagent lifecycle (built-in Task agents + OMC/workflow agents), see which files/dirs a session modified and when, reconstruct a file's content from the transcript's Read/Write/Edit stream (incl. a deleted plan via recover --file @plan), locate the plan file bound to a session, identify the calling session, or supply verbatim message history (e.g. standing directives) as a supplement after a context compaction. ripgrep-for-transcripts: pure regex, no embeddings/semantic search.
 user-invocable: true
 ---
 
@@ -62,10 +62,11 @@ or `cargo run -- <subcommand>` during development).
   summary (which owns task state) — it does not re-derive intent / the plan / the file ledger.
 - **"Who am I (the calling session)?"** → `csift whoami` resolves the current session id from
   `$CLAUDE_CODE_SESSION_ID`.
-- **Post-compaction recovery** → after a context compaction, diff the compaction summary against the
-  lossless jsonl to surface STANDING DIRECTIVES the summary dropped or inverted (the motivating
-  use-case — see "Integration recipes → (A)"). For the verbatim TURN back-and-forth (vs standing
-  directives), `csift turns` automates the summary's own "read the full transcript at `<path>`" pointer.
+- **Post-compaction recovery** → after a context compaction the conversation is replaced by a single
+  recency-biased summary pass, so durable early instructions can thin out or shift in phrasing. csift
+  supplies the lossless side: `csift turns` re-emits the verbatim TURN back-and-forth the summary
+  clipped (automating its own "read the full transcript at `<path>`" pointer), and a summary-vs-jsonl
+  diff can surface standing directives as a SUPPLEMENT to the summary — see "Integration recipes → (A)".
 
 Reach for csift instead of hand-grepping `~/.claude/projects/**/*.jsonl`: it understands the
 record model (genuine-user vs tool_result-carrier, thinking/tool/agent categories), spans subagent
@@ -79,8 +80,8 @@ Eight subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `pl
 `list`/`search`/`files`/`recover` span each session's subagent transcripts **by default**
 (`--no-subagents` opts out). On these four `--include-subagents` is a **default-ON no-op** kept only
 for symmetry/explicitness — it never changes the result, and `--no-subagents` is **DOMINANT**: when
-present it always wins, regardless of flag order (passing `--include-subagents` last no longer
-re-enables the fan-out you suppressed). `turns` is the exception — a single-thread recovery tool whose
+present it always wins, regardless of flag order (passing `--include-subagents` last does not
+re-enable the fan-out you suppressed). `turns` is the exception — a single-thread recovery tool whose
 per-session budget MULTIPLIES, so it defaults to the **top-level thread only** and opts INTO spanning
 via `--include-subagents` (there it is load-bearing, last-flag-wins). (`agents` LISTS subagents as its
 targets, so it has no span flag.) `plan` also spans subagents by default (surfacing their own bound
@@ -197,10 +198,18 @@ csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
 csift search "persisted-output" --resolve-persisted --format json
 ```
 
-Text output shape:
+**Result ordering — a combined, stable chronological timeline.** Exchanges are emitted in ASCENDING
+turn-opening time across the WHOLE scope, with subagent hits INTERLEAVED among top-level hits by absolute
+timestamp (both clocks are the same machine's UTC) — NOT grouped by file. The order is stable/deterministic
+(timestamp-less exchanges sort last, with a reproducible tie-break), and the global `--max-count` cap is
+applied AFTER the sort (it keeps the EARLIEST N and reports the dropped remainder — never silent). Each
+result carries its chronological position: the text header appends the turn-opening timestamp, and the JSON
+envelope carries `ts_utc`/`ts_local`.
+
+Text output shape (the `· <ts>` in the header is the turn-opening time the timeline is sorted on):
 
 ```
-═══ SESSION 0a1b2c3d · TURN 0 ═══
+═══ SESSION 0a1b2c3d · TURN 0 · 2026-06-03 22:51:53 AEST ═══
 ◂ user  2026-06-03 22:51:53 AEST (2026-06-03T12:51:53.206Z)
    Audit harness-correctness in the worktree … (+2958 chars)
 
@@ -208,9 +217,12 @@ matched 2 exchanges (category=user)  ·  18 dropped by --max-count
 ```
 
 JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
-scope record when the scope spans subagents, then one object per exchange (`session_id`, `turn_index`,
-`hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name}`, `record_uuids[]`), then a trailing
-summary object `{matched, dropped_by_cap, skipped_lines}`.
+scope record when the scope spans subagents, then one object per exchange (`session_id`, `is_subagent`,
+`parent_session_id`, `turn_index`, the envelope-level `ts_utc`/`ts_local` = the turn-opening timestamp
+the timeline is sorted on, `hits[]` with `{category, excerpt, ts_utc, ts_local, tool_name}` — a per-hit
+`ts_utc` may be LATER than the envelope's for a deep tool_use match — and `record_uuids[]` = every record
+stitched into the round-trip), then a trailing summary object `{matched, dropped_by_cap, skipped_lines}`.
+See **Output formats** below for a concrete record + jq/python.
 
 #### Regex dialect — linear-time (RE2-class)
 
@@ -385,9 +397,9 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
   or `python -c "open('/tmp/x','w')…"`) is NOT parsed — out of scope for a lexical parser, so such
   writes are missed. The precision contract holds (the miss is **never mis-reported**): heredoc BODY
   lines are lexically skipped before redirect/verb scanning, and quoted/procsub spans are masked, so
-  a `>` or quote inside them can no longer fabricate a redirect row. A trailing OUTPUT redirect
+  a `>` or quote inside them cannot fabricate a redirect row. A trailing OUTPUT redirect
   (`2>&1`, `2>/dev/null`, a spaced `> /tmp/log`/`>> /tmp/log`) is **removed from the operand stream**
-  before verb dispatch (symmetric to input-redirect `<` handling), so it no longer displaces a real
+  before verb dispatch (symmetric to input-redirect `<` handling), so it does not displace a real
   `cp`/`mv`/`ln`/`install`/`rsync` destination, mislabels a source, or double-emits the redirect path.
   Bash carries no path field in its result, so all of the above are best-effort and **always labelled
   `(heuristic)`**.
@@ -395,7 +407,7 @@ transcript (spanning subagents **by default** — OMC fan-out edits happen in su
 **Subagent scope** (mutually exclusive): default spans subagents; `--no-subagents` reports only the
 top-level session's own mutations; `--subagents-only` is the **complement** — only the files the
 session's subagents created/modified, with the top-level session excluded (one command for the
-"what did the fan-out touch?" set-difference that previously needed two runs).
+"what did the fan-out touch?" set-difference).
 
 Exactly one **detail level** applies (mutually exclusive; default `--summary`):
 
@@ -583,7 +595,7 @@ csift turns [PATH...] [--session ID] [--budget N] [--budget-unit chars|tokens]
             [--keep-first | --no-keep-first] [--profile heavy|light]
             [--include-subagents | --no-subagents]
             [--turn-range START..END] [--since WHEN] [--until WHEN]
-            [--out PATH] [--format text|json]
+            [--out PATH] [--slice N] [--window N] [--format text|json]
 ```
 
 A Claude Code compaction summary preserves task STATE but loses TURN fidelity: its "All user messages"
@@ -670,8 +682,7 @@ default ALSO keeps a substantive first and the rich middles (below).
   often states the plan or an early finding. A short "let me look into this" opener falls below the
   gate and collapses.
 - **each MIDDLE that is RICH** — a major finding can live mid-run.
-- **the LAST** — kept only when it is itself rich/substantive; a short throwaway wrap-up collapses
-  (THE headline fix — the last is no longer kept unconditionally).
+- **the LAST** — kept only when it is itself rich/substantive; a short throwaway wrap-up collapses.
 - **everything else** collapses into a placeholder.
 
 A message is "rich" by a cheap single-pass test: a number-of-substance (`12 passed 3 failed`, `12/40`),
@@ -716,6 +727,7 @@ csift turns <uuid> --agent-msgs rich              # the keep-on-doubt keep-set (
 csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)
 csift turns <uuid> --agent-msgs all --budget 60000  # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
+csift turns . --budget 36000 --window 9000 --slice 1  # 1st ≤9000-char chunk for a SessionStart hook (slices 1–4 fan 36K)
 csift turns <uuid> --include-subagents            # ALSO span subagents (budget × N; rare cross-fan-out recon)
 ```
 
@@ -731,6 +743,29 @@ record carries `session_id` + the id-domain discriminators `is_subagent` + `pare
 carries `trigger_kind` / `task_id` / `status` / `event`. `budget_chars`/`max_total_chars` are always
 in CHARS — under `--budget-unit tokens` they read 4× `--budget` (a token budget is pre-multiplied
 ×4), so pass an explicit `--budget` when flipping to tokens or the default `40000` becomes 160000 chars.
+
+**Chunked output for hook injection (`--slice` / `--window`).** A `SessionStart` hook can inject only
+≤10,000 CHARACTERS per call: Claude Code caps each hook's `additionalContext` (and plain stdout) at that,
+replacing any over-cap output with a file-path + short preview — so the body is effectively LOST to the
+model. To fan a larger reconstruction across several hooks, `--slice N` paginates the verbatim DOCUMENT
+(the SAME body `--out` writes — turn units + boundary banners, with NO scope/header/footer chrome) into
+≤`--window`-character chunks and prints ONLY the Nth (1-based) chunk to stdout. `--window` defaults to
+10000 and counts CHARACTERS (Unicode scalars — the unit the cap itself counts, so CJK-heavy prose is not
+3× over-counted the way a byte budget would be); pass a little under (e.g. `--window 9000`) to leave
+headroom for any wrapper text the hook adds. Slicing is DETERMINISTIC — the same session + `--budget`
+yields identical chunk boundaries, and concatenating slices `1..K` reproduces the whole document
+byte-for-byte — so N independent hooks can each request their own slice with no coordination inside csift.
+But the HOOKS are not order-free: Claude Code runs same-event hooks concurrently and collects their
+`additionalContext` in COMPLETION order, never settings-declaration order, so slices declared 1-2-3-4 can
+land as 2-4-3-1 and scramble the reconstruction. Order MUST be enforced in the hook shell with a done-flag barrier — slice N
+blocks until slice N-1 has emitted+exited, forcing process-exit order (= the harness's collection order)
+into slice order. This is the exact mechanism a chunked-USER.md `SessionStart` loader uses; recipe (A)
+below ports it in full. An out-of-range `N` prints nothing (exit 0), so a fixed fleet of hooks (say 4)
+self-trims — surplus hooks simply inject nothing, but they STILL must release the barrier so the chain
+doesn't stall. `--slice` is text-only and is NOT combinable with
+`--out` (which writes the WHOLE document to a file). Example: a 36000-char recon across four 9000-char
+hooks — hook `i` runs `csift turns . --budget 36000 --window 9000 --slice i`. See "Integration recipes →
+(A)" for the wiring and how this composes with compaction re-injection.
 
 ---
 
@@ -777,7 +812,7 @@ The genuine-user classification is load-bearing and excludes plain tool_result-c
 pseudo-turns, compaction summaries, interrupt markers (`[Request interrupted by user]`),
 `<local-command-stdout>` output, and `<command-name>` slash-command wrappers. A turn boundary
 ALSO opens on an answered AskUserQuestion and a tool-use rejection-with-message (both are genuine
-user messages that were previously missed).
+user messages).
 
 - **`thinking`** — assistant thinking blocks.
 - **`user`** — genuine human input + the full AskUserQuestion Q+options+answer unit + a
@@ -797,89 +832,193 @@ from "genuine user".
 
 ---
 
+## Output formats — `--format text` vs `--format json`
+
+Every subcommand defaults to **text** (the headered, skimmable "Text output shape" blocks above) and
+takes **`--format json`** for machine use. The JSON is **JSONL / NDJSON**, never one document — parse it
+**line by line**, NOT with a whole-file `json.load` (that fails). A stream is:
+
+```
+{kind:"session_header", …}    # OPTIONAL leading scope record — only when the scope spans ≥1 subagent
+{ …per-unit record… }         # one object per exchange / turn-unit / mutation / agent node / segment
+{ …per-unit record… }
+{ …trailing summary… }        # final accounting object (search/files/recover; turns folds it into the header)
+```
+
+Drop the optional header + trailing summary by **key presence** (a unit always carries its payload key,
+e.g. `turn_index`/`role`/`op`). Concrete records with the REAL field names:
+
+**`search`** — one envelope per matched exchange, in combined chronological order (subagents interleaved),
+then a summary:
+
+```json
+{"session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","is_subagent":false,"parent_session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","turn_index":4,"ts_utc":"2026-06-03T12:51:53.206Z","ts_local":"2026-06-03T22:51:53+10:00","hits":[{"category":"user","excerpt":"Audit harness-correctness …","ts_utc":"2026-06-03T12:51:53.206Z","ts_local":"2026-06-03T22:51:53+10:00","tool_name":null}],"record_uuids":["u4","a4t","a4f"]}
+{"matched":2,"dropped_by_cap":18,"skipped_lines":0}
+```
+
+**`turns`** — a `{kind:"session_header",…}` (carrying the budget/automation accounting — there is no
+separate footer), then one verbatim `role`-bearing unit / `compaction_boundary` / `collapsed_agents`
+record per line. A unit (full field set: `full_chars`, `rendered_chars`, `truncated`, `elided_chars`,
+`elided_lines`, `tool_calls`, `compactions_before`, `also_in_summary` ride along too):
+
+```json
+{"session_id":"…","is_subagent":false,"parent_session_id":"…","turn_index":4,"role":"user","line_no":812,"ts_utc":"2026-06-03T12:51:53.206Z","ts_local":"2026-06-03T22:51:53+10:00","text":"the full verbatim message …","truncated":false}
+```
+
+**`files --timeline`** — one mutation per line, then a summary:
+
+```json
+{"session_id":"…","is_subagent":false,"parent_session_id":"…","path":"/p/spec/gaps.md","op":"edit","ts_utc":"…","ts_local":"…","turn_index":7,"is_create":false,"heuristic":false}
+{"distinct_files":5,"total_mutations":6,"skipped_lines":0,"detail_level":"timeline"}
+```
+
+**jq** — JSONL feeds `jq` directly (no `-s`); filter the header/footer by the unit's payload key:
+
+```bash
+# search: each exchange's time + turn + first-hit excerpt, already chronological
+csift search "panic" --session <uuid> --format json \
+  | jq -r 'select(.turn_index!=null) | "\(.ts_local)  turn \(.turn_index)  \(.hits[0].excerpt)"'
+
+# files: distinct /tmp files this session CREATED (authoritative only)
+csift files <uuid> --timeline --format json \
+  | jq -r 'select(.path? and (.path|startswith("/tmp")) and .is_create==true and .heuristic==false) | .path' | sort -u
+
+# turns: the verbatim user-side text, in order
+csift turns <uuid> --format json | jq -r 'select(.role=="user") | .text'
+```
+
+**python** — read line-by-line; skip blanks and tolerate the header/footer by key presence:
+
+```python
+import json, subprocess
+out = subprocess.run(
+    ["csift", "search", "panic", "--session", SID, "--format", "json"],
+    capture_output=True, text=True, check=True,
+).stdout
+rows = [json.loads(l) for l in out.splitlines() if l.strip()]
+exchanges = [r for r in rows if "turn_index" in r]   # drop scope header + summary footer
+for ex in exchanges:                                 # already in chronological order
+    print(ex["ts_utc"], ex["turn_index"], ex["hits"][0]["excerpt"])
+```
+
+Across subcommands the id-domain discriminators are uniform: a record's `session_id` is the transcript's
+own id (a top-level uuid, or a bare subagent hex when `is_subagent` is true), and `parent_session_id` is
+the always-re-feedable owning uuid — feed THAT to `csift turns/files/recover --session`, never a subagent
+`session_id`.
+
+---
+
 ## Integration recipes
 
 ### (A) Post-compaction standing-directive recovery — the motivating use-case
 
-**Problem.** When Claude Code compacts context, the whole conversation is replaced by a single
-summary written by the same main-loop model in one lossy pass. The loss is **recency-biased**, not
-importance-biased: durable STANDING DIRECTIVES — persistent "keep going / don't stop until done"
-style instructions the user hammered early — get **dropped or even inverted** (e.g. a standing
-"never pause mid-task" silently becoming "waits are legitimate"). The lossless signal still exists:
-the full pre-compaction transcript is on disk as the session jsonl.
+**Problem.** When Claude Code compacts context, the whole pre-boundary conversation is replaced by a
+single summary written by the same main-loop model in one pass. That pass is lossy and tends to be
+**recency-biased**: durable early instructions — persistent "keep going / don't stop until done" style
+STANDING DIRECTIVES the user set up front — can thin out, or have their phrasing shift, by the time the
+summary is written. The lossless signal still exists on disk as the full pre-compaction session jsonl, so
+csift can re-surface that material verbatim as a SUPPLEMENT to the summary (it does not replace the
+summary, which still owns task state).
 
-**Intended integration.** A Claude Code **`SessionStart` hook with `source: "compact"`** (the
-`matcher` for after auto/manual compaction) runs `csift` to compare the just-written compaction
-**summary** against the lossless session **jsonl** (`transcript_path` is provided on the hook's
-stdin), then emits a pointer-note back into context via `hookSpecificOutput.additionalContext` so
-the freshly-compacted session re-sees the directives the summary lost. csift supplies the lossless
-side: `csift search` over genuine-user turns (`-t user`) recovers the original directive text, and
-the summary is the `isCompactSummary:true` record at/after the `compact_boundary`. Hook event +
-field shapes per the official docs: https://code.claude.com/docs/en/hooks.md
+**Why it's safe to re-run on EVERY compaction (no pile-up).** On compaction the post-boundary context is
+rebuilt as `[boundary marker, summary, restored attachments, SessionStart('compact') hook results]`. The
+previous injection lived in the pre-boundary messages, so it is fed to the summarizer and dropped; then
+`SessionStart` re-fires with `source:"compact"` and re-injects a fresh copy. There is therefore always
+exactly ONE current copy — the drop-and-re-inject cycle is self-balancing. Resume doesn't duplicate it
+either: a `compact`-matched hook does NOT re-fire on resume (`source:"resume"` ≠ `"compact"`), so the
+transcript-replayed copy is the only one (broaden the matcher to include `resume` and it would replay AND
+re-fire — keep it `compact`-only; identical re-injections are de-duplicated by content regardless). The
+injection is a SUPPLEMENT added alongside the summary, never folded in, so it must stand on its own and
+stay within the 10K-char cap — which is what `--slice` (below) is for.
 
-Skeleton (`.claude/hooks/csift-compaction-rescue.sh`, registered for `matcher: "compact"`):
+**The recipe — verbatim-turn supplement via `turns --slice`.** A `SessionStart` hook with
+`matcher: "compact"` (so it fires after auto/manual compaction) re-injects the verbatim recent turns the
+summary clipped: `csift turns` reconstructs them (the session id + `transcript_path` arrive on the hook's
+stdin), and `--slice` fans a >10K reconstruction across a fixed fleet of hooks, one ≤10K chunk each. This
+re-surfaces the back-and-forth verbatim as a SUPPLEMENT; it does not try to detect which directives the
+summary dropped, and it never replaces the summary (which still owns task state). Hook field shapes per the
+official docs: https://code.claude.com/docs/en/hooks.md
+
+Slicing is deterministic, so each hook asks for its own slice with no coordination inside csift — but the
+harness runs same-event hooks concurrently and collects their `additionalContext` in COMPLETION order, not
+registration order, so slices declared 1-4 can land 2-4-3-1 and scramble (a turn split across a boundary
+then glues back wrong). The script MUST carry a done-flag barrier: slice N waits for slice N-1's `.done`
+before it emits + exits, forcing process-exit order into slice order. Same mechanism the chunked-USER.md
+`SessionStart` loader uses.
+
+`.claude/hooks/csift-turns-slice.sh` (one script, registered N times with a different slice arg):
 
 ```bash
 #!/usr/bin/env bash
-# SessionStart(source=compact) — surface standing directives the summary dropped/inverted.
+# SessionStart(source=compact) hook #i of N — inject the i-th ≤9000-char chunk of the verbatim turn
+# reconstruction. Claude Code runs same-event hooks concurrently and collects their additionalContext in
+# COMPLETION order (not registration order), so without sequencing the chunks arrive out of order.
+# A filesystem done-flag barrier forces injection order = slice order: slice N waits for slice N-1's
+# .done flag, then emits + exits + releases its own. Namespaced by the Claude Code PID (= this script's
+# PPID) so concurrent sessions don't collide. Faithful port of the chunked-USER.md SessionStart loader.
 set -euo pipefail
-input="$(cat)"                                          # hook JSON on stdin
-session_id="$(printf '%s' "$input" | jq -r '.session_id')"
-transcript="$(printf '%s' "$input" | jq -r '.transcript_path')"   # lossless jsonl
+slice="${1:?pass the 1-based slice index as argv1}"
+MAX_SLICES=4                       # MUST equal the number of registered hooks below
+WAIT_TIMEOUT_SECS=5                # insurance: proceed anyway if a predecessor never fires
 
-# Lossless side: genuine-user directive text from the full transcript.
-# (A real implementation does a STRUCTURED semantic loss-diff against the
-#  isCompactSummary record — see "hard problems" below — not a naive grep.)
-directives="$(csift search "" -t user --session "$session_id" --format json 2>/dev/null \
-  | jq -rs '...semantic loss-diff vs the compaction summary...')"
+SEQ_DIR="/tmp/csift-turns-slice-seq-${PPID}"
+DONE_FLAG="${SEQ_DIR}/slice-${slice}.done"
 
-if [ -n "${directives:-}" ]; then
-  jq -n --arg ctx "STANDING DIRECTIVES the compaction summary dropped/inverted:
-$directives" \
-    '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}'
+# Release the barrier for slice N+1 on EVERY exit path (success, empty slice, or error under set -e),
+# and let the last-registered hook tear the namespace down. Installed before any fallible work so the
+# chain can never stall on an early failure.
+release() {
+  mkdir -p "$SEQ_DIR" 2>/dev/null || true
+  touch "$DONE_FLAG" 2>/dev/null || true
+  [ "$slice" = "$MAX_SLICES" ] && rm -rf "$SEQ_DIR" 2>/dev/null || true
+  return 0
+}
+trap release EXIT
+
+# Slice 1 resets stale flags from a prior PID-collision run; later slices block on their predecessor.
+if [ "$slice" -le 1 ]; then
+  rm -rf "$SEQ_DIR" 2>/dev/null || true
+  mkdir -p "$SEQ_DIR" 2>/dev/null || true
+else
+  prev="${SEQ_DIR}/slice-$((slice - 1)).done"
+  deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECS ))
+  while [ ! -f "$prev" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.05; done
 fi
+
+input="$(cat)"
+session_id="$(printf '%s' "$input" | jq -r '.session_id')"
+chunk="$(csift turns --session "$session_id" --budget 36000 --window 9000 --slice "$slice" 2>/dev/null || true)"
+# An out-of-range slice prints nothing → inject nothing; the trap still releases the barrier (the fleet
+# is sized for the worst case and self-trims).
+[ -n "$chunk" ] || exit 0
+
+jq -n --arg ctx "Verbatim turns the compaction summary clipped (part $slice — a supplement; the summary still owns task state):
+$chunk" \
+  '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}'
 ```
 
-Register in `settings.json`:
+Register the same script four times (slices 1–4 → up to 36000 chars across four ≤9000-char hooks):
 
 ```json
 {
   "hooks": {
     "SessionStart": [
-      {
-        "matcher": "compact",
-        "hooks": [
-          { "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-compaction-rescue.sh" }
-        ]
-      }
+      { "matcher": "compact", "hooks": [{ "type": "command",
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 1" }] },
+      { "matcher": "compact", "hooks": [{ "type": "command",
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 2" }] },
+      { "matcher": "compact", "hooks": [{ "type": "command",
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 3" }] },
+      { "matcher": "compact", "hooks": [{ "type": "command",
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 4" }] }
     ]
   }
 }
 ```
 
-**HONEST status — hard problems to solve before this is reliable (do NOT ship a naive regex diff):**
-
-1. **The compaction summary is newest-first** and is itself a bounded-length artifact — it may not
-   reach old directives at all. A directive issued near session start can be entirely absent from
-   the summary, so "present in summary?" is the wrong test for "survived". You must compare against
-   the *occurrence history* in the lossless jsonl, not against the summary's coverage window.
-2. **~10% of records can lack a `headUuid`** (and some records have no `timestamp`), so you cannot
-   assume clean uuid/parent linkage or strict chronological anchoring for every record. The diff
-   must tolerate missing-linkage records rather than crash or silently drop them.
-3. **A durable occurrence ledger is required.** "Did this directive get dropped/inverted?" is a
-   judgement over how many times + how recently the directive appeared across the whole session
-   (and prior sessions), versus how the summary now phrases it. That needs persisted state across
-   compactions, not a single point-in-time grep.
-4. **Hallucination + secret guards.** The note is injected straight back into model context, so the
-   diff must not fabricate a directive that was never given, and must not echo secrets/credentials
-   that appeared in the transcript. Treat surfaced text as untrusted and bound + sanitize it.
-
-Net: a **structured semantic loss-diff** (directive occurrence ledger → compare lossless history vs
-summary phrasing → flag dropped/inverted, with hallucination/secret guards) is required. A naive
-regex diff of summary-vs-jsonl is insufficient and will mislead. csift provides the fast,
-record-aware lossless extraction layer this diff sits on top of; the ledger + semantic comparison +
-guards are the part still to be built before the hook is trustworthy.
+Safe to fire on every compaction (no pile-up, per above). `--window 9000` (under the 10K cap) leaves
+headroom for the wrapper line each hook adds; concatenating the slices reproduces the whole reconstruction,
+and the barrier guarantees they arrive in that order.
 
 ### (B) `whoami` remediation — export the session id when CC doesn't
 

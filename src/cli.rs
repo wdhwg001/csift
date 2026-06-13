@@ -582,14 +582,19 @@ impl ListArgs {
         nothing, not that a category was excluded.\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
-        {session_id, is_subagent, parent_session_id, turn_index, record_uuids:[…], \
-        hits:[{category, excerpt, tool_name, ts_utc, ts_local}, …]} — the per-hit objects \
-        carry no session_id; it lives on the envelope. `session_id` is the transcript's own \
-        id: a re-feedable top-level uuid, OR a bare SUBAGENT hex when `is_subagent` is true \
-        (that hex is NOT a `--session` target — re-feed `parent_session_id`, which is always \
-        the owning top-level uuid). A trailing footer object {matched, dropped_by_cap, \
-        skipped_lines} closes the stream. (Whole-document `json.load` fails — parse \
-        line-by-line as JSONL: N envelopes then the footer.)"
+        {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
+        record_uuids:[…], hits:[{category, excerpt, tool_name, ts_utc, ts_local}, …]} — the \
+        per-hit objects carry no session_id; it lives on the envelope. Envelopes stream in \
+        a COMBINED STABLE CHRONOLOGICAL order (subagent exchanges interleaved with top-level \
+        by `ts_utc`, the turn-opening timestamp; timestamp-less exchanges sort last); the \
+        per-hit `ts_utc` may be later than the envelope's for a deep tool_use match. \
+        `session_id` is the transcript's own id: a re-feedable top-level uuid, OR a bare \
+        SUBAGENT hex when `is_subagent` is true (that hex is NOT a `--session` target — \
+        re-feed `parent_session_id`, which is always the owning top-level uuid). \
+        `record_uuids` lists every record stitched into the round-trip (§6.4 completeness \
+        evidence). A trailing footer object {matched, dropped_by_cap, skipped_lines} closes \
+        the stream. (Whole-document `json.load` fails — parse line-by-line as JSONL: N \
+        envelopes then the footer.)"
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
@@ -1499,6 +1504,7 @@ impl PlanArgs {
           csift turns <uuid> --include-subagents --format json  # ALSO span subagents (budget × N, line-numbered)\n  \
           csift turns <uuid> --round-trip-fraction 0.6      # weight harder toward complete round-trips\n  \
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
+          csift turns . --budget 36000 --window 9000 --slice 1   # 1st ≤9000-char chunk for a SessionStart hook (fan slices 1..4)\n  \
           csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary\n  \
           csift turns <uuid> --agent-msgs eot-only          # force the old single-EOT (last-message-only) output\n  \
           csift turns <uuid> --agent-rich-min-chars 200     # default mode, lower bar → keep more first/middle messages\n  \
@@ -1726,6 +1732,29 @@ pub struct TurnsArgs {
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+
+    /// CHUNKED OUTPUT: paginate the recovered DOCUMENT (the verbatim turns — the same content
+    /// `--out` writes) into ≤`--window`-CHARACTER chunks and print ONLY the Nth chunk (1-based)
+    /// to stdout, with NO operational chrome (scope banner / SESSION header / footer). Built for
+    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH
+    /// hook's `additionalContext` at 10,000 CHARACTERS (over-cap is replaced by a file-path +
+    /// short preview — i.e. the body is effectively LOST to the model), so one hook per slice
+    /// keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same session +
+    /// budget ⇒ identical chunk boundaries), so N independent hooks can each request their own
+    /// slice; the lock/ordering lives in the hook shell. An out-of-range N prints nothing (exit
+    /// 0) — surplus hooks simply inject nothing. Text format only; not combinable with `--out`.
+    #[arg(long, value_name = "N")]
+    pub slice: Option<usize>,
+
+    /// Chunk size for `--slice`, in CHARACTERS (Unicode scalars — the unit Claude Code's
+    /// 10,000-char `additionalContext` cap counts, so a CJK-heavy document is NOT 3×
+    /// over-counted the way a byte budget would). Default 10000 = the cap; pass a little under
+    /// (e.g. `--window 9000`) to leave headroom for any wrapper text the hook adds around the
+    /// chunk. Lines are packed greedily up to the window at LINE boundaries; a single line
+    /// longer than the window is hard-split on a char boundary so no chunk ever exceeds it.
+    /// Ignored without `--slice`.
+    #[arg(long, value_name = "N", default_value_t = 10000)]
+    pub window: usize,
 }
 
 impl TurnsArgs {

@@ -2705,3 +2705,50 @@ fn turn_carries_parsed_automation_trigger_for_json() {
     assert_eq!(trig.task_id.as_deref(), Some("wf_42"));
     assert_eq!(trig.status.as_deref(), Some("completed"));
 }
+
+// ── --slice chunked output (slice_into_windows) ──
+
+#[test]
+fn slice_windows_concatenate_back_to_the_source() {
+    let doc = "line one\nline two\nthree\nfour five six\n";
+    let chunks = slice_into_windows(doc, 12);
+    assert_eq!(chunks.concat(), doc, "lossless reassembly across slices");
+    for c in &chunks {
+        assert!(c.chars().count() <= 12, "chunk over window: {c:?}");
+    }
+    assert!(chunks.len() > 1, "doc spans multiple windows");
+}
+
+#[test]
+fn slice_windows_count_chars_not_bytes() {
+    // Each `🛠` is 4 BYTES but 1 CHARACTER. A 6-char window fits 5 wrenches + newline
+    // (21 bytes), proving the window counts Unicode scalars — the unit Claude Code's
+    // additionalContext cap uses — not bytes (a byte budget would split after the first).
+    let line = "🛠🛠🛠🛠🛠\n"; // 6 chars, 21 bytes
+    let chunks = slice_into_windows(line, 6);
+    assert_eq!(
+        chunks.len(),
+        1,
+        "6 chars fit one 6-char window despite 21 bytes"
+    );
+    assert_eq!(chunks[0], line);
+}
+
+#[test]
+fn slice_windows_hard_split_an_oversized_line_on_char_boundaries() {
+    // A single line longer than the window is hard-split so NO chunk exceeds it — and never
+    // mid-`🛠` (char boundary). Window 2, line of 5 wrenches (no trailing newline).
+    let line = "🛠🛠🛠🛠🛠";
+    let chunks = slice_into_windows(line, 2);
+    assert_eq!(chunks.concat(), line, "lossless even when hard-splitting");
+    for c in &chunks {
+        assert!(c.chars().count() <= 2);
+        assert!(c.chars().all(|ch| ch == '🛠'), "no broken char: {c:?}");
+    }
+    assert_eq!(chunks, vec!["🛠🛠", "🛠🛠", "🛠"]);
+}
+
+#[test]
+fn slice_windows_empty_input_yields_no_chunks() {
+    assert!(slice_into_windows("", 10).is_empty());
+}

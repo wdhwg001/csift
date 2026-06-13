@@ -445,6 +445,27 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
     if args.budget == 0 {
         bail!("--budget must be > 0");
     }
+    // ── Validate --slice / --window (chunked-output mode) ──
+    if let Some(slice) = args.slice {
+        if slice == 0 {
+            bail!("--slice is 1-based: the first chunk is --slice 1");
+        }
+        if args.window == 0 {
+            bail!("--window must be > 0");
+        }
+        if args.out.is_some() {
+            bail!(
+                "--slice and --out are mutually exclusive: --slice writes the selected chunk \
+                 to stdout, --out writes the whole document to a file"
+            );
+        }
+        if matches!(args.format, OutputFormat::Json) {
+            bail!(
+                "--slice requires the text format (the chunked-injection use case is verbatim \
+                 text); drop --format json"
+            );
+        }
+    }
 
     // Normalize the budget to characters.
     let budget_chars = match args.budget_unit {
@@ -520,7 +541,14 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
     };
 
     match args.format {
-        OutputFormat::Text => render_text(&ctx, &sessions, &plans, args.out.as_deref())?,
+        OutputFormat::Text => render_text(
+            &ctx,
+            &sessions,
+            &plans,
+            args.out.as_deref(),
+            args.slice,
+            args.window,
+        )?,
         OutputFormat::Json => render_json(&ctx, &sessions, &plans, args.out.as_deref())?,
     }
     Ok(())
@@ -1867,7 +1895,22 @@ fn render_text(
     sessions: &[ScanResult],
     plans: &[SessionPlan],
     out_path: Option<&Path>,
+    slice: Option<usize>,
+    window: usize,
 ) -> Result<()> {
+    // ── Chunked-output mode (--slice): emit ONLY the Nth ≤window-char chunk of the verbatim
+    // DOCUMENT (the SAME body `--out` writes), with NO operational chrome — so a SessionStart
+    // hook can inject it under the 10,000-char additionalContext cap. Deterministic:
+    // concatenating slices 1..K reproduces the whole document byte-for-byte. An out-of-range N
+    // prints nothing (exit 0), so surplus hooks simply inject nothing. ──
+    if let Some(n) = slice {
+        let doc = build_document_body(sessions, plans, &ctx.cfg);
+        if let Some(chunk) = slice_into_windows(&doc, window).into_iter().nth(n - 1) {
+            print!("{chunk}");
+        }
+        return Ok(());
+    }
+
     let mut first = true;
     let mut any = false;
     let mut out_blob = String::new();
@@ -2033,6 +2076,95 @@ fn render_text(
         }
     }
     Ok(())
+}
+
+/// Build the verbatim DOCUMENT body (boundary banners + selected turn units) for every
+/// in-scope session, with NO operational chrome. Byte-for-byte identical to the `out_blob`
+/// that `render_text` accumulates for `--out` (same emit path: `maybe_boundary_banner` +
+/// `render_turn_text`, each line followed by `\n`), so a `--slice` reconstruction and an
+/// `--out` file carry the same content. Sessions concatenate with no separator (mirrors
+/// `out_blob`); a `--slice` run is almost always a single top-level thread anyway.
+fn build_document_body(
+    sessions: &[ScanResult],
+    plans: &[SessionPlan],
+    cfg: &RichnessCfg,
+) -> String {
+    let mut blob = String::new();
+    for (sr, plan) in sessions.iter().zip(plans.iter()) {
+        if plan.selected.is_empty() {
+            continue;
+        }
+        let mut prev_comp: Option<usize> = None;
+        for sel in &plan.selected {
+            let Some(turn) = find_turn(plan, sel.turn_index) else {
+                continue;
+            };
+            maybe_boundary_banner(
+                &mut prev_comp,
+                turn.compactions_before,
+                &sr.summaries,
+                &mut |s| {
+                    blob.push_str(&s);
+                    blob.push('\n');
+                },
+            );
+            render_turn_text(turn, sel.sides, cfg, &mut |s| {
+                blob.push_str(&s);
+                blob.push('\n');
+            });
+        }
+    }
+    blob
+}
+
+/// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode
+/// scalars — the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy
+/// document is NOT 3× over-counted the way a byte budget would). A line longer than the
+/// window on its own is hard-split on a char boundary so NO emitted chunk ever exceeds
+/// `window`. Concatenating the chunks in order reproduces `text` exactly (`split_inclusive`
+/// keeps the newlines), so the slices reassemble losslessly across hook invocations.
+fn slice_into_windows(text: &str, window: usize) -> Vec<String> {
+    let window = window.max(1);
+    let mut chunks: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut cur_chars = 0usize;
+    for line in text.split_inclusive('\n') {
+        let line_chars = line.chars().count();
+        if line_chars > window {
+            // Oversized single line: flush the current chunk, then hard-split on char
+            // boundaries so no emitted chunk exceeds the window. The trailing remainder
+            // (< window) seeds the next chunk so following lines still pack onto it.
+            if !cur.is_empty() {
+                chunks.push(std::mem::take(&mut cur));
+                cur_chars = 0;
+            }
+            let mut piece = String::new();
+            let mut piece_chars = 0usize;
+            for ch in line.chars() {
+                piece.push(ch);
+                piece_chars += 1;
+                if piece_chars == window {
+                    chunks.push(std::mem::take(&mut piece));
+                    piece_chars = 0;
+                }
+            }
+            if !piece.is_empty() {
+                cur = piece;
+                cur_chars = piece_chars;
+            }
+            continue;
+        }
+        if cur_chars + line_chars > window && !cur.is_empty() {
+            chunks.push(std::mem::take(&mut cur));
+            cur_chars = 0;
+        }
+        cur.push_str(line);
+        cur_chars += line_chars;
+    }
+    if !cur.is_empty() {
+        chunks.push(cur);
+    }
+    chunks
 }
 
 /// Emit a `══ compaction boundary ══` banner for every summary the ascending walk

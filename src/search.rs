@@ -77,6 +77,13 @@ pub struct Exchange {
     pub parent_session_id: String,
     /// 0-based turn index (turns delimited by genuine-user messages).
     pub turn_index: usize,
+    /// Turn-opening (genuine-user) record timestamp — this exchange's position in the
+    /// COMBINED chronological timeline (top-level + subagent exchanges interleaved by
+    /// absolute time). ISO-8601 UTC sorts lexicographically == chronologically. `None`
+    /// when the opening record carries no timestamp (rare); such exchanges sort LAST,
+    /// deterministically. Surfaced as `ts_utc`/`ts_local` on the JSON envelope and in
+    /// the text header so the chronological position is visible per result.
+    pub started_utc: Option<String>,
     pub hits: Vec<Hit>,
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
@@ -336,28 +343,52 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         .count();
     let scope_top = session_files.len() - scope_sub;
 
-    // Deterministic merge: by (path order already sorted) → flatten exchanges in
-    // file order, applying the GLOBAL --max-count cap across the whole corpus.
+    // ── Combined STABLE chronological timeline (SPEC §6.2) ──
+    // Flatten every file's exchanges into ONE timeline, then stable-sort by the
+    // turn-opening timestamp so subagent exchanges INTERLEAVE with top-level ones by
+    // absolute time (both clocks are the same machine's UTC). ISO-8601 sorts as text;
+    // timestamp-less exchanges sort LAST (mirrors `files --timeline`). The pre-sort
+    // order — sorted file order, then turn order — is deterministic, and a stable sort
+    // keeps it as the tie-break, so the timeline is fully reproducible. The GLOBAL
+    // --max-count cap is applied AFTER the sort (keeping the EARLIEST N), never
+    // silently — the dropped remainder is reported in the footer.
     let mut outcome = SearchOutcome {
         scope_top,
         scope_sub,
         ..SearchOutcome::default()
     };
+    let mut all: Vec<Exchange> = Vec::new();
     for fr in per_file {
         outcome.skipped_lines += fr.skipped_lines;
-        for ex in fr.exchanges {
-            match args.max_count {
-                Some(cap) if outcome.exchanges.len() >= cap => outcome.dropped_by_cap += 1,
-                _ => outcome.exchanges.push(ex),
-            }
+        all.extend(fr.exchanges);
+    }
+    all.sort_by(|a, b| {
+        timestamp_sort_key(a.started_utc.as_deref())
+            .cmp(&timestamp_sort_key(b.started_utc.as_deref()))
+    });
+    if let Some(cap) = args.max_count {
+        if all.len() > cap {
+            outcome.dropped_by_cap = all.len() - cap;
+            all.truncate(cap);
         }
     }
+    outcome.exchanges = all;
 
     match args.format {
         OutputFormat::Text => render_text(&outcome, args),
         OutputFormat::Json => render_json(&outcome)?,
     }
     Ok(())
+}
+
+/// Sort key that places timestamp-less exchanges LAST (after all timestamped ones) and
+/// orders timestamped ones chronologically (ISO-8601 UTC sorts as text). Same shape as
+/// `files::timestamp_sort_key`, so `search` and `files --timeline` order identically.
+fn timestamp_sort_key(ts: Option<&str>) -> (bool, &str) {
+    match ts {
+        Some(t) => (false, t),
+        None => (true, ""),
+    }
 }
 
 /// Per-file scan result before the global cap is applied.
@@ -503,11 +534,21 @@ fn reconstruct_and_match(
             .filter_map(|k| k.rec.uuid.clone())
             .collect();
 
+        // Chronological key for the combined timeline: the turn-opening (genuine-user)
+        // record's timestamp, falling back to the earliest hit's timestamp when the
+        // opener carries none. ISO-8601 UTC sorts lexicographically == chronologically.
+        let started_utc = turn
+            .records
+            .first()
+            .and_then(|k| k.rec.timestamp.clone())
+            .or_else(|| hits.iter().find_map(|h| h.timestamp_utc.clone()));
+
         out.push(Exchange {
             session_id: session_id.clone(),
             is_subagent,
             parent_session_id: parent_session_id.clone(),
             turn_index: turn.index,
+            started_utc,
             hits,
             record_uuids,
         });
@@ -757,13 +798,17 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // labeled `SUBAGENT <hex>` (the hex is NOT a `--session` target — it is a subagent
         // transcript id); we append the re-feedable parent uuid so the copy-paste workflow
         // still works. A top-level hit stays `SESSION <uuid>`.
+        let when = format_timestamp(ex.started_utc.as_deref());
         if ex.is_subagent {
             println!(
-                "═══ SUBAGENT {} · parent SESSION {} · TURN {} ═══",
+                "═══ SUBAGENT {} · parent SESSION {} · TURN {} · {when} ═══",
                 ex.session_id, ex.parent_session_id, ex.turn_index
             );
         } else {
-            println!("═══ SESSION {} · TURN {} ═══", ex.session_id, ex.turn_index);
+            println!(
+                "═══ SESSION {} · TURN {} · {when} ═══",
+                ex.session_id, ex.turn_index
+            );
         }
         for hit in &ex.hits {
             let glyph = category_glyph(hit.category);
@@ -846,6 +891,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
             "is_subagent": ex.is_subagent,
             "parent_session_id": ex.parent_session_id,
             "turn_index": ex.turn_index,
+            // Envelope-level chronological position = the turn-opening timestamp, the key
+            // the combined timeline is sorted on. `ts_local` is the same instant in the
+            // host TZ. Per-hit `ts_utc` (in `hits`) can diverge for a deep tool_use match.
+            "ts_utc": ex.started_utc,
+            "ts_local": ex.started_utc.as_deref().and_then(local_iso),
             "hits": hits,
             "record_uuids": ex.record_uuids,
         });
@@ -1266,6 +1316,52 @@ mod tests {
             tr.as_ref(),
             &tw,
         )
+    }
+
+    #[test]
+    fn started_utc_is_none_when_opener_and_hits_lack_timestamps() {
+        // A genuine-user opener with NO `timestamp` and no later hit ts → started_utc is None
+        // (the `.or_else(hits…)` fallback finds nothing). Such an exchange sorts LAST in the
+        // combined timeline (the timestamp_sort_key None arm, asserted separately).
+        let lines = vec![
+            r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"no ts but matches carry"}}"#,
+        ];
+        let ex = search(&lines, &args("carry"));
+        assert_eq!(ex.len(), 1);
+        assert!(
+            ex[0].started_utc.is_none(),
+            "no opener ts, no hit ts → None"
+        );
+    }
+
+    #[test]
+    fn started_utc_falls_back_to_first_hit_when_opener_lacks_timestamp() {
+        // The opener carries no ts, but a later agent record in the turn does → started_utc falls
+        // back to that hit's timestamp rather than staying None.
+        let lines = vec![
+            r#"{"type":"user","uuid":"u0","message":{"role":"user","content":"opener carry no ts"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply carry"}]}}"#,
+        ];
+        let mut a = args("carry");
+        a.categories = vec![Category::Agent];
+        let ex = search(&lines, &a);
+        assert_eq!(ex.len(), 1);
+        assert_eq!(
+            ex[0].started_utc.as_deref(),
+            Some("2026-06-07T05:00:09.000Z"),
+            "fallback to the first hit's timestamp"
+        );
+    }
+
+    #[test]
+    fn timestamp_sort_key_orders_timestamped_first_none_last() {
+        // ISO-8601 UTC strings sort chronologically as text; a None timestamp sorts LAST.
+        let early = timestamp_sort_key(Some("2026-06-07T05:00:00.000Z"));
+        let late = timestamp_sort_key(Some("2026-06-07T05:00:05.000Z"));
+        let none = timestamp_sort_key(None);
+        assert!(early < late, "earlier ts sorts first");
+        assert!(late < none, "any timestamp sorts before None");
+        assert!(early < none);
     }
 
     #[test]

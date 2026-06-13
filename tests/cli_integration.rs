@@ -1166,6 +1166,72 @@ fn search_global_max_count_caps_across_files() {
     assert!(out.stdout.contains("by --max-count"));
 }
 
+#[test]
+fn search_timeline_interleaves_subagents_with_top_level_by_timestamp() {
+    // The combined timeline is CHRONOLOGICAL, not file-grouped: a subagent exchange whose
+    // turn began BETWEEN two parent turns must sort BETWEEN them — even though the subagent
+    // file is scanned after the parent file. Parent turns at T=00 and T=10, subagent turn at
+    // T=05 → expected envelope order 00 (parent) · 05 (SUBAGENT) · 10 (parent).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"ping alpha"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply alpha"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"ping gamma"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply gamma"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub222.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"sub222","uuid":"s0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"user","content":"ping beta"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"sa0","parentUuid":"s0","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"assistant","content":[{"type":"text","text":"sub reply beta"}]}}"#, "\n",
+        ),
+    );
+
+    let out = h.run(&["search", "ping", "--session", SESS, "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let envelopes: Vec<_> = json_lines(&out.stdout)
+        .into_iter()
+        .filter(|o| o.get("turn_index").is_some())
+        .collect();
+    assert_eq!(
+        envelopes.len(),
+        3,
+        "parent ×2 + subagent ×1: {}",
+        out.stdout
+    );
+
+    // Chronological interleave: 00 (parent) · 05 (SUBAGENT, between) · 10 (parent).
+    assert_eq!(
+        envelopes[0]["ts_utc"],
+        serde_json::json!("2026-06-07T05:00:00.000Z")
+    );
+    assert_eq!(envelopes[0]["is_subagent"], serde_json::json!(false));
+    assert_eq!(
+        envelopes[1]["ts_utc"],
+        serde_json::json!("2026-06-07T05:00:05.000Z")
+    );
+    assert_eq!(
+        envelopes[1]["is_subagent"],
+        serde_json::json!(true),
+        "subagent sorts BETWEEN the two parent turns, not grouped after them"
+    );
+    assert_eq!(envelopes[1]["parent_session_id"], serde_json::json!(SESS));
+    assert_eq!(
+        envelopes[2]["ts_utc"],
+        serde_json::json!("2026-06-07T05:00:10.000Z")
+    );
+    assert_eq!(envelopes[2]["is_subagent"], serde_json::json!(false));
+
+    // ts_local is the same instant rendered in the host TZ (present, non-null).
+    assert!(
+        envelopes[1]["ts_local"].is_string(),
+        "envelope carries ts_local"
+    );
+}
+
 // ── whoami ──
 
 #[test]
@@ -4843,6 +4909,121 @@ fn turns_home() -> Home {
     let h = Home::new();
     h.write(&format!("{ENC}/{SESS}.jsonl"), &turns_fixture_jsonl());
     h
+}
+
+#[test]
+fn turns_slice_reassembles_out_document_within_window() {
+    // --slice paginates the SAME verbatim document `--out` writes into ≤window-CHAR chunks with
+    // NO chrome. Assert: every chunk ≤ window, concatenating slices 1..K reproduces the `--out`
+    // document byte-for-byte (the zero-drift contract between build_document_body and out_blob),
+    // and an out-of-range slice is empty (exit 0).
+    let h = turns_home();
+    let window = 500usize;
+
+    let out_path = h.root.join("turns_doc.md");
+    let r = h.run(&[
+        "turns",
+        SESS,
+        "--budget",
+        "20000",
+        "--no-subagents",
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(r.success, "stderr: {}", r.stderr);
+    let document = std::fs::read_to_string(&out_path).expect("out document written");
+    assert!(!document.is_empty(), "fixture yields a non-empty document");
+    assert!(
+        document.chars().count() > window,
+        "document must exceed one window to exercise multi-slice ({} chars)",
+        document.chars().count()
+    );
+
+    let win = window.to_string();
+    let mut reassembled = String::new();
+    let mut n = 1usize;
+    loop {
+        let ns = n.to_string();
+        let s = h.run(&[
+            "turns",
+            SESS,
+            "--budget",
+            "20000",
+            "--no-subagents",
+            "--window",
+            &win,
+            "--slice",
+            &ns,
+        ]);
+        assert!(s.success, "slice {n} stderr: {}", s.stderr);
+        if s.stdout.is_empty() {
+            break; // out-of-range slice → empty → done
+        }
+        assert!(
+            s.stdout.chars().count() <= window,
+            "slice {n} exceeds the {window}-char window ({} chars)",
+            s.stdout.chars().count()
+        );
+        reassembled.push_str(&s.stdout);
+        n += 1;
+        assert!(n < 1000, "runaway slice loop");
+    }
+    assert!(
+        n > 2,
+        "fixture should span at least two slices, got {}",
+        n - 1
+    );
+    assert_eq!(
+        reassembled, document,
+        "concatenated slices must reproduce the --out document byte-for-byte"
+    );
+}
+
+#[test]
+fn turns_slice_rejects_out_json_and_zero() {
+    // --slice writes the selected chunk to stdout and is verbatim-text only, so it refuses
+    // --out, --format json, and the 1-based 0 index — each with a pointed error.
+    let h = turns_home();
+
+    let bad_out = h.run(&[
+        "turns",
+        SESS,
+        "--no-subagents",
+        "--slice",
+        "1",
+        "--out",
+        h.root.join("x.md").to_str().unwrap(),
+    ]);
+    assert!(!bad_out.success);
+    assert!(
+        bad_out.stderr.contains("mutually exclusive"),
+        "stderr: {}",
+        bad_out.stderr
+    );
+
+    let bad_json = h.run(&[
+        "turns",
+        SESS,
+        "--no-subagents",
+        "--slice",
+        "1",
+        "--format",
+        "json",
+    ]);
+    assert!(!bad_json.success);
+    assert!(
+        bad_json.stderr.contains("text format"),
+        "stderr: {}",
+        bad_json.stderr
+    );
+
+    let bad_zero = h.run(&["turns", SESS, "--no-subagents", "--slice", "0"]);
+    assert!(!bad_zero.success);
+    assert!(
+        bad_zero.stderr.contains("1-based"),
+        "stderr: {}",
+        bad_zero.stderr
+    );
 }
 
 /// Parse the JSON-lines stdout into a vector of serde_json::Value objects.

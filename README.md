@@ -306,6 +306,7 @@ csift turns <uuid> --budget 12000                           # a 200K-context-siz
 csift turns <uuid> --agent-msgs eot-only                    # force the old single-EOT (last-message-only) output
 csift turns <uuid> --format json                            # machine-readable, line-numbered
 csift turns . --budget 40000 --out /tmp/turns.md            # full reconstruction to a file
+csift turns . --budget 36000 --window 9000 --slice 1        # 1st ≤9000-char chunk for a SessionStart hook (slices 1–4 fan 36K)
 ```
 
 ---
@@ -320,7 +321,7 @@ csift turns [PATH...] [--session ID] [--budget N] [--budget-unit chars|tokens]
             [--keep-first | --no-keep-first] [--profile heavy|light]
             [--include-subagents | --no-subagents]
             [--turn-range START..END] [--since WHEN] [--until WHEN]
-            [--out PATH] [--format text|json]
+            [--out PATH] [--slice N] [--window N] [--format text|json]
 ```
 
 ### Budget model
