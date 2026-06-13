@@ -556,7 +556,8 @@ impl ListArgs {
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c)\n  \
           csift search \"refactor\" -l                            # LIST sessions that match (ripgrep -l)\n  \
           csift search \"let's chat\" -t user --siblings          # the match WITH the agent's reply (sibling records)\n  \
-          csift search \"let's chat\" -t user --sibling-category agent  # …only the agent-side sibling\n\n\
+          csift search \"let's chat\" -t user --sibling-category agent  # …only the agent-side sibling\n  \
+          csift search \"let's chat\" -t user --sibling-category agent --full  # …and READ that reply end-to-end\n\n\
         SIBLINGS (`--siblings` / `--sibling-category`)\n  \
           A match renders only the records that MATCHED. `--siblings` additionally renders the \
         OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
@@ -750,6 +751,14 @@ pub struct SearchArgs {
     /// set, or ALL categories when no `-t` was given.
     #[arg(long = "sibling-category", value_enum)]
     pub sibling_categories: Vec<Category>,
+
+    /// Emit each matched (and `--siblings`) record's FULL text instead of the ~400-char
+    /// excerpt — so you can READ a found message end-to-end (e.g. the question at the tail
+    /// of a long reply) without dropping to the raw jsonl. Newlines are still collapsed to
+    /// single spaces (one line per record). The default excerpt stays centered on the match
+    /// with an explicit `… (+N chars)` marker; `--full` removes the cap entirely.
+    #[arg(long, visible_alias = "no-truncate")]
+    pub full: bool,
 
     /// Resolve `<persisted-output>` pointers to their `tool-results/<id>.txt` file.
     #[arg(long)]

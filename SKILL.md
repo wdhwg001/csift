@@ -151,7 +151,7 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
              [-i|--ignore-case] [--multiline]
              [--turn-range START..END] [--since WHEN] [--until WHEN]
              [--max-count N] [-c|--count] [-l|--files-with-matches]
-             [--siblings] [--sibling-category CAT]...
+             [--siblings] [--sibling-category CAT]... [--full|--no-truncate]
              [--resolve-persisted] [--format text|json]
 ```
 
@@ -198,6 +198,11 @@ csift search [PATTERN] [PATH...] [--session ID] [--no-subagents]
   render under a `·` marker. By default the siblings shown are every category EXCEPT the match `-t`
   set (or ALL when no `-t`); **`--sibling-category CAT`** (repeatable, implies `--siblings`) narrows
   them. A record that itself matched is never repeated as a sibling.
+- **`--full`** (alias `--no-truncate`) emits each matched (and `--siblings`) record's FULL text
+  instead of the ~400-char centered excerpt — so you can READ a found message end-to-end (e.g. the
+  question at the TAIL of a long reply) without dropping to the raw jsonl. Newlines are still
+  collapsed to single spaces (one line per record); the explicit `… (+N chars)` marker disappears
+  because nothing is clipped.
 - **`--resolve-persisted`** resolves `<persisted-output>` pointers to their `tool-results/<id>.txt`
   file (large tool outputs are externalised).
 
@@ -213,6 +218,7 @@ csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
 csift search "refactor" -c                            # COUNT matches only ("how many times?")
 csift search "refactor" -l                            # LIST sessions that match ("which sessions?")
 csift search "let's chat" -t user --sibling-category agent  # the match WITH the agent's reply
+csift search "let's chat" -t user --sibling-category agent --full  # …and READ the reply in full
 csift search "persisted-output" --resolve-persisted --format json
 ```
 

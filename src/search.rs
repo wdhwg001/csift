@@ -582,6 +582,8 @@ fn reconstruct_and_match(
         } else {
             None
         };
+    // `--full` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
+    let excerpt_max = if args.full { usize::MAX } else { EXCERPT_MAX };
     let mut out = Vec::new();
 
     for (turn_index, idxs) in index_turns.iter().enumerate() {
@@ -605,6 +607,7 @@ fn reconstruct_and_match(
             matcher,
             time_window,
             args.resolve_persisted,
+            excerpt_max,
             &plan_index,
         );
         if hits.is_empty() {
@@ -614,9 +617,14 @@ fn reconstruct_and_match(
         // `--siblings`: render the turn's NON-matched records (the rest of the
         // back-and-forth) so a matched user question surfaces with the agent's reply.
         let siblings = match &sibling_cats {
-            Some(cats) if !cats.is_empty() => {
-                collect_turn_siblings(&turn, cats, &hit_idxs, args.resolve_persisted, &plan_index)
-            }
+            Some(cats) if !cats.is_empty() => collect_turn_siblings(
+                &turn,
+                cats,
+                &hit_idxs,
+                args.resolve_persisted,
+                excerpt_max,
+                &plan_index,
+            ),
             _ => Vec::new(),
         };
 
@@ -694,6 +702,7 @@ fn collect_turn_hits(
     matcher: &Matcher,
     time_window: &TimeWindow,
     resolve_persisted: bool,
+    excerpt_max: usize,
     plan_index: &PlanIndex,
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
@@ -713,7 +722,15 @@ fn collect_turn_hits(
             continue;
         }
         let before = hits.len();
-        collect_record_hits(rec, want, matcher, resolve_persisted, plan_index, &mut hits);
+        collect_record_hits(
+            rec,
+            want,
+            matcher,
+            resolve_persisted,
+            excerpt_max,
+            plan_index,
+            &mut hits,
+        );
         if hits.len() > before {
             hit_idxs.push(i);
         }
@@ -732,6 +749,7 @@ fn collect_turn_siblings(
     cats: &[Category],
     hit_idxs: &[usize],
     resolve_persisted: bool,
+    excerpt_max: usize,
     plan_index: &PlanIndex,
 ) -> Vec<Hit> {
     let pure = Matcher {
@@ -748,6 +766,7 @@ fn collect_turn_siblings(
             cats,
             &pure,
             resolve_persisted,
+            excerpt_max,
             plan_index,
             &mut sibs,
         );
@@ -761,6 +780,7 @@ fn collect_record_hits(
     want: &[Category],
     matcher: &Matcher,
     resolve_persisted: bool,
+    excerpt_max: usize,
     plan_index: &PlanIndex,
     hits: &mut Vec<Hit>,
 ) {
@@ -780,7 +800,14 @@ fn collect_record_hits(
             .or_else(|| rec.reconstructed_user_text(Some(plan_index)));
         if let Some(text) = text {
             if let Some(span) = matcher.locate(&text) {
-                hits.push(make_hit(Category::User, &text, span, ts.clone(), None));
+                hits.push(make_hit(
+                    Category::User,
+                    &text,
+                    span,
+                    ts.clone(),
+                    None,
+                    excerpt_max,
+                ));
             }
         }
     }
@@ -797,6 +824,7 @@ fn collect_record_hits(
                             span,
                             ts.clone(),
                             None,
+                            excerpt_max,
                         ));
                     }
                 }
@@ -809,7 +837,14 @@ fn collect_record_hits(
                         None
                     };
                     if let Some(span) = span {
-                        hits.push(make_hit(Category::Agent, text, span, ts.clone(), None));
+                        hits.push(make_hit(
+                            Category::Agent,
+                            text,
+                            span,
+                            ts.clone(),
+                            None,
+                            excerpt_max,
+                        ));
                     }
                 }
                 Block::ToolUse { name, input, .. } if category_active(want, Category::Tool) => {
@@ -821,6 +856,7 @@ fn collect_record_hits(
                             span,
                             ts.clone(),
                             name.clone(),
+                            excerpt_max,
                         ));
                     }
                 }
@@ -853,6 +889,7 @@ fn collect_record_hits(
                             span,
                             ts.clone(),
                             None,
+                            excerpt_max,
                         ));
                     }
                 }
@@ -914,23 +951,28 @@ fn auq_answer_text(rec: &Record) -> Option<String> {
     None
 }
 
-/// Build a hit with a normalized excerpt CENTERED on the match (`span`).
+/// Build a hit with a normalized excerpt CENTERED on the match (`span`), capped at
+/// `excerpt_max` chars (`usize::MAX` under `--full` ⇒ the whole record, uncapped).
 fn make_hit(
     category: Category,
     text: &str,
     span: Option<(usize, usize)>,
     ts: Option<String>,
     tool_name: Option<String>,
+    excerpt_max: usize,
 ) -> Hit {
     Hit {
         category,
-        excerpt: match_excerpt(text, span, EXCERPT_MAX),
+        excerpt: match_excerpt(text, span, excerpt_max),
         timestamp_utc: ts,
         tool_name,
     }
 }
 
 /// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
+/// Test-only: production excerpting goes through [`match_excerpt`], which carries the
+/// caller's (possibly `--full`) budget; this fixed-budget wrapper backs the unit tests.
+#[cfg(test)]
 fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
 }
@@ -947,15 +989,16 @@ fn truncate_excerpt(s: &str) -> String {
 /// on either side is explicit, never silent (SPEC §0).
 fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> String {
     let total = text.chars().count();
-    // Pure filter, or the whole message already fits: keep the head-anchored form.
+    // Pure filter, or the whole message already fits (incl. `--full`'s `usize::MAX`): keep
+    // the head-anchored form, capped at `max` (uncapped under `--full`).
     let start_byte = match span {
         Some((s, _)) if total > max => s,
-        _ => return truncate_excerpt(&normalize_line(text)),
+        _ => return crate::text::truncate_excerpt(&normalize_line(text), max),
     };
     // Char index of the match start; a non-char-boundary byte offset (possible with a
     // raw-byte regex) falls back to the head rather than panicking.
     let Some(prefix) = text.get(..start_byte) else {
-        return truncate_excerpt(&normalize_line(text));
+        return crate::text::truncate_excerpt(&normalize_line(text), max);
     };
     let match_char = prefix.chars().count();
     let win_start = match_char.saturating_sub(max / 4);
@@ -1178,6 +1221,7 @@ mod tests {
             files_with_matches: false,
             siblings: false,
             sibling_categories: Vec::new(),
+            full: false,
             resolve_persisted: false,
             include_subagents: true,
             no_subagents: false,
@@ -1382,6 +1426,7 @@ mod tests {
             &[Category::ToolResponse],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut no_resolve,
         );
@@ -1394,6 +1439,7 @@ mod tests {
             &[Category::ToolResponse],
             &m,
             true,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut with_resolve,
         );
@@ -1415,6 +1461,7 @@ mod tests {
             &[Category::Thinking],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -1435,6 +1482,7 @@ mod tests {
             &[Category::Agent],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -1454,6 +1502,7 @@ mod tests {
             &[Category::Tool],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -1473,6 +1522,7 @@ mod tests {
             &[Category::User],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -1493,6 +1543,7 @@ mod tests {
             &[Category::User],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -1504,6 +1555,7 @@ mod tests {
             &[Category::ToolResponse],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits2,
         );
@@ -1828,6 +1880,7 @@ mod tests {
             &[Category::User],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -1898,6 +1951,25 @@ mod tests {
     }
 
     #[test]
+    fn match_excerpt_full_budget_emits_whole_message() {
+        // `--full` passes `usize::MAX` as the budget: a message longer than EXCERPT_MAX is
+        // emitted whole, with NO truncation marker — whereas the default budget truncates.
+        let n = EXCERPT_MAX + 200;
+        let text = "x".repeat(n);
+        let capped = match_excerpt(&text, None, EXCERPT_MAX);
+        assert!(
+            capped.contains("… (+"),
+            "default budget truncates: {capped}"
+        );
+        let full = match_excerpt(&text, None, usize::MAX);
+        assert!(
+            !full.contains("… (+"),
+            "full budget has no truncation marker"
+        );
+        assert_eq!(full.chars().count(), n, "full text length preserved");
+    }
+
+    #[test]
     fn effective_sibling_categories_default_and_explicit() {
         use crate::cli::Category;
         // No `-t`, no explicit list → all five categories are sibling-eligible.
@@ -1945,7 +2017,15 @@ mod tests {
             records: vec![&kept],
         };
         let tw = TimeWindow::default();
-        let (hits, hit_idxs) = collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default());
+        let (hits, hit_idxs) = collect_turn_hits(
+            &turn,
+            &[],
+            &m,
+            &tw,
+            false,
+            EXCERPT_MAX,
+            &PlanIndex::default(),
+        );
         assert!(hits.is_empty(), "a can_hit=false record yields no hits");
         assert!(hit_idxs.is_empty(), "no record produced a hit");
     }
@@ -1966,18 +2046,30 @@ mod tests {
         };
         // Window starting AFTER the record's timestamp → excluded.
         let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
-        assert!(
-            collect_turn_hits(&turn, &[], &m, &tw, false, &PlanIndex::default())
-                .0
-                .is_empty()
-        );
+        assert!(collect_turn_hits(
+            &turn,
+            &[],
+            &m,
+            &tw,
+            false,
+            EXCERPT_MAX,
+            &PlanIndex::default()
+        )
+        .0
+        .is_empty());
         // An unbounded window admits it.
         let tw2 = TimeWindow::default();
-        assert!(
-            !collect_turn_hits(&turn, &[], &m, &tw2, false, &PlanIndex::default())
-                .0
-                .is_empty()
-        );
+        assert!(!collect_turn_hits(
+            &turn,
+            &[],
+            &m,
+            &tw2,
+            false,
+            EXCERPT_MAX,
+            &PlanIndex::default()
+        )
+        .0
+        .is_empty());
     }
 
     #[test]
@@ -2053,6 +2145,7 @@ mod tests {
             &[Category::ToolResponse],
             &m,
             true,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );
@@ -2078,6 +2171,7 @@ mod tests {
             &[Category::Agent],
             &m,
             false,
+            EXCERPT_MAX,
             &PlanIndex::default(),
             &mut hits,
         );

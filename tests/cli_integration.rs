@@ -841,6 +841,55 @@ fn search_sibling_category_narrows_and_implies_siblings() {
 }
 
 #[test]
+fn search_full_emits_the_untruncated_record() {
+    // A message far longer than the ~400-char excerpt cap, with a token at the very TAIL.
+    // The default excerpt truncates (explicit `… (+N chars)` marker) and hides the tail;
+    // `--full` (and its `--no-truncate` alias) emit the whole record so the tail is readable
+    // — the gap that otherwise forces a drop to the raw jsonl.
+    let h = Home::new();
+    let filler = "x".repeat(900);
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!(
+            r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"needle {filler} taIlToken9z"}}}}"#
+        ),
+    );
+
+    let def = h.run(&["search", "needle", "--no-subagents"]);
+    assert!(def.success, "stderr: {}", def.stderr);
+    assert!(
+        def.stdout.contains("… (+"),
+        "default excerpt must truncate with the explicit marker: {}",
+        def.stdout
+    );
+    assert!(
+        !def.stdout.contains("taIlToken9z"),
+        "the tail token is hidden by the default cap: {}",
+        def.stdout
+    );
+
+    let full = h.run(&["search", "needle", "--no-subagents", "--full"]);
+    assert!(
+        full.stdout.contains("taIlToken9z"),
+        "--full must surface the tail: {}",
+        full.stdout
+    );
+    assert!(
+        !full.stdout.contains("… (+"),
+        "--full removes the truncation marker: {}",
+        full.stdout
+    );
+
+    // The `--no-truncate` alias behaves identically.
+    let alias = h.run(&["search", "needle", "--no-subagents", "--no-truncate"]);
+    assert!(
+        alias.stdout.contains("taIlToken9z"),
+        "--no-truncate alias must surface the tail too: {}",
+        alias.stdout
+    );
+}
+
+#[test]
 fn files_bare_uuid_positional_routes_to_session() {
     // The documented `csift files <uuid>` form (a bare uuid in the positional slot) now
     // resolves as a session filter across all projects, not as a (nonexistent) project
