@@ -53,7 +53,7 @@ pub fn malformed_note(n: usize) -> String {
 /// The canonical SCOPE-span text fragment, e.g. `4 sessions in scope (1 top-level + 3
 /// subagent)`. EVERY subagent-spanning subcommand (`list`/`files`/`search`/`recover`/`turns`)
 /// reports a bare-uuid fan-out with this SAME wording so an agent reads one format. `turns`
-/// prefixes `SCOPE  ` and appends its budget clause; the others use [`emit_scope_banner`].
+/// prefixes `scope  ` and appends its budget clause; the others use [`emit_scope_banner`].
 #[must_use]
 pub fn scope_span_fragment(top: usize, sub: usize) -> String {
     let total = top + sub;
@@ -63,7 +63,7 @@ pub fn scope_span_fragment(top: usize, sub: usize) -> String {
     )
 }
 
-/// Emit the `SCOPE  N sessions in scope (X top-level + Y subagent)` banner + a trailing blank
+/// Emit the `scope  N sessions in scope (X top-level + Y subagent)` banner + a trailing blank
 /// line to stdout — but ONLY when the resolved set actually spans ≥1 subagent (`sub > 0`).
 /// This is the ONE emit site for the four non-turns spanning subcommands
 /// (`list`/`files`/`search`/`recover`): a bare `csift <cmd> <uuid>` that silently balloons
@@ -73,7 +73,7 @@ pub fn scope_span_fragment(top: usize, sub: usize) -> String {
 /// [`scope_span_fragment`] for the wording.
 pub fn emit_scope_banner(top: usize, sub: usize) {
     if sub > 0 {
-        println!("SCOPE  {}", scope_span_fragment(top, sub));
+        println!("scope  {}", scope_span_fragment(top, sub));
         println!();
     }
 }
@@ -155,9 +155,9 @@ mod tests {
         let s = "🛠".repeat(202);
         let out = truncate_excerpt(&s, 200);
         assert!(out.ends_with("… (+2 chars)"), "got: {out}");
-        // CJK likewise.
-        let cjk = "x".repeat(203);
-        assert!(truncate_excerpt(&cjk, 200).ends_with("… (+3 chars)"));
+        // A 3-byte codepoint likewise.
+        let three_byte = "€".repeat(203);
+        assert!(truncate_excerpt(&three_byte, 200).ends_with("… (+3 chars)"));
     }
 
     #[test]

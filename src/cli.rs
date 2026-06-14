@@ -436,7 +436,7 @@ pub enum OutputFormat {
           csift list <uuid> --no-subagents                            # JUST the one top-level session row\n  \
           csift list --format json .                                  # machine-readable index\n\n\
         SCOPE: because the default SPANS subagents, a bare `csift list <uuid>` can return 1 \
-        top-level + N subagent rows. The text output then leads with a `SCOPE  N sessions in \
+        top-level + N subagent rows. The text output then leads with a `scope  N sessions in \
         scope (1 top-level + M subagent)` banner, brands each subagent row \
         `SUBAGENT <hex> · parent SESSION <uuid>` (a bare hex is NOT a re-feedable target — \
         re-feed the parent uuid), and a top-level row keeps the plain `SESSION <uuid>` header.\n\n\
@@ -1543,7 +1543,7 @@ impl PlanArgs {
         (or tokens via `--budget-unit tokens`, ≈4 chars/token) — it is applied PER session \
         in scope. `turns` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
         just `budget` chars; with `--include-subagents` a target that spans S subagents \
-        realizes up to `budget × (1 + S)` chars total (a SCOPE banner surfaces the \
+        realizes up to `budget × (1 + S)` chars total (a scope banner surfaces the \
         multiplier). `--round-trip-fraction` \
         (default 0.5) is a HARD FLOOR: that fraction of the budget can ONLY be spent on \
         COMPLETE round-trips (user → [N tool calls] → assistant EOT), never on user-only / \
@@ -1576,7 +1576,7 @@ impl PlanArgs {
         BUDGET FAN-OUT: `--budget` is applied PER session in scope. `turns` defaults to the \
         top-level thread only, so a bare-uuid run is a single session at `budget` chars. With \
         `--include-subagents` the target also spans that session's subagents, so the realized \
-        output is `budget × (sessions in scope)`; a top-of-output SCOPE banner then names the \
+        output is `budget × (sessions in scope)`; a top-of-output scope banner then names the \
         TRUE scope (all discovered top-level + subagent sessions), how many rendered within \
         budget, and the realized multiplier.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
@@ -1614,7 +1614,7 @@ impl PlanArgs {
           FLOOR (reserved for human exchanges) but can still be selected as Phase-2 fill.\n  \
           LIMITATION: only `<task-notification>` COMPLETION pulses are segmented + attributed.\n  \
           The isMeta ScheduleWakeup WAKEUP-TICK *prompts* (a monitor/cron tick FIRING, e.g.\n  \
-          `MONITOR TICK` / `x tick`) bypass this — they are isMeta records that do NOT open a\n  \
+          `MONITOR TICK`) bypass this — they are isMeta records that do NOT open a\n  \
           turn, so the agent run a tick triggers currently groups under the PRECEDING\n  \
           genuine-user turn (not yet split into per-tick segments). In an automation-heavy\n  \
           monitor session this lumps the dominant tick-driven work onto one human turn.\n\n\
@@ -1622,7 +1622,7 @@ impl PlanArgs {
           `--budget` is PER session in scope. `turns` defaults to the TOP-LEVEL thread only, so\n  \
           a bare-uuid run is one session at `budget` chars. Add `--include-subagents` to also\n  \
           span that session's subagents — the realized output is then budget × (sessions in\n  \
-          scope), and a top-of-output `SCOPE` line names the TRUE scope (all top-level +\n  \
+          scope), and a top-of-output `scope` line names the TRUE scope (all top-level +\n  \
           subagent sessions discovered), how many rendered within budget, and the multiplier.\n  \
           A targeted top-level session that does not fit `budget` is reported with an explicit\n  \
           `skipped — needs ≥ N chars` note, never silently dropped.\n\n\
@@ -1681,7 +1681,7 @@ pub struct TurnsArgs {
     /// Character (default) or token budget applied PER session in scope. Each session's
     /// reconstruction is bounded by this; `turns` defaults to the top-level thread only, so a
     /// bare-uuid run realizes just `budget` chars. With `--include-subagents` the realized
-    /// total is `budget × (sessions in scope)` and a SCOPE banner surfaces the multiplier.
+    /// total is `budget × (sessions in scope)` and a scope banner surfaces the multiplier.
     /// Default 40000.
     #[arg(long, value_name = "N", default_value_t = 40000)]
     pub budget: usize,

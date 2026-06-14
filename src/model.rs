@@ -1129,7 +1129,7 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 /// message that preceded it), so same-parent openers are ALWAYS alternative versions of one
 /// logical turn; and across the corpus the last sibling's subtree is the one that reaches
 /// furthest toward the leaf (the live branch). A content-similarity heuristic would miss the
-/// common case where the user *prepended/inserted* text on the edit (`x…` → `x…`),
+/// common case where the user *prepended/inserted* text on the edit (`look…` → `take a closer look…`),
 /// so the parent-uuid identity — not text — is the load-bearing signal.
 ///
 /// `rec` projects each element to its `Record` (works for `&Record`, `Record`, and the
@@ -2173,15 +2173,15 @@ mod tests {
     #[test]
     fn superseded_drafts_collapse_same_parent_edit_resend() {
         // u0 (parent root) → assistant a0 → THREE drafts of one turn under parent a0:
-        // "x" → edited "x" → "x5x" (the one that continued) → assistant a1.
+        // "draft v1" → edited "draft v2" → "draft v2, with a tail" (the one that continued) → assistant a1.
         // Only the last sibling survives; the two earlier ones are superseded drafts.
         let records: Vec<Record> = [
-            r#"{"type":"user","uuid":"u0","parentUuid":"root","message":{"role":"user","content":"x"}}"#,
-            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}"#,
-            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
-            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
-            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"x5x"}}"#,
-            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}"#,
+            r#"{"type":"user","uuid":"u0","parentUuid":"root","message":{"role":"user","content":"start"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"draft v1"}}"#,
+            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"draft v2"}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"draft v2, with a tail"}}"#,
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"noted"}]}}"#,
         ]
         .iter()
         .map(|l| parse(l))
@@ -2213,9 +2213,9 @@ mod tests {
         // exactly one turn, not three.
         let records: Vec<Record> = [
             r#"{"type":"assistant","uuid":"a0","parentUuid":"root","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
-            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
-            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
-            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"x"}}"#,
+            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"the same resent line"}}"#,
+            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"the same resent line"}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"the same resent line"}}"#,
         ]
         .iter()
         .map(|l| parse(l))
@@ -2377,15 +2377,15 @@ mod tests {
     }
 
     #[test]
-    fn command_name_wrapper_with_cjk_args_is_codepoint_safe() {
-        // A CJK args body must be recovered whole (codepoint-safe slice on the ASCII tags
-        // only) — the live panic class.
+    fn command_name_wrapper_with_multibyte_args_is_codepoint_safe() {
+        // A multi-byte args body must be recovered whole (codepoint-safe slice on the ASCII
+        // tags only) — the live panic class.
         let r = parse(
-            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>x</command-args>"}}"#,
+            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>🤖 just shipped the batch, summarize 🎉</command-args>"}}"#,
         );
         assert_eq!(
             r.slash_command_args().as_deref(),
-            Some("x")
+            Some("🤖 just shipped the batch, summarize 🎉")
         );
     }
 
@@ -2417,17 +2417,16 @@ mod tests {
     }
 
     #[test]
-    fn auq_answer_cjk_is_codepoint_safe_boundary() {
-        // The exact AUQ answer that expanded the session scope — CJK answer prose. Must
-        // reconstruct whole, no mid-codepoint slice.
+    fn auq_answer_multibyte_is_codepoint_safe_boundary() {
+        // A multi-byte answer prose — must reconstruct whole, no mid-codepoint slice.
         let r = parse(
-            r#"{"type":"user","toolUseResult":{"questions":[{"question":"STEP TWO x?","header":"STEP TWO x","options":[{"label":"x+x (x)"}]}],"answers":{"STEP TWO x?":"xsessionxscopex"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"STEP TWO x?\"=\"x\"."}]}}"#,
+            r#"{"type":"user","toolUseResult":{"questions":[{"question":"which option for step two? 🤖","header":"STEP TWO","options":[{"label":"option A (recommended)"}]}],"answers":{"which option for step two? 🤖":"🤖 option A is fine, the scope is broader than stated"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two? 🤖\"=\"🤖 option A is fine\"."}]}}"#,
         );
         assert!(r.is_auq_answer_boundary());
-        let unit = r.auq_exchange().expect("cjk auq exchange");
-        assert!(unit.contains("xsessionxscopex"));
-        assert!(unit.contains("STEP TWO x"));
-        assert!(unit.contains("x+x (x)"));
+        let unit = r.auq_exchange().expect("multibyte auq exchange");
+        assert!(unit.contains("🤖 option A is fine, the scope is broader than stated"));
+        assert!(unit.contains("which option for step two? 🤖"));
+        assert!(unit.contains("option A (recommended)"));
     }
 
     #[test]
@@ -2477,20 +2476,19 @@ mod tests {
     //    boundary + a plan pointer. Real shape from captured-c (CJK) + the English form. ──
 
     #[test]
-    fn plan_rejection_with_cjk_message_is_a_boundary() {
-        // Instance A (captured-c): the user rejects the plan and types a CJK instruction.
+    fn plan_rejection_with_typed_message_is_a_boundary() {
+        // The user rejects the plan and types a follow-up instruction.
         let r = parse(
-            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01KpYZsMm2SaKgw6Qvhd8ST8","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nxsmoke testxOKxscreenshotx"}]}}"#,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLANREJECT01","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nplease run the smoke tests once and diff the output before calling it done."}]}}"#,
         );
         assert!(r.is_plan_rejection_boundary());
         assert!(r.opens_turn());
         let (id, msg) = r.plan_rejection_message().expect("rejection message");
-        assert_eq!(id.as_deref(), Some("toolu_01KpYZsMm2SaKgw6Qvhd8ST8"));
-        // The genuine message is ONLY the typed tail (CJK, whole), not the synthesized
-        // prefix.
+        assert_eq!(id.as_deref(), Some("toolu_PLANREJECT01"));
+        // The genuine message is ONLY the typed tail (whole), not the synthesized prefix.
         assert_eq!(
             msg,
-            "xsmoke testxOKxscreenshotx"
+            "please run the smoke tests once and diff the output before calling it done."
         );
         assert!(!msg.contains("doesn't want to proceed"));
     }
@@ -2833,13 +2831,16 @@ mod tests {
     }
 
     #[test]
-    fn automation_trigger_cjk_summary_codepoint_safe() {
-        // A CJK summary body must not be split mid-codepoint by the tag extractor.
+    fn automation_trigger_multibyte_summary_codepoint_safe() {
+        // A multi-byte summary body must not be split mid-codepoint by the tag extractor.
         let r = parse(
-            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>zh1</task-id>\n<status>completed</status>\n<summary>x</summary>\n</task-notification>"}}"#,
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>zh1</task-id>\n<status>completed</status>\n<summary>🤖 batch shipped, please summarize 🎉</summary>\n</task-notification>"}}"#,
         );
         let t = r.automation_trigger().unwrap();
-        assert_eq!(t.summary.as_deref(), Some("x"));
+        assert_eq!(
+            t.summary.as_deref(),
+            Some("🤖 batch shipped, please summarize 🎉")
+        );
     }
 
     #[test]

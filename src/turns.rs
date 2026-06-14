@@ -1001,30 +1001,13 @@ const FINDING_LEXEMES: &[&str] = &[
     "fix",
     "fixed",
     "regression",
-    "x",
-    "x",
-    "x",
-    "x",
-    "x",
 ];
 
 /// The intent-verb openers that mark a PURE declaration (Arm of the drop predicate),
 /// case-insensitive prefix on the first ~24 trimmed chars. A message that opens with one
 /// of these, is short, and carries no signal is the only thing collapsed.
 const INTENT_VERB_OPENERS: &[&str] = &[
-    "let me",
-    "i'll",
-    "i will",
-    "now i",
-    "now let",
-    "next i",
-    "next,",
-    "let's",
-    "x",
-    "x",
-    "x",
-    "x",
-    "x",
+    "let me", "i'll", "i will", "now i", "now let", "next i", "next,", "let's",
 ];
 
 /// Does a normalized agent message carry important info? A SHORT-CIRCUIT OR of two keep
@@ -1976,7 +1959,7 @@ fn render_text(
         // Reuse the shared `N session(s) in scope (X top-level + Y subagent)` wording (the same
         // fragment list/files/search/recover emit), then append turns' own budget clause.
         println!(
-            "SCOPE  {} · {} rendered within budget · budget {} chars is PER session → up to {} \
+            "scope  {} · {} rendered within budget · budget {} chars is PER session → up to {} \
              chars total",
             crate::text::scope_span_fragment(sc.in_scope_top, sc.in_scope_sub),
             sc.rendered,

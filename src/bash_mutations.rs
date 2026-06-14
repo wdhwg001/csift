@@ -1568,7 +1568,7 @@ mod tests {
         // The comment must not steal the cp/mv/ln destination: the LAST positional after the
         // comment is masked away, so the true dest is the surviving last operand.
         assert_eq!(
-            paths("cp /tmp/src.txt /tmp/real-dest.bak  # x"),
+            paths("cp /tmp/src.txt /tmp/real-dest.bak  # café note"),
             vec![("/tmp/real-dest.bak".to_string(), "cp")]
         );
         // `mv a b` reports the dest (`mv`) AND the source (`mv-from`); the `# note` tail must
@@ -2802,9 +2802,9 @@ mod tests {
             just_paths(r#"grep -rnE "...|> *dt|interval" file.txt"#).is_empty(),
             "in-quote regex `> *dt` must not fabricate `*dt`"
         );
-        // printf prose with a `>` (`x > cover`) — the em-dash / CJK-bearing class.
+        // printf prose with a `>` (`café > cover`) — the non-ASCII-bearing class.
         assert!(
-            just_paths(r#"printf 'layout x > cover scaled x'"#).is_empty(),
+            just_paths(r#"printf 'layout café > cover scaled déjà'"#).is_empty(),
             "in-quote prose `>` must not fabricate a file"
         );
         // The captured monitor's `echo ">>> NO compact"` / `echo "  >> ABSENT"` family.
@@ -2911,15 +2911,15 @@ mod tests {
 
     #[test]
     fn shell_mask_is_byte_length_preserving_with_multibyte_utf8() {
-        // REGRESSION: the mask must be BYTE-length-identical to the input even with CJK /
-        // emoji inside (and outside) quotes — else `masked_tokens` slices on a non-char
-        // boundary and panics (caught by the captured session, which is dense CJK).
+        // REGRESSION: the mask must be BYTE-length-identical to the input even with
+        // accented-Latin / 3-byte / 4-byte-emoji chars inside (and outside) quotes — else
+        // `masked_tokens` slices on a non-char boundary and panics (a dense-multibyte oracle).
         for cmd in [
-            r#"echo "x x > cover x" > /tmp/out.txt"#,
-            r#"printf 'x >per-mode x' && touch /tmp/x.txt"#,
-            "grep -nE 'cur > base' x.txt",
+            r#"echo "café € région > cover résumé" > /tmp/out.txt"#,
+            r#"printf 'naïve >per-mode déjà' && touch /tmp/né.txt"#,
+            "grep -nE 'cur > base' café.txt",
             r#"echo "🛠 build >done" > /tmp/x"#,
-            "tee >(grep x) /tmp/real.log",
+            "tee >(grep café) /tmp/real.log",
         ] {
             let m = shell_mask(cmd);
             assert_eq!(
@@ -2932,13 +2932,13 @@ mod tests {
             assert!(
                 got.iter()
                     .all(|p| p.starts_with('/') || !p.chars().any(|c| c as u32 > 127)),
-                "no CJK-prose fragment should surface as a file: {got:?}"
+                "no non-ASCII-prose fragment should surface as a file: {got:?}"
             );
         }
-        // The real redirect after a CJK-bearing quoted arg is still caught.
+        // The real redirect after a non-ASCII-bearing quoted arg is still caught.
         assert_eq!(
-            just_paths(r#"echo "x > cover" > /tmp/cjk-ok.txt"#),
-            vec!["/tmp/cjk-ok.txt".to_string()]
+            just_paths(r#"echo "café > cover" > /tmp/nonascii-ok.txt"#),
+            vec!["/tmp/nonascii-ok.txt".to_string()]
         );
     }
 

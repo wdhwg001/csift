@@ -2250,10 +2250,9 @@ mod tests {
         // The needle sits ~800 chars in — far past EXCERPT_MAX. The OLD head-only
         // excerpt hid it entirely (the bug that forced raw-jsonl reads); centering
         // must surface it, with explicit clipping markers on both sides.
-        // Synthetic CJK placeholder (heavenly-stem chars ≈ "A B C D E") + neutral
-        // padding.
-        let needle = "x";
-        let text = format!("{}{needle}{}", "x".repeat(800), "x".repeat(800));
+        // Synthetic multi-byte placeholder (neutral emoji) + neutral padding.
+        let needle = "🤖🎉✅🚀🌟";
+        let text = format!("{}{needle}{}", "🔵".repeat(800), "🟥".repeat(800));
         let m = build_matcher(&args(needle)).unwrap();
         let span = m.locate(&text).expect("matches").expect("has a span");
         let ex = match_excerpt(&text, Some(span), EXCERPT_MAX);
@@ -2302,7 +2301,7 @@ mod tests {
         // `--full` passes `usize::MAX` as the budget: a message longer than EXCERPT_MAX is
         // emitted whole, with NO truncation marker — whereas the default budget truncates.
         let n = EXCERPT_MAX + 200;
-        let text = "x".repeat(n);
+        let text = "🤖".repeat(n);
         let capped = match_excerpt(&text, None, EXCERPT_MAX);
         assert!(
             capped.contains("… (+"),

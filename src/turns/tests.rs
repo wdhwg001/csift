@@ -1666,10 +1666,10 @@ fn agent_msg_is_rich_each_signal_arm_flips_a_short_body() {
     assert!(agent_msg_is_rich("edited src/cli.rs today", &c));
     // ARM 2d — backtick code path.
     assert!(agent_msg_is_rich("the `agents` vec holds it", &c));
-    // ARM 2e — finding/decision lexeme (incl. CJK).
+    // ARM 2e — finding/decision lexeme.
     assert!(agent_msg_is_rich("root cause confirmed here", &c));
-    assert!(agent_msg_is_rich("x the real issue", &c));
-    assert!(agent_msg_is_rich("x x", &c));
+    assert!(agent_msg_is_rich("found the real issue", &c));
+    assert!(agent_msg_is_rich("regression verified", &c));
     // ARM 1 — length gate: a >=280-char signal-less body is rich on length alone.
     let long = "z".repeat(280);
     assert!(agent_msg_is_rich(&long, &c));
@@ -1686,23 +1686,20 @@ fn agent_msg_is_rich_rejects_a_short_signalless_declaration() {
 }
 
 #[test]
-fn agent_msg_is_rich_is_codepoint_safe_for_cjk_with_a_digit() {
-    // REGRESSION: a digit adjacent to multi-byte CJK text used to panic — the ±16-byte
+fn agent_msg_is_rich_is_codepoint_safe_for_multibyte_with_a_digit() {
+    // REGRESSION: a digit adjacent to multi-byte text used to panic — the ±16-byte
     // number-of-substance window sliced mid-codepoint. The window bounds must snap to a
     // char boundary; this must NOT panic, for a 2-digit number AND a single digit.
     let c = rich_cfg();
-    // A real-shaped CJK line with a time/number near multi-byte chars (no substance noun
+    // A multi-byte line with a time/number right next to 4-byte chars (no substance noun
     // → not rich, but the point is it must not panic).
-    let _ = agent_msg_is_rich(
-        "x 07:40xsx relay x,s2/s3 x drift-checkx",
-        &c,
-    );
-    let _ = agent_msg_is_rich("x 42 x x src/x.rs:9", &c);
-    let _ = agent_msg_is_rich("x 7 x", &c);
-    // A CJK substance phrase with a number that DOES carry a finding lexeme is rich.
-    assert!(agent_msg_is_rich("x x x 42 x", &c));
+    let _ = agent_msg_is_rich("🤖 07:40 watching 🚀, 9 left to go", &c);
+    let _ = agent_msg_is_rich("🤖 confirmed 42 times, root cause at src/x.rs:9", &c);
+    let _ = agent_msg_is_rich("🤖 step 7 done", &c);
+    // A multi-byte phrase with a number that DOES carry a finding lexeme is rich.
+    assert!(agent_msg_is_rich("🤖 root cause confirmed at line 42", &c));
     // The droppable predicate is codepoint-safe too (it calls agent_msg_is_rich first).
-    let _ = agent_msg_is_droppable("x 07:40 x", &c);
+    let _ = agent_msg_is_droppable("🤖 looking at the 07:40 log", &c);
 }
 
 #[test]
@@ -1710,7 +1707,7 @@ fn agent_msg_is_droppable_and_keep_on_doubt() {
     let c = rich_cfg();
     // Droppable: short + intent-verb opener + no signal.
     assert!(agent_msg_is_droppable("let me read the file", &c));
-    assert!(agent_msg_is_droppable("x", &c));
+    assert!(agent_msg_is_droppable("now i will open this file", &c));
     // NOT droppable — rich wins even with an intent-verb opener (fusion case).
     assert!(!agent_msg_is_droppable(
         "let me note: root cause confirmed in src/x.rs:42",
@@ -2039,7 +2036,7 @@ fn select_rich_first_kept_and_sudden_rich_middle_survives() {
             "now i will check another",         // middle decl → collapse
             "12 passed 3 failed in src/x.rs:9", // sudden rich middle → kept
             "let me write it up",               // middle decl → collapse
-            "x",                     // middle decl → collapse
+            "next i continue here",             // middle decl → collapse
             "now let me finalize",              // middle decl → collapse
             "the final committed answer",       // last → always kept
         ],

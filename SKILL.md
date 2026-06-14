@@ -91,7 +91,7 @@ plans) with `--no-subagents` to opt out, but carries only `--no-subagents` / `--
 
 **Span disclosure (uniform across every spanning subcommand).** Whenever a bare-uuid invocation
 fans out across ≥1 subagent, the surface announces the span UP FRONT, identically:
-- TEXT: a leading `SCOPE  N sessions in scope (X top-level + Y subagent)` banner (on
+- TEXT: a leading `scope  N sessions in scope (X top-level + Y subagent)` banner (on
   `list`/`files`/`search`/`recover`; `turns` uses the same wording plus its budget clause).
 - JSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}`
   record (on `list`/`files`/`search`/`recover`/`turns`).
@@ -734,13 +734,13 @@ default ALSO keeps a substantive first and the rich middles (below).
 
 A message is "rich" by a cheap single-pass test: a number-of-substance (`12 passed 3 failed`, `12/40`),
 a commit-hash-like hex, a `file.rs:NNN` ref, a backtick `code` path, a finding/decision lexeme (`found`
-/ `confirmed` / `root cause` / `DEFER` / `x` / `x` / `x` / …), or simply a body ≥
+/ `confirmed` / `root cause` / `DEFER` / …), or simply a body ≥
 `--agent-rich-min-chars` (default 280). **`--agent-rich-min-chars` is the tuning knob for both the
 default and `rich`:** in `longest` it gates the "keep the first if substantive" decision AND the rich
 length arm; raise it to keep fewer first/middle messages, lower it to keep more.
 
 In `rich` mode the spine is KEEP-ON-DOUBT instead: only a short (`< --agent-declaration-max-chars`,
-default 200) signal-less intent-verb opener (`let me …` / `now I …` / `x…`) is COLLAPSED; anything
+default 200) signal-less intent-verb opener (`let me …` / `now I …`) is COLLAPSED; anything
 uncertain is kept, and `--keep-first` (default) keeps the first by position privilege regardless of
 richness (`--no-keep-first` decides it as a middle — `--keep-first` has no effect in `longest` mode,
 where the first is gated on length). A contiguous collapsed run renders as one placeholder line
@@ -846,7 +846,7 @@ exchange shape as any search (text label table + `s·t` rows; JSON exchange obje
 
 ```bash
 # skim, then fetch the exact message(s) — full, no drop to raw jsonl
-csift search "x" -t user                        # → a hit row shows `◂ user  L46550 …`
+csift search "deploy" -t user                        # → a hit row shows `◂ user  L46550 …`
 csift search "" <id> --no-subagents --line 46550     # → that message, in full
 csift search "" <id> --no-subagents --line 46540-46560  # → it plus its surrounding span
 csift search "" --uuid 1f70fc7d-c4b3-4d0e-915c-edf09b32a7c0  # by record uuid (scope optional)
@@ -1175,9 +1175,9 @@ search the current session and `csift whoami` is unavailable, read that file and
 
 ```bash
 # Find every time a directive was given in this session (current session id from whoami).
-# The pattern mixes English directives with a multi-byte CJK token to show that regex
+# The pattern mixes English directives with a multi-byte emoji token to show that regex
 # search handles arbitrary UTF-8 literals (serde_json emits non-ASCII verbatim):
-csift search "don't stop|keep going|x" -i --session "$(csift whoami --format json | jq -r .session_id)"
+csift search "don't stop|keep going|🤖" -i --session "$(csift whoami --format json | jq -r .session_id)"
 
 # ⚠ SUBAGENT CAVEAT for the recipe above: this whoami→--session chain only works from a
 # TOP-LEVEL session. Inside a subagent, $CLAUDE_CODE_SESSION_ID (and thus whoami) yields the

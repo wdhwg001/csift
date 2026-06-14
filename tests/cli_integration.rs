@@ -3195,7 +3195,7 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
 fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     // `list` spans subagents by default: a bare `csift list <uuid>` returns the top-level row
     // + each subagent row. JSON carries is_subagent + the re-feedable parent_session_id; text
-    // leads with a SCOPE banner and brands subagent rows SUBAGENT … · parent SESSION ….
+    // leads with a scope banner and brands subagent rows SUBAGENT … · parent SESSION ….
     let h = Home::new();
     subagents_only_scenario(&h);
 
@@ -3219,7 +3219,7 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     assert!(t.success, "stderr: {}", t.stderr);
     assert!(
         t.stdout
-            .contains("SCOPE  2 sessions in scope (1 top-level + 1 subagent)"),
+            .contains("scope  2 sessions in scope (1 top-level + 1 subagent)"),
         "missing scope banner: {}",
         t.stdout
     );
@@ -3234,7 +3234,7 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     let top_only = h.run(&["list", SESS, "--no-subagents"]);
     assert!(top_only.success, "stderr: {}", top_only.stderr);
     assert!(
-        !top_only.stdout.contains("SCOPE"),
+        !top_only.stdout.contains("scope  "),
         "no banner when no subagents in scope: {}",
         top_only.stdout
     );
@@ -5450,13 +5450,13 @@ fn turns_fixture_jsonl() -> String {
             "found the AGENTRICHFIRST root cause already", // first — rich (lexeme) → kept
             "let me try the LETMEDECL one next",           // middle decl → collapse
             "now i will check LETMEDECL another",          // middle decl → collapse
-            // A CJK declaration with a digit adjacent to multi-byte chars (the exact
+            // A declaration with a digit adjacent to multi-byte chars (the exact
             // shape that once panicked the ±16-byte number-of-substance window): a
             // signal-less intent-verb opener → collapses, and must NOT panic.
-            "x LETMEDECL x 07:40 x", // middle CJK decl → collapse
+            "let me LETMEDECL look at the 🤖 07:40 log", // middle decl → collapse
             "AGENTRICHMID 12 passed 3 failed in src/x.rs:9", // sudden rich middle → kept
-            "let me write LETMEDECL it up",       // middle decl → collapse
-            "now let me LETMEDECL finalize",      // middle decl → collapse
+            "let me write LETMEDECL it up",              // middle decl → collapse
+            "now let me LETMEDECL finalize",             // middle decl → collapse
             "root cause confirmed in src/y.rs:42 — now let me FUSEDTAIL write the fix", // fused → kept
             "the AGENTEOT final committed answer", // last — always kept
         ],
@@ -6742,7 +6742,7 @@ fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
 fn turns_defaults_to_top_level_only_no_subagent_span() {
     // FOOTGUN FIX: `turns <uuid>` with NO flags must reconstruct ONLY the top-level thread —
     // it must NOT span the session's subagents (unlike files/search). So a bare run prints no
-    // `(subagent transcript)` blocks and no SCOPE banner (one session in scope, rendered).
+    // `(subagent transcript)` blocks and no scope banner (one session in scope, rendered).
     let h = populated_home();
     let out = h.run(&["turns", SESS, "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -6757,7 +6757,7 @@ fn turns_defaults_to_top_level_only_no_subagent_span() {
         out.stdout
     );
     assert!(
-        !out.stdout.contains("SCOPE"),
+        !out.stdout.contains("scope  "),
         "a single top-level session prints no scope banner: {}",
         out.stdout
     );
@@ -6766,7 +6766,7 @@ fn turns_defaults_to_top_level_only_no_subagent_span() {
 #[test]
 fn turns_include_subagents_opts_into_span_with_scope_banner() {
     // `--include-subagents` is the explicit opt-in for the rare cross-fan-out reconstruction;
-    // it spans the subagents AND prints a SCOPE banner that reports the TRUE top-level/subagent
+    // it spans the subagents AND prints a scope banner that reports the TRUE top-level/subagent
     // split (never `0 top-level`, even though the budget applies per session).
     let h = populated_home();
     let out = h.run(&["turns", SESS, "--include-subagents", "--budget", "40000"]);
@@ -6777,7 +6777,7 @@ fn turns_include_subagents_opts_into_span_with_scope_banner() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("SCOPE") && out.stdout.contains("1 top-level"),
+        out.stdout.contains("scope  ") && out.stdout.contains("1 top-level"),
         "scope banner must report the targeted top-level (never 0 top-level): {}",
         out.stdout
     );
@@ -7598,11 +7598,11 @@ fn turns_help_lists_the_new_agent_msg_flags() {
 // ── Genuine-user-message holes (Part B): AskUserQuestion answer as a turn boundary,
 //    ExitPlanMode rejection-with-message + plan pointer, interrupt non-boundary —
 //    driven end-to-end through the REAL binary on a session built from the verified
-//    real-data record shapes (a captured-sample AUQ; captured-c ExitPlanMode CJK reject). ──
+//    real-data record shapes (AUQ answer boundary; ExitPlanMode typed reject). ──
 
 /// A session whose ONLY genuine human opener is "start the work", followed by an
-/// AskUserQuestion exchange (Q+options+CJK answer) and an ExitPlanMode plan that the
-/// user REJECTS with a typed CJK message, plus an interrupt marker that must NOT split a
+/// AskUserQuestion exchange (Q+options+multi-byte answer) and an ExitPlanMode plan that the
+/// user REJECTS with a typed message, plus an interrupt marker that must NOT split a
 /// turn.
 fn holes_home() -> Home {
     let h = Home::new();
@@ -7612,13 +7612,13 @@ fn holes_home() -> Home {
             // turn 0: genuine human opener.
             r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the work"}}"#, "\n",
             // assistant asks (member of turn 0).
-            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"STEP TWO x?","header":"STEP TWO x","options":[{"label":"x+x (x)"},{"label":"x worker"}]}]}}]}}"#, "\n",
-            // turn 1: the AUQ ANSWER opens a turn (the behavior change). CJK answer prose.
-            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","toolUseResult":{"questions":[{"question":"STEP TWO x?","header":"STEP TWO x","options":[{"label":"x+x (x)"},{"label":"x worker"}]}],"answers":{"STEP TWO x?":"xscopex"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"STEP TWO x?\"=\"xscopex\"."}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)"},{"label":"option B"}]}]}}]}}"#, "\n",
+            // turn 1: the AUQ ANSWER opens a turn (the behavior change). Typed answer prose.
+            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","toolUseResult":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)"},{"label":"option B"}]}],"answers":{"which option for step two?":"option A is fine, the scope is broader than stated"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two?\"=\"option A is fine, the scope is broader than stated\"."}]}}"#, "\n",
             // assistant proposes a plan (member of turn 1).
             r#"{"type":"assistant","uuid":"a1","parentUuid":"ans","timestamp":"2026-06-07T05:11:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN1","name":"ExitPlanMode","input":{"plan":"the plan body here","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"#, "\n",
-            // turn 2: the user REJECTS the plan with a CJK typed message → boundary + pointer.
-            r#"{"type":"user","uuid":"rej","parentUuid":"a1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nxsmoke testxOK"}]}}"#, "\n",
+            // turn 2: the user REJECTS the plan with a typed message → boundary + pointer.
+            r#"{"type":"user","uuid":"rej","parentUuid":"a1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nplease run the smoke tests once before calling it done"}]}}"#, "\n",
             // an interrupt marker — a turn MEMBER of turn 2, NOT a new boundary.
             r#"{"type":"user","uuid":"int","parentUuid":"rej","timestamp":"2026-06-07T05:20:30.000Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a2","parentUuid":"int","timestamp":"2026-06-07T05:21:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok, adding the smoke test check"}]}}"#, "\n",
@@ -7630,10 +7630,10 @@ fn holes_home() -> Home {
 #[test]
 fn auq_answer_opens_a_turn_and_surfaces_clean_answer() {
     let h = holes_home();
-    // search -t user for the CJK answer prose: it must surface under `user`.
+    // search -t user for the answer prose: it must surface under `user`.
     let out = h.run(&[
         "search",
-        "x",
+        "option A is fine",
         "-t",
         "user",
         "--format",
@@ -7643,7 +7643,7 @@ fn auq_answer_opens_a_turn_and_surfaces_clean_answer() {
     let hit_line = out
         .stdout
         .lines()
-        .find(|l| l.contains("x"))
+        .find(|l| l.contains("option A is fine"))
         .unwrap_or_else(|| panic!("AUQ answer not surfaced under user:\n{}", out.stdout));
     let v: serde_json::Value = serde_json::from_str(hit_line).unwrap();
     // It is a genuine-user turn boundary now → turn_index 1 (after the "start" opener).
@@ -7660,26 +7660,28 @@ fn turns_reconstructs_auq_exchange_and_plan_rejection_with_pointer() {
     let out = h.run(&["turns", "--session", SESS]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The AUQ exchange is reconstructed as a complete unit: marker + question + options
-    // + the CJK answer prose.
+    // + the answer prose.
     assert!(
         out.stdout.contains("AskUserQuestion"),
         "AUQ unit label missing:\n{}",
         out.stdout
     );
     assert!(
-        out.stdout.contains("x+x (x)"),
+        out.stdout.contains("option A (recommended)"),
         "AUQ options missing:\n{}",
         out.stdout
     );
     assert!(
-        out.stdout.contains("xscopex"),
-        "AUQ CJK answer missing:\n{}",
+        out.stdout
+            .contains("option A is fine, the scope is broader than stated"),
+        "AUQ answer missing:\n{}",
         out.stdout
     );
-    // The plan rejection surfaces the user's typed CJK instruction AND a pointer to the
+    // The plan rejection surfaces the user's typed instruction AND a pointer to the
     // plan file.
     assert!(
-        out.stdout.contains("xsmoke testxOK"),
+        out.stdout
+            .contains("please run the smoke tests once before calling it done"),
         "plan-rejection user message missing:\n{}",
         out.stdout
     );
@@ -7717,7 +7719,7 @@ fn interrupt_does_not_split_a_turn() {
 
 // ── round 7: SCOPE-disclosure uniformity, wrong-flag diagnostics, --out data-safety ──
 
-/// The shared `SCOPE  N sessions in scope (X top-level + Y subagent)` banner is now emitted
+/// The shared `scope  N sessions in scope (X top-level + Y subagent)` banner is now emitted
 /// by EVERY subagent-spanning text surface (list/files/search/recover/turns), not just
 /// list/turns. populated_home spans 2 subagents under 1 top-level session.
 #[test]

@@ -96,7 +96,7 @@ so it spans subagents only on explicit `--include-subagents`). On the four defau
 present, it always wins regardless of flag order; on `turns` `--include-subagents` is the load-bearing
 opt-in (last-flag-wins). A `--subagents-only` flag (a `files`-only scope flag) mistyped onto a sibling
 gives a pointed "that's a `files`-only flag" error. Every spanning subcommand discloses a subagent
-fan-out the SAME way: a leading `SCOPE  N sessions in scope (X top-level + Y subagent)` text banner and
+fan-out the SAME way: a leading `scope  N sessions in scope (X top-level + Y subagent)` text banner and
 a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}` JSON
 record (both suppressed under `--no-subagents` / a single-transcript scope). `agents` has **no**
 subagent-span flag: it *discovers* a session's subagents as its primary output, so there is nothing to
@@ -201,7 +201,7 @@ never fabricated). The parser is **quote/backtick/procsub/arith-aware**: a `>`/`
 echo/printf or regex (`echo "idle >8min"`), inside a backtick command substitution (`` `date >f` ``),
 or inside an arithmetic/test comparison (`(( a > b ))` / `[[ a > b ]]`) is masked before redirect
 detection, so it never fabricates a file. A trailing **`#` shell comment** (an unquoted `#` at a word
-boundary → end-of-line) is likewise masked, so `cp src dst  # x` reports `dst` (not the comment word),
+boundary → end-of-line) is likewise masked, so `cp src dst  # note` reports `dst` (not the comment word),
 an in-comment `> /x` fabricates nothing, and a real cp/mv/ln destination is never displaced by the
 comment; an in-path `#` (`/tmp/a#b`) is preserved. A write inside an embedded-language
 body (heredoc / `python -c`) is out of scope and missed — but **never mis-reported** (heredoc body
@@ -391,12 +391,11 @@ length gate (kept on length alone when ≥ `--agent-rich-min-chars`, default 280
 - a **commit-hash-like hex** (a 7–40 char `[0-9a-f]` run with at least one a–f letter);
 - a **file-and-line ref** (`turns.rs:402`, a `src/…` path);
 - a **backtick code path** (`` `agents` ``);
-- a **finding/decision lexeme** (`found` / `confirmed` / `verified` / `root cause` / `DEFER` / `fix` /
-  `x` / `x` / `x` / `x` / `x` / …).
+- a **finding/decision lexeme** (`found` / `confirmed` / `verified` / `root cause` / `DEFER` / `fix` / …).
 
 **KEEP-ON-DOUBT is the spine.** A message is COLLAPSED only when it is a *proven* pure declaration: short
 (`< --agent-declaration-max-chars`, default 200), signal-less, AND opening with an intent verb
-(`let me …` / `now I …` / `x…` / `x…`). Anything uncertain is kept — a wrongly-kept declaration
+(`let me …` / `now I …`). Anything uncertain is kept — a wrongly-kept declaration
 costs at most one capped body, while a wrongly-dropped finding is unrecoverable. A FUSED
 finding+declaration body trips a signal → kept WHOLE; its trailing declaration is shed only by the
 within-message char-ellipsis, never by whole-message drop.

@@ -675,16 +675,16 @@ mod tests {
     #[test]
     fn one_line_collapses_and_marks_elision_count() {
         assert_eq!(one_line("a\n  b\tc"), "a b c");
-        // A long CJK string truncated on a CHAR boundary never panics AND now marks the
-        // dropped-char count explicitly (the never-silent-truncation contract — the old
+        // A long multi-byte string truncated on a CHAR boundary never panics AND now marks
+        // the dropped-char count explicitly (the never-silent-truncation contract — the old
         // bare `…` dropped the count). 400 chars in, 200 kept → `… (+200 chars)`.
-        let cjk = "x".repeat(100); // 400 chars
-        let out = one_line(&cjk);
+        let multibyte = "🤖🎉✅🚀".repeat(100); // 400 chars
+        let out = one_line(&multibyte);
         assert!(
             out.ends_with("… (+200 chars)"),
             "elision must carry the count, not a bare …: {out}"
         );
-        assert!(out.starts_with(&"x".repeat(50))); // first 200 chars kept
+        assert!(out.starts_with(&"🤖🎉✅🚀".repeat(50))); // first 200 chars kept
     }
 
     #[test]
