@@ -1,6 +1,6 @@
 # SPEC.md — csift
 
-> **Status: AUTHORITATIVE (build-ready).** This is the single source of truth for *what csift does and how*. It merges the original project brief with empirically-verified research (real `~/.claude/projects` data, 51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records). **Where the research contradicted the brief, the research wins — each correction is called out inline as `[CORRECTION]`.** [`CLAUDE.md`](./CLAUDE.md) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
+> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. It merges the original project brief with empirically-verified research (real `~/.claude/projects` data, 51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records). **Where the research contradicted the brief, the research wins — each correction is called out inline as `[CORRECTION]`.** All eight subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
 
 ---
 
@@ -325,8 +325,7 @@ When no `--category` is given, **all five** categories are eligible (search ever
 | `[PATH]…` | repeatable positional | all projects | a real cwd OR an encoded dir (§2.3); 0 args ⇒ every dir under projects root |
 | `--format text\|json` | enum | `text` | output format |
 | `--include-subagents` | bool | `true` | also list each session's subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`); **default ON**. Workflow `journal.jsonl` is excluded (not a transcript). |
-| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only (overrides `--include-subagents`) |
-| `--limit N` | usize | none | *(Phase-2 add)* cap rows; reports dropped count |
+| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only; **DOMINANT** (always wins when present, any flag order) |
 
 **Per-session fields emitted:** `session-id`, **first** genuine-user message (+ts), **last** genuine-user message (+ts), **last** agent message (+ts), the session `cwd` (decoded from data, §2.4), `version`, `gitBranch`. Each message is a one-line excerpt (truncated with an explicit `… (+N chars)` marker — never silent).
 
@@ -366,21 +365,29 @@ csift list --format json .                              # machine-readable index
 **Args (matches `cli::SearchArgs`):**
 | flag | short | type | default | meaning |
 |---|---|---|---|---|
-| `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case** |
-| `--path PATH` | — | repeatable | all projects | target(s): real cwd or encoded dir (§2.3) |
+| `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A lone `search <uuid>` (a uuid as the SOLE positional) routes to `--session` scope, not a literal-uuid search (a note reports it); add a scope target to keep it literal (`search <uuid> .`). |
+| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd or encoded dir (§2.3) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
 | `--session ID` | — | string | none | restrict to one session uuid |
 | `--category C` | `-t` | repeatable enum | all | one of `thinking\|user\|tool\|tool-response\|agent` (§5) |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
 | `--turn-range START..END` | — | string | none | inclusive 0-based turn index range; **mutually exclusive** with `--since`/`--until` |
-| `--since WHEN` | — | string | none | lower time bound (ISO8601 or relative, e.g. `2h`, `2026-06-01`) |
-| `--until WHEN` | — | string | none | upper time bound |
+| `--since WHEN` / `--until WHEN` | — | string | none | time bounds (ISO8601 or relative `2h`/`3d`/…, system-local; bare date ⇒ local midnight) |
 | `--max-count N` | — | usize | none | cap emitted exchanges; **reports dropped count** |
+| `--count` | `-c` | bool | off | print ONLY the match total (ripgrep `-c` idiom); honors every filter; mutually exclusive with `-l` |
+| `--files-with-matches` | `-l` | bool | off | list ONLY the distinct sessions containing ≥1 match (ripgrep `-l`); mutually exclusive with `-c` |
+| `--siblings` | — | bool | off | also render each matched turn's NON-matched records (the surrounding back-and-forth, e.g. a matched user question + the agent reply) |
+| `--sibling-category C` | — | repeatable enum | off | restrict `--siblings` rendering to these categories (implies `--siblings`) |
+| `--full` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (alias `--no-truncate`) |
+| `--line SPEC` | — | repeatable + comma | none | ADDRESS by 1-based physical line(s)/ranges (`--line 87,495-500`) instead of/with pattern; needs a single-transcript scope; addressed records render FULL; an explicit miss is reported `unresolved` |
+| `--uuid U` | — | repeatable + comma | none | ADDRESS by record uuid(s) (globally unique); addressed records render FULL; a miss is `unresolved` |
+| `--subagent HEX` | — | string | none | pin `--line` addressing to one subagent transcript (bare hex from `agents`) |
 | `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6) |
-| `--include-subagents` | — | bool | `true` | also search each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`); **default ON**. Workflow `journal.jsonl` is never searched (not a transcript). |
-| `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions (overrides `--include-subagents`) |
+| `--include-subagents` | — | bool | `true` | also search each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`); **default ON** (passing it is a no-op for explicitness). Workflow `journal.jsonl` is never searched (not a transcript). |
+| `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions; **DOMINANT** — always wins when present, any flag order |
 | `--format text\|json` | — | enum | `text` | output format |
-| `--context N` | `-C` | usize | full exchange | *(Phase-2 add)* optionally trim the exchange to ±N surrounding records |
+
+**Addressing (record fetch) — `--line` / `--uuid`.** Beyond regex matching, a record can be selected by **physical line** (`--line`, per-file, needs a single-transcript scope) or **uuid** (`--uuid`, global). Addressed records emit at FULL length (you asked for *this* message, not a teaser); a pattern, if also given, further narrows within the addressed set. This is the permission-friendly alternative to `Read`-ing the raw jsonl. An explicitly-requested address that resolves to nothing is reported in an `unresolved:` footer line — never silently dropped.
 
 **Smart-case rule:** pattern is case-insensitive iff it contains no uppercase letter; `-i` forces insensitive regardless; the two never conflict (`-i` wins). Compile via `regex::bytes::RegexBuilder` (match on raw line bytes pre-JSON in the prefilter, then on decoded text for excerpting). `--multiline` sets `.dot_matches_new_line(true)` + multiline mode.
 
@@ -394,25 +401,29 @@ csift list --format json .                              # machine-readable index
 
 **Output — complete round-trip:** see §6.4. Each emitted unit is one **Exchange** with a session header, turn index, and the matched hit(s) shown in context of their full round-trip.
 
-**Text output example:**
+**Text output example.** Each distinct session is declared ONCE in a label table (`s1 = <uuid>`), then every exchange header is the cheap `s<N>·t<turn>` reference + a single compact local instant (the offset already pins it — no second UTC copy); hit lines are `  <glyph> <category>[ <tool>]  L<line>  <excerpt>` with `◂` = user, `▸` = everything else:
 ```
-═══ SESSION 0a1b2c3d… · TURN 47 ═══
-◂ user  2026-06-07 14:32:01 AEST (…T04:32:01Z)
-   why is the tail-read carry needed?
-▸ thinking  …T04:32:05Z
-   The carry holds an incomplete line straddling a chunk boundary…   ◀ match: "carry"
-▸ agent  …T04:32:40Z
-   The carry is the partial line at the low-offset edge of each chunk…
-matched 1 exchange (category=thinking)  ·  0 dropped
+s1 = 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+
+s1·t47  2026-06-07 14:32:05.478+10:00
+  ◂ user  L990  why is the tail-read carry needed?
+  ▸ thinking  L994  The carry holds an incomplete line straddling a chunk boundary…
+  ▸ agent  L1003  The carry is the partial line at the low-offset edge of each chunk…
+
+matched 1 exchange · 1 session · category=all
 ```
+(A subagent session's table row reads `s2 = <hex> (subagent · parent s1)`; a `tool-response` hit names its tool, `▸ tool-response Edit  L2128  …`.)
 
 **Example invocations:**
 ```bash
 csift search "carry"                                   # all projects, smart-case
 csift search -i "askuserquestion" -t tool             # tool_use blocks naming AUQ
-csift search "" -t user --since 2h --path .            # pure filter: genuine user turns, last 2h, this project
+csift search "" -t user --since 2h .                   # pure filter: genuine user turns, last 2h, this project
 csift search "tail.read" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
+csift search "" --session 0a1b2c3d-… --no-subagents --line 992,1374   # fetch records by line (FULL)
+csift search "" --uuid 7f3c9e21-…                      # fetch a record by uuid, anywhere in scope
+csift search -l "deadline"                             # WHICH sessions mention it (ripgrep -l)
 csift search "persisted-output" --resolve-persisted --format json
 ```
 
@@ -425,7 +436,7 @@ csift search "persisted-output" --resolve-persisted --format json
 3. **Fallback when the var is absent/empty — ERROR with actionable guidance, never guess.** Message: your session id was not found (`CLAUDE_CODE_SESSION_ID` unset — old CC build or running outside CC); pass `--session <uuid>`; your id is the basename of your own transcript, or grep a unique recent line you wrote to disambiguate; **do NOT trust most-recent-mtime** (many CC sessions may be live concurrently). It is acceptable for `whoami` to often say "ambiguous, pass --session".
 4. **FORBIDDEN as a whoami source:** process-tree walk and most-recent-mtime. (Evidence: 83 concurrent `claude` processes + 6 installed CC versions on one machine ⇒ ~83-way ambiguity and cross-version argv brittleness; the UUID isn't even on the process command line. mtime with 83 live sessions is almost always wrong.)
 
-**Args (matches `cli::WhoamiArgs`):** `--path` (also print the resolved jsonl path) — *Phase-2: rename/extend to accept an explicit cwd `--cwd PATH` for transcript resolution*; `--format text|json`.
+**Args (matches `cli::WhoamiArgs`):** `--show-path` (visible alias `--with-path`; legacy alias `--path`) and `--format text|json`. The resolved `path` line is ALREADY printed by default whenever the id resolves; `--show-path` only FORCES a `path <not found …>` line in the unresolved case (instead of omitting it). `whoami` takes **no** target — it reads the env var, never a path argument.
 
 **Text output:**
 ```
@@ -457,7 +468,7 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 
 ### 6.5 `agents` — a session's subagent TOPOLOGY (kind, trigger/start/completion, returned message, files)
 
-**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. `--tree` shows workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) as parents of their agents. Complements `--include-subagents` on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents.
+**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. `--tree` shows workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) as parents of their agents. Complements `--include-subagents` on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents. (Design rationale + verified corpus counts: **§11.3**.)
 
 **Topology linkage (the spawn join).** A built-in subagent's `meta.json` carries `toolUseId` — the id of the parent `Task`/`Agent` `tool_use` that spawned it. csift builds a per-session `ParentSpawnIndex` (one forward scan of the parent transcript) mapping `tool_use_id → {spawn tool name, trigger ts, description, subagent_type}` and `tool_use_id → paired tool_result text`. Each subagent joins on its `spawn_tool_use_id`, recovering:
 
@@ -530,8 +541,8 @@ Bash's `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpect
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); optional when `--session` is given |
 | `--session ID` | string | none | restrict to one parent session uuid |
-| `--include-subagents` / `--no-subagents` | bool | `true` | attribute SUBAGENT mutations under the session (default ON — OMC fan-out edits happen in subagents) |
-| `--summary` / `--by-dir` / `--by-file` / `--timeline` | mutually-exclusive enum (clap group) | `--summary` | detail level (below) |
+| `--include-subagents` / `--no-subagents` / `--subagents-only` | mutually-exclusive (clap group `subagent_scope`) | `--include-subagents` | subagent scope: default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only; `--subagents-only` = the complement (only what the session's subagents touched) |
+| `--summary` / `--by-dir` / `--by-file` / `--timeline` | mutually-exclusive enum (clap group `detail`) | `--summary` | detail level (below) |
 | `--turn-range START..END` | string | none | inclusive 0-based turn range; **mutually exclusive** with `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local) |
 | `--format text\|json` | enum | `text` | output format |
@@ -558,7 +569,7 @@ csift files . --format json --by-dir        # machine-readable per-dir rollup
 
 ### 6.7 `recover` — reconstruct a file's content (or a plan) from the transcript
 
-**Purpose.** Where `files` (§6.6) only reports THAT a file was touched, `recover` rebuilds the file's **content** by replaying its Read / Write / Edit stream in transcript order. Three mutually-exclusive modes (clap group `mode`, default `--patches`): segmented diff-patch history (`--patches`), a point-in-time partial snapshot (`--at`), or coverage/scoping (`--coverage`, alias `--dry-run`). `--file` is REQUIRED for all three. A magic `--file @plan` VALUE (not a mode) resolves the session-bound plan file and reconstructs THAT file exactly like any other — its full Write+Edit history, edit-aware — so it composes with every mode and with `--out`/`--format`; this is how you DUMP a plan's content, including a DELETED plan rebuilt from the transcript alone (§6.7.1 covers `@plan` + the sibling `plan` subcommand that LOCATES a session's plan). The motivating use is restoring a file (or a dropped plan) lost in a bad-recovery. **Every output reference carries the JSONL line number** (`Lnnnnn`) so a consumer can `Read` the raw jsonl directly — the one genuinely-new capability over the other subcommands (added via a local line counter threaded through `scan_lines_bytes`; the shared signature is untouched).
+**Purpose.** Where `files` (§6.6) only reports THAT a file was touched, `recover` rebuilds the file's **content** by replaying its Read / Write / Edit stream in transcript order. Three mutually-exclusive modes (clap group `mode`, default `--patches`): segmented diff-patch history (`--patches`), a point-in-time partial snapshot (`--at`), or coverage/scoping (`--coverage`, alias `--dry-run`). `--file` is REQUIRED for all three. A magic `--file @plan` VALUE (not a mode) resolves the session-bound plan file and reconstructs THAT file exactly like any other — its full Write+Edit history, edit-aware — so it composes with every mode and with `--out`/`--format`; this is how you DUMP a plan's content, including a DELETED plan rebuilt from the transcript alone (§6.7.1 covers `@plan` + the sibling `plan` subcommand that LOCATES a session's plan). The motivating use is restoring a file (or a dropped plan) lost in a bad-recovery. (Design rationale — the reference-tool survey + the `originalFile` boundary inversion: **§11.1**.) **Every output reference carries the JSONL line number** (`Lnnnnn`) so a consumer can `Read` the raw jsonl directly — the one genuinely-new capability over the other subcommands (added via a local line counter threaded through `scan_lines_bytes`; the shared signature is untouched).
 
 **Extraction (verified against the live corpus, 2026-06-08).** Per `--file`, in transcript order:
 
@@ -643,7 +654,7 @@ csift recover --session <uuid> --file @plan # DUMP the plan's content (this subc
 
 ### 6.8 `turns` — turn-fidelity reconstruction (restore the back-and-forth a compaction summary clipped)
 
-**Purpose.** A Claude Code **compaction summary** preserves TASK STATE (its 9-section synthesis: primary request, key concepts, file ledger, errors+fixes, plan, next step) in high fidelity, but provably **loses turn fidelity**: its "All user messages" section clips real prose turns to `...`-truncated bullets (measured: ~22 real user turns → ~17 bullets), and the assistant side collapses to a SINGLE verbatim quote (the last pre-compaction message). `turns` **supplements** the summary — it re-emits the verbatim user/assistant TURNS, in original order, each line carrying the JSONL line number (`Lnnnnn`) so a consumer can `Read` the raw transcript at the cited line. It does **not** re-derive task state (the summary owns that; duplicating it wastes budget and risks contradiction). The split of labor is the summary's own design — its trailer says "read the full transcript at `<path>`" for the exact content it generated; `turns` automates that pointer.
+**Purpose.** A Claude Code **compaction summary** preserves TASK STATE (its 9-section synthesis: primary request, key concepts, file ledger, errors+fixes, plan, next step) in high fidelity, but provably **loses turn fidelity**: its "All user messages" section clips real prose turns to `...`-truncated bullets (measured: ~22 real user turns → ~17 bullets), and the assistant side collapses to a SINGLE verbatim quote (the last pre-compaction message). `turns` **supplements** the summary — it re-emits the verbatim user/assistant TURNS, in original order, each line carrying the JSONL line number (`Lnnnnn`) so a consumer can `Read` the raw transcript at the cited line. It does **not** re-derive task state (the summary owns that; duplicating it wastes budget and risks contradiction). The split of labor is the summary's own design — its trailer says "read the full transcript at `<path>`" for the exact content it generated; `turns` automates that pointer. (The measured basis for every default below, and the proof that the budget really reaches back across compaction boundaries: **§11.2**.)
 
 **Reuse, no re-parse.** `turns` sits on the §6.7 `recover` extraction layer verbatim: the same `scan_one_file` forward line-numbered `scan_lines_bytes` pass (the 1:1 jsonl line map), the same `group_turn_indices` (§6.4) turn delimiter, the same `Record` helpers (`is_genuine_user` / `genuine_user_text` / `agent_text` / `blocks` / `is_compact_summary`), the same `resolve_session_files` / `TimeWindow` / `timez` rendering. The byte prefilter is a SUPERSET of recover's, broadened with `"role":"assistant"` / `"type":"assistant"` probes so a pure-text assistant turn (carrying none of Edit/Write/Read/Bash) is never missed. The `Record`/`Block` model needs no change.
 
@@ -651,7 +662,7 @@ csift recover --session <uuid> --file @plan # DUMP the plan's content (this subc
 
 **Budget allocation (two-phase).** `--budget <N>` (default 40000) bounds the whole reconstruction in chars (or tokens via `--budget-unit tokens`, ≈4 chars/token). `--round-trip-fraction <F>` (default 0.5) is a **hard floor**: Phase 1 spends `budget·F` ONLY on round-trip-complete turns (user && assistant-EOT), walking recency-first; Phase 2 fills the rest with whichever single sides remain, user-first (the user wording is the scarcer, higher-signal loss). Without the floor an assistant-heavy tail recovers ZERO user turns (measured on a real pulse-shaped tail). The `[N tool calls]` marker cost is charged per turn (omitted when 0). Determinism: recency = descending line_no, ties by descending turn_index.
 
-**Multi-agent-message richness (`--agent-msgs`).** A single user turn can own a LONG run of agent messages (a debugging/build chain the model narrates step by step) that the summary clips to its single §9 quote. Each `TurnSlice` carries EVERY agent-text record (`agents: Vec<AgentMsg>`); a derived `assistant_eot()` (== `agents.last()`) keeps the EOT anchor for dedup/round-trip/render. `--agent-msgs` decides how much of the run to restore: **`eot-only`** (DEFAULT, non-breaking — keeps only the last message, byte-identical to the pre-expansion output), **`rich`** (keeps the last always + the load-bearing first/middle messages, collapsing pure declarations into a placeholder), or **`all`** (every message). `rich` only filters a LONG run (`agents.len() > --agent-run-threshold`, default 6). A message is **kept when "rich"** — a cheap single-pass OR of a length gate (`>= --agent-rich-min-chars`, default 280) and a signal test (a number-of-substance, a commit-hash-like hex, a `file.rs:NNN`/`src/…` ref, a backtick code span, or a finding/decision lexeme). **KEEP-ON-DOUBT** is the spine: only a short (`< --agent-declaration-max-chars`, default 200) signal-less intent-verb opener (`let me …`/`now i …`) is collapsed; anything uncertain is kept (a wrongly-kept declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A FUSED finding+declaration body trips a signal → kept WHOLE, its trailing declaration shed only by the char-ellipsis. A contiguous collapsed run renders as one `△ L{first}–L{last}  [X agent message(s), Y tool call(s)[, Z failed]]` placeholder carrying the fetchable line range + per-message attribution. `--keep-first` (default) keeps a turn's first message by position privilege; `--no-keep-first` decides it as a middle. `--profile heavy|light` bundles the thresholds (applied before the individual flags, explicit flag wins). Subagent transcripts get the SAME treatment via the shared selection path. The summed-cost == summed-emitted invariant holds with placeholders (the dropped bodies contribute zero cost; the placeholder line is charged like any emitted line).
+**Multi-agent-message richness (`--agent-msgs`).** A single user turn can own a LONG run of agent messages (a debugging/build chain the model narrates step by step) that the summary clips to its single §9 quote. Each `TurnSlice` carries EVERY agent-text record (`agents: Vec<AgentMsg>`); a derived `assistant_eot()` (== `agents.last()`) keeps the EOT anchor for dedup/round-trip/render. `--agent-msgs` decides how much of the run to restore — four modes: **`longest`** (DEFAULT) keeps the LONGEST agent message (the best one-message proxy for "where the substance is" — the summary's single quote is the turn's LAST message, often a ~50-char throwaway wrap-up, while the real finding sits in a MIDDLE one) **+** the first-when-substantive **+** every rich middle, collapsing the rest (including a short non-rich last) into a placeholder; **`eot-only`** forces last-message-only — byte-identical to the pre-expansion single-EOT output (the escape hatch); **`rich`** keeps the last always + the first by position privilege + each non-droppable middle; **`all`** keeps every message. `longest` applies to every multi-message turn; `rich` only filters a LONG run (`agents.len() > --agent-run-threshold`, default 6). A message is **kept when "rich"** — a cheap single-pass OR of a length gate (`>= --agent-rich-min-chars`, default 280) and a signal test (a number-of-substance, a commit-hash-like hex, a `file.rs:NNN`/`src/…` ref, a backtick code span, or a finding/decision lexeme). **KEEP-ON-DOUBT** is the spine: only a short (`< --agent-declaration-max-chars`, default 200) signal-less intent-verb opener (`let me …`/`now i …`) is collapsed; anything uncertain is kept (a wrongly-kept declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A FUSED finding+declaration body trips a signal → kept WHOLE, its trailing declaration shed only by the char-ellipsis. A contiguous collapsed run renders as one `△ L{first}–L{last}  [X agent message(s), Y tool call(s)[, Z failed]]` placeholder carrying the fetchable line range + per-message attribution. `--keep-first` (default) keeps a turn's first message by position privilege **in `rich` mode** (`--no-keep-first` decides it as a middle); it has NO effect in `longest`, where the first is gated on length instead. `--profile heavy|light` bundles the thresholds (applied before the individual flags, explicit flag wins; the master `--agent-msgs` mode is unchanged, so `--profile heavy` alone still runs `longest`). Subagent transcripts get the SAME treatment via the shared selection path. The summed-cost == summed-emitted invariant holds with placeholders (the dropped bodies contribute zero cost; the placeholder line is charged like any emitted line).
 
 **Ellipsis (role-asymmetric middle-truncation).** A unit over its role cap (`USER_CAP=600`, `ASST_CAP=900`, sized from measured medians) is **middle-truncated**, keeping head+tail, with an explicit `… [+K chars, L lines elided] …` marker (the line count uses the pre-normalization text; omitted for single-line user messages). The assistant head is both absolutely larger (900 vs 600) and a larger fraction (0.66 vs 0.60 → head 594/tail 306 vs user 360/240), because EOT prose front-loads context and back-loads the decision. Cuts are on `char` boundaries (UTF-8 safe). No content is fabricated; nothing is silently dropped.
 
@@ -659,20 +670,22 @@ csift recover --session <uuid> --file @plan # DUMP the plan's content (this subc
 
 **Output.** Text groups under `SESSION <id>`: a budget-accounting header, then turn-by-turn `▽ Lnnnnn USER (ts)` / `[N tool calls]` / `△ Lnnnnn ASSISTANT (ts)` (one `△` line per KEPT agent message under `--agent-msgs rich`/`all`), with `══ compaction boundary · summary at Lnnnnn ══` banners at crossings, `(also in summary)` flags on demoted units, and `△ L{a}–L{b}  [X agent messages, Y tool calls, Z failed]` placeholders for collapsed agent-message runs. `--out` writes the full (un-terminal-truncated) reconstruction to a file while the summary prints to stdout. JSON (`--format json`) emits one VERBATIM (un-truncated `text`) object per unit (`line_no`, `role`, `ts_utc`/`ts_local`, `tool_calls`, `full_chars`, `rendered_chars`, `truncated`, `elided_chars`/`elided_lines`, `also_in_summary`, `compactions_before`) plus interleaved `{"kind":"compaction_boundary","line_no":…,"summary_chars":…}` records and, per collapsed agent-message span, a `{"kind":"collapsed_agents","agent_messages":…,"tool_calls":…,"failed":…,"first_line":…,"last_line":…}` record. **No silent truncation** — skipped malformed lines are counted and surfaced.
 
-**Chunked output for hook injection (`--slice <N>` / `--window <N>`).** A Claude Code `SessionStart` hook can inject at most **10,000 CHARACTERS** of `additionalContext` (over-cap output is replaced by a file-path + preview, so the body is lost), so a >10K reconstruction must be fanned across several hooks. `--slice <N>` prints ONLY the Nth (1-based) chunk of the verbatim DOCUMENT (the `--out` body — turn units + boundary banners, NO scope/header/footer chrome) after packing its lines greedily into `≤ --window`-CHARACTER chunks. `--window` defaults to 10000 and counts CHARACTERS (Unicode scalars — the unit the cap itself counts, so CJK prose is not 3× over-charged the way bytes would be), hard-splitting any single line longer than the window on a char boundary so no chunk ever exceeds it. Slicing is **deterministic** (same session + `--budget` ⇒ identical chunk boundaries; concatenating slices `1..K` reproduces the document byte-for-byte), so N independent `SessionStart(compact)` hooks each request their own slice and the lock/ordering lives in the hook shell. An out-of-range `N` prints nothing (exit 0); `--slice` is **text-only** and **mutually exclusive with `--out`** and with `--format json`; `--slice 0` or `--window 0` errors. Safe to fire on every compaction — the drop-and-re-inject cycle (the old injection is summarized away pre-boundary while `SessionStart('compact')` re-injects fresh) prevents context pile-up.
+**Chunked output for hook injection (`--slice <N>` / `--window <N>`).** A Claude Code `SessionStart` hook can inject at most **10,000 CHARACTERS** of `additionalContext` (over-cap output is replaced by a file-path + preview, so the body is lost), so a >10K reconstruction must be fanned across several hooks. `--slice <N>` prints ONLY the Nth (1-based) chunk of the verbatim DOCUMENT (the `--out` body — turn units + boundary banners, NO scope/header/footer chrome) after packing its lines greedily into `≤ --window`-CHARACTER chunks. `--window` defaults to 10000 and counts CHARACTERS (Unicode scalars — the unit the cap itself counts, so CJK prose is not 3× over-charged the way bytes would be), hard-splitting any single line longer than the window on a char boundary so no chunk ever exceeds it. Slicing is **deterministic** (same session + `--budget` ⇒ identical chunk boundaries; concatenating slices `1..K` reproduces the document byte-for-byte), so N independent `SessionStart(compact)` hooks each request their own slice and the lock/ordering lives in the hook shell. An out-of-range `N` prints nothing (exit 0); `--slice` is **text-only** and **mutually exclusive with `--out`** and with `--format json`; `--slice 0` or `--window 0` errors. **`--slices <N>` (FIXED-FLEET mode)** pins the chunk COUNT to match a fixed set of N registered `SessionStart` hooks: csift fills the N newest-first slices with WHOLE turns (the per-role 600/900 caps are dropped — a turn is ellipsized only if it ALONE exceeds one window) and DISCARDS the oldest overflow, so the count never drifts to 5/6/7 as the conversation grows (the hook count never needs re-tuning); the realized budget becomes `N × --window` and `--budget` is ignored, with `--slice i` still picking which chunk to print. Without `--slices`, `--slice` keeps its legacy budget-driven, variable-chunk-count behavior. Safe to fire on every compaction — the drop-and-re-inject cycle (the old injection is summarized away pre-boundary while `SessionStart('compact')` re-injects fresh) prevents context pile-up.
 
 **Windowing** matches §6.7: `--turn-range START..END` (inclusive, 0-based genuine-user order) is mutually exclusive with `--since`/`--until` (ISO8601 / relative).
 
 **Example invocations:**
 ```bash
-csift turns .                                   # default 40K-char reconstruction, this project's session
+csift turns .                                   # default 40K recon (longest agent msg + rich members per turn)
 csift turns <uuid> --budget 12000               # a 200K-context-sized recovery (~10-15K)
 csift turns <uuid> --budget 40000 --format json # machine-readable, line-numbered
 csift turns <uuid> --round-trip-fraction 0.6    # weight harder toward complete round-trips
-csift turns <uuid> --agent-msgs rich            # restore the load-bearing intermediate agent messages
-csift turns <uuid> --profile heavy              # rich mode, lower thresholds (max fidelity)
+csift turns <uuid> --agent-msgs eot-only        # force the old single-EOT (last-message-only) output
+csift turns <uuid> --profile heavy              # longest mode, lower thresholds (max fidelity)
 csift turns <uuid> --agent-msgs all             # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
+csift turns . --window 9000 --slices 4          # fixed 4-chunk fan-out for 4 SessionStart hooks
+csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chunks
 ```
 
 ---
@@ -775,3 +788,58 @@ JSON must be valid UTF-8; non-UTF-8 bytes in excerpts are lossily replaced (`Str
 | 5 | Persisted output = `<persisted-output>` inline pointer | True **plus** a structured `toolUseResult.persistedOutputPath` + `persistedOutputSize`; resolve via the structured field (no regex needed), inline marker is the fallback. | §4.6 |
 | 6 | `type` set = user/assistant/system + a few metadata | Full set incl. `attachment` (54% of records — dominant noise), `file-history-snapshot`, `queue-operation`; block extras `caller` (on tool_use), `tool_reference` (in tool_result content). Model must absorb all via tolerant parsing. | §3.1, §3.5, §4.8 |
 | 7 | Generic "mmap + memchr + rayon + lazy parse" | Quantified: 400 KB max single line ⇒ chunk-with-carry tail read; prefilter is two-stage (category memmem + keyword literal); rayon **across** files only (within-file is future opt-in); simd-json explicitly rejected for the default. | §7 |
+
+---
+
+## 11. Design notes & empirical grounding
+
+> The normative spec is §0–§10; this section records the **design rationale and the measurements** behind the three deepest features (`recover`, `turns`, `agents`) — *why* the algorithm is shaped as it is and *why* the magic numbers are what they are. It is the durable residue of the former standalone `RECOVERY_DESIGN` / `TURN_FIDELITY_DESIGN` / `TOPOLOGY_DESIGN` design docs, folded here (their implementation scaffolding — line-number maps, clap-wiring, files-touched, test plans — was execution-time material and is intentionally dropped; the code is the source of truth for that). All counts below are empirical, captured against the live `~/.claude/projects` corpus on the dates noted; treat them as representative magnitudes, not invariants (a live session's subagent counts drift upward as it spawns more).
+
+### 11.1 `recover` — reference-tool survey + the `originalFile` boundary inversion
+
+Four prior tools were studied (ccdiag, claude-file-recovery, coding-agent-session-search, florian-gist). **None reconstructs file content across integrity boundaries, and none segments at out-of-band-edit boundaries** — that is `recover`'s original territory (§6.7). Only four peripheral primitives were harvested from them:
+
+1. the `tool_use_id ↔ tool_result` join (used everywhere a result must be attributed to its intent);
+2. the Read `→` (U+2192) gutter-strip regex (recovers raw line text from a visible `cat -n`-style Read);
+3. the `file-history-snapshot` on-disk backup channel (which claude-file-recovery parses and ccdiag discards) — used only as a coverage annotation, never to fabricate content, because the real `backupFileName` is frequently `null`;
+4. `(timestamp, session_id, line_number)` as the ordering key.
+
+**The load-bearing inversion** is over claude-file-recovery: where it uses an Edit's `originalFile` to *paper over* drift (assume the file was whatever `originalFile` claims), `recover` uses **replayed-buffer ≠ the next op's `originalFile`** to *detect and segment at* the drift — that disagreement is exactly the AUTHORITATIVE integrity boundary #2 of §6.7. The same "in the LLM's eyes" sparse-buffer model (a `BTreeMap<file_line, cell>`; an absent line is an explicit gap, never fabricated; an un-anchorable edit becomes a counted coverage hole) is what keeps the reconstructed-vs-disk guarantee honest — the contiguous-from-line-1 prefix matches disk byte-for-byte even on a heavily-edited file with no clean anchor. The one genuinely-new capability under all of this is the per-line `Lnnnnn` counter (§6.7), threaded locally so the shared `scan_lines_bytes` signature is untouched.
+
+### 11.2 `turns` — the measured basis for every default
+
+**What the summary loses (the anatomy that motivates the feature).** Measured over three real sessions (246 MB, 130 MB, and 80 MB): a Claude Code compaction summary preserves task STATE in high fidelity but provably loses TURN fidelity — its §6 "All user messages" clips ~**22 real user prose turns → ~17 `...`-truncated bullets**, and the assistant side collapses ~**239 assistant turns → exactly 1 verbatim quote** (the last pre-compaction message). `turns` supplements (never re-derives) the summary by restoring those verbatim turns in order, each carrying its `Lnnnnn`.
+
+**Every default is sized from those measurements**, not guessed:
+
+| parameter | default | empirical basis |
+|---|---|---|
+| `--budget` | 40000 chars | a 1M-context session at 40–50% compaction comfortably recovers ~40K; a 200K context → ~10–15K |
+| `--budget-unit` | chars | tokens via ≈4 chars/token (a ~17K-char summary measured ≈ ~3.5–4.5K tokens) |
+| `--round-trip-fraction` | 0.5 | ~50% reservation guarantees the back-and-forth; without it an assistant-heavy tail recovers ZERO user turns (the 10K-verbatim case → `users=0`, below) |
+| `USER_CAP` | 600 | user text median 410 / p90 2,574 → 600 keeps the median whole, ellipsizes only the tail |
+| `ASST_CAP` | 900 | assistant-EOT natural-stop median 608–1,710 (1.45–2.16× the user side), more newlines → a larger cap |
+| assistant head fraction | 0.66 | EOT prose front-loads context, back-loads the decision → keep head ≈ ⅔ |
+| user head fraction | 0.60 | the user front-loads the ask → slightly less tail needed |
+| `--agent-run-threshold` | 6 | a run > 6 messages fires on ~52–55% of multi-message turns (the rich-filter trigger) |
+| `--agent-rich-min-chars` | 280 | ≈ 1.5× the measured 184-char median middle message |
+| `--max-compactions` | 0 (∞) | reach across multiple boundaries by default; a guard, not a target |
+
+**The spanning is proven, not asserted.** A backward char-budget walk on the two real multi-compaction transcripts, with vs without the §6.8 ellipsis cost model (USER_CAP 600 / ASST_CAP 900):
+
+| sample | compactions in file | budget | mode | boundaries spanned | users / asst recovered |
+|---|---|---|---|---|---|
+| alpha | 35 | 40K | verbatim | 1 | 5 / 15 |
+| alpha | 35 | 40K | **ellipsis** | **3** | **22 / 49** |
+| beta | 54 | 40K | verbatim | 2 | 2 / 127 |
+| beta | 54 | 40K | **ellipsis** | 2 | 2 / **160** |
+| beta | 54 | 10K | verbatim | 0 | **0** / 26 |
+| beta | 54 | 10K | ellipsis | 1 | 0 / 35 |
+
+Three conclusions this *proves*: (1) a 40K ellipsized budget spans ≥2 boundaries on both samples (alpha 3, beta 2) — and **the ellipsis compression is what makes it reach back** (alpha 40K: 1 boundary → 3, recovery 5/15 → 22/49); (2) a naive recency walk starves the round-trip guarantee (beta 10K verbatim → 0 users), which is the empirical justification for the 50% floor forcing user inclusion; (3) 200K-context sizing (~10–15K) spans ~1 boundary, 1M-context (~40K) spans 2–3 — matching the budget→reach guidance.
+
+### 11.3 `agents` — the topology fix + verified corpus
+
+**The problem it fixed.** Discovery of subagent transcripts was always lossless, but it was a *flat list* — each nested transcript treated as a detached session, with the LINKAGE back to the parent `tool_use` that spawned it missing. That made three of six real queries impossible (returned message, files-changed, the topology tree) and two lossy (the "when" was the lagging child-head ts; there was no workflow-run grouping). The fix is **additive**: a topology builder (`ParentSpawnIndex` — one forward scan of the parent transcript joining `tool_use_id → {spawn tool, trigger ts, description, subagent_type}`) layered on the existing discovery + lifecycle primitives; none of the good discovery code was rewritten. The two sanctioned behavior changes that fell out (both a previously-wrong/lossy output corrected, neither touching default top-level behavior) are in §6.5: `--by` defaults to the true `trigger` axis (not the lagging `start`), and a subagent row's printed id is the bare `<hex>` (joinable to an `agents` node), not the un-joinable `agent-<hex>` stem.
+
+**Verified on-disk (a representative live session, 2026-06-08).** 152 built-in (`subagents/agent-<hex>.jsonl`) + 404 workflow (`subagents/workflows/wf_*/agent-<hex>.jsonl`) = 556 subagents, **0 nested** (depth uniformly 1 — Claude Code provisions subagents without an agent-spawn tool, so there are zero sub-sub-agents; confirmed across 2348 transcripts). The parent transcript carried 151 `Agent` + 22 `Workflow` tool_uses (this corpus spells the built-in spawn tool `Agent`, not `Task`; `Task` is matched defensively for other corpora), and 19 top-level `workflows/wf_*.json` run manifests. The **3-way returned-message resolve** broke down 147 sync-tool-result, 6 async-child-tail (the parent result was the `Async agent launched …` run-in-background sentinel → fall back to the child transcript tail), 403 workflow-journal (the `journal.jsonl` `result` event payload), 1 unresolved — 0 linkage mismatches.

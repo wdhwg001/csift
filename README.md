@@ -87,30 +87,26 @@ identity), lazy `serde_json` only on candidate lines, and rayon parallelism ACRO
 
 ## Subcommands
 
-Every **session-operating** subcommand (`list`, `search`, `agents`, `files`, `recover`, `plan`, `turns`)
-takes optional `PATH...` targets and an optional `--session <uuid>` (a bare session-UUID in the positional
-slot is routed to `--session`; a bare **subagent hex** is NOT accepted there — inspect one with `csift
-agents --agent <hex>`). `plan` additionally resolves the CALLING session from `$CLAUDE_CODE_SESSION_ID`
-when given no target (like `whoami`), and its only flags are `--no-subagents` / `--format`. For `search` the first positional is the **PATTERN**, so a lone-uuid `search
-<uuid>` is routed to `--session` (a one-line note reports it); pass a scope target to keep a literal
-search (`csift search <uuid> .`). The subagent-span flags `--include-subagents` / `--no-subagents`
-apply to the **four** transcript-spanning subcommands `list`/`search`/`files`/`recover` (default **ON**)
-and `turns` (default **OFF** — a single-thread recovery tool with a per-session budget that multiplies,
-so it spans subagents only on explicit `--include-subagents`). On the four default-ON subcommands
-`--include-subagents` is a **no-op** (the default already spans) and `--no-subagents` is **DOMINANT** —
-present, it always wins regardless of flag order; on `turns` `--include-subagents` is the load-bearing
-opt-in (last-flag-wins). A `--subagents-only` flag (a `files`-only scope flag) mistyped onto a sibling
-gives a pointed "that's a `files`-only flag" error. Every spanning subcommand discloses a subagent
-fan-out the SAME way: a leading `scope  N sessions in scope (X top-level + Y subagent)` text banner and
-a leading `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}` JSON
-record (both suppressed under `--no-subagents` / a single-transcript scope). `agents` has **no**
-subagent-span flag: it *discovers* a session's subagents as its primary output, so there is nothing to
-span over (passing `--no-subagents`/`--include-subagents` errors with that note). The argv pre-pass routes declared flags
-(long and the search short flags `-t`/`-i`) away from the positional, so a flag works in any position,
-including trailing. `whoami` is the
-exception: it takes NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to
-`CODEX_COMPANION_SESSION_ID`) and its only flags are `--show-path` / `--format`. All support
-`--format text|json`.
+A few conventions are shared across subcommands:
+
+- **Targets.** Every session-operating subcommand (`list`, `search`, `agents`, `files`, `recover`,
+  `plan`, `turns`) takes optional `PATH...` targets (a real cwd or an encoded `-Users-…` dir) and an
+  optional `--session <uuid>`; a bare session-UUID in the positional slot routes to `--session`. A bare
+  **subagent hex** is not a valid target — inspect one with `csift agents --agent <hex>`. `whoami` takes
+  no target (it reads `$CLAUDE_CODE_SESSION_ID`); `plan` falls back to that same env var when given none.
+- **`search` puts PATTERN first**, so a lone `search <uuid>` routes the uuid to `--session` (a note
+  reports it); add a scope target to keep it a literal search: `csift search <uuid> .`.
+- **Subagent span.** `list` / `search` / `files` / `recover` span each session's subagent transcripts by
+  **default**; `--no-subagents` is dominant (wins in any flag position) and `--include-subagents` is then
+  a no-op. `turns` instead defaults to the **top-level thread only** (its per-session budget multiplies
+  across fan-out), so there `--include-subagents` is the opt-in. `files` also accepts `--subagents-only`
+  (the complement); `agents` has no span flag — discovering a session's subagents *is* its job.
+- **Flags work in any position** — a pre-pass routes declared flags (long, plus search's `-t`/`-i`) away
+  from the leading-`-` encoded target, so a trailing flag is never swallowed. All support
+  `--format text|json`.
+- **Fan-out is disclosed.** A run that spans more than one transcript prints a leading
+  `scope  N sessions in scope (X top-level + Y subagent)` banner (and a `{kind:"session_header", …}` JSON
+  record), suppressed under `--no-subagents` or a single-transcript scope.
 
 ### `list` — session identity index
 
@@ -196,25 +192,17 @@ csift agents --session <uuid> --returned-message --format json   # every node's 
 ### `files` — which files/dirs a session modified, when
 
 The set of files a session Read / Wrote / Edited (+ Bash mutations), with timestamps. `files` reports
-THAT a file changed; `recover` rebuilds its content. Bash mutations are parsed lexically and flagged
-`(heuristic)`: the verb allowlist (incl. `ln`/`install`/`rsync`, GNU `-t DIR`, and `tar -c` → its `-f`
-archive) plus fd-qualified redirects (`2>`/`1>`/`&>`, and the noclobber-override `>|`), `curl`/`wget`
-output flags, and allowlisted flag outputs (`--junit-xml=`/`--report-path`/`dd of=`/`zip`) — only
-concrete, resolvable paths (an unexpandable `$VAR`/`~`, a `/dev/null` sink with a glued substitution
-`)`, a `>(…)` process substitution and its body args, and a quote-severed fragment are all dropped,
-never fabricated). The parser is **quote/backtick/procsub/arith-aware**: a `>`/`<` inside a quoted
-echo/printf or regex (`echo "idle >8min"`), inside a backtick command substitution (`` `date >f` ``),
-or inside an arithmetic/test comparison (`(( a > b ))` / `[[ a > b ]]`) is masked before redirect
-detection, so it never fabricates a file. A trailing **`#` shell comment** (an unquoted `#` at a word
-boundary → end-of-line) is likewise masked, so `cp src dst  # note` reports `dst` (not the comment word),
-an in-comment `> /x` fabricates nothing, and a real cp/mv/ln destination is never displaced by the
-comment; an in-path `#` (`/tmp/a#b`) is preserved. A write inside an embedded-language
-body (heredoc / `python -c`) is out of scope and missed — but **never mis-reported** (heredoc body
-lines are lexically skipped and quoted/procsub spans masked before scanning). The four detail levels
-**strictly coarsen**: `--summary` is a top-level-PREFIX rollup (a whole project tree → one row;
-smallest output) < `--by-dir` (full parent dir) < `--by-file` < `--timeline`. Subagent scope is
-mutually exclusive: default spans subagents, `--no-subagents` is the top-level session only, and
-`--subagents-only` is its complement (only the files the session's subagents touched).
+THAT a file changed; `recover` rebuilds its content. `Edit` / `Write` / `MultiEdit` mutations are
+**authoritative** (create-vs-edit comes from the tool result); **Bash** mutations are a best-effort
+lexical parse — quote/backtick/procsub/arith/comment-aware, so a `>` inside a quoted string, a comment,
+or an arithmetic test never fabricates a path — and are always flagged `(heuristic)`. A write buried in
+a heredoc or `python -c` body is out of scope (missed, never mis-reported). The full Bash verb/redirect
+allowlist lives in [`SPEC.md`](./SPEC.md) §6.6.
+
+The four detail levels **strictly coarsen**: `--summary` (the default — a top-level-prefix rollup, so a
+whole project tree collapses to one row; smallest output) < `--by-dir` < `--by-file` < `--timeline`.
+Subagent scope is mutually exclusive: the default spans subagents, `--no-subagents` is the top-level
+session only, and `--subagents-only` is its complement (only what the session's subagents touched).
 
 ```bash
 csift files --session <uuid>
@@ -279,31 +267,17 @@ csift recover --session <uuid> --file @plan # DUMP the plan's content (plan only
 ### `turns`
 
 Reconstruct the verbatim user/assistant back-and-forth a compaction summary clipped — the headline
-command. In automation-heavy sessions, machine-injected `<task-notification>` triggers open turns;
-`turns` (and `search -t user`) label them as `[<kind> <id> <status>] <summary>` (kind =
-`background-command` / `workflow` / `agent` / `monitor` / `task`, read from the summary — never the
-raw XML; `monitor` matches a `<task-notification>` whose summary opens `Monitor`/`scheduled`/`cron`
-OR a `Background command "…"` whose quoted command NAME carries a monitor-cadence token
-(`monitor`/`re-arm`/`relaunch monitor`/`liveness`) — so a monitor loop implemented as `&`-detached
-background commands is attributed to `monitor`, not disguised as generic `background-command`) and the
-header reports the
-human/automation split WITH a per-class breakdown (`N user (M automation triggers: 2 background-command,
-1 agent)`). A monitor pulse's real outcome lives in `<event>` (often with no `<status>`), so its label
-surfaces the event (`[monitor … STAGE2_OUTPUT_READY]`) rather than fabricating `completed`. **Note:**
-the `monitor` class covers only these `<task-notification>` pulses; the **`ScheduleWakeup` wakeup-tick
-prompts** that drive a monitor/cron *cadence* arrive as `isMeta:true` user records (not
-`<task-notification>`s) and are **not yet segmented or attributed** — they currently group under the
-preceding genuine-user turn. In
-`--format json` the attribution is structural (`is_automation` / `trigger_kind` / `task_id` / `status` /
-`event`) on the user-segment object, with a leading `{kind:"session_header",…}` object carrying the
-lumped `automation_triggers` + per-class `automation_by_kind` (the SELECTED triggers) +
-`automation_in_scope_by_kind` (the SAME breakdown over EVERY in-scope pulse, REGARDLESS of budget — so a
-monitor-heavy session is never read as `monitor:0` just because the recency window selected none of its
-deep pulses) + `sessions_in_scope` vs
-`sessions_rendered`. The text header likewise prints an `in scope (not all selected): N automation
-triggers — …` line when more automation exists than was rendered. These pulses are
-excluded from the `--round-trip-fraction` human-reserved floor. See the [budget model](#budget-model)
-and [richness model](#richness-model) below.
+command. In automation-heavy sessions, machine-injected `<task-notification>` triggers also open turns;
+`turns` (and `search -t user`) label them `[<kind> <id> <status>] <summary>` (kind =
+`background-command` / `workflow` / `agent` / `monitor` / `task`, read from the notification summary,
+never the raw XML), and the header reports the human-vs-automation split with a per-class breakdown
+(`N user (M automation triggers: 2 background-command, 1 agent)`). A monitor pulse's outcome is taken
+from its `<event>` rather than fabricating a `completed` status. Automation triggers are excluded from
+the `--round-trip-fraction` human floor, and `--format json` carries the attribution structurally
+(`is_automation` / `trigger_kind` / `task_id` / `status` / `event`). One gap worth knowing: the
+`ScheduleWakeup` wakeup-tick prompts that drive a monitor/cron *cadence* arrive as `isMeta:true` records
+(not `<task-notification>`s) and are **not yet** segmented — they group under the preceding genuine-user
+turn. See the [budget model](#budget-model) and [richness model](#richness-model) below.
 
 ```bash
 csift turns .                                               # default 40K-char recon (longest agent msg + rich members/turn)
@@ -473,8 +447,11 @@ tests/
   cli_integration.rs  # end-to-end tests against the compiled binary
 ```
 
-Design docs: `SPEC.md` (the full record model + subcommand specs), `TURN_FIDELITY_DESIGN.md` (the
-`turns` budget + richness design), `SKILL.md` (the agent-facing usage skill).
+Design docs: [`SPEC.md`](./SPEC.md) — the full record model, the per-subcommand spec, the performance
+contract, and (§11) the design rationale + empirical grounding for `recover` / `turns` / `agents` (the
+former `RECOVERY_DESIGN` / `TURN_FIDELITY_DESIGN` / `TOPOLOGY_DESIGN` docs are folded in there).
+[`SKILL.md`](./SKILL.md) is the agent-facing usage skill; [`AGENTS.md`](./AGENTS.md) is how to work in
+the repo.
 
 ## License
 

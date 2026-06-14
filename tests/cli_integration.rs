@@ -5697,7 +5697,7 @@ fn json_lines(stdout: &str) -> Vec<serde_json::Value> {
 }
 
 /// Strip the OPERATIONAL trailer lines the text renderer prints to stdout but that are
-/// NOT part of the reconstruction DOCUMENT (per TURN_FIDELITY_DESIGN §4/§7.1 the document
+/// NOT part of the reconstruction DOCUMENT (per SPEC §6.8 the document
 /// is: doc-header-block + unit headers + bodies + ellipsis markers + boundary banners).
 /// The `(skipped N malformed …)` diagnostic and the `(wrote full reconstruction …)`
 /// notice are stdout-only chrome, never written to `--out`; everything else stays.
@@ -5722,7 +5722,7 @@ fn turns_budget_respected_real_emitted_chars() {
     // replaces the old circular checks (the reported "chars used" number, and the JSON sum
     // re-derived with a hardcoded `+ 24`) — neither of which measured the real document.
     //
-    // The contract binds the default TEXT form (TURN_FIDELITY_DESIGN §4 line ~200 / §7.1).
+    // The contract binds the default TEXT form (SPEC §6.8 — budget allocation + text output).
     // We bound BOTH the stdout document (doc-header-block + banners + units, minus the
     // operational trailers) AND the `--out` file (the documented verbatim reconstruction,
     // which omits the stdout-only header block) — so every component the contract lists is

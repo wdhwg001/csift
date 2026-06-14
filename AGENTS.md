@@ -4,7 +4,7 @@ Project-specific operating manual for any AI agent (Claude Code, Codex, Cursor) 
 
 > **About this file.** `AGENTS.md` is the canonical, vendor-neutral filename (Codex / Cursor / GPT-tooling convention). `CLAUDE.md` is Claude Code's expected filename and is a **symlink to `AGENTS.md`**, so the same content loads whichever tool is driving. **Edit `AGENTS.md` only; `CLAUDE.md` follows automatically.**
 >
-> **Companion doc.** [`SPEC.md`](./SPEC.md) is the product/behaviour spec (Phase 2 finalizes it). This file is authoritative for _how to work in the repo_; SPEC.md for _what to build_.
+> **Companion doc.** [`SPEC.md`](./SPEC.md) is the product/behaviour spec — the record model, the per-subcommand spec, the performance contract, and (§11) the design rationale + empirical grounding for `recover` / `turns` / `agents`. This file is authoritative for _how to work in the repo_; SPEC.md for _what to build_.
 
 ---
 
@@ -62,7 +62,7 @@ cargo build --release                        # optimised (thin-LTO, 1 cgu) for r
 cargo run -- list [PATH...]                  # list sessions (+ subagents by default; --no-subagents to skip)
 cargo run -- search PATTERN [flags]          # regex search (spans subagents by default)
 cargo run -- agents [PATH | --session ID]    # subagent lifecycle (kind/start/completion/status; --since/--until/--by)
-cargo run -- whoami [--path]                 # identify the calling CC session
+cargo run -- whoami [--show-path]            # identify the calling CC session
 cargo fmt --all                              # format
 cargo fmt --all -- --check                   # format gate
 cargo clippy --all-targets -- -D warnings    # lint gate (warnings-as-errors)
