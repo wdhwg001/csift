@@ -774,7 +774,7 @@ csift turns <uuid> --agent-msgs rich              # the keep-on-doubt keep-set (
 csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)
 csift turns <uuid> --agent-msgs all --budget 60000  # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
-csift turns . --budget 36000 --window 9000 --slice 1  # 1st ≤9000-char chunk for a SessionStart hook (slices 1–4 fan 36K)
+csift turns . --budget 36000 --window 9000 --slice 1  # 1st ≤9000-char chunk for a SessionStart hook (size the fleet to ceil(body/window)+1 — a ≤36K body fans across ~6)
 csift turns <uuid> --include-subagents            # ALSO span subagents (budget × N; rare cross-fan-out recon)
 ```
 
@@ -810,8 +810,8 @@ into slice order. This is the exact mechanism a chunked-USER.md `SessionStart` l
 below ports it in full. An out-of-range `N` prints nothing (exit 0), so a fixed fleet of hooks (say 4)
 self-trims — surplus hooks simply inject nothing, but they STILL must release the barrier so the chain
 doesn't stall. `--slice` is text-only and is NOT combinable with
-`--out` (which writes the WHOLE document to a file). Example: a 36000-char recon across four 9000-char
-hooks — hook `i` runs `csift turns . --budget 36000 --window 9000 --slice i`. See "Integration recipes →
+`--out` (which writes the WHOLE document to a file). Example: a ≤36000-char recon across a six-9000-char-
+hook fleet — hook `i` runs `csift turns . --budget 36000 --window 9000 --slice i`. See "Integration recipes →
 (A)" for the wiring and how this composes with compaction re-injection.
 
 ---
@@ -1034,7 +1034,7 @@ before it emits + exits, forcing process-exit order into slice order. Same mecha
 # PPID) so concurrent sessions don't collide. Faithful port of the chunked-USER.md SessionStart loader.
 set -euo pipefail
 slice="${1:?pass the 1-based slice index as argv1}"
-MAX_SLICES=4                       # MUST equal the number of registered hooks below
+MAX_SLICES=6                       # MUST equal the number of registered hooks below (see sizing note)
 WAIT_TIMEOUT_SECS=5                # insurance: proceed anyway if a predecessor never fires
 
 SEQ_DIR="/tmp/csift-turns-slice-seq-${PPID}"
@@ -1073,7 +1073,11 @@ $chunk" \
   '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}'
 ```
 
-Register the same script four times (slices 1–4 → up to 36000 chars across four ≤9000-char hooks):
+Register the same script six times (slices 1–6). **Size the fleet to `ceil(budget ÷ window) + 1`, not
+`budget ÷ window`:** `--slice` never splits a turn mid-unit, so a ≤36000-char body lands in up to **five**
+boundary-respecting ≤9000-char chunks (a four-hook fleet would silently drop the fifth); the sixth is
+empty headroom for a session with many compaction-boundary banners. Surplus slices print nothing and
+self-trim — but they STILL release the barrier so the chain never stalls.
 
 ```json
 {
@@ -1086,15 +1090,24 @@ Register the same script four times (slices 1–4 → up to 36000 chars across f
       { "matcher": "compact", "hooks": [{ "type": "command",
         "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 3" }] },
       { "matcher": "compact", "hooks": [{ "type": "command",
-        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 4" }] }
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 4" }] },
+      { "matcher": "compact", "hooks": [{ "type": "command",
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 5" }] },
+      { "matcher": "compact", "hooks": [{ "type": "command",
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 6" }] }
     ]
   }
 }
 ```
 
+For a GLOBAL install (every project), drop the same script in `~/.claude/hooks/` and register the six
+entries in `~/.claude/settings.json` with an ABSOLUTE `command` path — `${CLAUDE_PROJECT_DIR}` is unset
+outside a project — and resolve `csift` from `~/.cargo/bin` / PATH rather than a repo-relative binary.
+
 Safe to fire on every compaction (no pile-up, per above). `--window 9000` (under the 10K cap) leaves
-headroom for the wrapper line each hook adds; concatenating the slices reproduces the whole reconstruction,
-and the barrier guarantees they arrive in that order.
+headroom for the wrapper line each hook adds; concatenating the slices reproduces the chrome-less document
+BODY (the same bytes `--out` writes — NOT the scope-banner/footer-wrapped plain `turns` output), and the
+barrier guarantees they arrive in that order.
 
 ### (B) `whoami` remediation — export the session id when CC doesn't
 
