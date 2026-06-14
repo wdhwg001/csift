@@ -537,11 +537,30 @@ impl Record {
         }
     }
 
+    /// The `toolUseResult.annotations` map (§4.4) — per-question `{notes?, preview?}` the
+    /// user attached to a selection. `notes` is free-text the user typed alongside (or
+    /// instead of) a listed option; when the answer is the literal `"(notes only)"`
+    /// placeholder, the user's ENTIRE real message lives here. `None` when absent/empty.
+    fn auq_annotations_obj(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        let ann = self
+            .tool_use_result
+            .as_ref()?
+            .get("annotations")?
+            .as_object()?;
+        if ann.is_empty() {
+            None
+        } else {
+            Some(ann)
+        }
+    }
+
     /// Reconstruct the COMPLETE AskUserQuestion exchange (§4.4) as one genuine-user unit:
     /// `[AskUserQuestion · N questions]` followed by, per question, the header, the
-    /// question, its options, and the user's answer. Built from the structured
-    /// `toolUseResult.questions[]` zipped with `toolUseResult.answers{}`; falls back to
-    /// the synthesized `tool_result` string (parsed for `"<q>"="<a>"`) when
+    /// question, each option WITH its description (supplementary note), the user's answer, and any
+    /// free-text `annotations.notes` attached to that answer (the `"(notes only)"` path,
+    /// where the user's real message lives — never dropped). Built from the structured
+    /// `toolUseResult.questions[]` zipped with `toolUseResult.answers{}` + `.annotations{}`;
+    /// falls back to the synthesized `tool_result` string (parsed for `"<q>"="<a>"`) when
     /// `toolUseResult` is absent. Returns `None` when this is not an answered AUQ carrier.
     ///
     /// CODEPOINT-SAFE: works entirely on owned `String`/`&str` values pulled structurally
@@ -559,6 +578,7 @@ impl Record {
                 .as_ref()
                 .and_then(|t| t.get("questions"))
                 .and_then(serde_json::Value::as_array);
+            let annotations = self.auq_annotations_obj();
             let mut out = String::new();
             let n = questions.map_or(answers.len(), Vec::len);
             out.push_str(&format!("[AskUserQuestion · {n} question{}]", plural(n)));
@@ -569,13 +589,24 @@ impl Record {
                         .get("question")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or_default();
-                    let opts: Vec<String> = q
+                    // Each option is a (label, description) pair — BOTH surfaced; the
+                    // description (supplementary note) is the per-option detail the user wants kept,
+                    // and is what was being dropped (only the label survived).
+                    let opts: Vec<(String, Option<String>)> = q
                         .get("options")
                         .and_then(serde_json::Value::as_array)
                         .map(|os| {
                             os.iter()
-                                .filter_map(|o| o.get("label").and_then(serde_json::Value::as_str))
-                                .map(str::to_string)
+                                .filter_map(|o| {
+                                    let label =
+                                        o.get("label").and_then(serde_json::Value::as_str)?;
+                                    let desc = o
+                                        .get("description")
+                                        .and_then(serde_json::Value::as_str)
+                                        .filter(|s| !s.is_empty())
+                                        .map(str::to_string);
+                                    Some((label.to_string(), desc))
+                                })
                                 .collect()
                         })
                         .unwrap_or_default();
@@ -584,19 +615,34 @@ impl Record {
                         .get(question)
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or("");
+                    // Free-text notes the user attached to THIS answer. When the answer is
+                    // the `"(notes only)"` placeholder, the notes ARE the user's message —
+                    // dropping them silently swallowed the whole turn (the common path,
+                    // since the user routinely answers AUQs with typed prose, not a click).
+                    let note = annotations
+                        .and_then(|a| a.get(question))
+                        .and_then(|v| v.get("notes"))
+                        .and_then(serde_json::Value::as_str)
+                        .filter(|s| !s.is_empty());
                     out.push_str(&format!("\nQ{} ", i + 1));
                     if let Some(h) = header {
                         out.push_str(&format!("({}): ", normalize_line(h)));
                     }
                     out.push_str(&normalize_line(question));
-                    if !opts.is_empty() {
-                        out.push_str("  options: ");
-                        out.push_str(&opts.join(" | "));
+                    for (label, desc) in &opts {
+                        out.push_str(&format!("\n  - {}", normalize_line(label)));
+                        if let Some(d) = desc {
+                            out.push_str(&format!(": {}", normalize_line(d)));
+                        }
                     }
                     out.push_str(&format!("\nA{}: {}", i + 1, normalize_line(answer)));
+                    if let Some(n) = note {
+                        out.push_str(&format!("\n   note: {}", normalize_line(n)));
+                    }
                 }
             } else {
-                // No questions[] array (rare): list the answers map directly.
+                // No questions[] array (rare): list the answers map directly, still
+                // surfacing any notes attached to each answer.
                 for (i, (q, a)) in answers.iter().enumerate() {
                     out.push_str(&format!(
                         "\nQ{}: {}\nA{}: {}",
@@ -605,6 +651,14 @@ impl Record {
                         i + 1,
                         normalize_line(a.as_str().unwrap_or_default())
                     ));
+                    if let Some(n) = annotations
+                        .and_then(|an| an.get(q))
+                        .and_then(|v| v.get("notes"))
+                        .and_then(serde_json::Value::as_str)
+                        .filter(|s| !s.is_empty())
+                    {
+                        out.push_str(&format!("\n   note: {}", normalize_line(n)));
+                    }
                 }
             }
             return Some(out);
@@ -2407,7 +2461,9 @@ mod tests {
         assert!(unit.contains("AskUserQuestion · 1 question"));
         assert!(unit.contains("which?"));
         assert!(unit.contains("FIX"));
-        assert!(unit.contains("opt A | opt B"), "options rendered: {unit}");
+        // Options render one-per-line as `- <label>` (description appended when present).
+        assert!(unit.contains("- opt A"), "option A rendered: {unit}");
+        assert!(unit.contains("- opt B"), "option B rendered: {unit}");
         assert!(unit.contains("go with opt A and also fix the prod gap"));
         // reconstructed_user_text routes to the same unit.
         assert!(r
@@ -2427,6 +2483,53 @@ mod tests {
         assert!(unit.contains("🤖 option A is fine, the scope is broader than stated"));
         assert!(unit.contains("which option for step two? 🤖"));
         assert!(unit.contains("option A (recommended)"));
+    }
+
+    #[test]
+    fn auq_exchange_surfaces_each_option_description() {
+        // Real shape (coc captured-a): every option carries a `description` (supplementary note)
+        // alongside its `label`. BOTH must survive into the reconstructed unit — the
+        // description was previously dropped (only labels rendered).
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"questions":[{"header":"EXIF tool","multiSelect":false,"options":[{"description":"standard route, ~10MB download, one-liner","label":"brew install exiftool (Recommended)"},{"description":"pure python, pip install piexif","label":"pip install piexif"}],"question":"which tool re-attaches EXIF?"}],"answers":{"which tool re-attaches EXIF?":"brew install exiftool (Recommended)"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which tool re-attaches EXIF?\"=\"brew install exiftool (Recommended)\". You can now continue."}]}}"#,
+        );
+        let unit = r.auq_exchange().expect("auq exchange");
+        // Both labels AND both descriptions present, verbatim.
+        assert!(unit.contains("brew install exiftool (Recommended)"));
+        assert!(
+            unit.contains("standard route, ~10MB download, one-liner"),
+            "option description must survive: {unit}"
+        );
+        assert!(unit.contains("pip install piexif"));
+        assert!(
+            unit.contains("pure python, pip install piexif"),
+            "second option description must survive: {unit}"
+        );
+    }
+
+    #[test]
+    fn auq_exchange_surfaces_notes_when_answer_is_notes_only() {
+        // Real shape (captured-b / aaaaaaaa): the user answered by typing prose into the
+        // notes field; the answer value is the literal "(notes only)" placeholder and the
+        // ACTUAL message lives in `annotations[question].notes`. It must be surfaced —
+        // previously the whole user message was silently dropped.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"questions":[{"header":"Routing","multiSelect":false,"options":[{"description":"the inbound path","label":"Route A"},{"description":"the outbound path","label":"Route B"}],"question":"which route for the queue?"}],"answers":{"which route for the queue?":"(notes only)"},"annotations":{"which route for the queue?":{"notes":"never conflate the two — Route A is inbound only, Route B is outbound only"}}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which route for the queue?\"=\"(notes only)\". You can now continue."}]}}"#,
+        );
+        let unit = r.auq_exchange().expect("auq exchange");
+        // The placeholder answer is shown, but the real message (the notes) is what the
+        // user actually said — it MUST be present and searchable.
+        assert!(
+            unit.contains("never conflate the names"),
+            "notes (the user's real message) must surface: {unit}"
+        );
+        assert!(
+            unit.contains("Route B is outbound only"),
+            "full notes verbatim: {unit}"
+        );
+        // Options + descriptions still present alongside.
+        assert!(unit.contains("Route A"));
+        assert!(unit.contains("the outbound path"));
     }
 
     #[test]

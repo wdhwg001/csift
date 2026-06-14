@@ -7611,10 +7611,11 @@ fn holes_home() -> Home {
         concat!(
             // turn 0: genuine human opener.
             r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the work"}}"#, "\n",
-            // assistant asks (member of turn 0).
-            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)"},{"label":"option B"}]}]}}]}}"#, "\n",
-            // turn 1: the AUQ ANSWER opens a turn (the behavior change). Typed answer prose.
-            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","toolUseResult":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)"},{"label":"option B"}]}],"answers":{"which option for step two?":"option A is fine, the scope is broader than stated"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two?\"=\"option A is fine, the scope is broader than stated\"."}]}}"#, "\n",
+            // assistant asks (member of turn 0). Options carry per-option descriptions.
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)","description":"the conservative path that reuses existing state"},{"label":"option B","description":"the full path that rebuilds from scratch"}]}]}}]}}"#, "\n",
+            // turn 1: the AUQ ANSWER opens a turn (the behavior change). The carrier echoes
+            // the options WITH descriptions and carries free-text `annotations.notes`.
+            r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:10:00.000Z","toolUseResult":{"questions":[{"question":"which option for step two?","header":"STEP TWO","options":[{"label":"option A (recommended)","description":"the conservative path that reuses existing state"},{"label":"option B","description":"the full path that rebuilds from scratch"}]}],"answers":{"which option for step two?":"option A is fine, the scope is broader than stated"},"annotations":{"which option for step two?":{"notes":"go with option A but budget for the edge cases, it is more involved than a quick tweak"}}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two?\"=\"option A is fine, the scope is broader than stated\"."}]}}"#, "\n",
             // assistant proposes a plan (member of turn 1).
             r#"{"type":"assistant","uuid":"a1","parentUuid":"ans","timestamp":"2026-06-07T05:11:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN1","name":"ExitPlanMode","input":{"plan":"the plan body here","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"#, "\n",
             // turn 2: the user REJECTS the plan with a typed message → boundary + pointer.
@@ -7671,6 +7672,26 @@ fn turns_reconstructs_auq_exchange_and_plan_rejection_with_pointer() {
         "AUQ options missing:\n{}",
         out.stdout
     );
+    // Each option's DESCRIPTION (supplementary note) must survive — not just the label.
+    assert!(
+        out.stdout
+            .contains("the conservative path that reuses existing state"),
+        "AUQ option description missing:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("the full path that rebuilds from scratch"),
+        "second AUQ option description missing:\n{}",
+        out.stdout
+    );
+    // Free-text notes the user attached to the answer must surface verbatim.
+    assert!(
+        out.stdout
+            .contains("it is more involved than a quick tweak"),
+        "AUQ answer notes missing:\n{}",
+        out.stdout
+    );
     assert!(
         out.stdout
             .contains("option A is fine, the scope is broader than stated"),
@@ -7690,6 +7711,44 @@ fn turns_reconstructs_auq_exchange_and_plan_rejection_with_pointer() {
             .contains("[plan: /Users/testuser/.claude/plans/elegant-scribbling-dream.md]"),
         "plan pointer missing:\n{}",
         out.stdout
+    );
+}
+
+#[test]
+fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
+    let h = holes_home();
+    // (1) A phrase that lives ONLY in an option's `description` must be searchable in the
+    //     reconstructed USER turn (not merely in the raw assistant tool-call JSON).
+    let desc = h.run(&[
+        "search",
+        "decouple approval from the socket",
+        "-t",
+        "user",
+        "--session",
+        SESS,
+    ]);
+    assert!(desc.success, "stderr: {}", desc.stderr);
+    assert!(
+        desc.stdout.contains("decouple approval from the socket"),
+        "option description not searchable under user:\n{}",
+        desc.stdout
+    );
+    // (2) A phrase that lives ONLY in the answer's `annotations.notes` must be searchable
+    //     under `user` — it IS the user's typed message. (Regression: previously dropped,
+    //     so this returned "no matching exchanges".)
+    let notes = h.run(&[
+        "search",
+        "more involved than a quick tweak",
+        "-t",
+        "user",
+        "--session",
+        SESS,
+    ]);
+    assert!(notes.success, "stderr: {}", notes.stderr);
+    assert!(
+        notes.stdout.contains("more involved than a quick tweak"),
+        "answer notes not searchable under user:\n{}",
+        notes.stdout
     );
 }
 
