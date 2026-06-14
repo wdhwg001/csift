@@ -34,6 +34,12 @@ fn main() -> ExitCode {
     // flag works in ANY position relative to a leading-`-` encoded project target
     // (see cli::normalize_argv — fixes the allow_hyphen_values greedy-absorb bug).
     let cli = parse_argv();
+    // Install the `--claude-home` override (if any) BEFORE dispatch, so every subcommand's
+    // path resolution honors it. `$CLAUDE_CONFIG_DIR` is read directly by `path::claude_home`
+    // and needs no wiring here.
+    if let Some(dir) = cli.claude_home.clone() {
+        path::set_claude_home_override(dir);
+    }
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {

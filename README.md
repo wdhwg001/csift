@@ -10,6 +10,11 @@ The headline subcommand is [`turns`](#turns), which restores the verbatim user/a
 that a Claude Code **compaction summary** clips — supplementing the summary (which owns task state) with
 the turn fidelity it loses.
 
+The default corpus root is `~/.claude`, but a relocated config dir is honored on **every** subcommand:
+the global `--claude-home <DIR>` flag and Claude Code's own `$CLAUDE_CONFIG_DIR` env var both repoint it
+(precedence: flag → `$CLAUDE_CONFIG_DIR` → `$HOME/.claude`). `<DIR>` is the `.claude` equivalent, so
+transcripts are read from `<DIR>/projects/<encoded>/*.jsonl`.
+
 ---
 
 ## Why

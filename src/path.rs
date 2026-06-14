@@ -27,7 +27,9 @@
 //! the remainder has no `/`, matches `^-[A-Za-z0-9-]*$`, AND resolves to a dir.
 //! Otherwise it is a real path: absolutize, encode (§2.1), look up the dir.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -61,9 +63,70 @@ fn home_dir() -> Result<PathBuf> {
     std::env::home_dir().ok_or_else(|| anyhow!("cannot determine home directory ($HOME unset)"))
 }
 
-/// Absolute path to `~/.claude/projects` (honors `$HOME`).
+/// Process-wide override for the Claude config dir, installed once from the global
+/// `--claude-home` flag (see [`set_claude_home_override`]). `OnceLock` because it is set
+/// exactly once in `main` before any path resolution and never mutated afterwards.
+static CLAUDE_HOME_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Claude Code's own config-dir relocation env var. When set, "every `~/.claude` path
+/// lives under that directory instead", so csift — which reads Claude Code's data — must
+/// honor it to keep pointing at the same files.
+pub const CLAUDE_CONFIG_DIR_ENV: &str = "CLAUDE_CONFIG_DIR";
+
+/// Install an explicit Claude config dir (the `~/.claude` equivalent) from the global
+/// `--claude-home` flag. Call ONCE, early in `main`, before any path resolution. Only the
+/// first call wins (matching the parse-once-at-startup lifecycle); later calls are no-ops.
+pub fn set_claude_home_override(dir: PathBuf) {
+    let _ = CLAUDE_HOME_OVERRIDE.set(dir);
+}
+
+/// Pure precedence resolver for the Claude config dir, factored out so the ordering is
+/// unit-testable without touching process-global env / `OnceLock` state. Order:
+/// 1. explicit `--claude-home` flag, 2. `$CLAUDE_CONFIG_DIR` (when non-empty),
+/// 3. `$HOME/.claude`.
+fn resolve_claude_home(
+    flag_override: Option<&Path>,
+    config_dir_env: Option<&OsStr>,
+    home: &Path,
+) -> PathBuf {
+    if let Some(p) = flag_override {
+        return p.to_path_buf();
+    }
+    if let Some(d) = config_dir_env {
+        if !d.is_empty() {
+            return PathBuf::from(d);
+        }
+    }
+    home.join(".claude")
+}
+
+/// The Claude Code config dir — the `~/.claude` directory, or wherever it has been
+/// relocated. Honors, in priority order, the `--claude-home` flag, the `$CLAUDE_CONFIG_DIR`
+/// env var (Claude Code's own relocation mechanism), then `$HOME/.claude`. EVERY
+/// subcommand reaches Claude's data through here (via [`projects_root`]), so this single
+/// override point covers the whole CLI.
+pub fn claude_home() -> Result<PathBuf> {
+    let flag = CLAUDE_HOME_OVERRIDE.get();
+    let env = std::env::var_os(CLAUDE_CONFIG_DIR_ENV);
+    // `$HOME` feeds only the default branch; resolve it lazily so a relocated config dir
+    // (flag or env) still works when `$HOME` is unset.
+    let have_higher = flag.is_some() || env.as_deref().is_some_and(|d| !d.is_empty());
+    let home = if have_higher {
+        PathBuf::new()
+    } else {
+        home_dir()?
+    };
+    Ok(resolve_claude_home(
+        flag.map(PathBuf::as_path),
+        env.as_deref(),
+        &home,
+    ))
+}
+
+/// Absolute path to the `projects/` dir under the (possibly relocated) Claude config dir.
+/// Honors `--claude-home` / `$CLAUDE_CONFIG_DIR` / `$HOME/.claude` (see [`claude_home`]).
 pub fn projects_root() -> Result<PathBuf> {
-    Ok(home_dir()?.join(".claude").join("projects"))
+    Ok(claude_home()?.join("projects"))
 }
 
 /// A resolved project target: the encoded dir under the projects root.
@@ -579,6 +642,35 @@ mod tests {
         let root = projects_root().expect("projects_root");
         assert!(root.ends_with("projects"));
         assert!(root.to_string_lossy().contains(".claude"));
+    }
+
+    #[test]
+    fn resolve_claude_home_precedence_flag_then_env_then_home() {
+        let home = Path::new("/home/u");
+        // 1. The `--claude-home` flag wins over everything else.
+        assert_eq!(
+            resolve_claude_home(
+                Some(Path::new("/flag/dir")),
+                Some(OsStr::new("/env/dir")),
+                home
+            ),
+            PathBuf::from("/flag/dir")
+        );
+        // 2. With no flag, $CLAUDE_CONFIG_DIR wins over the $HOME default.
+        assert_eq!(
+            resolve_claude_home(None, Some(OsStr::new("/env/dir")), home),
+            PathBuf::from("/env/dir")
+        );
+        // 3. An EMPTY $CLAUDE_CONFIG_DIR is ignored → falls through to $HOME/.claude.
+        assert_eq!(
+            resolve_claude_home(None, Some(OsStr::new("")), home),
+            PathBuf::from("/home/u/.claude")
+        );
+        // 4. Nothing set → $HOME/.claude (the historical default, unchanged).
+        assert_eq!(
+            resolve_claude_home(None, None, home),
+            PathBuf::from("/home/u/.claude")
+        );
     }
 
     // ── Branch-completeness for the pure helpers (env-touching arms are covered by

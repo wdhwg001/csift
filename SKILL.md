@@ -14,6 +14,11 @@ token-efficient, regex-driven text by default, with `--format json` for machine 
 It is **pure regex / ripgrep** — explicitly **no BM25, no embeddings, no semantic search**.
 Lexical scoring across scripts (CJK / multi-byte) is intractable; regex is the whole point.
 
+**Custom Claude home.** csift reads `~/.claude` by default but honors a relocated config dir on
+**every** subcommand: the global `--claude-home <DIR>` flag and Claude Code's own
+`$CLAUDE_CONFIG_DIR` env var both repoint it (flag wins, then env, then `$HOME/.claude`). `<DIR>`
+is the `.claude` equivalent — transcripts are read from `<DIR>/projects/<encoded>/*.jsonl`.
+
 Binary: `csift` (build with `cargo build --release` in this repo → `target/release/csift`;
 or `cargo run -- <subcommand>` during development).
 

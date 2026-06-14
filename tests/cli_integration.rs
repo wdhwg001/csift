@@ -291,6 +291,89 @@ fn list_ignores_stray_non_dir_entries_in_projects_root() {
 // scan. See the final coverage report's "remaining gaps".
 
 #[test]
+fn custom_claude_home_via_env_var_and_flag() {
+    // A Claude config dir RELOCATED away from $HOME/.claude — the rare custom-home case.
+    let h = Home::new();
+    let custom = h.root.join("relocated-claude");
+    let jsonl = custom
+        .join("projects")
+        .join(ENC)
+        .join(format!("{SESS}.jsonl"));
+    std::fs::create_dir_all(jsonl.parent().unwrap()).unwrap();
+    std::fs::write(
+        &jsonl,
+        concat!(
+            r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","#,
+            r#""cwd":"/Users/testuser/Projects/foo","timestamp":"2026-06-07T05:00:00.000Z","#,
+            r#""message":{"role":"user","content":"relocated home marker xyzzy"}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let custom_s = custom.to_str().unwrap();
+    let marker = "relocated home marker";
+
+    // (0) Default ($HOME/.claude) does NOT see the relocated session — it lives elsewhere.
+    let none = h.run(&["search", "xyzzy"]);
+    assert!(none.success, "stderr: {}", none.stderr);
+    assert!(
+        !none.stdout.contains(marker),
+        "default home must NOT see the relocated session:\n{}",
+        none.stdout
+    );
+
+    // (1) $CLAUDE_CONFIG_DIR (Claude Code's own relocation var) redirects csift too.
+    let via_env = h.run_with_env(&["search", "xyzzy"], &[("CLAUDE_CONFIG_DIR", custom_s)]);
+    assert!(via_env.success, "stderr: {}", via_env.stderr);
+    assert!(
+        via_env.stdout.contains(marker),
+        "CLAUDE_CONFIG_DIR must relocate the search:\n{}",
+        via_env.stdout
+    );
+
+    // (2) `--claude-home` AFTER the subcommand (exercises normalize_argv global-flag path).
+    let via_flag = h.run(&["search", "xyzzy", "--claude-home", custom_s]);
+    assert!(via_flag.success, "stderr: {}", via_flag.stderr);
+    assert!(
+        via_flag.stdout.contains(marker),
+        "--claude-home after the subcommand must relocate the search:\n{}",
+        via_flag.stdout
+    );
+
+    // (3) `--claude-home` BEFORE the subcommand also works.
+    let via_flag_pre = h.run(&["--claude-home", custom_s, "search", "xyzzy"]);
+    assert!(via_flag_pre.success, "stderr: {}", via_flag_pre.stderr);
+    assert!(
+        via_flag_pre.stdout.contains(marker),
+        "--claude-home before the subcommand must relocate the search:\n{}",
+        via_flag_pre.stdout
+    );
+
+    // (4) Another subcommand (`list`) honors the override too — it is not search-specific.
+    let list = h.run(&["list", "--claude-home", custom_s]);
+    assert!(list.success, "stderr: {}", list.stderr);
+    assert!(
+        list.stdout.contains(SESS),
+        "list must honor --claude-home:\n{}",
+        list.stdout
+    );
+
+    // (5) Precedence: the flag beats $CLAUDE_CONFIG_DIR (env points at an empty config dir).
+    let empty_cfg = h.root.join("empty-cfg");
+    std::fs::create_dir_all(empty_cfg.join("projects")).unwrap();
+    let both = h.run_with_env(
+        &["search", "xyzzy", "--claude-home", custom_s],
+        &[("CLAUDE_CONFIG_DIR", empty_cfg.to_str().unwrap())],
+    );
+    assert!(both.success, "stderr: {}", both.stderr);
+    assert!(
+        both.stdout.contains(marker),
+        "--claude-home must win over CLAUDE_CONFIG_DIR:\n{}",
+        both.stdout
+    );
+}
+
+#[test]
 fn list_encoded_token_after_flag_ordering() {
     let h = populated_home();
     // Exercises normalize_argv: a leading-`-` encoded token THEN --format json.

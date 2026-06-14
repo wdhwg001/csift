@@ -152,7 +152,15 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
     // single dash + alnum/dash) is NOT in this set, so it stays a positional.
     let mut short_value: std::collections::HashSet<char> = std::collections::HashSet::new();
     let mut short_all: std::collections::HashSet<char> = std::collections::HashSet::new();
-    for a in sub.get_arguments() {
+    // Enumerate the subcommand's own args PLUS the root command's GLOBAL args (e.g.
+    // `--claude-home <DIR>`): a global value-flag propagates to every subcommand but may
+    // not surface in `sub.get_arguments()` at introspection time, and if it isn't known to
+    // take a value, a `--claude-home /path` placed AFTER the subcommand would mis-sort the
+    // path as a positional. HashSet inserts are idempotent, so double-counting is harmless.
+    for a in sub
+        .get_arguments()
+        .chain(cmd.get_arguments().filter(|a| a.is_global_set()))
+    {
         if let Some(longs) = a.get_long_and_visible_aliases() {
             let takes = flag_takes_value(a);
             for l in longs {
@@ -347,6 +355,15 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
+
+    /// Override the Claude Code config dir — the `~/.claude` directory, or wherever it has
+    /// been relocated. Applies to EVERY subcommand (it determines where session
+    /// transcripts and plan files are read from). Highest priority; the `$CLAUDE_CONFIG_DIR`
+    /// env var (Claude Code's own relocation mechanism) is honored too, and a bare
+    /// `~/.claude` under `$HOME` is the default. Point this at the dir that IS the `.claude`
+    /// equivalent — transcripts are read from `<DIR>/projects/<encoded>/*.jsonl`.
+    #[arg(long = "claude-home", value_name = "DIR", global = true)]
+    pub claude_home: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
