@@ -475,7 +475,9 @@ mod tests {
     #[test]
     fn encode_replaces_slash_and_underscore_with_dash() {
         assert_eq!(
-            encode_cwd(Path::new("/Users/testuser/Projects/widget_app_prototype")),
+            encode_cwd(Path::new(
+                "/Users/testuser/Projects/widget_app_prototype"
+            )),
             "-Users-testuser-Projects-widget-app-prototype"
         );
     }
@@ -545,7 +547,9 @@ mod tests {
     fn strip_prefix_rejects_real_path() {
         let root = Path::new("/home/u/.claude/projects");
         // A real cwd with slashes is NOT a bare token and is not under the root.
-        assert!(strip_projects_root_prefix(Path::new("/Users/testuser/Projects/foo"), root).is_none());
+        assert!(
+            strip_projects_root_prefix(Path::new("/Users/testuser/Projects/foo"), root).is_none()
+        );
         // Under-root but with an extra nested component (a session dir, not an
         // encoded project token) → not a single-component encoded token.
         assert!(strip_projects_root_prefix(

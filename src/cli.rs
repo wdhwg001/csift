@@ -2158,7 +2158,8 @@ mod tests {
 
     #[test]
     fn real_path_target_still_accepted() {
-        let cli = parse(&["csift", "list", "/Users/testuser/Projects/foo"]).expect("real path parses");
+        let cli =
+            parse(&["csift", "list", "/Users/testuser/Projects/foo"]).expect("real path parses");
         match cli.command {
             Command::List(a) => {
                 assert_eq!(a.paths[0].to_string_lossy(), "/Users/testuser/Projects/foo")
@@ -2374,13 +2375,25 @@ mod tests {
         // An encoded `-Users-…` token's first char `U` is NOT a declared short flag, so it
         // stays a positional even though `-t`/`-i` exist. The short-flag set is per-char.
         let out = normalize_argv(
-            ["csift", "search", "spec", "-Users-testuser-Projects-foo", "-i"]
-                .map(String::from)
-                .to_vec(),
+            [
+                "csift",
+                "search",
+                "spec",
+                "-Users-testuser-Projects-foo",
+                "-i",
+            ]
+            .map(String::from)
+            .to_vec(),
         );
         assert_eq!(
             out,
-            vec!["csift", "search", "-i", "spec", "-Users-testuser-Projects-foo"]
+            vec![
+                "csift",
+                "search",
+                "-i",
+                "spec",
+                "-Users-testuser-Projects-foo"
+            ]
         );
     }
 
