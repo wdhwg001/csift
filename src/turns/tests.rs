@@ -34,7 +34,7 @@ fn role_caps_and_head_fractions_are_asymmetric() {
 #[test]
 fn sub_cap_unit_renders_verbatim_no_marker() {
     let u = unit(Role::User, 10, "café🛠 a short ask", 0);
-    let r = render_unit_body(&u);
+    let r = render_unit_body(&u, None);
     assert!(!r.truncated);
     assert_eq!(r.body, "café🛠 a short ask");
     assert_eq!(r.elided_chars, 0);
@@ -47,7 +47,7 @@ fn user_ellipsis_head_360_tail_240_with_counts() {
     // A user body > 600 chars → head 360 / tail 240, marker carries +K chars.
     let body: String = "a".repeat(1000);
     let u = unit(Role::User, 10, &body, 3);
-    let r = render_unit_body(&u);
+    let r = render_unit_body(&u, None);
     assert!(r.truncated);
     assert_eq!(r.elided_chars, 1000 - 600);
     assert_eq!(r.elided_lines, 3);
@@ -65,7 +65,7 @@ fn assistant_ellipsis_head_larger_than_user_head() {
     // than the user side (the measured asymmetry).
     let body: String = "b".repeat(2000);
     let a = unit(Role::Assistant, 20, &body, 7);
-    let r = render_unit_body(&a);
+    let r = render_unit_body(&a, None);
     assert!(r.truncated);
     assert_eq!(r.elided_chars, 2000 - 900);
     // head 594.
@@ -76,7 +76,7 @@ fn assistant_ellipsis_head_larger_than_user_head() {
 
     // The assistant head (594) is strictly larger than the user head (360).
     let ubody: String = "u".repeat(2000);
-    let ru = render_unit_body(&unit(Role::User, 1, &ubody, 0));
+    let ru = render_unit_body(&unit(Role::User, 1, &ubody, 0), None);
     let asst_head_len = 594usize;
     let user_head_len = 360usize;
     assert!(asst_head_len > user_head_len);
@@ -88,7 +88,7 @@ fn assistant_ellipsis_head_larger_than_user_head() {
 fn single_line_user_omits_lines_elided_note() {
     let body: String = "x".repeat(1000);
     let u = unit(Role::User, 5, &body, 0); // 0 original newlines
-    let r = render_unit_body(&u);
+    let r = render_unit_body(&u, None);
     assert!(r.truncated);
     assert!(r.body.contains("[+400 chars]"));
     assert!(
@@ -108,7 +108,7 @@ fn ellipsis_cut_is_codepoint_safe_for_multibyte_token() {
     body.push('🛠'); // lands right after the head cut
     body.push_str(&"a".repeat(400));
     let u = unit(Role::User, 1, &body, 0);
-    let r = render_unit_body(&u);
+    let r = render_unit_body(&u, None);
     // valid UTF-8 by construction (String), and the emoji is either in head or dropped,
     // never split. The head is the first 360 'a's; the emoji is elided.
     assert!(r.body.starts_with(&"a".repeat(360)));
@@ -126,7 +126,7 @@ fn emoji_in_tail_is_wholly_kept() {
     body.push('🛠');
     body.push_str(&"b".repeat(239)); // tail = last 240 chars = 🛠 + 239 b's
     let u = unit(Role::User, 1, &body, 0);
-    let r = render_unit_body(&u);
+    let r = render_unit_body(&u, None);
     assert!(r.truncated);
     assert!(r.body.contains('🛠'), "emoji in the kept tail: {}", r.body);
     assert!(!r.body.contains('\u{FFFD}'));
@@ -160,7 +160,7 @@ fn unit_cost_charges_real_header_line_plus_newlines() {
 
     // A huge user unit costs header + newline + 600 (cap body) + newline.
     let big = unit(Role::User, 1, &"z".repeat(5000), 2);
-    let r = render_unit_body(&big);
+    let r = render_unit_body(&big, None);
     let big_hdr = unit_header_line(&big).chars().count();
     assert_eq!(
         unit_cost(&big),
@@ -183,7 +183,7 @@ fn unit_cost_equals_real_emitted_chars_for_the_unit() {
     ] {
         let u = unit(role, 42, &text, nl);
         let mut emitted = String::new();
-        emit_unit_text(&u, &mut |s| {
+        emit_unit_text(&u, None, &mut |s| {
             emitted.push_str(&s);
             emitted.push('\n');
         });
@@ -1040,7 +1040,7 @@ fn render_turn_text_emits_user_marker_assistant_for_both() {
     // ▽ user, the [N tool calls] marker, then △ assistant.
     let t = mk_turn(0, Some("the ask"), Some("the reply"), 3, 0);
     let mut lines: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::Both, &cfg(), &mut |s| lines.push(s));
+    render_turn_text(&t, SelSides::Both, &cfg(), None, &mut |s| lines.push(s));
     let joined = lines.join("\n");
     assert!(joined.contains("▽ L1"), "user header: {joined}");
     assert!(joined.contains("[3 tool calls]"), "tool marker: {joined}");
@@ -1050,7 +1050,7 @@ fn render_turn_text_emits_user_marker_assistant_for_both() {
 
     // UserOnly: no marker, no assistant.
     let mut uonly: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::UserOnly, &cfg(), &mut |s| uonly.push(s));
+    render_turn_text(&t, SelSides::UserOnly, &cfg(), None, &mut |s| uonly.push(s));
     let uj = uonly.join("\n");
     assert!(uj.contains("▽ L1"));
     assert!(!uj.contains("tool calls"), "no marker on user-only: {uj}");
@@ -1058,7 +1058,9 @@ fn render_turn_text_emits_user_marker_assistant_for_both() {
 
     // AssistantOnly: only the assistant side.
     let mut aonly: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::AssistantOnly, &cfg(), &mut |s| aonly.push(s));
+    render_turn_text(&t, SelSides::AssistantOnly, &cfg(), None, &mut |s| {
+        aonly.push(s)
+    });
     let aj = aonly.join("\n");
     assert!(!aj.contains("▽ L1"), "no user on assistant-only");
     assert!(aj.contains("△ L5"));
@@ -1068,7 +1070,7 @@ fn render_turn_text_emits_user_marker_assistant_for_both() {
 fn render_turn_text_zero_tool_turn_omits_marker() {
     let t = mk_turn(0, Some("ask"), Some("reply"), 0, 0);
     let mut lines: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::Both, &cfg(), &mut |s| lines.push(s));
+    render_turn_text(&t, SelSides::Both, &cfg(), None, &mut |s| lines.push(s));
     assert!(
         !lines.join("\n").contains("tool calls"),
         "0-tool omits marker"
@@ -1080,7 +1082,7 @@ fn emit_unit_text_flags_dedup_unit() {
     let mut u = unit(Role::User, 7, "deduped ask", 0);
     u.also_in_summary = true;
     let mut lines: Vec<String> = Vec::new();
-    emit_unit_text(&u, &mut |s| lines.push(s));
+    emit_unit_text(&u, None, &mut |s| lines.push(s));
     assert!(
         lines.iter().any(|l| l.contains("(also in summary)")),
         "dedup flag rendered: {lines:?}"
@@ -1409,7 +1411,7 @@ fn render_turn_text_user_only_with_no_user_emits_nothing() {
     // happen) emits no user line — the `if let Some(u)` false arm.
     let t = mk_turn(0, None, Some("only assistant"), 0, 0);
     let mut lines: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::UserOnly, &cfg(), &mut |s| lines.push(s));
+    render_turn_text(&t, SelSides::UserOnly, &cfg(), None, &mut |s| lines.push(s));
     assert!(lines.is_empty(), "no user to render: {lines:?}");
 }
 
@@ -1417,7 +1419,9 @@ fn render_turn_text_user_only_with_no_user_emits_nothing() {
 fn render_turn_text_assistant_only_with_no_assistant_emits_nothing() {
     let t = mk_turn(0, Some("only user"), None, 0, 0);
     let mut lines: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::AssistantOnly, &cfg(), &mut |s| lines.push(s));
+    render_turn_text(&t, SelSides::AssistantOnly, &cfg(), None, &mut |s| {
+        lines.push(s)
+    });
     assert!(lines.is_empty(), "no assistant to render: {lines:?}");
 }
 
@@ -1427,7 +1431,7 @@ fn render_turn_text_both_with_zero_tools_no_marker_line() {
     // `[N tool calls]` line, but user + assistant still render.
     let t = mk_turn(0, Some("ask"), Some("reply"), 0, 0);
     let mut lines: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::Both, &cfg(), &mut |s| lines.push(s));
+    render_turn_text(&t, SelSides::Both, &cfg(), None, &mut |s| lines.push(s));
     assert!(lines.iter().any(|l| l.starts_with("▽ L")));
     assert!(lines.iter().any(|l| l.starts_with("△ L")));
     assert!(!lines.iter().any(|l| l.contains("tool calls")));
@@ -1439,7 +1443,7 @@ fn emit_unit_text_non_dup_has_no_flag() {
     // false arm).
     let u = unit(Role::User, 3, "a normal ask", 0);
     let mut lines: Vec<String> = Vec::new();
-    emit_unit_text(&u, &mut |s| lines.push(s));
+    emit_unit_text(&u, None, &mut |s| lines.push(s));
     assert!(!lines.iter().any(|l| l.contains("also in summary")));
     assert!(lines[0].starts_with("▽ L3"));
 }
@@ -2173,7 +2177,7 @@ fn select_fusion_message_kept_whole_and_char_capped_later() {
     );
     // Stage 2 char-cap is the existing render_unit_body path — verbatim under the cap here.
     let u = unit(Role::Assistant, 1, fused, 0);
-    let r = render_unit_body(&u);
+    let r = render_unit_body(&u, None);
     assert!(
         !r.truncated,
         "this fused body is under ASST_CAP so it renders whole"
@@ -2312,13 +2316,13 @@ fn eot_only_selection_is_byte_identical_to_single_eot_render() {
     );
     // EotOnly render.
     let mut eot_lines: Vec<String> = Vec::new();
-    render_turn_text(&t, SelSides::AssistantOnly, &cfg(), &mut |s| {
+    render_turn_text(&t, SelSides::AssistantOnly, &cfg(), None, &mut |s| {
         eot_lines.push(s)
     });
     // The hand-rolled single-EOT render of the last message only.
     let last = t.assistant_eot().unwrap();
     let mut single: Vec<String> = Vec::new();
-    emit_unit_text(last, &mut |s| single.push(s));
+    emit_unit_text(last, None, &mut |s| single.push(s));
     assert_eq!(eot_lines, single, "EotOnly == single-EOT render");
     // And the cost matches the single-unit cost (no placeholder, no extra agents).
     assert_eq!(
@@ -2357,7 +2361,7 @@ fn cost_invariant_holds_with_placeholders_under_rich_and_all() {
         let mut emitted = String::new();
         for entry in select_agent_messages(&t, &c) {
             match entry {
-                AgentRender::Kept(a) => emit_unit_text(&a.unit, &mut |s| {
+                AgentRender::Kept(a) => emit_unit_text(&a.unit, None, &mut |s| {
                     emitted.push_str(&s);
                     emitted.push('\n');
                 }),

@@ -95,6 +95,14 @@ const USER_CAP: usize = 600;
 /// newlines (measured) — so its head fraction is larger too (see [`ASST_HEAD_FRAC`]).
 const ASST_CAP: usize = 900;
 
+/// Headroom subtracted from `--window` to size the per-body cap in `--slices` (fixed-fleet) mode.
+/// There the per-role 600/900 caps are REPLACED by a window cap: a body renders whole up to
+/// `window - SLICE_BODY_HEADROOM`, so its rendered body LINE (incl. the `… [+K chars, L lines
+/// elided] …` wrapper) AND the unit's separate header line each stay under one window — no single
+/// line can force [`slice_into_windows`] to hard-split mid-content. Only a turn that ALONE exceeds
+/// a window is ellipsized; everything else is kept verbatim (the user-directive recovery target).
+const SLICE_BODY_HEADROOM: usize = 200;
+
 /// Head fraction for an ASSISTANT unit's middle-truncation: EOT prose front-loads
 /// context and back-loads the decision, so keep ≈⅔ head / ⅓ tail.
 const ASST_HEAD_FRAC: f64 = 0.66;
@@ -442,8 +450,16 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
             args.round_trip_fraction
         );
     }
-    if args.budget == 0 {
+    if args.slices.is_none() && args.budget == 0 {
         bail!("--budget must be > 0");
+    }
+    if let Some(n) = args.slices {
+        if n == 0 {
+            bail!("--slices must be > 0 (it pins the fleet to N chunks)");
+        }
+        if args.slice.is_none() {
+            bail!("--slices N sets the fleet size; pass --slice i to pick which chunk to emit");
+        }
     }
     // ── Validate --slice / --window (chunked-output mode) ──
     if let Some(slice) = args.slice {
@@ -467,11 +483,17 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
         }
     }
 
-    // Normalize the budget to characters.
-    let budget_chars = match args.budget_unit {
-        BudgetUnit::Chars => args.budget,
-        // round-half-up; saturate so a giant token budget never overflows usize.
-        BudgetUnit::Tokens => ((args.budget as f64) * TOKEN_CHARS).round() as usize,
+    // Normalize the budget to characters. `--slices N` pins the FLEET size, so the budget is
+    // derived as N windows (the slice COUNT is the hard constraint — a fixed set of registered
+    // hooks must never need to grow); otherwise it is the requested char/token amount.
+    let budget_chars = if let Some(n) = args.slices {
+        n.saturating_mul(args.window)
+    } else {
+        match args.budget_unit {
+            BudgetUnit::Chars => args.budget,
+            // round-half-up; saturate so a giant token budget never overflows usize.
+            BudgetUnit::Tokens => ((args.budget as f64) * TOKEN_CHARS).round() as usize,
+        }
     };
 
     let turn_range = args
@@ -548,6 +570,7 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
             args.out.as_deref(),
             args.slice,
             args.window,
+            args.slices,
         )?,
         OutputFormat::Json => render_json(&ctx, &sessions, &plans, args.out.as_deref())?,
     }
@@ -902,12 +925,13 @@ struct RenderedUnit {
     elided_lines: usize,
 }
 
-/// Middle-truncate a unit to its role cap, keeping head+tail, with an explicit elided
-/// marker. A unit at or below the cap renders verbatim. The cut is on `char` boundaries
-/// (never mid-codepoint). The `L lines elided` note is included only when the original
-/// text spanned ≥1 newline.
-fn render_unit_body(unit: &TurnUnit) -> RenderedUnit {
-    let cap = unit.role.cap();
+/// Middle-truncate a unit to a cap (`cap_override` when set — the fixed-fleet `--slices` window
+/// cap that keeps whole turns — else the unit's per-role cap), keeping head+tail, with an explicit
+/// elided marker. A unit at or below the cap renders verbatim. The cut is on `char` boundaries
+/// (never mid-codepoint). The `L lines elided` note is included only when the original text spanned
+/// ≥1 newline.
+fn render_unit_body(unit: &TurnUnit, cap_override: Option<usize>) -> RenderedUnit {
+    let cap = cap_override.unwrap_or_else(|| unit.role.cap());
     let chars: Vec<char> = unit.text.chars().collect();
     let total = chars.len();
     if total <= cap {
@@ -1436,7 +1460,7 @@ fn unit_header_line(unit: &TurnUnit) -> String {
 /// timestamp-dependent line, not a flat estimate.
 fn unit_cost(unit: &TurnUnit) -> usize {
     let header_chars = unit_header_line(unit).chars().count() + NEWLINE_COST;
-    let body_chars = render_unit_body(unit).body.chars().count() + NEWLINE_COST;
+    let body_chars = render_unit_body(unit, None).body.chars().count() + NEWLINE_COST;
     header_chars + body_chars
 }
 
@@ -1897,15 +1921,40 @@ fn render_text(
     out_path: Option<&Path>,
     slice: Option<usize>,
     window: usize,
+    slices: Option<usize>,
 ) -> Result<()> {
-    // ── Chunked-output mode (--slice): emit ONLY the Nth ≤window-char chunk of the verbatim
-    // DOCUMENT (the SAME body `--out` writes), with NO operational chrome — so a SessionStart
-    // hook can inject it under the 10,000-char additionalContext cap. Deterministic:
-    // concatenating slices 1..K reproduces the whole document byte-for-byte. An out-of-range N
-    // prints nothing (exit 0), so surplus hooks simply inject nothing. ──
+    // ── Chunked-output mode (--slice): emit ONLY one ≤window-char chunk of the verbatim DOCUMENT
+    // (the SAME body `--out` writes), with NO operational chrome — so a SessionStart hook can
+    // inject it under the 10,000-char additionalContext cap. Two sub-modes:
+    //
+    //   • LEGACY (`--slice` alone): budget-driven. The document is whatever `--budget` selected,
+    //     paginated into a VARIABLE number of chunks; `--slice i` emits the i-th. Concatenating
+    //     1..K reproduces the document byte-for-byte. The per-role 600/900 body caps apply.
+    //   • FIXED-FLEET (`--slices N`): the slice COUNT is the hard constraint (a fixed set of hooks
+    //     can't grow). Bodies render whole up to one window — a turn is ellipsized ONLY if it
+    //     ALONE exceeds a window — and only the NEWEST N chunks are kept; the oldest overflow is
+    //     DISCARDED. So the emitted count is ALWAYS ≤N regardless of turn size. slice 1 = oldest
+    //     KEPT, slice N = newest.
+    //
+    // An out-of-range index prints nothing (exit 0), so surplus hooks simply inject nothing. ──
     if let Some(n) = slice {
-        let doc = build_document_body(sessions, plans, &ctx.cfg);
-        if let Some(chunk) = slice_into_windows(&doc, window).into_iter().nth(n - 1) {
+        // Fixed-fleet drops the per-role caps for a window cap (whole turns; ellipsize only a turn
+        // bigger than a window). Legacy keeps the role caps (cap_override = None).
+        let cap_override = slices.map(|_| window.saturating_sub(SLICE_BODY_HEADROOM).max(1));
+        let doc = build_document_body(sessions, plans, &ctx.cfg, cap_override);
+        let chunks = slice_into_windows(&doc, window);
+        let idx = match slices {
+            Some(n_slices) => {
+                if n > n_slices {
+                    return Ok(()); // index outside the fixed fleet → inject nothing
+                }
+                // Keep the newest n_slices chunks; drop the oldest (len - n_slices) overflow so
+                // the count never exceeds the fleet. slice 1 maps to the oldest KEPT chunk.
+                chunks.len().saturating_sub(n_slices) + (n - 1)
+            }
+            None => n - 1,
+        };
+        if let Some(chunk) = chunks.into_iter().nth(idx) {
             print!("{chunk}");
         }
         return Ok(());
@@ -2052,7 +2101,7 @@ fn render_text(
                     out_blob.push('\n');
                 },
             );
-            render_turn_text(turn, sel.sides, &ctx.cfg, &mut |s| {
+            render_turn_text(turn, sel.sides, &ctx.cfg, None, &mut |s| {
                 println!("{s}");
                 out_blob.push_str(&s);
                 out_blob.push('\n');
@@ -2088,6 +2137,7 @@ fn build_document_body(
     sessions: &[ScanResult],
     plans: &[SessionPlan],
     cfg: &RichnessCfg,
+    cap_override: Option<usize>,
 ) -> String {
     let mut blob = String::new();
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
@@ -2108,7 +2158,7 @@ fn build_document_body(
                     blob.push('\n');
                 },
             );
-            render_turn_text(turn, sel.sides, cfg, &mut |s| {
+            render_turn_text(turn, sel.sides, cfg, cap_override, &mut |s| {
                 blob.push_str(&s);
                 blob.push('\n');
             });
@@ -2258,17 +2308,18 @@ fn render_turn_text(
     turn: &TurnSlice,
     sides: SelSides,
     cfg: &RichnessCfg,
+    cap_override: Option<usize>,
     emit: &mut dyn FnMut(String),
 ) {
     if let Some(u) = shown_user(turn, sides) {
-        emit_unit_text(u, emit);
+        emit_unit_text(u, cap_override, emit);
     }
     if matches!(sides, SelSides::Both) && turn.tool_calls > 0 {
         emit(format!("  [{} tool calls]", turn.tool_calls));
     }
     for entry in shown_agent_lane(turn, sides, cfg) {
         match entry {
-            AgentRender::Kept(a) => emit_unit_text(&a.unit, emit),
+            AgentRender::Kept(a) => emit_unit_text(&a.unit, cap_override, emit),
             AgentRender::Placeholder(s) => emit(agent_placeholder_line(&s)),
         }
     }
@@ -2277,9 +2328,9 @@ fn render_turn_text(
 /// Emit a unit's header line + rendered (possibly truncated) body. The header string is
 /// produced by [`unit_header_line`] — the SAME function the cost model charges — so the
 /// emitted line is byte-for-byte what the budget accounted.
-fn emit_unit_text(unit: &TurnUnit, emit: &mut dyn FnMut(String)) {
+fn emit_unit_text(unit: &TurnUnit, cap_override: Option<usize>, emit: &mut dyn FnMut(String)) {
     emit(unit_header_line(unit));
-    let r = render_unit_body(unit);
+    let r = render_unit_body(unit, cap_override);
     emit(r.body);
 }
 
@@ -2607,7 +2658,7 @@ fn emit_unit_json(
     out_blob: &mut String,
 ) -> Result<()> {
     use serde_json::json;
-    let r = render_unit_body(unit);
+    let r = render_unit_body(unit, None);
     let mut obj = json!({
         "session_id": sr.session_id,
         // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex subagent

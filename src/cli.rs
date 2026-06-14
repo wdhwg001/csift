@@ -1847,6 +1847,18 @@ pub struct TurnsArgs {
     /// Ignored without `--slice`.
     #[arg(long, value_name = "N", default_value_t = 10000)]
     pub window: usize,
+
+    /// FIXED-FLEET mode: pin the reconstruction to AT MOST N slices of `--window` chars each,
+    /// instead of letting `--budget` decide a VARIABLE number of chunks. A hook fleet is a fixed
+    /// set of registered `SessionStart` hooks, so the slice COUNT — not the char budget — is the
+    /// hard constraint: it must NOT drift to 5/6/7 as the turns grow. With `--slices N`, csift
+    /// fills the N newest-first slices with WHOLE turns (the per-role 600/900 caps are dropped; a
+    /// turn is ellipsized ONLY if it alone exceeds one window), and DISCARDS the oldest turns that
+    /// don't fit — so the emitted count is ALWAYS ≤N no matter how big the turns are. Requires
+    /// `--slice i` to pick which chunk; the budget becomes N×`--window`, so `--budget` is ignored.
+    /// Without `--slices`, `--slice` keeps its legacy budget-driven, variable-chunk-count behavior.
+    #[arg(long, value_name = "N")]
+    pub slices: Option<usize>,
 }
 
 impl TurnsArgs {

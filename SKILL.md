@@ -774,7 +774,7 @@ csift turns <uuid> --agent-msgs rich              # the keep-on-doubt keep-set (
 csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)
 csift turns <uuid> --agent-msgs all --budget 60000  # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
-csift turns . --budget 36000 --window 9000 --slice 1  # 1st ≤9000-char chunk for a SessionStart hook (size the fleet to ceil(body/window)+1 — a ≤36K body fans across ~6)
+csift turns . --slices 4 --window 9000 --slice 1   # FIXED-FLEET: the 1st of AT MOST 4 newest-first chunks for a SessionStart hook (count never drifts)
 csift turns <uuid> --include-subagents            # ALSO span subagents (budget × N; rare cross-fan-out recon)
 ```
 
@@ -799,20 +799,30 @@ model. To fan a larger reconstruction across several hooks, `--slice N` paginate
 ≤`--window`-character chunks and prints ONLY the Nth (1-based) chunk to stdout. `--window` defaults to
 10000 and counts CHARACTERS (Unicode scalars — the unit the cap itself counts, so CJK-heavy prose is not
 3× over-counted the way a byte budget would be); pass a little under (e.g. `--window 9000`) to leave
-headroom for any wrapper text the hook adds. Slicing is DETERMINISTIC — the same session + `--budget`
-yields identical chunk boundaries, and concatenating slices `1..K` reproduces the whole document
-byte-for-byte — so N independent hooks can each request their own slice with no coordination inside csift.
-But the HOOKS are not order-free: Claude Code runs same-event hooks concurrently and collects their
+headroom for any wrapper text the hook adds. Two ways to size the fan-out:
+
+- **`--slices N` (FIXED-FLEET — use this for a hook).** The slice COUNT is the hard constraint: csift
+  fills the N newest-first chunks with WHOLE turns (a turn is ellipsized ONLY if it alone exceeds one
+  window) and DISCARDS the oldest turns that don't fit, so it emits AT MOST N chunks NO MATTER how big the
+  turns are. A registered hook fleet is a fixed set of N `SessionStart` hooks, so `--slices N` is what
+  keeps the count from drifting to 5/6/7 (and silently dropping a slice) as a session's turns grow. The
+  budget becomes N×`--window`; the per-role 600/900 body caps are dropped, so user directives — the
+  recovery target — survive verbatim. `--slices N` requires `--slice i` to pick which chunk.
+- **`--slice i` alone (LEGACY, budget-driven).** `--budget` decides the document; it paginates into a
+  VARIABLE number of ≤`--window` chunks and `--slice i` prints the i-th. DETERMINISTIC (same session +
+  budget ⇒ identical boundaries) and concatenating `1..K` reproduces the whole document byte-for-byte —
+  but K is not knowable in advance, so this fits ad-hoc reads, NOT a fixed hook fleet.
+
+Either way the HOOKS are not order-free: Claude Code runs same-event hooks concurrently and collects their
 `additionalContext` in COMPLETION order, never settings-declaration order, so slices declared 1-2-3-4 can
-land as 2-4-3-1 and scramble the reconstruction. Order MUST be enforced in the hook shell with a done-flag barrier — slice N
-blocks until slice N-1 has emitted+exited, forcing process-exit order (= the harness's collection order)
-into slice order. This is the exact mechanism a chunked-USER.md `SessionStart` loader uses; recipe (A)
-below ports it in full. An out-of-range `N` prints nothing (exit 0), so a fixed fleet of hooks (say 4)
-self-trims — surplus hooks simply inject nothing, but they STILL must release the barrier so the chain
-doesn't stall. `--slice` is text-only and is NOT combinable with
-`--out` (which writes the WHOLE document to a file). Example: a ≤36000-char recon across a six-9000-char-
-hook fleet — hook `i` runs `csift turns . --budget 36000 --window 9000 --slice i`. See "Integration recipes →
-(A)" for the wiring and how this composes with compaction re-injection.
+land as 2-4-3-1 and scramble the reconstruction. Order MUST be enforced in the hook shell with a done-flag
+barrier — slice N blocks until slice N-1 has emitted+exited, forcing process-exit order (= the harness's
+collection order) into slice order. This is the exact mechanism a chunked-USER.md `SessionStart` loader
+uses; recipe (A) below ports it in full. An out-of-range `N` prints nothing (exit 0), so a surplus hook in
+a fixed fleet simply injects nothing — but it STILL must release the barrier so the chain doesn't stall.
+`--slice` is text-only and is NOT combinable with `--out` (which writes the WHOLE document to a file).
+Example: a fixed 4-hook fleet — hook `i` runs `csift turns . --slices 4 --window 9000 --slice i`. See
+"Integration recipes → (A)" for the wiring and how this composes with compaction re-injection.
 
 ---
 
@@ -1034,7 +1044,7 @@ before it emits + exits, forcing process-exit order into slice order. Same mecha
 # PPID) so concurrent sessions don't collide. Faithful port of the chunked-USER.md SessionStart loader.
 set -euo pipefail
 slice="${1:?pass the 1-based slice index as argv1}"
-MAX_SLICES=6                       # MUST equal the number of registered hooks below (see sizing note)
+MAX_SLICES=4                       # the FIXED fleet size — MUST equal the number of registered hooks below
 WAIT_TIMEOUT_SECS=5                # insurance: proceed anyway if a predecessor never fires
 
 SEQ_DIR="/tmp/csift-turns-slice-seq-${PPID}"
@@ -1063,9 +1073,11 @@ fi
 
 input="$(cat)"
 session_id="$(printf '%s' "$input" | jq -r '.session_id')"
-chunk="$(csift turns --session "$session_id" --budget 36000 --window 9000 --slice "$slice" 2>/dev/null || true)"
-# An out-of-range slice prints nothing → inject nothing; the trap still releases the barrier (the fleet
-# is sized for the worst case and self-trims).
+# `--slices N` pins the FLEET size: csift fills N newest-first slices with WHOLE turns (ellipsizing a turn
+# only if it ALONE exceeds one window) and drops the oldest overflow, so the chunk count is ALWAYS ≤ N —
+# it never drifts to 5/6/7 as turns grow, so the registered hook count never needs re-tuning per session.
+chunk="$(csift turns --session "$session_id" --slices "$MAX_SLICES" --window 9000 --slice "$slice" 2>/dev/null || true)"
+# An out-of-range slice prints nothing → inject nothing; the trap still releases the barrier.
 [ -n "$chunk" ] || exit 0
 
 jq -n --arg ctx "Verbatim turns the compaction summary clipped (part $slice — a supplement; the summary still owns task state):
@@ -1073,11 +1085,11 @@ $chunk" \
   '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}'
 ```
 
-Register the same script six times (slices 1–6). **Size the fleet to `ceil(budget ÷ window) + 1`, not
-`budget ÷ window`:** `--slice` never splits a turn mid-unit, so a ≤36000-char body lands in up to **five**
-boundary-respecting ≤9000-char chunks (a four-hook fleet would silently drop the fifth); the sixth is
-empty headroom for a session with many compaction-boundary banners. Surplus slices print nothing and
-self-trim — but they STILL release the barrier so the chain never stalls.
+Register the same script N times (here 4 = `MAX_SLICES`). With `--slices N` the slice COUNT is the hard
+constraint, so N is simply how much recent history to recover (≈N×`--window` chars) — NOT a number to
+re-tune per session. csift always emits ≤N chunks, dropping the oldest turns that don't fit, so the fleet
+never has to grow as turns get bigger. A surplus slice (a short session) prints nothing and self-trims —
+but still releases the barrier so the chain never stalls.
 
 ```json
 {
@@ -1090,24 +1102,20 @@ self-trim — but they STILL release the barrier so the chain never stalls.
       { "matcher": "compact", "hooks": [{ "type": "command",
         "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 3" }] },
       { "matcher": "compact", "hooks": [{ "type": "command",
-        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 4" }] },
-      { "matcher": "compact", "hooks": [{ "type": "command",
-        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 5" }] },
-      { "matcher": "compact", "hooks": [{ "type": "command",
-        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 6" }] }
+        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/csift-turns-slice.sh 4" }] }
     ]
   }
 }
 ```
 
-For a GLOBAL install (every project), drop the same script in `~/.claude/hooks/` and register the six
+For a GLOBAL install (every project), drop the same script in `~/.claude/hooks/` and register the four
 entries in `~/.claude/settings.json` with an ABSOLUTE `command` path — `${CLAUDE_PROJECT_DIR}` is unset
 outside a project — and resolve `csift` from `~/.cargo/bin` / PATH rather than a repo-relative binary.
 
 Safe to fire on every compaction (no pile-up, per above). `--window 9000` (under the 10K cap) leaves
-headroom for the wrapper line each hook adds; concatenating the slices reproduces the chrome-less document
-BODY (the same bytes `--out` writes — NOT the scope-banner/footer-wrapped plain `turns` output), and the
-barrier guarantees they arrive in that order.
+headroom for the wrapper line each hook adds; the four slices carry the NEWEST ≈4×9000 chars of verbatim
+turns (oldest overflow discarded — `--slices` keeps recency, not the whole document), and the barrier
+guarantees they arrive oldest-kept → newest.
 
 ### (B) `whoami` remediation — export the session id when CC doesn't
 
