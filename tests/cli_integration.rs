@@ -7783,7 +7783,7 @@ fn holes_home() -> Home {
             r#"{"type":"user","uuid":"rej","parentUuid":"a1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nplease run the smoke tests once before calling it done"}]}}"#, "\n",
             // an interrupt marker — a turn MEMBER of turn 2, NOT a new boundary.
             r#"{"type":"user","uuid":"int","parentUuid":"rej","timestamp":"2026-06-07T05:20:30.000Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a2","parentUuid":"int","timestamp":"2026-06-07T05:21:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok, adding the smoke test check"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"int","timestamp":"2026-06-07T05:21:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok, adding the smoke-test check"}]}}"#, "\n",
         ),
     );
     h
@@ -7882,7 +7882,7 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
     //     reconstructed USER turn (not merely in the raw assistant tool-call JSON).
     let desc = h.run(&[
         "search",
-        "decouple approval from the socket",
+        "the conservative path that reuses existing state",
         "-t",
         "user",
         "--session",
@@ -7890,7 +7890,8 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
     ]);
     assert!(desc.success, "stderr: {}", desc.stderr);
     assert!(
-        desc.stdout.contains("decouple approval from the socket"),
+        desc.stdout
+            .contains("the conservative path that reuses existing state"),
         "option description not searchable under user:\n{}",
         desc.stdout
     );

@@ -409,7 +409,7 @@ impl Record {
     /// record is not one: `[<kind> <task-id> <status>] <summary>` where `<kind>` is the TRUE
     /// trigger class parsed from the summary's leading classifier (`background-command` /
     /// `workflow` / `agent` / fallback `task`) — NOT the hardcoded literal `workflow` that
-    /// mislabeled 81% of triggers on the oracle (85 background-command + 2 agent). A missing
+    /// mislabeled 81% of triggers on a captured session (85 background-command + 2 agent). A missing
     /// field is elided gracefully. This is what `turns` / `search` render as the segment
     /// opener in place of the raw `<task-notification>` XML blob.
     #[must_use]
@@ -1353,7 +1353,7 @@ fn scrape_persisted_path(text: &str) -> Option<String> {
 /// classifier of its `<summary>` (verified against real sessions: the summary opens with
 /// `Background command "…"`, `Dynamic workflow "…"`, or `Agent …`). This is the attribution
 /// the P2 turn-segmentation lens demands — the old code hardcoded the literal `workflow` for
-/// EVERY trigger, mislabeling background-command + agent pulses (81% on the captured session).
+/// EVERY trigger, mislabeling background-command + agent pulses (81% on a captured session).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutomationKind {
     /// A `Background command "…"` completion pulse (a `&`-detached shell command CC ran).
@@ -1400,7 +1400,7 @@ impl AutomationKind {
             // "Relaunch monitor timer (cycle 2)"` / `"Re-arm corrected monitor …"` /
             // `"nightly monitor tick (25min)"`). The leading classifier is `Background command`, so
             // a pure prefix check buried EVERY such pulse under `background-command` and the
-            // `Monitor` class matched zero of them on the captured session. Route to `Monitor` when
+            // `Monitor` class matched zero of them on a captured session. Route to `Monitor` when
             // the quoted command NAME carries a monitor-cadence token, so the dominant monitor
             // activity is attributed to its own class instead of disguised as generic bg-cmd.
             if quoted_name_is_monitor_cadence(s) {
@@ -2487,7 +2487,7 @@ mod tests {
 
     #[test]
     fn auq_exchange_surfaces_each_option_description() {
-        // Real shape (coc captured-a): every option carries a `description` (supplementary note)
+        // Real-captured shape: every option carries a `description` (supplementary note)
         // alongside its `label`. BOTH must survive into the reconstructed unit — the
         // description was previously dropped (only labels rendered).
         let r = parse(
@@ -2509,7 +2509,7 @@ mod tests {
 
     #[test]
     fn auq_exchange_surfaces_notes_when_answer_is_notes_only() {
-        // Real shape (captured-b / aaaaaaaa): the user answered by typing prose into the
+        // Real-captured shape: the user answered by typing prose into the
         // notes field; the answer value is the literal "(notes only)" placeholder and the
         // ACTUAL message lives in `annotations[question].notes`. It must be surfaced —
         // previously the whole user message was silently dropped.
@@ -2520,7 +2520,7 @@ mod tests {
         // The placeholder answer is shown, but the real message (the notes) is what the
         // user actually said — it MUST be present and searchable.
         assert!(
-            unit.contains("never conflate the names"),
+            unit.contains("never conflate the two"),
             "notes (the user's real message) must surface: {unit}"
         );
         assert!(
@@ -2576,7 +2576,7 @@ mod tests {
     }
 
     // ── §4.2.4 ExitPlanMode / tool-use rejection WITH a typed message = a genuine-user
-    //    boundary + a plan pointer. Real shape from captured-c (CJK) + the English form. ──
+    //    boundary + a plan pointer. Real-captured shape (the typed tail is the message). ──
 
     #[test]
     fn plan_rejection_with_typed_message_is_a_boundary() {
@@ -2802,11 +2802,11 @@ mod tests {
 
     #[test]
     fn monitor_cadence_event_replaces_fabricated_completed_status() {
-        // The real captured monitor line-34408 shape: a Monitor pulse with NO <status> but a real
+        // A real-captured monitor shape: a Monitor pulse with NO <status> but a real
         // <event> outcome. The label must surface the EVENT (STAGE2_OUTPUT_READY), not fabricate
         // `completed` — which would invert a timed-out monitor's attribution.
         let mon = parse(
-            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b718g3gqq</task-id>\n<summary>Monitor event: \"full pulse suite re-run completion\"</summary>\n<event>STAGE2_OUTPUT_READY</event>\n</task-notification>"}}"#,
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b718g3gqq</task-id>\n<summary>Monitor event: \"full test suite re-run completion\"</summary>\n<event>STAGE2_OUTPUT_READY</event>\n</task-notification>"}}"#,
         );
         let t = mon.automation_trigger().expect("a monitor trigger");
         assert_eq!(t.kind, AutomationKind::Monitor);
@@ -2871,11 +2871,11 @@ mod tests {
             BackgroundCommand
         );
         // A monitor-COMPLETION `<task-notification>` (summary opens Monitor/Scheduled/cron)
-        // is its own labeled class — the real `Monitor event: "…"` pulse (10× across the
-        // oracles) must NOT fall to `task`. (This is NOT the isMeta ScheduleWakeup tick PROMPT,
-        // which never reaches this summary classifier; see AutomationKind::Monitor docs.)
+        // is its own labeled class — the real `Monitor event: "…"` pulse (seen many times
+        // across captures) must NOT fall to `task`. (This is NOT the isMeta ScheduleWakeup tick
+        // PROMPT, which never reaches this summary classifier; see AutomationKind::Monitor docs.)
         assert_eq!(
-            AutomationKind::from_summary(Some("Monitor event: \"full pulse suite re-run\"")),
+            AutomationKind::from_summary(Some("Monitor event: \"full test suite re-run\"")),
             Monitor
         );
         assert_eq!(AutomationKind::from_summary(Some("Monitor tick")), Monitor);
@@ -2887,7 +2887,7 @@ mod tests {
         // The captured-monitor shape: a monitor/cron cadence implemented as a `&`-detached
         // `Background command "<monitor-named>"`. The quoted command NAME carrying a
         // monitor-cadence token routes to Monitor (not the generic BackgroundCommand), so the
-        // dominant monitor activity is not disguised. (Verified against the captured session, where
+        // dominant monitor activity is not disguised. (Verified against a captured session, where
         // the monitor loop is `Relaunch monitor timer` / `Re-arm corrected monitor` bg-cmds.)
         assert_eq!(
             AutomationKind::from_summary(Some(
@@ -2902,7 +2902,9 @@ mod tests {
             Monitor
         );
         assert_eq!(
-            AutomationKind::from_summary(Some("Background command \"nightly monitor tick (25min)\"")),
+            AutomationKind::from_summary(Some(
+                "Background command \"nightly monitor tick (25min)\""
+            )),
             Monitor
         );
         // PRECISION: a background command that merely mentions monitoring in PROSE (outside the

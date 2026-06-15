@@ -517,14 +517,17 @@ mod tests {
                 "/Users/testuser/Projects/Acme/widget_factory-worktrees/main",
                 "-Users-testuser-Projects-Acme-widget-factory-worktrees-main",
             ),
-            // The `/.claude` segment emits a literal `--` (proves no collapse).
+            // The `/.cache` segment emits a literal `--` (proves no collapse).
             (
                 "/Users/testuser/Projects/Acme/widget_factory/.cache-worktrees/sunny-meadow",
                 "-Users-testuser-Projects-Acme-widget-factory--cache-worktrees-sunny-meadow",
             ),
             ("/a/.claude/b", "-a--claude-b"),
             // Case is preserved; digits pass through.
-            ("/Users/testuser/Projects/coc", "-Users-testuser-Projects-coc"),
+            (
+                "/Users/testuser/Projects/Demo3",
+                "-Users-testuser-Projects-Demo3",
+            ),
         ];
         for (cwd, encoded) in table {
             assert_eq!(
@@ -538,9 +541,7 @@ mod tests {
     #[test]
     fn encode_replaces_slash_and_underscore_with_dash() {
         assert_eq!(
-            encode_cwd(Path::new(
-                "/Users/testuser/Projects/widget_app_prototype"
-            )),
+            encode_cwd(Path::new("/Users/testuser/Projects/widget_app_prototype")),
             "-Users-testuser-Projects-widget-app-prototype"
         );
     }

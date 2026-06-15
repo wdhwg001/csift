@@ -2807,7 +2807,7 @@ mod tests {
             just_paths(r#"printf 'layout café > cover scaled déjà'"#).is_empty(),
             "in-quote prose `>` must not fabricate a file"
         );
-        // The captured monitor's `echo ">>> NO compact"` / `echo "  >> ABSENT"` family.
+        // A sample oracle's `echo ">>> NO compact"` / `echo "  >> ABSENT"` family.
         assert!(just_paths(r#"echo ">>> NO compact""#).is_empty());
         assert!(just_paths(r#"echo "  >> ABSENT""#).is_empty());
         assert!(just_paths(r#"echo "  >> NOT assigned""#).is_empty());
