@@ -1211,6 +1211,84 @@ fn search_subagent_line_addresses_the_subagent_transcript() {
 }
 
 #[test]
+fn search_subagent_scopes_a_normal_search_not_just_line_addressing() {
+    // REGRESSION (the `--subagent` silent no-op): without `--line`, `--subagent <hex>` used to
+    // be dropped entirely — the search ran over the WHOLE scope and fail-OPENed to the full
+    // corpus. Decisive fixture fact: "panic" lives ONLY in the top-level transcript; subagent
+    // `aaa111` contains "carry"/"sub" but NEVER "panic". So scoping to aaa111 MUST yield zero
+    // "panic" hits; the bug returned the top-level hit anyway.
+    let h = populated_home();
+
+    // Unscoped: "panic" matches (it is in the top-level session).
+    let unscoped = h.run(&["search", "panic", SESS, "-c"]);
+    assert!(unscoped.success, "stderr: {}", unscoped.stderr);
+    assert_eq!(
+        unscoped.stdout.trim(),
+        "1",
+        "panic should match once unscoped: {}",
+        unscoped.stdout
+    );
+
+    // Scoped to the subagent that has NO "panic": must be 0 (was 1 with the no-op bug).
+    let scoped = h.run(&["search", "panic", SESS, "--subagent", "aaa111", "-c"]);
+    assert!(scoped.success, "stderr: {}", scoped.stderr);
+    assert_eq!(
+        scoped.stdout.trim(),
+        "0",
+        "--subagent must SCOPE the search to aaa111 (no panic there), not widen it: {}",
+        scoped.stdout
+    );
+
+    // And a term that IS in aaa111 ("sub") still matches under the same scope — proving the
+    // scope is the subagent transcript, not an empty/echo result.
+    let positive = h.run(&["search", "sub", SESS, "--subagent", "aaa111", "-l"]);
+    assert!(positive.success, "stderr: {}", positive.stderr);
+    assert!(
+        positive.stdout.contains("aaa111"),
+        "the in-scope subagent should still match its own content: {}",
+        positive.stdout
+    );
+    // -l lists exactly the one in-scope transcript: a single line, `aaa111 (parent <SESS>)`.
+    // The sibling wf agent bbb222 must be absent. (The parent-uuid annotation legitimately
+    // echoes SESS — that is the subagent's re-feedable parent, not a top-level hit.)
+    let lines: Vec<&str> = positive
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    assert_eq!(
+        lines.len(),
+        1,
+        "scope must resolve to exactly one transcript: {}",
+        positive.stdout
+    );
+    assert!(
+        !positive.stdout.contains("bbb222"),
+        "scope must be ONLY aaa111, not the sibling subagent bbb222: {}",
+        positive.stdout
+    );
+}
+
+#[test]
+fn search_subagent_unknown_hex_fails_closed() {
+    // The fail-OPEN footgun: an unmatched `--subagent` hex must ERROR (so the caller knows the
+    // scope is empty), never silently fall back to the whole corpus. Asserted WITHOUT `--line`
+    // — the path that previously ignored `--subagent` outright.
+    let h = populated_home();
+    let out = h.run(&["search", "carry", SESS, "--subagent", "deadbeef00", "-c"]);
+    assert!(
+        !out.success,
+        "an unmatched --subagent hex must fail, not return corpus counts; stdout: {} stderr: {}",
+        out.stdout, out.stderr
+    );
+    assert!(
+        out.stderr.contains("--subagent") && out.stderr.contains("deadbeef00"),
+        "the error should name the flag + the unmatched hex: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn search_tool_response_names_the_tool_it_answers() {
     let h = populated_home();
     // Fixture L4 = a tool_result for tool_use_id `call0`, whose tool_use (L3) is `Read`.

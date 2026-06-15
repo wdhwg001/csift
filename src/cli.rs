@@ -804,9 +804,11 @@ pub struct SearchArgs {
     #[arg(long, value_name = "UUID", value_delimiter = ',')]
     pub uuid: Vec<String>,
 
-    /// Pin `--line` addressing to ONE subagent transcript by its bare hex id (as shown by
-    /// `csift agents`): `--session <parent> --subagent <hex> --line N`. Without it, `--line`
-    /// addresses the top-level session transcript.
+    /// SCOPE the search to ONE subagent transcript by its bare hex id (as shown by `csift
+    /// agents`): `--session <parent> --subagent <hex>` searches only that subagent. Fail-CLOSED
+    /// — an unmatched hex is an error, never a silent widen to the whole corpus. It ALSO pins
+    /// the single transcript that `--line` addressing needs (`--session <parent> --subagent
+    /// <hex> --line N`); without `--subagent`, `--line` addresses the top-level transcript.
     #[arg(long, value_name = "HEX")]
     pub subagent: Option<String>,
 

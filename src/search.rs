@@ -374,9 +374,10 @@ fn parse_line_specs(tokens: &[String]) -> Result<Vec<(usize, bool)>> {
     Ok(out)
 }
 
-/// Resolve the scope to exactly ONE transcript for `--line` addressing (lines are per-file).
-/// `--subagent <hex>` pins that subagent transcript; otherwise the top-level one. A pointed
-/// error explains how to narrow an ambiguous or empty scope.
+/// Resolve the scope to exactly ONE transcript — for `--subagent <hex>` scoping (a hex names
+/// one subagent transcript) and/or `--line` addressing (lines are per-file). `--subagent <hex>`
+/// pins that subagent transcript; otherwise the top-level one. Fail-CLOSED: an unmatched hex or
+/// an ambiguous/empty scope is a pointed error, never a silent widen to the whole corpus.
 fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
     let scope = if args.subagent.is_some() {
         SubagentScope::WithSubagents
@@ -402,7 +403,7 @@ fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
         [] => {
             if args.subagent.is_some() {
                 bail!(
-                    "--line: no subagent transcript `{}` found in scope — pass its parent \
+                    "--subagent: no subagent transcript `{}` found in scope — pass its parent \
                      `--session <uuid>` and check the hex with `csift agents`",
                     args.subagent.as_deref().unwrap_or("")
                 )
@@ -502,9 +503,13 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         );
     }
 
-    // ── Resolve targets → session files. `--line` addressing is PER-FILE, so it pins exactly
-    //    ONE transcript; everything else uses the shared (optionally subagent-spanning) resolver. ──
-    let session_files = if !args.line.is_empty() {
+    // ── Resolve targets → session files. `--subagent <hex>` names exactly ONE subagent
+    //    transcript, so it pins the scope to that single file (in EVERY mode, not just `--line`);
+    //    `--line` addressing is likewise PER-FILE and pins one transcript. Either ⇒ the
+    //    single-transcript resolver (which fail-CLOSES: an unmatched hex errors, never widens
+    //    scope to the whole corpus). Everything else uses the shared (optionally
+    //    subagent-spanning) resolver. ──
+    let session_files = if !args.line.is_empty() || args.subagent.is_some() {
         vec![resolve_single_transcript(args)?]
     } else {
         path::resolve_session_files(
