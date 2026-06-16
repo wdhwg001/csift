@@ -217,10 +217,14 @@ csift files <uuid> --subagents-only --by-file   # only what the session's subage
 Rebuilds a file's content by replaying its Read / Write / Edit stream in transcript order. Five
 mutually-exclusive modes (**default = restore**): **restore** (no mode flag) hands back the file's RAW
 final content (`recover --file X > X`), but ONLY when the session saw the WHOLE file — if it saw just
-PART, restore FAILS rather than emit a holey file, naming the recoverable + missing ranges and pointing
-at `--salvage`; **`--salvage`** is restore's never-fails sibling, the best-effort line-numbered fragment
-of what survived (gaps left explicit, identical to `--at @latest`); **`--patches`** is the segmented
-unified-diff CHANGES/rewind history split at integrity boundaries; **`--at WHEN`** is the partial
+PART, restore FAILS rather than emit a holey file — with a SMART diagnostic: covered + missing ranges,
+EVERY external-change boundary, and (when a richer state survived before the first change) a dump-the-
+pre-change-version + patches-since + reconcile-by-hand recipe, always closing with a caveat that csift
+can't see changes made outside the Read/Write/Edit stream; **`--salvage`** is restore's never-fails
+sibling, the best-effort line-numbered fragment of what survived (gaps left explicit, identical to `--at
+@latest`); **`--patches`** is the segmented unified-diff CHANGES/rewind history split at integrity
+boundaries, rendered with FULL context (every read-covered line shown, not a 3-line window — so a
+fully-read, one-line-edited file reproduces in full); **`--at WHEN`** is the partial
 line-numbered snapshot as the LLM saw it (gaps explicit, never fabricated); **`--coverage`**/`--dry-run`
 scopes without dumping. `--file` is **required** for all five. A `modified since read` boundary (the
 file changed underneath — `prettier`/linter, etc.) **invalidates the pre-boundary buffer in the final

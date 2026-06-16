@@ -164,7 +164,7 @@ src/agents.rs    # `agents`: per-subagent lifecycle rows + --kind/--since/--unti
 src/time_window.rs # `--since`/`--until` parsing (absolute + relative, system-local); shared by search + agents
 src/timez.rs     # shared system-local timestamp rendering (format_timestamp / local_iso / local_tz)
 src/whoami.rs    # `whoami`: CLAUDE_CODE_SESSION_ID detection, false-positive-safe
-src/recover.rs   # `recover`: file-content reconstruction (default restore = raw final content or fail-if-partial; --salvage/--patches/--at/--coverage) + the `--file @plan` sigil; modified-since-read invalidates the final-state buffer; basename prefilter + `--files-from`/`--out-dir` batch (parse each transcript once for many files)
+src/recover.rs   # `recover`: file-content reconstruction (default restore = raw final content, or a SMART fail-if-partial that lists every external-change boundary + recommends the pre-change dump + patches-since + reconcile; --salvage/--patches/--at/--coverage) + the `--file @plan` sigil; modified-since-read invalidates the final-state buffer; --patches uses FULL context (all read lines, Read-before-Edit-guaranteed); basename prefilter + `--files-from`/`--out-dir` batch (parse each transcript once for many files)
 src/plan.rs      # `plan`: plan-file binding resolver (the `plan_mode` attachment) + shared @plan resolution
 src/turns.rs     # `turns`: turn-fidelity reconstruction of a compaction-clipped exchange
 src/image.rs     # `image`: list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error + --since/--turn-range/--uuid disambiguators; --out extension-driven transcode via image + libwebp)

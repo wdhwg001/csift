@@ -4319,6 +4319,18 @@ fn recover_restore_partial_file_errors_pointing_to_salvage() {
         "points at --salvage: {}",
         out.stderr
     );
+    // No external-change boundary here (just an incomplete read) — so no boundary list.
+    assert!(
+        !out.stderr.contains("changed OUTSIDE"),
+        "no boundary list when there was no external change: {}",
+        out.stderr
+    );
+    // …but the hidden-change caveat fires even without a boundary.
+    assert!(
+        out.stderr.contains("does not hunt for hidden changes"),
+        "caveat present even with no boundary: {}",
+        out.stderr
+    );
 }
 
 #[test]
@@ -4493,6 +4505,61 @@ fn recover_modified_since_read_invalidates_stale_lines() {
         rest.stderr.contains("recovered 2/5"),
         "honest partial count: {}",
         rest.stderr
+    );
+    // Smart failure: it lists the external-change boundary…
+    assert!(
+        rest.stderr.contains("changed OUTSIDE") && rest.stderr.contains("modified_since_read"),
+        "lists the external-change boundary: {}",
+        rest.stderr
+    );
+    // …and recognizes the pre-change state was COMPLETELY recoverable (scenario 1), recommending
+    // the pre-change dump + patches-since recipe.
+    assert!(
+        rest.stderr.contains("COMPLETELY recoverable"),
+        "surfaces the complete pre-change state: {}",
+        rest.stderr
+    );
+    assert!(
+        rest.stderr.contains("--at @line:") && rest.stderr.contains("--patches"),
+        "recommends pre-change dump + patches: {}",
+        rest.stderr
+    );
+}
+
+#[test]
+fn recover_restore_surfaces_fuller_pre_change_partial_state() {
+    // Scenario 2: a file NOT authored here — windowed-read lines 1-8 of a 10-line file, then a
+    // modified-since-read boundary, then re-read only lines 1-2. Latest is 2/10; but BEFORE the
+    // change 8/10 survives (fuller, still partial). Restore surfaces that + a snapshot-as-of recipe.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"read"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/big.txt","content":"L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8","startLine":1,"numLines":8,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/p/big.txt","old_string":"L1","new_string":"X1"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T06:00:02.000Z","toolUseResult":{"file":{"filePath":"/p/big.txt","content":"L1\nL2","startLine":1,"numLines":2,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", "--session", SESS, "--file", "/p/big.txt"]);
+    assert!(!out.success, "partial restore fails: {}", out.stdout);
+    assert!(
+        out.stderr.contains("recovered 2/10"),
+        "latest count: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("MORE survives") && out.stderr.contains("8/10"),
+        "fuller (still partial) pre-change state surfaced: {}",
+        out.stderr
+    );
+    // The recommended pre-change dump is `--at @line:N` (NOT `--salvage --at`, which would be a
+    // mutually-exclusive-mode parse error).
+    assert!(
+        out.stderr.contains("--at @line:") && !out.stderr.contains("--salvage --at"),
+        "recommends a valid snapshot-as-of command: {}",
+        out.stderr
     );
 }
 

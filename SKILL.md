@@ -547,14 +547,22 @@ restore** when no mode flag is set); `--file` is **required** for all five:
   (`recover --file X > X`; with `--out` it writes the raw file + a stderr note, stdout stays empty;
   `--format json` → a single `{file, complete, lines, content}` object). Restore SUCCEEDS only when the
   session saw the WHOLE file (a full Read, or it authored the file); when it saw just PART, restore
-  **FAILS LOUDLY** — naming the recoverable + missing line ranges and pointing at `--salvage` — rather
-  than emit a holey file.
+  **FAILS LOUDLY** rather than emit a holey file. The failure is a SMART diagnostic: covered + missing
+  ranges, EVERY external-change boundary (Edit-before-Read / external edit), and — when a richer state
+  survived BEFORE the first change (COMPLETE if the session authored the file, a fuller partial
+  otherwise) — a `dump the pre-change version (--at @line:<before>) + the changes since (--patches
+  --since) + reconcile by hand` recipe. It ALWAYS closes with a caveat: csift cannot see changes made
+  OUTSIDE the visible Read/Write/Edit stream (a formatter like prettier, a husky/pre-commit hook, git,
+  bash) and does NOT hunt for hidden boundaries (escalated if a bash mutation may have touched the file).
 - **`--salvage`** — restore's never-fails sibling: the best-effort, line-numbered FINAL-state fragment.
   Dumps whatever survived (known lines numbered) with the rest as explicit `??? lines A..B unknown`
   gaps. For a file that is GONE, only-partially-read, and barely-edited — salvage the surviving
   proportion instead of rewinding. **Identical output to `--at @latest`.**
 - **`--patches`** — segmented unified-diff history of `--file` (the CHANGES / rewind-over-a-window
-  view), split at **integrity boundaries** where reconstruction across them is invalid: a `modified
+  view), rendered with **FULL context**: every read-covered line is shown, not a 3-line window — CC's
+  strict Read-before-Edit guarantees those lines were genuinely observed, so a fully-read,
+  one-line-edited file reproduces in full (patches is never LESS than `--salvage` over the read-covered
+  region). Split at **integrity boundaries** where reconstruction across them is invalid: a `modified
   since read` harness error (authoritative), an `originalFile` that disagrees with the replayed buffer
   (authoritative — the signal other recovery tools discard), an external `edited_text_file`
   (authoritative), or a Bash mutation (heuristic, always flagged). No diff spans a boundary.
@@ -636,6 +644,26 @@ boundary / snapshot (every object carries `session_id` + the id-domain discrimin
 **Use it to** restore a plan (via `--file @plan`) a compaction or bad-recovery dropped, extract a file's
 diff-history over a turn/time range, or check (via `--coverage`) whether a file is even worth attempting
 to reconstruct and where it will break — before dumping anything.
+
+**Recipe — recovering a file that crossed external-change boundaries.** When the default restore fails
+(or you suspect a formatter/linter/git/bash changed the file mid-session), don't settle for the latest
+fragment — work boundary by boundary:
+
+```bash
+# 1. List the external-change boundaries (line / turn / ts / kind) for the file:
+csift recover --file /abs/X --coverage --format json | jq '.boundaries[] | {line_no, kind, ts_utc}'
+# 2. The boundaries cut the timeline into segments. For EACH segment, dump the cleanest form as of
+#    its end (just BEFORE the next boundary) — restore-quality if that segment is complete, else a
+#    salvage fragment with gaps explicit. `@line:<N>` = the jsonl line from step 1 (minus 1):
+csift recover --file /abs/X --at @line:<boundary_line - 1>     # the pre-change state of that segment
+csift recover --file /abs/X --patches --since '<boundary ts>'  # the changes the next segment made
+# 3. Reconcile the segments by hand into the final file. The pre-FIRST-boundary segment is usually the
+#    richest (a session-authored file is often COMPLETE there); later segments are the post-change edits.
+```
+
+This is exactly what the restore-failure message recommends, generalized to every boundary. (csift does
+NOT hunt for HIDDEN boundaries — a formatter/git/bash change with no downstream `modified since read`
+error is invisible; treat any such reconstruction as best-effort.)
 
 ---
 

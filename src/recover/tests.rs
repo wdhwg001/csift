@@ -675,7 +675,7 @@ fn unified_diff_basic_change() {
         "    raw = fh.read()".to_string(),
         "use(raw)".to_string(),
     ];
-    let d = unified_diff(&old, &new);
+    let d = unified_diff(&old, &new, 3);
     assert!(d.contains("@@ -"), "carries a hunk header: {d}");
     assert!(d.contains("-raw = open(s).read()"), "removed line: {d}");
     assert!(d.contains("+with open(s) as fh:"), "added line: {d}");
@@ -685,14 +685,14 @@ fn unified_diff_basic_change() {
 #[test]
 fn unified_diff_identical_is_empty() {
     let v = vec!["a".to_string(), "b".to_string()];
-    assert_eq!(unified_diff(&v, &v), "");
+    assert_eq!(unified_diff(&v, &v, 3), "");
 }
 
 #[test]
 fn unified_diff_pure_insertion_header_form() {
     let old: Vec<String> = vec![];
     let new = vec!["new1".to_string(), "new2".to_string()];
-    let d = unified_diff(&old, &new);
+    let d = unified_diff(&old, &new, 3);
     assert!(d.contains("+new1") && d.contains("+new2"), "{d}");
     // A zero-length old side uses the 0,0 form.
     assert!(d.contains("@@ -0,0 +1,2 @@"), "insertion header: {d}");
@@ -767,6 +767,7 @@ fn noop_edit_does_not_change_buffer_or_inflate_diff() {
     let diff = unified_diff(
         &filter_lines(&seg.start_buffer, None),
         &filter_lines(&seg.end_buffer, None),
+        usize::MAX,
     );
     assert_eq!(
         diff, "@@ -0,0 +1,2 @@\n+a\n+b\n",
@@ -1477,7 +1478,7 @@ fn lcs_diff_emits_trailing_deletions_when_old_is_longer() {
     // first pass only exercised balanced / leading change runs).
     let old = vec!["keep".to_string(), "drop1".to_string(), "drop2".to_string()];
     let new = vec!["keep".to_string()];
-    let d = unified_diff(&old, &new);
+    let d = unified_diff(&old, &new, 3);
     assert!(
         d.contains("-drop1") && d.contains("-drop2"),
         "tail deletes: {d}"
@@ -1500,7 +1501,7 @@ fn lcs_diff_emits_trailing_insertions_when_new_is_longer() {
     // new has lines old lacks at the END → the `while j < m` tail-insert loop runs.
     let old = vec!["keep".to_string()];
     let new = vec!["keep".to_string(), "add1".to_string(), "add2".to_string()];
-    let d = unified_diff(&old, &new);
+    let d = unified_diff(&old, &new, 3);
     assert!(
         d.contains("+add1") && d.contains("+add2"),
         "tail inserts: {d}"
@@ -1520,7 +1521,7 @@ fn unified_diff_pure_deletion_uses_zero_length_new_header() {
     // `if new_count == 0` header form on the NEW side.
     let old = vec!["x".to_string(), "y".to_string()];
     let new: Vec<String> = vec![];
-    let d = unified_diff(&old, &new);
+    let d = unified_diff(&old, &new, 3);
     assert!(d.contains("-x") && d.contains("-y"), "both removed: {d}");
     assert!(
         d.contains("@@ -1,2 +0,0 @@"),
@@ -1948,7 +1949,7 @@ fn unified_diff_caps_leading_context_at_three_lines() {
     let old: Vec<String> = (1..=8).map(|n| format!("line{n}")).collect();
     let mut new = old.clone();
     new[6] = "line7-CHANGED".to_string(); // change the 7th line (index 6)
-    let d = unified_diff(&old, &new);
+    let d = unified_diff(&old, &new, 3);
     assert!(
         d.contains("-line7") && d.contains("+line7-CHANGED"),
         "the change: {d}"
@@ -1962,6 +1963,31 @@ fn unified_diff_caps_leading_context_at_three_lines() {
         !d.contains(" line1\n") && !d.contains(" line3\n"),
         "context is capped at 3 lines (line1..line3 excluded): {d}"
     );
+}
+
+#[test]
+fn unified_diff_full_context_shows_every_line() {
+    // usize::MAX context (what --patches passes) reproduces the WHOLE file as context — a
+    // far-away change still drags every read line into one spanning hunk. This is what makes
+    // `--patches` of a fully-read, one-line-edited file contain all lines (CC's Read-before-Edit
+    // guarantees those context lines were genuinely observed, so they are valid to include).
+    let old: Vec<String> = (1..=8).map(|n| format!("line{n}")).collect();
+    let mut new = old.clone();
+    new[6] = "line7-CHANGED".to_string();
+    let d = unified_diff(&old, &new, usize::MAX);
+    // Every distant line appears as context — line1 and line3 are NOT excluded here.
+    for n in [1, 2, 3, 4, 5, 6, 8] {
+        assert!(
+            d.contains(&format!(" line{n}\n")),
+            "full context keeps line{n}: {d}"
+        );
+    }
+    assert!(
+        d.contains("-line7") && d.contains("+line7-CHANGED"),
+        "the change is still marked: {d}"
+    );
+    // One spanning hunk over all 8 lines.
+    assert_eq!(d.matches("@@ -").count(), 1, "single full-span hunk: {d}");
 }
 
 #[test]

@@ -1997,12 +1997,17 @@ fn buffer_disagrees_with_original(buf: &SparseBuffer, original_file: &str) -> bo
 /// Compute a unified diff between two line vectors, emitting `@@ -a,b +c,d @@` hunks with
 /// ` `/`-`/`+` prefixes. A compact LCS-based diff (O(n·m) DP) — fine for single-file
 /// reconstruction sizes and fully unit-testable. Returns an empty string when identical.
-fn unified_diff(old: &[String], new: &[String]) -> String {
+/// `context` = number of equal lines to keep around each change. `usize::MAX` ⇒ FULL context:
+/// every line of `old`/`new` is shown. `--patches` passes MAX on purpose — `old`/`new` are the
+/// segment's READ-covered lines, and CC's strict Read-before-Edit means each of those lines was
+/// genuinely observed, so showing them all is valid, high-quality context (a fully-read,
+/// barely-edited file then reproduces in full, not just a 3-line window around the one change).
+fn unified_diff(old: &[String], new: &[String], context: usize) -> String {
     if old == new {
         return String::new();
     }
     let ops = lcs_diff(old, new);
-    format_unified(&ops, old, new)
+    format_unified(&ops, old, new, context)
 }
 
 /// A single edit op in the diff script.
@@ -2054,9 +2059,14 @@ fn lcs_diff(old: &[String], new: &[String]) -> Vec<(DiffOp, usize, usize)> {
     ops
 }
 
-/// Format an LCS op-script as unified-diff hunks with 3 lines of context.
-fn format_unified(ops: &[(DiffOp, usize, usize)], old: &[String], new: &[String]) -> String {
-    const CONTEXT: usize = 3;
+/// Format an LCS op-script as unified-diff hunks. `context` equal lines surround each change
+/// (`usize::MAX` ⇒ full context: all lines emitted, every change merged into one spanning hunk).
+fn format_unified(
+    ops: &[(DiffOp, usize, usize)],
+    old: &[String],
+    new: &[String],
+    context: usize,
+) -> String {
     // Mark which op indices are changes vs equal.
     let is_change: Vec<bool> = ops.iter().map(|(o, _, _)| *o != DiffOp::Equal).collect();
     let mut out = String::new();
@@ -2070,7 +2080,7 @@ fn format_unified(ops: &[(DiffOp, usize, usize)], old: &[String], new: &[String]
         // A change run: extend backward/forward by CONTEXT equal ops.
         let mut start = idx;
         let mut ctx_back = 0;
-        while start > 0 && !is_change[start - 1] && ctx_back < CONTEXT {
+        while start > 0 && !is_change[start - 1] && ctx_back < context {
             start -= 1;
             ctx_back += 1;
         }
@@ -2088,10 +2098,10 @@ fn format_unified(ops: &[(DiffOp, usize, usize)], old: &[String], new: &[String]
                 run += 1;
             }
             let equal_len = run - end;
-            if run < ops.len() && equal_len <= 2 * CONTEXT {
+            if run < ops.len() && equal_len <= context.saturating_mul(2) {
                 end = run; // absorb the gap
             } else {
-                end += equal_len.min(CONTEXT);
+                end += equal_len.min(context);
                 break;
             }
         }
@@ -2413,9 +2423,16 @@ fn render_restore(
     out_path: Option<&Path>,
     json: bool,
 ) -> Result<()> {
-    /// The freshest, most-complete restore candidate so far: (known lines, total line count,
-    /// latest event timestamp). Newer ts — then more lines — wins.
-    type RestoreCandidate = (Vec<(usize, String)>, usize, Option<String>);
+    /// The freshest, most-complete restore candidate so far. Newer ts — then more lines — wins.
+    /// Carries the source group's events + boundaries so a partial result can re-derive the
+    /// richest pre-change state and list every external-change boundary.
+    struct RestoreCandidate<'a> {
+        known: Vec<(usize, String)>,
+        total: usize,
+        ts: Option<String>,
+        events: &'a [FileEvent],
+        boundaries: Vec<Boundary>,
+    }
     let file = ctx.file.as_deref().unwrap_or("(none)");
     let mut best: Option<RestoreCandidate> = None;
     for s in sessions {
@@ -2438,33 +2455,37 @@ fn render_restore(
             .max();
         let better = match &best {
             None => true,
-            Some((bk, _, bts)) => (&ts, known.len()) > (bts, bk.len()),
+            Some(b) => (&ts, known.len()) > (&b.ts, b.known.len()),
         };
         if better {
-            best = Some((known, total, ts));
+            best = Some(RestoreCandidate {
+                known,
+                total,
+                ts,
+                events: &s.events,
+                boundaries: rep.boundaries,
+            });
         }
     }
-    let Some((known, total, _)) = best else {
+    let Some(cand) = best else {
         bail!(
             "no recoverable history for {file} in this scope — it was never Read/Written/Edited \
              here. Widen the scope (more sessions/transcripts) or check the path."
         );
     };
+    let RestoreCandidate {
+        known,
+        total,
+        events,
+        boundaries,
+        ..
+    } = cand;
     // Every line_no is ≤ total, so knowing `total` distinct lines ⇒ the whole 1..=total is known.
     let complete = total > 0 && known.len() == total;
     if !complete {
-        let covered = ranges_str(&known.iter().map(|(n, _)| *n).collect::<Vec<_>>());
-        let missing = missing_ranges_str(&known, total);
         bail!(
-            "cannot fully recover {file} from this scope: recovered {}/{} line(s) [{covered}], \
-             MISSING [{missing}]. This session only observed PART of the file (a windowed read + \
-             edits), so a complete file can't be rebuilt here. To salvage what DID survive (the \
-             recovered lines, numbered, with the gaps left explicit) use `--salvage`; for the \
-             CHANGES it made — e.g. to rewind a copy you still have, optionally over a window via \
-             --since/--until — use `--patches`; to scope what IS recoverable use `--coverage`; or \
-             widen the scope (more sessions/transcripts).",
-            known.len(),
-            total
+            "{}",
+            restore_partial_message(file, &known, total, &boundaries, events)
         );
     }
     let mut content = known
@@ -2499,6 +2520,125 @@ fn render_restore(
         eprintln!("(recovered {file}: {} lines, complete)", known.len());
     }
     Ok(())
+}
+
+/// The smart "can't fully restore the LATEST state" diagnostic. Beyond the covered/missing
+/// ranges it (1) lists EVERY external-change boundary (Edit-before-Read / external edit — the
+/// file changed outside the tool stream), (2) when a richer state existed BEFORE the first such
+/// change, surfaces it (complete in the session-authored case, a fuller salvage otherwise) with
+/// a dump-pre-change + dump-patches-since + reconcile-by-hand recipe, and (3) ALWAYS appends the
+/// caveat that csift cannot see changes made outside the visible Read/Write/Edit stream and does
+/// NOT hunt for hidden boundaries (escalated when a bash mutation may have touched the file).
+fn restore_partial_message(
+    file: &str,
+    known: &[(usize, String)],
+    total: usize,
+    boundaries: &[Boundary],
+    events: &[FileEvent],
+) -> String {
+    let covered = ranges_str(&known.iter().map(|(n, _)| *n).collect::<Vec<_>>());
+    let missing = missing_ranges_str(known, total);
+    let mut m = format!(
+        "cannot fully recover the LATEST {file} from this scope: recovered {}/{} line(s) \
+         [{covered}], MISSING [{missing}].",
+        known.len(),
+        total
+    );
+
+    // External-change boundaries: the file changed OUTSIDE the tool stream and a fresh Read was
+    // forced. Across these, pre-change content is no longer part of "latest".
+    let ext: Vec<&Boundary> = boundaries
+        .iter()
+        .filter(|b| {
+            matches!(
+                b.kind,
+                "modified_since_read" | "external_edit" | "original_file_disagreement"
+            )
+        })
+        .collect();
+    if let Some(first) = ext.iter().min_by_key(|b| b.line_no) {
+        m.push_str(&format!(
+            " The file changed OUTSIDE the Read/Write/Edit stream at {} point(s) (so latest can't \
+             include the pre-change lines):",
+            ext.len()
+        ));
+        for b in &ext {
+            m.push_str(&format!(
+                "\n  - jsonl L{} · turn {} · {} · {}",
+                b.line_no,
+                b.turn_index,
+                format_timestamp(b.timestamp_utc.as_deref()),
+                b.kind
+            ));
+        }
+        // Richest pre-change state = just before the FIRST external boundary (before any
+        // invalidation). A second replay with a cutoff there never trips the invalidation.
+        let cutoff = first.line_no.saturating_sub(1);
+        let pre = replay(events, Some(cutoff));
+        let pre_known = pre.final_buffer.known_lines();
+        let pre_total = pre
+            .final_buffer
+            .seen_total_lines
+            .unwrap_or_else(|| pre_known.last().map(|(n, _)| *n).unwrap_or(0));
+        if pre_known.len() > known.len() {
+            let pre_complete = pre_total > 0 && pre_known.len() == pre_total;
+            let since = first
+                .timestamp_utc
+                .as_deref()
+                .map(|t| format!("--since '{t}'"))
+                .unwrap_or_else(|| format!("(events after L{})", first.line_no));
+            if pre_complete {
+                m.push_str(&format!(
+                    "\nBUT BEFORE that first change the file is COMPLETELY recoverable ({} lines, \
+                     as of {}). Recommended (reconcile by hand): dump the pre-change version with \
+                     `recover --file {file} --at @line:{cutoff}`, then the changes since with \
+                     `recover --file {file} --patches {since}`.",
+                    pre_known.len(),
+                    format_timestamp(first.timestamp_utc.as_deref())
+                ));
+            } else {
+                m.push_str(&format!(
+                    "\nBUT BEFORE that first change MORE survives ({}/{} lines, vs {}/{} at \
+                     latest). Recommended (reconcile by hand): dump that fuller fragment with \
+                     `recover --file {file} --at @line:{cutoff}` (line-numbered, gaps explicit), \
+                     then the changes since with `recover --file {file} --patches {since}`.",
+                    pre_known.len(),
+                    pre_total,
+                    known.len(),
+                    total
+                ));
+            }
+        }
+    } else {
+        m.push_str(" This session only observed PART of the file, so a complete file can't be rebuilt here.");
+    }
+
+    m.push_str(
+        " For the best-effort LATEST fragment (survivors numbered, gaps explicit) use `--salvage`; \
+         for the changes use `--patches`; to scope what's recoverable use `--coverage`; or widen \
+         the scope.",
+    );
+
+    // Always-on caveat — csift does NOT hunt for hidden boundaries.
+    m.push_str(
+        "\nNote: recovery can't fully guarantee a match to disk — anything that changed this file \
+         OUTSIDE the visible Read/Write/Edit stream (a formatter like prettier, a husky/pre-commit \
+         hook, git, an external editor, a bash mutation) may be invisible here; csift does not hunt \
+         for hidden changes.",
+    );
+    let bash: Vec<&Boundary> = boundaries
+        .iter()
+        .filter(|b| b.kind == "bash_mutation")
+        .collect();
+    if let Some(b0) = bash.first() {
+        m.push_str(&format!(
+            " In fact this session ran {} bash command(s) that may have touched the file (first at \
+             L{}) — treat the result as suspect.",
+            bash.len(),
+            b0.line_no
+        ));
+    }
+    m
 }
 
 /// Compress sorted line numbers to a compact `1-50, 52, 60-72` range string (`none` when empty).
@@ -2664,7 +2804,7 @@ fn render_patches_text(
                     );
                     let old = filter_lines(&seg.start_buffer, ctx.line_range);
                     let new = filter_lines(&seg.end_buffer, ctx.line_range);
-                    let diff = unified_diff(&old, &new);
+                    let diff = unified_diff(&old, &new, usize::MAX);
                     if diff.is_empty() {
                         println!("  (no change in this segment)");
                     } else {
@@ -2970,7 +3110,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                         TimelineItem::Seg(seg) => {
                             let old = filter_lines(&seg.start_buffer, ctx.line_range);
                             let new = filter_lines(&seg.end_buffer, ctx.line_range);
-                            let diff = unified_diff(&old, &new);
+                            let diff = unified_diff(&old, &new, usize::MAX);
                             out_blob.push_str(&diff);
                             let obj = json!({
                                 "session_id": s.session_id,
