@@ -62,12 +62,17 @@ pub struct Hit {
     /// Tool name when the hit is a `tool`/`tool-response` block, for the header.
     pub tool_name: Option<String>,
     /// 1-based PHYSICAL line number of the source record in its session jsonl — the stable
-    /// address `csift get --line N` re-fetches. Backfilled by the turn collector (make_hit
+    /// address `csift search --line N` re-fetches. Backfilled by the turn collector (make_hit
     /// leaves it 0); 0 means "not located" (never happens for a real scanned hit).
     pub line: usize,
     /// The source record's `uuid` (jsonl's own globally-unique id), when present — the
-    /// alternative `csift get --uuid U` address. `None` for records that carry no uuid.
+    /// alternative `csift search --uuid U` address. `None` for records that carry no uuid.
     pub uuid: Option<String>,
+    /// Stable image ids the SOURCE RECORD carries (`#N` session handle, else `L<line>i<n>`) —
+    /// the `[N image(s): …]` suffix, so a `search` hit on an image-bearing message exposes the
+    /// SAME extractable id as `turns`/`image` (feed it to `csift image <session> --id <ID>`).
+    /// Backfilled onto the record's first hit only (avoids repeating it per matched block).
+    pub image_ids: Vec<String>,
 }
 
 /// A complete reconstructed request/response exchange (round-trip) containing the
@@ -699,7 +704,7 @@ struct Kept {
     rec: Record,
     can_hit: bool,
     /// 1-based PHYSICAL line number of this record in its source jsonl (from the scanner) —
-    /// a stable address (jsonl is append-only), surfaced per hit so `csift get --line N` (and
+    /// a stable address (jsonl is append-only), surfaced per hit so `csift search --line N` (and
     /// raw `sed -n 'Np'`) can re-fetch the exact record.
     line_no: usize,
 }
@@ -1025,12 +1030,17 @@ fn collect_turn_hits(
 }
 
 /// Stamp the source record's line number + uuid onto each hit just appended for it — the
-/// `csift get` address. Done by the turn collector (not `make_hit`) because the line number
-/// lives on the `Kept`, not the `Record`.
+/// `csift search --line/--uuid` address. Done by the turn collector (not `make_hit`) because the line number
+/// lives on the `Kept`, not the `Record`. Also attaches the record's image ids to its FIRST
+/// hit (so an image-bearing message exposes the extractable `#N`/`L<line>i<n>` id once, not
+/// repeated per matched block).
 fn backfill_address(hits: &mut [Hit], kept: &Kept) {
-    for h in hits {
+    for h in hits.iter_mut() {
         h.line = kept.line_no;
         h.uuid = kept.rec.uuid.clone();
+    }
+    if let Some(first) = hits.first_mut() {
+        first.image_ids = crate::image::image_ids_for_record(&kept.rec, kept.line_no);
     }
 }
 
@@ -1276,10 +1286,11 @@ fn make_hit(
         excerpt: match_excerpt(text, span, excerpt_max),
         timestamp_utc: ts,
         tool_name,
-        // line/uuid are per-RECORD, not known here — the turn collector backfills them onto
-        // every hit it appends (it holds the `Kept`, which carries the line number).
+        // line/uuid/image_ids are per-RECORD, not known here — the turn collector backfills
+        // them onto the hits it appends (it holds the `Kept`, which carries line + record).
         line: 0,
         uuid: None,
+        image_ids: Vec::new(),
     }
 }
 
@@ -1458,7 +1469,21 @@ fn print_record_line(marker: char, h: &Hit) {
         .as_deref()
         .map(|n| format!(" {n}"))
         .unwrap_or_default();
-    println!("  {marker} {label}{name}  L{}  {}", h.line, h.excerpt);
+    let images = image_suffix(&h.image_ids);
+    println!(
+        "  {marker} {label}{name}  L{}  {}{}",
+        h.line, h.excerpt, images
+    );
+}
+
+/// ` [N image(s): …]` suffix when the hit's record carries images — the SAME ids `turns` shows,
+/// feedable straight to `csift image <session> --id <ID>`. Empty string when there are none.
+fn image_suffix(ids: &[String]) -> String {
+    if ids.is_empty() {
+        return String::new();
+    }
+    let noun = if ids.len() == 1 { "image" } else { "images" };
+    format!("  [{} {}: {}]", ids.len(), noun, ids.join(", "))
 }
 
 /// Print the `unresolved:` line when an EXPLICIT address (`--line N` / `--uuid U`) matched no
@@ -1478,9 +1503,11 @@ fn hit_json(h: &Hit) -> serde_json::Value {
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
         "tool_name": h.tool_name,
-        // The `csift get` address: 1-based source line + the record uuid (when present).
+        // The `csift search --line/--uuid` address: 1-based source line + the record uuid (when present).
         "line": h.line,
         "uuid": h.uuid,
+        // Extractable image ids (`#N`/`L<line>i<n>`) the record carries; empty array when none.
+        "image_ids": h.image_ids,
     })
 }
 

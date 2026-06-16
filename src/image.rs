@@ -35,6 +35,16 @@ struct ImageRef {
     line_no: usize,
     /// 1-based ordinal of this image among the record's image blocks.
     img_index: usize,
+    /// The session-facing `[Image #N]` number — the SAME handle the model sees and refers to
+    /// ("re-share #32"). Extracted by positionally zipping the record's `[Image #N]` text
+    /// markers with its image blocks (CC numbers pasted images per-prompt; `history.ts`).
+    /// `None` when the marker count doesn't match (then only `L<line>i<n>` addresses it).
+    /// NOT globally unique — CC reuses low numbers across prompts, so a `#N` lookup resolves
+    /// to the LATEST occurrence (what the live session currently means by it).
+    seq: Option<usize>,
+    /// A cheap content fingerprint (`<len>:<head>:<tail>` of the base64) — dedups the SAME
+    /// image re-injected across context windows so the listing shows it once.
+    fingerprint: String,
     /// `"base64"` | `"url"` | another source kind (kept verbatim).
     source_kind: String,
     media_type: String,
@@ -52,9 +62,18 @@ struct ImageRef {
 }
 
 impl ImageRef {
-    /// The stable, surfaceable id `L<line>i<n>`.
+    /// The exact per-occurrence locator `L<line>i<n>` (always unambiguous).
     fn id(&self) -> String {
         format!("L{}i{}", self.line_no, self.img_index)
+    }
+
+    /// The session-facing handle `#N` when known, else the locator — so output leads with the
+    /// number the model already uses ("re-share #32" → `--id #32`).
+    fn handle(&self) -> String {
+        match self.seq {
+            Some(n) => format!("#{n}"),
+            None => self.id(),
+        }
     }
 
     /// File extension implied by the media type (`bin` when unknown — never fabricated).
@@ -73,11 +92,15 @@ impl ImageRef {
         }
     }
 
-    /// `<session-short>-L<line>i<n>.<ext>` — unique across sessions/lines/indices, so a
-    /// multi-transcript `--out` extraction never collides.
+    /// `<session-short>[-img<N>]-L<line>i<n>.<ext>` — carries the `#N` when known (so the file
+    /// is recognizable as "image #32") and stays unique via the `L<line>i<n>` locator, so a
+    /// multi-image / multi-transcript `--out` extraction never collides.
     fn out_filename(&self) -> String {
         let short = self.session_id.get(..8).unwrap_or(&self.session_id);
-        format!("{short}-{}.{}", self.id(), self.ext())
+        match self.seq {
+            Some(n) => format!("{short}-img{n}-{}.{}", self.id(), self.ext()),
+            None => format!("{short}-{}.{}", self.id(), self.ext()),
+        }
     }
 }
 
@@ -158,19 +181,26 @@ fn image_ref_from_source(source: &Value, with_data: bool) -> Option<ImageRef> {
         .and_then(Value::as_str)
         .unwrap_or("application/octet-stream")
         .to_string();
-    let (b64_len, est_bytes, url, data) = if source_kind == "url" {
+    let (b64_len, est_bytes, url, fingerprint, data) = if source_kind == "url" {
         let url = source
             .get("url")
             .and_then(Value::as_str)
             .map(str::to_string);
-        (0, 0, url, None)
+        let fp = format!("url:{}", url.as_deref().unwrap_or(""));
+        (0, 0, url, fp, None)
     } else {
-        let data = source.get("data").and_then(Value::as_str)?;
+        let d = source.get("data").and_then(Value::as_str)?;
+        // Cheap content fingerprint: length + base64 head/tail. Dedups the SAME image
+        // re-injected across context windows without holding/hashing the full payload.
+        let head: String = d.chars().take(32).collect();
+        let tail: String = d.chars().rev().take(32).collect();
+        let fp = format!("{}:{head}:{tail}", d.len());
         (
-            data.len(),
-            est_decoded_len(data),
+            d.len(),
+            est_decoded_len(d),
             None,
-            with_data.then(|| data.to_string()),
+            fp,
+            with_data.then(|| d.to_string()),
         )
     };
     Some(ImageRef {
@@ -179,6 +209,8 @@ fn image_ref_from_source(source: &Value, with_data: bool) -> Option<ImageRef> {
         parent_session_id: String::new(),
         line_no: 0,
         img_index: 0,
+        seq: None,
+        fingerprint,
         source_kind,
         media_type,
         b64_len,
@@ -190,6 +222,23 @@ fn image_ref_from_source(source: &Value, with_data: bool) -> Option<ImageRef> {
     })
 }
 
+/// Extract the `[Image #N]` numbers from a text block, in order of appearance. CC writes
+/// these per-prompt as the model's image handles (`history.ts`).
+fn parse_image_markers(text: &str, out: &mut Vec<usize>) {
+    let mut rest = text;
+    const PAT: &str = "[Image #";
+    while let Some(i) = rest.find(PAT) {
+        let after = &rest[i + PAT.len()..];
+        let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() && after[digits.len()..].starts_with(']') {
+            if let Ok(n) = digits.parse::<usize>() {
+                out.push(n);
+            }
+        }
+        rest = &after[digits.len()..];
+    }
+}
+
 /// Collect every image carried by one record, in document order: a direct `Block::Image`
 /// (the user-sent / assistant case) OR an `{type:"image"}` element nested in a
 /// `Block::ToolResult.content` array (a tool screenshot). `img_index` is a 1-based running
@@ -199,6 +248,13 @@ fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     let Some(blocks) = rec.blocks() else {
         return out;
     };
+    // `[Image #N]` markers across the record's text blocks, in document order.
+    let mut markers: Vec<usize> = Vec::new();
+    for block in blocks {
+        if let Block::Text { text } = block {
+            parse_image_markers(text, &mut markers);
+        }
+    }
     for block in blocks {
         match block {
             Block::Image { source: Some(src) } => {
@@ -227,18 +283,26 @@ fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
             _ => {}
         }
     }
+    // Assign `#N` by POSITIONAL zip — only when the marker count matches the image count
+    // (CC guarantees `[Image #N]` is unique within a prompt; a mismatch means a back-
+    // reference to a compressed-out image, so we leave `seq = None` rather than misassign).
+    if markers.len() == out.len() {
+        for (r, &n) in out.iter_mut().zip(markers.iter()) {
+            r.seq = Some(n);
+        }
+    }
     out
 }
 
-/// The stable `L<line>i<n>` image ids carried by one record — for surfacing in `turns`
-/// (and any other view) without the full extraction machinery. Empty when the record has
-/// no images.
+/// The image HANDLES a record carries — `#N` (the session's own image number) when known,
+/// else the `L<line>i<n>` locator — for surfacing in `turns`. Both feed straight back into
+/// `csift image --id`. Empty when the record has no images.
 pub(crate) fn image_ids_for_record(rec: &Record, line_no: usize) -> Vec<String> {
     record_images(rec, false)
         .into_iter()
         .map(|mut r| {
             r.line_no = line_no;
-            r.id()
+            r.handle()
         })
         .collect()
 }
@@ -274,9 +338,20 @@ fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)
     Ok((out, skipped))
 }
 
-/// Parse the `--id` selection: `L<line>i<n>` tokens (the leading `L` optional), repeatable
-/// and comma-delimited. Returns the `(line, index)` set. A malformed token is a hard error.
-fn parse_id_selection(ids: &[String]) -> Result<Vec<(usize, usize)>> {
+/// One `--id` selector: either the session's `#N` image number, or an exact `L<line>i<n>`
+/// locator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Sel {
+    /// `#N` / bare `N` — the `[Image #N]` handle the model uses. Resolves to the LATEST
+    /// occurrence (CC reuses low numbers across prompts; latest = what the live session means).
+    Seq(usize),
+    /// `L<line>i<n>` — the exact per-occurrence locator.
+    Loc(usize, usize),
+}
+
+/// Parse the `--id` selection (repeatable + comma-delimited). Accepts `#32` / `32` (a `#N`
+/// handle) and `L6812i2` / `6812i2` (a locator). A malformed token is a hard error.
+fn parse_id_selection(ids: &[String]) -> Result<Vec<Sel>> {
     let mut out = Vec::new();
     for raw in ids {
         for tok in raw.split(',') {
@@ -284,23 +359,53 @@ fn parse_id_selection(ids: &[String]) -> Result<Vec<(usize, usize)>> {
             if tok.is_empty() {
                 continue;
             }
-            let body = tok
-                .strip_prefix('L')
-                .or_else(|| tok.strip_prefix('l'))
-                .unwrap_or(tok);
-            let (line, idx) = body
+            if let Some(n) = tok.strip_prefix('#') {
+                let n = n
+                    .parse()
+                    .with_context(|| format!("--id `{tok}`: bad image number `{n}`"))?;
+                out.push(Sel::Seq(n));
+            } else if let Some((line, idx)) = tok
+                .strip_prefix(['L', 'l'])
+                .unwrap_or(tok)
                 .split_once('i')
-                .with_context(|| format!("--id `{tok}` is not `L<line>i<n>` (e.g. `L6812i2`)"))?;
-            let line: usize = line
-                .parse()
-                .with_context(|| format!("--id `{tok}`: bad line number `{line}`"))?;
-            let idx: usize = idx
-                .parse()
-                .with_context(|| format!("--id `{tok}`: bad image index `{idx}`"))?;
-            out.push((line, idx));
+                .filter(|(l, i)| {
+                    !l.is_empty()
+                        && l.bytes().all(|b| b.is_ascii_digit())
+                        && !i.is_empty()
+                        && i.bytes().all(|b| b.is_ascii_digit())
+                })
+            {
+                out.push(Sel::Loc(line.parse()?, idx.parse()?));
+            } else if !tok.is_empty() && tok.bytes().all(|b| b.is_ascii_digit()) {
+                out.push(Sel::Seq(tok.parse()?));
+            } else {
+                bail!("--id `{tok}` is not `#N` or `L<line>i<n>` (e.g. `#32` or `L6812i2`)");
+            }
         }
     }
     Ok(out)
+}
+
+/// Dedup the SAME image re-injected across context windows (by content fingerprint), keeping
+/// the LATEST occurrence (its current `#N`). `images` is sorted ascending, so walking in
+/// reverse and keeping first-seen yields the latest; then order by `#N` (then line) for the
+/// listing so a reader scanning for "#32" finds it in sequence.
+fn dedup_latest(images: &[ImageRef]) -> Vec<&ImageRef> {
+    let mut seen = std::collections::HashSet::new();
+    let mut v: Vec<&ImageRef> = Vec::new();
+    for i in images.iter().rev() {
+        if seen.insert(i.fingerprint.as_str()) {
+            v.push(i);
+        }
+    }
+    v.sort_by(|a, b| {
+        (a.seq.unwrap_or(usize::MAX), a.line_no, a.img_index).cmp(&(
+            b.seq.unwrap_or(usize::MAX),
+            b.line_no,
+            b.img_index,
+        ))
+    });
+    v
 }
 
 pub fn run_image(args: &ImageArgs) -> Result<()> {
@@ -348,28 +453,38 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         ids.len()
     };
 
-    // Apply `--id` selection (if any). Selection is per-(line,index); when the scope spans
-    // more than one transcript the `L<line>i<n>` ids are ambiguous, so require a single
-    // transcript (same rule/spirit as `search --line`).
+    // Apply the `--id` selection (if any). `#N` and `L<line>i<n>` are both per-transcript, so
+    // a multi-transcript scope is ambiguous → require a single transcript (like `search --line`).
     let selected: Vec<&ImageRef> = if selection.is_empty() {
-        images.iter().collect()
+        // List/extract ALL → dedup the SAME image re-injected across context windows (by
+        // content fingerprint), keeping the LATEST occurrence (its CURRENT `#N`), then order
+        // by `#N` so a reader scanning for "#32" finds it in sequence.
+        dedup_latest(&images)
     } else {
         if distinct_transcripts > 1 {
             bail!(
-                "--id addresses one transcript by line, but the scope resolves to {} — pin it \
-                 with `--session <uuid> --no-subagents`",
+                "--id is per-transcript (line numbers and `#N` are), but the scope resolves to \
+                 {} transcripts — pin it with `--session <uuid> --no-subagents`",
                 distinct_transcripts
             );
         }
         let mut sel = Vec::new();
         let mut unresolved = Vec::new();
-        for (line, idx) in &selection {
-            match images
-                .iter()
-                .find(|i| i.line_no == *line && i.img_index == *idx)
-            {
+        for s in &selection {
+            // `#N` → the LATEST occurrence with that number (CC reuses low numbers across
+            // prompts; `images` is sorted ascending, so the last match is the current one).
+            let found = match s {
+                Sel::Seq(n) => images.iter().filter(|i| i.seq == Some(*n)).next_back(),
+                Sel::Loc(line, idx) => images
+                    .iter()
+                    .find(|i| i.line_no == *line && i.img_index == *idx),
+            };
+            match found {
                 Some(i) => sel.push(i),
-                None => unresolved.push(format!("L{line}i{idx}")),
+                None => unresolved.push(match s {
+                    Sel::Seq(n) => format!("#{n}"),
+                    Sel::Loc(l, i) => format!("L{l}i{i}"),
+                }),
             }
         }
         if !unresolved.is_empty() {
@@ -428,7 +543,8 @@ fn extract(
                 println!(
                     "{}",
                     json!({
-                        "id": img.id(), "path": path.to_string_lossy(),
+                        "handle": img.handle(), "seq": img.seq, "id": img.id(),
+                        "path": path.to_string_lossy(),
                         "bytes": bytes.len(), "media_type": img.media_type,
                         "session_id": img.session_id, "is_subagent": img.is_subagent,
                         "parent_session_id": img.parent_session_id,
@@ -437,8 +553,9 @@ fn extract(
             }
             OutputFormat::Text => {
                 println!(
-                    "wrote {}  ({}, {})",
+                    "wrote {}  ({} {}, {})",
                     path.display(),
+                    img.handle(),
                     img.media_type,
                     human_bytes(bytes.len())
                 );
@@ -485,9 +602,14 @@ fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize)
         } else {
             format!("{} ~{}", img.media_type, human_bytes(img.est_bytes))
         };
+        // Lead with the session's `#N` handle (what the model says), then the exact locator.
+        let label = match img.seq {
+            Some(_) => format!("{:<5} {}", img.handle(), img.id()),
+            None => img.id(),
+        };
         println!(
             "{}  {}  {}{}",
-            img.id(),
+            label,
             size,
             format_timestamp(img.ts_utc.as_deref()),
             tag
@@ -513,6 +635,8 @@ fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize)
         println!(
             "{}",
             json!({
+                "handle": img.handle(),
+                "seq": img.seq,
                 "id": img.id(),
                 "line_no": img.line_no,
                 "img_index": img.img_index,
@@ -580,11 +704,50 @@ mod tests {
 
     #[test]
     fn parse_id_selection_forms() {
+        // Locators (L<line>i<n>) AND the session `#N` handle (with `#` or bare number).
         assert_eq!(
             parse_id_selection(&["L6812i2,L99i1".into(), "L1i1".into()]).unwrap(),
-            vec![(6812, 2), (99, 1), (1, 1)]
+            vec![Sel::Loc(6812, 2), Sel::Loc(99, 1), Sel::Loc(1, 1)]
+        );
+        assert_eq!(
+            parse_id_selection(&["#32,#33".into(), "34".into()]).unwrap(),
+            vec![Sel::Seq(32), Sel::Seq(33), Sel::Seq(34)]
+        );
+        // A bare number is a `#N` handle, not a locator (no `i`).
+        assert_eq!(
+            parse_id_selection(&["7".into()]).unwrap(),
+            vec![Sel::Seq(7)]
         );
         assert!(parse_id_selection(&["nope".into()]).is_err());
+        assert!(parse_id_selection(&["L6812".into()]).is_err()); // missing `i<n>`
+    }
+
+    #[test]
+    fn seq_extracted_by_positional_zip_of_image_markers() {
+        // Text lists `[Image #2] [Image #3]` and the record has 2 image blocks → positional.
+        let r: Record = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":[
+                {"type":"text","text":"see [Image #2] and [Image #3] please"},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}},
+                {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"aGVsbG8="}}
+            ]}}"#,
+        )
+        .unwrap();
+        let imgs = record_images(&r, false);
+        assert_eq!(imgs.len(), 2);
+        assert_eq!(imgs[0].seq, Some(2));
+        assert_eq!(imgs[1].seq, Some(3));
+        assert_eq!(imgs[1].media_type, "image/jpeg"); // NOT assumed PNG
+                                                      // A count mismatch (1 marker, 2 images) leaves seq unassigned — no misattribution.
+        let r2: Record = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":[
+                {"type":"text","text":"only [Image #9] referenced"},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}
+            ]}}"#,
+        )
+        .unwrap();
+        assert!(record_images(&r2, false).iter().all(|i| i.seq.is_none()));
     }
 
     #[test]

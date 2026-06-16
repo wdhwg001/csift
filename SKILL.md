@@ -83,8 +83,8 @@ transcripts, and reconstructs whole turns rather than emitting line fragments.
 
 Nine subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `image`.
 `search` doubles as the message-fetcher (`--line`/`--uuid` address specific records, rendered full).
-`image` lists + extracts a session's inline images by a stable `L<line>i<n>` id (`--out <dir>` decodes
-them back to files).
+`image` lists + extracts a session's inline images by the `#N` handle it uses (or the exact
+`L<line>i<n>` locator); `--out <dir>` decodes them back to files.
 `list`/`search`/`files`/`recover`/`image` span each session's subagent transcripts **by default**
 (`--no-subagents` opts out). On these four `--include-subagents` is a **default-ON no-op** kept only
 for symmetry/explicitness — it never changes the result, and `--no-subagents` is **DOMINANT**: when
@@ -863,23 +863,31 @@ csift search "" <id> --subagent aaa111 --line 12     # a record inside a subagen
 ### `image` — get a sent image back out of a transcript
 
 A pasted/attached image (or a tool screenshot) lives INLINE on a record as a base64 image block, so
-it is recoverable straight from the jsonl. `image` lists them by a stable id `L<line>i<n>` (the carrying
-record's JSONL line + the 1-based ordinal of the image within it — the same `Lnnnnn` line refs `turns`
-and `search` print, so an id you see there feeds straight back here), and `--out <dir>` decodes them to
-real files (`<session-short>-L<line>i<n>.<ext>`, extension from the media type). Default is to LIST.
-Spans subagents by default (a screenshot may be in one); `--no-subagents` to restrict. A `url`-source
-image is reported, never fabricated.
+it is recoverable straight from the jsonl. Address an image two ways:
+
+- **`#N`** — the SAME `[Image #N]` number the session uses ("re-share #32"). `turns` and `search` print
+  it inline (`[N image(s): #32, #33, …]`), so you feed it straight back: `--id '#32,#33'`. **Not unique
+  across the session** — CC reuses low numbers per prompt, so `--id #N` resolves to the **latest**
+  occurrence (the current one). If a record's markers can't be matched 1:1 to its images, `#N` is left
+  off and only the locator addresses it (never mis-attributed).
+- **`L<line>i<n>`** — the exact locator (carrying record's JSONL line + ordinal of the image within it),
+  always unambiguous; use it to pin one specific occurrence.
+
+`--out <dir>` decodes the (selected) images to real files (`<session-short>[-img<N>]-L<line>i<n>.<ext>`,
+extension read per-image from its media type — **never assumed PNG**). The bare LISTING is content-deduped
+(a re-injected image shows once, under its current `#N`). Default is to LIST. Spans subagents by default
+(a screenshot may be in one); `--no-subagents` to restrict. A `url`-source image is reported, never fabricated.
 
 ```bash
-csift image <id>                                  # list every image: id · media-type · ~size · time
+csift image <id>                                  # list (deduped): id · media-type · ~size · time
 csift image <id> --out /tmp/imgs                  # extract ALL images to a dir (real bytes)
-csift image <id> --no-subagents --id L6812i2 --out /tmp/imgs   # extract one by id
-csift image <id> --id L6812i1,L6812i2             # list just these
+csift image <id> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
+csift image <id> --no-subagents --id L6812i2 --out /tmp/imgs             # pin one exact occurrence
 csift image . --format json                       # one object per image + a trailing summary
 ```
 
-A `--line`-style rule applies to `--id`: line numbers are per-transcript, so addressing one needs a
-single transcript in scope — pin it with `--session <uuid> --no-subagents`.
+A `--line`-style rule applies to `--id`: `#N` and `L<line>i<n>` are both per-transcript, so addressing
+needs a single transcript in scope — pin it with `--session <uuid> --no-subagents`.
 
 ---
 

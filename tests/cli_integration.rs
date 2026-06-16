@@ -6231,7 +6231,7 @@ fn turns_slices_keeps_newest_discards_oldest() {
 
 #[test]
 fn turns_slices_keeps_user_turns_whole_no_role_cap() {
-    // The defect the Pulse session caught: budget mode middle-truncates a USER turn at the 600-char
+    // The defect a peer session caught: budget mode middle-truncates a USER turn at the 600-char
     // role cap even with budget to spare. In `--slices` mode the only cap is the WINDOW, so a
     // multi-hundred-char user directive survives VERBATIM. The fixture's huge_user (≈817 chars)
     // appears whole (no mid-cut) when the window comfortably exceeds it.
@@ -8298,13 +8298,13 @@ fn recover_subagent_input_fallback_skips_failed_edit() {
         concat!(
             r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"make g.md then fix it"}}"#, "\n",
             // Write via input fallback (bare success result).
-            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw","name":"Write","input":{"file_path":"/p/g.md","content":"S1\nS2\nS3\n"}}]}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw","name":"Write","input":{"file_path":"/p/g.md","content":"aa\nbb\ncc\n"}}]}}"#, "\n",
             r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw","content":"File created successfully at: /p/g.md"}]}}"#, "\n",
             // FAILED edit (is_error) — must NOT be applied from the input.
             r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sbad","name":"Edit","input":{"file_path":"/p/g.md","old_string":"NOPE","new_string":"GHOST"}}]}}"#, "\n",
             r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:12.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sbad","content":"String to replace not found in file.","is_error":true}]}}"#, "\n",
             // SUCCESSFUL edit via input fallback (bare success result).
-            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sok","name":"Edit","input":{"file_path":"/p/g.md","old_string":"S2","new_string":"S2-ok"}}]}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sok","name":"Edit","input":{"file_path":"/p/g.md","old_string":"bb","new_string":"bb-ok"}}]}}"#, "\n",
             r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:13.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sok","content":"The file /p/g.md has been updated successfully."}]}}"#, "\n",
         ),
     );
@@ -8331,7 +8331,7 @@ fn recover_subagent_input_fallback_skips_failed_edit() {
     );
     assert_eq!(
         recon_lines_from_at_json(&out.stdout),
-        vec!["S1", "S2-ok", "S3"],
+        vec!["aa", "bb-ok", "cc"],
         "subagent: only the good edit lands"
     );
 }
@@ -8793,14 +8793,25 @@ fn recover_file_plan_resolves_subagent_only_plan() {
 /// A synthetic 1×1 transparent PNG (base64) — the canonical fixture payload.
 const PNG_1X1: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+/// Three more DISTINCT valid 1×1 PNGs (red / green / blue) — distinct content fingerprints, so
+/// the listing's content-dedup treats them as separate screenshots (not one re-injected image).
+const PNG_RED: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+const PNG_GREEN: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/wHwAEAQH/cetH5QAAAABJRU5ErkJggg==";
+const PNG_BLUE: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==";
+
+fn img_block(media: &str, data: &str) -> serde_json::Value {
+    serde_json::json!({"type":"image","source":{"type":"base64","media_type":media,"data":data}})
+}
 
 fn image_home() -> Home {
     let h = Home::new();
-    let img = |media: &str| serde_json::json!({"type":"image","source":{"type":"base64","media_type":media,"data":PNG_1X1}});
     let r0 = serde_json::json!({
         "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
         "version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z",
-        "message":{"role":"user","content":[{"type":"text","text":"first screenshot"}, img("image/png")]}
+        "message":{"role":"user","content":[{"type":"text","text":"first screenshot"}, img_block("image/png", PNG_1X1)]}
     });
     let r1 = serde_json::json!({
         "type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z",
@@ -8808,7 +8819,7 @@ fn image_home() -> Home {
     });
     let r2 = serde_json::json!({
         "type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z",
-        "message":{"role":"user","content":[{"type":"text","text":"two more"}, img("image/jpeg"), img("image/png")]}
+        "message":{"role":"user","content":[{"type":"text","text":"two more"}, img_block("image/jpeg", PNG_RED), img_block("image/png", PNG_GREEN)]}
     });
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -8856,6 +8867,134 @@ fn image_extracts_real_bytes_to_dir() {
     // media_type drives the extension: image/jpeg → .jpg.
     assert!(out_dir.join("0a1b2c3d-L3i1.jpg").exists());
     assert!(out_dir.join("0a1b2c3d-L3i2.png").exists());
+}
+
+#[test]
+fn image_hash_n_resolves_to_latest_occurrence() {
+    // `[Image #N]` is CC's per-prompt counter — UNIQUE within a prompt, but REUSED across
+    // prompts (a later prompt restarts the count low). So one `#1` can name two DIFFERENT
+    // images in the same session. The fixture reproduces that: r0 carries #1=transparent +
+    // #2=red; a later r2 (post-"compaction") reuses #1 for a different image (blue). `--id #1`
+    // must resolve to the LATEST occurrence — what the live session currently means by "#1".
+    let h = Home::new();
+    let r0 = serde_json::json!({
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
+        "timestamp":"2026-06-07T05:00:00.000Z",
+        "message":{"role":"user","content":[
+            {"type":"text","text":"look at [Image #1] and [Image #2]"},
+            img_block("image/png", PNG_1X1), img_block("image/png", PNG_RED)]}
+    });
+    let r1 = serde_json::json!({
+        "type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z",
+        "message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}
+    });
+    let r2 = serde_json::json!({
+        "type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z",
+        "message":{"role":"user","content":[
+            {"type":"text","text":"now re-sharing [Image #1]"},
+            img_block("image/png", PNG_BLUE)]}
+    });
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{r0}\n{r1}\n{r2}\n"),
+    );
+
+    // Listing surfaces the `#N` handle and shows BOTH #1 images (distinct content → not deduped).
+    let list = h.run(&["image", SESS, "--no-subagents"]);
+    assert!(list.success, "stderr: {}", list.stderr);
+    assert!(
+        list.stdout.contains("#1"),
+        "handle #1 in listing:\n{}",
+        list.stdout
+    );
+    assert!(
+        list.stdout.contains("#2"),
+        "handle #2 in listing:\n{}",
+        list.stdout
+    );
+    assert!(
+        list.stdout.contains("3 image(s)"),
+        "all 3 distinct (no content-dedup):\n{}",
+        list.stdout
+    );
+
+    // `--id #1` resolves to the LATEST occurrence (line 3, the blue re-share) — not line 1.
+    let sel = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "#1",
+        "--format",
+        "json",
+    ]);
+    assert!(sel.success, "stderr: {}", sel.stderr);
+    let obj: serde_json::Value = sel
+        .stdout
+        .lines()
+        .find(|l| l.trim_start().starts_with('{') && l.contains("\"handle\""))
+        .map(|l| serde_json::from_str(l).unwrap())
+        .expect("one image object");
+    assert_eq!(obj["handle"], "#1");
+    assert_eq!(obj["seq"], 1);
+    assert_eq!(
+        obj["line_no"], 3,
+        "latest #1 is the line-3 re-share, not the line-1 original"
+    );
+    assert_eq!(obj["id"], "L3i1");
+
+    // Extracting #1 writes the line-3 (blue) image; the filename carries BOTH the `#1` tag and
+    // the exact `L3i1` locator, so it can never collide with the line-1 `#1`.
+    let out_dir = h.root.join("n_imgs");
+    let ex = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "#1",
+        "--out",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert!(ex.success, "stderr: {}", ex.stderr);
+    let f = out_dir.join("0a1b2c3d-img1-L3i1.png");
+    let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
+    assert_eq!(
+        &bytes[..8],
+        &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
+        "real PNG written"
+    );
+}
+
+#[test]
+fn search_surfaces_extractable_image_ids_on_a_hit() {
+    // A `search` hit on a message that carries images must expose the SAME extractable ids as
+    // `turns`/`image` — so a search result feeds straight into `csift image --id` with no
+    // manual L+i assembly. r2 ("two more") carries a jpeg + a png at line 3 → L3i1, L3i2.
+    let h = image_home();
+    let out = h.run(&["search", "two more", "--session", SESS, "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("[2 images: L3i1, L3i2]"),
+        "image-id suffix on the hit line:\n{}",
+        out.stdout
+    );
+    // The JSON envelope carries the ids array on the hit too.
+    let j = h.run(&[
+        "search",
+        "two more",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let hit = j
+        .stdout
+        .lines()
+        .find(|l| l.contains("\"image_ids\"") && l.contains("L3i1"))
+        .expect("a hit object carrying image_ids");
+    assert!(hit.contains("L3i2"), "both ids present: {hit}");
 }
 
 #[test]

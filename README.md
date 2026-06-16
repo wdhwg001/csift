@@ -428,16 +428,24 @@ treatment via the shared code path when spanned.
 ### `image` — get a sent image back out of a transcript
 
 A pasted/attached image (or a tool screenshot) is stored INLINE on a record as a base64 image block, so
-it is recoverable straight from the JSONL — no hand-parsing. `image` lists them by a stable id
-`L<line>i<n>` (the carrying record's JSONL line + the 1-based ordinal of the image within it, the same
-`Lnnnnn` line refs `turns`/`search` print), and `--out <dir>` decodes each one back to a real file
-(`<session-short>-L<line>i<n>.<ext>`, extension from the media type). Default is to LIST; spans subagents
-by default (a screenshot may be in one). A `url`-source image is reported, never fabricated.
+it is recoverable straight from the JSONL — no hand-parsing. Two ways to address an image:
+
+- **`#N`** — the same `[Image #N]` number the session refers to ("re-share #32"). `turns`/`search` print
+  it inline, so you feed it straight back: `--id '#32,#33'`. It is **not unique across the session** (CC
+  reuses low numbers per prompt), so `--id #N` resolves to the **latest** occurrence — the current one.
+- **`L<line>i<n>`** — the exact locator (carrying record's JSONL line + ordinal within it), always
+  unambiguous; pins one specific occurrence.
+
+`--out <dir>` decodes each selected image back to a real file (`<session-short>[-img<N>]-L<line>i<n>.<ext>`,
+extension read per-image from its media type — **not** assumed PNG). The bare listing is content-deduped (a
+re-injected image shows once). Default is to LIST; spans subagents by default. A `url`-source image is
+reported, never fabricated.
 
 ```bash
-csift image <uuid>                                # list every image: id · media-type · ~size · time
+csift image <uuid>                                # list (deduped): id · media-type · ~size · time
 csift image <uuid> --out /tmp/imgs                # extract ALL images to a dir (real bytes)
-csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs   # extract one by id
+csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
+csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs             # pin one exact occurrence
 csift image . --format json                       # one object per image + a trailing summary
 ```
 
@@ -461,7 +469,7 @@ src/
   plan.rs          # plan-file binding resolver + `plan` subcommand
   turns.rs         # turn-fidelity reconstruction (budget + richness model)
   turns/tests.rs   # turns unit tests
-  image.rs         # list + extract inline base64 images (stable L<line>i<n> id)
+  image.rs         # list + extract inline base64 images (#N handle + L<line>i<n> locator)
 tests/
   cli_integration.rs  # end-to-end tests against the compiled binary
 ```

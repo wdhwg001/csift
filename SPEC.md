@@ -700,36 +700,41 @@ csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chu
 
 **Purpose.** A pasted/attached image (and a tool-result screenshot) is stored **inline** on a record as an `{type:"image", source:{type:"base64", media_type:"image/png", data:"<base64>"}}` block — verified on real `~/.claude/projects` data (2026-06-16): a single user record commonly carries several. The bytes are in the jsonl, so `image` lists them and decodes them straight back to files; nothing was externalised. Fills the gap that you previously could not get a sent image back out of a transcript without hand-parsing base64.
 
-**Stable id `L<line>i<n>`** — the 1-based JSONL line of the carrying record + the 1-based ordinal of the image among that record's image blocks (a direct `Block::Image`, OR an `{type:"image"}` element nested in a `tool_result` content array, counted in document order). Stable because the transcript is append-only, and consistent with the `Lnnnnn` line refs `recover`/`turns`/`search` already emit — so an id seen there feeds straight back here. Default action is to **LIST**; `--out <DIR>` switches to **EXTRACT**.
+**Two addresses, by design.**
+
+- **`#N` — the session handle** (preferred). This is the SAME `[Image #N]` number the model sees and refers to ("re-share #32") — Claude Code renders pasted images as `[Image #N]` text markers, and `image` recovers `N` by positionally zipping a record's markers with its image blocks. So a consumer reading a `[Image #32]` reference (in `turns`/`search` output, or in its own context) addresses it directly: `--id #32`. **`#N` is NOT globally unique** — CC numbers per-prompt and **reuses** low numbers across prompts (`history.ts`: "unique within a single prompt but not across prompts"). `--id #N` therefore resolves to the **LATEST** occurrence — what the live session currently means by "#N". When a record's marker count doesn't match its image count, `#N` is left unset for that record (only the locator addresses it) — never mis-attributed.
+- **`L<line>i<n>` — the exact locator** (always unambiguous). The 1-based JSONL line of the carrying record + the 1-based ordinal of the image among that record's image blocks (a direct `Block::Image`, OR an `{type:"image"}` element nested in a `tool_result` content array, counted in document order). Stable because the transcript is append-only, and consistent with the `Lnnnnn` line refs `recover`/`turns`/`search` already emit. Use it to pin one specific occurrence regardless of `#N` reuse.
+
+`turns` and `search` both surface these ids inline (`[N image(s): #32, #33, …]` under a user turn / as a hit suffix), so an id seen there feeds straight back into `--id`. Default action is to **LIST** (deduped — see Behaviour); `--out <DIR>` switches to **EXTRACT**.
 
 **Args (matches `cli::ImageArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a bare session-UUID routes to `--session` |
 | `--session ID` | string | none | restrict to one parent session uuid |
-| `--id ID` | repeatable + comma | none | address images by `L<line>i<n>` (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Lines are per-transcript, so `--id` needs a single transcript in scope (pin with `--session <uuid> --no-subagents`) |
-| `--out DIR` | path | none | EXTRACT: decode each (selected) image → write `<DIR>/<session-short>-L<line>i<n>.<ext>` (dir created if absent; ext from media_type, `bin` when unknown). Without `--out`, only LIST |
+| `--id ID` | repeatable + comma | none | address images by the `#N` handle (`--id #32,#33`; bare `32` == `#32`) or the exact `L<line>i<n>` locator (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Both forms are per-transcript, so `--id` needs a single transcript in scope (pin with `--session <uuid> --no-subagents`) |
+| `--out DIR` | path | none | EXTRACT: decode each (selected) image → write `<DIR>/<session-short>[-img<N>]-L<line>i<n>.<ext>` (the `#N` tag is included when known; the `L<line>i<n>` locator keeps it unique; dir created if absent; ext from media_type, `bin` when unknown). Without `--out`, only LIST |
 | `--include-subagents` / `--no-subagents` | bool | `true` | span subagent transcripts (a tool screenshot may live there); `--no-subagents` dominant |
 | `--format text\|json` | enum | `text` | output format |
 
-**Behaviour.** Same scan shape as `recover`/`files` (mmap + a pre-JSON image byte prefilter + parse only candidate lines, line-numbered 1:1). Decoded size is **estimated** for the listing (4 b64 chars → 3 bytes) without decoding the large payload; extraction decodes in full and reports the exact byte count. A `source.type == "url"` image has no inline bytes — it is reported (with its URL), never fabricated into a file. **No silent truncation / no silent miss:** an explicitly-requested `--id` that matches nothing is an error; a base64 that fails to decode is an error (never a wrong file); skipped malformed lines are counted. Base64 decoding is a small in-crate standard-alphabet decoder (no new dependency — the repo gates on a zero-vuln audit).
+**Behaviour.** Same scan shape as `recover`/`files` (mmap + a pre-JSON image byte prefilter + parse only candidate lines, line-numbered 1:1). The media type (and thus the file extension) is read **per image** from its `source.media_type` — never assumed PNG; real sessions carry a mix (png, jpeg, …), and the `~/.claude/image-cache/*.png` mirror is a lossy `.png` rename that the inline bytes do not share. The **LISTING is content-deduped**: the same image re-injected across context windows (a common effect of every prompt re-sending attached images + compaction re-including them) is shown **once**, keeping its latest occurrence (current `#N`), via a cheap `<len>:<head>:<tail>` base64 fingerprint. Decoded size is **estimated** for the listing (4 b64 chars → 3 bytes) without decoding the large payload; extraction decodes in full and reports the exact byte count. A `source.type == "url"` image has no inline bytes — it is reported (with its URL), never fabricated into a file. **No silent truncation / no silent miss:** an explicitly-requested `--id` that matches nothing is an error; a base64 that fails to decode is an error (never a wrong file); skipped malformed lines are counted. Base64 decoding is a small in-crate standard-alphabet decoder (no new dependency — the repo gates on a zero-vuln audit).
 
-**Text output example:**
+**Text output example** (leads with the `#N` handle when known, else the bare locator):
 ```
-L6802i1  image/png ~440 KB  2026-06-11 10:25:50 AEST (2026-06-11T00:25:50.942Z)
-L6812i1  image/png ~440 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
-L6812i2  image/png ~252 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
-86 image(s) · 3 transcript(s)
+#1    L6802i1  image/png ~440 KB  2026-06-11 10:25:50 AEST (2026-06-11T00:25:50.942Z)
+#2    L6812i1  image/png ~440 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
+#3    L6812i2  image/png ~252 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
+55 image(s) · 3 transcript(s)
 ```
-(A subagent image row is suffixed `  SUBAGENT <hex> · parent <uuid>`.) JSON is one object per image (`id`, `line_no`, `img_index`, `session_id`, `is_subagent`, `parent_session_id`, `source_kind`, `media_type`, `b64_len`, `est_bytes`, `url`, `record_uuid`, `ts_utc`/`ts_local`) + a trailing `{images, transcripts, skipped_lines}` summary.
+(A subagent image row is suffixed `  SUBAGENT <hex> · parent <uuid>`.) JSON is one object per image (`handle` [`#N` or the locator], `seq` [the `N`, or null], `id` [the `L<line>i<n>` locator], `line_no`, `img_index`, `session_id`, `is_subagent`, `parent_session_id`, `source_kind`, `media_type`, `b64_len`, `est_bytes`, `url`, `record_uuid`, `ts_utc`/`ts_local`) + a trailing `{images, transcripts, skipped_lines}` summary.
 
 **Example invocations:**
 ```bash
-csift image <uuid>                              # list every image in the session
+csift image <uuid>                              # list every image (deduped), id · type · ~size · time
 csift image . --format json                     # machine-readable listing
 csift image <uuid> --out /tmp/imgs              # extract ALL images to a dir
-csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs   # extract one by id
-csift image <uuid> --id L6812i1,L6812i2         # list just these (no extraction)
+csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
+csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs             # pin one exact occurrence
 ```
 
 ---
