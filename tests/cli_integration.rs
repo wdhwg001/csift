@@ -8935,3 +8935,22 @@ fn resolve_long_path_uses_prefix_scan_fallback() {
         out.stdout
     );
 }
+
+#[test]
+fn turns_surfaces_image_ids_under_the_user_turn() {
+    // The image marker shows the SAME `L<line>i<n>` id that `image --id` consumes, so a
+    // turns reader can pull the bytes back without re-scanning.
+    let h = image_home();
+    let out = h.run(&["turns", SESS]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("L1i1"),
+        "image id not surfaced in turns:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("image"),
+        "no [N image(s)] marker:\n{}",
+        out.stdout
+    );
+}

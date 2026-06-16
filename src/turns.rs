@@ -347,6 +347,11 @@ struct TurnSlice {
     user: Option<TurnUnit>,
     /// `tool_use` block count across the turn → the `[N tool calls]` marker.
     tool_calls: usize,
+    /// Stable `L<line>i<n>` ids of the images this turn carries (a pasted image, a tool
+    /// screenshot) → the `[N image(s): …]` marker under the user line. Feed an id straight
+    /// to `csift image <session> --id <ID> --out <dir>` to get the bytes back. Empty for a
+    /// turn with no images.
+    image_ids: Vec<String>,
     /// Every agent-text record in the turn, in file order (ascending line_no). EMPTY
     /// for a pure tool-call turn. The LAST element is the EOT anchor (`assistant_eot()`).
     agents: Vec<AgentMsg>,
@@ -702,6 +707,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
         let mut automation: Option<crate::model::AutomationTrigger> = None;
         let mut agents: Vec<AgentMsg> = Vec::new();
         let mut tool_calls = 0usize;
+        let mut image_ids: Vec<String> = Vec::new();
         // Per-message attribution: tool_use / erroring tool_result blocks seen since the
         // PREVIOUS agent-text record (or turn start). Consumed (and zeroed) on each push.
         let mut pending_tool_calls = 0usize;
@@ -730,6 +736,10 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
                     }
                 }
             }
+
+            // Images this turn carries (pasted image / tool screenshot) → the `[N image(s)]`
+            // marker. Cheap (only image-bearing lines pass turns' prefilter anyway).
+            image_ids.extend(crate::image::image_ids_for_record(rec, line_no));
 
             // The turn opener (genuine human, an answered AskUserQuestion, or a tool-use
             // rejection-with-message). `group_turn_indices` opens a turn on `opens_turn`,
@@ -798,6 +808,7 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
             turn_index,
             user,
             tool_calls,
+            image_ids,
             agents,
             compactions_before,
             is_automation,
@@ -1458,6 +1469,24 @@ fn marker_cost(tool_calls: usize) -> usize {
     }
 }
 
+/// The `[N image(s): …]` marker line — shown under the user line when a turn carries images
+/// (a pasted image / tool screenshot), listing their stable `csift image` ids so a consumer
+/// can `csift image <session> --id <ID> --out <dir>` to get the bytes back.
+fn image_marker_line(ids: &[String]) -> String {
+    let noun = if ids.len() == 1 { "image" } else { "images" };
+    format!("  [{} {}: {}]", ids.len(), noun, ids.join(", "))
+}
+
+/// The image-marker line render cost INCLUDING its trailing newline (0 ⇒ omitted, no cost).
+/// Matches the exact line `render_turn_text` emits, so summed cost == summed emitted chars.
+fn image_marker_cost(ids: &[String]) -> usize {
+    if ids.is_empty() {
+        0
+    } else {
+        image_marker_line(ids).chars().count() + NEWLINE_COST
+    }
+}
+
 /// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing
 /// newline). The renderer and the budget reservation both call this so the reserved
 /// banner length is byte-for-byte what is emitted.
@@ -1580,6 +1609,9 @@ fn turn_cost(turn: &TurnSlice, sides: SelSides, cfg: &RichnessCfg) -> usize {
     if matches!(sides, SelSides::Both | SelSides::UserOnly) {
         if let Some(u) = &turn.user {
             c += unit_cost(u);
+            // The image marker renders directly under a SHOWN user line (so it is tied to
+            // the user side, charged whenever that side is taken — 0 when no images).
+            c += image_marker_cost(&turn.image_ids);
         }
     }
     // The marker is only rendered BETWEEN the user and the assistant lane, so it is
@@ -2296,6 +2328,11 @@ fn render_turn_text(
 ) {
     if let Some(u) = shown_user(turn, sides) {
         emit_unit_text(u, cap_override, emit);
+        // Image marker directly under the user line (charged by `image_marker_cost` in
+        // `turn_cost` on the same user-side selection — keeps summed-cost == emitted).
+        if !turn.image_ids.is_empty() {
+            emit(image_marker_line(&turn.image_ids));
+        }
     }
     if matches!(sides, SelSides::Both) && turn.tool_calls > 0 {
         emit(format!("  [{} tool calls]", turn.tool_calls));

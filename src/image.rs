@@ -230,6 +230,19 @@ fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     out
 }
 
+/// The stable `L<line>i<n>` image ids carried by one record — for surfacing in `turns`
+/// (and any other view) without the full extraction machinery. Empty when the record has
+/// no images.
+pub(crate) fn image_ids_for_record(rec: &Record, line_no: usize) -> Vec<String> {
+    record_images(rec, false)
+        .into_iter()
+        .map(|mut r| {
+            r.line_no = line_no;
+            r.id()
+        })
+        .collect()
+}
+
 /// Scan ONE transcript for images. Mirrors `recover`/`files`: mmap + a pre-JSON byte
 /// prefilter + parse only candidate lines (line-numbered, 1:1 with the file). Returns the
 /// images and the malformed-line count (surfaced, never hidden).
