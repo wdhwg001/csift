@@ -8954,3 +8954,88 @@ fn turns_surfaces_image_ids_under_the_user_turn() {
         out.stdout
     );
 }
+
+#[test]
+fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
+    // Two DIFFERENT cwds that encode to the SAME projects dir (§2.1 lossy collision):
+    //   /Users/testuser/Projects/foo-bar   (a literal '-')
+    //   /Users/testuser/Projects/foo_bar   (a '_'→'-')
+    // both → -Users-testuser-Projects-foo-bar. CC stores both projects' sessions there;
+    // csift must NOT leak the sibling's sessions (or its subagents) when you target one path.
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-foo-bar";
+    let sess_a = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let sess_b = "0b1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let rec = |sess: &str, cwd: &str, body: &str| {
+        serde_json::json!({
+            "type":"user","uuid":"u0","sessionId":sess,"cwd":cwd,
+            "version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z",
+            "message":{"role":"user","content":body}
+        })
+        .to_string()
+            + "\n"
+    };
+    // session A: cwd .../foo-bar ; session B (the colliding sibling): cwd .../foo_bar
+    h.write(
+        &format!("{enc}/{sess_a}.jsonl"),
+        &rec(sess_a, "/Users/testuser/Projects/foo-bar", "i am session A"),
+    );
+    h.write(
+        &format!("{enc}/{sess_b}.jsonl"),
+        &rec(
+            sess_b,
+            "/Users/testuser/Projects/foo_bar",
+            "i am session B sibling",
+        ),
+    );
+    // B also spawned a subagent (lives under B's sidecar in the SAME shared dir).
+    h.write(
+        &format!("{enc}/{sess_b}/subagents/agent-bbb999.jsonl"),
+        &(serde_json::json!({
+            "type":"user","isSidechain":true,"agentId":"bbb999","timestamp":"2026-06-07T05:00:01.000Z",
+            "message":{"role":"user","content":"sibling B subagent work"}
+        })
+        .to_string()
+            + "\n"),
+    );
+
+    // Target the REAL path of A → must see ONLY A, never B or B's subagent.
+    let out = h.run(&["list", "/Users/testuser/Projects/foo-bar"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(sess_a),
+        "session A must be found:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains(sess_b) && !out.stdout.contains("bbb999"),
+        "COLLISION LEAK: sibling B / its subagent must NOT appear:\n{}",
+        out.stdout
+    );
+
+    // Targeting the sibling's real path → only B (and B's subagent surfaces in search).
+    let out_b = h.run(&[
+        "search",
+        "",
+        "/Users/testuser/Projects/foo_bar",
+        "-t",
+        "user",
+        "-l",
+    ]);
+    assert!(out_b.success, "stderr: {}", out_b.stderr);
+    assert!(out_b.stdout.contains(sess_b) || out_b.stdout.contains("bbb999"));
+    assert!(
+        !out_b.stdout.contains(sess_a),
+        "A must not leak into B's scope:\n{}",
+        out_b.stdout
+    );
+
+    // The EXPLICIT encoded-dir token is the user's chosen scope → NOT cwd-filtered (both show).
+    let both = h.run(&["list", enc]);
+    assert!(both.success, "stderr: {}", both.stderr);
+    assert!(
+        both.stdout.contains(sess_a) && both.stdout.contains(sess_b),
+        "an explicit encoded-dir token must show the whole dir:\n{}",
+        both.stdout
+    );
+}

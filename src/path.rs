@@ -134,6 +134,13 @@ pub fn projects_root() -> Result<PathBuf> {
 pub struct ProjectDir {
     /// Absolute path to the `<encoded>` directory under the projects root.
     pub dir: PathBuf,
+    /// The canonical cwd of a REAL-path target — `Some` when the user passed an actual
+    /// filesystem path, `None` for a pre-encoded `<ENCODED>` dir token (where the user
+    /// explicitly named the dir) or an all-projects scan. When `Some`, session enumeration
+    /// filters this dir's files to those whose recorded `cwd` IS this path, so a lossy-
+    /// encoding COLLISION (a different cwd that encodes to the same dir, §2.1) never leaks a
+    /// sibling's sessions — or their subagents — into the result.
+    pub target_cwd: Option<PathBuf>,
 }
 
 /// True iff `token` is a plausible pre-encoded projects-dir basename: starts with
@@ -219,7 +226,12 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
     if let Some(token) = strip_projects_root_prefix(target, &root) {
         let dir = root.join(&token);
         if dir.is_dir() {
-            return Ok(ProjectDir { dir });
+            // An EXPLICIT encoded-dir token: the user named the dir, so don't cwd-filter
+            // (a collision is the user's chosen scope here).
+            return Ok(ProjectDir {
+                dir,
+                target_cwd: None,
+            });
         }
         // A leading-`-` token that doesn't exist as a dir: don't silently fall
         // through to path-encoding (it can't be a real absolute path anyway).
@@ -235,7 +247,10 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
     let encoded = encode_cwd(&abs);
     let dir = root.join(&encoded);
     if dir.is_dir() {
-        return Ok(ProjectDir { dir });
+        return Ok(ProjectDir {
+            dir,
+            target_cwd: Some(abs),
+        });
     }
 
     // §2.3 step 3: LONG-PATH fallback. Claude Code caps the encoded dir name at
@@ -247,7 +262,10 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
     if encoded.len() > MAX_SANITIZED_LENGTH {
         let prefix = format!("{}-", &encoded[..MAX_SANITIZED_LENGTH]);
         if let Some(found) = find_dir_by_prefix(&root, &prefix, &abs)? {
-            return Ok(ProjectDir { dir: found });
+            return Ok(ProjectDir {
+                dir: found,
+                target_cwd: Some(abs.clone()),
+            });
         }
     }
 
@@ -294,25 +312,45 @@ fn find_dir_by_prefix(root: &Path, prefix: &str, abs: &Path) -> Result<Option<Pa
     Ok(matches.into_iter().next())
 }
 
-/// Cheaply read the `cwd` string of a project dir's first session file — first line only,
-/// no full JSON parse (mirrors CC's `extractJsonStringField`). Used to disambiguate a
-/// 200-char-prefix collision and to detect a shared-dir collision.
+/// Cheaply read the `cwd` of ONE session file from its first record — a BOUNDED head read
+/// (≤64 KiB; the `cwd` field sits in the first record's first ~200 bytes), so a first line
+/// that is huge (an image record on line 1) never forces a full-line load. No full JSON
+/// parse — mirrors CC's `extractJsonStringField`.
+fn read_first_cwd(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(64 * 1024)
+        .read_to_end(&mut buf)
+        .ok()?;
+    let head = String::from_utf8_lossy(&buf);
+    // Only the FIRST line's cwd (don't pick up a later record's if the head spans a newline).
+    let first_line = head.split('\n').next().unwrap_or(&head);
+    extract_json_string_field(first_line, "cwd")
+}
+
+/// The `cwd` string of a project dir's first session file (any one). Used to disambiguate a
+/// 200-char-prefix collision among long-path candidates.
 fn dir_first_cwd(dir: &Path) -> Option<String> {
-    use std::io::{BufRead, BufReader};
     let read = std::fs::read_dir(dir).ok()?;
     for entry in read.flatten() {
         let p = entry.path();
         if p.extension().is_some_and(|e| e == "jsonl") {
-            let f = std::fs::File::open(&p).ok()?;
-            let mut first = String::new();
-            if BufReader::new(f).read_line(&mut first).is_ok() {
-                if let Some(cwd) = extract_json_string_field(&first, "cwd") {
-                    return Some(cwd);
-                }
+            if let Some(cwd) = read_first_cwd(&p) {
+                return Some(cwd);
             }
         }
     }
     None
+}
+
+/// Whether a stored `cwd` string denotes the same directory as `want` (the canonical
+/// target). Trailing-slash tolerant. Exact for the ASCII paths that dominate; a non-ASCII
+/// NFC-vs-NFD mismatch is the one accepted edge (CC stores realpath+NFC, csift realpath only).
+fn cwd_equivalent(stored: &str, want: &Path) -> bool {
+    let norm = |s: &str| s.trim_end_matches('/').to_string();
+    norm(stored) == norm(&want.to_string_lossy())
 }
 
 /// Extract a simple `"key":"value"` JSON string field from raw text without a full parse
@@ -354,7 +392,10 @@ pub fn all_project_dirs() -> Result<Vec<ProjectDir>> {
             Err(_) => path.is_dir(),
         };
         if is_dir {
-            dirs.push(ProjectDir { dir: path });
+            dirs.push(ProjectDir {
+                dir: path,
+                target_cwd: None,
+            });
         }
     }
     dirs.sort_by(|a, b| a.dir.cmp(&b.dir));
@@ -486,6 +527,18 @@ pub fn resolve_session_files(
                     let stem = p.file_stem().and_then(|s| s.to_str());
                     if !stem.is_some_and(|st| session_ids.iter().any(|sid| sid == st)) {
                         continue;
+                    }
+                }
+                // COLLISION GUARD (§2.1): when this dir was resolved from a REAL path, the
+                // lossy encoding means a DIFFERENT cwd can share it. Keep only files whose
+                // recorded `cwd` IS this target — so a sibling's sessions (and, since
+                // subagents are discovered from this filtered set below, its subagents) never
+                // leak in. A file whose `cwd` is ABSENT is kept (never false-exclude).
+                if let Some(want) = &pd.target_cwd {
+                    if let Some(stored) = read_first_cwd(&p) {
+                        if !cwd_equivalent(&stored, want) {
+                            continue;
+                        }
                     }
                 }
                 top_level.push(p);
