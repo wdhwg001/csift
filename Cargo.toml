@@ -26,6 +26,7 @@ anyhow = "1.0"
 # timezone rendering alongside raw UTC (jiff's default `tz-system` feature powers
 # `TimeZone::system()`).
 jiff = "0.2"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 
 [dev-dependencies]
 # Installs a git pre-commit hook on first `cargo test`/build that runs the same

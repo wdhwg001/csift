@@ -8790,9 +8790,10 @@ fn recover_file_plan_resolves_subagent_only_plan() {
 
 // ── image ──
 
-/// A synthetic 1×1 transparent PNG (base64) — the canonical fixture payload.
+/// A synthetic 1×1 transparent PNG (base64) — a REAL valid PNG (correct chunk CRCs, so the
+/// strict `image` decoder accepts it for `--as` transcoding, not just the magic-byte checks).
 const PNG_1X1: &str =
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
 /// Three more DISTINCT valid 1×1 PNGs (red / green / blue) — distinct content fingerprints, so
 /// the listing's content-dedup treats them as separate screenshots (not one re-injected image).
 const PNG_RED: &str =
@@ -8801,6 +8802,9 @@ const PNG_GREEN: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/wHwAEAQH/cetH5QAAAABJRU5ErkJggg==";
 const PNG_BLUE: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==";
+/// A real 3-frame (red/green/blue, 0.5s each = 1.5s) 4×4 animated GIF89a, for the
+/// "convert an animated GIF to a still format → first frame + warning" path.
+const ANIM_GIF_3F: &str = "R0lGODlhBAAEAPAAAP8AAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAMgAAACwAAAAABAAEAAACBISPCQUAIfkEADIAAAAsAAAAAAQABACAAIAAAAAAAgSEjwkFACH5BAAyAAAALAAAAAAEAAQAgAAA/wAAAAIEhI8JBQA7";
 
 fn img_block(media: &str, data: &str) -> serde_json::Value {
     serde_json::json!({"type":"image","source":{"type":"base64","media_type":media,"data":data}})
@@ -8869,13 +8873,10 @@ fn image_extracts_real_bytes_to_dir() {
     assert!(out_dir.join("0a1b2c3d-L3i2.png").exists());
 }
 
-#[test]
-fn image_hash_n_resolves_to_latest_occurrence() {
-    // `[Image #N]` is CC's per-prompt counter — UNIQUE within a prompt, but REUSED across
-    // prompts (a later prompt restarts the count low). So one `#1` can name two DIFFERENT
-    // images in the same session. The fixture reproduces that: r0 carries #1=transparent +
-    // #2=red; a later r2 (post-"compaction") reuses #1 for a different image (blue). `--id #1`
-    // must resolve to the LATEST occurrence — what the live session currently means by "#1".
+/// Fixture: a session where `#1` names TWO different images (CC reuses `#N` per prompt). r0
+/// (turn 0) carries #1=transparent + #2=red; a later r2 (turn 1) reuses #1 for a different
+/// image (blue). Returns the home.
+fn ambiguous_hash_home() -> Home {
     let h = Home::new();
     let r0 = serde_json::json!({
         "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
@@ -8889,7 +8890,7 @@ fn image_hash_n_resolves_to_latest_occurrence() {
         "message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}
     });
     let r2 = serde_json::json!({
-        "type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z",
+        "type":"user","uuid":"u1deadbeef","timestamp":"2026-06-07T06:00:00.000Z",
         "message":{"role":"user","content":[
             {"type":"text","text":"now re-sharing [Image #1]"},
             img_block("image/png", PNG_BLUE)]}
@@ -8898,60 +8899,107 @@ fn image_hash_n_resolves_to_latest_occurrence() {
         &format!("{ENC}/{SESS}.jsonl"),
         &format!("{r0}\n{r1}\n{r2}\n"),
     );
+    h
+}
+
+#[test]
+fn image_ambiguous_hash_n_errors_with_occurrence_list() {
+    let h = ambiguous_hash_home();
 
     // Listing surfaces the `#N` handle and shows BOTH #1 images (distinct content → not deduped).
     let list = h.run(&["image", SESS, "--no-subagents"]);
     assert!(list.success, "stderr: {}", list.stderr);
-    assert!(
-        list.stdout.contains("#1"),
-        "handle #1 in listing:\n{}",
-        list.stdout
-    );
-    assert!(
-        list.stdout.contains("#2"),
-        "handle #2 in listing:\n{}",
-        list.stdout
-    );
+    assert!(list.stdout.contains("#1") && list.stdout.contains("#2"));
     assert!(
         list.stdout.contains("3 image(s)"),
         "all 3 distinct (no content-dedup):\n{}",
         list.stdout
     );
 
-    // `--id #1` resolves to the LATEST occurrence (line 3, the blue re-share) — not line 1.
-    let sel = h.run(&[
+    // `--id #1` is AMBIGUOUS → it must ERROR (not silently pick one) and list every occurrence
+    // with its turn / locator / uuid / time / excerpt so the consumer can disambiguate.
+    let err = h.run(&["image", SESS, "--no-subagents", "--id", "#1"]);
+    assert!(!err.success, "ambiguous #1 must fail, got:\n{}", err.stdout);
+    assert!(err.stderr.contains("ambiguous"), "stderr: {}", err.stderr);
+    assert!(
+        err.stderr.contains("L1i1") && err.stderr.contains("L3i1"),
+        "both occurrences listed: {}",
+        err.stderr
+    );
+    assert!(
+        err.stderr.contains("t0") && err.stderr.contains("t1"),
+        "turn indices shown: {}",
+        err.stderr
+    );
+    // the excerpt centers on the marker, and the uuid prefix is surfaced.
+    assert!(
+        err.stderr.contains("re-sharing") && err.stderr.contains("u1deadbe"),
+        "excerpt + uuid in the list: {}",
+        err.stderr
+    );
+
+    // `--id #2` is UNIQUE (only the line-1 red) → resolves fine.
+    let two = h.run(&["image", SESS, "--no-subagents", "--id", "#2"]);
+    assert!(two.success, "stderr: {}", two.stderr);
+    assert!(two.stdout.contains("L1i2"), "{}", two.stdout);
+}
+
+#[test]
+fn image_hash_n_disambiguators_resolve_to_one() {
+    let h = ambiguous_hash_home();
+    // Each disambiguator narrows `#1` to a unique image: turn, time window, uuid, exact locator.
+    let by_turn = h.run(&[
         "image",
         SESS,
         "--no-subagents",
+        "--turn-range",
+        "1..1",
         "--id",
         "#1",
         "--format",
         "json",
     ]);
-    assert!(sel.success, "stderr: {}", sel.stderr);
-    let obj: serde_json::Value = sel
-        .stdout
-        .lines()
-        .find(|l| l.trim_start().starts_with('{') && l.contains("\"handle\""))
-        .map(|l| serde_json::from_str(l).unwrap())
-        .expect("one image object");
-    assert_eq!(obj["handle"], "#1");
-    assert_eq!(obj["seq"], 1);
-    assert_eq!(
-        obj["line_no"], 3,
-        "latest #1 is the line-3 re-share, not the line-1 original"
+    assert!(by_turn.success, "stderr: {}", by_turn.stderr);
+    assert!(
+        by_turn.stdout.contains("\"id\": \"L3i1\"") || by_turn.stdout.contains("\"id\":\"L3i1\""),
+        "turn-range 1..1 → the line-3 blue #1:\n{}",
+        by_turn.stdout
     );
-    assert_eq!(obj["id"], "L3i1");
 
-    // Extracting #1 writes the line-3 (blue) image; the filename carries BOTH the `#1` tag and
-    // the exact `L3i1` locator, so it can never collide with the line-1 `#1`.
-    let out_dir = h.root.join("n_imgs");
+    // Time window: r2 is at 06:00, r0 at 05:00 → --since 05:30 isolates the line-3 one.
+    let by_time = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--since",
+        "2026-06-07T05:30:00Z",
+        "--id",
+        "#1",
+    ]);
+    assert!(by_time.success, "stderr: {}", by_time.stderr);
+    assert!(by_time.stdout.contains("L3i1"), "{}", by_time.stdout);
+
+    // uuid prefix → the line-3 record.
+    let by_uuid = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--uuid",
+        "u1deadbe",
+        "--id",
+        "#1",
+    ]);
+    assert!(by_uuid.success, "stderr: {}", by_uuid.stderr);
+    assert!(by_uuid.stdout.contains("L3i1"), "{}", by_uuid.stdout);
+
+    // Exact locator extracts the line-3 (blue) image; filename carries `#1` + the locator.
+    let out_dir = h.root.join("d_imgs");
     let ex = h.run(&[
         "image",
         SESS,
         "--no-subagents",
         "--id",
-        "#1",
+        "L3i1",
         "--out",
         out_dir.to_str().unwrap(),
     ]);
@@ -8960,9 +9008,108 @@ fn image_hash_n_resolves_to_latest_occurrence() {
     let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
     assert_eq!(
         &bytes[..8],
-        &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
-        "real PNG written"
+        &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
     );
+}
+
+#[test]
+fn image_as_converts_source_format_never_errors() {
+    // `--as <fmt>` transcodes a source in a different format (never rejects it). Verify each
+    // target writes the right magic bytes; `--as png` on a PNG source is a raw passthrough.
+    let h = image_home(); // r0 L1i1 is a real PNG.
+    let png_magic = &[0x89u8, b'P', b'N', b'G'][..];
+    for (fmt, ext, magic, len) in [
+        ("jpeg", "jpg", &[0xFFu8, 0xD8, 0xFF][..], 3usize),
+        ("gif", "gif", &b"GIF8"[..], 4),
+        ("webp", "webp", &b"RIFF"[..], 4),
+        ("png", "png", png_magic, 4),
+    ] {
+        let dir = h.root.join(format!("as_{fmt}"));
+        let out = h.run(&[
+            "image",
+            SESS,
+            "--no-subagents",
+            "--id",
+            "L1i1",
+            "--as",
+            fmt,
+            "--out",
+            dir.to_str().unwrap(),
+        ]);
+        assert!(out.success, "--as {fmt} stderr: {}", out.stderr);
+        let f = dir.join(format!("0a1b2c3d-L1i1.{ext}"));
+        let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
+        assert_eq!(
+            &bytes[..len],
+            magic,
+            "--as {fmt} produced wrong magic bytes"
+        );
+    }
+    // WebP also carries the "WEBP" fourcc at offset 8.
+    let wf = h.root.join("as_webp/0a1b2c3d-L1i1.webp");
+    let wb = std::fs::read(&wf).unwrap();
+    assert_eq!(&wb[8..12], b"WEBP");
+}
+
+#[test]
+fn image_as_animated_gif_takes_first_frame_with_warning() {
+    let h = Home::new();
+    let r0 = serde_json::json!({
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
+        "timestamp":"2026-06-07T05:00:00.000Z",
+        "message":{"role":"user","content":[
+            {"type":"text","text":"an animation [Image #1]"},
+            img_block("image/gif", ANIM_GIF_3F)]}
+    });
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &format!("{r0}\n"));
+
+    // Converting an animated GIF to a still PNG keeps the FIRST frame + warns (frames + seconds).
+    let dir = h.root.join("frame");
+    let out = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "#1",
+        "--as",
+        "png",
+        "--out",
+        dir.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("first frame") && out.stdout.contains("3 frames"),
+        "first-frame warning with frame count:\n{}",
+        out.stdout
+    );
+    let f = dir.join("0a1b2c3d-img1-L1i1.png");
+    let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
+    assert_eq!(
+        &bytes[..8],
+        &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+    );
+
+    // `--as gif` (same format) is a raw passthrough — the animation is preserved, no warning.
+    let dir2 = h.root.join("keep");
+    let keep = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "#1",
+        "--as",
+        "gif",
+        "--out",
+        dir2.to_str().unwrap(),
+    ]);
+    assert!(keep.success, "stderr: {}", keep.stderr);
+    assert!(
+        !keep.stdout.contains("first frame"),
+        "no flatten note: {}",
+        keep.stdout
+    );
+    let g = std::fs::read(dir2.join("0a1b2c3d-img1-L1i1.gif")).unwrap();
+    assert_eq!(&g[..4], b"GIF8");
 }
 
 #[test]

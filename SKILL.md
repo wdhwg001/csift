@@ -867,27 +867,30 @@ it is recoverable straight from the jsonl. Address an image two ways:
 
 - **`#N`** — the SAME `[Image #N]` number the session uses ("re-share #32"). `turns` and `search` print
   it inline (`[N image(s): #32, #33, …]`), so you feed it straight back: `--id '#32,#33'`. **Not unique
-  across the session** — CC reuses low numbers per prompt, so `--id #N` resolves to the **latest**
-  occurrence (the current one). If a record's markers can't be matched 1:1 to its images, `#N` is left
-  off and only the locator addresses it (never mis-attributed).
+  across the session** — CC reuses low numbers per prompt. If a `#N` names >1 DISTINCT image, `--id #N`
+  **ERRORS** with the occurrence list (each one's `t<turn>` / `L<line>i<n>` / uuid / time / excerpt) instead
+  of guessing — disambiguate with the locator, or narrow scope with `--since`/`--until` / `--turn-range` /
+  `--uuid` (pre-applyable, e.g. `--since 1h`). Markers that can't be matched 1:1 leave `#N` unset (locator only).
 - **`L<line>i<n>`** — the exact locator (carrying record's JSONL line + ordinal of the image within it),
   always unambiguous; use it to pin one specific occurrence.
 
 `--out <dir>` decodes the (selected) images to real files (`<session-short>[-img<N>]-L<line>i<n>.<ext>`,
-extension read per-image from its media type — **never assumed PNG**). The bare LISTING is content-deduped
-(a re-injected image shows once, under its current `#N`). Default is to LIST. Spans subagents by default
-(a screenshot may be in one); `--no-subagents` to restrict. A `url`-source image is reported, never fabricated.
+extension read per-image from its media type — **never assumed PNG**). `--as png|jpeg|gif|webp` forces the
+output format: a different source is **converted, not rejected** (→jpeg lossy q90, →gif palette, →webp
+lossless; an animated GIF → still keeps its first frame + warns). The bare LISTING is content-deduped (a
+re-injected image shows once). Default is to LIST. Spans subagents by default; `--no-subagents` to restrict.
 
 ```bash
 csift image <id>                                  # list (deduped): id · media-type · ~size · time
-csift image <id> --out /tmp/imgs                  # extract ALL images to a dir (real bytes)
+csift image <id> --out /tmp/imgs                  # extract ALL images to a dir (source formats)
 csift image <id> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
-csift image <id> --no-subagents --id L6812i2 --out /tmp/imgs             # pin one exact occurrence
+csift image <id> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1 by time
+csift image <id> --no-subagents --id L6812i2 --as jpeg --out /tmp/imgs   # pin one occurrence + convert
 csift image . --format json                       # one object per image + a trailing summary
 ```
 
-A `--line`-style rule applies to `--id`: `#N` and `L<line>i<n>` are both per-transcript, so addressing
-needs a single transcript in scope — pin it with `--session <uuid> --no-subagents`.
+A `--line`-style rule applies to `--id` / `--turn-range`: `#N`, the locator, and turn indices are all
+per-transcript, so addressing needs a single transcript in scope — pin it with `--session <uuid> --no-subagents`.
 
 ---
 

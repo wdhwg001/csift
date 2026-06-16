@@ -432,20 +432,24 @@ it is recoverable straight from the JSONL — no hand-parsing. Two ways to addre
 
 - **`#N`** — the same `[Image #N]` number the session refers to ("re-share #32"). `turns`/`search` print
   it inline, so you feed it straight back: `--id '#32,#33'`. It is **not unique across the session** (CC
-  reuses low numbers per prompt), so `--id #N` resolves to the **latest** occurrence — the current one.
+  reuses low numbers per prompt) — if a `#N` names >1 distinct image, `--id #N` **errors** with the
+  occurrence list (turn / locator / uuid / time / excerpt) rather than guessing; disambiguate with the
+  locator or by narrowing scope (`--since`/`--until`, `--turn-range`, `--uuid` — pre-applyable).
 - **`L<line>i<n>`** — the exact locator (carrying record's JSONL line + ordinal within it), always
   unambiguous; pins one specific occurrence.
 
 `--out <dir>` decodes each selected image back to a real file (`<session-short>[-img<N>]-L<line>i<n>.<ext>`,
-extension read per-image from its media type — **not** assumed PNG). The bare listing is content-deduped (a
-re-injected image shows once). Default is to LIST; spans subagents by default. A `url`-source image is
-reported, never fabricated.
+extension read per-image from its media type — **not** assumed PNG). `--as png|jpeg|gif|webp` forces the
+output format: a different source is **converted** (→jpeg lossy q90, →gif palette, →webp lossless; an
+animated GIF → still keeps its first frame + warns), never rejected. The bare listing is content-deduped.
+Default is to LIST; spans subagents by default. A `url`-source image is reported, never fabricated.
 
 ```bash
 csift image <uuid>                                # list (deduped): id · media-type · ~size · time
-csift image <uuid> --out /tmp/imgs                # extract ALL images to a dir (real bytes)
+csift image <uuid> --out /tmp/imgs                # extract ALL images to a dir (source formats)
 csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
-csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs             # pin one exact occurrence
+csift image <uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1 by time
+csift image <uuid> --no-subagents --id L6812i2 --as jpeg --out /tmp/imgs   # pin one occurrence + convert
 csift image . --format json                       # one object per image + a trailing summary
 ```
 
@@ -469,7 +473,7 @@ src/
   plan.rs          # plan-file binding resolver + `plan` subcommand
   turns.rs         # turn-fidelity reconstruction (budget + richness model)
   turns/tests.rs   # turns unit tests
-  image.rs         # list + extract inline base64 images (#N handle + L<line>i<n> locator)
+  image.rs         # list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error; --as transcode)
 tests/
   cli_integration.rs  # end-to-end tests against the compiled binary
 ```

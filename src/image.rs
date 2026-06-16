@@ -12,13 +12,14 @@
 //!
 //! Default action is to LIST. Pass `--out <DIR>` to EXTRACT (decode → write `<DIR>/<file>`).
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use memchr::memmem;
 use serde_json::{json, Value};
 
-use crate::cli::{ImageArgs, OutputFormat};
+use crate::cli::{ImageArgs, ImageOutFormat, OutputFormat};
 use crate::model::{Block, Record};
 use crate::parse::{mmap_bytes, parse_candidates_parallel};
 use crate::timez::{format_timestamp, local_iso};
@@ -39,8 +40,9 @@ struct ImageRef {
     /// ("re-share #32"). Extracted by positionally zipping the record's `[Image #N]` text
     /// markers with its image blocks (CC numbers pasted images per-prompt; `history.ts`).
     /// `None` when the marker count doesn't match (then only `L<line>i<n>` addresses it).
-    /// NOT globally unique — CC reuses low numbers across prompts, so a `#N` lookup resolves
-    /// to the LATEST occurrence (what the live session currently means by it).
+    /// NOT globally unique — CC reuses low numbers across prompts, so a `#N` that names >1
+    /// DISTINCT image is AMBIGUOUS: `--id #N` then ERRORS with the occurrence list rather than
+    /// silently guessing (disambiguate with the locator or `--since`/`--turn-range`/`--uuid`).
     seq: Option<usize>,
     /// A cheap content fingerprint (`<len>:<head>:<tail>` of the base64) — dedups the SAME
     /// image re-injected across context windows so the listing shows it once.
@@ -94,12 +96,13 @@ impl ImageRef {
 
     /// `<session-short>[-img<N>]-L<line>i<n>.<ext>` — carries the `#N` when known (so the file
     /// is recognizable as "image #32") and stays unique via the `L<line>i<n>` locator, so a
-    /// multi-image / multi-transcript `--out` extraction never collides.
-    fn out_filename(&self) -> String {
+    /// multi-image / multi-transcript `--out` extraction never collides. `ext` is the source
+    /// extension by default, or the `--as` target's when a conversion was requested.
+    fn out_filename_with_ext(&self, ext: &str) -> String {
         let short = self.session_id.get(..8).unwrap_or(&self.session_id);
         match self.seq {
-            Some(n) => format!("{short}-img{n}-{}.{}", self.id(), self.ext()),
-            None => format!("{short}-{}.{}", self.id(), self.ext()),
+            Some(n) => format!("{short}-img{n}-{}.{ext}", self.id()),
+            None => format!("{short}-{}.{ext}", self.id()),
         }
     }
 }
@@ -137,8 +140,8 @@ fn est_decoded_len(b64: &str) -> usize {
 
 /// Decode standard-alphabet base64 (padding + embedded whitespace tolerated). Returns `None`
 /// on an invalid character — so a malformed image is REPORTED, never silently written wrong.
-/// Hand-rolled to keep csift dependency-free (the repo gates on a zero-vuln `npm`/`cargo`
-/// audit; a new crate is audit surface we don't need for ~30 lines).
+/// Hand-rolled (~30 lines) to avoid pulling a base64 crate just for this; the `image` crate is
+/// the one heavyweight dependency, justified by the `--as` transcoding it alone can do.
 fn decode_base64(s: &str) -> Option<Vec<u8>> {
     fn sextet(c: u8) -> Option<u32> {
         match c {
@@ -342,8 +345,9 @@ fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageRef>, usize)
 /// locator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Sel {
-    /// `#N` / bare `N` — the `[Image #N]` handle the model uses. Resolves to the LATEST
-    /// occurrence (CC reuses low numbers across prompts; latest = what the live session means).
+    /// `#N` / bare `N` — the `[Image #N]` handle the model uses. Resolves to the unique image
+    /// with that handle in scope; if it names >1 DISTINCT image (CC reuses `#N` across prompts)
+    /// it is AMBIGUOUS and ERRORS with the occurrence list rather than silently picking one.
     Seq(usize),
     /// `L<line>i<n>` — the exact per-occurrence locator.
     Loc(usize, usize),
@@ -408,6 +412,197 @@ fn dedup_latest(images: &[ImageRef]) -> Vec<&ImageRef> {
     v
 }
 
+/// Number of distinct transcripts (session ids) the image set spans — the per-transcript guard
+/// for `--id` / `--turn-range` (line numbers + `#N` + turn indices are all per-transcript).
+fn count_distinct_transcripts(images: &[ImageRef]) -> usize {
+    let mut ids: Vec<&str> = images.iter().map(|i| i.session_id.as_str()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids.len()
+}
+
+/// The transcript file backing a single-transcript image set (by matching session id) — used to
+/// re-parse it for turn indices / excerpts on the `--turn-range` and ambiguity paths.
+fn pinned_path<'a>(session_files: &'a [PathBuf], images: &[ImageRef]) -> Option<&'a Path> {
+    let sid = images.first().map(|i| i.session_id.as_str())?;
+    session_files
+        .iter()
+        .map(PathBuf::as_path)
+        .find(|p| crate::subagent::session_id_from_path(p) == sid)
+}
+
+/// The DISTINCT images among `cands` (same `#N`): dedup by content fingerprint keeping the
+/// latest occurrence, ordered by line. Length 1 ⇒ `#N` is unambiguous; >1 ⇒ genuine reuse.
+fn distinct_by_fingerprint<'a>(cands: &[&'a ImageRef]) -> Vec<&'a ImageRef> {
+    let mut seen = std::collections::HashSet::new();
+    let mut v: Vec<&ImageRef> = Vec::new();
+    // `cands` are ascending by line; walk reverse + keep first-seen ⇒ latest per content.
+    for i in cands.iter().rev() {
+        if seen.insert(i.fingerprint.as_str()) {
+            v.push(i);
+        }
+    }
+    v.sort_by(|a, b| (a.line_no, a.img_index).cmp(&(b.line_no, b.img_index)));
+    v
+}
+
+/// Resolve the `--id` selectors against the (scope-filtered, single-transcript) image set. A
+/// `#N` resolves only when it names ONE distinct image; if it names several it ERRORS with the
+/// occurrence list (turn / locator / uuid / time / excerpt) — never silently picks one.
+fn resolve_selection<'a>(
+    selection: &[Sel],
+    images: &'a [ImageRef],
+    session_files: &[PathBuf],
+) -> Result<Vec<&'a ImageRef>> {
+    let mut sel = Vec::new();
+    let mut unresolved = Vec::new();
+    let mut ambiguous: Vec<(usize, Vec<&ImageRef>)> = Vec::new();
+    for s in selection {
+        match s {
+            Sel::Seq(n) => {
+                let cands: Vec<&ImageRef> = images.iter().filter(|i| i.seq == Some(*n)).collect();
+                let distinct = distinct_by_fingerprint(&cands);
+                match distinct.len() {
+                    0 => unresolved.push(format!("#{n}")),
+                    1 => sel.push(distinct[0]),
+                    _ => ambiguous.push((*n, distinct)),
+                }
+            }
+            Sel::Loc(line, idx) => match images
+                .iter()
+                .find(|i| i.line_no == *line && i.img_index == *idx)
+            {
+                Some(i) => sel.push(i),
+                None => unresolved.push(format!("L{line}i{idx}")),
+            },
+        }
+    }
+    if !ambiguous.is_empty() {
+        return Err(ambiguity_error(
+            &ambiguous,
+            pinned_path(session_files, images),
+        ));
+    }
+    if !unresolved.is_empty() {
+        bail!("--id matched no image: {}", unresolved.join(", "));
+    }
+    Ok(sel)
+}
+
+/// Per-line turn index + concatenated text for one transcript — a full parse (the `--id`/
+/// `--turn-range` paths already pin a single transcript, so this is one file) used to attach
+/// `t<turn>` + an excerpt to each occurrence in an ambiguity error.
+struct LineInfo {
+    turn_of: HashMap<usize, usize>,
+    text: HashMap<usize, String>,
+}
+
+fn transcript_line_info(path: &Path) -> Result<LineInfo> {
+    let mut info = LineInfo {
+        turn_of: HashMap::new(),
+        text: HashMap::new(),
+    };
+    let Some(mmap) = mmap_bytes(path)? else {
+        return Ok(info);
+    };
+    let (mut records, _skipped) = parse_candidates_parallel(&mmap, |_| true);
+    records.sort_by_key(|(ln, _)| *ln);
+    for (ln, rec) in &records {
+        if let Some(blocks) = rec.blocks() {
+            let mut t = String::new();
+            for b in blocks {
+                if let Block::Text { text } = b {
+                    if !t.is_empty() {
+                        t.push(' ');
+                    }
+                    t.push_str(text);
+                }
+            }
+            if !t.is_empty() {
+                info.text.insert(*ln, t);
+            }
+        }
+    }
+    // Turn index per line via the shared §6.4 delimiter (byte-consistent with turns/search).
+    for (ti, group) in crate::model::group_turn_indices_deduped(&records, |(_, r)| r)
+        .iter()
+        .enumerate()
+    {
+        for &ri in group {
+            info.turn_of.insert(records[ri].0, ti);
+        }
+    }
+    Ok(info)
+}
+
+/// First 8 chars of a uuid (its short, still-unique-in-practice prefix) for the ambiguity list.
+fn short_uuid(u: &str) -> String {
+    u.chars().take(8).collect()
+}
+
+/// A whitespace-normalized excerpt of `text` centered on `needle` (`[Image #N]`), `radius` chars
+/// each side — char-boundary safe. Falls back to the head when the needle isn't found.
+fn excerpt_around(text: &str, needle: &str, radius: usize) -> String {
+    let norm: Vec<char> = text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .collect();
+    let nd: Vec<char> = needle.chars().collect();
+    let pos = (0..norm.len()).find(|&i| norm[i..].starts_with(&nd[..]));
+    let (s, e) = match pos {
+        Some(p) => (
+            p.saturating_sub(radius),
+            (p + nd.len() + radius).min(norm.len()),
+        ),
+        None => (0, (radius * 2).min(norm.len())),
+    };
+    norm[s..e].iter().collect()
+}
+
+/// Build the `#N is ambiguous` error: for each reused `#N`, list every distinct occurrence with
+/// its turn, `L<line>i<n>` locator, uuid, time, and an excerpt around the `[Image #N]` marker —
+/// everything the consumer needs to disambiguate (by locator, or `--since`/`--turn-range`/`--uuid`).
+fn ambiguity_error(ambiguous: &[(usize, Vec<&ImageRef>)], path: Option<&Path>) -> anyhow::Error {
+    let info = path.and_then(|p| transcript_line_info(p).ok());
+    let mut msg = String::new();
+    for (n, occs) in ambiguous {
+        if !msg.is_empty() {
+            msg.push('\n');
+        }
+        msg.push_str(&format!(
+            "--id #{n} is ambiguous: it names {} different images in this transcript (Claude Code \
+             reuses `#N` across prompts). Pick one by its exact `--id L<line>i<n>`, or narrow the \
+             scope with --since/--until (a time window) / --turn-range / --uuid:",
+            occs.len()
+        ));
+        for o in occs {
+            let turn = info
+                .as_ref()
+                .and_then(|i| i.turn_of.get(&o.line_no))
+                .map(|t| format!("t{t}"))
+                .unwrap_or_else(|| "t?".to_string());
+            let when = format_timestamp(o.ts_utc.as_deref());
+            let uuid = o
+                .record_uuid
+                .as_deref()
+                .map(short_uuid)
+                .unwrap_or_else(|| "--------".to_string());
+            let excerpt = info
+                .as_ref()
+                .and_then(|i| i.text.get(&o.line_no))
+                .map(|t| excerpt_around(t, &format!("[Image #{n}]"), 48))
+                .unwrap_or_default();
+            msg.push_str(&format!(
+                "\n  #{n}  {}  {turn}  {when}  uuid {uuid}  \"…{excerpt}…\"",
+                o.id()
+            ));
+        }
+    }
+    anyhow::anyhow!(msg)
+}
+
 pub fn run_image(args: &ImageArgs) -> Result<()> {
     if let Some(msg) = args.span_flag_error() {
         bail!(msg);
@@ -446,51 +641,58 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         .then((a.line_no, a.img_index).cmp(&(b.line_no, b.img_index)))
     });
 
-    let distinct_transcripts = {
-        let mut ids: Vec<&str> = images.iter().map(|i| i.session_id.as_str()).collect();
-        ids.sort_unstable();
-        ids.dedup();
-        ids.len()
-    };
+    // ── Scope filters: each NARROWS the image set, so an ambiguous `#N` can resolve in a
+    //    window / turn / uuid where it is unique — the disambiguators the ambiguity error
+    //    names, and pre-applyable up front (`--since 1h` so `#N` is unique in the last hour). ──
+    let time_window =
+        crate::time_window::TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
+    images.retain(|i| time_window.contains(i.ts_utc.as_deref()));
+    if let Some(prefix) = args.uuid.as_deref() {
+        images.retain(|i| {
+            i.record_uuid
+                .as_deref()
+                .is_some_and(|u| u.starts_with(prefix))
+        });
+    }
+    let mut distinct_transcripts = count_distinct_transcripts(&images);
+
+    // `--turn-range` is per-transcript (turn indices are), so it needs a single transcript.
+    if let Some(spec) = args.turn_range.as_deref() {
+        let (lo, hi) = crate::text::parse_range(spec, "--turn-range", false)?;
+        if distinct_transcripts > 1 {
+            bail!(
+                "--turn-range is per-transcript (turn indices are), but the scope resolves to \
+                 {distinct_transcripts} transcripts — pin it with `--session <uuid> --no-subagents`"
+            );
+        }
+        if let Some(path) = pinned_path(&session_files, &images) {
+            let turn_of = transcript_line_info(path)?.turn_of;
+            images.retain(|i| {
+                turn_of
+                    .get(&i.line_no)
+                    .is_some_and(|t| *t >= lo && *t <= hi)
+            });
+        } else {
+            images.clear();
+        }
+        distinct_transcripts = count_distinct_transcripts(&images);
+    }
 
     // Apply the `--id` selection (if any). `#N` and `L<line>i<n>` are both per-transcript, so
     // a multi-transcript scope is ambiguous → require a single transcript (like `search --line`).
     let selected: Vec<&ImageRef> = if selection.is_empty() {
         // List/extract ALL → dedup the SAME image re-injected across context windows (by
-        // content fingerprint), keeping the LATEST occurrence (its CURRENT `#N`), then order
-        // by `#N` so a reader scanning for "#32" finds it in sequence.
+        // content fingerprint). Two DISTINCT-content images that share a `#N` both survive, so
+        // the listing shows the reuse — and an `--id #N` against it ERRORS (never silent-picks).
         dedup_latest(&images)
     } else {
         if distinct_transcripts > 1 {
             bail!(
                 "--id is per-transcript (line numbers and `#N` are), but the scope resolves to \
-                 {} transcripts — pin it with `--session <uuid> --no-subagents`",
-                distinct_transcripts
+                 {distinct_transcripts} transcripts — pin it with `--session <uuid> --no-subagents`"
             );
         }
-        let mut sel = Vec::new();
-        let mut unresolved = Vec::new();
-        for s in &selection {
-            // `#N` → the LATEST occurrence with that number (CC reuses low numbers across
-            // prompts; `images` is sorted ascending, so the last match is the current one).
-            let found = match s {
-                Sel::Seq(n) => images.iter().filter(|i| i.seq == Some(*n)).next_back(),
-                Sel::Loc(line, idx) => images
-                    .iter()
-                    .find(|i| i.line_no == *line && i.img_index == *idx),
-            };
-            match found {
-                Some(i) => sel.push(i),
-                None => unresolved.push(match s {
-                    Sel::Seq(n) => format!("#{n}"),
-                    Sel::Loc(l, i) => format!("L{l}i{i}"),
-                }),
-            }
-        }
-        if !unresolved.is_empty() {
-            bail!("--id matched no image: {}", unresolved.join(", "));
-        }
-        sel
+        resolve_selection(&selection, &images, &session_files)?
     };
 
     if let Some(out_dir) = args.out.as_deref() {
@@ -504,8 +706,98 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     }
 }
 
-/// Decode + write each selected image to `out_dir`. Reports every written path + byte count;
-/// a decode/IO failure is surfaced (never a silent or partial-wrong file).
+/// The `--as` target format (or the source format) → an [`ImageOutFormat`]. `None` for a
+/// media type outside the four Claude-API image types (shouldn't occur — CC only stores those).
+fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {
+    match mt {
+        "image/png" => Some(ImageOutFormat::Png),
+        "image/jpeg" | "image/jpg" => Some(ImageOutFormat::Jpeg),
+        "image/gif" => Some(ImageOutFormat::Gif),
+        "image/webp" => Some(ImageOutFormat::Webp),
+        _ => None,
+    }
+}
+
+/// Decode `bytes` and RE-ENCODE to `target` (caller handles the same-format passthrough). An
+/// animated GIF flattened to a still target yields its FIRST frame (with a warning note);
+/// →jpeg is quality-90 lossy, →gif is palette-quantized, →webp is pure-Rust lossless. Returns
+/// the encoded bytes plus any short human notes. A decode/encode failure is surfaced, never a
+/// wrong file.
+fn convert_image(bytes: &[u8], target: ImageOutFormat) -> Result<(Vec<u8>, Vec<String>)> {
+    let mut notes = Vec::new();
+    let src_is_gif = image::guess_format(bytes).ok() == Some(image::ImageFormat::Gif);
+
+    // Decode to a single still image. An animated GIF → still target keeps only the first frame.
+    let img: image::DynamicImage = if src_is_gif && target != ImageOutFormat::Gif {
+        let decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes))
+            .context("decode gif")?;
+        let frames = image::AnimationDecoder::into_frames(decoder)
+            .collect_frames()
+            .context("read gif frames")?;
+        let n = frames.len();
+        let total_s: f64 = frames
+            .iter()
+            .map(|f| {
+                let (num, den) = f.delay().numer_denom_ms();
+                if den == 0 {
+                    0.0
+                } else {
+                    f64::from(num) / f64::from(den)
+                }
+            })
+            .sum::<f64>()
+            / 1000.0;
+        let first = frames
+            .into_iter()
+            .next()
+            .context("animated gif has no frames")?;
+        if n > 1 {
+            notes.push(format!(
+                "animated GIF ({n} frames, {total_s:.1}s) — extracted the first frame only"
+            ));
+        }
+        image::DynamicImage::ImageRgba8(first.into_buffer())
+    } else {
+        image::load_from_memory(bytes).context("decode source image")?
+    };
+
+    let mut out = Vec::new();
+    {
+        let mut cur = std::io::Cursor::new(&mut out);
+        match target {
+            ImageOutFormat::Png => {
+                img.write_to(&mut cur, image::ImageFormat::Png)
+                    .context("encode png")?;
+            }
+            ImageOutFormat::Jpeg => {
+                // JPEG has no alpha → flatten to RGB; quality fixed at 90.
+                let rgb = img.to_rgb8();
+                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cur, 90)
+                    .encode_image(&rgb)
+                    .context("encode jpeg")?;
+                notes.push("lossy re-encode (jpeg quality 90)".to_string());
+            }
+            ImageOutFormat::Gif => {
+                image::codecs::gif::GifEncoder::new(&mut cur)
+                    .encode_frame(image::Frame::new(img.to_rgba8()))
+                    .context("encode gif")?;
+                notes.push("quantized to a ≤256-color palette".to_string());
+            }
+            ImageOutFormat::Webp => {
+                // The pure-Rust webp encoder is LOSSLESS only (no quality knob, larger files).
+                img.write_to(&mut cur, image::ImageFormat::WebP)
+                    .context("encode webp")?;
+                notes.push("lossless re-encode (webp)".to_string());
+            }
+        }
+    }
+    Ok((out, notes))
+}
+
+/// Decode + write each selected image to `out_dir`. With `--as <fmt>` a source in a different
+/// format is CONVERTED (never rejected); without it the original bytes are written under the
+/// source-inferred extension. Reports every written path + size + any conversion note; a
+/// decode/IO failure is surfaced (never a silent or partial-wrong file).
 fn extract(
     selected: &[&ImageRef],
     out_dir: &Path,
@@ -535,8 +827,43 @@ fn extract(
             .with_context(|| format!("{}: image data missing (internal)", img.id()))?;
         let bytes = decode_base64(b64)
             .with_context(|| format!("{}: base64 decode failed (corrupt data)", img.id()))?;
-        let path = out_dir.join(img.out_filename());
-        std::fs::write(&path, &bytes)
+
+        let src_fmt = format_of_media_type(&img.media_type);
+        // (bytes, extension, output media type, conversion notes).
+        let (out_bytes, out_ext, out_media, notes): (Vec<u8>, String, String, Vec<String>) =
+            match args.as_format {
+                // Auto-infer: keep the source bytes + source extension (the written path, with the
+                // inferred extension, is echoed below so the caller sees what it got).
+                None => (
+                    bytes,
+                    img.ext().to_string(),
+                    img.media_type.clone(),
+                    Vec::new(),
+                ),
+                // Forced format == source: no transcode, write the original bytes (this keeps an
+                // animated GIF animated).
+                Some(t) if src_fmt == Some(t) => (
+                    bytes,
+                    t.ext().to_string(),
+                    t.media_type().to_string(),
+                    Vec::new(),
+                ),
+                // Forced format != source: convert.
+                Some(t) => {
+                    let (conv, notes) = convert_image(&bytes, t).with_context(|| {
+                        format!(
+                            "{}: convert {} → {}",
+                            img.id(),
+                            img.media_type,
+                            t.media_type()
+                        )
+                    })?;
+                    (conv, t.ext().to_string(), t.media_type().to_string(), notes)
+                }
+            };
+
+        let path = out_dir.join(img.out_filename_with_ext(&out_ext));
+        std::fs::write(&path, &out_bytes)
             .with_context(|| format!("cannot write {}", path.display()))?;
         match args.format {
             OutputFormat::Json => {
@@ -545,19 +872,34 @@ fn extract(
                     json!({
                         "handle": img.handle(), "seq": img.seq, "id": img.id(),
                         "path": path.to_string_lossy(),
-                        "bytes": bytes.len(), "media_type": img.media_type,
+                        "bytes": out_bytes.len(),
+                        "media_type": out_media,
+                        "source_media_type": img.media_type,
+                        "converted": args.as_format.is_some() && src_fmt != args.as_format,
+                        "notes": notes,
                         "session_id": img.session_id, "is_subagent": img.is_subagent,
                         "parent_session_id": img.parent_session_id,
                     })
                 );
             }
             OutputFormat::Text => {
+                let kind = if out_media == img.media_type {
+                    out_media.clone()
+                } else {
+                    format!("{}→{out_media}", img.media_type)
+                };
+                let note = if notes.is_empty() {
+                    String::new()
+                } else {
+                    format!("  — {}", notes.join("; "))
+                };
                 println!(
-                    "wrote {}  ({} {}, {})",
+                    "wrote {}  ({} {}, {}){}",
                     path.display(),
                     img.handle(),
-                    img.media_type,
-                    human_bytes(bytes.len())
+                    kind,
+                    human_bytes(out_bytes.len()),
+                    note
                 );
             }
         }
@@ -698,7 +1040,9 @@ mod tests {
         r.line_no = 6812;
         r.img_index = 2;
         assert_eq!(r.id(), "L6812i2");
-        assert_eq!(r.out_filename(), "0a1b2c3d-L6812i2.png");
+        assert_eq!(r.out_filename_with_ext(r.ext()), "0a1b2c3d-L6812i2.png");
+        // A `--as`-converted target overrides only the extension, keeping the unique locator.
+        assert_eq!(r.out_filename_with_ext("jpg"), "0a1b2c3d-L6812i2.jpg");
         assert_eq!(r.ext(), "png");
     }
 
@@ -761,5 +1105,39 @@ mod tests {
         assert_eq!(r.b64_len, 0);
         assert_eq!(r.url.as_deref(), Some("https://example.test/x.png"));
         assert!(r.data.is_none());
+    }
+
+    #[test]
+    fn excerpt_around_centers_on_marker_and_is_char_safe() {
+        // Centers on the marker, normalizes whitespace, and never slices a multi-byte char.
+        let text = "café münster ☕ [Image #7] dolor sit amet consectetur";
+        let ex = excerpt_around(text, "[Image #7]", 8);
+        assert!(ex.contains("[Image #7]"), "centered on the marker: {ex}");
+        assert!(
+            ex.contains('☕') || ex.contains("dolor"),
+            "window around it: {ex}"
+        );
+        // No marker → head fallback, still char-safe (no panic on the multi-byte head).
+        let head = excerpt_around("résumé piñata ☕ über no marker here", "[Image #9]", 4);
+        assert!(!head.is_empty());
+    }
+
+    #[test]
+    fn format_of_media_type_maps_the_four_api_types() {
+        assert_eq!(format_of_media_type("image/png"), Some(ImageOutFormat::Png));
+        assert_eq!(
+            format_of_media_type("image/jpeg"),
+            Some(ImageOutFormat::Jpeg)
+        );
+        assert_eq!(
+            format_of_media_type("image/jpg"),
+            Some(ImageOutFormat::Jpeg)
+        );
+        assert_eq!(format_of_media_type("image/gif"), Some(ImageOutFormat::Gif));
+        assert_eq!(
+            format_of_media_type("image/webp"),
+            Some(ImageOutFormat::Webp)
+        );
+        assert_eq!(format_of_media_type("image/heic"), None);
     }
 }

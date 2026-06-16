@@ -432,6 +432,40 @@ pub enum OutputFormat {
     Json,
 }
 
+/// The four image formats the Claude API accepts — the only valid `image --as` targets, and
+/// the only formats a transcript's inline images are ever stored in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ImageOutFormat {
+    Png,
+    Jpeg,
+    Gif,
+    Webp,
+}
+
+impl ImageOutFormat {
+    /// The lower-case file extension for this format.
+    #[must_use]
+    pub fn ext(self) -> &'static str {
+        match self {
+            ImageOutFormat::Png => "png",
+            ImageOutFormat::Jpeg => "jpg",
+            ImageOutFormat::Gif => "gif",
+            ImageOutFormat::Webp => "webp",
+        }
+    }
+
+    /// The canonical `image/*` media type.
+    #[must_use]
+    pub fn media_type(self) -> &'static str {
+        match self {
+            ImageOutFormat::Png => "image/png",
+            ImageOutFormat::Jpeg => "image/jpeg",
+            ImageOutFormat::Gif => "image/gif",
+            ImageOutFormat::Webp => "image/webp",
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 #[command(
     long_about = "List sessions with a fast quick-identity tuple per session — WITHOUT \
@@ -1522,17 +1556,48 @@ pub struct ImageArgs {
     #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
-    /// ADDRESS specific images by their `L<line>i<n>` id (repeatable + comma-delimited,
-    /// `--id L6812i1,L6812i2`). Without `--out`, filters the LISTING to these; with `--out`,
-    /// extracts only these. Lines are per-transcript, so `--id` needs a single transcript in
-    /// scope (pin with `--session <uuid> --no-subagents`).
+    /// ADDRESS specific images by the `#N` session handle (`--id #32,#33`) or the exact
+    /// `L<line>i<n>` locator (`--id L6812i1`). Repeatable + comma-delimited. Without `--out`,
+    /// filters the LISTING to these; with `--out`, extracts only these. Both forms are
+    /// per-transcript, so `--id` needs a single transcript in scope (pin with `--session <uuid>
+    /// --no-subagents`). If a `#N` is AMBIGUOUS (CC reuses `#N` across prompts, so it names >1
+    /// distinct image), `image` ERRORS with the occurrence list — disambiguate with the exact
+    /// `L<line>i<n>`, or narrow scope via `--since`/`--until` / `--turn-range` / `--uuid`.
     #[arg(long, value_name = "ID", value_delimiter = ',')]
     pub id: Vec<String>,
 
+    /// Lower time bound (ISO8601 or relative `2h`/`3d`/…, system-local) — narrows the image set
+    /// so an ambiguous `#N` can resolve in a window where it is unique. A `#N` disambiguator.
+    #[arg(long, value_name = "WHEN")]
+    pub since: Option<String>,
+
+    /// Upper time bound (same WHEN grammar as `--since`). A `#N` disambiguator.
+    #[arg(long, value_name = "WHEN")]
+    pub until: Option<String>,
+
+    /// Restrict to images in this turn range (`START..END`, 0-based inclusive). A per-transcript
+    /// `#N` disambiguator — needs a single transcript in scope.
+    #[arg(long, value_name = "START..END")]
+    pub turn_range: Option<String>,
+
+    /// Restrict to images carried by the record whose uuid starts with this (a `#N`
+    /// disambiguator — the uuid shown in the ambiguity error / `--format json`).
+    #[arg(long, value_name = "UUID")]
+    pub uuid: Option<String>,
+
     /// EXTRACT mode: decode each (selected) image and write it to this directory as
-    /// `<session>-L<line>i<n>.<ext>` (created if absent). Without `--out`, `image` only LISTS.
+    /// `<session>[-img<N>]-L<line>i<n>.<ext>` (created if absent). Without `--out`, `image`
+    /// only LISTS.
     #[arg(long, value_name = "DIR")]
     pub out: Option<PathBuf>,
+
+    /// Force the EXTRACT output format (`png`/`jpeg`/`gif`/`webp` — the four Claude API image
+    /// types). Absent = keep the source format (auto-infer; the written path + inferred
+    /// extension are echoed). A forced format different from the source is CONVERTED, not
+    /// rejected: →jpeg is lossy (quality 90), →gif is palette-quantized, →webp is lossless; an
+    /// animated GIF converted to a still format yields its first frame (with a warning).
+    #[arg(long = "as", value_name = "FORMAT", value_enum)]
+    pub as_format: Option<ImageOutFormat>,
 
     /// Subagent span is ON BY DEFAULT (a tool screenshot may live in a subagent transcript);
     /// this flag is an explicit no-op. The REAL control is `--no-subagents`.
