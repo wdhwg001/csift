@@ -59,12 +59,32 @@ struct TaggedMutation {
     /// `session_id` for a top-level mutation. Defaults to `session_id`; set in `scan_one_file`.
     parent_session_id: String,
     turn_index: usize,
+    /// The JSONL physical line number of the mutating record (1-based), so a `files` row joins
+    /// back to the raw transcript exactly like `recover`/`search`/`turns` do.
+    line_no: usize,
     mutation: FileMutation,
+}
+
+/// An Edit-before-Read boundary `files` detected: the file changed OUTSIDE the Read/Write/Edit
+/// stream (a formatter, husky/pre-commit, git, an external editor) and the harness rejected an
+/// Edit/Write with `File has been modified since read`, forcing a fresh Read. Attributed to its
+/// file via the failed op's `tool_use_id` ↔ that op's `file_path` join, carrying the jsonl line.
+#[derive(Debug, Clone)]
+struct TaggedBoundary {
+    session_id: String,
+    is_subagent: bool,
+    parent_session_id: String,
+    path: String,
+    line_no: usize,
+    turn_index: usize,
+    kind: &'static str,
+    timestamp_utc: Option<String>,
 }
 
 /// Per-file scan result before global aggregation.
 struct FileResult {
     mutations: Vec<TaggedMutation>,
+    boundaries: Vec<TaggedBoundary>,
     skipped_lines: usize,
 }
 
@@ -104,8 +124,9 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         .map(|p| scan_one_file(p))
         .collect::<Result<Vec<_>>>()?;
 
-    // ── Merge + filter by turn-range / time-window per mutation ──
+    // ── Merge + filter by turn-range / time-window per mutation + boundary ──
     let mut mutations: Vec<TaggedMutation> = Vec::new();
+    let mut boundaries: Vec<TaggedBoundary> = Vec::new();
     let mut skipped_lines = 0usize;
     for fr in per_file {
         skipped_lines += fr.skipped_lines;
@@ -122,11 +143,25 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
             }
             mutations.push(tm);
         }
+        // Boundaries obey the SAME turn-range / time-window filters as mutations.
+        for tb in fr.boundaries {
+            if let Some((lo, hi)) = turn_range {
+                if tb.turn_index < lo || tb.turn_index > hi {
+                    continue;
+                }
+            }
+            if !time_window.contains(tb.timestamp_utc.as_deref()) {
+                continue;
+            }
+            boundaries.push(tb);
+        }
     }
+    boundaries.sort_by(|a, b| a.line_no.cmp(&b.line_no));
 
     let outcome = Outcome {
         detail: args.detail(),
         mutations,
+        boundaries,
         skipped_lines,
         turn_range,
         time_window_bounded: !time_window.is_unbounded(),
@@ -146,6 +181,7 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
             mutations: Vec::new(),
+            boundaries: Vec::new(),
             skipped_lines: 0,
         });
     };
@@ -163,9 +199,11 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
     // user delimiter (`"role":"user"`, needed so turns can still be delimited). Skipped
     // malformed lines are counted, never hidden.
     // Parse all files-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool) so a
-    // single giant transcript is not scanned on one core; `files` only needs the records in
-    // order, so the parallel scan's exact line numbers are discarded here.
+    // single giant transcript is not scanned on one core. KEEP the parallel scan's exact jsonl
+    // line numbers (aligned with `records` by index) — every `files` row + Edit-before-Read
+    // boundary carries its `Lnnnn` so it joins back to the raw transcript like recover/search.
     let (recs, skipped) = crate::parse::parse_candidates_parallel(bytes, line_is_files_candidate);
+    let line_nos: Vec<usize> = recs.iter().map(|(ln, _)| *ln).collect();
     let records: Vec<Record> = recs.into_iter().map(|(_, rec)| rec).collect();
 
     // A subagent transcript's `session_id` is a non-re-feedable bare hex; stamp the
@@ -175,15 +213,21 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
-    let mut mutations = extract_mutations(&session_id, &records);
+    let mut mutations = extract_mutations(&session_id, &records, &line_nos);
+    let mut boundaries = extract_boundaries(&session_id, &records, &line_nos);
     if is_subagent {
         for tm in &mut mutations {
             tm.is_subagent = true;
             tm.parent_session_id = parent_session_id.clone();
         }
+        for tb in &mut boundaries {
+            tb.is_subagent = true;
+            tb.parent_session_id = parent_session_id.clone();
+        }
     }
     Ok(FileResult {
         mutations,
+        boundaries,
         skipped_lines: skipped,
     })
 }
@@ -198,6 +242,10 @@ fn line_is_files_candidate(line: &[u8]) -> bool {
         || memmem::find(line, b"Write").is_some()
         || memmem::find(line, b"Bash").is_some()
         || memmem::find(line, b"filePath").is_some()
+        // Keep tool_result ERROR carriers — they carry the Edit-before-Read boundaries (and
+        // drive `failed_ids`, so a cancelled/errored op is never miscounted as a real mutation),
+        // and an error carrier may not otherwise match (its `"role":"user"` is its only hook).
+        || memmem::find(line, b"is_error").is_some()
 }
 
 /// Extract the bare file mutations carried by a record slice — the SAME structured +
@@ -296,7 +344,11 @@ fn bash_verb_is_create(verb: &str) -> bool {
 
 /// Delimit turns over the parsed records, then for each turn extract structured + Bash
 /// mutations and JOIN the structured ones to their carriers for accurate `is_create`.
-fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation> {
+fn extract_mutations(
+    session_id: &str,
+    records: &[Record],
+    line_nos: &[usize],
+) -> Vec<TaggedMutation> {
     let index_turns = group_turn_indices_deduped(records, |r| r);
     let mut out = Vec::new();
 
@@ -359,6 +411,7 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
                     is_subagent: false,
                     parent_session_id: session_id.to_string(),
                     turn_index,
+                    line_no: line_nos.get(i).copied().unwrap_or(0),
                     mutation: m,
                 });
             }
@@ -371,6 +424,7 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
                         is_subagent: false,
                         parent_session_id: session_id.to_string(),
                         turn_index,
+                        line_no: line_nos.get(i).copied().unwrap_or(0),
                         mutation: FileMutation {
                             path: bm.path,
                             op: FileOp::BashMutation,
@@ -380,6 +434,75 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
                             is_create: bash_verb_is_create(bm.verb),
                         },
                     });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// True when a `tool_result` body is the `File has been modified since read` harness error
+/// (the file changed OUTSIDE the tool stream — prettier/linter/git/etc. — and a fresh Read is
+/// demanded). Mirrors `recover::classify_integrity_error`'s `ModifiedSinceRead` arm; kept local
+/// so `files` doesn't depend on `recover`'s internals.
+fn is_modified_since_read(content: &serde_json::Value) -> bool {
+    let text = crate::model::tool_result_content_text(content);
+    text.contains("has been modified since read") || text.contains("File has been modified")
+}
+
+/// Extract the Edit-before-Read boundaries a session hit on each file: an Edit/Write rejected
+/// with `File has been modified since read` (the file changed outside the Read/Write/Edit
+/// stream). Attribution: the error `tool_result`'s `tool_use_id` matches the rejected op, whose
+/// `file_path` lives on its tool_use record (even though the op never landed) — so a per-turn
+/// `id → path` map (built from EVERY edit/write tool_use, failed or not) names the file. The
+/// jsonl line is taken from `line_nos` (aligned with `records` by index).
+fn extract_boundaries(
+    session_id: &str,
+    records: &[Record],
+    line_nos: &[usize],
+) -> Vec<TaggedBoundary> {
+    let index_turns = group_turn_indices_deduped(records, |r| r);
+    let mut out = Vec::new();
+    for (turn_index, idxs) in index_turns.iter().enumerate() {
+        // id → file_path for every Edit/Write tool_use in this turn (incl. failed ones — the
+        // rejected edit's INPUT still carries its file_path).
+        let mut tool_use_path: BTreeMap<String, String> = BTreeMap::new();
+        for &i in idxs {
+            if let Some(id) = tool_use_id_for(&records[i]) {
+                if let Some(m) = records[i]
+                    .structured_tool_mutations()
+                    .into_iter()
+                    .find(|m| !m.path.is_empty())
+                {
+                    tool_use_path.entry(id).or_insert(m.path);
+                }
+            }
+        }
+        for &i in idxs {
+            let Some(blocks) = records[i].blocks() else {
+                continue;
+            };
+            for b in blocks {
+                if let crate::model::Block::ToolResult {
+                    tool_use_id: Some(id),
+                    is_error: Some(true),
+                    content: Some(content),
+                } = b
+                {
+                    if is_modified_since_read(content) {
+                        if let Some(path) = tool_use_path.get(id) {
+                            out.push(TaggedBoundary {
+                                session_id: session_id.to_string(),
+                                is_subagent: false,
+                                parent_session_id: session_id.to_string(),
+                                path: path.clone(),
+                                line_no: line_nos.get(i).copied().unwrap_or(0),
+                                turn_index,
+                                kind: "modified_since_read",
+                                timestamp_utc: records[i].timestamp.clone(),
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -405,6 +528,8 @@ fn tool_use_id_for(rec: &Record) -> Option<String> {
 struct Outcome {
     detail: FilesDetail,
     mutations: Vec<TaggedMutation>,
+    /// Edit-before-Read boundaries (file changed outside the tool stream), sorted by jsonl line.
+    boundaries: Vec<TaggedBoundary>,
     skipped_lines: usize,
     turn_range: Option<(usize, usize)>,
     time_window_bounded: bool,
@@ -564,19 +689,56 @@ fn render_text(outcome: &Outcome) {
     // SCOPE banner FIRST (before the empty check) so a fan-out that touched no files still
     // announces it spanned N subagents — the same up-front disclosure `list`/`turns` give.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
-    if outcome.mutations.is_empty() {
+    if outcome.mutations.is_empty() && outcome.boundaries.is_empty() {
         println!("no file mutations found");
         print_footer(outcome);
         return;
     }
 
-    match outcome.detail {
-        FilesDetail::Summary => render_summary(outcome),
-        FilesDetail::ByDir => render_by_dir(outcome),
-        FilesDetail::ByFile => render_by_file(outcome),
-        FilesDetail::Timeline => render_timeline(outcome),
+    if !outcome.mutations.is_empty() {
+        match outcome.detail {
+            FilesDetail::Summary => render_summary(outcome),
+            FilesDetail::ByDir => render_by_dir(outcome),
+            FilesDetail::ByFile => render_by_file(outcome),
+            FilesDetail::Timeline => render_timeline(outcome),
+        }
     }
+    render_boundaries_section(outcome);
     print_footer(outcome);
+}
+
+/// The Edit-before-Read boundary section — orthogonal to the mutation rollup, shown in every
+/// detail mode (and on its own when a session ONLY hit boundaries, no mutations). Each row
+/// carries the file, the jsonl line, turn, time, and kind so it joins back to the transcript
+/// and feeds `recover --file <path> --coverage` for the precise per-boundary breakdown.
+fn render_boundaries_section(outcome: &Outcome) {
+    if outcome.boundaries.is_empty() {
+        return;
+    }
+    println!();
+    println!(
+        "── Edit-before-Read boundaries ({}) — file changed OUTSIDE the tool stream (formatter / \
+         git / external edit); recover with care ──",
+        outcome.boundaries.len()
+    );
+    for b in &outcome.boundaries {
+        let sub = if b.is_subagent {
+            format!(
+                "  ·  subagent {} (parent {})",
+                b.session_id, b.parent_session_id
+            )
+        } else {
+            String::new()
+        };
+        println!(
+            "  ⚠ {}  ·  L{}  ·  turn {}  ·  {}  ·  {}{sub}",
+            b.path,
+            b.line_no,
+            b.turn_index,
+            format_timestamp(b.timestamp_utc.as_deref()),
+            b.kind
+        );
+    }
 }
 
 /// Group mutations under their session header, then call `body` per session with that
@@ -669,7 +831,8 @@ fn render_timeline(outcome: &Outcome) {
                 ""
             };
             println!(
-                "  {}  turn {}  {}{}  {}",
+                "  L{}  {}  turn {}  {}{}  {}",
+                m.line_no,
                 format_timestamp(m.mutation.timestamp_utc.as_deref()),
                 m.turn_index,
                 m.mutation.op.label(),
@@ -699,9 +862,10 @@ fn print_footer(outcome: &Outcome) {
     let filter = filter_context(outcome);
     println!();
     println!(
-        "{} distinct file(s)  ·  {} mutation(s)  ·  detail={level}  ·  {filter}",
+        "{} distinct file(s)  ·  {} mutation(s)  ·  {} Edit-before-Read boundary(ies)  ·  detail={level}  ·  {filter}",
         outcome.distinct_files(),
-        outcome.mutations.len()
+        outcome.mutations.len(),
+        outcome.boundaries.len()
     );
     println!("(Bash mutations are heuristic — parsed from the command string.)");
     if outcome.skipped_lines > 0 {
@@ -758,6 +922,7 @@ fn render_json(outcome: &Outcome) -> Result<()> {
                     "ts_utc": m.mutation.timestamp_utc,
                     "ts_local": m.mutation.timestamp_utc.as_deref().and_then(local_iso),
                     "turn_index": m.turn_index,
+                    "line_no": m.line_no,
                     "is_create": m.mutation.is_create,
                     "heuristic": m.mutation.op.is_heuristic(),
                 });
@@ -765,10 +930,31 @@ fn render_json(outcome: &Outcome) -> Result<()> {
             }
         }
     }
+
+    // Edit-before-Read boundary objects (orthogonal to the mutation rollup; emitted in every
+    // detail mode so the recipe can `jq` them out of any `files --format json` run). Each carries
+    // the id-domain discriminators + the jsonl line, so it joins back to the transcript and feeds
+    // `recover --file <path> --coverage` for the precise per-boundary breakdown.
+    for b in &outcome.boundaries {
+        let obj = json!({
+            "type": "edit_before_read_boundary",
+            "session_id": b.session_id,
+            "is_subagent": b.is_subagent,
+            "parent_session_id": b.parent_session_id,
+            "path": b.path,
+            "line_no": b.line_no,
+            "turn_index": b.turn_index,
+            "kind": b.kind,
+            "ts_utc": b.timestamp_utc,
+            "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
+        });
+        println!("{}", serde_json::to_string(&obj)?);
+    }
     // Trailing summary object (mirrors search's trailing-summary convention).
     let summary = json!({
         "distinct_files": outcome.distinct_files(),
         "total_mutations": outcome.mutations.len(),
+        "edit_before_read_boundaries": outcome.boundaries.len(),
         "skipped_lines": outcome.skipped_lines,
         "detail_level": match outcome.detail {
             FilesDetail::Summary => "summary",
@@ -993,7 +1179,8 @@ mod tests {
     }
 
     fn extract(records: &[Record]) -> Vec<TaggedMutation> {
-        extract_mutations("0a1b2c3d-sess", records)
+        let line_nos: Vec<usize> = (1..=records.len()).collect();
+        extract_mutations("0a1b2c3d-sess", records, &line_nos)
     }
 
     #[test]
@@ -1136,6 +1323,7 @@ mod tests {
         let outcome = Outcome {
             detail: FilesDetail::Summary,
             mutations: muts,
+            boundaries: Vec::new(),
             skipped_lines: 0,
             turn_range: None,
             time_window_bounded: false,
@@ -1323,6 +1511,7 @@ mod tests {
         Outcome {
             detail,
             mutations: muts,
+            boundaries: Vec::new(),
             skipped_lines: 0,
             turn_range: None,
             time_window_bounded: false,
@@ -1390,8 +1579,9 @@ mod tests {
     #[test]
     fn render_multi_session_separator() {
         // Two sessions → the per_session blank-line separator arm (`!first`) fires.
-        let mut a = extract_mutations("aaaa-sess", &fixture());
-        let b = extract_mutations("bbbb-sess", &fixture());
+        let ln: Vec<usize> = (1..=fixture().len()).collect();
+        let mut a = extract_mutations("aaaa-sess", &fixture(), &ln);
+        let b = extract_mutations("bbbb-sess", &fixture(), &ln);
         a.extend(b);
         render_text(&outcome(FilesDetail::Summary, a));
     }

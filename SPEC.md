@@ -544,6 +544,10 @@ csift agents --session <uuid> --returned-message --format json # every node's re
 
 Bash's `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpected}` — **no path field** — so Bash mutations are a best-effort lexical (NOT shell) parse and are flagged heuristic everywhere they surface (text, JSON, help, SKILL). The `file_path` lives on the **tool_use** record while `toolUseResult.type` (`create`/`update`) lives on the **paired tool_result carrier**; the joiner pairs them by `tool_use_id` within the turn so `is_create` is accurate. **An op whose tool_result is `is_error:true` is EXCLUDED** — a failed Edit, or a Write `Cancelled: parallel tool call … errored` when a sibling op in the same batch failed, never landed, so counting it would be a forensic FALSE POSITIVE ("did this session write X?") and would contradict `recover` (which correctly reconstructs nothing). Same `failed_ids` gate `recover::extract` applies. Relative Bash paths are reported VERBATIM (the session's cwd at command time is not reliably known — absolutizing would fabricate a path).
 
+**Edit-before-Read boundaries (file changed outside the tool stream).** Beyond mutations, `files` also DETECTS the `File has been modified since read` integrity errors and attributes each to its file (the rejected op's `tool_use_id` ↔ that op's `file_path`, even though the op never landed). These are the points where a formatter / linter / husky-or-pre-commit hook / git / external editor changed the file out from under the harness and a fresh Read was forced — the same authoritative boundary `recover` segments on. Surfacing them in `files` is the DISCOVERY signal: "which files in this session are risky to reconstruct?" → then `recover --file <path> --coverage` for the precise per-boundary breakdown. The error-carrier line is kept by the prefilter (an `is_error` hook) so the detection survives. (csift does NOT hunt for HIDDEN boundaries — a change with no downstream `modified since read` error, e.g. a Read-first-then-windowed-edit, leaves no transcript signal and is undetectable; verified against the CC cleanroom + binary. What `files` surfaces is the detectable subset, honestly bounded.)
+
+Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of its record — the same join-back-to-the-transcript locator `recover`/`search`/`turns` provide (the parallel scan already produces it; it is no longer discarded).
+
 **Args (matches `cli::FilesArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
@@ -559,11 +563,13 @@ Bash's `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpect
 - **`--summary` (DEFAULT)** — compact per-top-level-dir rollup with op counts (e.g. `"/tmp: 12 write, 3 edit; spec/gaps: 4 edit"`); the smallest output, answers the acid test directly. Bucket = the mutation path's parent directory; a bare relative filename buckets under `./`.
 - **`--by-dir`** — one row per distinct directory (full path) with per-op counts + distinct-file count + first/last timestamp.
 - **`--by-file`** — one row per distinct absolute path with per-op counts + first/last timestamp (where "how many distinct gap docs touched" is exactly answerable).
-- **`--timeline`** — full chronological list, one line per mutation `(timestamp, turn index, op, path)`. The verbose mode; never the default.
+- **`--timeline`** — full chronological list, one line per mutation `(Lnnnn, timestamp, turn index, op, path)`. The verbose mode; never the default.
+
+Regardless of detail level, an **Edit-before-Read boundaries** section follows the mutation body (and shows on its own when a session ONLY hit boundaries, no mutations), one row per boundary `(⚠ path, Lnnnn, turn, ts, kind)`.
 
 **Filtering** is per-mutation: `--turn-range` (turn index assigned by the §6.4 genuine-user delimiter, shared with `search`) and `--since`/`--until` (a mutation with no timestamp never falls inside a *bounded* window — same rule as §6.2). **No silent truncation:** skipped malformed lines are counted and surfaced.
 
-**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then a footer: distinct files + total mutations, the active detail level, the turn/time filter context, the Bash-heuristic caveat, and the skipped-line count. Empty result prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--timeline` with `{path, op, ts_utc, ts_local, turn_index, is_create, heuristic}`), then a trailing summary object `{distinct_files, total_mutations, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention).
+**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then the Edit-before-Read boundary section (if any), then a footer: distinct files + total mutations + boundary count, the active detail level, the turn/time filter context, the Bash-heuristic caveat, and the skipped-line count. Empty result (no mutations AND no boundaries) prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--timeline` with `{path, op, ts_utc, ts_local, turn_index, line_no, is_create, heuristic}`), then one `{type:"edit_before_read_boundary", path, line_no, turn_index, kind, ts_utc, ts_local, session_id, is_subagent, parent_session_id}` per boundary (in every detail mode), then a trailing summary object `{distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention).
 
 **Perf shape** is `search`'s: a single forward pass per file (mmap + SIMD newline scan + a pre-JSON mutation byte-prefilter, full parse only on candidate lines), no large-blob retention (extract small `FileMutation` strings, drop the record — never hold `originalFile`/`content`/`structuredPatch`), rayon across files on the default pool (= CPU count).
 
@@ -573,6 +579,7 @@ csift files <uuid>                          # default summary: per-top-level-dir
 csift files <uuid> --by-file                # per-file op counts + first/last touch
 csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
 csift files . --format json --by-dir        # machine-readable per-dir rollup
+csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary")'  # which files changed outside the tool stream
 ```
 
 ### 6.7 `recover` — reconstruct a file's content (or a plan) from the transcript

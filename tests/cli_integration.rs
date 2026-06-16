@@ -3198,6 +3198,78 @@ fn files_no_mutations_says_none() {
 }
 
 #[test]
+fn files_detects_edit_before_read_boundaries() {
+    // A session Writes /p/app.rs, then an Edit to it is rejected with `File has been modified
+    // since read` (the file changed outside the tool stream). `files` surfaces that as an
+    // Edit-before-Read boundary attributed to the file, carrying the jsonl line number — and
+    // every row (mutation + boundary) now carries `Lnnnn` (the line-number threading fix).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/app.rs","content":"line\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/p/app.rs"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/p/app.rs","old_string":"line","new_string":"LINE"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
+        ),
+    );
+
+    // Text: timeline mutation rows carry Lnnnn; the boundary section names the file + kind + line.
+    let out = h.run(&["files", "--session", SESS, "--no-subagents", "--timeline"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("Edit-before-Read boundaries"),
+        "boundary section present: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("/p/app.rs") && out.stdout.contains("modified_since_read"),
+        "boundary attributed to the file with its kind: {}",
+        out.stdout
+    );
+    // The failed edit (ed1) is NOT counted as a mutation; the Write IS, and its timeline row
+    // carries the jsonl line. Footer reports the boundary count.
+    assert!(
+        out.stdout.contains("1 Edit-before-Read boundary(ies)"),
+        "footer boundary count: {}",
+        out.stdout
+    );
+
+    // JSON: a typed boundary object with line_no + the summary count.
+    let j = h.run(&[
+        "files",
+        "--session",
+        SESS,
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let objs: Vec<serde_json::Value> = j
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson parses"))
+        .collect();
+    let b = objs
+        .iter()
+        .find(|o| o.get("type").and_then(|t| t.as_str()) == Some("edit_before_read_boundary"))
+        .expect("a boundary object");
+    assert_eq!(b["path"], "/p/app.rs");
+    assert_eq!(b["kind"], "modified_since_read");
+    assert!(
+        b["line_no"].as_u64().unwrap_or(0) >= 1,
+        "boundary carries its jsonl line: {b}"
+    );
+    let summary = objs
+        .iter()
+        .find(|o| o.get("detail_level").is_some())
+        .expect("trailing summary");
+    assert_eq!(summary["edit_before_read_boundaries"], serde_json::json!(1));
+}
+
+#[test]
 fn files_spans_subagent_mutations() {
     // A subagent that Writes a file → its mutation is attributed under the session by
     // default (OMC fan-out edits happen in subagents). --no-subagents drops it.

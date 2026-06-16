@@ -206,10 +206,17 @@ whole project tree collapses to one row; smallest output) < `--by-dir` < `--by-f
 Subagent scope is mutually exclusive: the default spans subagents, `--no-subagents` is the top-level
 session only, and `--subagents-only` is its complement (only what the session's subagents touched).
 
+`files` also detects **Edit-before-Read boundaries** — `File has been modified since read` errors,
+attributed to their file: the points where a formatter/linter/husky/git/external-editor changed the file
+outside the tool stream. They surface in their own section + as `edit_before_read_boundary` JSON objects,
+the discovery signal for "which files are risky to reconstruct" (→ `recover --file <path> --coverage` for
+the per-boundary breakdown). Every `files` row + boundary carries its JSONL line number (`Lnnnn`).
+
 ```bash
 csift files --session <uuid>
 csift files . --no-subagents
 csift files <uuid> --subagents-only --by-file   # only what the session's subagents touched
+csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary")'  # files changed outside the tool stream
 ```
 
 ### `recover` — reconstruct a file's content (and `plan` — locate a session's plan)

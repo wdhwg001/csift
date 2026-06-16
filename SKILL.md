@@ -481,6 +481,18 @@ Exactly one **detail level** applies (mutually exclusive; default `--summary`):
 All levels honor `--turn-range` / `--since` / `--until` (same windowing semantics as `search`; a
 mutation with no timestamp never falls inside a bounded window) and `--format json`.
 
+**Edit-before-Read boundaries.** `files` also detects the `File has been modified since read`
+integrity errors and attributes each to its file (the rejected op's `tool_use_id` ↔ that op's
+`file_path`) — the points where a formatter/linter/husky/git/external-editor changed the file
+outside the tool stream and a fresh Read was forced. They render in their own section (every detail
+mode; on their own if a session ONLY hit boundaries) and as `{type:"edit_before_read_boundary",
+path, line_no, turn_index, kind, ts_utc, …}` JSON objects, with the footer/summary carrying the
+count. This is the DISCOVERY signal for "which files are risky to reconstruct" → then `recover
+--file <path> --coverage` for the precise per-boundary breakdown. (csift does NOT hunt HIDDEN
+boundaries — a change with no downstream `modified since read` error leaves no transcript signal;
+what's surfaced is the detectable subset.) Every `files` row + boundary carries its **JSONL line
+number** (`Lnnnn`), joining back to the raw transcript like `recover`/`search`/`turns`.
+
 Examples:
 
 ```bash
@@ -489,6 +501,7 @@ csift files <uuid> --by-file                # per-file op counts + first/last to
 csift files <uuid> --subagents-only --by-file   # ONLY what the session's subagents touched
 csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
 csift files . --format json --by-dir        # machine-readable per-dir rollup
+csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary")'  # files changed outside the tool stream
 ```
 
 **Acid test — "how many distinct gap docs did this session touch, and how many `/tmp` docs did it
@@ -650,7 +663,9 @@ to reconstruct and where it will break — before dumping anything.
 fragment — work boundary by boundary:
 
 ```bash
-# 1. List the external-change boundaries (line / turn / ts / kind) for the file:
+# 0. DISCOVERY — which files in the session changed outside the tool stream (across ALL files):
+csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary") | {path, line_no, kind, ts_utc}'
+# 1. For one such file, list ITS external-change boundaries (line / turn / ts / kind):
 csift recover --file /abs/X --coverage --format json | jq '.boundaries[] | {line_no, kind, ts_utc}'
 # 2. The boundaries cut the timeline into segments. For EACH segment, dump the cleanest form as of
 #    its end (just BEFORE the next boundary) — restore-quality if that segment is complete, else a
