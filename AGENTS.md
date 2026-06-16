@@ -31,6 +31,7 @@ No CI service runs here; the pre-commit hook (§5) is the entire quality gate.
 | Language | Rust 2021, `rust-version = 1.89` | Fast byte/IO, strong types over dense jsonl |
 | CLI | `clap` (derive) | Subcommands + example-rich `--help` |
 | Regex | `regex` | ripgrep-like matching, smart-case |
+| Multi-literal | `aho-corasick` | `recover --files-from` batch prefilter — match all manifest basenames against a transcript in one pass (already transitive via `regex`) |
 | JSON | `serde` + `serde_json` | Lazy parse only on candidate lines |
 | Scan | `memchr` (SIMD newline) + `memmap2` (mmap) | 200MB+ files without full-buffer reads |
 | Parallel | `rayon` | Fan-out across many session files |
@@ -163,7 +164,7 @@ src/agents.rs    # `agents`: per-subagent lifecycle rows + --kind/--since/--unti
 src/time_window.rs # `--since`/`--until` parsing (absolute + relative, system-local); shared by search + agents
 src/timez.rs     # shared system-local timestamp rendering (format_timestamp / local_iso / local_tz)
 src/whoami.rs    # `whoami`: CLAUDE_CODE_SESSION_ID detection, false-positive-safe
-src/recover.rs   # `recover`: file-content reconstruction (--patches/--at/--coverage) + the `--file @plan` sigil
+src/recover.rs   # `recover`: file-content reconstruction (--patches/--at/--coverage) + the `--file @plan` sigil; basename prefilter + `--files-from`/`--out-dir` batch (parse each transcript once for many files)
 src/plan.rs      # `plan`: plan-file binding resolver (the `plan_mode` attachment) + shared @plan resolution
 src/turns.rs     # `turns`: turn-fidelity reconstruction of a compaction-clipped exchange
 src/image.rs     # `image`: list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error + --since/--turn-range/--uuid disambiguators; --out extension-driven transcode via image + libwebp)

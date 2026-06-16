@@ -581,6 +581,17 @@ Edit-before-Read wall `File has not been read yet` for a Bash-created-then-direc
 plan already in context that must be re-Read before it can be Edited) never mutated the file, so it is
 SKIPPED (not applied, not counted as a recoverable edit; a not-read-yet case is an integrity annotation).
 
+**Batch (`--files-from <manifest>` + `--out-dir <dir>`).** Restoring MANY files (e.g. a `/tmp` a rogue
+session nuked) one-by-one re-parses the same huge transcripts on every call — quadratic. Batch mode lists
+the target absolute paths in a manifest (one per line, `#` comments ok), gates each transcript with an
+Aho-Corasick of all basenames, parses + turn-groups a matched transcript ONCE, and extracts every listed
+file it touched — so the corpus is walked a single time regardless of manifest size. Each file is written
+to `<out-dir>/<abs-path>` as RAW restorable bytes (its final state; honors `--at`/`--since`/`--until`),
+plus a `recovery-report.tsv` (status · known · total · target · path); `--force` overwrites existing
+outputs (default skips them). Cross-session writes merge; unrelated versions resolve to the freshest.
+The single-file path also gained a basename prefilter, so even one `recover --file` only fully parses the
+transcripts that touched the file.
+
 Examples:
 
 ```bash
@@ -588,6 +599,7 @@ csift recover . --file /abs/PLAN.md --coverage             # scope first: covere
 csift recover <uuid> --file /abs/app.py --patches          # segmented unified diffs over the session
 csift recover <uuid> --file /abs/app.py --at @turn:42      # partial snapshot as the LLM saw it at turn 42
 csift recover <uuid> --file @plan --out /tmp/restored-plan.md  # rebuild the session's bound plan (DELETED ok)
+csift recover --files-from nuked.txt --out-dir /restore    # BATCH: reconstruct every listed file in ONE scan
 ```
 
 JSON is NDJSON: a leading `{kind:"session_header", sessions_in_scope, top_level_sessions,

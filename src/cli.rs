@@ -1506,6 +1506,26 @@ pub struct RecoverArgs {
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+
+    /// BATCH MODE: reconstruct MANY files in a single corpus scan. Path to a manifest listing
+    /// the target absolute file paths (one per line; blank lines and `#` comments ignored).
+    /// Each transcript is parsed ONCE and every listed file it touched is extracted from it —
+    /// turning N separate `recover --file` runs (N whole-corpus parses) into one. Requires
+    /// `--out-dir`; mutually exclusive with `--file`. Honors `--at`/`--since`/`--until` (default
+    /// = the file's final reconstructed state). Each file is written under `--out-dir` mirroring
+    /// its absolute path; a `recovery-report.tsv` summarizes per-file status.
+    #[arg(long, value_name = "MANIFEST")]
+    pub files_from: Option<PathBuf>,
+
+    /// BATCH MODE output directory (required with `--files-from`). Each recovered file is written
+    /// to `<DIR>/<abs-path-without-leading-slash>` (created as needed); existing files are not
+    /// clobbered unless `--force`.
+    #[arg(long, value_name = "DIR")]
+    pub out_dir: Option<PathBuf>,
+
+    /// In batch mode, overwrite an already-present output file (default: skip + report it).
+    #[arg(long)]
+    pub force: bool,
 }
 
 impl RecoverArgs {

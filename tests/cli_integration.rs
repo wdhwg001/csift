@@ -3784,6 +3784,118 @@ fn recover_scenario_home() -> Home {
 }
 
 #[test]
+fn recover_batch_reconstructs_many_files_in_one_scan() {
+    let h = Home::new();
+    let read_full = |uid: &str, path: &str, content: &str, total: usize| -> String {
+        serde_json::json!({
+            "type":"user","uuid":uid,"timestamp":"2026-06-07T05:00:00.000Z",
+            "toolUseResult":{"file":{"filePath":path,"content":content,"startLine":1,"numLines":total,"totalLines":total}},
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":uid,"content":"ok"}]}
+        }).to_string()
+    };
+    // Session 1 holds two files; a SECOND session holds a third — all recovered in ONE scan.
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            read_full("r0", "/tmp/alpha.md", "# Alpha\nline two\nline three", 3),
+            read_full("r1", "/tmp/beta.md", "beta one\nbeta two", 2)
+        ),
+    );
+    let sess2 = "11112222-3333-4444-5555-666677778888";
+    h.write(
+        &format!("{ENC}/{sess2}.jsonl"),
+        &format!(
+            "{}\n",
+            read_full("r2", "/tmp/gamma.md", "gamma only line", 1)
+        ),
+    );
+
+    // Manifest: three real targets + a comment + an absent one.
+    let manifest = h.root.join("manifest.txt");
+    std::fs::write(
+        &manifest,
+        "/tmp/alpha.md\n/tmp/beta.md\n# a comment\n/tmp/gamma.md\n/tmp/absent.md\n",
+    )
+    .unwrap();
+    let out_dir = h.root.join("recovered");
+    let out = h.run(&[
+        "recover",
+        "--files-from",
+        manifest.to_str().unwrap(),
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+
+    // Each present file is reconstructed to its raw content, mirrored under out-dir.
+    assert_eq!(
+        std::fs::read_to_string(out_dir.join("tmp/alpha.md")).unwrap(),
+        "# Alpha\nline two\nline three\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(out_dir.join("tmp/beta.md")).unwrap(),
+        "beta one\nbeta two\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(out_dir.join("tmp/gamma.md")).unwrap(),
+        "gamma only line\n"
+    );
+    // The absent target writes no file and is reported as no-history.
+    assert!(!out_dir.join("tmp/absent.md").exists());
+    let report = std::fs::read_to_string(out_dir.join("recovery-report.tsv")).unwrap();
+    assert!(
+        report.contains("complete\t3\t3\t/tmp/alpha.md"),
+        "report:\n{report}"
+    );
+    assert!(
+        report.contains("no-history\t0\t0\t/tmp/absent.md"),
+        "report:\n{report}"
+    );
+    assert!(out.stdout.contains("3 complete"), "summary: {}", out.stdout);
+
+    // Re-running without --force skips the already-present files.
+    let out2 = h.run(&[
+        "recover",
+        "--files-from",
+        manifest.to_str().unwrap(),
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert!(out2.success, "stderr: {}", out2.stderr);
+    assert!(
+        out2.stdout.contains("3 skipped"),
+        "skip summary: {}",
+        out2.stdout
+    );
+}
+
+#[test]
+fn recover_batch_requires_out_dir_and_excludes_file() {
+    let h = recover_scenario_home();
+    let manifest = h.root.join("m.txt");
+    std::fs::write(&manifest, "/tmp/x.md\n").unwrap();
+    let no_out = h.run(&["recover", "--files-from", manifest.to_str().unwrap()]);
+    assert!(!no_out.success);
+    assert!(no_out.stderr.contains("--out-dir"), "{}", no_out.stderr);
+    let both = h.run(&[
+        "recover",
+        "--files-from",
+        manifest.to_str().unwrap(),
+        "--out-dir",
+        h.root.join("o").to_str().unwrap(),
+        "--file",
+        "/tmp/x.md",
+    ]);
+    assert!(!both.success);
+    assert!(
+        both.stderr.contains("mutually exclusive"),
+        "{}",
+        both.stderr
+    );
+}
+
+#[test]
 fn recover_coverage_counts_and_boundary() {
     let h = recover_scenario_home();
     let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--coverage"]);

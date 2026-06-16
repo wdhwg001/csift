@@ -167,6 +167,10 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     if let Some(msg) = args.span_flag_error() {
         bail!(msg);
     }
+    // BATCH MODE: many files in one corpus scan (parse each transcript ONCE).
+    if args.files_from.is_some() {
+        return run_recover_batch(args);
+    }
     // ── Validate window mutual-exclusion (same rule + wording as `files`/`search`) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
@@ -293,6 +297,297 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     Ok(())
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Batch reconstruction (`--files-from` / `--out-dir`)
+//
+// The dominant cost of recovering MANY files one-by-one is re-parsing the same huge
+// transcripts on every `recover --file` call (a session that wrote — or merely mentions —
+// hundreds of files is re-parsed hundreds of times). Batch mode parses + turn-groups each
+// transcript ONCE and extracts every listed file it touched, so the corpus is walked a
+// single time regardless of manifest size.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One target's batch outcome, for the TSV report + the summary line.
+struct BatchOutcome {
+    target: String,
+    status: &'static str, // "complete" | "partial" | "no-history" | "skipped-exists"
+    known: usize,
+    total: usize,
+    written: Option<std::path::PathBuf>,
+}
+
+/// The last path component (the filename) — the distinctive token a transcript carries for
+/// every op on the file, and the [`aho_corasick`] pattern that gates parsing.
+fn basename_of(p: &str) -> &str {
+    p.rsplit('/').next().unwrap_or(p)
+}
+
+fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
+    let manifest = args
+        .files_from
+        .as_deref()
+        .expect("batch mode requires --files-from");
+    let Some(out_dir) = args.out_dir.as_deref() else {
+        bail!("--files-from requires --out-dir <DIR> (where to write the recovered files)");
+    };
+    if args.file.is_some() {
+        bail!("--files-from (batch) is mutually exclusive with --file (single-file mode)");
+    }
+    if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
+        bail!("--turn-range is mutually exclusive with --since/--until");
+    }
+
+    // ── Manifest: one absolute path per line; blank lines and `#` comments ignored; deduped. ──
+    let raw = std::fs::read_to_string(manifest)
+        .with_context(|| format!("cannot read manifest {}", manifest.display()))?;
+    let mut seen = std::collections::HashSet::new();
+    let targets: Vec<String> = raw
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(str::to_string)
+        .filter(|t| seen.insert(t.clone()))
+        .collect();
+    if targets.is_empty() {
+        bail!("manifest {} lists no files", manifest.display());
+    }
+
+    // ── Multi-pattern byte prefilter: which manifest BASENAMES a transcript mentions. A
+    //    transcript matching none is skipped without parsing (the single-file prefilter,
+    //    generalized to the whole manifest in one Aho-Corasick pass). ──
+    let basenames: Vec<String> = targets.iter().map(|t| basename_of(t).to_string()).collect();
+    let ac = aho_corasick::AhoCorasick::new(&basenames)
+        .context("building the manifest basename matcher")?;
+
+    let when = args.at.clone().unwrap_or_default();
+    let turn_range = args
+        .turn_range
+        .as_deref()
+        .map(parse_turn_range)
+        .transpose()?;
+    let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
+
+    let session_files = path::resolve_session_files(
+        &args.paths,
+        args.session.as_deref(),
+        args.want_subagents().into(),
+        path::Caller::Other,
+    )?;
+    eprintln!(
+        "recover --files-from: {} file(s), scanning {} transcript(s) once…",
+        targets.len(),
+        session_files.len()
+    );
+
+    // ── ONE parse per transcript; extract every present target from its shared turn grouping. ──
+    let per_file: Vec<Vec<(usize, ScanResult)>> = session_files
+        .par_iter()
+        .map(|p| scan_one_file_multi(p, &targets, &ac))
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut by_target: Vec<Vec<ScanResult>> = (0..targets.len()).map(|_| Vec::new()).collect();
+    for file_results in per_file {
+        for (ti, sr) in file_results {
+            by_target[ti].push(sr);
+        }
+    }
+
+    // ── Reconstruct + write each target (the file's final state, honoring any window). ──
+    let mut outcomes: Vec<BatchOutcome> = Vec::with_capacity(targets.len());
+    for (ti, mut scans) in by_target.into_iter().enumerate() {
+        let target = targets[ti].clone();
+        for sr in &mut scans {
+            sr.events.retain(|e| {
+                window_admits(
+                    e.turn_index,
+                    e.timestamp_utc.as_deref(),
+                    turn_range,
+                    &time_window,
+                )
+            });
+        }
+        scans.retain(|s| !s.events.is_empty());
+        let Some((content, known, total)) = reconstruct_best(scans, &when)? else {
+            outcomes.push(BatchOutcome {
+                target,
+                status: "no-history",
+                known: 0,
+                total: 0,
+                written: None,
+            });
+            continue;
+        };
+        // Mirror the absolute path under out_dir (strip leading separators → safe join).
+        let dest = out_dir.join(target.trim_start_matches('/'));
+        if dest.exists() && !args.force {
+            outcomes.push(BatchOutcome {
+                target,
+                status: "skipped-exists",
+                known,
+                total,
+                written: None,
+            });
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("cannot create {}", parent.display()))?;
+        }
+        std::fs::write(&dest, &content)
+            .with_context(|| format!("cannot write {}", dest.display()))?;
+        let status = if total > 0 && known >= total {
+            "complete"
+        } else {
+            "partial"
+        };
+        outcomes.push(BatchOutcome {
+            target,
+            status,
+            known,
+            total,
+            written: Some(dest),
+        });
+    }
+
+    write_batch_report(out_dir, &outcomes)
+}
+
+/// Scan ONE transcript for ALL manifest targets it mentions: AC-gate, parse + turn-group once,
+/// then extract each present target. Returns `(target_index, ScanResult)` for every target with
+/// at least one event in this transcript.
+fn scan_one_file_multi(
+    path: &Path,
+    targets: &[String],
+    ac: &aho_corasick::AhoCorasick,
+) -> Result<Vec<(usize, ScanResult)>> {
+    let session_id = crate::subagent::session_id_from_path(path);
+    let is_subagent = crate::subagent::is_subagent_path(path);
+    let parent_session_id =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
+
+    let Some(mmap) = mmap_bytes(path)? else {
+        return Ok(Vec::new());
+    };
+    let bytes: &[u8] = &mmap;
+    if !ac.is_match(bytes) {
+        return Ok(Vec::new());
+    }
+    // Which manifest basenames appear (overlapping, so a basename that is a substring of
+    // another match region is still detected) → the targets worth extracting from this file.
+    let mut present: Vec<usize> = ac
+        .find_overlapping_iter(bytes)
+        .map(|m| m.pattern().as_usize())
+        .collect();
+    present.sort_unstable();
+    present.dedup();
+
+    let (records, skipped) =
+        crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
+    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
+    let turns = group_turn_indices_deduped(&recs, |r| *r);
+
+    let mut out = Vec::new();
+    for ti in present {
+        let events = extract_with_turns(&records, &turns, Some(&targets[ti]));
+        if !events.is_empty() {
+            out.push((
+                ti,
+                ScanResult {
+                    session_id: session_id.clone(),
+                    is_subagent,
+                    parent_session_id: parent_session_id.clone(),
+                    events,
+                    skipped_lines: skipped,
+                },
+            ));
+        }
+    }
+    Ok(out)
+}
+
+/// Reconstruct a target's FINAL content (or its `--at`/window snapshot) as RAW bytes — the
+/// restorable file, not the line-numbered diff view. Cross-session writes are merged per
+/// top-level group; when unrelated sessions each hold a version, the FRESHEST (latest-write)
+/// candidate wins. Returns `(content, known_lines, total_lines)`, or `None` when nothing is
+/// recoverable. A partial reconstruction (`known < total`) joins the known lines in order.
+fn reconstruct_best(scans: Vec<ScanResult>, when: &str) -> Result<Option<(String, usize, usize)>> {
+    let merged = merge_groups_for_reconstruction(scans);
+    let mut best: Option<(String, usize, usize, Option<String>)> = None;
+    for s in &merged {
+        if s.events.is_empty() {
+            continue;
+        }
+        let cutoff = resolve_cutoff(when, &s.events)?;
+        let rep = replay(&s.events, cutoff);
+        let known = rep.final_buffer.known_lines();
+        if known.is_empty() {
+            continue;
+        }
+        let total = rep
+            .final_buffer
+            .seen_total_lines
+            .unwrap_or_else(|| known.last().map(|(n, _)| *n).unwrap_or(0));
+        let latest_ts = s
+            .events
+            .iter()
+            .filter_map(|e| e.timestamp_utc.clone())
+            .max();
+        let mut content = known
+            .iter()
+            .map(|(_, t)| t.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !content.is_empty() {
+            content.push('\n');
+        }
+        let fresher = match &best {
+            None => true,
+            Some((_, bk, _, bts)) => (&latest_ts, known.len()) > (bts, *bk),
+        };
+        if fresher {
+            best = Some((content, known.len(), total, latest_ts));
+        }
+    }
+    Ok(best.map(|(c, k, t, _)| (c, k, t)))
+}
+
+/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary.
+fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> Result<()> {
+    std::fs::create_dir_all(out_dir)
+        .with_context(|| format!("cannot create {}", out_dir.display()))?;
+    let mut body = String::from("status\tknown_lines\ttotal_lines\ttarget\twritten_to\n");
+    let (mut complete, mut partial, mut none, mut skipped) = (0usize, 0usize, 0usize, 0usize);
+    for o in outcomes {
+        match o.status {
+            "complete" => complete += 1,
+            "partial" => partial += 1,
+            "no-history" => none += 1,
+            "skipped-exists" => skipped += 1,
+            _ => {}
+        }
+        body.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\n",
+            o.status,
+            o.known,
+            o.total,
+            o.target,
+            o.written
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default()
+        ));
+    }
+    let report = out_dir.join("recovery-report.tsv");
+    std::fs::write(&report, &body).with_context(|| format!("cannot write {}", report.display()))?;
+    println!(
+        "recovered {} file(s): {complete} complete · {partial} partial · {none} no-history · \
+         {skipped} skipped (already present)",
+        outcomes.len()
+    );
+    println!("report: {}", report.display());
+    Ok(())
+}
+
 /// True when an event at `turn_index` / `ts` is admitted by the active window.
 /// A timestamp-less item never falls inside a BOUNDED time window (same rule as `files`).
 fn window_admits(
@@ -334,6 +629,26 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
         });
     };
     let bytes: &[u8] = &mmap;
+
+    // ── File-level prefilter (the dominant cost of an UNSCOPED recover). A transcript that
+    //    never mentions the target's BASENAME holds no events for it: every Read/Edit/Write/Bash
+    //    op and result `extract` replays carries the path literal somewhere in that transcript,
+    //    and `extract` matches by full path OR basename-suffix — so the basename is the correct
+    //    SUPERSET gate. One SIMD `memmem` over the mmap lets us skip PARSING the file entirely,
+    //    turning an unscoped recover from a whole-corpus JSON parse into a parse of only the few
+    //    transcripts that touched the file. (No target ⇒ no gate; behaviour unchanged.)
+    if let Some(t) = target_file {
+        let base = t.rsplit('/').next().unwrap_or(t);
+        if !base.is_empty() && memmem::find(bytes, base.as_bytes()).is_none() {
+            return Ok(ScanResult {
+                session_id,
+                is_subagent,
+                parent_session_id,
+                events: Vec::new(),
+                skipped_lines: 0,
+            });
+        }
+    }
 
     // Parse all recover-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool),
     // preserving each record's exact 1-based line number (counts EVERY visited line, 1:1 with
@@ -385,7 +700,17 @@ fn extract(records: &[(usize, Record)], target_file: Option<&str>) -> Vec<FileEv
     // tool-use rejection-with-message opens a turn, an interrupt / local-command-stdout
     // does not.
     let turns = group_turn_indices_deduped(&recs, |r| *r);
+    extract_with_turns(records, &turns, target_file)
+}
 
+/// Extract `--file` events given PRE-COMPUTED turn groups. Batch reconstruction groups each
+/// transcript ONCE and calls this per target, so a transcript mentioning many manifest files
+/// is grouped a single time rather than once per file.
+fn extract_with_turns(
+    records: &[(usize, Record)],
+    turns: &[Vec<usize>],
+    target_file: Option<&str>,
+) -> Vec<FileEvent> {
     let mut events: Vec<FileEvent> = Vec::new();
 
     for (turn_index, idxs) in turns.iter().enumerate() {

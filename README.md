@@ -236,6 +236,18 @@ no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`
 modes. A SUBAGENT transcript surfaces as `SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never
 a bare-hex `SESSION`).
 
+**Batch (`--files-from <manifest>` + `--out-dir <dir>`).** Recovering many files (a nuked `/tmp`) one-by-one
+re-parses the same huge transcripts on every call. Batch mode lists the absolute target paths in a manifest
+and walks the corpus ONCE — an Aho-Corasick of all basenames gates each transcript, and a matched transcript
+is parsed + turn-grouped a single time, extracting every listed file it touched. Each is written to
+`<out-dir>/<abs-path>` as raw restorable bytes (its final state) with a `recovery-report.tsv`; `--force`
+overwrites existing outputs. (The single-file path also gained a basename prefilter, so even one
+`recover --file` only fully parses the transcripts that touched the file.)
+
+```bash
+csift recover --files-from nuked-files.txt --out-dir /restore   # batch: every listed file in ONE corpus scan
+```
+
 ```bash
 csift recover . --file /abs/PLAN.md --coverage                 # scope first: covered ranges + boundaries
 csift recover <uuid> --file /abs/app.py --patches              # segmented unified diffs

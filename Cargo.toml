@@ -29,6 +29,7 @@ jiff = "0.2"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "color_quant"] }
 webp = "0.3.1"
 color_quant = "1.1.0"
+aho-corasick = "1.1.4"
 
 [dev-dependencies]
 # Installs a git pre-commit hook on first `cargo test`/build that runs the same
