@@ -14,7 +14,7 @@ Project-specific operating manual for any AI agent (Claude Code, Codex, Cursor) 
 
 - **Primary consumer is an LLM** — a Claude Code agent searching/recovering its own or a peer session. Output must be clean, token-efficient, and regex-driven. Default output is human/LLM-readable with clear session/turn/category/timestamp headers; `--json` is the machine format.
 - **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
-- **Subcommands:** `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `image`. `list`/`search`/`files`/`recover`/`turns`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `agents` reports a session's subagent lifecycle (kind / start / completion / status), with `--since`/`--until` + `--by start|completion` window filters. `recover --file @plan` reconstructs the session-bound plan file; `plan` locates it (via the `plan_mode` attachment). `image` lists + extracts the inline base64 images a session carries — addressed by the `#N` handle the session uses (or the exact `L<line>i<n>` locator), `--out <dir>` decodes to files; `turns`/`search` surface the ids inline. An ambiguous `#N` (CC reuses them across prompts) errors with the occurrence list — disambiguate via the locator or `--since`/`--turn-range`/`--uuid`; `--as png|jpeg|gif|webp` converts on extract. See SPEC §6.5–6.9.
+- **Subcommands:** `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `image`. `list`/`search`/`files`/`recover`/`turns`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `agents` reports a session's subagent lifecycle (kind / start / completion / status), with `--since`/`--until` + `--by start|completion` window filters. `recover --file @plan` reconstructs the session-bound plan file; `plan` locates it (via the `plan_mode` attachment). `image` lists + extracts the inline base64 images a session carries — addressed by the `#N` handle the session uses (or the exact `L<line>i<n>` locator), `--out <dir>` decodes to files; `turns`/`search` surface the ids inline. An ambiguous `#N` (CC reuses them across prompts) errors with the occurrence list — disambiguate via the locator or `--since`/`--turn-range`/`--uuid`; the `--out` PATH extension drives the format (a `.jpg`/`.gif`/`.webp` file converts a single image, a directory keeps source formats). See SPEC §6.5–6.9.
 
 ---
 
@@ -36,7 +36,7 @@ No CI service runs here; the pre-commit hook (§5) is the entire quality gate.
 | Parallel | `rayon` | Fan-out across many session files |
 | Errors | `anyhow` | Error chains surfaced on stderr; no `unwrap` in lib paths |
 | Date/TZ | `jiff` | ISO8601 parse + system-local timezone render alongside raw UTC (auto-detected via `TimeZone::system()`) |
-| Images | `image` (features `png`/`jpeg`/`gif`/`webp` only) | `image --as <fmt>` transcoding (decode + re-encode the four Claude-API image types; webp encode is pure-Rust lossless). The one heavyweight dep — only `image.rs` touches it |
+| Images | `image` (features `png`/`jpeg`/`gif`/`webp`/`color_quant`) + `webp` (libwebp) + `color_quant` | `image --out <file.ext>` transcoding: decode any of the four Claude-API types via `image`; re-encode png/jpeg(q90)/gif(Floyd-Steinberg dithered, NeuQuant palette) via `image`, and webp(q90 lossy) via libwebp (the `webp` crate). The heavyweight deps — only `image.rs` touches them |
 | Hooks | `cargo-husky` (dev-dep, `user-hooks`) | Installs the pre-commit gate |
 
 Versions are pinned by `^`-range in `Cargo.toml` + `Cargo.lock`. **Do not bump majors without an explicit reason.**
@@ -166,7 +166,7 @@ src/whoami.rs    # `whoami`: CLAUDE_CODE_SESSION_ID detection, false-positive-sa
 src/recover.rs   # `recover`: file-content reconstruction (--patches/--at/--coverage) + the `--file @plan` sigil
 src/plan.rs      # `plan`: plan-file binding resolver (the `plan_mode` attachment) + shared @plan resolution
 src/turns.rs     # `turns`: turn-fidelity reconstruction of a compaction-clipped exchange
-src/image.rs     # `image`: list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error + --since/--turn-range/--uuid disambiguators; --as transcode via image crate)
+src/image.rs     # `image`: list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error + --since/--turn-range/--uuid disambiguators; --out extension-driven transcode via image + libwebp)
 ```
 The CLI entrypoint is `cli::parse_argv` (NOT `Cli::parse`): it runs an argv-normalization pass (`cli::normalize_argv`) so a `--format`/`--kind`/… flag works in ANY position relative to a leading-`-` encoded project target — fixes clap's `allow_hyphen_values` greedy-absorb bug (#3880) with zero-drift flag discovery via clap introspection.
 

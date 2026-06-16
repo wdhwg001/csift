@@ -874,18 +874,20 @@ it is recoverable straight from the jsonl. Address an image two ways:
 - **`L<line>i<n>`** — the exact locator (carrying record's JSONL line + ordinal of the image within it),
   always unambiguous; use it to pin one specific occurrence.
 
-`--out <dir>` decodes the (selected) images to real files (`<session-short>[-img<N>]-L<line>i<n>.<ext>`,
-extension read per-image from its media type — **never assumed PNG**). `--as png|jpeg|gif|webp` forces the
-output format: a different source is **converted, not rejected** (→jpeg lossy q90, →gif palette, →webp
-lossless; an animated GIF → still keeps its first frame + warns). The bare LISTING is content-deduped (a
-re-injected image shows once). Default is to LIST. Spans subagents by default; `--no-subagents` to restrict.
+`--out <path>` decodes the (selected) images to real files. The path's EXTENSION drives the format (the
+`convert in out.jpg` idiom): a **directory** (no image extension) writes each `<session-short>[-img<N>]-
+L<line>i<n>.<ext>` in its SOURCE format (per-image media type — **never assumed PNG**); a **file** path
+with a `png`/`jpg`/`gif`/`webp` extension writes the single selected image to it, **converting** if the
+format differs (→jpeg lossy q90, →gif dithered palette, →webp lossy q90 via libwebp; an animated GIF →
+a still format keeps its first frame + warns). The bare LISTING is content-deduped. Default is to LIST.
+Spans subagents by default; `--no-subagents` to restrict.
 
 ```bash
 csift image <id>                                  # list (deduped): id · media-type · ~size · time
-csift image <id> --out /tmp/imgs                  # extract ALL images to a dir (source formats)
+csift image <id> --out /tmp/imgs                  # extract ALL to a DIR (source formats, auto-named)
 csift image <id> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
 csift image <id> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1 by time
-csift image <id> --no-subagents --id L6812i2 --as jpeg --out /tmp/imgs   # pin one occurrence + convert
+csift image <id> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image to a FILE → convert
 csift image . --format json                       # one object per image + a trailing summary
 ```
 

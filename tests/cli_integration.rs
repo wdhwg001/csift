@@ -9013,46 +9013,75 @@ fn image_hash_n_disambiguators_resolve_to_one() {
 }
 
 #[test]
-fn image_as_converts_source_format_never_errors() {
-    // `--as <fmt>` transcodes a source in a different format (never rejects it). Verify each
-    // target writes the right magic bytes; `--as png` on a PNG source is a raw passthrough.
+fn image_converts_by_out_path_extension() {
+    // The --out path's EXTENSION drives the format (the `convert in out.jpg` idiom): a single
+    // image written to a file with a recognized image extension is CONVERTED to it; a png source
+    // → a .png path is a raw passthrough. There is no separate `--as` flag.
     let h = image_home(); // r0 L1i1 is a real PNG.
     let png_magic = &[0x89u8, b'P', b'N', b'G'][..];
-    for (fmt, ext, magic, len) in [
-        ("jpeg", "jpg", &[0xFFu8, 0xD8, 0xFF][..], 3usize),
-        ("gif", "gif", &b"GIF8"[..], 4),
-        ("webp", "webp", &b"RIFF"[..], 4),
-        ("png", "png", png_magic, 4),
+    for (ext, magic, len) in [
+        ("jpg", &[0xFFu8, 0xD8, 0xFF][..], 3usize),
+        ("gif", &b"GIF8"[..], 4),
+        ("webp", &b"RIFF"[..], 4),
+        ("png", png_magic, 4),
     ] {
-        let dir = h.root.join(format!("as_{fmt}"));
+        let f = h.root.join(format!("shot.{ext}"));
         let out = h.run(&[
             "image",
             SESS,
             "--no-subagents",
             "--id",
             "L1i1",
-            "--as",
-            fmt,
             "--out",
-            dir.to_str().unwrap(),
+            f.to_str().unwrap(),
         ]);
-        assert!(out.success, "--as {fmt} stderr: {}", out.stderr);
-        let f = dir.join(format!("0a1b2c3d-L1i1.{ext}"));
+        assert!(out.success, ".{ext} stderr: {}", out.stderr);
         let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
-        assert_eq!(
-            &bytes[..len],
-            magic,
-            "--as {fmt} produced wrong magic bytes"
-        );
+        assert_eq!(&bytes[..len], magic, ".{ext} produced wrong magic bytes");
     }
-    // WebP also carries the "WEBP" fourcc at offset 8.
-    let wf = h.root.join("as_webp/0a1b2c3d-L1i1.webp");
-    let wb = std::fs::read(&wf).unwrap();
+    // WebP carries the "WEBP" fourcc at offset 8 (lossy VP8, via libwebp).
+    let wb = std::fs::read(h.root.join("shot.webp")).unwrap();
     assert_eq!(&wb[8..12], b"WEBP");
+
+    // A single-file path with >1 image selected is an error (can't write many to one file).
+    let many = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--out",
+        h.root.join("x.png").to_str().unwrap(),
+    ]);
+    assert!(
+        !many.success,
+        "single file + many images must error: {}",
+        many.stdout
+    );
+    assert!(
+        many.stderr.contains("single") && many.stderr.contains("directory"),
+        "error names the file/dir distinction: {}",
+        many.stderr
+    );
+
+    // A directory path (no image extension) keeps the SOURCE format, auto-named — no conversion.
+    let dir = h.root.join("imgs");
+    let d = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "L1i1",
+        "--out",
+        dir.to_str().unwrap(),
+    ]);
+    assert!(d.success, "stderr: {}", d.stderr);
+    assert!(
+        dir.join("0a1b2c3d-L1i1.png").exists(),
+        "source-format auto-name in the directory"
+    );
 }
 
 #[test]
-fn image_as_animated_gif_takes_first_frame_with_warning() {
+fn image_animated_gif_to_still_takes_first_frame() {
     let h = Home::new();
     let r0 = serde_json::json!({
         "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
@@ -9063,18 +9092,16 @@ fn image_as_animated_gif_takes_first_frame_with_warning() {
     });
     h.write(&format!("{ENC}/{SESS}.jsonl"), &format!("{r0}\n"));
 
-    // Converting an animated GIF to a still PNG keeps the FIRST frame + warns (frames + seconds).
-    let dir = h.root.join("frame");
+    // A .png out path flattens the animated GIF to a still → FIRST frame + a warning (frames + s).
+    let f = h.root.join("frame.png");
     let out = h.run(&[
         "image",
         SESS,
         "--no-subagents",
         "--id",
         "#1",
-        "--as",
-        "png",
         "--out",
-        dir.to_str().unwrap(),
+        f.to_str().unwrap(),
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -9082,25 +9109,22 @@ fn image_as_animated_gif_takes_first_frame_with_warning() {
         "first-frame warning with frame count:\n{}",
         out.stdout
     );
-    let f = dir.join("0a1b2c3d-img1-L1i1.png");
-    let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
+    let bytes = std::fs::read(&f).unwrap();
     assert_eq!(
         &bytes[..8],
         &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
     );
 
-    // `--as gif` (same format) is a raw passthrough — the animation is preserved, no warning.
-    let dir2 = h.root.join("keep");
+    // A .gif out path (same format as source) is a raw passthrough — animation preserved, no warning.
+    let g = h.root.join("keep.gif");
     let keep = h.run(&[
         "image",
         SESS,
         "--no-subagents",
         "--id",
         "#1",
-        "--as",
-        "gif",
         "--out",
-        dir2.to_str().unwrap(),
+        g.to_str().unwrap(),
     ]);
     assert!(keep.success, "stderr: {}", keep.stderr);
     assert!(
@@ -9108,8 +9132,8 @@ fn image_as_animated_gif_takes_first_frame_with_warning() {
         "no flatten note: {}",
         keep.stdout
     );
-    let g = std::fs::read(dir2.join("0a1b2c3d-img1-L1i1.gif")).unwrap();
-    assert_eq!(&g[..4], b"GIF8");
+    let gb = std::fs::read(&g).unwrap();
+    assert_eq!(&gb[..4], b"GIF8");
 }
 
 #[test]

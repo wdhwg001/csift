@@ -432,9 +432,9 @@ pub enum OutputFormat {
     Json,
 }
 
-/// The four image formats the Claude API accepts — the only valid `image --as` targets, and
-/// the only formats a transcript's inline images are ever stored in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+/// The four image formats the Claude API accepts — the only `image --out <file.ext>` conversion
+/// targets, and the only formats a transcript's inline images are ever stored in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageOutFormat {
     Png,
     Jpeg,
@@ -443,6 +443,19 @@ pub enum ImageOutFormat {
 }
 
 impl ImageOutFormat {
+    /// The output format implied by an `--out` path EXTENSION (case-insensitive), or `None` when
+    /// the extension isn't one of the four image types (⇒ the path is treated as a directory).
+    #[must_use]
+    pub fn from_ext(ext: &str) -> Option<Self> {
+        match ext.to_ascii_lowercase().as_str() {
+            "png" => Some(ImageOutFormat::Png),
+            "jpg" | "jpeg" => Some(ImageOutFormat::Jpeg),
+            "gif" => Some(ImageOutFormat::Gif),
+            "webp" => Some(ImageOutFormat::Webp),
+            _ => None,
+        }
+    }
+
     /// The lower-case file extension for this format.
     #[must_use]
     pub fn ext(self) -> &'static str {
@@ -1585,19 +1598,16 @@ pub struct ImageArgs {
     #[arg(long, value_name = "UUID")]
     pub uuid: Option<String>,
 
-    /// EXTRACT mode: decode each (selected) image and write it to this directory as
-    /// `<session>[-img<N>]-L<line>i<n>.<ext>` (created if absent). Without `--out`, `image`
-    /// only LISTS.
-    #[arg(long, value_name = "DIR")]
+    /// EXTRACT — decode the selected image(s) to this PATH. The path's EXTENSION drives the
+    /// format (the `convert in.png out.jpg` idiom): a **directory** (or any path WITHOUT an
+    /// `png`/`jpg`/`jpeg`/`gif`/`webp` extension) writes each image auto-named
+    /// `<session>[-img<N>]-L<line>i<n>.<ext>` in its SOURCE format; a path WITH one of those
+    /// extensions writes the (single) selected image to exactly that file, CONVERTING to that
+    /// format if it differs from the source (→jpeg lossy q90, →gif dithered palette, →webp lossy
+    /// q90; an animated GIF → a still format yields its first frame + a warning). Without
+    /// `--out`, `image` only LISTS.
+    #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
-
-    /// Force the EXTRACT output format (`png`/`jpeg`/`gif`/`webp` — the four Claude API image
-    /// types). Absent = keep the source format (auto-infer; the written path + inferred
-    /// extension are echoed). A forced format different from the source is CONVERTED, not
-    /// rejected: →jpeg is lossy (quality 90), →gif is palette-quantized, →webp is lossless; an
-    /// animated GIF converted to a still format yields its first frame (with a warning).
-    #[arg(long = "as", value_name = "FORMAT", value_enum)]
-    pub as_format: Option<ImageOutFormat>,
 
     /// Subagent span is ON BY DEFAULT (a tool screenshot may live in a subagent transcript);
     /// this flag is an explicit no-op. The REAL control is `--no-subagents`.

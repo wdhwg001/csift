@@ -10,7 +10,8 @@
 //! transcript is append-only, and it is consistent with the `Lnnnnn` line references used
 //! across `recover` / `turns` / `search` (so an id surfaced there feeds straight back here).
 //!
-//! Default action is to LIST. Pass `--out <DIR>` to EXTRACT (decode → write `<DIR>/<file>`).
+//! Default action is to LIST. Pass `--out <PATH>` to EXTRACT — a DIRECTORY keeps each image's
+//! source format; a FILE path's extension converts to that format (the `convert in out.jpg` idiom).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -97,7 +98,7 @@ impl ImageRef {
     /// `<session-short>[-img<N>]-L<line>i<n>.<ext>` — carries the `#N` when known (so the file
     /// is recognizable as "image #32") and stays unique via the `L<line>i<n>` locator, so a
     /// multi-image / multi-transcript `--out` extraction never collides. `ext` is the source
-    /// extension by default, or the `--as` target's when a conversion was requested.
+    /// extension by default, or the `--out` file path's when its extension converts the format.
     fn out_filename_with_ext(&self, ext: &str) -> String {
         let short = self.session_id.get(..8).unwrap_or(&self.session_id);
         match self.seq {
@@ -141,7 +142,7 @@ fn est_decoded_len(b64: &str) -> usize {
 /// Decode standard-alphabet base64 (padding + embedded whitespace tolerated). Returns `None`
 /// on an invalid character — so a malformed image is REPORTED, never silently written wrong.
 /// Hand-rolled (~30 lines) to avoid pulling a base64 crate just for this; the `image` crate is
-/// the one heavyweight dependency, justified by the `--as` transcoding it alone can do.
+/// the one heavyweight dependency, justified by the format transcoding it alone can do.
 fn decode_base64(s: &str) -> Option<Vec<u8>> {
     fn sextet(c: u8) -> Option<u32> {
         match c {
@@ -706,8 +707,8 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     }
 }
 
-/// The `--as` target format (or the source format) → an [`ImageOutFormat`]. `None` for a
-/// media type outside the four Claude-API image types (shouldn't occur — CC only stores those).
+/// A source `media_type` → an [`ImageOutFormat`]. `None` for a media type outside the four
+/// Claude-API image types (shouldn't occur — CC only stores those).
 fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {
     match mt {
         "image/png" => Some(ImageOutFormat::Png),
@@ -762,50 +763,95 @@ fn convert_image(bytes: &[u8], target: ImageOutFormat) -> Result<(Vec<u8>, Vec<S
     };
 
     let mut out = Vec::new();
-    {
-        let mut cur = std::io::Cursor::new(&mut out);
-        match target {
-            ImageOutFormat::Png => {
-                img.write_to(&mut cur, image::ImageFormat::Png)
-                    .context("encode png")?;
+    match target {
+        ImageOutFormat::Png => {
+            img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+                .context("encode png")?;
+        }
+        ImageOutFormat::Jpeg => {
+            // JPEG has no alpha → flatten to RGB; quality fixed at 90.
+            let rgb = img.to_rgb8();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(
+                &mut std::io::Cursor::new(&mut out),
+                90,
+            )
+            .encode_image(&rgb)
+            .context("encode jpeg")?;
+            notes.push("lossy re-encode (jpeg quality 90)".to_string());
+        }
+        ImageOutFormat::Gif => {
+            // Build a ≤256-color palette (NeuQuant) and Floyd-Steinberg dither INTO it before
+            // encoding, so a photographic source doesn't band. `image`'s dither diffuses error to
+            // x+1 unconditionally → it panics on a 1px-wide buffer; a sub-2px image has nothing to
+            // dither anyway, so skip it there (the encoder still quantizes) and never crash.
+            let mut rgba = img.to_rgba8();
+            let dithered = rgba.width() >= 2 && rgba.height() >= 2;
+            if dithered {
+                let nq = color_quant::NeuQuant::new(10, 256, rgba.as_raw());
+                image::imageops::colorops::dither(&mut rgba, &nq);
             }
-            ImageOutFormat::Jpeg => {
-                // JPEG has no alpha → flatten to RGB; quality fixed at 90.
-                let rgb = img.to_rgb8();
-                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cur, 90)
-                    .encode_image(&rgb)
-                    .context("encode jpeg")?;
-                notes.push("lossy re-encode (jpeg quality 90)".to_string());
-            }
-            ImageOutFormat::Gif => {
-                image::codecs::gif::GifEncoder::new(&mut cur)
-                    .encode_frame(image::Frame::new(img.to_rgba8()))
-                    .context("encode gif")?;
-                notes.push("quantized to a ≤256-color palette".to_string());
-            }
-            ImageOutFormat::Webp => {
-                // The pure-Rust webp encoder is LOSSLESS only (no quality knob, larger files).
-                img.write_to(&mut cur, image::ImageFormat::WebP)
-                    .context("encode webp")?;
-                notes.push("lossless re-encode (webp)".to_string());
-            }
+            image::codecs::gif::GifEncoder::new(&mut std::io::Cursor::new(&mut out))
+                .encode_frame(image::Frame::new(rgba))
+                .context("encode gif")?;
+            notes.push(
+                if dithered {
+                    "dithered to a ≤256-color palette"
+                } else {
+                    "quantized to a ≤256-color palette"
+                }
+                .to_string(),
+            );
+        }
+        ImageOutFormat::Webp => {
+            // libwebp (the `webp` crate) — proper lossy quality-90, not a lossless-only fallback.
+            let rgba = img.to_rgba8();
+            let (w, h) = (rgba.width(), rgba.height());
+            out = webp::Encoder::from_rgba(rgba.as_raw(), w, h)
+                .encode(90.0)
+                .to_vec();
+            notes.push("lossy re-encode (webp quality 90)".to_string());
         }
     }
     Ok((out, notes))
 }
 
-/// Decode + write each selected image to `out_dir`. With `--as <fmt>` a source in a different
-/// format is CONVERTED (never rejected); without it the original bytes are written under the
-/// source-inferred extension. Reports every written path + size + any conversion note; a
-/// decode/IO failure is surfaced (never a silent or partial-wrong file).
+/// Decode + write the selected image(s) to `out_path`. The path's EXTENSION drives the format
+/// (the `convert in out.jpg` idiom): a path WITH a `png`/`jpg`/`jpeg`/`gif`/`webp` extension is a
+/// single-FILE target in that format (the one selected image is CONVERTED to it if it differs);
+/// any other path is a DIRECTORY, each image auto-named in its SOURCE format. A decode/IO failure
+/// is surfaced (never a silent or partial-wrong file).
 fn extract(
     selected: &[&ImageRef],
-    out_dir: &Path,
+    out_path: &Path,
     args: &ImageArgs,
     skipped_lines: usize,
 ) -> Result<()> {
-    std::fs::create_dir_all(out_dir)
-        .with_context(|| format!("cannot create output dir {}", out_dir.display()))?;
+    let file_target = out_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(ImageOutFormat::from_ext);
+
+    if let Some(t) = file_target {
+        // One file ⇒ exactly one image; create the parent dir (the path itself is the file).
+        if selected.len() != 1 {
+            bail!(
+                "--out {} is a single {} file, but {} image(s) are selected — give a directory \
+                 (a path with no image extension) to extract many, or narrow `--id` to one",
+                out_path.display(),
+                t.ext(),
+                selected.len()
+            );
+        }
+        if let Some(parent) = out_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("cannot create {}", parent.display()))?;
+            }
+        }
+    } else {
+        std::fs::create_dir_all(out_path)
+            .with_context(|| format!("cannot create output dir {}", out_path.display()))?;
+    }
 
     let mut written = 0usize;
     let mut skipped_url = 0usize;
@@ -829,26 +875,22 @@ fn extract(
             .with_context(|| format!("{}: base64 decode failed (corrupt data)", img.id()))?;
 
         let src_fmt = format_of_media_type(&img.media_type);
-        // (bytes, extension, output media type, conversion notes).
+        // FILE mode → convert to the path's format (raw if it already matches, keeping an animated
+        // GIF animated); DIR mode → keep the source format (the "auto"/no-conversion path).
         let (out_bytes, out_ext, out_media, notes): (Vec<u8>, String, String, Vec<String>) =
-            match args.as_format {
-                // Auto-infer: keep the source bytes + source extension (the written path, with the
-                // inferred extension, is echoed below so the caller sees what it got).
+            match file_target {
                 None => (
                     bytes,
                     img.ext().to_string(),
                     img.media_type.clone(),
                     Vec::new(),
                 ),
-                // Forced format == source: no transcode, write the original bytes (this keeps an
-                // animated GIF animated).
                 Some(t) if src_fmt == Some(t) => (
                     bytes,
                     t.ext().to_string(),
                     t.media_type().to_string(),
                     Vec::new(),
                 ),
-                // Forced format != source: convert.
                 Some(t) => {
                     let (conv, notes) = convert_image(&bytes, t).with_context(|| {
                         format!(
@@ -862,7 +904,11 @@ fn extract(
                 }
             };
 
-        let path = out_dir.join(img.out_filename_with_ext(&out_ext));
+        let path = if file_target.is_some() {
+            out_path.to_path_buf()
+        } else {
+            out_path.join(img.out_filename_with_ext(&out_ext))
+        };
         std::fs::write(&path, &out_bytes)
             .with_context(|| format!("cannot write {}", path.display()))?;
         match args.format {
@@ -875,7 +921,7 @@ fn extract(
                         "bytes": out_bytes.len(),
                         "media_type": out_media,
                         "source_media_type": img.media_type,
-                        "converted": args.as_format.is_some() && src_fmt != args.as_format,
+                        "converted": file_target.is_some() && src_fmt != file_target,
                         "notes": notes,
                         "session_id": img.session_id, "is_subagent": img.is_subagent,
                         "parent_session_id": img.parent_session_id,
@@ -906,7 +952,12 @@ fn extract(
         written += 1;
     }
     if matches!(args.format, OutputFormat::Text) {
-        let mut tail = format!("extracted {written} image(s) to {}", out_dir.display());
+        let dest = if file_target.is_some() {
+            String::new()
+        } else {
+            format!(" to {}", out_path.display())
+        };
+        let mut tail = format!("extracted {written} image(s){dest}");
         if skipped_url > 0 {
             tail.push_str(&format!(" · {skipped_url} url image(s) skipped"));
         }
@@ -1041,7 +1092,7 @@ mod tests {
         r.img_index = 2;
         assert_eq!(r.id(), "L6812i2");
         assert_eq!(r.out_filename_with_ext(r.ext()), "0a1b2c3d-L6812i2.png");
-        // A `--as`-converted target overrides only the extension, keeping the unique locator.
+        // A converted target overrides only the extension, keeping the unique locator.
         assert_eq!(r.out_filename_with_ext("jpg"), "0a1b2c3d-L6812i2.jpg");
         assert_eq!(r.ext(), "png");
     }

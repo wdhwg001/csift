@@ -438,18 +438,20 @@ it is recoverable straight from the JSONL — no hand-parsing. Two ways to addre
 - **`L<line>i<n>`** — the exact locator (carrying record's JSONL line + ordinal within it), always
   unambiguous; pins one specific occurrence.
 
-`--out <dir>` decodes each selected image back to a real file (`<session-short>[-img<N>]-L<line>i<n>.<ext>`,
-extension read per-image from its media type — **not** assumed PNG). `--as png|jpeg|gif|webp` forces the
-output format: a different source is **converted** (→jpeg lossy q90, →gif palette, →webp lossless; an
-animated GIF → still keeps its first frame + warns), never rejected. The bare listing is content-deduped.
-Default is to LIST; spans subagents by default. A `url`-source image is reported, never fabricated.
+`--out <path>` decodes each selected image back to a real file. The path's EXTENSION drives the format
+(the `convert in out.jpg` idiom): a **directory** (no image extension) writes each `<session-short>[-img<N>]-
+L<line>i<n>.<ext>` in its SOURCE format (per-image media type — **not** assumed PNG); a **file** path with a
+`png`/`jpg`/`gif`/`webp` extension writes the single selected image to it, **converting** if the format
+differs (→jpeg lossy q90, →gif dithered palette, →webp lossy q90 via libwebp; an animated GIF → a still
+format keeps its first frame + warns), never rejected. The bare listing is content-deduped. Default is to
+LIST; spans subagents by default. A `url`-source image is reported, never fabricated.
 
 ```bash
 csift image <uuid>                                # list (deduped): id · media-type · ~size · time
-csift image <uuid> --out /tmp/imgs                # extract ALL images to a dir (source formats)
+csift image <uuid> --out /tmp/imgs                # extract ALL to a DIR (source formats, auto-named)
 csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
 csift image <uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1 by time
-csift image <uuid> --no-subagents --id L6812i2 --as jpeg --out /tmp/imgs   # pin one occurrence + convert
+csift image <uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image to a FILE → convert
 csift image . --format json                       # one object per image + a trailing summary
 ```
 
@@ -473,7 +475,7 @@ src/
   plan.rs          # plan-file binding resolver + `plan` subcommand
   turns.rs         # turn-fidelity reconstruction (budget + richness model)
   turns/tests.rs   # turns unit tests
-  image.rs         # list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error; --as transcode)
+  image.rs         # list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error; --out extension-driven transcode)
 tests/
   cli_integration.rs  # end-to-end tests against the compiled binary
 ```
