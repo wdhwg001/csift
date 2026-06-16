@@ -1,12 +1,12 @@
 # SPEC.md — csift
 
-> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. It merges the original project brief with empirically-verified research (real `~/.claude/projects` data, 51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records). **Where the research contradicted the brief, the research wins — each correction is called out inline as `[CORRECTION]`.** All eight subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
+> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. It merges the original project brief with empirically-verified research (real `~/.claude/projects` data, 51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records). **Where the research contradicted the brief, the research wins — each correction is called out inline as `[CORRECTION]`.** All nine subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
 
 ---
 
 ## 0. Mission & non-negotiables
 
-**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Subcommands: `list`, `search`, `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1). `list`/`search`/`files`/`recover` span each session's subagent transcripts by default (`--no-subagents` opts out).
+**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Subcommands: `list`, `search`, `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `image` (list + extract the images a session carries, §6.9). `list`/`search`/`files`/`recover`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out).
 
 - **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--json` for machine use.
 - **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
@@ -77,6 +77,14 @@ pub fn encode_cwd(cwd: &Path) -> String {
         .collect()
 }
 ```
+
+**Two more rules CC applies that the naive encoding above omits (verified against the cleanroom `sanitizePath` AND the shipping binary `Siq`, 2026-06-16):**
+
+1. **Canonicalization first.** CC encodes the cwd's **`realpath` + Unicode-NFC** form (`canonicalizePath`), not the raw string — so `/tmp`↔`/private/tmp` symlinks and NFC/NFD variants *converge* to one dir. csift's `absolutize` does the realpath (`canonicalize`) but **not** NFC; for an all-ASCII path (the overwhelming case) this is identical, and a non-ASCII byte encodes to `-` either way — the only divergence is the dash COUNT for an NFD-decomposed non-ASCII path (an accepted, documented edge gap).
+
+2. **200-char cap + hash (`MAX_SANITIZED_LENGTH = 200`).** If the encoded string exceeds 200 chars, CC stores the dir as **`<first-200>-<hash>`** — `Bun.hash` on the CLI, a djb2 variant in the SDK (so the SAME path gets DIFFERENT suffixes depending on which wrote it). Because the suffix is not reconstructible, CC's own `findProjectDir` does **not** recompute it — it **prefix-scans** the projects root for a dir starting with `<first-200>-`. `resolve_target` mirrors this exactly (§2.3 step 3). `encode_cwd` itself stays the *raw* full encoding (it also feeds the §2.4 cross-check); the cap lives in the lookup.
+
+**Collision is REAL and CC does NOT disambiguate it (for ≤200-char paths).** The map is many-to-one, so two *different* cwds can encode to the *same* dir — e.g. `/Users/x/Projects/Acme/widget_factory-worktrees/portal` and `/Users/x/Projects-Acme/widget-factory-worktrees-portal` BOTH encode to `-Users-x-Projects-Acme-widget-factory-worktrees-portal` (the first has `/Acme/` + `_` separators, the second `-Acme` + `-` — all collapse to `-`). CC takes no action: both projects' sessions coexist in that one dir, told apart ONLY by session UUID + the in-record `cwd` field (§2.4). csift faithfully mirrors CC (the encoded dir is the lookup key), so a real-path target whose dir is shared by a colliding sibling will surface that sibling's sessions too — `list` shows the true per-session `cwd` (so the collision is visible), but the scoped commands do not filter on it. The `cwd` field is the authoritative origin; never trust the dir name alone to mean one cwd.
 
 ### 2.2 Reverse (dir → cwd) is LOSSY — never attempt it
 
@@ -686,6 +694,42 @@ csift turns <uuid> --agent-msgs all             # every agent message, no filter
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
 csift turns . --window 9000 --slices 4          # fixed 4-chunk fan-out for 4 SessionStart hooks
 csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chunks
+```
+
+### 6.9 `image` — list + extract the images a session carries
+
+**Purpose.** A pasted/attached image (and a tool-result screenshot) is stored **inline** on a record as an `{type:"image", source:{type:"base64", media_type:"image/png", data:"<base64>"}}` block — verified on real `~/.claude/projects` data (2026-06-16): a single user record commonly carries several. The bytes are in the jsonl, so `image` lists them and decodes them straight back to files; nothing was externalised. Fills the gap that you previously could not get a sent image back out of a transcript without hand-parsing base64.
+
+**Stable id `L<line>i<n>`** — the 1-based JSONL line of the carrying record + the 1-based ordinal of the image among that record's image blocks (a direct `Block::Image`, OR an `{type:"image"}` element nested in a `tool_result` content array, counted in document order). Stable because the transcript is append-only, and consistent with the `Lnnnnn` line refs `recover`/`turns`/`search` already emit — so an id seen there feeds straight back here. Default action is to **LIST**; `--out <DIR>` switches to **EXTRACT**.
+
+**Args (matches `cli::ImageArgs`):**
+| flag / positional | type | default | meaning |
+|---|---|---|---|
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a bare session-UUID routes to `--session` |
+| `--session ID` | string | none | restrict to one parent session uuid |
+| `--id ID` | repeatable + comma | none | address images by `L<line>i<n>` (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Lines are per-transcript, so `--id` needs a single transcript in scope (pin with `--session <uuid> --no-subagents`) |
+| `--out DIR` | path | none | EXTRACT: decode each (selected) image → write `<DIR>/<session-short>-L<line>i<n>.<ext>` (dir created if absent; ext from media_type, `bin` when unknown). Without `--out`, only LIST |
+| `--include-subagents` / `--no-subagents` | bool | `true` | span subagent transcripts (a tool screenshot may live there); `--no-subagents` dominant |
+| `--format text\|json` | enum | `text` | output format |
+
+**Behaviour.** Same scan shape as `recover`/`files` (mmap + a pre-JSON image byte prefilter + parse only candidate lines, line-numbered 1:1). Decoded size is **estimated** for the listing (4 b64 chars → 3 bytes) without decoding the large payload; extraction decodes in full and reports the exact byte count. A `source.type == "url"` image has no inline bytes — it is reported (with its URL), never fabricated into a file. **No silent truncation / no silent miss:** an explicitly-requested `--id` that matches nothing is an error; a base64 that fails to decode is an error (never a wrong file); skipped malformed lines are counted. Base64 decoding is a small in-crate standard-alphabet decoder (no new dependency — the repo gates on a zero-vuln audit).
+
+**Text output example:**
+```
+L6802i1  image/png ~440 KB  2026-06-11 10:25:50 AEST (2026-06-11T00:25:50.942Z)
+L6812i1  image/png ~440 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
+L6812i2  image/png ~252 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
+86 image(s) · 3 transcript(s)
+```
+(A subagent image row is suffixed `  SUBAGENT <hex> · parent <uuid>`.) JSON is one object per image (`id`, `line_no`, `img_index`, `session_id`, `is_subagent`, `parent_session_id`, `source_kind`, `media_type`, `b64_len`, `est_bytes`, `url`, `record_uuid`, `ts_utc`/`ts_local`) + a trailing `{images, transcripts, skipped_lines}` summary.
+
+**Example invocations:**
+```bash
+csift image <uuid>                              # list every image in the session
+csift image . --format json                     # machine-readable listing
+csift image <uuid> --out /tmp/imgs              # extract ALL images to a dir
+csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs   # extract one by id
+csift image <uuid> --id L6812i1,L6812i2         # list just these (no extraction)
 ```
 
 ---

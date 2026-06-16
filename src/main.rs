@@ -9,6 +9,7 @@ mod agents;
 mod bash_mutations;
 mod cli;
 mod files;
+mod image;
 mod model;
 mod parse;
 mod path;
@@ -60,5 +61,6 @@ fn run(cli: Cli) -> Result<()> {
         Command::Recover(args) => recover::run_recover(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::Turns(args) => turns::run_turns(&args),
+        Command::Image(args) => image::run_image(&args),
     }
 }

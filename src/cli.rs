@@ -387,6 +387,8 @@ pub enum Command {
     /// Turn-fidelity reconstruction — restore the verbatim user/assistant
     /// back-and-forth a compaction summary clipped, within a char/token budget.
     Turns(TurnsArgs),
+    /// List + extract the images a session carries (inline base64 blocks → files).
+    Image(ImageArgs),
 }
 
 /// How to interpret `--budget`: as raw characters (default) or as tokens (estimated
@@ -1485,6 +1487,83 @@ impl RecoverArgs {
         } else {
             RecoverMode::Patches
         }
+    }
+}
+
+#[derive(Debug, Args)]
+#[command(
+    long_about = "List and EXTRACT the images a session carries. A pasted/attached image (and a \
+        tool-result screenshot) is stored INLINE on a record as a base64 image block, so `image` \
+        decodes it straight back to a file — nothing was externalised.\n\n\
+        STABLE ID `L<line>i<n>`: the JSONL line of the carrying record + the 1-based ordinal of \
+        the image within that record (the SAME `Lnnnnn` line refs `turns`/`search` show, so an id \
+        surfaced there feeds straight back here).\n\n\
+        Default action is to LIST (id · media-type · ~size · time). Pass `--out <DIR>` to EXTRACT \
+        (decode → write `<DIR>/<session>-L<line>i<n>.<ext>`, dir created if absent). `--id` selects \
+        specific images. A URL-source image has no inline bytes — it is reported, never fabricated.",
+    after_help = "EXAMPLES\n  \
+          csift image <uuid>                              # list every image in the session\n  \
+          csift image . --format json                     # machine-readable listing\n  \
+          csift image <uuid> --out /tmp/imgs              # extract ALL images to a dir\n  \
+          csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs  # extract one\n  \
+          csift image <uuid> --id L6812i1,L6812i2         # list just these (no --out)"
+)]
+pub struct ImageArgs {
+    /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images.
+    /// Optional when `--session` is given; with neither, every project is scanned. A target
+    /// may ALSO be a bare session-UUID routed to `--session`.
+    #[arg(
+        value_name = "PATH",
+        allow_hyphen_values = true,
+        value_parser = parse_project_target
+    )]
+    pub paths: Vec<PathBuf>,
+
+    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
+    pub session: Option<String>,
+
+    /// ADDRESS specific images by their `L<line>i<n>` id (repeatable + comma-delimited,
+    /// `--id L6812i1,L6812i2`). Without `--out`, filters the LISTING to these; with `--out`,
+    /// extracts only these. Lines are per-transcript, so `--id` needs a single transcript in
+    /// scope (pin with `--session <uuid> --no-subagents`).
+    #[arg(long, value_name = "ID", value_delimiter = ',')]
+    pub id: Vec<String>,
+
+    /// EXTRACT mode: decode each (selected) image and write it to this directory as
+    /// `<session>-L<line>i<n>.<ext>` (created if absent). Without `--out`, `image` only LISTS.
+    #[arg(long, value_name = "DIR")]
+    pub out: Option<PathBuf>,
+
+    /// Subagent span is ON BY DEFAULT (a tool screenshot may live in a subagent transcript);
+    /// this flag is an explicit no-op. The REAL control is `--no-subagents`.
+    #[arg(long = "include-subagents", default_value_t = true)]
+    pub include_subagents: bool,
+
+    /// Exclude subagent transcripts — scan only the top-level session. DOMINANT (wins over
+    /// `--include-subagents`, any order).
+    #[arg(long = "no-subagents")]
+    pub no_subagents: bool,
+
+    /// HIDDEN no-op — accepted only to emit a pointed "that's a `files`-only flag" error.
+    #[arg(long = "subagents-only", hide = true)]
+    pub subagents_only: bool,
+
+    /// Emit JSON (one object per image + a trailing summary) instead of the text listing.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+}
+
+impl ImageArgs {
+    /// Subagent span is ON by default; `--no-subagents` is dominant.
+    #[must_use]
+    pub fn want_subagents(&self) -> bool {
+        !self.no_subagents
+    }
+
+    /// Pointed error if the `files`-only `--subagents-only` was mistyped here, else `None`.
+    #[must_use]
+    pub fn span_flag_error(&self) -> Option<&'static str> {
+        subagents_only_misplaced_error(self.subagents_only)
     }
 }
 

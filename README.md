@@ -425,6 +425,24 @@ treatment via the shared code path when spanned.
 
 ---
 
+### `image` — get a sent image back out of a transcript
+
+A pasted/attached image (or a tool screenshot) is stored INLINE on a record as a base64 image block, so
+it is recoverable straight from the JSONL — no hand-parsing. `image` lists them by a stable id
+`L<line>i<n>` (the carrying record's JSONL line + the 1-based ordinal of the image within it, the same
+`Lnnnnn` line refs `turns`/`search` print), and `--out <dir>` decodes each one back to a real file
+(`<session-short>-L<line>i<n>.<ext>`, extension from the media type). Default is to LIST; spans subagents
+by default (a screenshot may be in one). A `url`-source image is reported, never fabricated.
+
+```bash
+csift image <uuid>                                # list every image: id · media-type · ~size · time
+csift image <uuid> --out /tmp/imgs                # extract ALL images to a dir (real bytes)
+csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs   # extract one by id
+csift image . --format json                       # one object per image + a trailing summary
+```
+
+---
+
 ## Project layout
 
 ```
@@ -443,6 +461,7 @@ src/
   plan.rs          # plan-file binding resolver + `plan` subcommand
   turns.rs         # turn-fidelity reconstruction (budget + richness model)
   turns/tests.rs   # turns unit tests
+  image.rs         # list + extract inline base64 images (stable L<line>i<n> id)
 tests/
   cli_integration.rs  # end-to-end tests against the compiled binary
 ```

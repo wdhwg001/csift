@@ -238,12 +238,100 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         return Ok(ProjectDir { dir });
     }
 
+    // §2.3 step 3: LONG-PATH fallback. Claude Code caps the encoded dir name at
+    // MAX_SANITIZED_LENGTH (200) chars and appends a hash suffix for anything longer —
+    // `<first-200>-<hash>` — so the full encoding above does not exist on disk for a
+    // deeply-nested project. The suffix is NOT reconstructible (the CLI uses Bun.hash,
+    // the SDK djb2 — different digests for the same path), which is why CC's own
+    // `findProjectDir` PREFIX-SCANS rather than recomputing it. We mirror that exactly.
+    if encoded.len() > MAX_SANITIZED_LENGTH {
+        let prefix = format!("{}-", &encoded[..MAX_SANITIZED_LENGTH]);
+        if let Some(found) = find_dir_by_prefix(&root, &prefix, &abs)? {
+            return Ok(ProjectDir { dir: found });
+        }
+    }
+
     // §2.3 step 4: neither resolved — surface the attempted path, no empty result.
     bail!(
         "no Claude Code project dir for {} (looked for {})",
         abs.display(),
         dir.display()
     )
+}
+
+/// Claude Code's `MAX_SANITIZED_LENGTH`: a project's encoded dir-name is capped at 200
+/// chars; a longer cwd is stored as `<first-200>-<hash>` (§2.1). Matches the cleanroom
+/// `sanitizePath` + the shipping binary (`Siq`, verified 2026-06-16).
+const MAX_SANITIZED_LENGTH: usize = 200;
+
+/// Resolve a >200-char encoded path to its on-disk dir by prefix-scanning the projects
+/// root for `<first-200>-<hash>` (the hash is not reconstructible — see [`resolve_target`]).
+/// Among multiple matches (two paths identical for the first 200 encoded chars — vanishingly
+/// rare), prefer the dir whose first session's recorded `cwd` equals the target; otherwise
+/// fall back to the sole / first match. Returns `None` when nothing matches.
+fn find_dir_by_prefix(root: &Path, prefix: &str, abs: &Path) -> Result<Option<PathBuf>> {
+    let read = match std::fs::read_dir(root) {
+        Ok(r) => r,
+        Err(_) => return Ok(None),
+    };
+    let mut matches: Vec<PathBuf> = Vec::new();
+    for entry in read.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with(prefix) && entry.path().is_dir() {
+            matches.push(entry.path());
+        }
+    }
+    if matches.len() > 1 {
+        let want = abs.to_string_lossy();
+        if let Some(exact) = matches
+            .iter()
+            .find(|d| dir_first_cwd(d).as_deref() == Some(want.as_ref()))
+        {
+            return Ok(Some(exact.clone()));
+        }
+    }
+    matches.sort();
+    Ok(matches.into_iter().next())
+}
+
+/// Cheaply read the `cwd` string of a project dir's first session file — first line only,
+/// no full JSON parse (mirrors CC's `extractJsonStringField`). Used to disambiguate a
+/// 200-char-prefix collision and to detect a shared-dir collision.
+fn dir_first_cwd(dir: &Path) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+    let read = std::fs::read_dir(dir).ok()?;
+    for entry in read.flatten() {
+        let p = entry.path();
+        if p.extension().is_some_and(|e| e == "jsonl") {
+            let f = std::fs::File::open(&p).ok()?;
+            let mut first = String::new();
+            if BufReader::new(f).read_line(&mut first).is_ok() {
+                if let Some(cwd) = extract_json_string_field(&first, "cwd") {
+                    return Some(cwd);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract a simple `"key":"value"` JSON string field from raw text without a full parse
+/// (escape-aware; stops at the first unescaped `"`). Mirrors CC's `extractJsonStringField`.
+fn extract_json_string_field(text: &str, key: &str) -> Option<String> {
+    for pat in [format!("\"{key}\":\""), format!("\"{key}\": \"")] {
+        let Some(idx) = text.find(&pat) else { continue };
+        let bytes = text.as_bytes();
+        let start = idx + pat.len();
+        let mut i = start;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'\\' => i += 2,
+                b'"' => return Some(text[start..i].replace("\\\\", "\\").replace("\\\"", "\"")),
+                _ => i += 1,
+            }
+        }
+    }
+    None
 }
 
 /// Enumerate every project directory directly under `~/.claude/projects`.

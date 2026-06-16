@@ -8787,3 +8787,151 @@ fn recover_file_plan_resolves_subagent_only_plan() {
         out.stdout
     );
 }
+
+// ── image ──
+
+/// A synthetic 1×1 transparent PNG (base64) — the canonical fixture payload.
+const PNG_1X1: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+fn image_home() -> Home {
+    let h = Home::new();
+    let img = |media: &str| serde_json::json!({"type":"image","source":{"type":"base64","media_type":media,"data":PNG_1X1}});
+    let r0 = serde_json::json!({
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
+        "version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z",
+        "message":{"role":"user","content":[{"type":"text","text":"first screenshot"}, img("image/png")]}
+    });
+    let r1 = serde_json::json!({
+        "type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z",
+        "message":{"role":"assistant","content":[{"type":"text","text":"got it"}]}
+    });
+    let r2 = serde_json::json!({
+        "type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z",
+        "message":{"role":"user","content":[{"type":"text","text":"two more"}, img("image/jpeg"), img("image/png")]}
+    });
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{r0}\n{r1}\n{r2}\n"),
+    );
+    h
+}
+
+#[test]
+fn image_lists_images_with_stable_ids() {
+    let h = image_home();
+    let out = h.run(&["image", SESS]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // r0 = line 1 (1 image), r2 = line 3 (2 images): L1i1 png, L3i1 jpeg, L3i2 png.
+    assert!(out.stdout.contains("L1i1"), "L1i1 missing:\n{}", out.stdout);
+    assert!(out.stdout.contains("L3i1"), "L3i1 missing:\n{}", out.stdout);
+    assert!(out.stdout.contains("L3i2"), "L3i2 missing:\n{}", out.stdout);
+    assert!(out.stdout.contains("image/jpeg"));
+    assert!(
+        out.stdout.contains("3 image(s)"),
+        "count line:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn image_extracts_real_bytes_to_dir() {
+    let h = image_home();
+    let out_dir = h.root.join("imgs");
+    let out = h.run(&["image", SESS, "--out", out_dir.to_str().unwrap()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("extracted 3 image(s)"),
+        "{}",
+        out.stdout
+    );
+    // <sess8>-L1i1.png must be a REAL decoded PNG (magic bytes).
+    let f = out_dir.join("0a1b2c3d-L1i1.png");
+    let bytes = std::fs::read(&f).unwrap_or_else(|_| panic!("missing {}", f.display()));
+    assert_eq!(
+        &bytes[..8],
+        &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
+        "not a PNG"
+    );
+    // media_type drives the extension: image/jpeg → .jpg.
+    assert!(out_dir.join("0a1b2c3d-L3i1.jpg").exists());
+    assert!(out_dir.join("0a1b2c3d-L3i2.png").exists());
+}
+
+#[test]
+fn image_id_selection_json_and_unresolved() {
+    let h = image_home();
+    let out = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "L3i2",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let objs: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .filter(|l| l.trim_start().starts_with('{'))
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert!(objs
+        .iter()
+        .any(|o| o.get("id").and_then(|v| v.as_str()) == Some("L3i2")));
+    assert!(objs.iter().any(|o| o.get("images").is_some())); // trailing summary
+                                                             // A nonexistent id is an explicit error, never a silent miss.
+    let miss = h.run(&["image", SESS, "--no-subagents", "--id", "L999i9"]);
+    assert!(!miss.success);
+    assert!(miss.stderr.contains("L999i9"), "stderr: {}", miss.stderr);
+}
+
+#[test]
+fn image_extract_single_by_id() {
+    let h = image_home();
+    let out_dir = h.root.join("one");
+    let out = h.run(&[
+        "image",
+        SESS,
+        "--no-subagents",
+        "--id",
+        "L1i1",
+        "--out",
+        out_dir.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out_dir.join("0a1b2c3d-L1i1.png").exists());
+    let n = std::fs::read_dir(&out_dir).unwrap().count();
+    assert_eq!(n, 1, "only the selected image should be written");
+}
+
+#[test]
+fn resolve_long_path_uses_prefix_scan_fallback() {
+    // A project whose ENCODED cwd exceeds 200 chars is stored by Claude Code as
+    // `<first-200>-<hash>` (the hash is not reconstructible — Bun vs djb2). csift must
+    // PREFIX-SCAN to find it, mirroring CC's findProjectDir. Regression: csift used to look
+    // up the full >200-char name (which never exists on disk) and bail.
+    let h = Home::new();
+    let seg = "a".repeat(210);
+    let long_cwd = format!("/Users/testuser/Projects/{seg}");
+    let encoded: String = long_cwd
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    assert!(encoded.len() > 200);
+    let dir_name = format!("{}-deadbeef", &encoded[..200]); // CC's truncate+hash form
+    let rec = serde_json::json!({
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":long_cwd,
+        "version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z",
+        "message":{"role":"user","content":"hello from a deeply nested project"}
+    });
+    h.write(&format!("{dir_name}/{SESS}.jsonl"), &format!("{rec}\n"));
+    let out = h.run(&["list", long_cwd.as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(SESS),
+        "long-path session not found via prefix-scan:\n{}",
+        out.stdout
+    );
+}
