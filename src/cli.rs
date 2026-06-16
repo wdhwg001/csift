@@ -1542,18 +1542,20 @@ impl RecoverArgs {
     long_about = "List and EXTRACT the images a session carries. A pasted/attached image (and a \
         tool-result screenshot) is stored INLINE on a record as a base64 image block, so `image` \
         decodes it straight back to a file — nothing was externalised.\n\n\
-        STABLE ID `L<line>i<n>`: the JSONL line of the carrying record + the 1-based ordinal of \
-        the image within that record (the SAME `Lnnnnn` line refs `turns`/`search` show, so an id \
-        surfaced there feeds straight back here).\n\n\
-        Default action is to LIST (id · media-type · ~size · time). Pass `--out <DIR>` to EXTRACT \
-        (decode → write `<DIR>/<session>-L<line>i<n>.<ext>`, dir created if absent). `--id` selects \
-        specific images. A URL-source image has no inline bytes — it is reported, never fabricated.",
+        TWO ADDRESSES: `#N` — the session's own `[Image #N]` handle (`turns`/`search` show it \
+        inline; an ambiguous `#N` errors with the occurrence list, disambiguate via `--since`/\
+        `--turn-range`/`--uuid`); and `L<line>i<n>` — the exact locator (carrying record's JSONL \
+        line + ordinal within it).\n\n\
+        Default action is to LIST (id · media-type · ~size · time). Pass `--out <PATH>` to EXTRACT: \
+        a DIRECTORY keeps each image's SOURCE format (auto-named); a FILE path's extension CONVERTS \
+        the single image to that format (`convert in.png out.jpg` idiom). A URL-source image has no \
+        inline bytes — it is reported, never fabricated.",
     after_help = "EXAMPLES\n  \
-          csift image <uuid>                              # list every image in the session\n  \
+          csift image <uuid>                              # list every image (deduped)\n  \
           csift image . --format json                     # machine-readable listing\n  \
-          csift image <uuid> --out /tmp/imgs              # extract ALL images to a dir\n  \
-          csift image <uuid> --no-subagents --id L6812i2 --out /tmp/imgs  # extract one\n  \
-          csift image <uuid> --id L6812i1,L6812i2         # list just these (no --out)"
+          csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle\n  \
+          csift image <uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1\n  \
+          csift image <uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image -> a file, convert"
 )]
 pub struct ImageArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images.
