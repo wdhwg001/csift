@@ -214,11 +214,19 @@ csift files <uuid> --subagents-only --by-file   # only what the session's subage
 
 ### `recover` — reconstruct a file's content (and `plan` — locate a session's plan)
 
-Rebuilds a file's content by replaying its Read / Write / Edit stream in transcript order. Three
-mutually-exclusive modes: `--patches` (DEFAULT, segmented unified-diff history split at integrity
-boundaries), `--at WHEN` (the partial line-numbered snapshot as the LLM saw it; gaps are explicit, never
-fabricated), and `--coverage`/`--dry-run` (scope without dumping). `--file` is **required** for all
-three. An Edit/Write whose result ERRORED (`is_error:true`) never mutated the file, so reconstruction
+Rebuilds a file's content by replaying its Read / Write / Edit stream in transcript order. Five
+mutually-exclusive modes (**default = restore**): **restore** (no mode flag) hands back the file's RAW
+final content (`recover --file X > X`), but ONLY when the session saw the WHOLE file — if it saw just
+PART, restore FAILS rather than emit a holey file, naming the recoverable + missing ranges and pointing
+at `--salvage`; **`--salvage`** is restore's never-fails sibling, the best-effort line-numbered fragment
+of what survived (gaps left explicit, identical to `--at @latest`); **`--patches`** is the segmented
+unified-diff CHANGES/rewind history split at integrity boundaries; **`--at WHEN`** is the partial
+line-numbered snapshot as the LLM saw it (gaps explicit, never fabricated); **`--coverage`**/`--dry-run`
+scopes without dumping. `--file` is **required** for all five. A `modified since read` boundary (the
+file changed underneath — `prettier`/linter, etc.) **invalidates the pre-boundary buffer in the final
+state**, so restore won't falsely report `complete` (nor will `--salvage`/`--at @latest` dump stale
+content) when a session read a file, watched it change, then re-read only part of it. An Edit/Write whose
+result ERRORED (`is_error:true`) never mutated the file, so reconstruction
 does not apply it and coverage does not count it — this covers both `String to replace not found in file`
 and the Edit-before-Read wall (`File has not been read yet`, e.g. a file created with Bash then directly
 Edited, since Bash/Grep don't satisfy CC's Read-before-Edit gate); a not-read-yet case is surfaced as an
@@ -234,8 +242,8 @@ sessions bound to DIFFERENT plans (asks for `--session`).
 
 `--out` writes the artifact verbatim and is **data-safe on an empty result** (leaves the destination
 UNTOUCHED, prints no false `(wrote …)` line — a stderr `note: … left untouched` fires instead); it is a
-no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`) applies in all three
-modes. A SUBAGENT transcript surfaces as `SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never
+no-op in `--coverage` mode. `--line-range` (a 1-based FILE-line span of `--file`) applies in every
+mode. A SUBAGENT transcript surfaces as `SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never
 a bare-hex `SESSION`).
 
 **Batch (`--files-from <manifest>` + `--out-dir <dir>`).** Recovering many files (a nuked `/tmp`) one-by-one
@@ -251,6 +259,8 @@ csift recover --files-from nuked-files.txt --out-dir /restore   # batch: every l
 ```
 
 ```bash
+csift recover <uuid> --file /abs/app.py                        # DEFAULT restore: raw final content (or FAIL if only partial)
+csift recover <uuid> --file /abs/gone.py --salvage             # gone + only partly seen: dump what survived, gaps explicit
 csift recover . --file /abs/PLAN.md --coverage                 # scope first: covered ranges + boundaries
 csift recover <uuid> --file /abs/app.py --patches              # segmented unified diffs
 csift recover <uuid> --file /abs/app.py --at @turn:42          # partial snapshot as of turn 42

@@ -4216,12 +4216,16 @@ fn recover_help_mentions_modes() {
     let h = Home::new();
     let out = h.run(&["recover", "--help"]);
     assert!(out.success);
-    // The three mutually-exclusive mode flags and their semantics are documented.
+    // All five modes (default restore + the four explicit flags) and their semantics are
+    // documented, including the salvage fallback the restore-fail message points at.
     for needle in [
+        "--salvage",
         "--patches",
         "--at",
         "--coverage",
-        "segmented unified-diff",
+        "restore",
+        "Segmented unified-diff",
+        "Best-effort",
         "partial snapshot",
     ] {
         assert!(
@@ -4248,6 +4252,247 @@ fn recover_no_history_says_so() {
         out.stdout.contains("no recoverable history"),
         "honest empty result: {}",
         out.stdout
+    );
+}
+
+#[test]
+fn recover_restore_default_returns_raw_full_content() {
+    // Default mode (no --salvage/--patches/--at/--coverage) RESTOREs the file's final content
+    // as RAW bytes — no SESSION banner, no line numbers, no mode footer — because this session
+    // saw the whole file (the post-drift full Read re-establishes all 6 lines).
+    let h = recover_scenario_home();
+    let out = h.run(&["recover", "--session", SESS, "--file", RFILE]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let expected =
+        "import os\nwith open(src) as fh:\n    raw = fh.read()\nuse(raw)\nprint(café🛠)\nEOF\n";
+    assert_eq!(out.stdout, expected, "raw restored content");
+    // No decoration leaks into the restorable bytes.
+    for banned in ["SESSION", "mode=", "  1  "] {
+        assert!(
+            !out.stdout.contains(banned),
+            "no {banned} in raw restore: {}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn recover_restore_partial_file_errors_pointing_to_salvage() {
+    // The session only WINDOW-read lines 5-7 of a 10-line file. Default restore must FAIL
+    // (never a holey file), name what it can/can't recover, and point at --salvage.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"look"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/spec.md","content":"line5\nline6\nline7","startLine":5,"numLines":3,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", "--session", SESS, "--file", "/p/spec.md"]);
+    assert!(
+        !out.success,
+        "partial restore must fail: stdout={}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.is_empty(),
+        "no holey file on stdout: {:?}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("recovered 3/10"),
+        "names recoverable count: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("[5-7]"),
+        "covered range: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("1-4") && out.stderr.contains("8-10"),
+        "missing ranges: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("--salvage"),
+        "points at --salvage: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn recover_restore_out_writes_raw_file_no_stdout() {
+    let h = recover_scenario_home();
+    let out_path = h.root.join("restored.py");
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--out",
+        out_path.to_str().unwrap(),
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.is_empty(),
+        "restore --out keeps stdout empty (note goes to stderr): {:?}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("recovered"),
+        "stderr note: {}",
+        out.stderr
+    );
+    let written = std::fs::read_to_string(&out_path).unwrap();
+    assert_eq!(
+        written,
+        "import os\nwith open(src) as fh:\n    raw = fh.read()\nuse(raw)\nprint(café🛠)\nEOF\n"
+    );
+}
+
+#[test]
+fn recover_restore_json_emits_single_complete_object_no_trailer() {
+    let h = recover_scenario_home();
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        RFILE,
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let lines: Vec<&str> = out
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    assert_eq!(
+        lines.len(),
+        1,
+        "restore emits exactly one object: {}",
+        out.stdout
+    );
+    let v: serde_json::Value = serde_json::from_str(lines[0]).expect("one json object");
+    assert_eq!(v["file"], RFILE);
+    assert_eq!(v["complete"], serde_json::Value::Bool(true));
+    assert_eq!(v["lines"], serde_json::json!(6));
+    assert!(
+        v["content"]
+            .as_str()
+            .unwrap()
+            .contains("with open(src) as fh:"),
+        "content carries the edited line: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("summary"),
+        "no trailer: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_salvage_dumps_surviving_fragment_with_gaps() {
+    // --salvage is restore's never-fails sibling: a windowed-only session yields the surviving
+    // lines (numbered) with the rest as explicit gaps, never an error.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"look"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/spec.md","content":"line5\nline6\nline7","startLine":5,"numLines":3,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/spec.md",
+        "--salvage",
+    ]);
+    assert!(out.success, "salvage never fails: {}", out.stderr);
+    assert!(
+        out.stdout.contains("??? lines 1..4 unknown"),
+        "leading gap: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("    5  line5"),
+        "numbered survivor: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("??? lines 8..10 unknown"),
+        "trailing gap: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("mode=salvage"),
+        "salvage footer: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn recover_modified_since_read_invalidates_stale_lines() {
+    // A full Read (5 lines) → an edit blocked by "modified since read" (the file changed
+    // underneath, e.g. prettier) → a re-read of only lines 1-2. The pre-boundary lines 3-5 are
+    // now STALE and must be INVALIDATED: salvage shows 1-2 + explicit gaps (never the stale
+    // CCC/DDD/EEE), and restore must FAIL rather than confidently hand back stale content.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"read"}}"#, "\n",
+            r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/x.txt","content":"AAA\nBBB\nCCC\nDDD\nEEE","startLine":1,"numLines":5,"totalLines":5}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/p/x.txt","old_string":"CCC","new_string":"ZZZ"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T06:00:02.000Z","toolUseResult":{"file":{"filePath":"/p/x.txt","content":"AAA\nBBB","startLine":1,"numLines":2,"totalLines":5}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    // Salvage: stale CCC/DDD/EEE are dropped; lines 3-5 are explicit gaps.
+    let salv = h.run(&[
+        "recover",
+        "--session",
+        SESS,
+        "--file",
+        "/p/x.txt",
+        "--salvage",
+    ]);
+    assert!(salv.success, "stderr: {}", salv.stderr);
+    assert!(
+        salv.stdout.contains("    1  AAA"),
+        "re-read line kept: {}",
+        salv.stdout
+    );
+    assert!(
+        salv.stdout.contains("??? lines 3..5 unknown"),
+        "stale region invalidated: {}",
+        salv.stdout
+    );
+    for stale in ["CCC", "DDD", "EEE"] {
+        assert!(
+            !salv.stdout.contains(stale),
+            "stale {stale} must not be shown as current: {}",
+            salv.stdout
+        );
+    }
+    // Restore: refuses rather than falsely claim "complete" on the invalidated buffer.
+    let rest = h.run(&["recover", "--session", SESS, "--file", "/p/x.txt"]);
+    assert!(
+        !rest.success,
+        "restore must fail on the invalidated file: {}",
+        rest.stdout
+    );
+    assert!(
+        rest.stderr.contains("recovered 2/5"),
+        "honest partial count: {}",
+        rest.stderr
     );
 }
 

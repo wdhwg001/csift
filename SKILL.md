@@ -42,9 +42,12 @@ or `cargo run -- <subcommand>` during development).
   discrimination and first/last timestamps. Answers "how many distinct gap docs touched / `/tmp` docs
   created" directly.
 - **"Reconstruct / restore a file (or plan) from the transcript."** → `csift recover --session <uuid>
-  --file <abs>` rebuilds a file's CONTENT line-by-line from its Read/Write/Edit stream — as segmented
-  diff-patches (`--patches`), a point-in-time partial snapshot (`--at`), or a coverage/scoping summary
-  (`--coverage`); `--file` is required for all three. To restore a plan (DELETED ok), pass the magic
+  --file <abs>` (no mode flag) hands back the file's RAW FINAL content to restore it (`> file`) — but
+  ONLY if the session saw the WHOLE file; if it only saw PART, restore FAILS rather than emit a holey
+  file and points you at **`--salvage`** (the best-effort line-numbered fragment of what survived, gaps
+  explicit). Other modes: segmented diff-patches (`--patches`, the changes/rewind view), a point-in-time
+  partial snapshot (`--at`), or a coverage/scoping summary (`--coverage`); `--file` is required for all
+  five. To restore a plan (DELETED ok), pass the magic
   value `--file @plan`, which resolves the session-bound plan file and rebuilds its full Write+Edit
   history under any mode. It SEGMENTS at integrity boundaries (a `modified since read` error, an
   `originalFile` disagreement, an external edit, a heuristic Bash mutation), is necessarily PARTIAL
@@ -531,20 +534,30 @@ nor displaces a real cp/mv destination; an in-path `#` (`/tmp/a#b`) is preserved
 
 ```
 csift recover [PATH...] [--session ID] --file <ABS_PATH|@plan> [--no-subagents]
-              [--patches | --at WHEN | --coverage(--dry-run)]
+              [--salvage | --patches | --at WHEN | --coverage(--dry-run)]
               [--turn-range START..END] [--since WHEN] [--until WHEN]
               [--line-range START..END] [--out PATH] [--format text|json]
 ```
 
 Where `files` reports THAT a file changed, `recover` rebuilds its **content** by replaying the
-file's Read / Write / Edit stream in transcript order. Three mutually-exclusive modes (default
-`--patches`); `--file` is **required** for all three:
+file's Read / Write / Edit stream in transcript order. Five mutually-exclusive modes (**default =
+restore** when no mode flag is set); `--file` is **required** for all five:
 
-- **`--patches`** (DEFAULT) — segmented unified-diff history of `--file`, split at **integrity
-  boundaries** where reconstruction across them is invalid: a `modified since read` harness error
-  (authoritative), an `originalFile` that disagrees with the replayed buffer (authoritative — the
-  signal other recovery tools discard), an external `edited_text_file` (authoritative), or a Bash
-  mutation (heuristic, always flagged). No diff spans a boundary.
+- **restore** (DEFAULT, no mode flag) — hand back the file's FINAL content as RAW restorable bytes
+  (`recover --file X > X`; with `--out` it writes the raw file + a stderr note, stdout stays empty;
+  `--format json` → a single `{file, complete, lines, content}` object). Restore SUCCEEDS only when the
+  session saw the WHOLE file (a full Read, or it authored the file); when it saw just PART, restore
+  **FAILS LOUDLY** — naming the recoverable + missing line ranges and pointing at `--salvage` — rather
+  than emit a holey file.
+- **`--salvage`** — restore's never-fails sibling: the best-effort, line-numbered FINAL-state fragment.
+  Dumps whatever survived (known lines numbered) with the rest as explicit `??? lines A..B unknown`
+  gaps. For a file that is GONE, only-partially-read, and barely-edited — salvage the surviving
+  proportion instead of rewinding. **Identical output to `--at @latest`.**
+- **`--patches`** — segmented unified-diff history of `--file` (the CHANGES / rewind-over-a-window
+  view), split at **integrity boundaries** where reconstruction across them is invalid: a `modified
+  since read` harness error (authoritative), an `originalFile` that disagrees with the replayed buffer
+  (authoritative — the signal other recovery tools discard), an external `edited_text_file`
+  (authoritative), or a Bash mutation (heuristic, always flagged). No diff spans a boundary.
 - **`--at WHEN`** — the **partial, line-numbered "in the LLM's eyes" snapshot** as of a cutoff
   (ISO8601, relative `2h`, `@turn:<N>` = first line after genuine-user turn N, `@line:<N>` =
   JSONL TRANSCRIPT line N — the `Lnnnnn`/`line_no` this tool prints, **NOT** a file line of `--file`;
@@ -560,24 +573,30 @@ file's Read / Write / Edit stream in transcript order. Three mutually-exclusive 
 escaping in mixed scripts — consistent with `--at`'s `@line:`/`@turn:` sigils). It resolves the target
 session's BOUND plan file (via the `plan_mode` attachment — see the `plan` subcommand) and reconstructs
 THAT file exactly like any other: its FULL Write+Edit history, edit-aware (NOT just the latest Write). It
-composes with every mode (`--patches`/`--at`/`--coverage`) and with `--out`/`--format`, so it is how you
+composes with every mode (restore/`--salvage`/`--patches`/`--at`/`--coverage`) and with `--out`/`--format`, so it is how you
 DUMP a plan's content — including a DELETED plan rebuilt from the transcript alone. It prefers the
 top-level session's own plan and **ERRORS clearly (never guesses)** when no plan is bound to the target,
 or when the target spans sessions bound to DIFFERENT plans (the error asks for `--session`). A subagent
 transcript surfaces as `SUBAGENT <hex> · parent SESSION <uuid>` in recover text (never a bare-hex
 `SESSION`).
 
-`--out` writes the reconstructed artifact (snapshot / plan / concatenated patches) verbatim to a file
-while the summary still prints to stdout — but is **ignored in `--coverage` mode** (coverage is a scoping
+`--out` writes the reconstructed artifact (restored content / snapshot / plan / concatenated patches)
+verbatim to a file (in restore mode stdout then stays empty, just a stderr note; in the other dumping
+modes the summary still prints to stdout) — but is **ignored in `--coverage` mode** (coverage is a scoping
 summary, no artifact; a stderr note makes the no-op visible). `--out` is **data-safe on an empty
 result**: when nothing is reconstructed (no recoverable history / over-budget), the destination is
 left UNTOUCHED (never truncated to 0 bytes) and no false `(wrote …)` line is printed — a stderr
 `note: nothing reconstructed … left untouched` fires instead (same guard across `--patches`/`--at`,
-their JSON twins, and `turns`). `--line-range` (a 1-based FILE-line span of `--file`) applies in all
-three modes. **Every output line carries the JSONL line number** (`Lnnnnn`) so you
+their JSON twins, and `turns`). `--line-range` (a 1-based FILE-line span of `--file`) applies in every
+mode. **Every output line carries the JSONL line number** (`Lnnnnn`) so you
 can `Read` the raw jsonl directly. Reconstruction is necessarily PARTIAL: an un-anchorable edit (its
 old text over an unknown gap, or whose context disagrees with the buffer) is a counted coverage hole,
-never a fabricated line — so the contiguous-from-line-1 prefix matches the on-disk file exactly. An
+never a fabricated line — so the contiguous-from-line-1 prefix matches the on-disk file exactly. A
+`modified since read` boundary (the file changed underneath — a `prettier`/linter rewrite, etc. — and
+the harness demanded a fresh Read) **invalidates the pre-boundary buffer in the final state**: only
+content re-read / re-written after it survives, the rest becomes explicit gaps. That is what stops
+restore from falsely reporting `complete` (and `--salvage`/`--at @latest` from dumping stale content)
+when a session read a file, watched it change, then only re-read part of it. An
 Edit/Write whose result ERRORED (`is_error:true` — `String to replace not found in file`, or the
 Edit-before-Read wall `File has not been read yet` for a Bash-created-then-directly-Edited file, or a
 plan already in context that must be re-Read before it can be Edited) never mutated the file, so it is
@@ -597,6 +616,9 @@ transcripts that touched the file.
 Examples:
 
 ```bash
+csift recover <uuid> --file /abs/app.py                    # DEFAULT restore: raw final content (or FAIL if only partial)
+csift recover <uuid> --file /abs/app.py --out /abs/app.py  # restore straight back onto disk (raw bytes)
+csift recover <uuid> --file /abs/gone.py --salvage         # gone + only partly seen: dump what survived, gaps explicit
 csift recover . --file /abs/PLAN.md --coverage             # scope first: covered ranges + boundaries
 csift recover <uuid> --file /abs/app.py --patches          # segmented unified diffs over the session
 csift recover <uuid> --file /abs/app.py --at @turn:42      # partial snapshot as the LLM saw it at turn 42

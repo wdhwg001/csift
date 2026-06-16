@@ -1334,13 +1334,27 @@ impl FilesArgs {
     }
 }
 
-/// The reconstruction mode for `recover` (exactly one is active; default patches).
+/// The reconstruction mode for `recover` (exactly one is active; default restore).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecoverMode {
-    /// One or more unified-diff patches over the range, segmented at integrity
-    /// boundaries (the DEFAULT).
+    /// DEFAULT (no mode flag): hand back the file's FINAL content as RAW restorable bytes —
+    /// but ONLY when it is fully recoverable. If the session saw just PART of the file (a
+    /// windowed read + a few edits), restore ERRORS rather than emit a holey file, naming what
+    /// it can/can't recover and pointing at `--salvage`.
+    Restore,
+    /// Best-effort, line-numbered FINAL-state fragment of `--file`. Explicit (`--salvage`).
+    /// Restore's never-fails sibling: when the session only ever saw PART of the file, this
+    /// dumps what DID survive (each known line numbered) with the unrecoverable lines left as
+    /// explicit `??? lines A..B unknown` gaps — for a file that is gone, only-partially-read,
+    /// and barely-edited, where rewinding isn't the goal and salvaging the surviving proportion
+    /// is. Same output as `--at @latest`, framed as the dead-file salvage front door.
+    Salvage,
+    /// One or more unified-diff patches over the range, segmented at integrity boundaries.
+    /// Explicit (`--patches`). The diff/rewind view: shows the changes a session made (compose
+    /// with `--since`/`--until`/`--turn-range` to extract a time window — to rewind a file you
+    /// still have to an older state, even when the session only partially read it).
     Patches,
-    /// The partial, line-numbered point-in-time snapshot as of `--at <WHEN>`.
+    /// The partial, line-numbered point-in-time snapshot as of `--at <WHEN>` (gaps are explicit).
     At,
     /// Coverage / scoping summary — recoverable ranges + boundaries + counts, no dump.
     Coverage,
@@ -1353,18 +1367,36 @@ pub enum RecoverMode {
         file's CONTENT line-by-line from the transcript's Reads / Writes / Edits, in \
         transcript order, with every output line carrying the JSONL LINE NUMBER so an \
         LLM can `Read` the raw jsonl directly.\n\n\
-        THREE MUTUALLY-EXCLUSIVE MODES (exactly one; default `--patches`):\n  \
-          --patches   (DEFAULT) segmented unified-diff history of `--file`. The range \
+        FIVE MUTUALLY-EXCLUSIVE MODES (exactly one; default = restore):\n  \
+          (default, no mode flag) RESTORE the file's FINAL content as RAW restorable \
+        bytes — what you'd `> file` to put it back. Restore SUCCEEDS only when the \
+        session saw the WHOLE file (a full Read, or it authored the file outright); it \
+        then prints the reconstructed content with NO line numbers / banners (clean for \
+        piping). When the session observed just PART of the file (a windowed read + a few \
+        edits), restore FAILS LOUDLY — it never hands back a holey file — naming the \
+        line ranges it CAN and CANNOT recover and pointing at `--salvage`.\n  \
+          --salvage   restore's never-fails sibling: the best-effort, line-numbered \
+        FINAL-state fragment. Dumps whatever survived (each known line numbered) with the \
+        unrecoverable lines left as explicit `??? lines A..B unknown` gaps. For a file \
+        that is GONE, only-partially-read, and barely-edited — where rewinding isn't the \
+        goal and salvaging the surviving proportion is. Identical output to `--at @latest`, \
+        framed as the dead-file salvage front door. (Content invalidated by a \
+        `modified since read` boundary is dropped, not shown stale.)\n  \
+          --patches   segmented unified-diff history of `--file`. The range \
         is split at INTEGRITY BOUNDARIES — points where reconstruction across them is \
         invalid (a `File has been modified since read` harness error, an `originalFile` \
         that disagrees with the replayed buffer, an external `edited_text_file`, or a \
         heuristic Bash mutation). Each segment + boundary carries its jsonl line / turn \
-        / timestamp.\n  \
+        / timestamp. This is the CHANGES view: rewind a still-present file to an older \
+        state over a `--since`/`--until` window — most useful when ONLY this session \
+        touched the file and it did NOT read it in full.\n  \
           --at <WHEN> the PARTIAL, line-numbered \"in the LLM's eyes\" snapshot of \
         `--file` as of <WHEN> (the SAME relative/ISO/bare-date grammar as --since — \
         `45s`/`90m`/`2h`/`3d`/`1w`, ISO8601, bare-date=local-midnight — PLUS the \
-        recover-only `@turn:<N>` / `@line:<N>`). Known lines carry their number; unknown \
-        regions are marked `??? lines A..B unknown` — gaps are NEVER fabricated.\n  \
+        recover-only `@turn:<N>` / `@line:<N>` / `@latest`). Unlike restore, `--at` will \
+        dump a PARTIAL snapshot: known lines carry their number; unknown regions are \
+        marked `??? lines A..B unknown` — gaps are NEVER fabricated. `--at @latest` is \
+        the partial-tolerant sibling of the default restore (final state, holes shown).\n  \
           --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
         counts (reads / edits / writes / bash / external-edits).\n\n\
@@ -1374,29 +1406,39 @@ pub enum RecoverMode {
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
         mutually exclusive with `--since`/`--until` (ISO8601 / relative). `--line-range \
         START..END` further restricts to a 1-based file-line span. `--out <PATH>` writes \
-        the reconstructed artifact (snapshot / concatenated patches) verbatim to \
-        a file while the summary still prints to stdout.\n\n\
+        the reconstructed artifact (restored content / snapshot / concatenated patches) \
+        verbatim to a file; in restore mode stdout then stays empty (just a stderr note), \
+        in the other modes the summary still prints to stdout.\n\n\
         Reconstruction is NECESSARILY PARTIAL and NEVER fabricates: an unseen line is \
         an explicit gap, an un-anchorable edit is a coverage hole, a Bash touch is a \
         heuristic (not authoritative) boundary. No silent truncation.",
-    after_help = "MODE (choose AT MOST ONE; default --patches)\n  \
-          --patches / --at <WHEN> / --coverage are MUTUALLY EXCLUSIVE — passing two \
-        (e.g. `--coverage --patches`) is a parse error. With none, `--patches` applies. `--file` \
-        is REQUIRED for every mode (--patches / --at / --coverage); its value is an absolute \
-        path OR the magic `@plan` (the session-bound plan file).\n\n\
+    after_help = "MODE (choose AT MOST ONE; default = restore)\n  \
+          --salvage / --patches / --at <WHEN> / --coverage are MUTUALLY EXCLUSIVE — \
+        passing two (e.g. `--coverage --patches`) is a parse error. With NONE, the default \
+        RESTORE mode applies: it hands back the file's final content, or FAILS (never a \
+        partial file) when the session saw only part of it — reach for `--salvage` then. \
+        `--file` is REQUIRED for every mode; its value is an absolute path OR the magic \
+        `@plan` (the session-bound plan file).\n\n\
         EXAMPLES\n  \
+          csift recover <uuid> --file /abs/app.py                   # DEFAULT: restore final content (or fail if only partial)\n  \
+          csift recover <uuid> --file /abs/app.py --out /abs/app.py # restore straight back onto disk (raw bytes, no banners)\n  \
+          csift recover <uuid> --file /abs/gone.py --salvage        # file is gone + only partly seen: dump what survived, gaps explicit\n  \
           csift recover . --file /abs/PLAN.md --coverage            # scope first: covered ranges + boundaries, no dump\n  \
           csift recover <uuid> --file /abs/app.py --patches         # segmented unified diffs over the whole session\n  \
-          csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only\n  \
+          csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only (rewind a window)\n  \
+          csift recover <uuid> --file /abs/app.py --at @latest      # partial-tolerant final snapshot (holes shown)\n  \
           csift recover <uuid> --file /abs/app.py --at @turn:42     # partial snapshot as the LLM saw it at turn 42\n  \
           csift recover <uuid> --file @plan --out /tmp/plan.md      # reconstruct the session's bound plan (even if deleted)\n  \
           csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200\n\n\
         JSON SCHEMA (per --format json)\n  \
-          Per-MODE record objects (each tagged by a `type`/`mode`-specific shape — \
+          The default RESTORE mode emits a SINGLE object and no trailer — \
+        `{file, complete:true, lines, content}` on success (or, with `--out`, \
+        `{file, complete:true, lines, path, wrote}`); a partial file is an ERROR (a stderr \
+        message + non-zero exit), never a JSON record. The other four modes emit per-MODE \
+        record objects (each tagged by a `type`/`mode`-specific shape — \
         `--patches` emits `{type:\"segment\",…}` + `{type:\"boundary\",…}`; `--coverage` emits \
         a `{covered_ranges, boundaries, events, fragments, recoverable_lines, …}` object; \
-        `--at` emits line/gap records). \
-        EVERY per-record \
+        `--at` and `--salvage` emit line/gap records). For those four, EVERY per-record \
         object carries the id-domain discriminators `{session_id, is_subagent, \
         parent_session_id}` (is_subagent flags a bare-hex subagent record; re-feed \
         parent_session_id, never the bare session_id). Records are followed by a UNIFORM \
@@ -1447,7 +1489,18 @@ pub struct RecoverArgs {
     #[arg(long = "subagents-only", hide = true)]
     pub subagents_only: bool,
 
-    /// DEFAULT mode: segmented unified-diff history of `--file`.
+    /// Best-effort line-numbered FINAL-state fragment — restore's never-fails sibling. Where
+    /// the default restore REFUSES a partial file, `--salvage` dumps whatever survived (known
+    /// lines numbered, unrecoverable lines left as explicit `??? lines A..B unknown` gaps). For
+    /// a file that is gone, only-partially-read, and barely-edited: salvage the surviving
+    /// proportion instead of rewinding. Identical output to `--at @latest`.
+    #[arg(long, group = "mode")]
+    pub salvage: bool,
+
+    /// Segmented unified-diff history of `--file` — the CHANGES view (rewind a still-present
+    /// file over a `--since`/`--until` window; best when only this session touched it and did
+    /// not read it whole). NOT the default — with no mode flag, `recover` RESTOREs the final
+    /// content instead (and fails loudly rather than emit a partial file).
     #[arg(long, group = "mode")]
     pub patches: bool,
 
@@ -1546,15 +1599,19 @@ impl RecoverArgs {
 
     /// Resolve the mode flags into the active [`RecoverMode`]. clap's `group = "mode"`
     /// (multiple=false) rejects more than one at parse time, so at most one is set;
-    /// none set ⇒ the `Patches` default.
+    /// none set ⇒ the `Restore` default (full content, or an error if only partial).
     #[must_use]
     pub fn mode(&self) -> RecoverMode {
         if self.at.is_some() {
             RecoverMode::At
         } else if self.coverage {
             RecoverMode::Coverage
-        } else {
+        } else if self.patches {
             RecoverMode::Patches
+        } else if self.salvage {
+            RecoverMode::Salvage
+        } else {
+            RecoverMode::Restore
         }
     }
 }

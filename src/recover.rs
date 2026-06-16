@@ -274,7 +274,10 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     // timestamp-ordered timeline so the file reconstructs as a single COMPLETE artifact.
     // UNRELATED top-level sessions (different parents) are never merged: separate histories.
     // Patches stays per-session (per-transcript diff-history provenance is the right view).
-    let sessions = if matches!(mode, RecoverMode::At | RecoverMode::Coverage) {
+    let sessions = if matches!(
+        mode,
+        RecoverMode::At | RecoverMode::Coverage | RecoverMode::Restore | RecoverMode::Salvage
+    ) {
         merge_groups_for_reconstruction(sessions)
     } else {
         sessions
@@ -1863,6 +1866,13 @@ fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay {
                         pre_state_known = false;
                         had_full_anchor = false;
                         anchor_source = None;
+                        // The file changed out from under us — the harness rejected the edit and
+                        // demanded a fresh Read. Everything known so far is now SUSPECT, so
+                        // invalidate the buffer: only content RE-READ / re-written after this
+                        // point counts toward the final state. Pre-boundary lines become explicit
+                        // gaps, never silently-stale lines presented as "current".
+                        buf.known.clear();
+                        buf.seen_total_lines = None;
                     }
                     IntegrityKind::NotReadYet => { /* not a boundary; the edit never landed */ }
                 }
@@ -2376,12 +2386,156 @@ fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<ScanResult>
 }
 
 fn render_text(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>) -> Result<()> {
+    // Restore writes the RAW file to stdout (for piping) — no scope banner to pollute it.
+    if matches!(ctx.mode, RecoverMode::Restore) {
+        return render_restore(ctx, sessions, out_path, false);
+    }
     crate::text::emit_scope_banner(ctx.scope_top, ctx.scope_sub);
     match ctx.mode {
+        RecoverMode::Restore => unreachable!("handled above"),
         RecoverMode::Coverage => render_coverage_text(ctx, sessions),
-        RecoverMode::At => render_at_text(ctx, sessions, out_path),
+        // Salvage == `--at @latest`: render_at_text reads ctx.at (None here) → empty `when`
+        // → resolve_cutoff returns None → the final-state best-effort fragment.
+        RecoverMode::At | RecoverMode::Salvage => render_at_text(ctx, sessions, out_path),
         RecoverMode::Patches => render_patches_text(ctx, sessions, out_path),
     }
+}
+
+/// DEFAULT `recover` (no mode flag): hand back the file's FINAL content as RAW restorable bytes
+/// — but ONLY when it is fully recoverable. When the session saw just PART of the file (a
+/// windowed read + edits), ERROR (never a holey file), naming the recoverable + missing line
+/// ranges and pointing at the other modes. Across unrelated session groups the freshest,
+/// most-complete candidate wins. Raw content goes to STDOUT (so `recover --file X > X` restores
+/// it); the status note goes to STDERR.
+fn render_restore(
+    ctx: &RenderCtx,
+    sessions: &[ScanResult],
+    out_path: Option<&Path>,
+    json: bool,
+) -> Result<()> {
+    /// The freshest, most-complete restore candidate so far: (known lines, total line count,
+    /// latest event timestamp). Newer ts — then more lines — wins.
+    type RestoreCandidate = (Vec<(usize, String)>, usize, Option<String>);
+    let file = ctx.file.as_deref().unwrap_or("(none)");
+    let mut best: Option<RestoreCandidate> = None;
+    for s in sessions {
+        if s.events.is_empty() {
+            continue;
+        }
+        let rep = replay(&s.events, None); // final state — no cutoff
+        let known = rep.final_buffer.known_lines();
+        if known.is_empty() {
+            continue;
+        }
+        let total = rep
+            .final_buffer
+            .seen_total_lines
+            .unwrap_or_else(|| known.last().map(|(n, _)| *n).unwrap_or(0));
+        let ts = s
+            .events
+            .iter()
+            .filter_map(|e| e.timestamp_utc.clone())
+            .max();
+        let better = match &best {
+            None => true,
+            Some((bk, _, bts)) => (&ts, known.len()) > (bts, bk.len()),
+        };
+        if better {
+            best = Some((known, total, ts));
+        }
+    }
+    let Some((known, total, _)) = best else {
+        bail!(
+            "no recoverable history for {file} in this scope — it was never Read/Written/Edited \
+             here. Widen the scope (more sessions/transcripts) or check the path."
+        );
+    };
+    // Every line_no is ≤ total, so knowing `total` distinct lines ⇒ the whole 1..=total is known.
+    let complete = total > 0 && known.len() == total;
+    if !complete {
+        let covered = ranges_str(&known.iter().map(|(n, _)| *n).collect::<Vec<_>>());
+        let missing = missing_ranges_str(&known, total);
+        bail!(
+            "cannot fully recover {file} from this scope: recovered {}/{} line(s) [{covered}], \
+             MISSING [{missing}]. This session only observed PART of the file (a windowed read + \
+             edits), so a complete file can't be rebuilt here. To salvage what DID survive (the \
+             recovered lines, numbered, with the gaps left explicit) use `--salvage`; for the \
+             CHANGES it made — e.g. to rewind a copy you still have, optionally over a window via \
+             --since/--until — use `--patches`; to scope what IS recoverable use `--coverage`; or \
+             widen the scope (more sessions/transcripts).",
+            known.len(),
+            total
+        );
+    }
+    let mut content = known
+        .iter()
+        .map(|(_, t)| t.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if !content.is_empty() {
+        content.push('\n');
+    }
+    if let Some(p) = out_path {
+        let wrote = write_out_guarded(p, &content)?;
+        if json {
+            println!(
+                "{}",
+                serde_json::json!({"file": file, "complete": true, "lines": known.len(), "path": p.to_string_lossy(), "wrote": wrote})
+            );
+        } else if wrote {
+            eprintln!(
+                "(recovered {file} → {}, {} lines)",
+                p.display(),
+                known.len()
+            );
+        }
+    } else if json {
+        println!(
+            "{}",
+            serde_json::json!({"file": file, "complete": true, "lines": known.len(), "content": content})
+        );
+    } else {
+        print!("{content}");
+        eprintln!("(recovered {file}: {} lines, complete)", known.len());
+    }
+    Ok(())
+}
+
+/// Compress sorted line numbers to a compact `1-50, 52, 60-72` range string (`none` when empty).
+fn ranges_str(nums: &[usize]) -> String {
+    if nums.is_empty() {
+        return "none".to_string();
+    }
+    let mut sorted: Vec<usize> = nums.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let fmt = |a: usize, b: usize| {
+        if a == b {
+            a.to_string()
+        } else {
+            format!("{a}-{b}")
+        }
+    };
+    let mut parts = Vec::new();
+    let (mut start, mut prev) = (sorted[0], sorted[0]);
+    for &n in &sorted[1..] {
+        if n == prev + 1 {
+            prev = n;
+        } else {
+            parts.push(fmt(start, prev));
+            start = n;
+            prev = n;
+        }
+    }
+    parts.push(fmt(start, prev));
+    parts.join(", ")
+}
+
+/// The `1..=total` line numbers NOT present in `known`, as a compact range string.
+fn missing_ranges_str(known: &[(usize, String)], total: usize) -> String {
+    let present: std::collections::HashSet<usize> = known.iter().map(|(n, _)| *n).collect();
+    let missing: Vec<usize> = (1..=total).filter(|n| !present.contains(n)).collect();
+    ranges_str(&missing)
 }
 
 /// Print the per-transcript header. A SUBAGENT transcript is branded
@@ -2725,7 +2879,9 @@ fn print_footer(ctx: &RenderCtx) {
     let mode = match ctx.mode {
         RecoverMode::Patches => "patches",
         RecoverMode::At => "at",
+        RecoverMode::Salvage => "salvage",
         RecoverMode::Coverage => "coverage",
+        RecoverMode::Restore => "restore", // never reached — render_restore returns before the footer
     };
     println!();
     println!(
@@ -2749,6 +2905,9 @@ impl Replay {
 
 fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>) -> Result<()> {
     use serde_json::json;
+    if matches!(ctx.mode, RecoverMode::Restore) {
+        return render_restore(ctx, sessions, out_path, true);
+    }
     let mut session_count = 0usize;
 
     // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
@@ -2762,6 +2921,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
     }
 
     match ctx.mode {
+        RecoverMode::Restore => unreachable!("Restore handled above in render_json"),
         RecoverMode::Coverage => {
             for s in sessions {
                 if s.events.is_empty() {
@@ -2846,7 +3006,8 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 write_out_guarded(p, &out_blob)?;
             }
         }
-        RecoverMode::At => {
+        RecoverMode::At | RecoverMode::Salvage => {
+            // Salvage feeds an empty `when` (ctx.at is None) → @latest (no cutoff).
             let when = ctx.at.as_deref().unwrap_or("");
             let mut out_blob = String::new();
             for s in sessions {
@@ -2903,7 +3064,9 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
             "mode": match ctx.mode {
                 RecoverMode::Patches => "patches",
                 RecoverMode::At => "at",
+                RecoverMode::Salvage => "salvage",
                 RecoverMode::Coverage => "coverage",
+                RecoverMode::Restore => "restore",
             },
             "skipped_lines": ctx.skipped_lines,
         }
