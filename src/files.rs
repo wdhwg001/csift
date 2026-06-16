@@ -211,13 +211,32 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
     // Build the carrier join map once over the whole slice: tool_use_id → (filePath,
     // is_create). A subagent transcript is a single scope, so a global join is correct.
     let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
+    // tool_use_ids whose RESULT errored / was cancelled (`is_error:true`) — those ops never
+    // landed, so they are not real mutations (mirrors `extract_mutations` + `recover::extract`).
+    let mut failed_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for rec in records {
         for (id, file_path, is_create) in rec.carrier_create_paths() {
             carriers.insert(id, (file_path, is_create));
         }
+        if let Some(blocks) = rec.blocks() {
+            for b in blocks {
+                if let crate::model::Block::ToolResult {
+                    tool_use_id: Some(id),
+                    is_error: Some(true),
+                    ..
+                } = b
+                {
+                    failed_ids.insert(id.clone());
+                }
+            }
+        }
     }
     let mut out = Vec::new();
     for rec in records {
+        // A record whose tool op errored / was cancelled mutated nothing — skip it.
+        if tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id)) {
+            continue;
+        }
         for mut m in rec.structured_tool_mutations() {
             if let Some(id) = tool_use_id_for(rec) {
                 if let Some((carrier_path, is_create)) = carriers.get(&id) {
@@ -284,14 +303,40 @@ fn extract_mutations(session_id: &str, records: &[Record]) -> Vec<TaggedMutation
     for (turn_index, idxs) in index_turns.iter().enumerate() {
         // Build the carrier join map for this turn: tool_use_id → (filePath, is_create).
         let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
+        // tool_use_ids whose RESULT was an error (`is_error:true`) — a failed Edit/Write, or a
+        // Write `Cancelled: parallel tool call … errored` when a sibling op in the same batch
+        // failed. The op NEVER landed, so it must NOT be counted as a real mutation: a `files`
+        // `write:1` on a cancelled Write contradicts `recover` (which correctly finds no
+        // history) and is a forensic FALSE POSITIVE ("did this session write X?"). Same
+        // `failed_ids` gate `recover::extract` already applies; computed per turn (the result
+        // block sits in the same turn as its call).
+        let mut failed_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
         for &i in idxs {
             for (id, file_path, is_create) in records[i].carrier_create_paths() {
                 carriers.insert(id, (file_path, is_create));
+            }
+            if let Some(blocks) = records[i].blocks() {
+                for b in blocks {
+                    if let crate::model::Block::ToolResult {
+                        tool_use_id: Some(id),
+                        is_error: Some(true),
+                        ..
+                    } = b
+                    {
+                        failed_ids.insert(id.clone());
+                    }
+                }
             }
         }
 
         for &i in idxs {
             let rec = &records[i];
+
+            // A record whose tool op errored / was cancelled never mutated anything — skip its
+            // structured AND heuristic-Bash mutations (the op's INPUT is a phantom, not a write).
+            if tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id)) {
+                continue;
+            }
 
             // Structured (authoritative) mutations, enriched from the carrier join.
             for mut m in rec.structured_tool_mutations() {
@@ -827,6 +872,42 @@ mod tests {
             .expect("Bash mutation surfaced");
         assert_eq!(bashed.op, FileOp::BashMutation);
         assert!(bashed.is_create, "touch is a create verb");
+    }
+
+    #[test]
+    fn mutations_in_records_excludes_cancelled_and_errored_writes() {
+        // A Write whose RESULT is `is_error:true` (a failed Edit, or a `Cancelled: parallel tool
+        // call … errored` when a sibling op in the same batch failed) NEVER landed → it must not
+        // be counted as a mutation (the `files`↔`recover` consistency fix; recover already
+        // excludes it via the same failed-id gate). A successful Write is still counted.
+        let recs = vec![
+            // turn 0: a SUCCESSFUL Write (create carrier, no error).
+            rec(
+                r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"wok","name":"Write","input":{"file_path":"/tmp/good.md","content":"real"}}]}}"#,
+            ),
+            rec(
+                r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"type":"create","filePath":"/tmp/good.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"wok","content":"ok"}]}}"#,
+            ),
+            // turn 1: a CANCELLED Write — its result is_error:true.
+            rec(
+                r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+            ),
+            rec(
+                r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"wbad","name":"Write","input":{"file_path":"/tmp/bad.md","content":"never landed"}}]}}"#,
+            ),
+            rec(
+                r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T06:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"wbad","is_error":true,"content":"<tool_use_error>Cancelled: parallel tool call Bash(...) errored</tool_use_error>"}]}}"#,
+            ),
+        ];
+        let muts = mutations_in_records(&recs);
+        assert!(
+            muts.iter().any(|m| m.path == "/tmp/good.md"),
+            "successful write is still counted"
+        );
+        assert!(
+            !muts.iter().any(|m| m.path == "/tmp/bad.md"),
+            "cancelled/errored write is NOT counted: {muts:?}"
+        );
     }
 
     #[test]

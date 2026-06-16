@@ -193,7 +193,9 @@ csift agents --session <uuid> --returned-message --format json   # every node's 
 
 The set of files a session Read / Wrote / Edited (+ Bash mutations), with timestamps. `files` reports
 THAT a file changed; `recover` rebuilds its content. `Edit` / `Write` / `MultiEdit` mutations are
-**authoritative** (create-vs-edit comes from the tool result); **Bash** mutations are a best-effort
+**authoritative** (create-vs-edit comes from the tool result) — and an op whose result is `is_error:true`
+(a failed Edit, or a Write `Cancelled` when a sibling in the same batch errored) is **excluded**: it
+never landed, so counting it would be a forensic false positive and would contradict `recover`; **Bash** mutations are a best-effort
 lexical parse — quote/backtick/procsub/arith/comment-aware, so a `>` inside a quoted string, a comment,
 or an arithmetic test never fabricates a path — and are always flagged `(heuristic)`. A write buried in
 a heredoc or `python -c` body is out of scope (missed, never mis-reported). The full Bash verb/redirect

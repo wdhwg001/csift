@@ -1459,7 +1459,9 @@ pub struct RecoverArgs {
     /// `csift search` text, or `turn_index` in any `--format json` record) and `@line:<N>`
     /// (snapshot as of JSONL TRANSCRIPT line N — the `line_no` shown in this tool's output,
     /// NOT a file line of `--file`; for a 1-based FILE-line span of `--file` use `--line-range`
-    /// instead).
+    /// instead), and `@latest` (the file's FINAL reconstructed state — no cutoff; the clean way
+    /// to ask for "its last form" without guessing a timestamp past the last write). A datetime
+    /// bound is INCLUSIVE of events AT that instant.
     /// Setting this both selects the mode AND supplies its cutoff.
     #[arg(long, value_name = "WHEN", group = "mode")]
     pub at: Option<String>,

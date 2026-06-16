@@ -546,10 +546,12 @@ file's Read / Write / Edit stream in transcript order. Three mutually-exclusive 
   signal other recovery tools discard), an external `edited_text_file` (authoritative), or a Bash
   mutation (heuristic, always flagged). No diff spans a boundary.
 - **`--at WHEN`** — the **partial, line-numbered "in the LLM's eyes" snapshot** as of a cutoff
-  (ISO8601, relative `2h`, `@turn:<N>` = first line after genuine-user turn N, or `@line:<N>` =
+  (ISO8601, relative `2h`, `@turn:<N>` = first line after genuine-user turn N, `@line:<N>` =
   JSONL TRANSCRIPT line N — the `Lnnnnn`/`line_no` this tool prints, **NOT** a file line of `--file`;
-  for a 1-based FILE-line span use `--line-range`). Known lines carry their number; unknown
-  regions are explicit `??? lines A..B unknown` markers — **gaps are NEVER fabricated**.
+  for a 1-based FILE-line span use `--line-range`; or `@latest` = the file's FINAL state, no cutoff —
+  ask for "its last form" without guessing a timestamp). A datetime bound is **inclusive** of that
+  instant. Known lines carry their number; unknown regions are explicit `??? lines A..B unknown`
+  markers — **gaps are NEVER fabricated**.
 - **`--coverage`** (alias `--dry-run`) — scope a recovery without dumping content: recoverable line
   ranges, where the boundaries sit, per-op counts (reads / edits / writes / bash / external-edits),
   fragment count.

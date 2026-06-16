@@ -2204,12 +2204,15 @@ fn truncate_excerpt(s: &str) -> String {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Resolve an `--at <WHEN>` spec to a cutoff jsonl line over a session's events.
-/// Supports `@line:<N>`, `@turn:<N>` (first line strictly after turn N), an ISO8601 /
-/// relative datetime (first line with ts strictly after the bound), or returns `None`
-/// (no cutoff → replay everything) when `when` is empty.
+/// Supports `@latest` (no cutoff → the file's FINAL state), `@line:<N>`, `@turn:<N>` (first line
+/// strictly after turn N), an ISO8601 / relative datetime (events with ts ≤ the bound — the bound
+/// is INCLUSIVE), or returns `None` (no cutoff → replay everything) when `when` is empty.
 fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<usize>> {
     let when = when.trim();
-    if when.is_empty() {
+    // `@latest` / empty → the final reconstructed state (replay every event, no cutoff). The
+    // clean way to ask for "the file's last form" without guessing a timestamp past the last
+    // write (a datetime cutoff is ≤-inclusive, so a too-early ts simply yields less).
+    if when.is_empty() || when == "@latest" {
         return Ok(None);
     }
     if let Some(rest) = when.strip_prefix("@line:") {
