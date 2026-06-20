@@ -374,7 +374,7 @@ csift list --format json .                              # machine-readable index
 | flag | short | type | default | meaning |
 |---|---|---|---|---|
 | `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is now a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
-| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main`\|`@self` (calling session) / `@<agent-hex>` (a SUBAGENT + its topological descendants — or the agent alone under `--no-subagents`) / `*.jsonl` (one transcript — a subagent transcript scopes to that agent's subtree) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
+| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main` (calling **top-level** session, env-resolved) / `@trap:<marker>` (the calling **SUBAGENT**, found by a unique literal marker the caller embeds in this csift command — §6.3a) / `@<agent-hex>` (a SUBAGENT + its topological descendants — or the agent alone under `--no-subagents`) / `*.jsonl` (one transcript — a subagent transcript scopes to that agent's subtree) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
 | `--category C` | `-t` | repeatable enum | all | one of `thinking\|user\|tool\|tool-response\|agent` (§5) |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
@@ -451,6 +451,20 @@ session  0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl
 ```
 **Error output (var absent):** non-zero exit + the guidance string from `whoami::AMBIGUOUS_GUIDANCE`.
+
+### 6.3a `@trap:<marker>` — let a SUBAGENT identify itself
+
+`whoami` and `@main` both read `CLAUDE_CODE_SESSION_ID`, which CC sets to the **top-level** session id in EVERY Bash environment — including inside an in-process subagent. A subagent therefore cannot name *itself* by env (CC withholds the per-subagent id from the Bash env; it is given only to hooks). `@trap:<marker>` recovers it from the transcript instead.
+
+**Mechanism.** The caller INVENTS a unique marker and embeds it **literally** in the very csift command (`csift agents @trap:JollyShinyBrook4283`). CC records an assistant message — including its `tool_use` — to the transcript BEFORE the tool runs (a subagent's sidechain transcript is flushed via `recordSidechainTranscript` ahead of execution; verified empirically — a subagent's Bash can already grep its own marker mid-run). csift resolves `CLAUDE_CODE_SESSION_ID`, then scans that session's main transcript **and** its subagent transcripts for a **Bash** `tool_use` whose `command` contains BOTH the marker AND the literal `csift` (so an unrelated command that merely echoed the token cannot satisfy it). Resolution:
+- exactly one **subagent** carries it → that agent (then its subtree, per `--no-subagents`);
+- only the **main** transcript carries it → the session itself;
+- **zero** → error (marker not literal / mistyped, the command did not run `csift`, or the transcript has not flushed — re-run);
+- **>1 subagent** → ambiguity error (use a fresher marker).
+
+A subagent resolves **first-try** (its tool_use is flushed before it runs); the main thread flushes at turn end, so a main-thread `@trap` may need a re-run — from the main thread just use `@main`.
+
+**Marker grammar (ENFORCED — the discipline is the point).** The marker must be a fresh, one-shot, imaginative token the model invents on the spot: **≥3 CamelCase words** (each one uppercase letter + ≥2 lowercase — no single letters, no ALLCAPS acronyms like `HTML`) followed by **exactly 4 digits** that do not form a trivial run (all-equal / consecutive / simple odd / simple even — `0000` / `1234` / `9876` / `1357` / `2468`). It must NOT be script-generated (a generator would itself be a `csift`-ish Bash command carrying the marker → ambiguity), built from a shell variable / concatenation (it must appear verbatim in the recorded command), or reused. csift rejects every violation loudly with guidance. This strictness exists precisely to make a hand-invented literary token the path of least resistance and kill the over-engineered shortcuts at the source.
 
 ### 6.4 Round-trip (turn / exchange) reconstruction algorithm
 

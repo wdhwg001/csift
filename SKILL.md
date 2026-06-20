@@ -188,6 +188,20 @@ csift search [PATTERN] [PATH...] [--no-subagents] [--subagent HEX]
   `@` is NOT special — it is treated as a literal path/pattern and does NOT scope (use `@<uuid>` /
   `@<agent-hex>`). `whoami` is the exception: it takes
   NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to `CODEX_COMPANION_SESSION_ID`).
+- **`@main` / `@trap:<marker>` — self-identification.** `@main` resolves the CALLING **top-level**
+  session from `$CLAUDE_CODE_SESSION_ID`. `@trap:<marker>` answers **"which SUBAGENT am I?"** — a
+  running subagent CANNOT read its own id from the environment (CC withholds it), so you INVENT a
+  marker and embed it LITERALLY in this very csift command; csift finds the transcript whose Bash
+  `csift` command carries that marker (a subagent's tool_use is flushed to disk BEFORE the command
+  runs, so it resolves first-try) and scopes to that agent's subtree. A main-thread marker resolves
+  the session, but the main transcript flushes at turn end so it may need a re-run — from the main
+  thread just use `@main`. **Marker discipline (csift ENFORCES it):** invent it ONE-SHOT, by you,
+  right now — an imaginative, literary, random token of **≥3 CamelCase words + 4 random digits**,
+  e.g. `@trap:JollyShinyBrook4283`. NEVER generate it with a script (a generator is itself a
+  `csift`-ish Bash call carrying the marker → ambiguity), never build it from a shell variable /
+  concatenation (it must appear VERBATIM in the recorded command), never reuse one. Rejected: fewer
+  than 3 words, single-letter or ALLCAPS "words" (`HTML…`), not exactly 4 trailing digits, or
+  trivial digits (`1111` / `1234` / `9876` / `1357` / `2468`).
 - **Flag ordering** — the argv pre-pass routes declared flags (LONG and the search short flags
   `-t`/`-i`) away from the `[PATH]...` positional, so a flag works in ANY position, including
   trailing: `search PATTERN <path> -t user` and `search PATTERN <path> --format json` both parse.

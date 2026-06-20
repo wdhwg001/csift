@@ -444,29 +444,220 @@ impl From<bool> for SubagentScope {
     }
 }
 
-/// Resolve the `@main`/`@self` env session token to a session/agent id. `@main` is always the
-/// calling session's top-level id (`CLAUDE_CODE_SESSION_ID`, which CC sets to the process-global
-/// MAIN id even inside a subagent). `@self` prefers `CLAUDE_CODE_AGENT_ID` (set only for
-/// process-based tmux/swarm teammates) so it can name the current agent; for an in-process
-/// subagent that env is absent, so `@self` falls back to the main id — identical to `@main`
-/// (CC does not export an in-process subagent's own id to the subprocess environment).
-pub fn resolve_env_session(self_scope: bool) -> Result<String> {
+/// Resolve the CALLING session id from the environment — the value of `CLAUDE_CODE_SESSION_ID`,
+/// which CC sets to the process-global MAIN session id even inside a subagent (verified
+/// empirically + against the cleanroom; an in-process subagent's OWN id is NOT exported to the
+/// subprocess env). Used by `@main` and as the `@trap:` search root. There is no env-based
+/// `@self` because CC withholds the per-subagent id from the Bash env — `@trap:<marker>`
+/// recovers it from the transcript instead.
+pub fn resolve_env_session() -> Result<String> {
     let read = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
-    if self_scope {
-        if let Some(a) = read("CLAUDE_CODE_AGENT_ID") {
-            return Ok(a);
-        }
-    }
     read("CLAUDE_CODE_SESSION_ID")
         .or_else(|| read("CODEX_COMPANION_SESSION_ID"))
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "{} needs the calling session id, but CLAUDE_CODE_SESSION_ID is not set \
-                 (running outside Claude Code, or an old build). Pass an explicit `@<uuid>` \
-                 target instead.",
-                if self_scope { "@self" } else { "@main" }
+                "needs the calling session id, but CLAUDE_CODE_SESSION_ID is not set (running \
+                 outside Claude Code, or an old build). Pass an explicit `@<uuid>` target instead."
             )
         })
+}
+
+/// The identity `@trap:<marker>` resolved to: a specific subagent (its bare hex), or the
+/// main-thread session itself (when the marker was issued from the top-level conversation).
+enum TrapSelf {
+    Agent(String),
+    Session(String),
+}
+
+/// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash
+/// `tool_use` command carries the (unique, literal) marker AND the literal `csift` — i.e. the
+/// very command that launched this run. Mechanism: CC records an assistant message — including
+/// its tool_use — to the transcript BEFORE the tool runs (verified: an in-process subagent's
+/// Bash can already grep its own marker mid-execution), so when csift runs it can see the command
+/// that launched it. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
+/// transcripts; a subagent match → that agent (then its subtree, per scope); only the main
+/// transcript → the session. The marker grammar is enforced strictly (see
+/// [`validate_trap_marker`]) precisely so the discipline cannot be shortcut: it must be a fresh,
+/// one-shot, imaginative token the model invents on the spot — never script-generated (a
+/// generator would itself be a `csift`-ish Bash call carrying the marker → ambiguity). Errors on
+/// a malformed marker, no match (marker not literal / mistyped / not yet flushed, or the command
+/// did not actually run `csift`), or >1 subagent (use a fresher random marker).
+fn resolve_trap(marker: &str) -> Result<TrapSelf> {
+    let marker = marker.trim();
+    validate_trap_marker(marker)?;
+    let session_id = resolve_env_session()?;
+    let main_jsonl = locate_session_jsonl(&session_id).ok_or_else(|| {
+        anyhow!(
+            "@trap: cannot locate the calling session {session_id}.jsonl under the projects root"
+        )
+    })?;
+
+    let main_hit = bash_command_carries_trap(&main_jsonl, marker);
+    let mut subagent_hits: Vec<String> = Vec::new();
+    for sub in crate::subagent::subagent_transcript_files(&main_jsonl)? {
+        if bash_command_carries_trap(&sub, marker) {
+            subagent_hits.push(crate::subagent::session_id_from_path(&sub));
+        }
+    }
+
+    match subagent_hits.len() {
+        1 => Ok(TrapSelf::Agent(subagent_hits.remove(0))),
+        0 if main_hit => Ok(TrapSelf::Session(session_id)),
+        0 => bail!(
+            "@trap: marker `{marker}` not found in a `csift` Bash command of the calling session. \
+             It must appear LITERALLY in THIS csift invocation (no shell variable / concatenation, \
+             and the command must actually run `csift`); if it does, the transcript may not have \
+             flushed yet — re-run."
+        ),
+        n => bail!(
+            "@trap: marker `{marker}` is AMBIGUOUS — it matched {n} subagents. Use a fresher, \
+             more random marker (it must be unique within the conversation)."
+        ),
+    }
+}
+
+/// Enforce the STRICT `@trap` marker grammar, rejecting every lazy shortcut at the source so the
+/// only way to satisfy it is to invent a fresh, imaginative token by hand. The marker must be
+/// `>=3` CamelCase words (each an uppercase letter + at least two lowercase letters — no single
+/// letters, no ALLCAPS acronyms like `HTML`) followed by EXACTLY four digits, and those four
+/// digits must NOT form a trivial run (all-equal / consecutive / simple odd / simple even — e.g.
+/// `0000` / `1234` / `9876` / `1357` / `2468`). Good: `JollyShinyBrook4283`. The strictness IS
+/// the point: it makes a hand-invented literary token the path of least resistance and a scripted
+/// or boilerplate token fail loudly.
+fn validate_trap_marker(marker: &str) -> Result<()> {
+    let guidance = "@trap needs a marker you INVENT one-shot, right now, by hand: >=3 imaginative \
+                    CamelCase words + 4 random digits, e.g. `@trap:JollyShinyBrook4283`. Put it \
+                    VERBATIM in this csift command (no shell variable / concatenation), and never \
+                    generate it with a script. Rejected: <3 words, single-letter or ALLCAPS \
+                    \"words\", missing or !=4 trailing digits, or trivial digits (1111 / 1234 / \
+                    9876 / 1357 / 2468 ...).";
+    if marker.is_empty() {
+        bail!("{guidance}");
+    }
+    if !marker.is_ascii() || marker.len() < 13 {
+        bail!("@trap: marker `{marker}` is malformed. {guidance}");
+    }
+    let (words, digits) = marker.split_at(marker.len() - 4);
+    if digits.len() != 4 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        bail!("@trap: marker `{marker}` must END with exactly 4 digits. {guidance}");
+    }
+    match camel_words(words) {
+        Some(w) if w.len() >= 3 => {}
+        _ => bail!(
+            "@trap: marker `{marker}` must be >=3 CamelCase words (each: 1 uppercase + >=2 \
+             lowercase) before the 4 digits. {guidance}"
+        ),
+    }
+    if is_trivial_4_digits(digits) {
+        bail!(
+            "@trap: the 4 digits `{digits}` are a trivial run — pick non-sequential random \
+             digits. {guidance}"
+        );
+    }
+    Ok(())
+}
+
+/// Split a CamelCase run into its words, requiring each to be one uppercase letter followed by
+/// `>=2` lowercase letters; returns `None` the moment that shape is violated (a digit, a
+/// lone/2-char "word", an ALLCAPS acronym, or any non-ASCII-letter). Used only by
+/// [`validate_trap_marker`].
+fn camel_words(s: &str) -> Option<Vec<&str>> {
+    let b = s.as_bytes();
+    let mut words: Vec<&str> = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if !b[i].is_ascii_uppercase() {
+            return None;
+        }
+        let start = i;
+        i += 1;
+        let mut lower = 0;
+        while i < b.len() && b[i].is_ascii_lowercase() {
+            i += 1;
+            lower += 1;
+        }
+        if lower < 2 {
+            return None;
+        }
+        words.push(&s[start..i]);
+    }
+    (!words.is_empty()).then_some(words)
+}
+
+/// True when four ASCII digits form a trivial arithmetic run — a constant step in `-2..=2`
+/// (all-equal `0` / consecutive `±1` / simple odd-or-even `±2`), e.g. `0000` `1234` `9876` `1357`
+/// `2468`. Such markers are too guessable / boilerplate to make a unique trap. Caller guarantees
+/// exactly four ASCII digits.
+fn is_trivial_4_digits(d: &str) -> bool {
+    let v: Vec<i32> = d.bytes().map(|b| i32::from(b - b'0')).collect();
+    let s1 = v[1] - v[0];
+    let s2 = v[2] - v[1];
+    let s3 = v[3] - v[2];
+    s1 == s2 && s2 == s3 && (-2..=2).contains(&s1)
+}
+
+/// Locate a session's top-level `<id>.jsonl` under the projects root: try the cwd-encoded dir
+/// first, then scan every project dir. `None` if absent. (Mirrors `whoami`'s locate logic.)
+fn locate_session_jsonl(id: &str) -> Option<PathBuf> {
+    let root = projects_root().ok()?;
+    let fname = format!("{id}.jsonl");
+    if let Ok(cwd) = std::env::current_dir() {
+        let c = root.join(encode_cwd(&cwd)).join(&fname);
+        if c.is_file() {
+            return Some(c);
+        }
+    }
+    for pd in all_project_dirs().ok()? {
+        let c = pd.dir.join(&fname);
+        if c.is_file() {
+            return Some(c);
+        }
+    }
+    None
+}
+
+/// True when `path`'s transcript contains a Bash `tool_use` whose `input.command` includes BOTH
+/// the `marker` AND the literal `csift` — i.e. the actual csift invocation that embedded the
+/// trap, not some unrelated command that merely echoed the token. A byte prefilter (`memmem` on
+/// the rare marker) skips a transcript that never mentions it without parsing — so a giant main
+/// transcript is mmap-scanned, not deserialized, unless the (unique) marker is present. Matching
+/// the Bash tool_use INPUT (not anywhere) avoids a false hit on a tool_result that echoed it.
+fn bash_command_carries_trap(path: &Path, marker: &str) -> bool {
+    let Ok(Some(mmap)) = crate::parse::mmap_bytes(path) else {
+        return false;
+    };
+    let bytes: &[u8] = &mmap;
+    if memchr::memmem::find(bytes, marker.as_bytes()).is_none() {
+        return false;
+    }
+    let mut found = false;
+    let _ = crate::parse::scan_lines_bytes(bytes, |line| {
+        if found {
+            return;
+        }
+        if let Ok(Some(rec)) = crate::parse::parse_line(line) {
+            if let Some(blocks) = rec.blocks() {
+                for b in blocks {
+                    if let crate::model::Block::ToolUse {
+                        name: Some(n),
+                        input: Some(inp),
+                        ..
+                    } = b
+                    {
+                        if n == "Bash"
+                            && inp
+                                .get("command")
+                                .and_then(serde_json::Value::as_str)
+                                .is_some_and(|c| c.contains(marker) && c.contains("csift"))
+                        {
+                            found = true;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    found
 }
 
 /// Resolve a `*.jsonl` session-file TARGET to `(project_dir, session_id)`. A top-level
@@ -530,7 +721,7 @@ pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
 ///
 /// This is the SINGLE shared target resolver for `list` / `search` / `agents` / `files` /
 /// `recover` / `turns` / `image`. There is NO `--session` flag — a session is targeted by a
-/// positional `@<uuid>` / `@<agent-hex>` / `@main` / `@self` token or a `*.jsonl` file; a real
+/// positional `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` token or a `*.jsonl` file; a real
 /// path / encoded-dir token / `~/.claude/projects/<enc>` scopes to project dir(s). 0 `paths` ⇒
 /// every project under the projects root. The subagent transcripts of a selected session
 /// (built-in Task/Agent-tool + workflow / OMC agents under `subagents/**`) are gathered from
@@ -550,7 +741,7 @@ pub fn resolve_session_files(
     scope: SubagentScope,
     caller: Caller,
 ) -> Result<Vec<PathBuf>> {
-    // Target grammar (no `--session` flag — a session is an `@<uuid>` / `@main` / `@self`
+    // Target grammar (no `--session` flag — a session is an `@<uuid>` / `@main` / `@trap:<marker>`
     // positional, or a `*.jsonl` file). A token is one of: an `@`-prefixed IDENTIFIER (env /
     // session-id / encoded-dir), a `*.jsonl` session file, or a PATH (real cwd, encoded-dir
     // token, or `~/.claude/projects/<enc>`). A BARE uuid is NOT special — it falls to the path
@@ -561,8 +752,8 @@ pub fn resolve_session_files(
     // Session-UUID PREFIXES (`@13d9645a` — the leading hex of a uuid, e.g. its first segment):
     // resolved by prefix-match against the enumerated sessions, UNIQUE or an ambiguity error.
     let mut session_prefixes: Vec<String> = Vec::new();
-    // AGENT targets (`@<agent-hex>` / `@self`→agent / a subagent `*.jsonl`): each resolves to
-    // that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
+    // AGENT targets (`@<agent-hex>` / `@trap:<marker>`→agent / a subagent `*.jsonl`): each resolves
+    // to that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
     let mut agent_hexes: Vec<String> = Vec::new();
     let mut project_paths: Vec<&std::path::PathBuf> = Vec::new();
     // Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) — kept
@@ -573,25 +764,27 @@ pub fn resolve_session_files(
     let mut session_target = false;
     for p in paths {
         let t = p.to_str().unwrap_or_default();
-        // `@`-prefixed IDENTIFIER tokens (never a path): `@main`/`@self` (env), `@<uuid>`,
-        // `@<agent-hex>` (the agent subtree), `@<uuid-prefix>` (leading hex → unique session),
-        // `@<encoded-dir>` (a project dir by its encoded name).
+        // `@`-prefixed IDENTIFIER tokens (never a path): `@main` (env), `@trap:<marker>` (find
+        // the CALLER's transcript by a unique literal marker it embedded in this command),
+        // `@<uuid>`, `@<agent-hex>` (the agent subtree), `@<uuid-prefix>` (leading hex → unique
+        // session), `@<encoded-dir>` (a project dir by its encoded name).
         if let Some(id) = t.strip_prefix('@') {
             match id {
                 "main" => {
-                    session_ids.push(resolve_env_session(false)?);
+                    session_ids.push(resolve_env_session()?);
                     session_target = true;
                 }
-                // `@self` resolves to the AGENT id for a tmux/swarm teammate (→ agent subtree),
-                // else the calling session id (→ session). For an in-process subagent the agent
-                // id is not in the env, so this falls through to the session (== `@main`).
-                "self" => {
-                    let s = resolve_env_session(true)?;
-                    if is_bare_subagent_hex(&s) {
-                        agent_hexes.push(s);
-                    } else {
-                        session_ids.push(s);
-                        session_target = true;
+                // `@trap:<marker>` — the SELF identifier. The caller (an in-process subagent
+                // whose own id CC withholds from the env) puts a unique, LITERAL marker in this
+                // very command; csift finds the transcript whose Bash tool_use carries it. A
+                // subagent match → that agent's subtree; a main-thread match → the session.
+                _ if id.starts_with("trap:") => {
+                    match resolve_trap(id.strip_prefix("trap:").unwrap_or(""))? {
+                        TrapSelf::Agent(hex) => agent_hexes.push(hex),
+                        TrapSelf::Session(sid) => {
+                            session_ids.push(sid);
+                            session_target = true;
+                        }
                     }
                 }
                 _ if is_uuid(id) => {
@@ -849,13 +1042,14 @@ fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// True when a TARGET token pins a SINGLE transcript/session (so `search --line` has one file
-/// to address, and the empty-pattern warning knows a session filter is present): an
-/// `@main`/`@self` env token, an `@<uuid>`/`@<agent-hex>` id, or a `*.jsonl` file. A plain path
-/// or encoded-dir token can span many sessions, so it does NOT pin.
+/// to address, and the empty-pattern warning knows a session filter is present): `@main`, a
+/// `@trap:<marker>` self-token, an `@<uuid>`/`@<agent-hex>`/`@<uuid-prefix>` id, or a `*.jsonl`
+/// file. A plain path or encoded-dir token can span many sessions, so it does NOT pin.
 #[must_use]
 pub fn pins_single_session(token: &str) -> bool {
     if let Some(id) = token.strip_prefix('@') {
-        return matches!(id, "main" | "self")
+        return id == "main"
+            || id.starts_with("trap:")
             || is_uuid(id)
             || is_bare_subagent_hex(id)
             || is_uuid_prefix(id);
@@ -1202,7 +1396,7 @@ mod tests {
     #[test]
     fn pins_single_session_covers_at_tokens_and_jsonl() {
         assert!(pins_single_session("@main"));
-        assert!(pins_single_session("@self"));
+        assert!(pins_single_session("@trap:JollyShinyBrook4283"));
         assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
         assert!(pins_single_session("@ae24045bd6d4bdaff"));
         assert!(pins_single_session("@13d9645a")); // uuid-prefix
@@ -1223,5 +1417,46 @@ mod tests {
         assert!(!is_uuid_prefix("13d9645a3a5b")); // 12 → agent hex
         assert!(!is_uuid_prefix("13d9645g")); // non-hex g
         assert!(!is_uuid_prefix("13d9-645a")); // dashed
+    }
+
+    #[test]
+    fn validate_trap_marker_enforces_the_strict_grammar() {
+        // Accepted: >=3 imaginative CamelCase words + 4 non-trivial digits.
+        for ok in [
+            "JollyShinyBrook4283",
+            "MossyLanternCove6024",
+            "GildedHeronVale7391",
+            "WistfulAmberGlenMoor8135", // 4 words is fine too
+        ] {
+            assert!(validate_trap_marker(ok).is_ok(), "should accept {ok}");
+        }
+        // Rejected — every lazy shortcut fails loudly.
+        for bad in [
+            "",                   // empty
+            "foo",                // too short / not the shape
+            "CrimsonOwlPond",     // no trailing 4 digits
+            "DeepRiverStone12",   // only 2 digits
+            "OneTwo4283",         // 2 words (< 3)
+            "GoFooBars4283",      // "Go" is a 2-letter word (need >=3 chars)
+            "HTTPSPROXYGATE4827", // ALLCAPS "word" — no lowercase tail
+            "HTML0000",           // the acronym + zeros loophole
+            "DeepRiverStone1234", // trivial: consecutive
+            "DeepRiverStone0000", // trivial: all-equal
+            "DeepRiverStone9876", // trivial: descending
+            "DeepRiverStone1357", // trivial: odd run (+2)
+            "DeepRiverStone2468", // trivial: even run (+2)
+        ] {
+            assert!(validate_trap_marker(bad).is_err(), "should reject {bad:?}");
+        }
+    }
+
+    #[test]
+    fn is_trivial_4_digits_flags_arithmetic_runs_only() {
+        for t in ["0000", "1234", "9876", "1357", "2468", "8642", "3210"] {
+            assert!(is_trivial_4_digits(t), "{t} is trivial");
+        }
+        for ok in ["4283", "6024", "7391", "8135", "1212", "1122"] {
+            assert!(!is_trivial_4_digits(ok), "{ok} is NOT trivial");
+        }
     }
 }

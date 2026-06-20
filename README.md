@@ -93,8 +93,13 @@ A few conventions are shared across subcommands:
   `plan`, `turns`) takes optional `PATH...` targets — a real cwd or an encoded `-Users-…` dir scopes to
   project dir(s), `@<uuid>` (canonical 8-4-4-4-12 hex) scopes to that one top-level session, `@<uuid-prefix>`
   (a 4–11-hex leading run like `@13d9645a`, e.g. a uuid's first segment) resolves the UNIQUE session it
-  prefixes — erroring with the candidates if it is ambiguous, `@main` /
-  `@self` is the calling (env-resolved) session, `@<agent-hex>` (a >=12-hex agent id) scopes to that
+  prefixes — erroring with the candidates if it is ambiguous, `@main` is the calling **top-level**
+  session (from `$CLAUDE_CODE_SESSION_ID`), `@trap:<marker>` is the calling **subagent** (a running
+  subagent can't read its own id from the env, so you embed a fresh, hand-invented `≥3
+  CamelCase-words + 4 digits` marker — e.g. `@trap:JollyShinyBrook4283` — LITERALLY in this csift
+  command and csift finds the transcript whose Bash `csift` command carries it; never
+  script-generated, never reused, strict format enforced — see `csift --help`), `@<agent-hex>` (a
+  >=12-hex agent id) scopes to that
   SUBAGENT plus its topological descendants — or the agent alone under `--no-subagents`,
   and a `*.jsonl` path scopes to that single transcript (a subagent transcript scopes to that agent's
   subtree). A BARE uuid WITHOUT `@` is NOT special — it is

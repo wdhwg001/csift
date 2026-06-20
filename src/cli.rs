@@ -15,7 +15,7 @@
 //! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`)
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` that is a cwd / encoded
-//! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@self` session token, or a `*.jsonl` file.
+//! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` session token, or a `*.jsonl` file.
 //! There is NO `--session` flag, and a BARE uuid (no `@`) is not special. (For `search` the
 //! first positional is PATTERN, so a session is targeted by an `@<uuid>` PATH positional — see
 //! [`SearchArgs::pattern`].) `whoami` is the exception (no target — it reads
@@ -323,7 +323,25 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         targets rather than spanning them as inputs, so it has no subagent flag.)\n\n\
         A target is EITHER a real filesystem cwd (it gets path-encoded) OR an \
         already-encoded `-Users-...` projects-dir token; with no target, every \
-        project under ~/.claude/projects is scanned.",
+        project under ~/.claude/projects is scanned.\n\n\
+        TARGETING a session/agent (the positional, no `--session` flag): `@<uuid>` (or its \
+        leading-hex prefix, e.g. `@13d9645a`) scopes to one session; `@<agent-hex>` to one \
+        subagent + its subtree; `@main` is the CALLING top-level session (read from \
+        $CLAUDE_CODE_SESSION_ID); a `*.jsonl` path scopes to that one transcript. A BARE uuid \
+        (no `@`) is NOT special.\n\n\
+        @trap:<marker> — \"which subagent am I?\". CC withholds a subagent's OWN id from its \
+        Bash environment, so a running subagent cannot name itself via env. Instead you INVENT \
+        a marker and embed it LITERALLY in this very csift command; csift finds the transcript \
+        whose Bash `csift` command carries that marker (CC records the tool_use to disk before \
+        it runs) and scopes to that agent's subtree — or to the session itself, if you are the \
+        main thread. DISCIPLINE (enforced): invent the marker ONE-SHOT, by you, right now — an \
+        imaginative, literary, random token of >=3 CamelCase words + 4 random digits, e.g. \
+        `@trap:JollyShinyBrook4283`. NEVER generate it with a script (a generator would be \
+        another `csift`-ish command carrying the marker → ambiguity); never build it from a \
+        shell variable or string concatenation (it must appear VERBATIM in the recorded \
+        command); never reuse a previous one. csift REJECTS lazy markers: fewer than 3 words, \
+        single-letter or ALLCAPS \"words\" (HTML…), not exactly 4 trailing digits, or trivial \
+        digits (1111 / 1234 / 9876 / 1357 / 2468).",
     after_help = "EXAMPLES\n  \
           csift list                                  # index every session, all projects\n  \
           csift list .                                # just this cwd's project\n  \
@@ -509,7 +527,7 @@ pub struct ListArgs {
     /// token. Repeatable. Defaults to all projects. `@<uuid>` (8-4-4-4-12 hex) scopes to that
     /// one top-level session (searched across all projects when no project path is given), so
     /// `csift list @<uuid>` identifies it — the SAME positional surface `files`/`recover`/`turns`
-    /// use; `@main`/`@self` resolve the calling session from the environment; a `*.jsonl` file
+    /// use; `@main`/`@trap:<marker>` resolve the calling session from the environment; a `*.jsonl` file
     /// path scopes to that transcript. NOTE: the default still SPANS that session's subagents, so
     /// a fan-out session lists 1 + N rows; add `--no-subagents` for just the single top-level row.
     /// A bare uuid WITHOUT `@` is NOT a session here — prefix it (`@<uuid>`). To inspect one
@@ -686,7 +704,7 @@ pub struct SearchArgs {
     /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable.
     /// With none, every project is scanned. A target may ALSO be an `@<uuid>` (8-4-4-4-12 hex)
     /// session token (so `csift search PATTERN @<uuid>` scopes to that one session),
-    /// `@main`/`@self` (the calling session), or a `*.jsonl` file. A bare SUBAGENT hex is NOT
+    /// `@main`/`@trap:<marker>` (the calling session), or a `*.jsonl` file. A bare SUBAGENT hex is NOT
     /// accepted here — inspect one subagent with `csift agents --agent <hex>`.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`; the
@@ -912,7 +930,7 @@ pub enum AgentKindFilter {
         `--with-files` attaches each node's files-changed list.",
     after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
           The TARGET selects the PARENT session whose subagents to list: pass `@<uuid>` \
-        (or `@main`/`@self`) for ONE session, or a project PATH/encoded-dir \
+        (or `@main`/`@trap:<marker>`) for ONE session, or a project PATH/encoded-dir \
         to cover every session under it (each session's subagents grouped under it). Three \
         on-disk subagent shapes are discovered under `<session>/subagents/**`:\n    \
             • builtin-task  subagents/agent-<hex>.jsonl                       (Task/Agent tool)\n    \
@@ -966,7 +984,7 @@ pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an
     /// `@<uuid>` session token. Repeatable; with none, every project is scanned. `@<uuid>`
     /// (8-4-4-4-12 hex) scopes to one session (so `csift agents @<uuid>` lists its subagents),
-    /// `@main`/`@self` resolve the calling session, and a `*.jsonl` file scopes to that transcript.
+    /// `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to that transcript.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1196,7 +1214,7 @@ pub struct FilesArgs {
     /// report, OR an `@<uuid>` session token. Repeatable; with none, every project is
     /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session (searched across all projects
     /// when no project path is given), so `csift files @<uuid>` works as the EXAMPLES show;
-    /// `@main`/`@self` resolve the calling session, and a `*.jsonl` file scopes to that
+    /// `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to that
     /// transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent with
     /// `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>` with
     /// `--subagents-only` to scope its subagents.
@@ -1421,7 +1439,7 @@ pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// from, OR an `@<uuid>` session token. Repeatable; with none, every project is
     /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift recover @<uuid>
-    /// --file …` works as the EXAMPLES show; `@main`/`@self` resolve the calling session, and a
+    /// --file …` works as the EXAMPLES show; `@main`/`@trap:<marker>` resolve the calling session, and a
     /// `*.jsonl` file scopes to that transcript. A bare SUBAGENT hex is NOT accepted here —
     /// inspect one subagent with `csift agents --agent <hex>`.
     #[arg(
@@ -1608,7 +1626,7 @@ impl RecoverArgs {
 pub struct ImageArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images,
     /// OR an `@<uuid>` session token. With none, every project is scanned. `@<uuid>` scopes to
-    /// one session, `@main`/`@self` resolve the calling session, and a `*.jsonl` file scopes to
+    /// one session, `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to
     /// that transcript.
     #[arg(
         value_name = "PATH",
@@ -1714,7 +1732,7 @@ impl ImageArgs {
 )]
 pub struct PlanArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to resolve the bound
-    /// plan file for, OR an `@<uuid>` session token (`@main`/`@self` resolve the calling
+    /// plan file for, OR an `@<uuid>` session token (`@main`/`@trap:<marker>` resolve the calling
     /// session; a `*.jsonl` file scopes to that transcript). With no target, the calling
     /// session is resolved from the environment.
     #[arg(
@@ -1891,7 +1909,7 @@ pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// turns from, OR an `@<uuid>` session token. Repeatable; with none, every project is
     /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift turns @<uuid>` works
-    /// as the EXAMPLES show; `@main`/`@self` resolve the calling session, and a `*.jsonl` file
+    /// as the EXAMPLES show; `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file
     /// scopes to that transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent
     /// with `csift agents --agent <hex>`. NOTE: `turns` defaults to the TOP-LEVEL thread only (the
     /// single-thread recovery use case), so a bare `csift turns @<uuid>` reconstructs just that
