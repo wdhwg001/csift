@@ -320,9 +320,45 @@ fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view:
             }
         }
 
-        // Built-in agents (no workflow_id) at the top level of the session.
-        for n in snodes.iter().filter(|n| n.workflow_id.is_none()) {
-            print_node_block(n, view, 1);
+        // Built-in agents (no workflow_id), NESTED by the agent→agent topology: a
+        // sub-subagent renders UNDER its spawning agent (indent grows with depth), not flat.
+        // The on-disk set is flat, so this is reconstructed from `parent_agent_id`.
+        let builtin: Vec<&SubagentNode> = snodes
+            .iter()
+            .filter(|n| n.workflow_id.is_none())
+            .copied()
+            .collect();
+        print_builtin_agents_nested(&builtin, view);
+    }
+}
+
+/// Print built-in agents as a tree by `parent_agent_id`. A root (parent absent, or its parent
+/// not an in-scope built-in) prints at indent 1 — identical to the pre-nesting flat layout —
+/// and each child one indent deeper. Pre-order DFS via an explicit stack (no recursion depth
+/// risk); siblings in stable `agent_id` order.
+fn print_builtin_agents_nested(builtin: &[&SubagentNode], view: &View) {
+    use std::collections::{BTreeMap, HashSet};
+    let ids: HashSet<&str> = builtin.iter().map(|n| n.agent_id.as_str()).collect();
+    let mut kids: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
+    let mut roots: Vec<&SubagentNode> = Vec::new();
+    for &n in builtin {
+        match n.parent_agent_id.as_deref() {
+            Some(p) if ids.contains(p) => kids.entry(p).or_default().push(n),
+            _ => roots.push(n),
+        }
+    }
+    roots.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
+    // Stack holds (node, indent); push children reversed so they pop in agent_id order.
+    let mut stack: Vec<(&SubagentNode, usize)> =
+        roots.into_iter().rev().map(|n| (n, 1usize)).collect();
+    while let Some((n, indent)) = stack.pop() {
+        print_node_block(n, view, indent);
+        if let Some(cs) = kids.get(n.agent_id.as_str()) {
+            let mut cs = cs.clone();
+            cs.sort_by(|a, b| b.agent_id.cmp(&a.agent_id)); // reverse → pop in order
+            for c in cs {
+                stack.push((c, indent + 1));
+            }
         }
     }
 }
@@ -445,11 +481,12 @@ fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &Vie
                 }
                 runs_json.push(workflow_run_json(run, children));
             }
-            let builtins: Vec<_> = snodes
+            let builtin_nodes: Vec<&SubagentNode> = snodes
                 .iter()
                 .filter(|n| n.workflow_id.is_none())
-                .map(|n| node_json(n, view))
+                .copied()
                 .collect();
+            let builtins = nested_builtin_json(&builtin_nodes, view);
             let obj = serde_json::json!({
                 "session_id": session,
                 "workflow_runs": runs_json,
@@ -465,6 +502,46 @@ fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &Vie
         println!("{}", serde_json::to_string(&node_json(n, view))?);
     }
     Ok(())
+}
+
+/// Built-in agents as nested JSON (tree view): roots (parent absent or out-of-scope) each
+/// carry their sub-subagents under `children`, recursively. Mirrors the text tree's nesting.
+/// Cycle-safe: a forged parent cycle yields no root, so it is simply not emitted.
+fn nested_builtin_json(builtin: &[&SubagentNode], view: &View) -> Vec<serde_json::Value> {
+    use std::collections::{BTreeMap, HashSet};
+    let ids: HashSet<&str> = builtin.iter().map(|n| n.agent_id.as_str()).collect();
+    let mut kids: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
+    let mut roots: Vec<&SubagentNode> = Vec::new();
+    for &n in builtin {
+        match n.parent_agent_id.as_deref() {
+            Some(p) if ids.contains(p) => kids.entry(p).or_default().push(n),
+            _ => roots.push(n),
+        }
+    }
+    roots.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
+    roots
+        .iter()
+        .map(|n| json_with_kids(n, view, &kids))
+        .collect()
+}
+
+/// One node's JSON with its sub-subagents embedded under `children` (recursive).
+fn json_with_kids(
+    n: &SubagentNode,
+    view: &View,
+    kids: &std::collections::BTreeMap<&str, Vec<&SubagentNode>>,
+) -> serde_json::Value {
+    let mut v = node_json(n, view);
+    if let Some(cs) = kids.get(n.agent_id.as_str()) {
+        let mut cs = cs.clone();
+        cs.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
+        let arr: Vec<serde_json::Value> =
+            cs.iter().map(|c| json_with_kids(c, view, kids)).collect();
+        if let Some(map) = v.as_object_mut() {
+            map.insert("children".to_string(), serde_json::Value::Array(arr));
+        }
+    }
+    v
 }
 
 /// One node's JSON object. `returned_message` / `files_changed` are included only when the

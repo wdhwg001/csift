@@ -2177,6 +2177,130 @@ fn whoami_trims_surrounding_whitespace() {
 // ── agents ──
 
 #[test]
+fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
+    // A NESTED subagent (agent spawned BY another agent). On-disk the layout is FLAT — both
+    // agents sit directly under <session>/subagents/ — because CC writes every subagent's
+    // transcript under getSessionId()=<main> regardless of depth (verified vs the cleanroom).
+    // The agent→agent link is LOGICAL: the child's spawning Task tool_use is recorded in the
+    // PARENT's transcript (not main), and the child's meta.json toolUseId points at it.
+    let enc = "-Users-testuser-Projects-nested";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let h = Home::new();
+    // Main session: spawns PARENT via an Agent tool_use (id call_parent).
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_parent","name":"Agent","input":{"description":"parent agent","subagent_type":"general-purpose"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:09:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_parent","content":"parent done"}]}}"#, "\n",
+        ),
+    );
+    // PARENT transcript (flat under subagents/). It SPAWNS the child via an Agent tool_use
+    // (id call_child) recorded HERE — this is the linkage a main-only scan would miss.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-parentaaa.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"parentaaa","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"parent: do work"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_child","name":"Agent","input":{"description":"child agent","subagent_type":"Explore"}}]}}"#, "\n",
+            r#"{"type":"user","timestamp":"2026-06-07T05:08:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_child","content":"child done"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-parentaaa.meta.json"),
+        r#"{"agentType":"general-purpose","description":"parent agent","toolUseId":"call_parent"}"#,
+    );
+    // CHILD transcript — FLAT in the SAME subagents/ dir (not nested on disk). Its meta
+    // toolUseId=call_child points at the spawn recorded in PARENT's transcript.
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-childbbb.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"childbbb","timestamp":"2026-06-07T05:01:30.000Z","message":{"role":"user","content":"child: explore"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:07:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"child result"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-childbbb.meta.json"),
+        r#"{"agentType":"Explore","description":"child agent","toolUseId":"call_child"}"#,
+    );
+
+    // JSON (flat): both agents listed; child carries parent_agent_id=parentaaa + depth 1,
+    // and recovers its trigger/description from the PARENT transcript's spawn (not main).
+    let j = h.run(&["agents", "--session", sess, "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let objs: Vec<serde_json::Value> = j
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("ndjson"))
+        .collect();
+    let child = objs
+        .iter()
+        .find(|o| o["agent_id"] == "childbbb")
+        .expect("child node");
+    let parent = objs
+        .iter()
+        .find(|o| o["agent_id"] == "parentaaa")
+        .expect("parent node");
+    assert_eq!(
+        child["parent_agent_id"], "parentaaa",
+        "child links to parent: {child}"
+    );
+    assert_eq!(
+        child["depth"],
+        serde_json::json!(1),
+        "child depth 1: {child}"
+    );
+    assert_eq!(
+        parent["parent_agent_id"],
+        serde_json::Value::Null,
+        "parent is a root: {parent}"
+    );
+    assert_eq!(
+        parent["depth"],
+        serde_json::json!(0),
+        "parent depth 0: {parent}"
+    );
+
+    // Tree JSON: child nests UNDER parent in the agents[].children array.
+    let tj = h.run(&["agents", "--session", sess, "--tree", "--format", "json"]);
+    assert!(tj.success, "stderr: {}", tj.stderr);
+    let tree: serde_json::Value = serde_json::from_str(tj.stdout.lines().next().unwrap()).unwrap();
+    let agents = tree["agents"].as_array().expect("agents array");
+    let proot = agents
+        .iter()
+        .find(|o| o["agent_id"] == "parentaaa")
+        .expect("parent at top level of tree");
+    let kids = proot["children"].as_array().expect("parent has children");
+    assert_eq!(
+        kids[0]["agent_id"], "childbbb",
+        "child nested under parent: {proot}"
+    );
+    assert!(
+        !agents.iter().any(|o| o["agent_id"] == "childbbb"),
+        "child is NOT also a top-level tree node: {tree}"
+    );
+
+    // Tree TEXT: child indented one level deeper than parent.
+    let tt = h.run(&["agents", "--session", sess, "--tree"]);
+    assert!(tt.success, "stderr: {}", tt.stderr);
+    let pidx = tt.stdout.find("parentaaa").expect("parent in tree text");
+    let cidx = tt.stdout.find("childbbb").expect("child in tree text");
+    assert!(cidx > pidx, "child printed after parent: {}", tt.stdout);
+    // child line has more leading spaces than the parent line
+    let line_indent = |needle: &str| -> usize {
+        let li = tt.stdout[..tt.stdout.find(needle).unwrap()]
+            .rfind('\n')
+            .map_or(0, |p| p + 1);
+        tt.stdout[li..].chars().take_while(|c| *c == ' ').count()
+    };
+    assert!(
+        line_indent("childbbb") > line_indent("parentaaa"),
+        "child is indented deeper than parent: {}",
+        tt.stdout
+    );
+}
+
+#[test]
 fn agents_text_lists_lifecycle_rows() {
     let h = populated_home();
     let out = h.run(&["agents", "--session", SESS]);

@@ -641,6 +641,11 @@ pub struct SpawnMeta {
 pub struct ParentSpawnIndex {
     spawns: std::collections::HashMap<String, SpawnMeta>,
     tool_results: std::collections::HashMap<String, String>,
+    /// `spawn tool_use_id → issuing agent` — `Some(agent_id)` when the spawn was recorded
+    /// in a SUBAGENT's transcript (so the spawned child is a sub-subagent of that agent),
+    /// `None` when issued by the main session itself. Populated only when the index is built
+    /// GLOBALLY ([`build_global_spawn_index`]); a single-transcript build leaves it empty.
+    issuer: std::collections::HashMap<String, Option<String>>,
 }
 
 impl ParentSpawnIndex {
@@ -656,6 +661,14 @@ impl ParentSpawnIndex {
     pub fn tool_result_text(&self, tool_use_id: &str) -> Option<&str> {
         self.tool_results.get(tool_use_id).map(String::as_str)
     }
+
+    /// The PARENT agent id for a spawn tool_use id: `Some(agent_id)` when that spawn was
+    /// issued from a subagent transcript (⇒ the spawned child nests under that agent),
+    /// `None` when main-issued or unknown. The agent→agent topology link.
+    #[must_use]
+    pub fn parent_agent_for(&self, spawn_tool_use_id: &str) -> Option<String> {
+        self.issuer.get(spawn_tool_use_id).cloned().flatten()
+    }
 }
 
 /// Build the [`ParentSpawnIndex`] for a session by a single forward scan of its parent
@@ -665,8 +678,34 @@ impl ParentSpawnIndex {
 /// index (degrade, never error).
 pub fn index_parent_spawns(parent_jsonl: &Path) -> Result<ParentSpawnIndex> {
     let mut idx = ParentSpawnIndex::default();
-    let Some(mmap) = mmap_bytes(parent_jsonl)? else {
-        return Ok(idx);
+    scan_spawns_into(parent_jsonl, None, &mut idx)?;
+    Ok(idx)
+}
+
+/// Build the GLOBAL spawn index: the main transcript (issuer `None`) PLUS every subagent
+/// transcript (issuer = that agent's id). This is what makes agent→agent nesting resolvable —
+/// a sub-subagent's spawn `Task`/`Agent` tool_use is recorded in its SPAWNING agent's
+/// transcript, NOT the main one, so a main-only scan ([`index_parent_spawns`]) can't see it.
+/// The union also recovers a nested agent's trigger ts / description / subagent_type (which
+/// likewise live in the spawning agent's transcript). On-disk layout is flat (every agent
+/// under `<main>/subagents/`), so the children are already discovered; this only adds the
+/// LOGICAL parent linkage the flat layout drops.
+pub fn build_global_spawn_index(main_jsonl: &Path, subs: &[Subagent]) -> Result<ParentSpawnIndex> {
+    // The main scan (issuer `None`) is exactly `index_parent_spawns`; then union each
+    // subagent transcript tagged with its own agent id as the issuer.
+    let mut idx = index_parent_spawns(main_jsonl)?;
+    for s in subs {
+        scan_spawns_into(&s.path, Some(s.agent_id.as_str()), &mut idx)?;
+    }
+    Ok(idx)
+}
+
+/// Scan one transcript for spawn tool_uses + tool_results, accumulating into `idx`. `issuer`
+/// tags every spawn id with the agent that issued it (`None` = the main session). A missing /
+/// unreadable jsonl is a no-op (degrade, never error).
+fn scan_spawns_into(jsonl: &Path, issuer: Option<&str>, idx: &mut ParentSpawnIndex) -> Result<()> {
+    let Some(mmap) = mmap_bytes(jsonl)? else {
+        return Ok(());
     };
     let bytes: &[u8] = &mmap;
     scan_lines_bytes(bytes, |line| {
@@ -699,6 +738,7 @@ pub fn index_parent_spawns(parent_jsonl: &Path) -> Result<ParentSpawnIndex> {
                             subagent_type: str_in("subagent_type"),
                         },
                     );
+                    idx.issuer.insert(id.clone(), issuer.map(str::to_string));
                 }
                 Block::ToolResult {
                     tool_use_id: Some(id),
@@ -712,7 +752,7 @@ pub fn index_parent_spawns(parent_jsonl: &Path) -> Result<ParentSpawnIndex> {
             }
         }
     })?;
-    Ok(idx)
+    Ok(())
 }
 
 /// True for a tool name that SPAWNS a subagent. The real transcript spelling is `Agent`
@@ -976,10 +1016,42 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
     if subs.is_empty() {
         return Ok(Vec::new());
     }
-    let index = index_parent_spawns(session_jsonl)?;
-    subs.iter()
+    // GLOBAL spawn index (main + every subagent transcript) so a nested agent's spawn —
+    // recorded in its spawning agent's transcript — links the child to that agent. On-disk
+    // layout is flat, so `subs` already holds every agent at any depth; this recovers the
+    // LOGICAL parent + the nested agent's spawn metadata the flat layout drops.
+    let index = build_global_spawn_index(session_jsonl, &subs)?;
+    let mut nodes: Vec<SubagentNode> = subs
+        .iter()
         .map(|s| node_for(s, &index, with_files))
-        .collect()
+        .collect::<Result<_>>()?;
+    assign_depths(&mut nodes);
+    Ok(nodes)
+}
+
+/// Set each node's `depth` = its number of AGENT ancestors (0 = a direct subagent of the
+/// session). Walks the `parent_agent_id` chain via an id→parent map, with a cycle guard (a
+/// corrupt/forged chain can never hang the walk). The on-disk set is flat, so this is the
+/// only place depth>0 is established.
+fn assign_depths(nodes: &mut [SubagentNode]) {
+    let parent: std::collections::HashMap<String, Option<String>> = nodes
+        .iter()
+        .map(|n| (n.agent_id.clone(), n.parent_agent_id.clone()))
+        .collect();
+    for n in nodes.iter_mut() {
+        let mut depth = 0usize;
+        let mut cur = n.parent_agent_id.clone();
+        let mut guard = 0usize;
+        while let Some(pid) = cur {
+            depth += 1;
+            guard += 1;
+            if guard > 64 {
+                break; // defensive: a cycle in a forged chain never hangs
+            }
+            cur = parent.get(&pid).cloned().flatten();
+        }
+        n.depth = depth;
+    }
 }
 
 /// Build one [`SubagentNode`] from a discovered [`Subagent`] + the session spawn index.
@@ -1019,7 +1091,10 @@ fn node_for(
         agent_id: subagent.agent_id.clone(),
         kind: subagent.kind,
         parent_session_id: subagent.parent_session_id.clone(),
-        parent_agent_id: None,
+        parent_agent_id: subagent
+            .spawn_tool_use_id
+            .as_deref()
+            .and_then(|id| index.parent_agent_for(id)),
         spawn_tool_use_id: subagent.spawn_tool_use_id.clone(),
         spawn_tool,
         workflow_id: subagent.workflow_id.clone(),

@@ -159,7 +159,7 @@ src/model.rs     # serde Record/Message/Content/Block + is_genuine_user
 src/parse.rs     # mmap + memchr head/tail/stream readers + lazy parse_line
 src/session.rs   # `list`: head+tail read → SessionSummary (+ spans subagents by default)
 src/search.rs    # `search`: regex + filters → complete round-trip Exchange (+ spans subagents)
-src/subagent.rs  # subagent discovery/classification (3 on-disk shapes, journal excluded) + lifecycle/status
+src/subagent.rs  # subagent discovery/classification (3 on-disk shapes, journal excluded) + lifecycle/status + agent→agent topology (flat on disk; nesting reconstructed via a GLOBAL spawn index → parent_agent_id/depth/tree)
 src/agents.rs    # `agents`: per-subagent lifecycle rows + --kind/--since/--until/--by filters
 src/time_window.rs # `--since`/`--until` parsing (absolute + relative, system-local); shared by search + agents
 src/timez.rs     # shared system-local timestamp rendering (format_timestamp / local_iso / local_tz)
