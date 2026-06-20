@@ -5,7 +5,8 @@
 //! - Pattern is ripgrep-like, default smart-case (`-i` forces insensitive,
 //!   `--multiline` lets `.` cross newlines). Empty pattern == pure filter.
 //! - Filters: `--category/-t` (repeatable), `--turn-range` XOR (`--since`/`--until`),
-//!   `--session`, `--path` (repeatable, multi-target).
+//!   a positional `[PATH]...` target (cwd / encoded dir / `@<uuid>` / `*.jsonl`, repeatable,
+//!   multi-target).
 //! - A **turn** is delimited by GENUINE user messages; a `tool_result`-carrier, an
 //!   `isMeta` pseudo-turn, and a compaction summary never start a turn.
 //! - On a hit, the COMPLETE round-trip (Exchange) is returned: a matched `tool_use`
@@ -80,8 +81,9 @@ pub struct Hit {
 #[derive(Debug, Clone)]
 pub struct Exchange {
     /// The transcript's own id: a top-level session uuid, OR a bare SUBAGENT hex when the
-    /// hit came from a subagent transcript. A subagent hex is NOT a `--session` target — use
-    /// `parent_session_id` to re-feed (`csift turns <parent>`). `is_subagent` discriminates.
+    /// hit came from a subagent transcript. A subagent hex is NOT a re-feedable `@<uuid>`
+    /// target — use `parent_session_id` to re-feed (`csift turns @<parent>`). `is_subagent`
+    /// discriminates.
     pub session_id: String,
     /// True when this exchange came from a subagent transcript (so `session_id` is a
     /// non-re-feedable bare hex). When true, `parent_session_id` carries the re-feedable uuid.
@@ -286,25 +288,6 @@ fn json_escapes_in_string(c: char) -> bool {
 }
 
 /// Entry point for `csift search`.
-/// Resolve a bare-uuid SOLE positional into (effective pattern, effective session). When
-/// `pattern` is a canonical session-uuid AND nothing else scopes (no PATH positional, no
-/// `--path` alias, no `--session`), the uuid is treated as the SESSION scope (mirroring the
-/// `files <uuid>` / `turns <uuid>` idiom) — returning an empty pattern + the uuid as the
-/// session filter, plus a one-line stderr note. Otherwise the inputs pass through unchanged.
-fn resolve_uuid_scope(args: &SearchArgs) -> (String, Option<String>) {
-    let lone_positional = args.targets().is_empty() && args.session.is_none();
-    if lone_positional && path::is_session_uuid(&args.pattern) {
-        eprintln!(
-            "csift: note: `{}` is a session id, not a pattern — scoping to that session \
-             (its first positional is PATTERN). For a literal-uuid search add a scope target, \
-             e.g. `csift search {} .`",
-            args.pattern, args.pattern
-        );
-        return (String::new(), Some(args.pattern.clone()));
-    }
-    (args.pattern.clone(), args.session.clone())
-}
-
 /// Record-address selectors (`--line` / `--uuid`) parsed into membership sets — the "fetch
 /// THESE records" filter that turns `search` into the in-permission message-getter. Active when
 /// either set is non-empty; a record is addressed when its physical line OR uuid is in range.
@@ -389,12 +372,7 @@ fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
     } else {
         SubagentScope::TopLevelOnly
     };
-    let files = path::resolve_session_files(
-        &args.targets(),
-        args.session.as_deref(),
-        scope,
-        Caller::Other,
-    )?;
+    let files = path::resolve_session_files(&args.targets(), scope, Caller::Other)?;
     let target: Vec<PathBuf> = if let Some(hex) = args.subagent.as_deref() {
         files
             .into_iter()
@@ -409,18 +387,18 @@ fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
             if args.subagent.is_some() {
                 bail!(
                     "--subagent: no subagent transcript `{}` found in scope — pass its parent \
-                     `--session <uuid>` and check the hex with `csift agents`",
+                     `@<uuid>` and check the hex with `csift agents`",
                     args.subagent.as_deref().unwrap_or("")
                 )
             }
             bail!(
-                "--line: the scope resolves to no single transcript — add `--session <uuid>` \
+                "--line: the scope resolves to no single transcript — add `@<uuid>` \
                  (lines of WHICH session?)"
             )
         }
         many => bail!(
             "--line is ambiguous: the scope resolves to {} transcripts. Narrow it with \
-             `--session <uuid> --no-subagents` (or `--session <uuid> --subagent <hex>`) so the \
+             `@<uuid> --no-subagents` (or `@<uuid> --subagent <hex>`) so the \
              line numbers name one file.",
             many.len()
         ),
@@ -446,20 +424,10 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         );
     }
 
-    // ── Bare-uuid SOLE positional → SCOPE, not pattern (sibling-idiom parity) ──
-    // Unlike files/turns/list/agents/recover (whose first positional is the PATH target),
-    // search's FIRST positional is PATTERN, so a copied `search <uuid>` would regex-search
-    // the uuid string across EVERY project instead of scoping to that session — silently
-    // wrong. When the pattern is a bare session-uuid and nothing else scopes (no PATH, no
-    // `--path`, no `--session`), route it to the session filter and clear the pattern, with
-    // an explicit note. A genuine literal-uuid search stays available by adding a scope
-    // positional (`csift search <uuid> .`, where `.` is the PATH and the uuid stays PATTERN).
-    let (effective_pattern, effective_session) = resolve_uuid_scope(args);
-    let args = &SearchArgs {
-        pattern: effective_pattern,
-        session: effective_session,
-        ..args.clone()
-    };
+    // Unlike files/turns/list/agents/recover (whose first positional is the PATH/`@<uuid>`
+    // target), search's FIRST positional is PATTERN — so a bare uuid here is a LITERAL pattern,
+    // searched verbatim across scope. To scope to a session, pass it as an `@<uuid>` POSITIONAL
+    // (a PATH target), exactly like every sibling (`csift search PATTERN @<uuid>`).
     let turn_range = args
         .turn_range
         .as_deref()
@@ -468,16 +436,15 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
     // A truly unbounded search (empty pattern + no filters) will emit a lot. Warn,
-    // but do not refuse — SPEC §6.2 explicitly allows it. A bare-uuid / bare-hex POSITIONAL
-    // routes to the SAME session filter as `--session` (via resolve_session_files), so it
-    // counts as a session filter here too — otherwise the warning would falsely claim "no
-    // session filter" on a run that is in fact scoped to one session.
-    let has_session_filter = args.session.is_some()
-        || args
-            .targets()
-            .iter()
-            .filter_map(|p| p.to_str())
-            .any(path::looks_like_session_id);
+    // but do not refuse — SPEC §6.2 explicitly allows it. An `@<uuid>` / `@<hex>` / `*.jsonl`
+    // POSITIONAL pins a single session (via resolve_session_files), so it counts as a session
+    // filter here too — otherwise the warning would falsely claim "no session filter" on a run
+    // that is in fact scoped to one session.
+    let has_session_filter = args
+        .targets()
+        .iter()
+        .filter_map(|p| p.to_str())
+        .any(path::pins_single_session);
     // ── Address selectors (`--line` / `--uuid`): "fetch THESE records" (rendered full) ──
     let line_specs = if args.line.is_empty() {
         Vec::new()
@@ -519,7 +486,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     } else {
         path::resolve_session_files(
             &args.targets(),
-            args.session.as_deref(),
             args.want_subagents().into(),
             path::Caller::Other,
         )?
@@ -1574,7 +1540,6 @@ mod tests {
             pattern: pattern.to_string(),
             paths: Vec::new(),
             path_flag: Vec::new(),
-            session: None,
             categories: Vec::new(),
             ignore_case: false,
             multiline: false,
@@ -1607,45 +1572,6 @@ mod tests {
         let m = build_matcher(&args("carry")).unwrap();
         assert!(m.is_match("the CARRY logic"));
         assert!(m.is_match("the carry logic"));
-    }
-
-    #[test]
-    fn lone_uuid_pattern_routes_to_session_scope() {
-        // `search <uuid>` with nothing else → the uuid becomes the SESSION scope and the
-        // pattern is cleared (parity with the `files <uuid>` / `turns <uuid>` idiom).
-        let uuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
-        let (pat, sess) = resolve_uuid_scope(&args(uuid));
-        assert_eq!(pat, "", "the uuid must not stay as a regex pattern");
-        assert_eq!(sess.as_deref(), Some(uuid));
-    }
-
-    #[test]
-    fn uuid_pattern_with_path_scope_stays_a_literal_pattern() {
-        // `search <uuid> .` → the user explicitly scoped with a PATH, so the uuid is a
-        // genuine literal pattern (the escape hatch for a literal-uuid search).
-        let uuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
-        let mut a = args(uuid);
-        a.paths = vec![std::path::PathBuf::from(".")];
-        let (pat, sess) = resolve_uuid_scope(&a);
-        assert_eq!(pat, uuid, "with a PATH scope the uuid stays the pattern");
-        assert_eq!(sess, None);
-    }
-
-    #[test]
-    fn uuid_pattern_with_explicit_session_stays_a_literal_pattern() {
-        // `search <uuid> --session <other>` → already scoped; uuid stays a literal pattern.
-        let uuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
-        let mut a = args(uuid);
-        a.session = Some("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string());
-        let (pat, _sess) = resolve_uuid_scope(&a);
-        assert_eq!(pat, uuid);
-    }
-
-    #[test]
-    fn non_uuid_pattern_passes_through_unchanged() {
-        let (pat, sess) = resolve_uuid_scope(&args("venv"));
-        assert_eq!(pat, "venv");
-        assert_eq!(sess, None);
     }
 
     #[test]

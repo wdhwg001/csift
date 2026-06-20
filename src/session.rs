@@ -11,11 +11,11 @@
 //!
 //! ## Scope resolution + parallelism
 //!
-//! Target resolution (positional PATH(s) / bare-uuid / `--session`, with subagent spanning)
+//! Target resolution (positional PATH(s) / `@<uuid>` / `*.jsonl`, with subagent spanning)
 //! goes through the SHARED [`crate::path::resolve_session_files`] resolver — the SAME one
 //! `search`/`agents`/`files`/`recover`/`turns` use — so `list` is no longer a separate
-//! scope dialect: a bare `csift list <uuid>` identifies that one session, and `--session`
-//! works, exactly like its siblings. The dominant work — the per-session head+tail parse —
+//! scope dialect: a `csift list @<uuid>` identifies that one session, exactly like its
+//! siblings. The dominant work — the per-session head+tail parse —
 //! then runs `rayon` `par_iter()` across the resolved files on the default pool (= CPU
 //! count); results are sorted by path for deterministic output.
 
@@ -44,7 +44,7 @@ const EXCERPT_MAX: usize = 200;
 pub struct SessionSummary {
     pub session_id: String,
     /// True when this row is a SUBAGENT transcript (so `session_id` is a bare hex, NOT a
-    /// re-feedable `--session` target). Discriminates the id-domain — the SAME shape
+    /// re-feedable `@<uuid>` target). Discriminates the id-domain — the SAME shape
     /// `search`/`files`/`turns`/`recover` carry, so a `list` JSON consumer can tell a
     /// subagent row from a top-level uuid row without string-parsing `path`.
     pub is_subagent: bool,
@@ -97,19 +97,14 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     }
     // 1+2. Resolve targets → the concrete session jsonl files, via the SAME shared resolver
     //       every other session-operating subcommand uses (`path::resolve_session_files`).
-    //       This routes a bare-uuid / bare-hex POSITIONAL (and the new `--session` flag) to
-    //       the session filter, so `csift list <uuid>` identifies that one session instead of
-    //       erroring — and 0 targets ⇒ every project. Subagent transcripts (built-in
-    //       Task/Agent-tool + workflow / OMC agents) span by default; `--no-subagents` keeps
-    //       only the top-level `<uuid>.jsonl` set. Workflow `journal.jsonl` event logs are
-    //       never transcripts and are excluded by the resolver.
+    //       This routes an `@<uuid>` / `@<hex>` POSITIONAL (and a `*.jsonl` file) to the session
+    //       filter, so `csift list @<uuid>` identifies that one session instead of erroring — and
+    //       0 targets ⇒ every project. Subagent transcripts (built-in Task/Agent-tool + workflow /
+    //       OMC agents) span by default; `--no-subagents` keeps only the top-level `<uuid>.jsonl`
+    //       set. Workflow `journal.jsonl` event logs are never transcripts and are excluded by the
+    //       resolver.
     let scope = SubagentScope::from(args.want_subagents());
-    let mut session_files = path::resolve_session_files(
-        &args.paths,
-        args.session.as_deref(),
-        scope,
-        path::Caller::Other,
-    )?;
+    let mut session_files = path::resolve_session_files(&args.paths, scope, path::Caller::Other)?;
     session_files.sort();
     session_files.dedup();
 
@@ -259,8 +254,8 @@ fn render_text(summaries: &[SessionSummary]) {
             println!();
         }
         // Brand a SUBAGENT row distinctly (mirroring `search`'s header + `turns`'
-        // `(subagent transcript)` annotation): a subagent hex is NOT a `--session` target,
-        // so label it as such and surface the re-feedable parent uuid inline.
+        // `(subagent transcript)` annotation): a subagent hex is NOT a re-feedable `@<uuid>`
+        // target, so label it as such and surface the re-feedable parent uuid inline.
         if s.is_subagent {
             println!(
                 "SUBAGENT  {}  ·  parent SESSION {}",

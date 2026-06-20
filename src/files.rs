@@ -49,8 +49,8 @@ use crate::timez::{format_timestamp, local_iso};
 #[derive(Debug, Clone)]
 struct TaggedMutation {
     /// The transcript's own id: a top-level session uuid, OR a bare SUBAGENT hex when the
-    /// mutation came from a subagent transcript. A subagent hex is NOT a `--session` target;
-    /// use `parent_session_id` to re-feed. `is_subagent` discriminates the id-domain.
+    /// mutation came from a subagent transcript. A subagent hex is NOT a re-feedable `@<uuid>`
+    /// target; use `parent_session_id` to re-feed. `is_subagent` discriminates the id-domain.
     session_id: String,
     /// True when this mutation came from a subagent transcript (so `session_id` is a bare
     /// hex, not a re-feedable uuid). Defaults false; set per-file in `scan_one_file`.
@@ -103,12 +103,8 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
 
     // ── Resolve targets → session files (subagent span per --no-subagents /
     //    --subagents-only; default spans subagents) ──
-    let session_files = path::resolve_session_files(
-        &args.paths,
-        args.session.as_deref(),
-        args.scope(),
-        path::Caller::Files,
-    )?;
+    let session_files =
+        path::resolve_session_files(&args.paths, args.scope(), path::Caller::Files)?;
 
     // SCOPE span of the resolved set (every transcript, incl. mutation-free subagents) so the
     // fan-out is announced from the true file set, not just the mutation-bearing subset.
@@ -745,7 +741,7 @@ fn render_boundaries_section(outcome: &Outcome) {
 /// session's mutations. Sessions render in sorted id order for determinism. A SUBAGENT
 /// group's header is branded `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring `search`'s
 /// header + `turns`' `(subagent transcript)` annotation) so a consumer never reads a bare
-/// subagent hex as a re-feedable `--session` target. All mutations in one group share the
+/// subagent hex as a re-feedable `@<uuid>` target. All mutations in one group share the
 /// same id-domain (same transcript), so the first row's flags brand the whole header.
 fn per_session<F: Fn(&str, &[&TaggedMutation])>(outcome: &Outcome, body: F) {
     let mut by_session: BTreeMap<&str, Vec<&TaggedMutation>> = BTreeMap::new();

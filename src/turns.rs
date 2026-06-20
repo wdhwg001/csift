@@ -424,7 +424,7 @@ struct SummaryInfo {
 struct ScanResult {
     session_id: String,
     /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
-    /// re-feedable `--session` target) — the r5 id-domain discriminator, now also on turns
+    /// re-feedable `@<uuid>` target) — the r5 id-domain discriminator, now also on turns
     /// JSON (the text path already brands a subagent block `(subagent transcript)`).
     is_subagent: bool,
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
@@ -510,7 +510,6 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
 
     let session_files = path::resolve_session_files(
         &args.paths,
-        args.session.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -2683,7 +2682,7 @@ fn emit_unit_json(
         "session_id": sr.session_id,
         // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex subagent
         // unit; `parent_session_id` is the always-re-feedable owning uuid (= session_id for
-        // a top-level unit). A subagent `session_id` is NOT a `--session` target.
+        // a top-level unit). A subagent `session_id` is NOT a re-feedable `@<uuid>` target.
         "is_subagent": sr.is_subagent,
         "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,

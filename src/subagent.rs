@@ -75,8 +75,8 @@ pub fn session_id_from_path(path: &Path) -> String {
 /// top-level `<uuid>.jsonl` (which IS its own session). A subagent transcript lives at
 /// `…/<PARENT-UUID>/subagents/[workflows/wf_*/]agent-<hex>.jsonl`, so the parent uuid is the
 /// directory component immediately BEFORE the `subagents` segment. This is what makes a
-/// search/files subagent match re-feedable: its bare-hex `session_id` is NOT a `--session`
-/// target, but the `parent_session_id` this returns is (`csift turns <parent>` works).
+/// search/files subagent match re-feedable: its bare-hex `session_id` is NOT a re-feedable
+/// `@<uuid>` target, but the `parent_session_id` this returns is (`csift turns @<parent>` works).
 #[must_use]
 pub fn parent_session_id_from_path(path: &Path) -> Option<String> {
     let mut prev: Option<&str> = None;

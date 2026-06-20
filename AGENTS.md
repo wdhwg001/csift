@@ -63,7 +63,7 @@ cargo build                                  # debug build (GATE: must succeed)
 cargo build --release                        # optimised (thin-LTO, 1 cgu) for real scans
 cargo run -- list [PATH...]                  # list sessions (+ subagents by default; --no-subagents to skip)
 cargo run -- search PATTERN [flags]          # regex search (spans subagents by default)
-cargo run -- agents [PATH | --session ID]    # subagent lifecycle (kind/start/completion/status; --since/--until/--by)
+cargo run -- agents [PATH... | @<uuid>]      # subagent lifecycle (kind/start/completion/status; --since/--until/--by)
 cargo run -- whoami [--show-path]            # identify the calling CC session
 cargo fmt --all                              # format
 cargo fmt --all -- --check                   # format gate
@@ -145,7 +145,7 @@ On a match, return the COMPLETE exchange, not a fragment: a matched `tool_use` W
 
 ### 6.7 whoami detection (verified)
 
-Claude Code exports **`CLAUDE_CODE_SESSION_ID`** into its Bash tool env, equal to the session's own jsonl basename (verified: env value `0a1b2c3d-…` matched `…/0a1b2c3d-….jsonl` in this project dir). This is definitive — per-session, version-independent, survives bash nesting, zero false positives. Use it and nothing else. When absent/empty, **DO NOT GUESS** (concurrent sessions, different binaries; most-recent-mtime is a false-positive trap) — error with guidance to pass `--session`. It is acceptable for whoami to often say "ambiguous". (`CODEX_COMPANION_SESSION_ID` mirrors it but is Codex-plugin-specific; prefer the canonical var.)
+Claude Code exports **`CLAUDE_CODE_SESSION_ID`** into its Bash tool env, equal to the session's own jsonl basename (verified: env value `0a1b2c3d-…` matched `…/0a1b2c3d-….jsonl` in this project dir). This is definitive — per-session, version-independent, survives bash nesting, zero false positives. Use it and nothing else. When absent/empty, **DO NOT GUESS** (concurrent sessions, different binaries; most-recent-mtime is a false-positive trap) — error with guidance to pass an explicit `@<uuid>` target. It is acceptable for whoami to often say "ambiguous". (`CODEX_COMPANION_SESSION_ID` mirrors it but is Codex-plugin-specific; prefer the canonical var.)
 
 ---
 

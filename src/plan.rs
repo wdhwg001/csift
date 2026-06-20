@@ -43,7 +43,7 @@ pub struct PlanRef {
     /// The transcript's own id (a bare hex for a subagent, a uuid for a top-level session).
     pub session_id: String,
     /// True when the binding came from a SUBAGENT transcript (plan file has the
-    /// `-agent-<hex>` suffix); its `session_id` is not a re-feedable `--session` target.
+    /// `-agent-<hex>` suffix); its `session_id` is not a re-feedable `@<uuid>` target.
     pub is_subagent: bool,
     /// The re-feedable parent session uuid (= `session_id` for a top-level transcript).
     pub parent_session_id: String,
@@ -139,7 +139,7 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
         paths.sort_unstable();
         bail!(
             "--file {PLAN_SIGIL}: the target spans sessions with different bound plan files \
-             ({}). Pass --session <uuid> to select one.",
+             ({}). Pass `@<uuid>` to select one.",
             paths.join(", ")
         );
     }
@@ -157,10 +157,9 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
 /// session/subagent id(s). The inverse of the default session→plan direction.
 fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
     let want = path::absolutize(plan_file)?;
-    // No --session filter (the whole point is we don't know the session); paths narrow scope.
+    // No session pin (the whole point is we don't know the session); paths narrow scope.
     let session_files = path::resolve_session_files(
         &args.paths,
-        None,
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -228,19 +227,22 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
     }
     // With NO target at all, resolve the CALLING session (like `whoami`) — `csift plan`
     // inside a Claude Code session answers "what is MY plan file". Never scan every
-    // project (ambiguous + expensive); error with guidance when the env signal is absent.
-    let session_filter: Option<String> = if args.paths.is_empty() && args.session.is_none() {
+    // project (ambiguous + expensive); error with guidance when the env signal is absent. A
+    // positional target (`@<uuid>` / `*.jsonl` / a project path) flows through the shared
+    // resolver's grammar instead.
+    let session_paths: Vec<PathBuf> = if args.paths.is_empty() {
         match crate::whoami::detect_session_id() {
-            Some(id) => Some(id),
+            // The env id becomes an `@<uuid>` positional — the same path every other
+            // session is reached by now that `--session` is gone.
+            Some(id) => vec![PathBuf::from(format!("@{id}"))],
             None => bail!("{}", crate::whoami::AMBIGUOUS_GUIDANCE),
         }
     } else {
-        args.session.clone()
+        args.paths.clone()
     };
 
     let session_files = path::resolve_session_files(
-        &args.paths,
-        session_filter.as_deref(),
+        &session_paths,
         args.want_subagents().into(),
         path::Caller::Other,
     )?;

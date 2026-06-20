@@ -14,11 +14,12 @@
 //! The session-operating subcommands
 //! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`)
 //! resolve their target through ONE shared resolver
-//! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` (cwd / encoded dir),
-//! an optional `--session <uuid>`, and a bare-uuid POSITIONAL that routes to the session
-//! filter. (For `search` the first positional is PATTERN, so the bare-uuid routing fires on
-//! a lone-uuid pattern — see [`SearchArgs::pattern`].) `whoami` is the exception (no target —
-//! it reads `$CLAUDE_CODE_SESSION_ID`).
+//! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` that is a cwd / encoded
+//! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@self` session token, or a `*.jsonl` file.
+//! There is NO `--session` flag, and a BARE uuid (no `@`) is not special. (For `search` the
+//! first positional is PATTERN, so a session is targeted by an `@<uuid>` PATH positional — see
+//! [`SearchArgs::pattern`].) `whoami` is the exception (no target — it reads
+//! `$CLAUDE_CODE_SESSION_ID`).
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
@@ -30,20 +31,6 @@
 use std::path::PathBuf;
 
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
-
-/// The ONE canonical `--session` help string, applied verbatim to all six session-operating
-/// subcommands so the flag reads identically everywhere (it previously diverged: `list`/
-/// `agents` carried the full guidance, the other four only a bare one-liner, and the
-/// `session id` vs `parent session id` terminology flipped inconsistently). The flag scopes
-/// to the PARENT session whose subagents the other plumbing may span, so it names the parent
-/// explicitly; a bare-uuid positional is the equivalent shorthand.
-const SESSION_FLAG_HELP: &str = "Restrict to a single (parent) session id (uuid). Use alone \
-    to find that one session across all projects, or with a PATH to scope to it; a bare-uuid \
-    POSITIONAL is equivalent. To scope to the CALLING session (there is no --self flag yet), \
-    chain whoami: `--session \"$(csift whoami --format json | jq -r .session_id)\"` — but note \
-    that yields a bare SUBAGENT hex inside a subagent, which is REJECTED here; first map it to \
-    its parent via `csift agents --agent <hex> --format json` (read parent_session_id) and feed \
-    THAT. Default scope (no --session, no PATH) is ALL projects, not the current session.";
 
 /// Parse + normalize the process argv into a [`Cli`] (the real entrypoint).
 ///
@@ -342,14 +329,14 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift list .                                # just this cwd's project\n  \
           csift search \"carry\"                        # smart-case regex, all projects\n  \
           csift search \"\" -t user --since 2h .        # pure filter: user turns, last 2h, here\n  \
-          csift agents --session <uuid> --since 2h    # subagents TRIGGERED in the last 2h\n  \
+          csift agents @<uuid> --since 2h             # subagents TRIGGERED in the last 2h\n  \
           csift whoami                                # who am I (this CC session)?\n  \
-          csift files <uuid> --by-file                # which files this session modified, when\n  \
-          csift recover <uuid> --file /abs/app.py     # segmented diff-patch history of a file\n  \
+          csift files @<uuid> --by-file               # which files this session modified, when\n  \
+          csift recover @<uuid> --file /abs/app.py    # segmented diff-patch history of a file\n  \
           csift recover . --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42\n  \
           csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
-          csift search \"\" <uuid> --no-subagents --line 46550   # fetch the exact message a hit reported, in full\n  \
-          csift search \"\" <uuid> --no-subagents --line 100-140 # fetch a contiguous span of records\n\n\
+          csift search \"\" @<uuid> --no-subagents --line 46550   # fetch the exact message a hit reported, in full\n  \
+          csift search \"\" @<uuid> --no-subagents --line 100-140 # fetch a contiguous span of records\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
 pub struct Cli {
@@ -499,9 +486,9 @@ impl ImageOutFormat {
           csift list /Users/testuser/Projects/widget_app_prototype  # a real path (gets encoded)\n  \
           csift list -Users-testuser-Projects-widget-app-prototype  # a pre-encoded dir token\n  \
           csift list ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype\n  \
-          csift list <uuid> --no-subagents                            # JUST the one top-level session row\n  \
+          csift list @<uuid> --no-subagents                          # JUST the one top-level session row\n  \
           csift list --format json .                                  # machine-readable index\n\n\
-        SCOPE: because the default SPANS subagents, a bare `csift list <uuid>` can return 1 \
+        SCOPE: because the default SPANS subagents, a `csift list @<uuid>` can return 1 \
         top-level + N subagent rows. The text output then leads with a `scope  N sessions in \
         scope (1 top-level + M subagent)` banner, brands each subagent row \
         `SUBAGENT <hex> · parent SESSION <uuid>` (a bare hex is NOT a re-feedable target — \
@@ -517,16 +504,16 @@ impl ImageOutFormat {
         NO trailing terminator object — it is pure JSONL, end-of-stream = EOF."
 )]
 pub struct ListArgs {
-    /// One or more targets: an actual filesystem cwd, or a direct
-    /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir. Repeatable.
-    /// Defaults to all projects. A target may ALSO be a bare session-UUID
-    /// (8-4-4-4-12 hex) — it is routed to the `--session` filter (and searched across all
-    /// projects when no project path is given), so `csift list <uuid>` scopes to that one
-    /// top-level session — the SAME positional surface `files`/`recover`/`turns` use. NOTE:
-    /// the default still SPANS that session's subagents, so a fan-out session lists 1 + N
-    /// rows; add `--no-subagents` for just the single top-level row. A bare SUBAGENT hex is
-    /// NOT accepted here (it never names a top-level jsonl) — inspect one subagent with
-    /// `csift agents --agent <hex>`, or pass the PARENT session uuid.
+    /// One or more targets: an actual filesystem cwd, a direct
+    /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir, or an `@`-prefixed session
+    /// token. Repeatable. Defaults to all projects. `@<uuid>` (8-4-4-4-12 hex) scopes to that
+    /// one top-level session (searched across all projects when no project path is given), so
+    /// `csift list @<uuid>` identifies it — the SAME positional surface `files`/`recover`/`turns`
+    /// use; `@main`/`@self` resolve the calling session from the environment; a `*.jsonl` file
+    /// path scopes to that transcript. NOTE: the default still SPANS that session's subagents, so
+    /// a fan-out session lists 1 + N rows; add `--no-subagents` for just the single top-level row.
+    /// A bare uuid WITHOUT `@` is NOT a session here — prefix it (`@<uuid>`). To inspect one
+    /// subagent use `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>`.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`
     /// (an absolute cwd's leading `/` encodes to `-`), e.g.
@@ -540,9 +527,6 @@ pub struct ListArgs {
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
-
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
 
     /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
     /// explicitness/symmetry — it never changes the result (the default already discovers +
@@ -622,7 +606,7 @@ impl ListArgs {
           csift search \"carry\" .                                # this project (positional PATH, like every sibling)\n  \
           csift search -i \"askuserquestion\" -t tool             # tool_use blocks naming AUQ\n  \
           csift search \"\" -t user --since 2h .                  # user turns, last 2h, this project\n  \
-          csift search \"tail.read\" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
+          csift search \"tail.read\" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
           csift search \"panic\" -t agent -t thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c)\n  \
@@ -679,7 +663,7 @@ impl ListArgs {
         by `ts_utc`, the turn-opening timestamp; timestamp-less exchanges sort last); the \
         per-hit `ts_utc` may be later than the envelope's for a deep tool_use match. \
         `session_id` is the transcript's own id: a re-feedable top-level uuid, OR a bare \
-        SUBAGENT hex when `is_subagent` is true (that hex is NOT a `--session` target — \
+        SUBAGENT hex when `is_subagent` is true (that hex is NOT a re-feedable `@<uuid>` target — \
         re-feed `parent_session_id`, which is always the owning top-level uuid). \
         `record_uuids` lists every record stitched into the round-trip (§6.4 completeness \
         evidence). A trailing footer object {matched, dropped_by_cap, skipped_lines} closes \
@@ -690,22 +674,19 @@ pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
     /// pure filter (use `--category` / time / turn filters alone).
     ///
-    /// BARE-UUID ROUTING: search's FIRST positional is PATTERN (unlike files/turns/list/
-    /// agents/recover, whose first positional is the PATH target). So a lone `csift search
-    /// <uuid>` — a session-uuid as the SOLE positional with no PATH/`--path`/`--session` —
-    /// is treated as the SESSION SCOPE (matching the `files <uuid>` idiom), not regex-searched
-    /// as the literal uuid string across every project. A one-line note reports the routing.
-    /// For a genuine literal-uuid search, add a scope target so the uuid stays the pattern:
-    /// `csift search <uuid> .` (`.` is the PATH, the uuid is PATTERN).
+    /// search's FIRST positional is PATTERN (unlike files/turns/list/agents/recover, whose
+    /// first positional is the PATH target), so a bare uuid here is a LITERAL pattern, searched
+    /// verbatim. To SCOPE to a session, pass it as an `@<uuid>` POSITIONAL (a PATH target),
+    /// exactly like every sibling: `csift search PATTERN @<uuid>`.
     #[arg(value_name = "PATTERN", default_value = "")]
     pub pattern: String,
 
     /// Project target(s) as a POSITIONAL `[PATH]...` — the SAME scope-target surface every
     /// sibling subcommand uses (`csift search PATTERN .` now works, matching
-    /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable;
-    /// combine with `--session` to narrow. With none, every project is scanned. A target may
-    /// ALSO be a bare session-UUID (8-4-4-4-12 hex) routed to the `--session` filter (so
-    /// `csift search PATTERN <uuid>` scopes to that one session). A bare SUBAGENT hex is NOT
+    /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable.
+    /// With none, every project is scanned. A target may ALSO be an `@<uuid>` (8-4-4-4-12 hex)
+    /// session token (so `csift search PATTERN @<uuid>` scopes to that one session),
+    /// `@main`/`@self` (the calling session), or a `*.jsonl` file. A bare SUBAGENT hex is NOT
     /// accepted here — inspect one subagent with `csift agents --agent <hex>`.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`; the
@@ -730,9 +711,6 @@ pub struct SearchArgs {
         hide = true
     )]
     pub path_flag: Vec<PathBuf>,
-
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
 
     /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
     /// explicitness/symmetry — it never changes the result (the default already searches each
@@ -793,7 +771,7 @@ pub struct SearchArgs {
 
     /// Print ONLY the total number of matching exchanges (one integer) — the ripgrep
     /// `-c` idiom for "how many times X?". Honors every filter (`-t`, time window,
-    /// `--session`, scope) and reports the TRUE total even if `--max-count` would cap
+    /// session/path scope) and reports the TRUE total even if `--max-count` would cap
     /// the listing. With `--format json`, prints `{"matched":N}` instead. Mutually exclusive
     /// with `-l`. (You rarely need it: the normal output's footer ALWAYS carries this same
     /// match total plus the distinct-session total — `-c` just isolates it for a pipe.)
@@ -841,22 +819,22 @@ pub struct SearchArgs {
     /// `Read`-ing the raw jsonl, built for BATCH. Repeatable AND comma-delimited, each token
     /// `N` or `A-B` (inclusive, ascending): `--line 87,495-500,992`. Addressed records render
     /// FULL. Lines are per-file, so `--line` needs the scope to pin a SINGLE transcript
-    /// (`--session <uuid>` [`--no-subagents`], or `--session <uuid> --subagent <hex>`). A range
+    /// (`@<uuid>` [`--no-subagents`], or `@<uuid> --subagent <hex>`). A range
     /// CLAMPS to the file; an EXPLICIT line that resolves to nothing is reported as `unresolved`.
     #[arg(long, value_name = "SPEC", value_delimiter = ',')]
     pub line: Vec<String>,
 
     /// ADDRESS by record `uuid`(s) (globally unique) — fetch those exact records, FULL.
     /// Repeatable AND comma-delimited (`--uuid a,b` or `--uuid a --uuid b`). Scope is optional
-    /// (uuid is global) but a `--session`/PATH scope makes the scan fast. A uuid that resolves
+    /// (uuid is global) but an `@<uuid>`/PATH scope makes the scan fast. A uuid that resolves
     /// to nothing is reported as `unresolved`.
     #[arg(long, value_name = "UUID", value_delimiter = ',')]
     pub uuid: Vec<String>,
 
     /// SCOPE the search to ONE subagent transcript by its bare hex id (as shown by `csift
-    /// agents`): `--session <parent> --subagent <hex>` searches only that subagent. Fail-CLOSED
+    /// agents`): `@<parent> --subagent <hex>` searches only that subagent. Fail-CLOSED
     /// — an unmatched hex is an error, never a silent widen to the whole corpus. It ALSO pins
-    /// the single transcript that `--line` addressing needs (`--session <parent> --subagent
+    /// the single transcript that `--line` addressing needs (`@<parent> --subagent
     /// <hex> --line N`); without `--subagent`, `--line` addresses the top-level transcript.
     #[arg(long, value_name = "HEX")]
     pub subagent: Option<String>,
@@ -918,7 +896,7 @@ pub enum AgentKindFilter {
           • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n\
         Workflow `journal.jsonl` event logs are NOT transcripts — they are read only \
         to corroborate completion status, never listed as agents.\n\n\
-        The TARGET selects the parent session: pass `--session <uuid>` for one \
+        The TARGET selects the parent session: pass `@<uuid>` for one \
         session, or a project PATH/encoded-dir to cover every session under it (each \
         session's subagents are grouped under it). Start/completion come from the \
         subagent transcript's first/last record timestamp; status is `completed` when \
@@ -933,8 +911,8 @@ pub enum AgentKindFilter {
         `--returned-message` adds the 3-way-resolved returned message to every row; \
         `--with-files` attaches each node's files-changed list.",
     after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
-          The TARGET selects the PARENT session whose subagents to list: pass `--session \
-        <uuid>` (or a bare-uuid POSITIONAL) for ONE session, or a project PATH/encoded-dir \
+          The TARGET selects the PARENT session whose subagents to list: pass `@<uuid>` \
+        (or `@main`/`@self`) for ONE session, or a project PATH/encoded-dir \
         to cover every session under it (each session's subagents grouped under it). Three \
         on-disk subagent shapes are discovered under `<session>/subagents/**`:\n    \
             • builtin-task  subagents/agent-<hex>.jsonl                       (Task/Agent tool)\n    \
@@ -950,17 +928,17 @@ pub enum AgentKindFilter {
         axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
         by `turns`/`search -t user` — they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
-          csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d      # one session's subagents\n  \
+          csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagents\n  \
           csift agents .                                                   # every session under this project\n  \
           csift agents . --kind workflow                                   # only workflow-shape agents (NOT the automation kind)\n  \
-          csift agents --session <uuid> --since 2h                         # subagents TRIGGERED in the last 2h\n  \
-          csift agents --session <uuid> --since 6h --by completion         # COMPLETED in the last 6h\n  \
-          csift agents --session <uuid> --since 2026-06-01T09:00:00Z --by completion  # COMPLETED since an ISO bound\n  \
-          csift agents --session <uuid>                                    # discover ids, then grab one:\n  \
+          csift agents @<uuid> --since 2h                                  # subagents TRIGGERED in the last 2h\n  \
+          csift agents @<uuid> --since 6h --by completion                  # COMPLETED in the last 6h\n  \
+          csift agents @<uuid> --since 2026-06-01T09:00:00Z --by completion  # COMPLETED since an ISO bound\n  \
+          csift agents @<uuid>                                             # discover ids, then grab one:\n  \
           csift agents --agent <hex>                                       #   grab ONE subagent (direct lookup; ignores time/kind/tree)\n  \
           csift agents . --tree                                            # parent→child topology (workflow runs as parents of their agents)\n  \
-          csift agents --session <uuid> --with-files                       # each node + its files-changed list\n  \
-          csift agents --session <uuid> --returned-message                 # add the 3-way-resolved returned message to every row\n  \
+          csift agents @<uuid> --with-files                                # each node + its files-changed list\n  \
+          csift agents @<uuid> --returned-message                          # add the 3-way-resolved returned message to every row\n  \
           csift agents . --format json                                     # machine-readable lifecycle rows\n\n\
         JSON SCHEMA (per --format json)\n  \
           One object per subagent node (under `--tree`, children nest in a `children` \
@@ -985,19 +963,16 @@ pub enum AgentKindFilter {
         is pure JSONL, end-of-stream = EOF."
 )]
 pub struct AgentsArgs {
-    /// Project target (actual cwd or encoded dir) whose sessions' subagents to list.
-    /// Optional when `--session` is given; with neither, every project is scanned.
-    /// Repeatable. A target may ALSO be a bare session-uuid (8-4-4-4-12 hex) routed to the
-    /// `--session` filter, so `csift agents <uuid>` works without `--session`.
+    /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an
+    /// `@<uuid>` session token. Repeatable; with none, every project is scanned. `@<uuid>`
+    /// (8-4-4-4-12 hex) scopes to one session (so `csift agents @<uuid>` lists its subagents),
+    /// `@main`/`@self` resolve the calling session, and a `*.jsonl` file scopes to that transcript.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
-
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
 
     /// HIDDEN no-op subagent-span flags. `agents` has NO subagent-span control: it DISCOVERS
     /// subagents as its primary output, so `--include-subagents`/`--no-subagents` are
@@ -1051,7 +1026,7 @@ pub struct AgentsArgs {
     /// known id resolves regardless of when it ran or its shape), and `--tree` is ignored
     /// (just the node is rendered). If the hex matches nothing in scope, it is a hard ERROR
     /// with discovery guidance — not the ambiguous `no subagents found`. Discover ids first
-    /// with `csift agents --session <uuid>` (the `agent_id` column / JSON field).
+    /// with `csift agents @<uuid>` (the `agent_id` column / JSON field).
     #[arg(long, value_name = "HEX")]
     pub agent: Option<String>,
 
@@ -1081,9 +1056,9 @@ impl AgentsArgs {
             Some(
                 "`agents` has no --include-subagents / --no-subagents flag: it DISCOVERS a \
                  session's subagents as its primary output (there is nothing to span over). \
-                 Drop the flag. To list a session's subagents run `csift agents --session \
-                 <uuid>`; to scope another subcommand's subagent span use that subcommand's \
-                 flag (e.g. `csift files --no-subagents <uuid>`).",
+                 Drop the flag. To list a session's subagents run `csift agents @<uuid>`; to \
+                 scope another subcommand's subagent span use that subcommand's \
+                 flag (e.g. `csift files --no-subagents @<uuid>`).",
             )
         } else {
             None
@@ -1104,7 +1079,7 @@ fn subagents_only_misplaced_error(passed: bool) -> Option<&'static str> {
             "`--subagents-only` is a `files`-only flag (report ONLY subagent file mutations). \
              It is not valid here. To restrict THIS subcommand to the top-level session use \
              `--no-subagents`; to span subagents (the default) drop the flag. For subagent-only \
-             FILE attribution run `csift files --subagents-only <uuid>`.",
+             FILE attribution run `csift files --subagents-only @<uuid>`.",
         )
     } else {
         None
@@ -1160,7 +1135,7 @@ pub enum FilesDetail {
                       --summary) with per-op + distinct-file counts + first/last\n  \
           --by-file   one row per distinct file (per-op counts + first/last touch)\n  \
           --timeline  full chronological list, one line per mutation (HEAVY — opt-in only)\n\n\
-        The TARGET selects the session(s): `--session <uuid>` for one, or a project \
+        The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it; with neither, all projects are \
         scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
         in subagents): `--no-subagents` restricts to the TOP-LEVEL session only; \
@@ -1179,14 +1154,14 @@ pub enum FilesDetail {
         (e.g. `--by-file --timeline`) is a parse error. SUBAGENT SCOPE: --no-subagents and \
         --subagents-only are likewise mutually exclusive (default spans subagents).\n\n\
         EXAMPLES\n  \
-          csift files <uuid>                          # default summary: coarse top-level-prefix op rollup\n  \
-          csift files <uuid> --by-file                # per-file op counts + first/last touch\n  \
-          csift files <uuid> --subagents-only --by-file   # ONLY files the session's subagents touched\n  \
-          csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)\n  \
+          csift files @<uuid>                         # default summary: coarse top-level-prefix op rollup\n  \
+          csift files @<uuid> --by-file               # per-file op counts + first/last touch\n  \
+          csift files @<uuid> --subagents-only --by-file   # ONLY files the session's subagents touched\n  \
+          csift files @<uuid> --timeline --since 2h   # full chronological, last 2h (heavy)\n  \
           csift files . --format json --by-dir        # machine-readable per-dir rollup\n\n\
         ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
-          csift files --session <uuid> --by-file              # count rows ending in gaps-style docs\n  \
-          csift files --session <uuid> --timeline --format json  # filter is_create==true (path under /tmp)\n  \
+          csift files @<uuid> --by-file                       # count rows ending in gaps-style docs\n  \
+          csift files @<uuid> --timeline --format json        # filter is_create==true (path under /tmp)\n  \
           (there is NO `op` value `create` — `op` is one of {bash,edit,write,multi_edit,\n   \
            notebook_edit}; create-vs-edit is the SEPARATE `is_create` boolean, so a /tmp-doc\n   \
            CREATE test filters `is_create==true` [optionally AND op in {write,multi_edit,\n   \
@@ -1200,8 +1175,8 @@ pub enum FilesDetail {
                        path, op, ts_utc, ts_local, turn_index, is_create, heuristic} + a\n             \
                        trailing summary object. (session_id is the transcript's own id — a\n             \
                        top-level uuid, or a bare SUBAGENT hex when is_subagent=true, which is\n             \
-                       NOT a --session target; re-feed parent_session_id, always the owning\n             \
-                       top-level uuid. heuristic=true ONLY for a bash-derived mutation — a\n             \
+                       NOT a re-feedable @<uuid> target; re-feed parent_session_id, always the\n             \
+                       owning top-level uuid. heuristic=true ONLY for a bash-derived mutation — a\n             \
                        guessed path/op lexically parsed from a shell command, lower confidence;\n             \
                        false = a definitive Edit/Write/Notebook/MultiEdit tool call with an\n             \
                        exact file_path. Filter heuristic==false for confirmed mutations only.)\n  \
@@ -1218,12 +1193,12 @@ pub enum FilesDetail {
 )]
 pub struct FilesArgs {
     /// Project target(s) (actual cwd or encoded dir) whose sessions' file mutations to
-    /// report. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) — it is
-    /// routed to the `--session` filter (searched across all projects when no project path is
-    /// given), so `csift files <uuid>` works as the EXAMPLES show (a uuid is neither a cwd nor
-    /// an encoded `-Users-…` dir). A bare SUBAGENT hex is NOT accepted here — inspect one
-    /// subagent with `csift agents --agent <hex>`, or pass the PARENT session uuid with
+    /// report, OR an `@<uuid>` session token. Repeatable; with none, every project is
+    /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session (searched across all projects
+    /// when no project path is given), so `csift files @<uuid>` works as the EXAMPLES show;
+    /// `@main`/`@self` resolve the calling session, and a `*.jsonl` file scopes to that
+    /// transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent with
+    /// `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>` with
     /// `--subagents-only` to scope its subagents.
     #[arg(
         value_name = "PATH",
@@ -1231,9 +1206,6 @@ pub struct FilesArgs {
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
-
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
 
     /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
     /// explicitness/symmetry — it never changes the result (the default already attributes
@@ -1400,7 +1372,7 @@ pub enum RecoverMode {
           --coverage  (alias --dry-run) scope a recovery WITHOUT dumping content: which \
         line ranges are recoverable, where the integrity boundaries sit, and per-op \
         counts (reads / edits / writes / bash / external-edits).\n\n\
-        The TARGET selects the session(s): `--session <uuid>` for one, or a project \
+        The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
@@ -1420,16 +1392,16 @@ pub enum RecoverMode {
         `--file` is REQUIRED for every mode; its value is an absolute path OR the magic \
         `@plan` (the session-bound plan file).\n\n\
         EXAMPLES\n  \
-          csift recover <uuid> --file /abs/app.py                   # DEFAULT: restore final content (or fail if only partial)\n  \
-          csift recover <uuid> --file /abs/app.py --out /abs/app.py # restore straight back onto disk (raw bytes, no banners)\n  \
-          csift recover <uuid> --file /abs/gone.py --salvage        # file is gone + only partly seen: dump what survived, gaps explicit\n  \
+          csift recover @<uuid> --file /abs/app.py                  # DEFAULT: restore final content (or fail if only partial)\n  \
+          csift recover @<uuid> --file /abs/app.py --out /abs/app.py # restore straight back onto disk (raw bytes, no banners)\n  \
+          csift recover @<uuid> --file /abs/gone.py --salvage       # file is gone + only partly seen: dump what survived, gaps explicit\n  \
           csift recover . --file /abs/PLAN.md --coverage            # scope first: covered ranges + boundaries, no dump\n  \
-          csift recover <uuid> --file /abs/app.py --patches         # segmented unified diffs over the whole session\n  \
-          csift recover <uuid> --file /abs/app.py --since 2h        # patches for the last 2h only (rewind a window)\n  \
-          csift recover <uuid> --file /abs/app.py --at @latest      # partial-tolerant final snapshot (holes shown)\n  \
-          csift recover <uuid> --file /abs/app.py --at @turn:42     # partial snapshot as the LLM saw it at turn 42\n  \
-          csift recover <uuid> --file @plan --out /tmp/plan.md      # reconstruct the session's bound plan (even if deleted)\n  \
-          csift recover <uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200\n\n\
+          csift recover @<uuid> --file /abs/app.py --patches        # segmented unified diffs over the whole session\n  \
+          csift recover @<uuid> --file /abs/app.py --since 2h       # patches for the last 2h only (rewind a window)\n  \
+          csift recover @<uuid> --file /abs/app.py --at @latest     # partial-tolerant final snapshot (holes shown)\n  \
+          csift recover @<uuid> --file /abs/app.py --at @turn:42    # partial snapshot as the LLM saw it at turn 42\n  \
+          csift recover @<uuid> --file @plan --out /tmp/plan.md     # reconstruct the session's bound plan (even if deleted)\n  \
+          csift recover @<uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200\n\n\
         JSON SCHEMA (per --format json)\n  \
           The default RESTORE mode emits a SINGLE object and no trailer — \
         `{file, complete:true, lines, content}` on success (or, with `--out`, \
@@ -1447,20 +1419,17 @@ pub enum RecoverMode {
 )]
 pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
-    /// from. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) routed
-    /// to the `--session` filter, so `csift recover <uuid> --file …` works as the EXAMPLES
-    /// show. A bare SUBAGENT hex is NOT accepted here — inspect one subagent with
-    /// `csift agents --agent <hex>`.
+    /// from, OR an `@<uuid>` session token. Repeatable; with none, every project is
+    /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift recover @<uuid>
+    /// --file …` works as the EXAMPLES show; `@main`/`@self` resolve the calling session, and a
+    /// `*.jsonl` file scopes to that transcript. A bare SUBAGENT hex is NOT accepted here —
+    /// inspect one subagent with `csift agents --agent <hex>`.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
-
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
 
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
     /// exactly as written in the transcript (with a basename-suffix fallback). REQUIRED
@@ -1630,16 +1599,17 @@ impl RecoverArgs {
         the single image to that format (`convert in.png out.jpg` idiom). A URL-source image has no \
         inline bytes — it is reported, never fabricated.",
     after_help = "EXAMPLES\n  \
-          csift image <uuid>                              # list every image (deduped)\n  \
+          csift image @<uuid>                             # list every image (deduped)\n  \
           csift image . --format json                     # machine-readable listing\n  \
-          csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle\n  \
-          csift image <uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1\n  \
-          csift image <uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image -> a file, convert"
+          csift image @<uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs  # re-share by handle\n  \
+          csift image @<uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs    # disambiguate a reused #1\n  \
+          csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg        # one image -> a file, convert"
 )]
 pub struct ImageArgs {
-    /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images.
-    /// Optional when `--session` is given; with neither, every project is scanned. A target
-    /// may ALSO be a bare session-UUID routed to `--session`.
+    /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images,
+    /// OR an `@<uuid>` session token. With none, every project is scanned. `@<uuid>` scopes to
+    /// one session, `@main`/`@self` resolve the calling session, and a `*.jsonl` file scopes to
+    /// that transcript.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1647,13 +1617,10 @@ pub struct ImageArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
-
     /// ADDRESS specific images by the `#N` session handle (`--id #32,#33`) or the exact
     /// `L<line>i<n>` locator (`--id L6812i1`). Repeatable + comma-delimited. Without `--out`,
     /// filters the LISTING to these; with `--out`, extracts only these. Both forms are
-    /// per-transcript, so `--id` needs a single transcript in scope (pin with `--session <uuid>
+    /// per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid>
     /// --no-subagents`). If a `#N` is AMBIGUOUS (CC reuses `#N` across prompts, so it names >1
     /// distinct image), `image` ERRORS with the occurrence list — disambiguate with the exact
     /// `L<line>i<n>`, or narrow scope via `--since`/`--until` / `--turn-range` / `--uuid`.
@@ -1731,24 +1698,25 @@ impl ImageArgs {
         transcript writes on entering Plan Mode. That attachment is the authoritative binding \
         — a session may also Edit/Write OTHER sessions' plan files, but those are not its own \
         plan, so this never path-guesses.\n\n\
-        TARGET: a project PATH / encoded-dir / bare session-UUID (positional), or `--session \
-        <uuid>`. With NO target, the CALLING session is resolved from `CLAUDE_CODE_SESSION_ID` \
+        TARGET: a project PATH / encoded-dir (positional), or an `@<uuid>` session token. \
+        With NO target, the CALLING session is resolved from `CLAUDE_CODE_SESSION_ID` \
         (like `whoami`) — `csift plan` answers \"what is MY plan file\". Subagents are spanned \
         by default (their own plans surface, flagged); `--no-subagents` restricts to the \
         top-level session.\n\n\
         To DUMP the plan's content (even after it was deleted), feed it to recover: \
-        `csift recover --session <uuid> --file @plan` reconstructs the bound plan from the \
+        `csift recover @<uuid> --file @plan` reconstructs the bound plan from the \
         transcript's Writes/Edits.",
     after_help = "EXAMPLES\n  \
-          csift plan                                   # the calling session's bound plan file\n  \
-          csift plan <uuid>                            # a specific session's plan file\n  \
-          csift plan . --format json                   # every session under this project (NDJSON)\n  \
-          csift recover --session <uuid> --file @plan  # DUMP the bound plan's reconstructed content"
+          csift plan                                  # the calling session's bound plan file\n  \
+          csift plan @<uuid>                          # a specific session's plan file\n  \
+          csift plan . --format json                  # every session under this project (NDJSON)\n  \
+          csift recover @<uuid> --file @plan          # DUMP the bound plan's reconstructed content"
 )]
 pub struct PlanArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to resolve the bound
-    /// plan file for. A target may ALSO be a bare session-UUID routed to `--session`. With
-    /// no target AND no `--session`, the calling session is resolved from the environment.
+    /// plan file for, OR an `@<uuid>` session token (`@main`/`@self` resolve the calling
+    /// session; a `*.jsonl` file scopes to that transcript). With no target, the calling
+    /// session is resolved from the environment.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1756,16 +1724,13 @@ pub struct PlanArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
-
     /// REVERSE lookup: given a PLAN FILE, find the session(s) BOUND to it (the inverse of the
     /// default session→plan direction). Scans the resolved scope — default every project, or
     /// narrow with a PATH target — for transcripts whose `plan_mode` attachment names this exact
     /// plan file, and prints the bound session/subagent id(s). Useful when you have a plan file
     /// (e.g. from `~/.claude/plans/`) and need to know which conversation owns it. The path is
     /// matched by absolute identity (relative / `~` inputs are absolutized first).
-    #[arg(long, value_name = "PLAN_FILE", conflicts_with = "session")]
+    #[arg(long, value_name = "PLAN_FILE")]
     pub reverse: Option<PathBuf>,
 
     /// Exclude subagent transcripts — resolve only the top-level session's bound plan (forward),
@@ -1856,16 +1821,16 @@ impl PlanArgs {
         per-unit cap) plus interleaved compaction-boundary records.",
     after_help = "EXAMPLES\n  \
           csift turns .                                     # default 40K-char reconstruction, top-level thread\n  \
-          csift turns <uuid> --budget 12000                 # recover JUST my thread (~10-15K, no fan-out)\n  \
-          csift turns <uuid> --include-subagents --format json  # ALSO span subagents (budget × N, line-numbered)\n  \
-          csift turns <uuid> --round-trip-fraction 0.6      # weight harder toward complete round-trips\n  \
+          csift turns @<uuid> --budget 12000                # recover JUST my thread (~10-15K, no fan-out)\n  \
+          csift turns @<uuid> --include-subagents --format json  # ALSO span subagents (budget × N, line-numbered)\n  \
+          csift turns @<uuid> --round-trip-fraction 0.6     # weight harder toward complete round-trips\n  \
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
           csift turns . --budget 36000 --window 9000 --slice 1   # 1st ≤9000-char chunk for a SessionStart hook (fan slices 1..4)\n  \
-          csift turns <uuid> --budget 8000 --max-compactions 1   # stay within one compaction boundary\n  \
-          csift turns <uuid> --agent-msgs eot-only          # force the old single-EOT (last-message-only) output\n  \
-          csift turns <uuid> --agent-rich-min-chars 200     # default mode, lower bar → keep more first/middle messages\n  \
-          csift turns <uuid> --profile heavy                # lower thresholds (max fidelity)\n  \
-          csift turns <uuid> --agent-msgs all               # every agent message, no filtering\n\n\
+          csift turns @<uuid> --budget 8000 --max-compactions 1  # stay within one compaction boundary\n  \
+          csift turns @<uuid> --agent-msgs eot-only         # force the old single-EOT (last-message-only) output\n  \
+          csift turns @<uuid> --agent-rich-min-chars 200    # default mode, lower bar → keep more first/middle messages\n  \
+          csift turns @<uuid> --profile heavy               # lower thresholds (max fidelity)\n  \
+          csift turns @<uuid> --agent-msgs all              # every agent message, no filtering\n\n\
         AUTOMATION TRIGGERS\n  \
           A machine `<task-notification>` (a background-command / workflow / spawned-agent /\n  \
           monitor-tick COMPLETION pulse Claude Code injects as a `type:\"user\"` record) OPENS\n  \
@@ -1924,23 +1889,20 @@ impl PlanArgs {
 )]
 pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
-    /// turns from. Optional when `--session` is given; with neither, every project is
-    /// scanned. Repeatable. A target may ALSO be a bare session-UUID (8-4-4-4-12 hex) routed
-    /// to the `--session` filter, so `csift turns <uuid>` works as the EXAMPLES show. A bare
-    /// SUBAGENT hex is NOT accepted here — inspect one subagent with `csift agents --agent
-    /// <hex>`. NOTE: `turns` defaults to the TOP-LEVEL thread only (the single-thread recovery
-    /// use case), so a bare `csift turns <uuid>` reconstructs just that conversation; add
-    /// `--include-subagents` for the rare cross-fan-out reconstruction (`--budget` is then
-    /// applied PER session in scope — see `--budget`).
+    /// turns from, OR an `@<uuid>` session token. Repeatable; with none, every project is
+    /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift turns @<uuid>` works
+    /// as the EXAMPLES show; `@main`/`@self` resolve the calling session, and a `*.jsonl` file
+    /// scopes to that transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent
+    /// with `csift agents --agent <hex>`. NOTE: `turns` defaults to the TOP-LEVEL thread only (the
+    /// single-thread recovery use case), so a bare `csift turns @<uuid>` reconstructs just that
+    /// conversation; add `--include-subagents` for the rare cross-fan-out reconstruction
+    /// (`--budget` is then applied PER session in scope — see `--budget`).
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
-
-    #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
-    pub session: Option<String>,
 
     /// Character (default) or token budget applied PER session in scope. Each session's
     /// reconstruction is bounded by this; `turns` defaults to the top-level thread only, so a
@@ -2129,7 +2091,7 @@ impl TurnsArgs {
     /// Resolve the include/exclude flags into a single decision. UNLIKE the other
     /// subcommands, `turns` defaults to TOP-LEVEL-ONLY (`include_subagents` defaults false):
     /// spanning is opt-in via `--include-subagents`, and a trailing `--no-subagents` still
-    /// forces it off. So a bare `csift turns <uuid>` reconstructs just that one thread.
+    /// forces it off. So a `csift turns @<uuid>` reconstructs just that one thread.
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         self.include_subagents && !self.no_subagents
@@ -2212,10 +2174,10 @@ impl TurnsArgs {
         giving up. (The exact var names are matched — never a loose /session/i regex, which \
         would false-positive on macOS's SECURITYSESSIONID.)\n\n\
         When NEITHER var is set (an old CC build, or running outside CC/Codex), whoami \
-        does NOT guess — it errors with guidance to pass `--session <uuid>`. \
+        does NOT guess — it errors with guidance to pass an explicit `@<uuid>` target. \
         Most-recent-mtime and process-tree walking are FORBIDDEN: many CC sessions \
         may be live at once, so mtime is almost always wrong. It is acceptable for \
-        whoami to often say \"ambiguous, pass --session\".\n\n\
+        whoami to often say \"ambiguous, pass `@<uuid>`\".\n\n\
         SUBAGENT CAVEAT: which session $CLAUDE_CODE_SESSION_ID names depends on HOW the \
         subagent was spawned. In a built-in Task/Agent SUBAGENT it is the SUBAGENT's OWN id \
         (so `whoami` identifies the subagent, not the main session). In an \
@@ -2239,7 +2201,7 @@ impl TurnsArgs {
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
         its value IS the calling session's jsonl basename). If absent, csift falls back to \
         CODEX_COMPANION_SESSION_ID (the Codex companion plugin's alias). If NEITHER is set, \
-        whoami errors with guidance to pass --session — it never guesses by mtime.\n\n\
+        whoami errors with guidance to pass an `@<uuid>` target — it never guesses by mtime.\n\n\
         SUBAGENT CAVEAT\n  \
           What the env var names depends on HOW the subagent was spawned. In a built-in \
         Task/Agent SUBAGENT it holds the SUBAGENT's OWN id (so `whoami` identifies the \
@@ -2264,7 +2226,7 @@ impl TurnsArgs {
           # FROM A SUBAGENT — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
           csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json\n  \
           # …then scope the whole conversation with that parent uuid:\n  \
-          csift search \"<pattern>\" --session \"$(csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json | jq -r .parent_session_id)\""
+          csift search \"<pattern>\" \"@$(csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json | jq -r .parent_session_id)\""
 )]
 pub struct WhoamiArgs {
     /// FORCE a `path` line even when the jsonl can't be resolved (then it prints
@@ -2469,25 +2431,41 @@ mod tests {
     }
 
     #[test]
-    fn list_has_session_flag_and_bare_uuid_positional() {
-        // list now carries `--session` and routes a bare-uuid positional like its siblings.
-        let cli = parse(&["csift", "list", "--session", SESS_UUID]).unwrap();
+    fn list_routes_at_uuid_and_bare_uuid_as_positional() {
+        // There is NO `--session` flag any more: a session is an `@<uuid>` POSITIONAL token,
+        // which the parser lands in `paths` (the resolver does the routing, not the parser).
+        let at = format!("@{SESS_UUID}");
+        let cli = parse(&["csift", "list", at.as_str()]).unwrap();
         match cli.command {
-            Command::List(a) => assert_eq!(a.session.as_deref(), Some(SESS_UUID)),
+            Command::List(a) => {
+                assert_eq!(a.paths.len(), 1, "the @<uuid> token is a positional target");
+                assert_eq!(a.paths[0].to_string_lossy(), at);
+            }
             _ => panic!("expected list"),
         }
+        // A BARE uuid (no `@`) is no longer special — it is also just a positional (the
+        // resolver later fails it as "no project dir named <uuid>", by design).
         let cli = parse(&["csift", "list", SESS_UUID]).unwrap();
         match cli.command {
             Command::List(a) => {
                 assert_eq!(a.paths.len(), 1, "the bare uuid is a positional target");
                 assert_eq!(a.paths[0].to_string_lossy(), SESS_UUID);
-                assert!(
-                    a.session.is_none(),
-                    "the resolver routes it, not the parser"
-                );
             }
             _ => panic!("expected list"),
         }
+    }
+
+    #[test]
+    fn removed_session_flag_no_longer_parses() {
+        // The old session-pin flag was hard-removed; clap must reject it as an unknown argument
+        // (never silently accept it) on a session-operating subcommand. The flag spelling is
+        // assembled at runtime (not a source literal) so it stays a NEGATIVE regression guard,
+        // not a lingering reference to the dead flag.
+        let dead_flag = concat!("--", "session");
+        assert!(
+            parse(&["csift", "list", dead_flag, SESS_UUID]).is_err(),
+            "the removed session flag must no longer parse"
+        );
     }
 
     // ── argv normalizer (the actual fix mechanism) ──
@@ -2782,12 +2760,13 @@ mod tests {
     // ── agents subcommand parsing ──
 
     #[test]
-    fn agents_session_and_window() {
+    fn agents_session_target_and_window() {
+        // A session is now an `@<uuid>` POSITIONAL (no `--session` flag): it lands in `paths`.
+        let at = format!("@{SESS_UUID}");
         let cli = parse(&[
             "csift",
             "agents",
-            "--session",
-            "abc",
+            at.as_str(),
             "--since",
             "2h",
             "--by",
@@ -2796,7 +2775,8 @@ mod tests {
         .unwrap();
         match cli.command {
             Command::Agents(a) => {
-                assert_eq!(a.session.as_deref(), Some("abc"));
+                assert_eq!(a.paths.len(), 1);
+                assert_eq!(a.paths[0].to_string_lossy(), at);
                 assert_eq!(a.since.as_deref(), Some("2h"));
                 assert_eq!(a.by, AgentTimeAxis::Completion);
             }
@@ -2828,7 +2808,8 @@ mod tests {
 
     #[test]
     fn files_default_detail_is_summary() {
-        let cli = parse(&["csift", "files", "--session", "abc"]).unwrap();
+        let at = format!("@{SESS_UUID}");
+        let cli = parse(&["csift", "files", at.as_str()]).unwrap();
         match cli.command {
             Command::Files(a) => {
                 assert_eq!(a.detail(), FilesDetail::Summary, "default is summary");
@@ -2837,7 +2818,8 @@ mod tests {
                     crate::path::SubagentScope::WithSubagents,
                     "subagents spanned by default"
                 );
-                assert_eq!(a.session.as_deref(), Some("abc"));
+                assert_eq!(a.paths.len(), 1);
+                assert_eq!(a.paths[0].to_string_lossy(), at);
             }
             _ => panic!("expected files"),
         }
@@ -2845,7 +2827,8 @@ mod tests {
 
     #[test]
     fn files_by_file_selects_by_file() {
-        let cli = parse(&["csift", "files", "--session", "abc", "--by-file"]).unwrap();
+        let at = format!("@{SESS_UUID}");
+        let cli = parse(&["csift", "files", at.as_str(), "--by-file"]).unwrap();
         match cli.command {
             Command::Files(a) => assert_eq!(a.detail(), FilesDetail::ByFile),
             _ => panic!("expected files"),

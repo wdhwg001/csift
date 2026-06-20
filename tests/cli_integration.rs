@@ -17,6 +17,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Wrap a session id / agent hex as the `@<id>` POSITIONAL target token (the grammar that
+/// replaced the removed `--session` flag). Used throughout these tests to pin one session.
+fn at(s: impl AsRef<str>) -> String {
+    format!("@{}", s.as_ref())
+}
+
 /// A scratch `$HOME` with a `.claude/projects` tree, removed on drop.
 struct Home {
     root: PathBuf,
@@ -399,7 +405,7 @@ fn list_bare_uuid_positional_routes_to_session() {
     // The scope-unification win: `csift list <uuid>` now identifies THAT one session via
     // the shared resolver (it previously encoded the uuid as a project dir and errored).
     let h = populated_home();
-    let out = h.run(&["list", SESS]);
+    let out = h.run(&["list", at(SESS).as_str()]);
     assert!(
         out.success,
         "bare-uuid positional must resolve via the shared resolver; stderr: {}",
@@ -414,14 +420,14 @@ fn list_bare_uuid_positional_routes_to_session() {
 }
 
 #[test]
-fn list_session_flag_filters_like_siblings() {
-    // `list --session <uuid>` is the SAME filter every other subcommand carries — it must
-    // parse (it previously errored "no Claude Code project dir named --session") and scope.
+fn list_at_uuid_filters_like_siblings() {
+    // `list @<uuid>` is the SAME session filter every other subcommand carries — the `@<uuid>`
+    // POSITIONAL must resolve to that one session and scope (no `--session` flag exists).
     let h = populated_home();
-    let out = h.run(&["list", "--session", SESS, "--no-subagents"]);
+    let out = h.run(&["list", at(SESS).as_str(), "--no-subagents"]);
     assert!(
         out.success,
-        "list --session must parse; stderr: {}",
+        "list @<uuid> must resolve; stderr: {}",
         out.stderr
     );
     assert!(out.stdout.contains(SESS));
@@ -439,9 +445,10 @@ fn unknown_flag_reports_clean_error_not_project_dir_error() {
     // "unexpected argument" message (NOT the misleading "no Claude Code project dir named
     // --xxx"). The `--`-leading value-parser reject makes this uniform tool-wide.
     let h = populated_home();
+    let at_sess = at(SESS);
     for args in [
-        vec!["files", SESS, "--by-fil"],
-        vec!["turns", SESS, "--budgett", "5000"],
+        vec!["files", at_sess.as_str(), "--by-fil"],
+        vec!["turns", at_sess.as_str(), "--budgett", "5000"],
         vec!["recover", "--bogus-flag"],
         vec!["agents", ENC, "--bogus"],
         vec!["list", "--by-fil"],
@@ -517,7 +524,7 @@ fn whoami_both_env_vars_blank_errors() {
         ],
     );
     assert!(!out.success, "both-blank must error");
-    assert!(out.stderr.contains("--session"), "stderr: {}", out.stderr);
+    assert!(out.stderr.contains("@<uuid>"), "stderr: {}", out.stderr);
 }
 
 // ── search ──
@@ -606,16 +613,16 @@ fn search_empty_pattern_warns_then_emits() {
 }
 
 #[test]
-fn search_empty_pattern_with_session_only_does_not_warn() {
-    // Empty pattern + ONLY `--session` (no category/time/turn filter) → the warning
-    // chain reaches `args.session.is_none()` and it is FALSE → warning suppressed.
-    // This is the last operand of the chain, so the earlier operands are all true.
+fn search_empty_pattern_with_session_target_only_does_not_warn() {
+    // Empty pattern + ONLY an `@<uuid>` session target (no category/time/turn filter) → the
+    // warning's `has_session_filter` operand (a `pins_single_session` target) is TRUE → warning
+    // suppressed.
     let h = populated_home();
-    let out = h.run(&["search", "", "--session", SESS, "--no-subagents"]);
+    let out = h.run(&["search", "", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         !out.stderr.contains("empty pattern with no category"),
-        "a --session scope must suppress the warning; stderr: {}",
+        "an @<uuid> session scope must suppress the warning; stderr: {}",
         out.stderr
     );
 }
@@ -631,8 +638,7 @@ fn search_empty_pattern_with_category_does_not_warn() {
         "-t",
         "user",
         "--no-subagents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -649,7 +655,7 @@ fn search_empty_pattern_with_uuid_positional_does_not_warn() {
     // filter" — must be SUPPRESSED. Previously the gate only inspected `--session` and
     // printed the misleading warning here.
     let h = populated_home();
-    let out = h.run(&["search", "", SESS, "--no-subagents"]);
+    let out = h.run(&["search", "", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         !out.stderr.contains("empty pattern with no category"),
@@ -1043,7 +1049,14 @@ fn search_count_and_files_with_matches_are_mutually_exclusive() {
 fn search_line_address_fetches_the_record_in_full() {
     let h = populated_home();
     // Fixture L1 = the opening user record. Addressing it (no pattern) returns it FULL.
-    let out = h.run(&["search", "", SESS, "--no-subagents", "--line", "1"]);
+    let out = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--line",
+        "1",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("◂ user  L1  "),
@@ -1061,7 +1074,14 @@ fn search_line_address_fetches_the_record_in_full() {
 fn search_line_address_renders_uncapped() {
     let h = populated_home();
     // L2 = the assistant thinking + agent-text record. Addressed → full (no excerpt cap).
-    let out = h.run(&["search", "", SESS, "--no-subagents", "--line", "2"]);
+    let out = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--line",
+        "2",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout
@@ -1075,7 +1095,14 @@ fn search_line_address_renders_uncapped() {
 fn search_multiple_lines_and_ranges_address_many_records() {
     let h = populated_home();
     // L1 (turn 0) + L6 (turn 1) — distinct turns, both surfaced under the SAME session label.
-    let list = h.run(&["search", "", SESS, "--no-subagents", "--line", "6,1"]);
+    let list = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--line",
+        "6,1",
+    ]);
     assert!(list.success, "stderr: {}", list.stderr);
     assert!(
         list.stdout.contains("why is the carry needed?")
@@ -1084,7 +1111,14 @@ fn search_multiple_lines_and_ranges_address_many_records() {
         list.stdout
     );
     // A range expands to every record in span (L1-L7 are records; L8 malformed is skipped).
-    let range = h.run(&["search", "", SESS, "--no-subagents", "--line", "1-7"]);
+    let range = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--line",
+        "1-7",
+    ]);
     assert!(range.success, "stderr: {}", range.stderr);
     assert!(
         range.stdout.contains("why is the carry needed?") && range.stdout.contains("No panic"),
@@ -1120,7 +1154,7 @@ fn search_line_address_json_carries_full_address() {
     let out = h.run(&[
         "search",
         "",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--line",
         "2",
@@ -1146,7 +1180,14 @@ fn search_explicit_unresolved_line_is_reported() {
     let h = populated_home();
     // An EXPLICIT line past EOF resolves to nothing → an `unresolved:` line (text) and an
     // `unresolved` array (json). `search` itself still exits 0 (a no-match is not an error).
-    let txt = h.run(&["search", "", SESS, "--no-subagents", "--line", "999"]);
+    let txt = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--line",
+        "999",
+    ]);
     assert!(txt.success, "stderr: {}", txt.stderr);
     assert!(
         txt.stdout.contains("unresolved: L999"),
@@ -1156,7 +1197,7 @@ fn search_explicit_unresolved_line_is_reported() {
     let js = h.run(&[
         "search",
         "",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--line",
         "1,999",
@@ -1179,7 +1220,14 @@ fn search_range_past_eof_is_clamped_not_reported() {
     let h = populated_home();
     // 6-1000: L6/L7 are records; L8 malformed; L9-1000 past EOF — all RANGE members, so the
     // gaps are clamped silently (no `unresolved`), the present records returned.
-    let out = h.run(&["search", "", SESS, "--no-subagents", "--line", "6-1000"]);
+    let out = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--line",
+        "6-1000",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("now explain the panic path"),
@@ -1196,7 +1244,15 @@ fn search_range_past_eof_is_clamped_not_reported() {
 #[test]
 fn search_subagent_line_addresses_the_subagent_transcript() {
     let h = populated_home();
-    let out = h.run(&["search", "", SESS, "--subagent", "aaa111", "--line", "1"]);
+    let out = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--subagent",
+        "aaa111",
+        "--line",
+        "1",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("sub: do the thing about carry"),
@@ -1220,7 +1276,7 @@ fn search_subagent_scopes_a_normal_search_not_just_line_addressing() {
     let h = populated_home();
 
     // Unscoped: "panic" matches (it is in the top-level session).
-    let unscoped = h.run(&["search", "panic", SESS, "-c"]);
+    let unscoped = h.run(&["search", "panic", at(SESS).as_str(), "-c"]);
     assert!(unscoped.success, "stderr: {}", unscoped.stderr);
     assert_eq!(
         unscoped.stdout.trim(),
@@ -1230,7 +1286,14 @@ fn search_subagent_scopes_a_normal_search_not_just_line_addressing() {
     );
 
     // Scoped to the subagent that has NO "panic": must be 0 (was 1 with the no-op bug).
-    let scoped = h.run(&["search", "panic", SESS, "--subagent", "aaa111", "-c"]);
+    let scoped = h.run(&[
+        "search",
+        "panic",
+        at(SESS).as_str(),
+        "--subagent",
+        "aaa111",
+        "-c",
+    ]);
     assert!(scoped.success, "stderr: {}", scoped.stderr);
     assert_eq!(
         scoped.stdout.trim(),
@@ -1241,7 +1304,14 @@ fn search_subagent_scopes_a_normal_search_not_just_line_addressing() {
 
     // And a term that IS in aaa111 ("sub") still matches under the same scope — proving the
     // scope is the subagent transcript, not an empty/echo result.
-    let positive = h.run(&["search", "sub", SESS, "--subagent", "aaa111", "-l"]);
+    let positive = h.run(&[
+        "search",
+        "sub",
+        at(SESS).as_str(),
+        "--subagent",
+        "aaa111",
+        "-l",
+    ]);
     assert!(positive.success, "stderr: {}", positive.stderr);
     assert!(
         positive.stdout.contains("aaa111"),
@@ -1275,7 +1345,14 @@ fn search_subagent_unknown_hex_fails_closed() {
     // scope is empty), never silently fall back to the whole corpus. Asserted WITHOUT `--line`
     // — the path that previously ignored `--subagent` outright.
     let h = populated_home();
-    let out = h.run(&["search", "carry", SESS, "--subagent", "deadbeef00", "-c"]);
+    let out = h.run(&[
+        "search",
+        "carry",
+        at(SESS).as_str(),
+        "--subagent",
+        "deadbeef00",
+        "-c",
+    ]);
     assert!(
         !out.success,
         "an unmatched --subagent hex must fail, not return corpus counts; stdout: {} stderr: {}",
@@ -1295,7 +1372,7 @@ fn search_tool_response_names_the_tool_it_answers() {
     let out = h.run(&[
         "search",
         "carry",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "-t",
         "tool-response",
@@ -1311,7 +1388,7 @@ fn search_tool_response_names_the_tool_it_answers() {
 #[test]
 fn search_text_output_is_token_lean() {
     let h = populated_home();
-    let out = h.run(&["search", "carry", SESS, "--no-subagents"]);
+    let out = h.run(&["search", "carry", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // Session id declared ONCE in an `s1 = <uuid>` table; exchanges reference the `s1·t<n>` label.
     assert!(
@@ -1356,7 +1433,7 @@ fn files_bare_uuid_positional_routes_to_session() {
     // resolves as a session filter across all projects, not as a (nonexistent) project
     // dir. Previously errored "no Claude Code project dir for …/<uuid>".
     let h = populated_home();
-    let out = h.run(&["files", SESS, "--summary", "--no-subagents"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--summary", "--no-subagents"]);
     // Routing success = the command resolved the session and ran (exit 0), NOT the old
     // "no Claude Code project dir for …/<uuid>" hard error.
     assert!(
@@ -1381,20 +1458,26 @@ fn files_bare_uuid_positional_routes_to_session() {
 #[test]
 fn turns_bare_uuid_positional_routes_to_session() {
     let h = populated_home();
-    let out = h.run(&["turns", SESS, "--budget", "2000", "--no-subagents"]);
+    let out = h.run(&[
+        "turns",
+        at(SESS).as_str(),
+        "--budget",
+        "2000",
+        "--no-subagents",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains(SESS), "got: {}", out.stdout);
 }
 
 #[test]
-fn bare_subagent_hex_positional_gives_guided_error() {
-    // A bare-hex SUBAGENT id (no top-level jsonl) yields a GUIDED error pointing at
+fn at_subagent_hex_positional_gives_guided_error() {
+    // An `@<hex>` SUBAGENT id (no top-level jsonl) yields a GUIDED error pointing at
     // `agents --agent`, not a misleading "session absent". The remediation is SUBCOMMAND-
     // AWARE: only `files` (which has `--subagents-only`) may advise that flag; turns/search/
     // recover/list/agents must NOT (the flag does not exist there, so following the advice
     // would be a parse error).
     let h = populated_home();
-    let files = h.run(&["files", "aaa111bbb222ccc333", "--summary"]);
+    let files = h.run(&["files", "@aaa111bbb222ccc333", "--summary"]);
     assert!(!files.success, "a subagent hex has no top-level session");
     assert!(
         files.stderr.contains("SUBAGENT id") && files.stderr.contains("agents --agent"),
@@ -1408,13 +1491,13 @@ fn bare_subagent_hex_positional_gives_guided_error() {
     );
     // The other five must guide to `agents --agent` WITHOUT advising the files-only flag.
     for sub in [
-        vec!["turns", "aaa111bbb222ccc333"],
-        vec!["search", "x", "aaa111bbb222ccc333"],
+        vec!["turns", "@aaa111bbb222ccc333"],
+        vec!["search", "x", "@aaa111bbb222ccc333"],
         // recover requires --file before it reaches the resolver; pass one so the subagent-hex
         // target reaches the resolver's guided error instead of the --file-required bail.
-        vec!["recover", "aaa111bbb222ccc333", "--file", "/x.rs"],
-        vec!["list", "aaa111bbb222ccc333"],
-        vec!["agents", "aaa111bbb222ccc333"],
+        vec!["recover", "@aaa111bbb222ccc333", "--file", "/x.rs"],
+        vec!["list", "@aaa111bbb222ccc333"],
+        vec!["agents", "@aaa111bbb222ccc333"],
     ] {
         let out = h.run(&sub);
         assert!(
@@ -1455,20 +1538,18 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
     let h = populated_home();
     let files = h.run(&[
         "files",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--by-file",
         "--format",
         "json",
         "--subagents-only",
     ]);
-    let search = h.run(&["search", "", ENC, "--session", SESS, "--format", "json"]);
+    let search = h.run(&["search", "", ENC, at(SESS).as_str(), "--format", "json"]);
     // turns now defaults to top-level-only, so opt INTO spanning subagents to exercise the
     // cross-surface id-form check on the turns surface too.
     let turns = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--include-subagents",
         "--budget",
         "8000",
@@ -1502,8 +1583,7 @@ fn search_session_filter_and_turn_range() {
     let out = h.run(&[
         "search",
         "",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--turn-range",
         "1..1",
         "--no-subagents",
@@ -1549,8 +1629,7 @@ fn search_unknown_session_errors() {
     let out = h.run(&[
         "search",
         "x",
-        "--session",
-        "00000000-0000-0000-0000-000000000000",
+        at("00000000-0000-0000-0000-000000000000").as_str(),
     ]);
     assert!(!out.success);
     assert!(
@@ -1582,8 +1661,7 @@ fn search_since_until_window() {
         "--since",
         "2026-06-07T06:00:00Z",
         "--no-subagents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -1620,8 +1698,7 @@ fn turns_and_search_label_automation_triggers() {
     // and never the raw XML.
     let t = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--budget",
         "20000",
         "--no-subagents",
@@ -1652,8 +1729,7 @@ fn turns_and_search_label_automation_triggers() {
         "background-command",
         "-t",
         "user",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--no-subagents",
     ]);
     assert!(s.success, "stderr: {}", s.stderr);
@@ -1686,8 +1762,7 @@ fn turns_single_automation_trigger_uses_singular_header() {
     );
     let t = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--budget",
         "20000",
         "--no-subagents",
@@ -1727,8 +1802,7 @@ fn turns_json_emits_session_header_and_structured_automation() {
     );
     let t = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--budget",
         "20000",
         "--no-subagents",
@@ -1790,8 +1864,7 @@ fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
     // crowded out — but large enough to fit the human round-trip in its protected lane.
     let t = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--budget",
         "1200",
         "--no-subagents",
@@ -1929,7 +2002,7 @@ fn search_timeline_interleaves_subagents_with_top_level_by_timestamp() {
         ),
     );
 
-    let out = h.run(&["search", "ping", "--session", SESS, "--format", "json"]);
+    let out = h.run(&["search", "ping", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let envelopes: Vec<_> = json_lines(&out.stdout)
         .into_iter()
@@ -2024,7 +2097,7 @@ fn whoami_without_env_errors_with_guidance() {
     let h = populated_home();
     let out = h.run(&["whoami"]); // env removed by run()
     assert!(!out.success, "no session env must exit nonzero");
-    assert!(out.stderr.contains("--session"), "stderr: {}", out.stderr);
+    assert!(out.stderr.contains("@<uuid>"), "stderr: {}", out.stderr);
     assert!(out.stderr.contains("mtime"));
 }
 
@@ -2225,7 +2298,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
 
     // JSON (flat): both agents listed; child carries parent_agent_id=parentaaa + depth 1,
     // and recovers its trigger/description from the PARENT transcript's spawn (not main).
-    let j = h.run(&["agents", "--session", sess, "--format", "json"]);
+    let j = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
     assert!(j.success, "stderr: {}", j.stderr);
     let objs: Vec<serde_json::Value> = j
         .stdout
@@ -2262,7 +2335,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     );
 
     // Tree JSON: child nests UNDER parent in the agents[].children array.
-    let tj = h.run(&["agents", "--session", sess, "--tree", "--format", "json"]);
+    let tj = h.run(&["agents", at(sess).as_str(), "--tree", "--format", "json"]);
     assert!(tj.success, "stderr: {}", tj.stderr);
     let tree: serde_json::Value = serde_json::from_str(tj.stdout.lines().next().unwrap()).unwrap();
     let agents = tree["agents"].as_array().expect("agents array");
@@ -2281,7 +2354,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     );
 
     // Tree TEXT: child indented one level deeper than parent.
-    let tt = h.run(&["agents", "--session", sess, "--tree"]);
+    let tt = h.run(&["agents", at(sess).as_str(), "--tree"]);
     assert!(tt.success, "stderr: {}", tt.stderr);
     let pidx = tt.stdout.find("parentaaa").expect("parent in tree text");
     let cidx = tt.stdout.find("childbbb").expect("child in tree text");
@@ -2303,7 +2376,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
 #[test]
 fn agents_text_lists_lifecycle_rows() {
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS]);
+    let out = h.run(&["agents", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("SESSION"));
     assert!(out.stdout.contains("builtin-task"));
@@ -2325,8 +2398,7 @@ fn agents_text_returned_files_and_tree_render() {
     let h = populated_home();
     let out = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--tree",
         "--returned-message",
         "--with-files",
@@ -2360,8 +2432,7 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
     let h = populated_home();
     let bt = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--kind",
         "builtin-task",
         "--format",
@@ -2373,7 +2444,7 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
         "builtin-task JSON label missing: {}",
         bt.stdout
     );
-    let tree = h.run(&["agents", "--session", SESS, "--tree", "--format", "json"]);
+    let tree = h.run(&["agents", at(SESS).as_str(), "--tree", "--format", "json"]);
     assert!(tree.success, "stderr: {}", tree.stderr);
     assert!(
         tree.stdout.contains("children"),
@@ -2381,7 +2452,7 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
         tree.stdout
     );
     // Flat text render with BOTH subagents → the inter-node blank line fires.
-    let flat = h.run(&["agents", "--session", SESS]);
+    let flat = h.run(&["agents", at(SESS).as_str()]);
     assert!(flat.success && flat.stdout.matches("triggered").count() >= 2);
 }
 
@@ -2412,7 +2483,7 @@ fn agents_with_files_renders_changed_list_and_summary_json() {
         &format!("-Users-x-w/{sess}/subagents/agent-fff999.meta.json"),
         r#"{"agentType":"executor","toolUseId":"tk"}"#,
     );
-    let out = h.run(&["agents", "--session", sess, "--with-files", "--by", "start"]);
+    let out = h.run(&["agents", at(sess).as_str(), "--with-files", "--by", "start"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("changed") && out.stdout.contains("new.rs"),
@@ -2420,7 +2491,7 @@ fn agents_with_files_renders_changed_list_and_summary_json() {
         out.stdout
     );
     // The summary JSON path (the `json_grouped` summary arm + trailing summary object).
-    let f = h.run(&["files", "--session", sess, "--summary", "--format", "json"]);
+    let f = h.run(&["files", at(sess).as_str(), "--summary", "--format", "json"]);
     assert!(f.success, "stderr: {}", f.stderr);
     let last = f
         .stdout
@@ -2440,7 +2511,7 @@ fn agents_single_agent_grab_text() {
     // `--agent <hex>` grabs ONE subagent (implies --returned-message), exercising the
     // single-node text path + the guided-error landing flag documented in the EXAMPLES.
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS, "--agent", "aaa111"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--agent", "aaa111"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("aaa111"),
@@ -2457,8 +2528,7 @@ fn agents_agent_grab_bypasses_time_and_kind_filters() {
     // aaa111 is a builtin-task triggered ~05:00; this window + kind would normally exclude it.
     let out = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--agent",
         "aaa111",
         "--since",
@@ -2479,10 +2549,10 @@ fn agents_bad_hex_errors_with_discovery_guidance() {
     // A typo'd / non-existent --agent hex is a HARD error (non-zero) with discovery
     // guidance — NOT the ambiguous `no subagents found` that a zero-subagent session prints.
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS, "--agent", "deadbeefcafe"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--agent", "deadbeefcafe"]);
     assert!(!out.success, "a bad hex must be a hard error");
     assert!(
-        out.stderr.contains("no subagent matched") && out.stderr.contains("agents --session"),
+        out.stderr.contains("no subagent matched") && out.stderr.contains("agents @<uuid>"),
         "error must name the bad id + the discovery path; stderr: {}",
         out.stderr
     );
@@ -2494,7 +2564,7 @@ fn agents_agent_with_tree_renders_single_node_not_whole_workflow() {
     // dumped. bbb222 is in workflow wf_abc alongside no other agent here, but the grab must
     // render bbb222 and NOT the WORKFLOW run header.
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS, "--agent", "bbb222", "--tree"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--agent", "bbb222", "--tree"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("bbb222"),
@@ -2513,7 +2583,7 @@ fn agents_rejects_subagent_span_flags_with_pointed_error() {
     // `agents --no-subagents` (a flag it does not have) is rejected with a pointed message,
     // NOT swallowed as a bogus PATH value by allow_hyphen_values.
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS, "--no-subagents"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--no-subagents"]);
     assert!(!out.success, "the no-op span flag must error");
     assert!(
         out.stderr.contains("no --include-subagents") || out.stderr.contains("no subagent-span"),
@@ -2525,7 +2595,7 @@ fn agents_rejects_subagent_span_flags_with_pointed_error() {
 #[test]
 fn agents_json_rows() {
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS, "--format", "json"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let mut kinds = Vec::new();
     for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
@@ -2541,7 +2611,7 @@ fn agents_json_rows() {
 #[test]
 fn agents_kind_filter_workflow_only() {
     let h = populated_home();
-    let out = h.run(&["agents", "--session", SESS, "--kind", "workflow"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--kind", "workflow"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("workflow"));
     assert!(!out.stdout.contains("builtin-task"));
@@ -2553,8 +2623,7 @@ fn agents_by_completion_axis_and_window() {
     let h = populated_home();
     let out = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--since",
         "2026-06-07T06:00:30Z",
         "--by",
@@ -2576,7 +2645,7 @@ fn agents_no_subagents_says_none() {
         &format!("{ENC}/{SESS}.jsonl"),
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
     );
-    let out = h.run(&["agents", "--session", SESS]);
+    let out = h.run(&["agents", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("no subagents found"),
@@ -2590,8 +2659,7 @@ fn agents_unknown_session_errors() {
     let h = populated_home();
     let out = h.run(&[
         "agents",
-        "--session",
-        "deadbeef-0000-0000-0000-000000000000",
+        at("deadbeef-0000-0000-0000-000000000000").as_str(),
     ]);
     assert!(!out.success);
     assert!(
@@ -2762,7 +2830,7 @@ fn agents_row_without_timestamps_omits_duration() {
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["agents", "--session", SESS]);
+    let out = h.run(&["agents", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("unknown"),
@@ -2795,7 +2863,7 @@ fn agents_reports_skipped_lines_note() {
             "{ this is a malformed newest line }\n",
         ),
     );
-    let out = h.run(&["agents", "--session", SESS]);
+    let out = h.run(&["agents", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("malformed line(s) skipped"),
@@ -2899,7 +2967,7 @@ fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
     // tool_use ts (04:59:58), which DIVERGES from its child-head `started_utc`
     // (05:00:00) — proving the topology recovered the true spawn instant.
     let h = topology_home();
-    let out = h.run(&["agents", "--session", SESS, "--format", "json"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let builtin = out
         .stdout
@@ -2923,8 +2991,7 @@ fn agents_default_axis_is_trigger_not_start() {
     let h = topology_home();
     let default_axis = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--since",
         "2026-06-07T04:59:59Z",
         "--kind",
@@ -2941,8 +3008,7 @@ fn agents_default_axis_is_trigger_not_start() {
     );
     let by_start = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--since",
         "2026-06-07T04:59:59Z",
         "--by",
@@ -2959,7 +3025,7 @@ fn agents_default_axis_is_trigger_not_start() {
         by_start.stdout
     );
     // The footer reflects the default axis.
-    let footer = h.run(&["agents", "--session", SESS]);
+    let footer = h.run(&["agents", at(SESS).as_str()]);
     assert!(footer.stdout.contains("window-axis=trigger"));
 }
 
@@ -2968,8 +3034,7 @@ fn agents_returned_message_three_way_resolution() {
     let h = topology_home();
     let out = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--returned-message",
         "--format",
         "json",
@@ -3005,7 +3070,7 @@ fn agents_returned_message_omitted_by_default() {
     // Without --returned-message (and without --agent), the returned message is NOT in
     // the JSON — keeping a plain listing compact.
     let h = topology_home();
-    let out = h.run(&["agents", "--session", SESS, "--format", "json"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let first: serde_json::Value =
         serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
@@ -3021,8 +3086,7 @@ fn agents_single_agent_grab_includes_returned_and_files() {
     let h = topology_home();
     let out = h.run(&[
         "agents",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--agent",
         "topo11",
         "--with-files",
@@ -3051,7 +3115,7 @@ fn agents_single_agent_grab_includes_returned_and_files() {
 #[test]
 fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     let h = topology_home();
-    let out = h.run(&["agents", "--session", SESS, "--tree", "--format", "json"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--tree", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // One object per session: workflow_runs[] (each with children[]) + agents[].
     let v: serde_json::Value =
@@ -3074,7 +3138,7 @@ fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     assert!(builtins.iter().any(|a| a["agent_id"] == "topo11"));
 
     // Text tree shows the WORKFLOW header with its run id + the nested agent.
-    let text = h.run(&["agents", "--session", SESS, "--tree"]);
+    let text = h.run(&["agents", at(SESS).as_str(), "--tree"]);
     assert!(
         text.stdout.contains("WORKFLOW  wf_topo"),
         "got: {}",
@@ -3116,7 +3180,7 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     // No `{ENC}/{SESS}/workflows/wf_orphan.json` manifest is written on purpose.
 
     // FLAT view sees every agent (discovery is lossless): topo11 + topo22 + topo33.
-    let flat = h.run(&["agents", "--session", SESS, "--format", "json"]);
+    let flat = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(flat.success, "stderr: {}", flat.stderr);
     let flat_ids: Vec<String> = flat
         .stdout
@@ -3132,7 +3196,7 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
 
     // TREE view must also surface topo33 — under a SYNTHESIZED run for wf_orphan whose
     // run-level fields are null (no manifest) but whose children carry the agent.
-    let tree = h.run(&["agents", "--session", SESS, "--tree", "--format", "json"]);
+    let tree = h.run(&["agents", at(SESS).as_str(), "--tree", "--format", "json"]);
     assert!(tree.success, "stderr: {}", tree.stderr);
     let v: serde_json::Value =
         serde_json::from_str(tree.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
@@ -3173,7 +3237,7 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     }
 
     // Text tree shows the orphan run header + the agent (not silently omitted).
-    let text = h.run(&["agents", "--session", SESS, "--tree"]);
+    let text = h.run(&["agents", at(SESS).as_str(), "--tree"]);
     assert!(
         text.stdout.contains("WORKFLOW  wf_orphan"),
         "text tree must show the stand-in run header: {}",
@@ -3188,10 +3252,10 @@ fn agents_id_form_is_bare_hex_joinable_across_files_and_recover() {
     // `files --session <subagent-hex>` / `recover` print the SAME bare hex (not the
     // `agent-` stem) — so a consumer can join file mutations back to the agent node.
     let h = topology_home();
-    let agents_json = h.run(&["agents", "--session", SESS, "--format", "json"]);
+    let agents_json = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(agents_json.stdout.contains(r#""agent_id":"topo11""#));
     // files spans subagents by default; the subagent row's session_id is bare hex.
-    let files_json = h.run(&["files", "--session", SESS, "--format", "json", "--by-file"]);
+    let files_json = h.run(&["files", at(SESS).as_str(), "--format", "json", "--by-file"]);
     assert!(files_json.success, "stderr: {}", files_json.stderr);
     assert!(
         files_json.stdout.contains(r#""session_id":"topo11""#)
@@ -3243,7 +3307,7 @@ fn files_scenario_home() -> Home {
 #[test]
 fn files_default_summary_acid_test() {
     let h = files_scenario_home();
-    let out = h.run(&["files", "--session", SESS]);
+    let out = h.run(&["files", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("SESSION"));
     // The /tmp bucket: two writes (the created docs) + the heuristic bash rm.
@@ -3272,7 +3336,7 @@ fn files_default_summary_acid_test() {
 #[test]
 fn files_by_file_distinct_counts_via_json() {
     let h = files_scenario_home();
-    let out = h.run(&["files", "--session", SESS, "--by-file", "--format", "json"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--by-file", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let lines: Vec<&str> = out
         .stdout
@@ -3313,7 +3377,7 @@ fn files_by_file_distinct_counts_via_json() {
 #[test]
 fn files_timeline_is_chronological_with_heuristic_label() {
     let h = files_scenario_home();
-    let out = h.run(&["files", "--session", SESS, "--timeline"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--timeline"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("detail=timeline"));
     // The bash rm is the newest mutation (06:00) and carries the heuristic label.
@@ -3337,7 +3401,7 @@ fn files_timeline_is_chronological_with_heuristic_label() {
 #[test]
 fn files_by_dir_groups_and_counts() {
     let h = files_scenario_home();
-    let out = h.run(&["files", "--session", SESS, "--by-dir", "--format", "json"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--by-dir", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let mut saw_gaps_dir = false;
     for l in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
@@ -3356,7 +3420,7 @@ fn files_by_dir_groups_and_counts() {
 fn files_turn_range_excludes_later_bash() {
     // --turn-range 0..0 keeps the turn-0 structured edits and DROPS the turn-1 bash rm.
     let h = files_scenario_home();
-    let out = h.run(&["files", "--session", SESS, "--turn-range", "0..0"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--turn-range", "0..0"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("turn-range=0..0"));
     // 5 mutations remain (2 writes + 3 edits), not 6 (the bash rm is in turn 1).
@@ -3372,8 +3436,7 @@ fn files_turn_range_with_since_is_mutually_exclusive() {
     let h = files_scenario_home();
     let out = h.run(&[
         "files",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--turn-range",
         "0..1",
         "--since",
@@ -3394,8 +3457,7 @@ fn files_since_window_keeps_only_later_mutations() {
     let h = files_scenario_home();
     let out = h.run(&[
         "files",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--since",
         "2026-06-07T06:00:00Z",
     ]);
@@ -3415,7 +3477,7 @@ fn files_no_mutations_says_none() {
             r#"{"type":"assistant","uuid":"a0","message":{"role":"assistant","content":[{"type":"text","text":"sure"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["files", "--session", SESS, "--no-subagents"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("no file mutations found"),
@@ -3443,7 +3505,7 @@ fn files_detects_edit_before_read_boundaries() {
     );
 
     // Text: timeline mutation rows carry Lnnnn; the boundary section names the file + kind + line.
-    let out = h.run(&["files", "--session", SESS, "--no-subagents", "--timeline"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--no-subagents", "--timeline"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("Edit-before-Read boundaries"),
@@ -3466,8 +3528,7 @@ fn files_detects_edit_before_read_boundaries() {
     // JSON: a typed boundary object with line_no + the summary count.
     let j = h.run(&[
         "files",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--format",
         "json",
@@ -3512,14 +3573,14 @@ fn files_spans_subagent_mutations() {
             r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/tmp/subagent-out.md","content":"z"}}]}}"#, "\n",
         ),
     );
-    let with = h.run(&["files", "--session", SESS]);
+    let with = h.run(&["files", at(SESS).as_str()]);
     assert!(with.success, "stderr: {}", with.stderr);
     assert!(
         with.stdout.contains("/tmp"),
         "subagent write spanned: {}",
         with.stdout
     );
-    let without = h.run(&["files", "--session", SESS, "--no-subagents"]);
+    let without = h.run(&["files", at(SESS).as_str(), "--no-subagents"]);
     assert!(without.success, "stderr: {}", without.stderr);
     assert!(
         without.stdout.contains("no file mutations found"),
@@ -3555,13 +3616,13 @@ fn files_subagents_only_returns_set_difference() {
     subagents_only_scenario(&h);
 
     // Default (spans subagents): BOTH the parent and subagent files surface.
-    let with = h.run(&["files", "--session", SESS, "--by-file"]);
+    let with = h.run(&["files", at(SESS).as_str(), "--by-file"]);
     assert!(with.success, "stderr: {}", with.stderr);
     assert!(with.stdout.contains("/parent/p.md"), "got: {}", with.stdout);
     assert!(with.stdout.contains("/sub/s.md"), "got: {}", with.stdout);
 
     // --no-subagents: ONLY the parent file.
-    let top = h.run(&["files", "--session", SESS, "--by-file", "--no-subagents"]);
+    let top = h.run(&["files", at(SESS).as_str(), "--by-file", "--no-subagents"]);
     assert!(top.success, "stderr: {}", top.stderr);
     assert!(top.stdout.contains("/parent/p.md"), "got: {}", top.stdout);
     assert!(
@@ -3571,7 +3632,7 @@ fn files_subagents_only_returns_set_difference() {
     );
 
     // --subagents-only: the COMPLEMENT — ONLY the subagent file, parent excluded.
-    let sub = h.run(&["files", "--session", SESS, "--by-file", "--subagents-only"]);
+    let sub = h.run(&["files", at(SESS).as_str(), "--by-file", "--subagents-only"]);
     assert!(sub.success, "stderr: {}", sub.stderr);
     assert!(sub.stdout.contains("/sub/s.md"), "got: {}", sub.stdout);
     assert!(
@@ -3588,7 +3649,7 @@ fn files_timeline_json_marks_subagent_rows_with_refeedable_parent() {
     // parent_session_id == session_id (so a consumer can always `csift turns <parent>`).
     let h = Home::new();
     subagents_only_scenario(&h);
-    let out = h.run(&["files", "--session", SESS, "--timeline", "--format", "json"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--timeline", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
     let parent_row = objs
@@ -3617,7 +3678,7 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
     let h = Home::new();
     subagents_only_scenario(&h);
 
-    let j = h.run(&["files", "--session", SESS, "--by-file", "--format", "json"]);
+    let j = h.run(&["files", at(SESS).as_str(), "--by-file", "--format", "json"]);
     assert!(j.success, "stderr: {}", j.stderr);
     let objs = json_lines(&j.stdout);
     let sub = objs
@@ -3634,7 +3695,7 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
     assert_eq!(parent["is_subagent"], serde_json::json!(false));
     assert_eq!(parent["parent_session_id"], serde_json::json!(SESS));
 
-    let t = h.run(&["files", "--session", SESS, "--by-file"]);
+    let t = h.run(&["files", at(SESS).as_str(), "--by-file"]);
     assert!(t.success, "stderr: {}", t.stderr);
     // The subagent group's header is branded SUBAGENT + the re-feedable parent uuid.
     assert!(
@@ -3659,7 +3720,7 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     let h = Home::new();
     subagents_only_scenario(&h);
 
-    let j = h.run(&["list", SESS, "--format", "json"]);
+    let j = h.run(&["list", at(SESS).as_str(), "--format", "json"]);
     assert!(j.success, "stderr: {}", j.stderr);
     let objs = json_lines(&j.stdout);
     let top = objs
@@ -3675,7 +3736,7 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     assert_eq!(sub["is_subagent"], serde_json::json!(true));
     assert_eq!(sub["parent_session_id"], serde_json::json!(SESS));
 
-    let t = h.run(&["list", SESS]);
+    let t = h.run(&["list", at(SESS).as_str()]);
     assert!(t.success, "stderr: {}", t.stderr);
     assert!(
         t.stdout
@@ -3691,7 +3752,7 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
     );
 
     // --no-subagents drops the banner + the subagent row entirely.
-    let top_only = h.run(&["list", SESS, "--no-subagents"]);
+    let top_only = h.run(&["list", at(SESS).as_str(), "--no-subagents"]);
     assert!(top_only.success, "stderr: {}", top_only.stderr);
     assert!(
         !top_only.stdout.contains("scope  "),
@@ -3721,7 +3782,7 @@ fn recover_coverage_out_is_noop_with_stderr_note() {
     let out_path = h.root.join("cov-out.md");
     let out = h.run(&[
         "recover",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/app.rs",
         "--coverage",
@@ -3751,7 +3812,7 @@ fn turns_json_units_carry_id_domain_discriminators() {
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"a substantive reply"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["turns", SESS, "--format", "json"]);
+    let out = h.run(&["turns", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
     let unit = objs
@@ -3776,7 +3837,7 @@ fn files_timeline_op_uses_underscore_spelling() {
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"n1","name":"NotebookEdit","input":{"notebook_path":"/p/nb.ipynb","new_source":"x"}}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["files", "--session", SESS, "--timeline", "--format", "json"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--timeline", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
     let ops: Vec<&str> = objs.iter().filter_map(|o| o["op"].as_str()).collect();
@@ -3805,8 +3866,7 @@ fn search_subagent_hit_json_marks_refeedable_parent() {
     let out = h.run(&[
         "search",
         "write a file",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--format",
         "json",
     ]);
@@ -3821,25 +3881,33 @@ fn search_subagent_hit_json_marks_refeedable_parent() {
 }
 
 #[test]
-fn search_lone_uuid_routes_to_session_scope() {
-    // `search <uuid>` (sole positional) scopes to that session (parity with `files <uuid>`)
-    // rather than regex-searching the uuid string across every project. The fixture's
-    // top-level turn contains "go"; scoping to the uuid + an empty pattern returns its turns.
+fn search_at_uuid_path_scopes_to_session() {
+    // `search "" @<uuid>` scopes to that session via the `@<uuid>` PATH positional (the grammar
+    // that replaced the removed bare-uuid-pattern routing). An empty pattern = pure filter over
+    // scope, so the session's own exchanges come back.
     let h = Home::new();
     subagents_only_scenario(&h);
-    let out = h.run(&["search", SESS]);
+    let out = h.run(&["search", "", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The scope note is emitted on stderr.
-    assert!(
-        out.stderr.contains("is a session id, not a pattern"),
-        "expected the scope-routing note; stderr: {}",
-        out.stderr
-    );
-    // And the session's own content is returned (empty pattern = pure filter over scope).
     assert!(
         out.stdout.contains("s1 = "),
         "scoped search should return the session's exchanges: {}",
         out.stdout
+    );
+}
+
+#[test]
+fn search_bare_uuid_is_a_literal_pattern_not_a_scope() {
+    // A BARE uuid (no `@`) as the sole positional is now a LITERAL pattern, NOT a session scope.
+    // It is searched verbatim across the corpus and emits no scope-routing note.
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["search", SESS]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stderr.contains("is a session id, not a pattern"),
+        "a bare uuid must NOT be routed to a scope anymore; stderr: {}",
+        out.stderr
     );
 }
 
@@ -3854,7 +3922,7 @@ fn files_subagents_only_with_no_subagent_says_none() {
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"touch /tmp/only-parent"}}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["files", "--session", SESS, "--subagents-only"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--subagents-only"]);
     // No subagents under the session → the --session resolver bails (nothing to dump).
     assert!(
         !out.success,
@@ -3874,8 +3942,7 @@ fn files_no_subagents_and_subagents_only_are_mutually_exclusive() {
     subagents_only_scenario(&h);
     let out = h.run(&[
         "files",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--subagents-only",
     ]);
@@ -3923,7 +3990,7 @@ fn files_detects_new_bash_idioms_end_to_end() {
     lines.push('\n');
     h.write(&format!("{ENC}/{SESS}.jsonl"), &lines);
 
-    let out = h.run(&["files", "--session", SESS, "--by-file", "--no-subagents"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--by-file", "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     for (cmd, want) in cmds {
         assert!(
@@ -3956,7 +4023,7 @@ fn serde_json_string(s: &str) -> String {
 #[test]
 fn files_unknown_session_errors() {
     let h = files_scenario_home();
-    let out = h.run(&["files", "--session", "00000000-0000-0000-0000-000000000000"]);
+    let out = h.run(&["files", at("00000000-0000-0000-0000-000000000000").as_str()]);
     assert!(!out.success);
     assert!(
         out.stderr.contains("no session file found"),
@@ -4197,7 +4264,7 @@ fn recover_batch_requires_out_dir_and_excludes_file() {
 #[test]
 fn recover_coverage_counts_and_boundary() {
     let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--coverage"]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE, "--coverage"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
     // Two full reads, two edits, one integrity error, one history snapshot.
@@ -4233,7 +4300,7 @@ fn recover_coverage_counts_and_boundary() {
 #[test]
 fn recover_patches_segments_split_at_boundary_with_line_numbers() {
     let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--patches"]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE, "--patches"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // At least TWO segments, split by the integrity boundary.
     let segs = out.stdout.matches("─ SEGMENT").count();
@@ -4275,8 +4342,7 @@ fn recover_at_snapshot_has_line_numbers_and_no_fabrication() {
     // the line-2 edit applied → 5 lines, all known, line-numbered.
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--at",
@@ -4311,8 +4377,7 @@ fn recover_at_partial_read_marks_explicit_gaps() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/spec.md",
         "--at",
@@ -4342,8 +4407,7 @@ fn recover_json_every_object_has_line_no_and_local_ts() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--coverage",
@@ -4391,8 +4455,7 @@ fn recover_at_json_lines_carry_provenance_and_gaps() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--at",
@@ -4437,8 +4500,7 @@ fn recover_turn_range_and_since_mutually_exclusive() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--coverage",
@@ -4459,10 +4521,11 @@ fn recover_turn_range_and_since_mutually_exclusive() {
 fn recover_file_required_for_all_modes() {
     let h = recover_scenario_home();
     // Every mode (patches / at / coverage) requires --file → each bails without it.
+    let at_sess = at(SESS);
     for mode in [
-        vec!["recover", "--session", SESS, "--patches"],
-        vec!["recover", "--session", SESS, "--at", "@turn:0"],
-        vec!["recover", "--session", SESS, "--coverage"],
+        vec!["recover", at_sess.as_str(), "--patches"],
+        vec!["recover", at_sess.as_str(), "--at", "@turn:0"],
+        vec!["recover", at_sess.as_str(), "--coverage"],
     ] {
         let no_file = h.run(&mode);
         assert!(!no_file.success, "{mode:?} must bail without --file");
@@ -4477,7 +4540,7 @@ fn recover_file_required_for_all_modes() {
 #[test]
 fn recover_dry_run_alias_works() {
     let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--dry-run"]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE, "--dry-run"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("recoverable"),
@@ -4491,8 +4554,7 @@ fn recover_line_range_restricts_output() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--at",
@@ -4540,8 +4602,7 @@ fn recover_no_history_says_so() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/no/such/file.rs",
         "--coverage",
@@ -4560,7 +4621,7 @@ fn recover_restore_default_returns_raw_full_content() {
     // as RAW bytes — no SESSION banner, no line numbers, no mode footer — because this session
     // saw the whole file (the post-drift full Read re-establishes all 6 lines).
     let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--file", RFILE]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE]);
     assert!(out.success, "stderr: {}", out.stderr);
     let expected =
         "import os\nwith open(src) as fh:\n    raw = fh.read()\nuse(raw)\nprint(café🛠)\nEOF\n";
@@ -4587,7 +4648,7 @@ fn recover_restore_partial_file_errors_pointing_to_salvage() {
             r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/spec.md","content":"line5\nline6\nline7","startLine":5,"numLines":3,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["recover", "--session", SESS, "--file", "/p/spec.md"]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", "/p/spec.md"]);
     assert!(
         !out.success,
         "partial restore must fail: stdout={}",
@@ -4638,8 +4699,7 @@ fn recover_restore_out_writes_raw_file_no_stdout() {
     let out_path = h.root.join("restored.py");
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--out",
@@ -4668,8 +4728,7 @@ fn recover_restore_json_emits_single_complete_object_no_trailer() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--format",
@@ -4720,8 +4779,7 @@ fn recover_salvage_dumps_surviving_fragment_with_gaps() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/spec.md",
         "--salvage",
@@ -4769,8 +4827,7 @@ fn recover_modified_since_read_invalidates_stale_lines() {
     // Salvage: stale CCC/DDD/EEE are dropped; lines 3-5 are explicit gaps.
     let salv = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/x.txt",
         "--salvage",
@@ -4794,7 +4851,7 @@ fn recover_modified_since_read_invalidates_stale_lines() {
         );
     }
     // Restore: refuses rather than falsely claim "complete" on the invalidated buffer.
-    let rest = h.run(&["recover", "--session", SESS, "--file", "/p/x.txt"]);
+    let rest = h.run(&["recover", at(SESS).as_str(), "--file", "/p/x.txt"]);
     assert!(
         !rest.success,
         "restore must fail on the invalidated file: {}",
@@ -4841,7 +4898,7 @@ fn recover_restore_surfaces_fuller_pre_change_partial_state() {
             r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T06:00:02.000Z","toolUseResult":{"file":{"filePath":"/p/big.txt","content":"L1\nL2","startLine":1,"numLines":2,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd1","content":"ok"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["recover", "--session", SESS, "--file", "/p/big.txt"]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", "/p/big.txt"]);
     assert!(!out.success, "partial restore fails: {}", out.stdout);
     assert!(
         out.stderr.contains("recovered 2/10"),
@@ -4867,8 +4924,7 @@ fn recover_patches_json_segments_and_boundary_objects() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--patches",
@@ -4924,8 +4980,7 @@ fn recover_patches_out_writes_concatenated_diffs() {
     let out_path = h.root.join("patches.diff");
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--patches",
@@ -4959,8 +5014,7 @@ fn recover_at_out_writes_partial_snapshot_with_gaps() {
     let out_path = h.root.join("snap.txt");
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/spec.md",
         "--at",
@@ -5002,8 +5056,7 @@ fn recover_at_json_out_writes_artifact() {
     let out_path = h.root.join("snap.json.txt");
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--at",
@@ -5032,8 +5085,7 @@ fn recover_coverage_no_boundaries_says_none() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/clean.rs",
         "--coverage",
@@ -5062,8 +5114,7 @@ fn recover_patches_heuristic_bash_boundary_is_flagged() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/h.rs",
         "--patches",
@@ -5130,8 +5181,7 @@ fn recover_real_multi_patch_segmentation_at_modified_since_read() {
     let out = run_real(&[
         "recover",
         &enc,
-        "--session",
-        &sess,
+        at(sess).as_str(),
         "--file",
         engine,
         "--patches",
@@ -5169,8 +5219,7 @@ fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
     let out = run_real(&[
         "recover",
         &enc,
-        "--session",
-        &sess,
+        at(sess).as_str(),
         "--file",
         disk_plan.to_str().unwrap(),
         "--at",
@@ -5256,8 +5305,7 @@ fn recover_coverage_reports_unanchorable_holes() {
     let h = recover_hole_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/big.rs",
         "--coverage",
@@ -5283,8 +5331,7 @@ fn recover_patches_no_history_says_so() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/no/such.rs",
         "--patches",
@@ -5303,8 +5350,7 @@ fn recover_at_no_history_says_so() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/no/such.rs",
         "--at",
@@ -5334,8 +5380,7 @@ fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
     // Text patches: the snapshot-only session is skipped → honest empty.
     let text = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/snap.rs",
         "--patches",
@@ -5349,8 +5394,7 @@ fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
     // JSON patches: only the trailing summary object, zero segment/boundary objects.
     let js = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/snap.rs",
         "--patches",
@@ -5469,8 +5513,7 @@ fn recover_at_merges_interleaved_cross_session_edits() {
 
     let out = h.run(&[
         "recover",
-        "--session",
-        MSESS,
+        at(MSESS).as_str(),
         "--file",
         "/p/doc.md",
         "--at",
@@ -5556,8 +5599,7 @@ fn recover_at_datetime_time_travels_across_edits() {
     let recon_at = |when: &str| -> Vec<String> {
         let out = h.run(&[
             "recover",
-            "--session",
-            TSESS,
+            at(TSESS).as_str(),
             "--file",
             "/p/plan.md",
             "--at",
@@ -5657,8 +5699,7 @@ fn recover_at_json_out_writes_partial_snapshot_artifact() {
     let out_path = h.root.join("at-artifact.txt");
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--at",
@@ -5683,8 +5724,7 @@ fn recover_patches_json_out_writes_concatenated_diffs() {
     let out_path = h.root.join("patches-json.diff");
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--patches",
@@ -5726,8 +5766,7 @@ fn recover_at_text_skips_session_with_events_but_no_known_content() {
     let h = recover_empty_reconstruction_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/e.rs",
         "--at",
@@ -5747,8 +5786,7 @@ fn recover_at_json_skips_session_with_events_but_no_known_content() {
     let h = recover_empty_reconstruction_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/e.rs",
         "--at",
@@ -5783,8 +5821,7 @@ fn recover_coverage_zero_seen_total_reports_zero_percent() {
     let h = recover_empty_reconstruction_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/e.rs",
         "--coverage",
@@ -5816,8 +5853,7 @@ fn recover_turn_range_and_until_mutually_exclusive() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--coverage",
@@ -5894,8 +5930,7 @@ fn recover_json_patches_skips_empty_event_session() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/no/such.rs",
         "--patches",
@@ -5987,8 +6022,7 @@ fn recover_coverage_heuristic_boundary_uses_soft_symbol() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/sb.rs",
         "--coverage",
@@ -6023,8 +6057,7 @@ fn recover_patches_boundary_only_session_still_renders() {
     // Text patches: the boundary is shown even though no segment exists.
     let text = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/bo.rs",
         "--patches",
@@ -6038,8 +6071,7 @@ fn recover_patches_boundary_only_session_still_renders() {
     // JSON patches: a boundary object is emitted (same non-skip second-operand path).
     let js = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/bo.rs",
         "--patches",
@@ -6061,7 +6093,7 @@ fn recover_at_empty_when_spec_omits_cutoff_line() {
     // `--at ""` (an explicit empty cutoff spec) → `resolve_cutoff` returns None → the
     // `if let Some(c) = cutoff` FALSE side: the snapshot renders WITHOUT an "as of:" line.
     let h = recover_scenario_home();
-    let out = h.run(&["recover", "--session", SESS, "--file", RFILE, "--at", ""]);
+    let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE, "--at", ""]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         !out.stdout.contains("as of: jsonl line"),
@@ -6090,8 +6122,7 @@ fn recover_at_line_range_outside_known_keeps_seen_total() {
     // Restrict to lines 1-2 — OUTSIDE the known 5-6 window → known empties, seen_total stays.
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/lr.rs",
         "--at",
@@ -6124,8 +6155,7 @@ fn recover_at_json_line_range_outside_known_keeps_seen_total() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/lrj.rs",
         "--at",
@@ -6165,8 +6195,7 @@ fn recover_turn_range_alone_is_accepted() {
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         RFILE,
         "--coverage",
@@ -6385,7 +6414,7 @@ fn turns_slice_reassembles_out_document_within_window() {
     let out_path = h.root.join("turns_doc.md");
     let r = h.run(&[
         "turns",
-        SESS,
+        at(SESS).as_str(),
         "--budget",
         "20000",
         "--no-subagents",
@@ -6408,7 +6437,7 @@ fn turns_slice_reassembles_out_document_within_window() {
         let ns = n.to_string();
         let s = h.run(&[
             "turns",
-            SESS,
+            at(SESS).as_str(),
             "--budget",
             "20000",
             "--no-subagents",
@@ -6449,7 +6478,7 @@ fn turns_slice_rejects_out_json_and_zero() {
 
     let bad_out = h.run(&[
         "turns",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--slice",
         "1",
@@ -6465,7 +6494,7 @@ fn turns_slice_rejects_out_json_and_zero() {
 
     let bad_json = h.run(&[
         "turns",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--slice",
         "1",
@@ -6479,7 +6508,7 @@ fn turns_slice_rejects_out_json_and_zero() {
         bad_json.stderr
     );
 
-    let bad_zero = h.run(&["turns", SESS, "--no-subagents", "--slice", "0"]);
+    let bad_zero = h.run(&["turns", at(SESS).as_str(), "--no-subagents", "--slice", "0"]);
     assert!(!bad_zero.success);
     assert!(
         bad_zero.stderr.contains("1-based"),
@@ -6535,8 +6564,7 @@ fn turns_budget_respected_real_emitted_chars() {
         // Default text form (stdout is the document + operational chrome).
         let text = h.run(&[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--budget",
             &bs,
@@ -6553,8 +6581,7 @@ fn turns_budget_respected_real_emitted_chars() {
         // The `--out` file: the verbatim reconstruction document (no operational chrome).
         let outrun = h.run(&[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--budget",
             &bs,
@@ -6598,8 +6625,7 @@ fn turns_budget_respected_real_emitted_chars() {
     // against the reconstruction budget — it is operational chrome).
     let any = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "8000",
@@ -6619,8 +6645,7 @@ fn turns_smaller_budget_emits_strictly_less() {
     let doc_len = |budget: &str| -> usize {
         let t = h.run(&[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--budget",
             budget,
@@ -6641,8 +6666,7 @@ fn turns_smaller_budget_selects_fewer() {
     let h = turns_home();
     let big = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -6651,8 +6675,7 @@ fn turns_smaller_budget_selects_fewer() {
     ]);
     let small = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "3000",
@@ -6679,8 +6702,7 @@ fn turns_round_trip_floor_recovers_a_user_turn() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "6000",
@@ -6707,8 +6729,7 @@ fn turns_spans_at_least_two_compaction_boundaries() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -6745,8 +6766,7 @@ fn turns_max_compactions_caps_the_reach() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -6782,8 +6802,7 @@ fn turns_ellipsis_role_asymmetry_and_counts() {
     let h = turns_home();
     let text = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -6810,8 +6829,7 @@ fn turns_ellipsis_role_asymmetry_and_counts() {
 
     let json = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -6863,8 +6881,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
     for i in 1..=2 {
         let o = h.run(&[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--slices",
             "2",
@@ -6882,8 +6899,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
     }
     let s1 = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--slices",
         "2",
@@ -6898,8 +6914,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
     );
     let s3 = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--slices",
         "2",
@@ -6926,8 +6941,7 @@ fn turns_slices_keeps_newest_discards_oldest() {
         doc.push_str(
             &h.run(&[
                 "turns",
-                "--session",
-                SESS,
+                at(SESS).as_str(),
                 "--no-subagents",
                 "--slices",
                 "2",
@@ -6964,8 +6978,7 @@ fn turns_slices_keeps_user_turns_whole_no_role_cap() {
         doc.push_str(
             &h.run(&[
                 "turns",
-                "--session",
-                SESS,
+                at(SESS).as_str(),
                 "--no-subagents",
                 "--slices",
                 "8",
@@ -6986,8 +6999,7 @@ fn turns_slices_keeps_user_turns_whole_no_role_cap() {
     // is untouched) — so the verbatim user body is NOT present and the elision marker IS.
     let budgeted = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7013,8 +7025,7 @@ fn turns_slices_ellipsizes_only_a_turn_bigger_than_one_window() {
         doc.push_str(
             &h.run(&[
                 "turns",
-                "--session",
-                SESS,
+                at(SESS).as_str(),
                 "--no-subagents",
                 "--slices",
                 "8",
@@ -7043,8 +7054,7 @@ fn turns_slices_requires_a_slice_index() {
     let h = turns_home();
     let o = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--slices",
         "4",
@@ -7063,8 +7073,7 @@ fn turns_tool_call_markers_present_with_correct_counts() {
     let h = turns_home();
     let text = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7087,8 +7096,7 @@ fn turns_tool_call_markers_present_with_correct_counts() {
     // JSON carries the exact tool_calls count.
     let json = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7108,8 +7116,7 @@ fn turns_line_numbers_present_in_text_and_json() {
     let h = turns_home();
     let text = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7126,8 +7133,7 @@ fn turns_line_numbers_present_in_text_and_json() {
     );
     let json = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7161,8 +7167,7 @@ fn turns_dedup_demotes_summary_match_never_drops() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7196,8 +7201,7 @@ fn turns_fidelity_beats_summary_verbatim_count() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7222,16 +7226,14 @@ fn turns_deterministic_byte_identical() {
     let h = turns_home();
     let a = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "10000",
     ]);
     let b = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "10000",
@@ -7248,8 +7250,7 @@ fn turns_out_file_holds_full_reconstruction() {
     let out_path = h.root.join("turns-out.md");
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7277,8 +7278,7 @@ fn turns_token_budget_unit_scales_by_four() {
     let h = turns_home();
     let tok = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "3000",
@@ -7289,8 +7289,7 @@ fn turns_token_budget_unit_scales_by_four() {
     ]);
     let chr = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "3000",
@@ -7316,8 +7315,7 @@ fn turns_turn_range_and_since_mutually_exclusive() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--turn-range",
         "0..2",
@@ -7338,8 +7336,7 @@ fn turns_invalid_round_trip_fraction_errors() {
     for f in ["0", "1", "1.5", "-0.1"] {
         let out = h.run(&[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--round-trip-fraction",
             f,
@@ -7353,8 +7350,7 @@ fn turns_zero_budget_errors() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "0",
@@ -7420,8 +7416,7 @@ fn turns_live_region_dedup_demotes_and_flags() {
     // Text: the dedup header line + the (also in summary) flag must appear.
     let text = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7441,8 +7436,7 @@ fn turns_live_region_dedup_demotes_and_flags() {
     // PRESENT (demoted, never dropped).
     let json = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7473,8 +7467,7 @@ fn turns_json_out_file_is_verbatim() {
     let out_path = h.root.join("turns.json");
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7513,8 +7506,7 @@ fn turns_no_genuine_turns_emits_honest_empty_message() {
     h.write(&format!("{ENC}/{SESS}.jsonl"), &s);
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7544,8 +7536,7 @@ fn turns_json_single_side_units_present_under_tight_budget() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "2500",
@@ -7572,8 +7563,7 @@ fn turns_since_window_filters_turns() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7628,7 +7618,7 @@ fn turns_defaults_to_top_level_only_no_subagent_span() {
     // it must NOT span the session's subagents (unlike files/search). So a bare run prints no
     // `(subagent transcript)` blocks and no scope banner (one session in scope, rendered).
     let h = populated_home();
-    let out = h.run(&["turns", SESS, "--budget", "40000"]);
+    let out = h.run(&["turns", at(SESS).as_str(), "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains(&format!("SESSION {SESS}")),
@@ -7653,7 +7643,13 @@ fn turns_include_subagents_opts_into_span_with_scope_banner() {
     // it spans the subagents AND prints a scope banner that reports the TRUE top-level/subagent
     // split (never `0 top-level`, even though the budget applies per session).
     let h = populated_home();
-    let out = h.run(&["turns", SESS, "--include-subagents", "--budget", "40000"]);
+    let out = h.run(&[
+        "turns",
+        at(SESS).as_str(),
+        "--include-subagents",
+        "--budget",
+        "40000",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("(subagent transcript)"),
@@ -7673,7 +7669,13 @@ fn turns_targeted_top_level_skipped_at_tiny_budget_is_reported_not_silent() {
     // the session must be reported with an explicit skip note (never silently absent), and the
     // scope banner must still count it as `1 top-level` in scope — not `0`.
     let h = populated_home();
-    let out = h.run(&["turns", SESS, "--include-subagents", "--budget", "120"]);
+    let out = h.run(&[
+        "turns",
+        at(SESS).as_str(),
+        "--include-subagents",
+        "--budget",
+        "120",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains(&format!("SESSION {SESS}  skipped")),
@@ -7699,7 +7701,7 @@ fn turns_json_header_carries_true_scope_and_rendered_and_by_kind() {
     let h = populated_home();
     let out = h.run(&[
         "turns",
-        SESS,
+        at(SESS).as_str(),
         "--include-subagents",
         "--budget",
         "40000",
@@ -7744,8 +7746,7 @@ fn turns_clean_session_reports_no_skipped_lines() {
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7774,8 +7775,7 @@ fn turns_json_clean_session_emits_zero_skipped_terminator() {
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7799,8 +7799,7 @@ fn turns_main_fixture_text_reports_skipped_line() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7818,8 +7817,7 @@ fn turns_json_main_fixture_has_skipped_record() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7852,8 +7850,7 @@ fn turns_assistant_only_orphan_lead_renders() {
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7869,8 +7866,7 @@ fn turns_turn_range_alone_is_not_a_conflict() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7902,8 +7898,7 @@ fn turns_empty_session_file_is_safe() {
     h.write(&format!("{ENC}/{sess}.jsonl"), "");
     let out = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7918,8 +7913,7 @@ fn turns_valid_round_trip_fraction_accepted() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7940,8 +7934,7 @@ fn turns_nonzero_budget_accepted() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "1000",
@@ -7957,8 +7950,7 @@ fn turns_since_and_until_both_bound_the_window() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -7978,8 +7970,7 @@ fn turns_token_budget_text_output_runs() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "2000",
@@ -7998,8 +7989,7 @@ fn turns_turn_range_excludes_out_of_window_turns() {
     let h = turns_home();
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8061,8 +8051,7 @@ fn turns_scan_skips_non_candidate_lines() {
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
         "turns",
-        "--session",
-        sess,
+        at(sess).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8089,8 +8078,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     let h = turns_home();
     let rich = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8128,8 +8116,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     // The `eot-only` ESCAPE keeps only the EOT — the intermediate rich members are absent.
     let eot = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8162,8 +8149,7 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
     let h = turns_home();
     let dflt = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8212,8 +8198,7 @@ fn turns_agent_msgs_rich_placeholder_range_is_fetchable_and_attributed() {
     let h = turns_home();
     let json = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8244,8 +8229,7 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
     let h = turns_home();
     let all = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "40000",
@@ -8275,7 +8259,7 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
 /// middles, so this baseline is reproduced by the `--agent-msgs eot-only` ESCAPE, not by
 /// the implicit default. Captured under `TZ=UTC` so the system-local timestamp render is
 /// deterministic across machines. Re-capture (only on an INTENDED eot-only-output change):
-///   TZ=UTC csift turns --session <SESS> --no-subagents --budget 40000 --agent-msgs eot-only
+///   TZ=UTC csift turns @<SESS> --no-subagents --budget 40000 --agent-msgs eot-only
 const TURNS_PRE_FEATURE_BASELINE: &str = include_str!("turns_pre_feature_baseline.txt");
 
 #[test]
@@ -8292,8 +8276,7 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     let eot_only = h.run_with_env(
         &[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--budget",
             "40000",
@@ -8315,8 +8298,7 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     let implicit = h.run_with_env(
         &[
             "turns",
-            "--session",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--budget",
             "40000",
@@ -8336,11 +8318,11 @@ fn turns_profile_heavy_keeps_at_least_as_many_as_light() {
     // heavy (lower thresholds) selects >= as many KEPT agent messages as light, and both
     // are bounded by `all` and floored by `eot-only`.
     let h = turns_home();
+    let at_sess = at(SESS);
     let kept_agents = |args: &[&str]| -> usize {
         let mut full = vec![
             "turns",
-            "--session",
-            SESS,
+            at_sess.as_str(),
             "--no-subagents",
             "--budget",
             "40000",
@@ -8374,8 +8356,7 @@ fn turns_budget_respected_under_rich_and_all_modes() {
             let bs = budget.to_string();
             let out = h.run(&[
                 "turns",
-                "--session",
-                SESS,
+                at(SESS).as_str(),
                 "--no-subagents",
                 "--budget",
                 &bs,
@@ -8430,8 +8411,7 @@ fn turns_rich_filters_subagent_runs_too() {
 
     let out = h.run(&[
         "turns",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--include-subagents",
         "--budget",
         "40000",
@@ -8473,9 +8453,9 @@ fn turns_help_lists_the_new_agent_msg_flags() {
         );
     }
     // Invalid enum values exit nonzero with a clap error.
-    let bad_mode = h.run(&["turns", "--session", SESS, "--agent-msgs", "bogus"]);
+    let bad_mode = h.run(&["turns", at(SESS).as_str(), "--agent-msgs", "bogus"]);
     assert!(!bad_mode.success, "invalid --agent-msgs must fail");
-    let bad_profile = h.run(&["turns", "--session", SESS, "--profile", "bogus"]);
+    let bad_profile = h.run(&["turns", at(SESS).as_str(), "--profile", "bogus"]);
     assert!(!bad_profile.success, "invalid --profile must fail");
 }
 
@@ -8542,7 +8522,7 @@ fn auq_answer_opens_a_turn_and_surfaces_clean_answer() {
 #[test]
 fn turns_reconstructs_auq_exchange_and_plan_rejection_with_pointer() {
     let h = holes_home();
-    let out = h.run(&["turns", "--session", SESS]);
+    let out = h.run(&["turns", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The AUQ exchange is reconstructed as a complete unit: marker + question + options
     // + the answer prose.
@@ -8608,8 +8588,7 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
         "the conservative path that reuses existing state",
         "-t",
         "user",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
     ]);
     assert!(desc.success, "stderr: {}", desc.stderr);
     assert!(
@@ -8626,8 +8605,7 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
         "more involved than a quick tweak",
         "-t",
         "user",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
     ]);
     assert!(notes.success, "stderr: {}", notes.stderr);
     assert!(
@@ -8669,32 +8647,38 @@ fn interrupt_does_not_split_a_turn() {
 #[test]
 fn scope_banner_uniform_across_spanning_subcommands() {
     let h = populated_home();
-    let f = h.run(&["files", SESS, "--by-file"]);
+    let f = h.run(&["files", at(SESS).as_str(), "--by-file"]);
     assert!(
         f.stdout.contains("sessions in scope"),
         "files banner:\n{}",
         f.stdout
     );
-    let s = h.run(&["search", "carry", SESS]);
+    let s = h.run(&["search", "carry", at(SESS).as_str()]);
     assert!(
         s.stdout.contains("sessions in scope"),
         "search banner:\n{}",
         s.stdout
     );
-    let r = h.run(&["recover", SESS, "--coverage", "--file", "/tmp/x"]);
+    let r = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--coverage",
+        "--file",
+        "/tmp/x",
+    ]);
     assert!(
         r.stdout.contains("sessions in scope"),
         "recover banner:\n{}",
         r.stdout
     );
-    let l = h.run(&["list", SESS]);
+    let l = h.run(&["list", at(SESS).as_str()]);
     assert!(
         l.stdout.contains("sessions in scope"),
         "list banner:\n{}",
         l.stdout
     );
     // The banner is SUPPRESSED under --no-subagents (single top-level transcript).
-    let f2 = h.run(&["files", SESS, "--by-file", "--no-subagents"]);
+    let f2 = h.run(&["files", at(SESS).as_str(), "--by-file", "--no-subagents"]);
     assert!(
         !f2.stdout.contains("sessions in scope"),
         "files --no-subagents banner leaked:\n{}",
@@ -8707,13 +8691,16 @@ fn scope_banner_uniform_across_spanning_subcommands() {
 #[test]
 fn scope_json_header_uniform_across_spanning_subcommands() {
     let h = populated_home();
+    // Bind the `@<uuid>` target once so the vecs below can borrow it (a temporary `at(SESS)`
+    // inside the array literal would be dropped before `h.run` borrows it).
+    let at_sess = at(SESS);
     for args in [
-        vec!["list", SESS, "--format", "json"],
-        vec!["files", SESS, "--by-file", "--format", "json"],
-        vec!["search", "carry", SESS, "--format", "json"],
+        vec!["list", at_sess.as_str(), "--format", "json"],
+        vec!["files", at_sess.as_str(), "--by-file", "--format", "json"],
+        vec!["search", "carry", at_sess.as_str(), "--format", "json"],
         vec![
             "recover",
-            SESS,
+            at_sess.as_str(),
             "--coverage",
             "--file",
             "/tmp/x",
@@ -8759,19 +8746,19 @@ fn no_subagents_dominant_regardless_of_order_end_to_end() {
     // Both orders must suppress the banner (top-level only).
     assert!(!span(&h.run(&[
         "list",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--include-subagents"
     ])));
     assert!(!span(&h.run(&[
         "list",
-        SESS,
+        at(SESS).as_str(),
         "--include-subagents",
         "--no-subagents"
     ])));
     assert!(!span(&h.run(&[
         "files",
-        SESS,
+        at(SESS).as_str(),
         "--by-file",
         "--no-subagents",
         "--include-subagents"
@@ -8779,7 +8766,7 @@ fn no_subagents_dominant_regardless_of_order_end_to_end() {
     assert!(!span(&h.run(&[
         "search",
         "carry",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--include-subagents"
     ])));
@@ -8791,7 +8778,7 @@ fn no_subagents_dominant_regardless_of_order_end_to_end() {
 fn subagents_only_misplaced_gives_pointed_error() {
     let h = populated_home();
     for sub in ["turns", "recover", "list"] {
-        let out = h.run(&[sub, SESS, "--subagents-only"]);
+        let out = h.run(&[sub, at(SESS).as_str(), "--subagents-only"]);
         assert!(!out.success, "{sub} --subagents-only should fail");
         assert!(
             out.stderr.contains("`files`-only flag") && out.stderr.contains("--no-subagents"),
@@ -8800,7 +8787,7 @@ fn subagents_only_misplaced_gives_pointed_error() {
         );
     }
     // search too (pattern positional first).
-    let out = h.run(&["search", "x", SESS, "--subagents-only"]);
+    let out = h.run(&["search", "x", at(SESS).as_str(), "--subagents-only"]);
     assert!(!out.success);
     assert!(
         out.stderr.contains("`files`-only flag"),
@@ -8808,7 +8795,7 @@ fn subagents_only_misplaced_gives_pointed_error() {
         out.stderr
     );
     // files itself still accepts it as the real flag.
-    let ok = h.run(&["files", SESS, "--subagents-only", "--by-file"]);
+    let ok = h.run(&["files", at(SESS).as_str(), "--subagents-only", "--by-file"]);
     assert!(
         ok.success,
         "files --subagents-only must work: {}",
@@ -8829,7 +8816,7 @@ fn empty_out_never_clobbers_or_lies() {
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
         "recover",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/tmp/no_such_file_xyz.md",
         "--patches",
@@ -8857,7 +8844,7 @@ fn empty_out_never_clobbers_or_lies() {
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
         "recover",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/tmp/no_such_file_xyz.md",
         "--at",
@@ -8881,7 +8868,7 @@ fn empty_out_never_clobbers_or_lies() {
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
         "turns",
-        SESS,
+        at(SESS).as_str(),
         "--budget",
         "5",
         "--out",
@@ -8901,7 +8888,12 @@ fn empty_out_never_clobbers_or_lies() {
 
     // CONTROL: a NON-empty reconstruction DOES write (guard is not over-eager).
     std::fs::write(&scratch, seed).unwrap();
-    let out = h.run(&["turns", SESS, "--out", scratch.to_str().unwrap()]);
+    let out = h.run(&[
+        "turns",
+        at(SESS).as_str(),
+        "--out",
+        scratch.to_str().unwrap(),
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("wrote full reconstruction"),
@@ -8921,7 +8913,7 @@ fn empty_out_never_clobbers_or_lies() {
 #[test]
 fn turns_text_brands_subagent_uniformly() {
     let h = populated_home();
-    let out = h.run(&["turns", SESS, "--include-subagents"]);
+    let out = h.run(&["turns", at(SESS).as_str(), "--include-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The subagent block carries the SUBAGENT token + the re-feedable parent uuid.
     assert!(
@@ -8980,8 +8972,7 @@ fn recover_at_skips_failed_string_not_found_edit_top_level() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/f.md",
         "--at",
@@ -9037,8 +9028,7 @@ fn recover_subagent_input_fallback_skips_failed_edit() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        PSESS,
+        at(PSESS).as_str(),
         "--file",
         "/p/g.md",
         "--at",
@@ -9080,8 +9070,7 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "/p/cfg.txt",
         "--coverage",
@@ -9170,7 +9159,7 @@ fn plan_resolves_bound_plan_not_an_edited_other_plan() {
         .into_owned();
     write_planning_session(&h, SESS, &bound_abs, &other_abs);
 
-    let out = h.run(&["plan", "--session", SESS, "--format", "json"]);
+    let out = h.run(&["plan", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let v: serde_json::Value =
         serde_json::from_str(out.stdout.lines().next().unwrap_or("")).unwrap();
@@ -9235,10 +9224,6 @@ fn plan_reverse_finds_the_session_bound_to_a_plan_file() {
         "honest empty note: {}",
         none.stderr
     );
-
-    // --reverse conflicts with --session (clap-level).
-    let conflict = h.run(&["plan", "--reverse", &bound_abs, "--session", SESS]);
-    assert!(!conflict.success, "reverse + session is rejected");
 }
 
 #[test]
@@ -9255,8 +9240,7 @@ fn recover_file_plan_magic_reconstructs_the_bound_plan() {
 
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "@plan",
         "--at",
@@ -9295,8 +9279,7 @@ fn recover_file_plan_errors_when_no_plan_is_bound() {
     );
     let out = h.run(&[
         "recover",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--file",
         "@plan",
         "--coverage",
@@ -9326,7 +9309,7 @@ fn recover_file_plan_errors_when_ambiguous_across_sessions() {
     let out = h.run(&["recover", ENC, "--file", "@plan", "--coverage"]);
     assert!(!out.success, "should be ambiguous: {}", out.stdout);
     assert!(
-        out.stderr.contains("different bound plan files") && out.stderr.contains("--session"),
+        out.stderr.contains("different bound plan files") && out.stderr.contains("@<uuid>"),
         "unhelpful ambiguity error: {}",
         out.stderr
     );
@@ -9342,7 +9325,7 @@ fn plan_no_binding_is_honest_not_an_error() {
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["plan", "--session", SESS]);
+    let out = h.run(&["plan", at(SESS).as_str()]);
     assert!(
         out.success,
         "no plan is a valid answer, not an error: {}",
@@ -9388,7 +9371,7 @@ fn plan_surfaces_subagent_bound_plan() {
         r#"{"agentType":"general-purpose","description":"planner","toolUseId":"t0"}"#,
     );
 
-    let out = h.run(&["plan", "--session", PSESS, "--format", "json"]);
+    let out = h.run(&["plan", at(PSESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let v: serde_json::Value = out
         .stdout
@@ -9476,7 +9459,7 @@ fn plan_text_lists_top_level_then_subagent_plans() {
         r#"{"agentType":"general-purpose","description":"worker","toolUseId":"t0"}"#,
     );
 
-    let out = h.run(&["plan", "--session", PSESS]);
+    let out = h.run(&["plan", at(PSESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     let top_pos = out
         .stdout
@@ -9538,8 +9521,7 @@ fn recover_file_plan_resolves_subagent_only_plan() {
 
     let out = h.run(&[
         "recover",
-        "--session",
-        PSESS,
+        at(PSESS).as_str(),
         "--file",
         "@plan",
         "--at",
@@ -9610,7 +9592,7 @@ fn image_home() -> Home {
 #[test]
 fn image_lists_images_with_stable_ids() {
     let h = image_home();
-    let out = h.run(&["image", SESS]);
+    let out = h.run(&["image", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     // r0 = line 1 (1 image), r2 = line 3 (2 images): L1i1 png, L3i1 jpeg, L3i2 png.
     assert!(out.stdout.contains("L1i1"), "L1i1 missing:\n{}", out.stdout);
@@ -9628,7 +9610,12 @@ fn image_lists_images_with_stable_ids() {
 fn image_extracts_real_bytes_to_dir() {
     let h = image_home();
     let out_dir = h.root.join("imgs");
-    let out = h.run(&["image", SESS, "--out", out_dir.to_str().unwrap()]);
+    let out = h.run(&[
+        "image",
+        at(SESS).as_str(),
+        "--out",
+        out_dir.to_str().unwrap(),
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("extracted 3 image(s)"),
@@ -9682,7 +9669,7 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
     let h = ambiguous_hash_home();
 
     // Listing surfaces the `#N` handle and shows BOTH #1 images (distinct content → not deduped).
-    let list = h.run(&["image", SESS, "--no-subagents"]);
+    let list = h.run(&["image", at(SESS).as_str(), "--no-subagents"]);
     assert!(list.success, "stderr: {}", list.stderr);
     assert!(list.stdout.contains("#1") && list.stdout.contains("#2"));
     assert!(
@@ -9693,7 +9680,7 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
 
     // `--id #1` is AMBIGUOUS → it must ERROR (not silently pick one) and list every occurrence
     // with its turn / locator / uuid / time / excerpt so the consumer can disambiguate.
-    let err = h.run(&["image", SESS, "--no-subagents", "--id", "#1"]);
+    let err = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "#1"]);
     assert!(!err.success, "ambiguous #1 must fail, got:\n{}", err.stdout);
     assert!(err.stderr.contains("ambiguous"), "stderr: {}", err.stderr);
     assert!(
@@ -9714,7 +9701,7 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
     );
 
     // `--id #2` is UNIQUE (only the line-1 red) → resolves fine.
-    let two = h.run(&["image", SESS, "--no-subagents", "--id", "#2"]);
+    let two = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "#2"]);
     assert!(two.success, "stderr: {}", two.stderr);
     assert!(two.stdout.contains("L1i2"), "{}", two.stdout);
 }
@@ -9725,7 +9712,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
     // Each disambiguator narrows `#1` to a unique image: turn, time window, uuid, exact locator.
     let by_turn = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--turn-range",
         "1..1",
@@ -9744,7 +9731,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
     // Time window: r2 is at 06:00, r0 at 05:00 → --since 05:30 isolates the line-3 one.
     let by_time = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--since",
         "2026-06-07T05:30:00Z",
@@ -9757,7 +9744,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
     // uuid prefix → the line-3 record.
     let by_uuid = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--uuid",
         "u1deadbe",
@@ -9771,7 +9758,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
     let out_dir = h.root.join("d_imgs");
     let ex = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--id",
         "L3i1",
@@ -9803,7 +9790,7 @@ fn image_converts_by_out_path_extension() {
         let f = h.root.join(format!("shot.{ext}"));
         let out = h.run(&[
             "image",
-            SESS,
+            at(SESS).as_str(),
             "--no-subagents",
             "--id",
             "L1i1",
@@ -9821,7 +9808,7 @@ fn image_converts_by_out_path_extension() {
     // A single-file path with >1 image selected is an error (can't write many to one file).
     let many = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--out",
         h.root.join("x.png").to_str().unwrap(),
@@ -9841,7 +9828,7 @@ fn image_converts_by_out_path_extension() {
     let dir = h.root.join("imgs");
     let d = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--id",
         "L1i1",
@@ -9871,7 +9858,7 @@ fn image_animated_gif_to_still_takes_first_frame() {
     let f = h.root.join("frame.png");
     let out = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--id",
         "#1",
@@ -9894,7 +9881,7 @@ fn image_animated_gif_to_still_takes_first_frame() {
     let g = h.root.join("keep.gif");
     let keep = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--id",
         "#1",
@@ -9917,7 +9904,7 @@ fn search_surfaces_extractable_image_ids_on_a_hit() {
     // `turns`/`image` — so a search result feeds straight into `csift image --id` with no
     // manual L+i assembly. r2 ("two more") carries a jpeg + a png at line 3 → L3i1, L3i2.
     let h = image_home();
-    let out = h.run(&["search", "two more", "--session", SESS, "--no-subagents"]);
+    let out = h.run(&["search", "two more", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("[2 images: L3i1, L3i2]"),
@@ -9928,8 +9915,7 @@ fn search_surfaces_extractable_image_ids_on_a_hit() {
     let j = h.run(&[
         "search",
         "two more",
-        "--session",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--format",
         "json",
@@ -9948,7 +9934,7 @@ fn image_id_selection_json_and_unresolved() {
     let h = image_home();
     let out = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--id",
         "L3i2",
@@ -9967,7 +9953,13 @@ fn image_id_selection_json_and_unresolved() {
         .any(|o| o.get("id").and_then(|v| v.as_str()) == Some("L3i2")));
     assert!(objs.iter().any(|o| o.get("images").is_some())); // trailing summary
                                                              // A nonexistent id is an explicit error, never a silent miss.
-    let miss = h.run(&["image", SESS, "--no-subagents", "--id", "L999i9"]);
+    let miss = h.run(&[
+        "image",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--id",
+        "L999i9",
+    ]);
     assert!(!miss.success);
     assert!(miss.stderr.contains("L999i9"), "stderr: {}", miss.stderr);
 }
@@ -9978,7 +9970,7 @@ fn image_extract_single_by_id() {
     let out_dir = h.root.join("one");
     let out = h.run(&[
         "image",
-        SESS,
+        at(SESS).as_str(),
         "--no-subagents",
         "--id",
         "L1i1",
@@ -10026,7 +10018,7 @@ fn turns_surfaces_image_ids_under_the_user_turn() {
     // The image marker shows the SAME `L<line>i<n>` id that `image --id` consumes, so a
     // turns reader can pull the bytes back without re-scanning.
     let h = image_home();
-    let out = h.run(&["turns", SESS]);
+    let out = h.run(&["turns", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("L1i1"),

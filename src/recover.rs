@@ -153,7 +153,7 @@ struct PatchHunk {
 struct ScanResult {
     session_id: String,
     /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
-    /// re-feedable `--session` target) — the r5 id-domain discriminator, now also on recover.
+    /// re-feedable `@<uuid>` target) — the r5 id-domain discriminator, now also on recover.
     is_subagent: bool,
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     parent_session_id: String,
@@ -207,7 +207,6 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     // ── Resolve targets → session files (spanning subagents by default) ──
     let session_files = path::resolve_session_files(
         &args.paths,
-        args.session.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -372,7 +371,6 @@ fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
 
     let session_files = path::resolve_session_files(
         &args.paths,
-        args.session.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -2369,7 +2367,7 @@ fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<ScanResult>
             out.extend(group);
             continue;
         }
-        // Prefer the top-level session's own uuid as the merged id (re-feedable `--session`
+        // Prefer the top-level session's own uuid as the merged id (re-feedable `@<uuid>`
         // target); fall back to the shared parent key if the group is subagent-only.
         let merged_id = group
             .iter()
@@ -2680,7 +2678,7 @@ fn missing_ranges_str(known: &[(usize, String)], total: usize) -> String {
 
 /// Print the per-transcript header. A SUBAGENT transcript is branded
 /// `SUBAGENT <hex> · parent SESSION <uuid>` (mirroring list/files/search/turns text) — its
-/// `session_id` is a bare hex, NOT a re-feedable `--session` target, so it must never be
+/// `session_id` is a bare hex, NOT a re-feedable `@<uuid>` target, so it must never be
 /// tokened a bare `SESSION`. A top-level transcript prints `SESSION <uuid>`.
 fn session_header(first: &mut bool, s: &ScanResult) {
     if !*first {

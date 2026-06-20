@@ -19,7 +19,7 @@
 //! CC build that drops it) we DO NOT GUESS — multiple CC sessions may run
 //! concurrently with different binaries, and most-recent-mtime is a false-positive
 //! trap. We error with actionable guidance instead. It is acceptable for whoami to
-//! often say "ambiguous, pass --session".
+//! often say "ambiguous, pass `@<uuid>`".
 
 use std::path::PathBuf;
 
@@ -40,8 +40,8 @@ const SESSION_ID_ENV_ALIAS: &str = "CODEX_COMPANION_SESSION_ID";
 /// message stays identical across call sites (and is unit-asserted).
 pub const AMBIGUOUS_GUIDANCE: &str = "cannot identify the calling session: \
 CLAUDE_CODE_SESSION_ID is not set (old Claude Code build, or running outside Claude \
-Code). Do NOT trust most-recent-mtime — many sessions may be live at once. Pass \
---session <uuid> explicitly: your id is the basename of your own transcript jsonl, \
+Code). Do NOT trust most-recent-mtime — many sessions may be live at once. Pass an \
+explicit `@<uuid>` target: your id is the basename of your own transcript jsonl, \
 or grep a unique recent line you wrote to disambiguate.";
 
 /// Read the definitive session id from the environment, if present and non-empty.
@@ -146,8 +146,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn guidance_mentions_session_flag_and_no_mtime() {
-        assert!(AMBIGUOUS_GUIDANCE.contains("--session"));
+    fn guidance_mentions_session_target_and_no_mtime() {
+        assert!(AMBIGUOUS_GUIDANCE.contains("@<uuid>"));
         assert!(AMBIGUOUS_GUIDANCE.contains("mtime"));
         assert!(AMBIGUOUS_GUIDANCE.contains("CLAUDE_CODE_SESSION_ID"));
     }

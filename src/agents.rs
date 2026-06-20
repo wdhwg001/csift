@@ -40,16 +40,12 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         bail!(msg);
     }
 
-    // Resolve the target session files (PATH(s) + optional --session). With neither,
-    // every project is scanned — the same target model as list/search. `agents`
-    // discovers each session's subagents itself, so it never spans subagent TRANSCRIPT
-    // files here (include_subagents=false).
-    let session_files = path::resolve_session_files(
-        &args.paths,
-        args.session.as_deref(),
-        false.into(),
-        path::Caller::Other,
-    )?;
+    // Resolve the target session files from the positional target(s). With none, every
+    // project is scanned — the same target model as list/search. `agents` discovers each
+    // session's subagents itself, so it never spans subagent TRANSCRIPT files here
+    // (include_subagents=false).
+    let session_files =
+        path::resolve_session_files(&args.paths, false.into(), path::Caller::Other)?;
 
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
@@ -82,7 +78,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         if nodes.is_empty() {
             bail!(
                 "no subagent matched id `{want_id}` in scope. List valid ids first with \
-                 `csift agents --session <uuid>` (or `csift agents <project-path>`) and read \
+                 `csift agents @<uuid>` (or `csift agents <project-path>`) and read \
                  the `agent_id` column / JSON field, then pass one to `--agent`."
             );
         }

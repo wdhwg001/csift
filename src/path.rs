@@ -444,26 +444,6 @@ impl From<bool> for SubagentScope {
     }
 }
 
-/// Resolve `--path` targets (+ optional `--session`) into the concrete, sorted,
-/// de-duplicated list of session `*.jsonl` files to operate on, with the subagent span
-/// governed by `scope`.
-///
-/// This is the SINGLE shared target resolver for `search` / `agents` / `files` /
-/// `recover` / `turns` (each previously carried a near-identical copy): 0 `paths` ⇒
-/// every project under the projects root; a `--session` restricts to the parent session
-/// whose jsonl basename matches. The subagent transcripts of a selected session (built-in
-/// Task/Agent-tool + workflow / OMC agents under `subagents/**`) are gathered from the
-/// already-`--session`-filtered top-level set; workflow `journal.jsonl` event logs are
-/// never transcripts and are excluded (see [`crate::subagent::subagent_transcript_files`]).
-/// Per [`SubagentScope`]:
-/// - `WithSubagents` — top-level session(s) + their subagents (the default).
-/// - `TopLevelOnly` — only the top-level `<uuid>.jsonl` session(s).
-/// - `SubagentsOnly` — only the subagent transcripts (the top-level jsonl is dropped).
-///
-/// Bails (never returns an empty silent result) when a `--session` was given but no
-/// matching file exists under the resolved target(s) — in `SubagentsOnly` this fires
-/// when the session exists but spawned no subagents. With no `--session`, an empty
-/// result is allowed (the caller renders an honest "nothing found").
 /// Resolve the `@main`/`@self` env session token to a session/agent id. `@main` is always the
 /// calling session's top-level id (`CLAUDE_CODE_SESSION_ID`, which CC sets to the process-global
 /// MAIN id even inside a subagent). `@self` prefers `CLAUDE_CODE_AGENT_ID` (set only for
@@ -545,22 +525,39 @@ pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
     ))
 }
 
+/// Resolve positional targets into the concrete, sorted, de-duplicated list of session
+/// `*.jsonl` files to operate on, with the subagent span governed by `scope`.
+///
+/// This is the SINGLE shared target resolver for `list` / `search` / `agents` / `files` /
+/// `recover` / `turns` / `image`. There is NO `--session` flag — a session is targeted by a
+/// positional `@<uuid>` / `@<agent-hex>` / `@main` / `@self` token or a `*.jsonl` file; a real
+/// path / encoded-dir token / `~/.claude/projects/<enc>` scopes to project dir(s). 0 `paths` ⇒
+/// every project under the projects root. The subagent transcripts of a selected session
+/// (built-in Task/Agent-tool + workflow / OMC agents under `subagents/**`) are gathered from
+/// the already-id-filtered top-level set; workflow `journal.jsonl` event logs are never
+/// transcripts and are excluded (see [`crate::subagent::subagent_transcript_files`]). Per
+/// [`SubagentScope`]:
+/// - `WithSubagents` — top-level session(s) + their subagents (the default).
+/// - `TopLevelOnly` — only the top-level `<uuid>.jsonl` session(s).
+/// - `SubagentsOnly` — only the subagent transcripts (the top-level jsonl is dropped).
+///
+/// Bails (never returns an empty silent result) when a session id was pinned but no matching
+/// file exists under the resolved target(s) — in `SubagentsOnly` this fires when the session
+/// exists but spawned no subagents. With no id pin, an empty result is allowed (the caller
+/// renders an honest "nothing found").
 pub fn resolve_session_files(
     paths: &[std::path::PathBuf],
-    session: Option<&str>,
     scope: SubagentScope,
     caller: Caller,
 ) -> Result<Vec<PathBuf>> {
-    // A POSITIONAL target that is a bare SESSION UUID (not a project dir) is routed to the
-    // session filter, so the documented `csift files <uuid>` / `recover <uuid>` / `turns
-    // <uuid>` forms work as written (a uuid is NOT a filesystem path — encoding+looking it
-    // up as a project dir is what used to error). Project-shaped targets stay project
-    // targets; uuid-shaped ones join the --session set. The result selects sessions whose
-    // basename matches ANY collected id.
+    // Target grammar (no `--session` flag — a session is an `@<uuid>` / `@main` / `@self`
+    // positional, or a `*.jsonl` file). A token is one of: an `@`-prefixed IDENTIFIER (env /
+    // session-id / encoded-dir), a `*.jsonl` session file, or a PATH (real cwd, encoded-dir
+    // token, or `~/.claude/projects/<enc>`). A BARE uuid is NOT special — it falls to the path
+    // branch and fails as "no project dir named <uuid>" (forced-unique: a folder literally named
+    // like a uuid would otherwise be ambiguous). Result selects sessions whose basename matches
+    // ANY collected id.
     let mut session_ids: Vec<String> = Vec::new();
-    if let Some(s) = session {
-        session_ids.push(s.to_string());
-    }
     let mut project_paths: Vec<&std::path::PathBuf> = Vec::new();
     // Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) — kept
     // apart from `project_paths` so they don't trigger the all-projects scan.
@@ -587,12 +584,8 @@ pub fn resolve_session_files(
             session_ids.push(sid);
             continue;
         }
-        // A bare SESSION-UUID positional still routes to the session filter (back-compat;
-        // a uuid is not a real project dir — encoding+looking it up is what used to error).
-        if looks_like_session_id(t) {
-            session_ids.push(t.to_string());
-            continue;
-        }
+        // Everything else is a PATH (real cwd / encoded-dir token / `~/.claude/projects/<enc>`).
+        // A bare uuid lands here on purpose → resolve_target fails as "no project dir named …".
         project_paths.push(p);
     }
 
@@ -646,7 +639,7 @@ pub fn resolve_session_files(
     }
 
     // Subagent transcripts of each selected top-level session (empty unless the scope
-    // asks for them). The --session restriction already applied to the parent above.
+    // asks for them). The session-id restriction already applied to the parent above.
     let mut sub_files: Vec<PathBuf> = Vec::new();
     if matches!(
         scope,
@@ -697,22 +690,24 @@ pub fn resolve_session_files(
     Ok(files)
 }
 
-/// True when `s` is shaped like a CC SESSION ID a caller might pass as a positional in
-/// place of a project path: either a full `8-4-4-4-12` lowercase-hex UUID (a top-level
-/// session jsonl basename) or a bare-hex agent id (a subagent transcript basename minus
-/// `agent-`). Used to route such a positional to the session filter rather than encoding
-/// it as a (non-existent) project directory — and reused by the `search` empty-pattern
-/// warning gate so a uuid POSITIONAL counts as a session filter (the warning must not claim
-/// "no session filter" when a bare-uuid positional effectively IS one).
+/// True when a TARGET token pins a SINGLE transcript/session (so `search --line` has one file
+/// to address, and the empty-pattern warning knows a session filter is present): an
+/// `@main`/`@self` env token, an `@<uuid>`/`@<agent-hex>` id, or a `*.jsonl` file. A plain path
+/// or encoded-dir token can span many sessions, so it does NOT pin.
 #[must_use]
-pub fn looks_like_session_id(s: &str) -> bool {
-    is_uuid(s) || is_bare_subagent_hex(s)
+pub fn pins_single_session(token: &str) -> bool {
+    if let Some(id) = token.strip_prefix('@') {
+        return matches!(id, "main" | "self") || is_uuid(id) || is_bare_subagent_hex(id);
+    }
+    token.ends_with(".jsonl")
 }
 
-/// True for a canonical `8-4-4-4-12` hex UUID (a top-level session jsonl basename). Public
-/// so `search` can detect a bare-uuid SOLE positional (its first positional is PATTERN, not
-/// PATH, so a lone uuid would otherwise be regex-searched instead of scoping — see
-/// `SearchArgs` routing).
+/// True for a canonical `8-4-4-4-12` hex UUID (a top-level session jsonl basename). Re-exports
+/// the ONE canonical uuid-shape validator so the `turns` TESTS discriminate a top-level uuid
+/// from a bare-hex subagent id without rolling their own (the only remaining caller now that
+/// `--session`/bare-uuid routing is gone, hence `#[cfg(test)]` — production code reaches this
+/// shape only through `pins_single_session`).
+#[cfg(test)]
 #[must_use]
 pub fn is_session_uuid(s: &str) -> bool {
     is_uuid(s)
@@ -1036,12 +1031,15 @@ mod tests {
     }
 
     #[test]
-    fn looks_like_session_id_covers_uuid_and_bare_hex() {
-        assert!(looks_like_session_id(
-            "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
-        ));
-        assert!(looks_like_session_id("ae24045bd6d4bdaff"));
-        assert!(!looks_like_session_id("-Users-testuser-Projects-foo"));
-        assert!(!looks_like_session_id("."));
+    fn pins_single_session_covers_at_tokens_and_jsonl() {
+        assert!(pins_single_session("@main"));
+        assert!(pins_single_session("@self"));
+        assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
+        assert!(pins_single_session("@ae24045bd6d4bdaff"));
+        assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
+        // A bare uuid (no `@`), an encoded token, a plain path, `.` → NOT a session pin.
+        assert!(!pins_single_session("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
+        assert!(!pins_single_session("-Users-testuser-Projects-foo"));
+        assert!(!pins_single_session("."));
     }
 }

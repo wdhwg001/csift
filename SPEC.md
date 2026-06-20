@@ -373,9 +373,8 @@ csift list --format json .                              # machine-readable index
 **Args (matches `cli::SearchArgs`):**
 | flag | short | type | default | meaning |
 |---|---|---|---|---|
-| `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A lone `search <uuid>` (a uuid as the SOLE positional) routes to `--session` scope, not a literal-uuid search (a note reports it); add a scope target to keep it literal (`search <uuid> .`). |
-| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd or encoded dir (§2.3) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
-| `--session ID` | — | string | none | restrict to one session uuid |
+| `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is now a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
+| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@main`\|`@self` (calling session) / `@<agent-hex>` (session-id filter) / `*.jsonl` (one transcript) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
 | `--category C` | `-t` | repeatable enum | all | one of `thinking\|user\|tool\|tool-response\|agent` (§5) |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
@@ -403,7 +402,7 @@ csift list --format json .                              # machine-readable index
 
 **Validation:** `--turn-range` together with `--since`/`--until` is an error (mutually exclusive). An empty `PATTERN` with no other filter is allowed (matches every category-eligible record) but should warn that it will emit a lot.
 
-**Filter application order per session:** `--session`/`--path` (target selection) → category eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
+**Filter application order per session:** target selection (positional PATH/`@<uuid>`/`*.jsonl`) → category eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
 
 **Time window:** `--since`/`--until` compare against each record's `timestamp` (UTC). Records with no timestamp (metadata/noise) are never time-matched. Relative forms (`2h`,`3d`,`90m`) are resolved against *now* in the system-local timezone then converted to UTC for comparison.
 
@@ -427,9 +426,9 @@ matched 1 exchange · 1 session · category=all
 csift search "carry"                                   # all projects, smart-case
 csift search -i "askuserquestion" -t tool             # tool_use blocks naming AUQ
 csift search "" -t user --since 2h .                   # pure filter: genuine user turns, last 2h, this project
-csift search "tail.read" --multiline --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+csift search "tail.read" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
-csift search "" --session 0a1b2c3d-… --no-subagents --line 992,1374   # fetch records by line (FULL)
+csift search "" @0a1b2c3d-… --no-subagents --line 992,1374   # fetch records by line (FULL)
 csift search "" --uuid 7f3c9e21-…                      # fetch a record by uuid, anywhere in scope
 csift search -l "deadline"                             # WHICH sessions mention it (ripgrep -l)
 csift search "persisted-output" --resolve-persisted --format json
@@ -441,7 +440,7 @@ csift search "persisted-output" --resolve-persisted --format json
 
 1. **Primary — read `CLAUDE_CODE_SESSION_ID`.** Verified definitive: CC exports it into every Bash-tool environment and its value equals the calling session's own jsonl basename exactly (e.g. `0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d` → `…/<ENCODED>/0a1b2c3d-….jsonl`). Per-session, version-independent, survives arbitrary bash nesting, **zero false positives**. If set and a non-empty UUID, that **is** the answer. Match the **exact** name `CLAUDE_CODE_SESSION_ID` — never a loose `/session/i` regex (`SECURITYSESSIONID`, the macOS login session, is a false-positive trap; `CODEX_COMPANION_SESSION_ID` mirrors the value but is Codex-plugin-specific — accept it only as a secondary alias, prefer the canonical var).
 2. Resolve its transcript: encode `$PWD` (or an explicit `--path`) to the `<ENCODED>` dir and open `<ENCODED>/$CLAUDE_CODE_SESSION_ID.jsonl`. If `$PWD` doesn't resolve, scan projects-root dirs for the one containing `<id>.jsonl`.
-3. **Fallback when the var is absent/empty — ERROR with actionable guidance, never guess.** Message: your session id was not found (`CLAUDE_CODE_SESSION_ID` unset — old CC build or running outside CC); pass `--session <uuid>`; your id is the basename of your own transcript, or grep a unique recent line you wrote to disambiguate; **do NOT trust most-recent-mtime** (many CC sessions may be live concurrently). It is acceptable for `whoami` to often say "ambiguous, pass --session".
+3. **Fallback when the var is absent/empty — ERROR with actionable guidance, never guess.** Message: your session id was not found (`CLAUDE_CODE_SESSION_ID` unset — old CC build or running outside CC); pass an explicit `@<uuid>` target; your id is the basename of your own transcript, or grep a unique recent line you wrote to disambiguate; **do NOT trust most-recent-mtime** (many CC sessions may be live concurrently). It is acceptable for `whoami` to often say "ambiguous, pass an explicit `@<uuid>`".
 4. **FORBIDDEN as a whoami source:** process-tree walk and most-recent-mtime. (Evidence: 83 concurrent `claude` processes + 6 installed CC versions on one machine ⇒ ~83-way ambiguity and cross-version argv brittleness; the UUID isn't even on the process command line. mtime with 83 live sessions is almost always wrong.)
 
 **Args (matches `cli::WhoamiArgs`):** `--show-path` (visible alias `--with-path`; legacy alias `--path`) and `--format text|json`. The resolved `path` line is ALREADY printed by default whenever the id resolves; `--show-path` only FORCES a `path <not found …>` line in the unresolved case (instead of omitting it). `whoami` takes **no** target — it reads the env var, never a path argument.
@@ -502,8 +501,7 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 **Args (matches `cli::AgentsArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
-| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3) whose sessions' subagents to list; optional when `--session` is given |
-| `--session ID` | string | none | restrict to one parent session uuid |
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3) whose sessions' subagents to list; a `@<uuid>` positional restricts to one top-level parent session |
 | `--kind builtin-task\|workflow` | repeatable enum | all | filter to a subagent kind |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local), filters by the `--by` axis |
 | `--by trigger\|start\|completion` | enum | **`trigger`** | which timestamp `--since`/`--until` filter on — `trigger` is the true spawn instant (the **default**), `start` the child's first-record ts, `completion` its last |
@@ -521,13 +519,13 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 
 **Example invocations:**
 ```bash
-csift agents --session 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d   # one session's subagent topology
+csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d            # one session's subagent topology
 csift agents . --kind workflow                                # only workflow agents
-csift agents --session <uuid> --since 2h                      # subagents TRIGGERED in the last 2h
-csift agents --session <uuid> --since 09:00 --by completion   # COMPLETED since a bound
-csift agents --session <uuid> --tree                          # parent→child topology (runs as parents)
-csift agents --session <uuid> --agent <hex> --with-files      # grab one subagent: its returned msg + files
-csift agents --session <uuid> --returned-message --format json # every node's returned message
+csift agents @<uuid> --since 2h                               # subagents TRIGGERED in the last 2h
+csift agents @<uuid> --since 09:00 --by completion            # COMPLETED since a bound
+csift agents @<uuid> --tree                                   # parent→child topology (runs as parents)
+csift agents @<uuid> --agent <hex> --with-files               # grab one subagent: its returned msg + files
+csift agents @<uuid> --returned-message --format json         # every node's returned message
 ```
 
 ### 6.6 `files` — which files/dirs a session modified, when
@@ -551,8 +549,7 @@ Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of
 **Args (matches `cli::FilesArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
-| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); optional when `--session` is given |
-| `--session ID` | string | none | restrict to one parent session uuid |
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level parent session |
 | `--include-subagents` / `--no-subagents` / `--subagents-only` | mutually-exclusive (clap group `subagent_scope`) | `--include-subagents` | subagent scope: default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only; `--subagents-only` = the complement (only what the session's subagents touched) |
 | `--summary` / `--by-dir` / `--by-file` / `--timeline` | mutually-exclusive enum (clap group `detail`) | `--summary` | detail level (below) |
 | `--turn-range START..END` | string | none | inclusive 0-based turn range; **mutually exclusive** with `--since`/`--until` |
@@ -575,11 +572,11 @@ Regardless of detail level, an **Edit-before-Read boundaries** section follows t
 
 **Example invocations:**
 ```bash
-csift files <uuid>                          # default summary: per-top-level-dir op rollup
-csift files <uuid> --by-file                # per-file op counts + first/last touch
-csift files <uuid> --timeline --since 2h    # full chronological, last 2h (heavy)
+csift files @<uuid>                         # default summary: per-top-level-dir op rollup
+csift files @<uuid> --by-file               # per-file op counts + first/last touch
+csift files @<uuid> --timeline --since 2h   # full chronological, last 2h (heavy)
 csift files . --format json --by-dir        # machine-readable per-dir rollup
-csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary")'  # which files changed outside the tool stream
+csift files @<uuid> --format json | jq 'select(.type=="edit_before_read_boundary")'  # which files changed outside the tool stream
 ```
 
 ### 6.7 `recover` — reconstruct a file's content (or a plan) from the transcript
@@ -606,8 +603,7 @@ csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary"
 **Args (matches `cli::RecoverArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
-| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); optional with `--session` |
-| `--session ID` | string | none | restrict to one parent session uuid |
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level parent session |
 | `--file ABS_PATH` \| `@plan` | string | none | the file to reconstruct (exact raw-string match + basename-suffix fallback); **REQUIRED** for every mode. The magic value `@plan` resolves the session-bound plan file (§6.7.1) and reconstructs it like any other file |
 | `--include-subagents` / `--no-subagents` | bool | `true` | span subagent transcripts (OMC fan-out edits happen there) |
 | `--salvage` / `--patches` / `--at WHEN` / `--coverage` (alias `--dry-run`) | clap group `mode` | restore (none set) | the reconstruction mode (mutually exclusive; with NONE set, the default restore mode applies) |
@@ -620,7 +616,7 @@ csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary"
 | `--out-dir DIR` | path | none | batch output dir — each recovered file is written to `<DIR>/<abs-path-without-leading-slash>` (mirrored, dirs created), plus a `recovery-report.tsv` (status · known · total · target · written_to) |
 | `--force` | bool | `false` | batch: overwrite an already-present output file (default: skip it + report `skipped-exists`) |
 
-`--at <WHEN>` accepts ISO8601, relative (`2h`), `@turn:<N>`, `@line:<N>` (state as of jsonl line N), or `@latest` (the file's FINAL reconstructed state — no cutoff; the clean way to ask for "its last form" without guessing a timestamp past the last write) and doubles as the snapshot cutoff. A datetime bound is **INCLUSIVE** of events at that instant. **`--file @plan`** is a bash-safe magic value (no shell metacharacters, no escaping in mixed scripts — consistent with `--at`'s `@line:`/`@turn:` sigils): it resolves the target session's authoritatively-bound plan file (§6.7.1) and substitutes that path, so `recover` then rebuilds the plan's FULL Write+Edit history (edit-aware, not just the latest Write) under whatever mode + window + `--out`/`--format` were given — the way to dump a plan's content, a DELETED plan included. It prefers the top-level session's own plan and **ERRORS clearly (never guesses)** when no plan is bound to the target session(s), or when the target spans sessions bound to DIFFERENT plans (asks for `--session`).
+`--at <WHEN>` accepts ISO8601, relative (`2h`), `@turn:<N>`, `@line:<N>` (state as of jsonl line N), or `@latest` (the file's FINAL reconstructed state — no cutoff; the clean way to ask for "its last form" without guessing a timestamp past the last write) and doubles as the snapshot cutoff. A datetime bound is **INCLUSIVE** of events at that instant. **`--file @plan`** is a bash-safe magic value (no shell metacharacters, no escaping in mixed scripts — consistent with `--at`'s `@line:`/`@turn:` sigils): it resolves the target session's authoritatively-bound plan file (§6.7.1) and substitutes that path, so `recover` then rebuilds the plan's FULL Write+Edit history (edit-aware, not just the latest Write) under whatever mode + window + `--out`/`--format` were given — the way to dump a plan's content, a DELETED plan included. It prefers the top-level session's own plan and **ERRORS clearly (never guesses)** when no plan is bound to the target session(s), or when the target spans sessions bound to DIFFERENT plans (asks for an explicit `@<uuid>` target).
 
 **Output.** **restore** (default) is the exception: it writes the RAW final content to stdout (no `SESSION` banner, no line numbers — clean to pipe `> file`) with a one-line stderr note, OR `--out` writes the raw file + a stderr note while stdout stays empty; a partial file is a hard ERROR (stderr message naming covered/missing ranges + non-zero exit), and `--format json` emits a SINGLE `{file, complete:true, lines, content}` object (with `--out`: `{file, complete, lines, path, wrote}`) and NO trailer. The other four modes group text under `SESSION <id>`: `--coverage`: recoverable-line fraction, covered ranges, per-op counts, the integrity-boundary list (`⚠` authoritative / `~` heuristic), fragment count (= boundaries + 1). `--patches`: interleaved segment headers (`─ SEGMENT n  L..L  turns..  ts..  (pre-state…)`) and boundary dividers, with the unified diffs. `--at` / `--salvage`: line-numbered known lines + explicit `??? lines A..B unknown` gap markers (`--salvage` ≡ `--at @latest`). For those four, JSON is NDJSON (one object per segment/boundary/snapshot, `line_no` + `ts_utc`/`ts_local` on every object, `set_at_line` provenance per reconstructed line) + a trailing summary. **No silent truncation** — long inline content uses the `… (+N chars)` marker; JSON + `--out` are verbatim; skipped malformed lines are counted.
 
@@ -628,20 +624,20 @@ csift files <uuid> --format json | jq 'select(.type=="edit_before_read_boundary"
 
 **Example invocations:**
 ```bash
-csift recover <uuid> --file /abs/app.py                 # DEFAULT restore: raw final content (or FAIL if only partial)
-csift recover <uuid> --file /abs/app.py --out /abs/app.py  # restore straight back onto disk (raw bytes)
-csift recover <uuid> --file /abs/gone.py --salvage      # gone + only partly seen: dump what survived, gaps explicit
+csift recover @<uuid> --file /abs/app.py                # DEFAULT restore: raw final content (or FAIL if only partial)
+csift recover @<uuid> --file /abs/app.py --out /abs/app.py  # restore straight back onto disk (raw bytes)
+csift recover @<uuid> --file /abs/gone.py --salvage     # gone + only partly seen: dump what survived, gaps explicit
 csift recover . --file /abs/PLAN.md --coverage          # scope first: covered ranges + boundaries
-csift recover <uuid> --file /abs/app.py --patches       # segmented unified diffs over the session
-csift recover <uuid> --file /abs/app.py --at @turn:42   # partial snapshot as the LLM saw it at turn 42
-csift recover <uuid> --file @plan --out /tmp/restored-plan.md   # rebuild the session's bound plan (DELETED ok), write it out
+csift recover @<uuid> --file /abs/app.py --patches      # segmented unified diffs over the session
+csift recover @<uuid> --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42
+csift recover @<uuid> --file @plan --out /tmp/restored-plan.md  # rebuild the session's bound plan (DELETED ok), write it out
 csift recover --files-from nuked-files.txt --out-dir /restore   # BATCH: reconstruct every listed file in ONE corpus scan
-csift plan <uuid>                                       # LOCATE the plan file bound to a session (does not dump it)
+csift plan @<uuid>                                      # LOCATE the plan file bound to a session (does not dump it)
 ```
 
 ### 6.7.1 `plan` — locate the plan file BOUND to a session (and the `@plan` recover sigil)
 
-**Purpose.** `plan` LOCATES (does not dump) the plan file a session is bound to. To DUMP a plan's content — including a deleted one rebuilt from the transcript alone — use `csift recover --session <uuid> --file @plan` (§6.7); `@plan` resolves through the SAME binding this subcommand reports. **`--reverse <PLAN_FILE>`** inverts the direction: given a plan file, it scans the resolved scope (default every project; narrow with a PATH target) for the `plan_mode` binding that names it (absolute-path identity) and reports the bound session/subagent id(s) + the binding's jsonl line — "which conversation owns this plan?". Conflicts with `--session`; an empty result (nobody bound) is honest, not an error. JSON: `{plan_file, session_id, is_subagent, parent_session_id, line_no}` per bound session.
+**Purpose.** `plan` LOCATES (does not dump) the plan file a session is bound to. To DUMP a plan's content — including a deleted one rebuilt from the transcript alone — use `csift recover @<uuid> --file @plan` (§6.7); `@plan` resolves through the SAME binding this subcommand reports. **`--reverse <PLAN_FILE>`** inverts the direction: given a plan file, it scans the resolved scope (default every project; narrow with a PATH target) for the `plan_mode` binding that names it (absolute-path identity) and reports the bound session/subagent id(s) + the binding's jsonl line — "which conversation owns this plan?". Conflicts with a positional target; an empty result (nobody bound) is honest, not an error. JSON: `{plan_file, session_id, is_subagent, parent_session_id, line_no}` per bound session.
 
 **The binding is AUTHORITATIVE, not a path heuristic.** When a session enters Plan Mode, Claude Code writes a `plan_mode` **attachment record**:
 ```
@@ -651,15 +647,14 @@ The session's bound plan is exactly that `planFilePath`. This matters because a 
 
 **Plan-file storage facts.** Claude Code stores plans flat under `~/.claude/plans/` with a random three-word name like `nested-prancing-popcorn.md`; a subagent's plan gets an `-agent-<hex>` suffix. The name is **NOT derivable from the session id** — only the `plan_mode` attachment binds them.
 
-**Targeting.** A project PATH / encoded-dir / bare session-UUID (positional) or `--session <uuid>`. With **no target** it resolves the CALLING session from `CLAUDE_CODE_SESSION_ID` (like `whoami`, §6.3). It spans subagents by default — their own plans surface, flagged as a subagent with the re-feedable parent uuid; `--no-subagents` restricts to the top-level session.
+**Targeting.** A project PATH / encoded-dir / `@<uuid>` positional. With **no target** it resolves the CALLING session from `CLAUDE_CODE_SESSION_ID` (like `whoami`, §6.3). It spans subagents by default — their own plans surface, flagged as a subagent with the re-feedable parent uuid; `--no-subagents` restricts to the top-level session.
 
-**`@plan` resolution (the recover sigil).** `recover --file @plan` prefers the top-level session's own bound plan, then reconstructs it like any other file. It **ERRORS clearly (never guesses)** when no plan is bound to the target session(s), or when the target spans sessions bound to DIFFERENT plans (the error asks for `--session`).
+**`@plan` resolution (the recover sigil).** `recover --file @plan` prefers the top-level session's own bound plan, then reconstructs it like any other file. It **ERRORS clearly (never guesses)** when no plan is bound to the target session(s), or when the target spans sessions bound to DIFFERENT plans (the error asks for an explicit `@<uuid>` target).
 
 **Args (matches `cli::PlanArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
-| `[PATH-or-session]` | positional | calling session | a project PATH / encoded dir / bare session-UUID; absent ⇒ resolve `CLAUDE_CODE_SESSION_ID` |
-| `--session ID` | string | none | restrict to one session uuid (alternative to the positional) |
+| `[PATH-or-session]` | positional | calling session | a project PATH / encoded dir / `@<uuid>`; absent ⇒ resolve `CLAUDE_CODE_SESSION_ID` |
 | `--no-subagents` | bool | — | restrict to the top-level session (default spans subagents, surfacing their own plans) |
 | `--format text\|json` | enum | `text` | output format |
 
@@ -668,10 +663,10 @@ The session's bound plan is exactly that `planFilePath`. This matters because a 
 **Example invocations:**
 ```bash
 csift plan                                  # the calling session's bound plan (resolves CLAUDE_CODE_SESSION_ID)
-csift plan <uuid>                           # a specific session's bound plan
+csift plan @<uuid>                          # a specific session's bound plan
 csift plan . --no-subagents                 # this project's top-level sessions only
-csift plan <uuid> --format json             # machine-readable, one object per plan
-csift recover --session <uuid> --file @plan # DUMP the plan's content (this subcommand only LOCATES it)
+csift plan @<uuid> --format json            # machine-readable, one object per plan
+csift recover @<uuid> --file @plan          # DUMP the plan's content (this subcommand only LOCATES it)
 ```
 
 ### 6.8 `turns` — turn-fidelity reconstruction (restore the back-and-forth a compaction summary clipped)
@@ -699,12 +694,12 @@ csift recover --session <uuid> --file @plan # DUMP the plan's content (this subc
 **Example invocations:**
 ```bash
 csift turns .                                   # default 40K recon (longest agent msg + rich members per turn)
-csift turns <uuid> --budget 12000               # a 200K-context-sized recovery (~10-15K)
-csift turns <uuid> --budget 40000 --format json # machine-readable, line-numbered
-csift turns <uuid> --round-trip-fraction 0.6    # weight harder toward complete round-trips
-csift turns <uuid> --agent-msgs eot-only        # force the old single-EOT (last-message-only) output
-csift turns <uuid> --profile heavy              # longest mode, lower thresholds (max fidelity)
-csift turns <uuid> --agent-msgs all             # every agent message, no filtering
+csift turns @<uuid> --budget 12000              # a 200K-context-sized recovery (~10-15K)
+csift turns @<uuid> --budget 40000 --format json # machine-readable, line-numbered
+csift turns @<uuid> --round-trip-fraction 0.6    # weight harder toward complete round-trips
+csift turns @<uuid> --agent-msgs eot-only        # force the old single-EOT (last-message-only) output
+csift turns @<uuid> --profile heavy              # longest mode, lower thresholds (max fidelity)
+csift turns @<uuid> --agent-msgs all             # every agent message, no filtering
 csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file
 csift turns . --window 9000 --slices 4          # fixed 4-chunk fan-out for 4 SessionStart hooks
 csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chunks
@@ -724,9 +719,8 @@ csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chu
 **Args (matches `cli::ImageArgs`):**
 | flag / positional | type | default | meaning |
 |---|---|---|---|
-| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a bare session-UUID routes to `--session` |
-| `--session ID` | string | none | restrict to one parent session uuid |
-| `--id ID` | repeatable + comma | none | address images by the `#N` handle (`--id #32,#33`; bare `32` == `#32`) or the exact `L<line>i<n>` locator (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Both forms are per-transcript, so `--id` needs a single transcript in scope (pin with `--session <uuid> --no-subagents`). An ambiguous `#N` errors (above) |
+| `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level session |
+| `--id ID` | repeatable + comma | none | address images by the `#N` handle (`--id #32,#33`; bare `32` == `#32`) or the exact `L<line>i<n>` locator (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Both forms are per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid> --no-subagents`). An ambiguous `#N` errors (above) |
 | `--since` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`, system-local) — narrows the image set, a `#N` disambiguator |
 | `--turn-range A..B` | string | none | 0-based inclusive turn window — a per-transcript `#N` disambiguator (turn indices come from the shared §6.4 delimiter) |
 | `--uuid PREFIX` | string | none | restrict to the record whose uuid starts with this — a `#N` disambiguator (the uuid is shown in the ambiguity list / JSON) |
@@ -749,12 +743,12 @@ csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chu
 
 **Example invocations:**
 ```bash
-csift image <uuid>                              # list every image (deduped), id · type · ~size · time
+csift image @<uuid>                             # list every image (deduped), id · type · ~size · time
 csift image . --format json                     # machine-readable listing
-csift image <uuid> --out /tmp/imgs              # extract ALL to a DIR (source formats, auto-named)
-csift image <uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
-csift image <uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1 by time
-csift image <uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image to a FILE → convert to jpeg
+csift image @<uuid> --out /tmp/imgs             # extract ALL to a DIR (source formats, auto-named)
+csift image @<uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs   # re-share by handle
+csift image @<uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # disambiguate a reused #1 by time
+csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image to a FILE → convert to jpeg
 ```
 
 ---

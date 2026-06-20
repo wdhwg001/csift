@@ -613,7 +613,6 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
 
     let session_files = crate::path::resolve_session_files(
         &args.paths,
-        args.session.as_deref(),
         args.want_subagents().into(),
         crate::path::Caller::Other,
     )?;
@@ -663,7 +662,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         if distinct_transcripts > 1 {
             bail!(
                 "--turn-range is per-transcript (turn indices are), but the scope resolves to \
-                 {distinct_transcripts} transcripts — pin it with `--session <uuid> --no-subagents`"
+                 {distinct_transcripts} transcripts — pin it with `@<uuid> --no-subagents`"
             );
         }
         if let Some(path) = pinned_path(&session_files, &images) {
@@ -690,7 +689,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         if distinct_transcripts > 1 {
             bail!(
                 "--id is per-transcript (line numbers and `#N` are), but the scope resolves to \
-                 {distinct_transcripts} transcripts — pin it with `--session <uuid> --no-subagents`"
+                 {distinct_transcripts} transcripts — pin it with `@<uuid> --no-subagents`"
             );
         }
         resolve_selection(&selection, &images, &session_files)?
