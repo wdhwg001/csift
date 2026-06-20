@@ -184,7 +184,7 @@ fn strip_projects_root_prefix(target: &Path, root: &Path) -> Option<String> {
 /// the cwd points at may have been deleted while its transcripts remain). We
 /// canonicalize when possible to resolve symlinks/`..`, else fall back to
 /// joining with the current dir + lexical normalization.
-fn absolutize(p: &Path) -> Result<PathBuf> {
+pub fn absolutize(p: &Path) -> Result<PathBuf> {
     if let Ok(c) = std::fs::canonicalize(p) {
         return Ok(c);
     }

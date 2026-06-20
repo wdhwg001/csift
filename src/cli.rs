@@ -1759,7 +1759,17 @@ pub struct PlanArgs {
     #[arg(long, value_name = "SESSION_ID", help = SESSION_FLAG_HELP)]
     pub session: Option<String>,
 
-    /// Exclude subagent transcripts — resolve only the top-level session's bound plan.
+    /// REVERSE lookup: given a PLAN FILE, find the session(s) BOUND to it (the inverse of the
+    /// default session→plan direction). Scans the resolved scope — default every project, or
+    /// narrow with a PATH target — for transcripts whose `plan_mode` attachment names this exact
+    /// plan file, and prints the bound session/subagent id(s). Useful when you have a plan file
+    /// (e.g. from `~/.claude/plans/`) and need to know which conversation owns it. The path is
+    /// matched by absolute identity (relative / `~` inputs are absolutized first).
+    #[arg(long, value_name = "PLAN_FILE", conflicts_with = "session")]
+    pub reverse: Option<PathBuf>,
+
+    /// Exclude subagent transcripts — resolve only the top-level session's bound plan (forward),
+    /// or only top-level bindings (reverse).
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 

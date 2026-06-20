@@ -641,7 +641,7 @@ csift plan <uuid>                                       # LOCATE the plan file b
 
 ### 6.7.1 `plan` — locate the plan file BOUND to a session (and the `@plan` recover sigil)
 
-**Purpose.** `plan` LOCATES (does not dump) the plan file a session is bound to. To DUMP a plan's content — including a deleted one rebuilt from the transcript alone — use `csift recover --session <uuid> --file @plan` (§6.7); `@plan` resolves through the SAME binding this subcommand reports.
+**Purpose.** `plan` LOCATES (does not dump) the plan file a session is bound to. To DUMP a plan's content — including a deleted one rebuilt from the transcript alone — use `csift recover --session <uuid> --file @plan` (§6.7); `@plan` resolves through the SAME binding this subcommand reports. **`--reverse <PLAN_FILE>`** inverts the direction: given a plan file, it scans the resolved scope (default every project; narrow with a PATH target) for the `plan_mode` binding that names it (absolute-path identity) and reports the bound session/subagent id(s) + the binding's jsonl line — "which conversation owns this plan?". Conflicts with `--session`; an empty result (nobody bound) is honest, not an error. JSON: `{plan_file, session_id, is_subagent, parent_session_id, line_no}` per bound session.
 
 **The binding is AUTHORITATIVE, not a path heuristic.** When a session enters Plan Mode, Claude Code writes a `plan_mode` **attachment record**:
 ```

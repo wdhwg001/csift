@@ -9190,6 +9190,58 @@ fn plan_resolves_bound_plan_not_an_edited_other_plan() {
 }
 
 #[test]
+fn plan_reverse_finds_the_session_bound_to_a_plan_file() {
+    // The inverse direction: given a PLAN FILE, find which session is bound to it.
+    let h = Home::new();
+    let plans_dir = h.root.join(".claude").join("plans");
+    std::fs::create_dir_all(&plans_dir).unwrap();
+    let bound = plans_dir.join("nested-prancing-popcorn.md");
+    std::fs::write(&bound, "the plan\n").unwrap();
+    let bound_abs = bound.to_string_lossy().into_owned();
+    let other_abs = plans_dir
+        .join("unrelated.md")
+        .to_string_lossy()
+        .into_owned();
+    write_planning_session(&h, SESS, &bound_abs, &other_abs);
+
+    // Reverse → the bound session, scanning all projects (no target given).
+    let out = h.run(&["plan", "--reverse", &bound_abs, "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let v: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().next().expect("a hit")).unwrap();
+    assert_eq!(
+        v["session_id"].as_str(),
+        Some(SESS),
+        "found the bound session: {}",
+        out.stdout
+    );
+    assert_eq!(v["plan_file"].as_str(), Some(bound_abs.as_str()));
+    assert_eq!(v["is_subagent"].as_bool(), Some(false));
+
+    // A plan file nobody is bound to → honest empty (stdout empty, stderr note), not an error.
+    let none = h.run(&["plan", "--reverse", &other_abs]);
+    assert!(
+        none.success,
+        "empty reverse is not an error: {}",
+        none.stderr
+    );
+    assert!(
+        none.stdout.lines().all(|l| !l.starts_with("session")),
+        "no bound session: {}",
+        none.stdout
+    );
+    assert!(
+        none.stderr.contains("no session in scope is bound"),
+        "honest empty note: {}",
+        none.stderr
+    );
+
+    // --reverse conflicts with --session (clap-level).
+    let conflict = h.run(&["plan", "--reverse", &bound_abs, "--session", SESS]);
+    assert!(!conflict.success, "reverse + session is rejected");
+}
+
+#[test]
 fn recover_file_plan_magic_reconstructs_the_bound_plan() {
     let h = Home::new();
     let plans_dir = h.root.join(".claude").join("plans");

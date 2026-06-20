@@ -290,11 +290,14 @@ session-UUID (positional) or `--session <uuid>`; with no target it resolves the 
 `CLAUDE_CODE_SESSION_ID` (like `whoami`). It spans subagents by default (their own plans surface, flagged
 subagent with the re-feedable parent uuid); `--no-subagents` restricts to the top-level session. Per
 resolved session it emits `session_id`, `is_subagent`, `parent_session_id`, `plan_file`, `plan_exists`
-(on disk), `line_no`; text or `--format json` (NDJSON, one object per plan).
+(on disk), `line_no`; text or `--format json` (NDJSON, one object per plan). **`--reverse <PLAN_FILE>`**
+inverts the direction: given a plan file, it scans the scope (default every project) for the `plan_mode`
+binding that names it and prints the bound session(s) — "which conversation owns this plan?".
 
 ```bash
 csift plan                                  # the calling session's bound plan (resolves CLAUDE_CODE_SESSION_ID)
 csift plan <uuid>                           # a specific session's bound plan
+csift plan --reverse ~/.claude/plans/nested-prancing-popcorn.md  # REVERSE: which session owns this plan?
 csift plan . --no-subagents --format json   # this project's top-level sessions, machine-readable
 csift recover --session <uuid> --file @plan # DUMP the plan's content (plan only LOCATES it)
 ```

@@ -685,11 +685,18 @@ error is invisible; treat any such reconstruction as best-effort.)
 ### `plan` — locate the plan file BOUND to a session
 
 ```
-csift plan [PATH-or-session] [--session ID] [--no-subagents] [--format text|json]
+csift plan [PATH-or-session] [--session ID] [--reverse PLAN_FILE] [--no-subagents] [--format text|json]
 ```
 
 LOCATES (does not dump) the plan file a session is bound to. To DUMP that plan's content — a DELETED one
 included — use `csift recover --session <uuid> --file @plan` (above), which resolves the SAME binding.
+
+**Reverse (`--reverse <PLAN_FILE>`)** — the inverse direction: given a PLAN FILE, find the session(s)
+BOUND to it. Scans the resolved scope (default every project; narrow with a PATH target) for the
+`plan_mode` attachment that names this exact plan file (absolute-path identity), and prints the bound
+session / subagent id(s) + the binding's jsonl line. Useful when you have a plan file from
+`~/.claude/plans/` and need to know which conversation owns it. Conflicts with `--session`; an empty
+result (nobody bound) is honest, not an error.
 
 The binding is **AUTHORITATIVE, not a path heuristic**: when a session enters Plan Mode, Claude Code
 writes a `plan_mode` attachment record
@@ -712,6 +719,7 @@ Examples:
 ```bash
 csift plan                                  # the calling session's bound plan (resolves CLAUDE_CODE_SESSION_ID)
 csift plan <uuid>                           # a specific session's bound plan
+csift plan --reverse ~/.claude/plans/nested-prancing-popcorn.md   # REVERSE: which session owns this plan?
 csift plan . --no-subagents --format json   # this project's top-level sessions, machine-readable
 csift recover --session <uuid> --file @plan # DUMP the plan's content (plan only LOCATES it)
 ```

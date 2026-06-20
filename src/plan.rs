@@ -151,8 +151,81 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
         .expect("chosen path came from pool"))
 }
 
+/// REVERSE plan lookup: which session(s) are bound to `plan_file`. Scans the resolved scope
+/// (default every project; narrow with a PATH target) for transcripts whose `plan_mode`
+/// attachment names this exact plan file (absolute-path identity), and reports the bound
+/// session/subagent id(s). The inverse of the default session→plan direction.
+fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
+    let want = path::absolutize(plan_file)?;
+    // No --session filter (the whole point is we don't know the session); paths narrow scope.
+    let session_files = path::resolve_session_files(
+        &args.paths,
+        None,
+        args.want_subagents().into(),
+        path::Caller::Other,
+    )?;
+    let mut hits: Vec<PlanRef> = Vec::new();
+    for p in &session_files {
+        if let Some(r) = resolve_session_plan(p)? {
+            if path::absolutize(Path::new(&r.plan_file))
+                .map(|a| a == want)
+                .unwrap_or(false)
+            {
+                hits.push(r);
+            }
+        }
+    }
+    hits.sort_by(|a, b| {
+        a.is_subagent
+            .cmp(&b.is_subagent)
+            .then_with(|| a.session_id.cmp(&b.session_id))
+    });
+    match args.format {
+        OutputFormat::Text => render_reverse_text(&want, &hits),
+        OutputFormat::Json => render_reverse_json(&want, &hits)?,
+    }
+    Ok(())
+}
+
+/// Reverse text: the plan file, then each bound session/subagent (with its parent).
+fn render_reverse_text(plan_file: &Path, hits: &[PlanRef]) {
+    println!("plan     {}", plan_file.display());
+    if hits.is_empty() {
+        eprintln!("note: no session in scope is bound to this plan file (no `plan_mode` binding).");
+        return;
+    }
+    for r in hits {
+        let tag = if r.is_subagent { "  (subagent)" } else { "" };
+        println!("session  {}{}", r.session_id, tag);
+        if r.is_subagent {
+            println!("parent   {}", r.parent_session_id);
+        }
+        println!("bound at jsonl L{}", r.line_no);
+    }
+}
+
+/// Reverse JSON: one object per bound session (the id-domain discriminators + provenance).
+fn render_reverse_json(plan_file: &Path, hits: &[PlanRef]) -> Result<()> {
+    let _ = plan_file; // the per-hit `plan_file` (the binding's stored path) is the faithful value
+    for r in hits {
+        let obj = serde_json::json!({
+            "plan_file": r.plan_file,
+            "session_id": r.session_id,
+            "is_subagent": r.is_subagent,
+            "parent_session_id": r.parent_session_id,
+            "line_no": r.line_no,
+        });
+        println!("{}", serde_json::to_string(&obj)?);
+    }
+    Ok(())
+}
+
 /// Entry point for `csift plan`.
 pub fn run_plan(args: &PlanArgs) -> Result<()> {
+    // REVERSE: given a plan file, find the session(s) bound to it.
+    if let Some(plan_file) = &args.reverse {
+        return run_plan_reverse(args, plan_file);
+    }
     // With NO target at all, resolve the CALLING session (like `whoami`) — `csift plan`
     // inside a Claude Code session answers "what is MY plan file". Never scan every
     // project (ambiguous + expensive); error with guidance when the env signal is absent.
