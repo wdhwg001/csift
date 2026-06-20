@@ -558,6 +558,9 @@ pub fn resolve_session_files(
     // like a uuid would otherwise be ambiguous). Result selects sessions whose basename matches
     // ANY collected id.
     let mut session_ids: Vec<String> = Vec::new();
+    // Session-UUID PREFIXES (`@13d9645a` — the leading hex of a uuid, e.g. its first segment):
+    // resolved by prefix-match against the enumerated sessions, UNIQUE or an ambiguity error.
+    let mut session_prefixes: Vec<String> = Vec::new();
     let mut project_paths: Vec<&std::path::PathBuf> = Vec::new();
     // Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) — kept
     // apart from `project_paths` so they don't trigger the all-projects scan.
@@ -565,12 +568,16 @@ pub fn resolve_session_files(
     for p in paths {
         let t = p.to_str().unwrap_or_default();
         // `@`-prefixed IDENTIFIER tokens (never a path): `@main`/`@self` (env), `@<uuid>` /
-        // `@<agent-hex>` (session filter), `@<encoded-dir>` (a project dir by its encoded name).
+        // `@<agent-hex>` (session filter), `@<uuid-prefix>` (leading hex → unique session),
+        // `@<encoded-dir>` (a project dir by its encoded name).
         if let Some(id) = t.strip_prefix('@') {
             match id {
                 "main" => session_ids.push(resolve_env_session(false)?),
                 "self" => session_ids.push(resolve_env_session(true)?),
                 _ if is_uuid(id) || is_bare_subagent_hex(id) => session_ids.push(id.to_string()),
+                // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
+                // never a full uuid (32+dashes) or an agent hex (≥12) — resolve it uniquely.
+                _ if is_uuid_prefix(id) => session_prefixes.push(id.to_string()),
                 // `@-Users-…` (or any non-id token) → an encoded project-dir name.
                 _ => explicit_dirs.push(resolve_target(Path::new(id))?),
             }
@@ -605,6 +612,10 @@ pub fn resolve_session_files(
     // not themselves emitted — so the session restriction still selects the right
     // parent whose subagents to dump.
     let mut top_level: Vec<PathBuf> = Vec::new();
+    // Per-prefix set of distinct session uuids it matched (for the uniqueness check below).
+    let mut prefix_hits: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    let have_filter = !session_ids.is_empty() || !session_prefixes.is_empty();
     for pd in &dirs {
         let read = match std::fs::read_dir(&pd.dir) {
             Ok(r) => r,
@@ -614,10 +625,16 @@ pub fn resolve_session_files(
             let p = entry.path();
             let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
             if is_file && p.extension().is_some_and(|e| e == "jsonl") {
-                // The collected session id(s) restrict to those uuids (the jsonl basename).
-                if !session_ids.is_empty() {
-                    let stem = p.file_stem().and_then(|s| s.to_str());
-                    if !stem.is_some_and(|st| session_ids.iter().any(|sid| sid == st)) {
+                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+                // The collected session id(s) / prefixes restrict to matching uuids (the
+                // jsonl basename). An exact id OR a uuid-PREFIX (`@13d9645a…`) keeps the file.
+                let matched_prefix = session_prefixes
+                    .iter()
+                    .find(|pfx| stem.starts_with(pfx.as_str()))
+                    .cloned();
+                if have_filter {
+                    let by_id = session_ids.iter().any(|sid| sid == stem);
+                    if !by_id && matched_prefix.is_none() {
                         continue;
                     }
                 }
@@ -633,7 +650,30 @@ pub fn resolve_session_files(
                         }
                     }
                 }
+                // Record a prefix hit only for a KEPT file (so the uniqueness count is over
+                // the files actually in scope, post collision-guard).
+                if let Some(pfx) = matched_prefix {
+                    prefix_hits.entry(pfx).or_default().insert(stem.to_string());
+                }
                 top_level.push(p);
+            }
+        }
+    }
+
+    // A uuid PREFIX must resolve to EXACTLY ONE session — else error (never silently pick).
+    for pfx in &session_prefixes {
+        match prefix_hits.get(pfx).map(std::collections::BTreeSet::len) {
+            None | Some(0) => bail!(
+                "no session id starts with `{pfx}` under the resolved target(s) — check the \
+                 prefix, or widen the scope."
+            ),
+            Some(1) => {}
+            Some(n) => {
+                let ids: Vec<&str> = prefix_hits[pfx].iter().map(String::as_str).collect();
+                bail!(
+                    "`@{pfx}` is AMBIGUOUS: {n} sessions start with it ({}). Use more of the uuid.",
+                    ids.join(", ")
+                );
             }
         }
     }
@@ -697,7 +737,10 @@ pub fn resolve_session_files(
 #[must_use]
 pub fn pins_single_session(token: &str) -> bool {
     if let Some(id) = token.strip_prefix('@') {
-        return matches!(id, "main" | "self") || is_uuid(id) || is_bare_subagent_hex(id);
+        return matches!(id, "main" | "self")
+            || is_uuid(id)
+            || is_bare_subagent_hex(id)
+            || is_uuid_prefix(id);
     }
     token.ends_with(".jsonl")
 }
@@ -732,6 +775,14 @@ fn is_uuid(s: &str) -> bool {
 /// top-level jsonl basenames.
 fn is_bare_subagent_hex(s: &str) -> bool {
     s.len() >= 12 && !s.contains('-') && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// True for a session-uuid PREFIX `@13d9645a` form: a dash-less hex run of 4..=11 chars — long
+/// enough to be near-collision-free (a uuid's first segment is 8 hex = 4 billion), short enough
+/// that it is unambiguously NEITHER a full uuid (32 hex + dashes) NOR an agent hex (≥12). The
+/// caller prefix-matches it against session uuids and errors if it is not unique.
+fn is_uuid_prefix(s: &str) -> bool {
+    (4..=11).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 #[cfg(test)]
@@ -1036,10 +1087,23 @@ mod tests {
         assert!(pins_single_session("@self"));
         assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
         assert!(pins_single_session("@ae24045bd6d4bdaff"));
+        assert!(pins_single_session("@13d9645a")); // uuid-prefix
         assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
         // A bare uuid (no `@`), an encoded token, a plain path, `.` → NOT a session pin.
         assert!(!pins_single_session("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
         assert!(!pins_single_session("-Users-testuser-Projects-foo"));
         assert!(!pins_single_session("."));
+    }
+
+    #[test]
+    fn is_uuid_prefix_covers_first_segment_not_full_or_agent() {
+        assert!(is_uuid_prefix("13d9")); // 4 hex (minimum)
+        assert!(is_uuid_prefix("13d9645a")); // 8 hex (the uuid first segment)
+        assert!(is_uuid_prefix("13d9645a3a5")); // 11 hex (max)
+                                                // Too short (<4), too long (≥12 = agent-hex territory), non-hex, dashed → NOT a prefix.
+        assert!(!is_uuid_prefix("13d")); // 3
+        assert!(!is_uuid_prefix("13d9645a3a5b")); // 12 → agent hex
+        assert!(!is_uuid_prefix("13d9645g")); // non-hex g
+        assert!(!is_uuid_prefix("13d9-645a")); // dashed
     }
 }

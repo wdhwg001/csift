@@ -91,7 +91,9 @@ A few conventions are shared across subcommands:
 
 - **Targets.** Every session-operating subcommand (`list`, `search`, `agents`, `files`, `recover`,
   `plan`, `turns`) takes optional `PATH...` targets — a real cwd or an encoded `-Users-…` dir scopes to
-  project dir(s), `@<uuid>` (canonical 8-4-4-4-12 hex) scopes to that one top-level session, `@main` /
+  project dir(s), `@<uuid>` (canonical 8-4-4-4-12 hex) scopes to that one top-level session, `@<uuid-prefix>`
+  (a 4–11-hex leading run like `@13d9645a`, e.g. a uuid's first segment) resolves the UNIQUE session it
+  prefixes — erroring with the candidates if it is ambiguous, `@main` /
   `@self` is the calling (env-resolved) session, `@<agent-hex>` filters on a session-id for an agent hex,
   and a `*.jsonl` path scopes to that single transcript. A BARE uuid WITHOUT `@` is NOT special — it is
   treated as a literal path/pattern and does NOT scope to a session. A bare **subagent hex** is not a

@@ -2789,6 +2789,61 @@ fn target_at_encoded_dir_resolves() {
 }
 
 #[test]
+fn target_at_uuid_prefix_resolves_unique_and_errors_on_ambiguity() {
+    // `@<first-segment>` (the emergent shorthand): a short hex prefix resolves the UNIQUE
+    // session whose uuid starts with it, and errors (never silently picks) when ambiguous.
+    let h = Home::new();
+    // Two sessions sharing the 8-hex first segment `0a1b2c3d`, and one distinct (`deadbeef`).
+    let a = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let b = "0a1b2c3d-ffff-4a6b-8c7d-9e0f1a2b3c4d";
+    let c = "deadbeef-1111-2222-3333-444455556666";
+    for s in [a, b, c] {
+        h.write(
+            &format!("{ENC}/{s}.jsonl"),
+            &format!(
+                "{{\"type\":\"user\",\"sessionId\":\"{s}\",\"cwd\":\"/p\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"hi\"}}}}\n"
+            ),
+        );
+    }
+    // A unique prefix → that one session (list shows its id).
+    let uniq = h.run(&["list", "@deadbeef"]);
+    assert!(uniq.success, "stderr: {}", uniq.stderr);
+    assert!(
+        uniq.stdout.contains(c),
+        "unique prefix resolved: {}",
+        uniq.stdout
+    );
+    assert!(
+        !uniq.stdout.contains(a),
+        "scoped to ONLY the matched session: {}",
+        uniq.stdout
+    );
+
+    // An ambiguous prefix → error listing BOTH candidates, never a silent pick.
+    let amb = h.run(&["list", "@0a1b2c3d"]);
+    assert!(!amb.success, "ambiguous prefix must error: {}", amb.stdout);
+    assert!(
+        amb.stderr.contains("AMBIGUOUS"),
+        "says ambiguous: {}",
+        amb.stderr
+    );
+    assert!(
+        amb.stderr.contains(a) && amb.stderr.contains(b),
+        "lists both candidates: {}",
+        amb.stderr
+    );
+
+    // A prefix nobody starts with → honest no-match.
+    let none = h.run(&["list", "@99999999"]);
+    assert!(!none.success);
+    assert!(
+        none.stderr.contains("no session id starts with"),
+        "{}",
+        none.stderr
+    );
+}
+
+#[test]
 fn agents_all_projects_default_scan() {
     // No PATH and no --session → scan every project (the all_project_dirs branch).
     let h = populated_home();

@@ -374,7 +374,7 @@ csift list --format json .                              # machine-readable index
 | flag | short | type | default | meaning |
 |---|---|---|---|---|
 | `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is now a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
-| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@main`\|`@self` (calling session) / `@<agent-hex>` (session-id filter) / `*.jsonl` (one transcript) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
+| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main`\|`@self` (calling session) / `@<agent-hex>` (session-id filter) / `*.jsonl` (one transcript) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
 | `--category C` | `-t` | repeatable enum | all | one of `thinking\|user\|tool\|tool-response\|agent` (§5) |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |

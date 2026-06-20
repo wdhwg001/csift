@@ -178,7 +178,10 @@ csift search [PATTERN] [PATH...] [--no-subagents] [--subagent HEX]
   a `--path` flag). A `@<uuid>` positional (canonical 8-4-4-4-12 hex after the `@`) scopes to that one
   top-level session on ALL of them — including `list` (now unified; `csift list @<uuid>` scopes to
   that one top-level session, spanning its subagents by default — add `--no-subagents` for just the
-  single row) — and is searched across all projects when no project path is given. A BARE uuid WITHOUT
+  single row) — and is searched across all projects when no project path is given. A SHORTHAND
+  `@<uuid-prefix>` (a 4–11-hex leading run, e.g. the first segment `@13d9645a`) resolves the UNIQUE
+  session whose uuid starts with it (erroring with the candidate list if ambiguous — collisions are
+  near-impossible at 8 hex). A BARE uuid WITHOUT
   `@` is NOT special — it is treated as a literal path/pattern and does NOT scope to a session. A bare
   **subagent hex** is NOT accepted as a positional (it never names a top-level jsonl); inspect one
   subagent with `csift agents --agent <hex>`, or pass the PARENT session's `@<uuid>`. `whoami` is the exception: it takes
