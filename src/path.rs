@@ -464,6 +464,87 @@ impl From<bool> for SubagentScope {
 /// matching file exists under the resolved target(s) — in `SubagentsOnly` this fires
 /// when the session exists but spawned no subagents. With no `--session`, an empty
 /// result is allowed (the caller renders an honest "nothing found").
+/// Resolve the `@main`/`@self` env session token to a session/agent id. `@main` is always the
+/// calling session's top-level id (`CLAUDE_CODE_SESSION_ID`, which CC sets to the process-global
+/// MAIN id even inside a subagent). `@self` prefers `CLAUDE_CODE_AGENT_ID` (set only for
+/// process-based tmux/swarm teammates) so it can name the current agent; for an in-process
+/// subagent that env is absent, so `@self` falls back to the main id — identical to `@main`
+/// (CC does not export an in-process subagent's own id to the subprocess environment).
+pub fn resolve_env_session(self_scope: bool) -> Result<String> {
+    let read = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());
+    if self_scope {
+        if let Some(a) = read("CLAUDE_CODE_AGENT_ID") {
+            return Ok(a);
+        }
+    }
+    read("CLAUDE_CODE_SESSION_ID")
+        .or_else(|| read("CODEX_COMPANION_SESSION_ID"))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} needs the calling session id, but CLAUDE_CODE_SESSION_ID is not set \
+                 (running outside Claude Code, or an old build). Pass an explicit `@<uuid>` \
+                 target instead.",
+                if self_scope { "@self" } else { "@main" }
+            )
+        })
+}
+
+/// Resolve a `*.jsonl` session-file TARGET to `(project_dir, session_id)`. A top-level
+/// `<enc>/<uuid>.jsonl` → its parent dir + the uuid stem. A SUBAGENT transcript
+/// `<enc>/<uuid>/subagents/[…/]agent-<hex>.jsonl` → the PARENT session (`<enc>/<uuid>`) so the
+/// whole conversation is in scope (the agent is reached via subagent expansion). Errors if the
+/// file does not exist (never fabricates a target).
+pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
+    if !file.is_file() {
+        bail!(
+            "no session transcript at {} (a `*.jsonl` target must be an existing session file)",
+            file.display()
+        );
+    }
+    // A subagent transcript: the parent session dir is the component before `subagents`.
+    if file
+        .components()
+        .any(|c| c.as_os_str().to_str() == Some("subagents"))
+    {
+        if let Some(parent_uuid) = crate::subagent::parent_session_id_from_path(file) {
+            // Walk up to the `<uuid>` session dir (the one whose name is parent_uuid), whose
+            // PARENT is the encoded project dir.
+            let mut cur = file;
+            while let Some(p) = cur.parent() {
+                if p.file_name().and_then(|n| n.to_str()) == Some(parent_uuid.as_str()) {
+                    if let Some(proj) = p.parent() {
+                        return Ok((
+                            ProjectDir {
+                                dir: proj.to_path_buf(),
+                                target_cwd: None,
+                            },
+                            parent_uuid,
+                        ));
+                    }
+                }
+                cur = p;
+            }
+        }
+    }
+    // A top-level session jsonl: parent dir is the encoded project dir; stem is the session id.
+    let dir = file
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("session file {} has no parent dir", file.display()))?
+        .to_path_buf();
+    let sid = file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow::anyhow!("session file {} has no stem", file.display()))?
+        .to_string();
+    Ok((
+        ProjectDir {
+            dir,
+            target_cwd: None,
+        },
+        sid,
+    ))
+}
+
 pub fn resolve_session_files(
     paths: &[std::path::PathBuf],
     session: Option<&str>,
@@ -481,32 +562,50 @@ pub fn resolve_session_files(
         session_ids.push(s.to_string());
     }
     let mut project_paths: Vec<&std::path::PathBuf> = Vec::new();
+    // Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) — kept
+    // apart from `project_paths` so they don't trigger the all-projects scan.
+    let mut explicit_dirs: Vec<ProjectDir> = Vec::new();
     for p in paths {
-        match p.to_str() {
-            // A session-id-shaped positional routes to the session filter. This can never
-            // collide with a real project dir: an encoded projects-dir basename ALWAYS
-            // starts with `-` (an absolute cwd's leading `/` encodes to `-`) and carries
-            // `-` separators, whereas a uuid has no leading `-` and a bare-hex agent id has
-            // no `-` at all — so `looks_like_session_id` and "is a project dir" are
-            // mutually exclusive by construction.
-            Some(s) if looks_like_session_id(s) => {
-                session_ids.push(s.to_string());
+        let t = p.to_str().unwrap_or_default();
+        // `@`-prefixed IDENTIFIER tokens (never a path): `@main`/`@self` (env), `@<uuid>` /
+        // `@<agent-hex>` (session filter), `@<encoded-dir>` (a project dir by its encoded name).
+        if let Some(id) = t.strip_prefix('@') {
+            match id {
+                "main" => session_ids.push(resolve_env_session(false)?),
+                "self" => session_ids.push(resolve_env_session(true)?),
+                _ if is_uuid(id) || is_bare_subagent_hex(id) => session_ids.push(id.to_string()),
+                // `@-Users-…` (or any non-id token) → an encoded project-dir name.
+                _ => explicit_dirs.push(resolve_target(Path::new(id))?),
             }
-            _ => project_paths.push(p),
+            continue;
         }
+        // A `*.jsonl` session-file target → its project dir + the session id (the marquee
+        // fix: an LLM that has the transcript PATH can pass it directly).
+        if t.ends_with(".jsonl") {
+            let (dir, sid) = session_file_target(Path::new(t))?;
+            explicit_dirs.push(dir);
+            session_ids.push(sid);
+            continue;
+        }
+        // A bare SESSION-UUID positional still routes to the session filter (back-compat;
+        // a uuid is not a real project dir — encoding+looking it up is what used to error).
+        if looks_like_session_id(t) {
+            session_ids.push(t.to_string());
+            continue;
+        }
+        project_paths.push(p);
     }
 
-    let dirs: Vec<ProjectDir> = if project_paths.is_empty() {
-        // No project target: scan every project (a uuid-only invocation searches all
-        // projects for that session, exactly like `--session <uuid>` with no path).
-        all_project_dirs()?
-    } else {
-        let mut d = Vec::with_capacity(project_paths.len());
+    let mut dirs: Vec<ProjectDir> = explicit_dirs;
+    if !project_paths.is_empty() {
         for p in project_paths {
-            d.push(resolve_target(p)?);
+            dirs.push(resolve_target(p)?);
         }
-        d
-    };
+    } else if dirs.is_empty() {
+        // No project / encoded / jsonl target: scan every project (a uuid-only or `@main`
+        // invocation searches all projects for that session).
+        dirs = all_project_dirs()?;
+    }
 
     // The top-level `<uuid>.jsonl` session files (after the optional session-id filter).
     // These ALWAYS drive subagent discovery — even in `SubagentsOnly`, where they are

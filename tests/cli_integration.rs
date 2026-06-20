@@ -2618,6 +2618,109 @@ fn agents_via_project_path_target() {
 }
 
 #[test]
+fn target_jsonl_file_path_scopes_to_session() {
+    // THE marquee fix: an LLM that has the session's transcript PATH (from ls/find) passes it
+    // directly. Before, csift re-encoded the whole path into a bogus dir and errored.
+    let h = populated_home();
+    let jsonl = h.projects().join(format!("{ENC}/{SESS}.jsonl"));
+    let out = h.run(&["search", "carry", jsonl.to_str().unwrap(), "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(SESS),
+        "scoped to the session: {}",
+        out.stdout
+    );
+    // A non-existent jsonl target errors honestly (never fabricates a dir).
+    let bad = h.run(&["search", "carry", "/no/such/session.jsonl"]);
+    assert!(!bad.success);
+    assert!(
+        bad.stderr.contains("no session transcript at"),
+        "honest missing-file error: {}",
+        bad.stderr
+    );
+}
+
+#[test]
+fn target_at_uuid_routes_to_session() {
+    // `@<uuid>` is the explicit session-id target (the form that will replace --session).
+    let h = populated_home();
+    let out = h.run(&["agents", &format!("@{SESS}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("builtin-task"),
+        "resolved the session: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn target_at_main_resolves_env_session() {
+    // `@main` resolves the calling session from CLAUDE_CODE_SESSION_ID.
+    let h = populated_home();
+    let out = h.run_with_env(&["agents", "@main"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("builtin-task"),
+        "@main → env session: {}",
+        out.stdout
+    );
+    // @main with no env errors with guidance.
+    let no_env = h.run(&["agents", "@main"]);
+    assert!(!no_env.success);
+    assert!(
+        no_env.stderr.contains("CLAUDE_CODE_SESSION_ID is not set"),
+        "guidance when env absent: {}",
+        no_env.stderr
+    );
+}
+
+#[test]
+fn target_at_self_falls_back_to_main_then_prefers_agent_env() {
+    let h = populated_home();
+    // In-process subagent case: no CLAUDE_CODE_AGENT_ID → @self == @main (the session).
+    let as_main = h.run_with_env(&["agents", "@self"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(as_main.success, "stderr: {}", as_main.stderr);
+    assert!(
+        as_main.stdout.contains("builtin-task"),
+        "@self→main fallback: {}",
+        as_main.stdout
+    );
+    // When CLAUDE_CODE_AGENT_ID is set (tmux teammate), @self PREFERS it over the session id.
+    // Proof of precedence: it now resolves the AGENT id (not SESS), which names no top-level
+    // session here → an honest no-match that quotes the agent id, not the session's results.
+    let as_agent = h.run_with_env(
+        &["agents", "@self"],
+        &[
+            ("CLAUDE_CODE_SESSION_ID", SESS),
+            ("CLAUDE_CODE_AGENT_ID", "deadbeefcafe1234"),
+        ],
+    );
+    assert!(
+        !as_agent.success,
+        "agent id names no top-level session: {}",
+        as_agent.stdout
+    );
+    assert!(
+        as_agent.stderr.contains("deadbeefcafe1234"),
+        "@self used the agent env (not SESS): {}",
+        as_agent.stderr
+    );
+}
+
+#[test]
+fn target_at_encoded_dir_resolves() {
+    // `@<encoded-dir>` names a project dir by its encoded form directly.
+    let h = populated_home();
+    let out = h.run(&["agents", &format!("@{ENC}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("builtin-task"),
+        "@encoded resolved: {}",
+        out.stdout
+    );
+}
+
+#[test]
 fn agents_all_projects_default_scan() {
     // No PATH and no --session → scan every project (the all_project_dirs branch).
     let h = populated_home();
