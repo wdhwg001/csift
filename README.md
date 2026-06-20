@@ -94,10 +94,12 @@ A few conventions are shared across subcommands:
   project dir(s), `@<uuid>` (canonical 8-4-4-4-12 hex) scopes to that one top-level session, `@<uuid-prefix>`
   (a 4–11-hex leading run like `@13d9645a`, e.g. a uuid's first segment) resolves the UNIQUE session it
   prefixes — erroring with the candidates if it is ambiguous, `@main` /
-  `@self` is the calling (env-resolved) session, `@<agent-hex>` filters on a session-id for an agent hex,
-  and a `*.jsonl` path scopes to that single transcript. A BARE uuid WITHOUT `@` is NOT special — it is
-  treated as a literal path/pattern and does NOT scope to a session. A bare **subagent hex** is not a
-  valid target — inspect one with `csift agents --agent <hex>`. `whoami` takes no target (it reads
+  `@self` is the calling (env-resolved) session, `@<agent-hex>` (a >=12-hex agent id) scopes to that
+  SUBAGENT plus its topological descendants — or the agent alone under `--no-subagents`,
+  and a `*.jsonl` path scopes to that single transcript (a subagent transcript scopes to that agent's
+  subtree). A BARE uuid WITHOUT `@` is NOT special — it is
+  treated as a literal path/pattern and does NOT scope to a session — and a bare **subagent hex** WITHOUT
+  `@` likewise falls to the path branch and fails (use `@<agent-hex>` to scope to it). `whoami` takes no target (it reads
   `$CLAUDE_CODE_SESSION_ID`); `plan` falls back to that same env var when given none.
 - **`search` puts PATTERN first**, so a lone `search <uuid>` is a LITERAL pattern, not a session target;
   to scope, pass `@<uuid>` as a PATH positional: `csift search PATTERN @<uuid>`.

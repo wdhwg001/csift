@@ -1470,54 +1470,121 @@ fn turns_bare_uuid_positional_routes_to_session() {
 }
 
 #[test]
-fn at_subagent_hex_positional_gives_guided_error() {
-    // An `@<hex>` SUBAGENT id (no top-level jsonl) yields a GUIDED error pointing at
-    // `agents --agent`, not a misleading "session absent". The remediation is SUBCOMMAND-
-    // AWARE: only `files` (which has `--subagents-only`) may advise that flag; turns/search/
-    // recover/list/agents must NOT (the flag does not exist there, so following the advice
-    // would be a parse error).
-    let h = populated_home();
-    let files = h.run(&["files", "@aaa111bbb222ccc333", "--summary"]);
-    assert!(!files.success, "a subagent hex has no top-level session");
+fn at_agent_hex_scopes_to_the_subtree() {
+    // `@<agent-hex>` now SCOPES to that subagent (+ its topological descendants, unless
+    // --no-subagents), per the rule "locating an agent: itself, or itself + descendants".
+    // A realistic >=12-char hex is needed (a <=11-char token is a uuid PREFIX, not an agent).
+    let enc = "-Users-testuser-Projects-agentscope";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let hex = "aaa111bbb222ccc33"; // 17 hex, like real agent ids
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call0","name":"Agent","input":{"description":"do it"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aaa111bbb222ccc33","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"sub: the WIDGET work"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"sub done"}]}}"#, "\n",
+        ),
+    );
+
+    // `search` within `@<agent-hex>` finds content in THAT subagent transcript.
+    let s = h.run(&["search", "WIDGET", &format!("@{hex}")]);
+    assert!(s.success, "stderr: {}", s.stderr);
     assert!(
-        files.stderr.contains("SUBAGENT id") && files.stderr.contains("agents --agent"),
-        "files error must guide to the subagent surfaces; stderr: {}",
-        files.stderr
+        s.stdout.contains(hex),
+        "scoped to the subagent: {}",
+        s.stdout
     );
     assert!(
-        files.stderr.contains("--subagents-only"),
-        "files (which HAS the flag) may advise --subagents-only; stderr: {}",
-        files.stderr
+        s.stdout.contains("subagent"),
+        "branded as a subagent: {}",
+        s.stdout
     );
-    // The other five must guide to `agents --agent` WITHOUT advising the files-only flag.
-    for sub in [
-        vec!["turns", "@aaa111bbb222ccc333"],
-        vec!["search", "x", "@aaa111bbb222ccc333"],
-        // recover requires --file before it reaches the resolver; pass one so the subagent-hex
-        // target reaches the resolver's guided error instead of the --file-required bail.
-        vec!["recover", "@aaa111bbb222ccc333", "--file", "/x.rs"],
-        vec!["list", "@aaa111bbb222ccc333"],
-        vec!["agents", "@aaa111bbb222ccc333"],
-    ] {
-        let out = h.run(&sub);
-        assert!(
-            !out.success,
-            "{:?} a subagent hex has no top-level session",
-            sub
-        );
-        assert!(
-            out.stderr.contains("agents --agent"),
-            "{:?} error must guide to `agents --agent`; stderr: {}",
-            sub,
-            out.stderr
-        );
-        assert!(
-            !out.stderr.contains("--subagents-only"),
-            "{:?} must NOT advise the files-only --subagents-only flag; stderr: {}",
-            sub,
-            out.stderr
-        );
-    }
+
+    // A NON-EXISTENT agent hex → honest "no subagent found" (not a session error).
+    let miss = h.run(&["search", "x", "@deadbeefdeadbeef0"]);
+    assert!(!miss.success);
+    assert!(
+        miss.stderr.contains("no subagent") && miss.stderr.contains("agents"),
+        "guides to agents listing: {}",
+        miss.stderr
+    );
+}
+
+#[test]
+fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
+    // The rule: locating an AGENT → itself (--no-subagents), else itself + ALL topological
+    // descendants. Build a nested pair (PARENT spawns CHILD) flat on disk, linked via the
+    // child's meta toolUseId pointing at the Agent tool_use recorded in PARENT's transcript.
+    let enc = "-Users-testuser-Projects-agtree";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let parent = "aaaa1111bbbb2222c"; // 17 hex
+    let child = "cccc3333dddd4444e"; // 17 hex
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_parent","name":"Agent","input":{"description":"parent"}}]}}"#, "\n",
+        ),
+    );
+    // PARENT spawns CHILD (the Agent tool_use is recorded HERE).
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{parent}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aaaa1111bbbb2222c","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"PARENTWORK"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_child","name":"Agent","input":{"description":"child"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{parent}.meta.json"),
+        r#"{"agentType":"general-purpose","toolUseId":"call_parent"}"#,
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{child}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"cccc3333dddd4444e","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"user","content":"CHILDWORK"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{child}.meta.json"),
+        r#"{"agentType":"Explore","toolUseId":"call_child"}"#,
+    );
+
+    // Default `@<parent>` → parent + descendant child both searchable.
+    let full = h.run(&["search", "WORK", &format!("@{parent}")]);
+    assert!(full.success, "stderr: {}", full.stderr);
+    assert!(
+        full.stdout.contains("PARENTWORK"),
+        "parent in scope: {}",
+        full.stdout
+    );
+    assert!(
+        full.stdout.contains("CHILDWORK"),
+        "descendant child in scope: {}",
+        full.stdout
+    );
+
+    // `--no-subagents` → the parent agent ALONE (child excluded).
+    let alone = h.run(&["search", "WORK", &format!("@{parent}"), "--no-subagents"]);
+    assert!(alone.success, "stderr: {}", alone.stderr);
+    assert!(
+        alone.stdout.contains("PARENTWORK"),
+        "parent still in scope: {}",
+        alone.stdout
+    );
+    assert!(
+        !alone.stdout.contains("CHILDWORK"),
+        "child EXCLUDED under --no-subagents: {}",
+        alone.stdout
+    );
 }
 
 #[test]

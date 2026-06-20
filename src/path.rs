@@ -561,39 +561,79 @@ pub fn resolve_session_files(
     // Session-UUID PREFIXES (`@13d9645a` — the leading hex of a uuid, e.g. its first segment):
     // resolved by prefix-match against the enumerated sessions, UNIQUE or an ambiguity error.
     let mut session_prefixes: Vec<String> = Vec::new();
+    // AGENT targets (`@<agent-hex>` / `@self`→agent / a subagent `*.jsonl`): each resolves to
+    // that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
+    let mut agent_hexes: Vec<String> = Vec::new();
     let mut project_paths: Vec<&std::path::PathBuf> = Vec::new();
     // Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) — kept
     // apart from `project_paths` so they don't trigger the all-projects scan.
     let mut explicit_dirs: Vec<ProjectDir> = Vec::new();
+    // True once any SESSION/PROJECT target is seen, so the all-session enumeration runs. An
+    // AGENT-ONLY invocation (e.g. just `@<agent-hex>`) leaves it false → only the agent path runs.
+    let mut session_target = false;
     for p in paths {
         let t = p.to_str().unwrap_or_default();
-        // `@`-prefixed IDENTIFIER tokens (never a path): `@main`/`@self` (env), `@<uuid>` /
-        // `@<agent-hex>` (session filter), `@<uuid-prefix>` (leading hex → unique session),
+        // `@`-prefixed IDENTIFIER tokens (never a path): `@main`/`@self` (env), `@<uuid>`,
+        // `@<agent-hex>` (the agent subtree), `@<uuid-prefix>` (leading hex → unique session),
         // `@<encoded-dir>` (a project dir by its encoded name).
         if let Some(id) = t.strip_prefix('@') {
             match id {
-                "main" => session_ids.push(resolve_env_session(false)?),
-                "self" => session_ids.push(resolve_env_session(true)?),
-                _ if is_uuid(id) || is_bare_subagent_hex(id) => session_ids.push(id.to_string()),
+                "main" => {
+                    session_ids.push(resolve_env_session(false)?);
+                    session_target = true;
+                }
+                // `@self` resolves to the AGENT id for a tmux/swarm teammate (→ agent subtree),
+                // else the calling session id (→ session). For an in-process subagent the agent
+                // id is not in the env, so this falls through to the session (== `@main`).
+                "self" => {
+                    let s = resolve_env_session(true)?;
+                    if is_bare_subagent_hex(&s) {
+                        agent_hexes.push(s);
+                    } else {
+                        session_ids.push(s);
+                        session_target = true;
+                    }
+                }
+                _ if is_uuid(id) => {
+                    session_ids.push(id.to_string());
+                    session_target = true;
+                }
+                _ if is_bare_subagent_hex(id) => agent_hexes.push(id.to_string()),
                 // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
                 // never a full uuid (32+dashes) or an agent hex (≥12) — resolve it uniquely.
-                _ if is_uuid_prefix(id) => session_prefixes.push(id.to_string()),
+                _ if is_uuid_prefix(id) => {
+                    session_prefixes.push(id.to_string());
+                    session_target = true;
+                }
                 // `@-Users-…` (or any non-id token) → an encoded project-dir name.
-                _ => explicit_dirs.push(resolve_target(Path::new(id))?),
+                _ => {
+                    explicit_dirs.push(resolve_target(Path::new(id))?);
+                    session_target = true;
+                }
             }
             continue;
         }
-        // A `*.jsonl` session-file target → its project dir + the session id (the marquee
-        // fix: an LLM that has the transcript PATH can pass it directly).
+        // A `*.jsonl` transcript target. A SUBAGENT transcript → that agent (+ its subtree); a
+        // top-level `<uuid>.jsonl` → that session. Either way its project dir scopes the search.
         if t.ends_with(".jsonl") {
-            let (dir, sid) = session_file_target(Path::new(t))?;
+            let file = Path::new(t);
+            let is_sub = file
+                .components()
+                .any(|c| c.as_os_str().to_str() == Some("subagents"));
+            let (dir, sid) = session_file_target(file)?;
             explicit_dirs.push(dir);
-            session_ids.push(sid);
+            if is_sub {
+                agent_hexes.push(crate::subagent::session_id_from_path(file));
+            } else {
+                session_ids.push(sid);
+                session_target = true;
+            }
             continue;
         }
         // Everything else is a PATH (real cwd / encoded-dir token / `~/.claude/projects/<enc>`).
         // A bare uuid lands here on purpose → resolve_target fails as "no project dir named …".
         project_paths.push(p);
+        session_target = true;
     }
 
     let mut dirs: Vec<ProjectDir> = explicit_dirs;
@@ -607,127 +647,205 @@ pub fn resolve_session_files(
         dirs = all_project_dirs()?;
     }
 
-    // The top-level `<uuid>.jsonl` session files (after the optional session-id filter).
-    // These ALWAYS drive subagent discovery — even in `SubagentsOnly`, where they are
-    // not themselves emitted — so the session restriction still selects the right
-    // parent whose subagents to dump.
-    let mut top_level: Vec<PathBuf> = Vec::new();
-    // Per-prefix set of distinct session uuids it matched (for the uniqueness check below).
-    let mut prefix_hits: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
-        std::collections::BTreeMap::new();
-    let have_filter = !session_ids.is_empty() || !session_prefixes.is_empty();
-    for pd in &dirs {
-        let read = match std::fs::read_dir(&pd.dir) {
-            Ok(r) => r,
-            Err(_) => continue, // tolerate a vanished dir mid-scan
-        };
-        for entry in read.flatten() {
-            let p = entry.path();
-            let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
-            if is_file && p.extension().is_some_and(|e| e == "jsonl") {
-                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
-                // The collected session id(s) / prefixes restrict to matching uuids (the
-                // jsonl basename). An exact id OR a uuid-PREFIX (`@13d9645a…`) keeps the file.
-                let matched_prefix = session_prefixes
-                    .iter()
-                    .find(|pfx| stem.starts_with(pfx.as_str()))
-                    .cloned();
-                if have_filter {
-                    let by_id = session_ids.iter().any(|sid| sid == stem);
-                    if !by_id && matched_prefix.is_none() {
-                        continue;
-                    }
-                }
-                // COLLISION GUARD (§2.1): when this dir was resolved from a REAL path, the
-                // lossy encoding means a DIFFERENT cwd can share it. Keep only files whose
-                // recorded `cwd` IS this target — so a sibling's sessions (and, since
-                // subagents are discovered from this filtered set below, its subagents) never
-                // leak in. A file whose `cwd` is ABSENT is kept (never false-exclude).
-                if let Some(want) = &pd.target_cwd {
-                    if let Some(stored) = read_first_cwd(&p) {
-                        if !cwd_equivalent(&stored, want) {
+    let _ = caller; // reserved for future subcommand-aware guidance
+    let mut files: Vec<PathBuf> = Vec::new();
+
+    // ── SESSION path: the top-level `<uuid>.jsonl` session files (+ subagents per scope).
+    // Skipped for an AGENT-ONLY invocation (no session target), so `@<agent-hex>` alone does
+    // not list every session — only the agent subtree below runs.
+    let session_path_active = session_target || agent_hexes.is_empty();
+    if session_path_active {
+        let mut top_level: Vec<PathBuf> = Vec::new();
+        let mut prefix_hits: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeSet<String>,
+        > = std::collections::BTreeMap::new();
+        let have_filter = !session_ids.is_empty() || !session_prefixes.is_empty();
+        for pd in &dirs {
+            let read = match std::fs::read_dir(&pd.dir) {
+                Ok(r) => r,
+                Err(_) => continue, // tolerate a vanished dir mid-scan
+            };
+            for entry in read.flatten() {
+                let p = entry.path();
+                let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
+                if is_file && p.extension().is_some_and(|e| e == "jsonl") {
+                    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+                    // An exact id OR a uuid-PREFIX (`@13d9645a…`) keeps the file.
+                    let matched_prefix = session_prefixes
+                        .iter()
+                        .find(|pfx| stem.starts_with(pfx.as_str()))
+                        .cloned();
+                    if have_filter {
+                        let by_id = session_ids.iter().any(|sid| sid == stem);
+                        if !by_id && matched_prefix.is_none() {
                             continue;
                         }
                     }
+                    // COLLISION GUARD (§2.1): when this dir was resolved from a REAL path, the
+                    // lossy encoding means a DIFFERENT cwd can share it. Keep only files whose
+                    // recorded `cwd` IS this target — so a sibling's sessions (and their
+                    // subagents) never leak in. A file whose `cwd` is ABSENT is kept.
+                    if let Some(want) = &pd.target_cwd {
+                        if let Some(stored) = read_first_cwd(&p) {
+                            if !cwd_equivalent(&stored, want) {
+                                continue;
+                            }
+                        }
+                    }
+                    if let Some(pfx) = matched_prefix {
+                        prefix_hits.entry(pfx).or_default().insert(stem.to_string());
+                    }
+                    top_level.push(p);
                 }
-                // Record a prefix hit only for a KEPT file (so the uniqueness count is over
-                // the files actually in scope, post collision-guard).
-                if let Some(pfx) = matched_prefix {
-                    prefix_hits.entry(pfx).or_default().insert(stem.to_string());
-                }
-                top_level.push(p);
             }
         }
-    }
 
-    // A uuid PREFIX must resolve to EXACTLY ONE session — else error (never silently pick).
-    for pfx in &session_prefixes {
-        match prefix_hits.get(pfx).map(std::collections::BTreeSet::len) {
-            None | Some(0) => bail!(
-                "no session id starts with `{pfx}` under the resolved target(s) — check the \
-                 prefix, or widen the scope."
-            ),
-            Some(1) => {}
-            Some(n) => {
-                let ids: Vec<&str> = prefix_hits[pfx].iter().map(String::as_str).collect();
-                bail!(
-                    "`@{pfx}` is AMBIGUOUS: {n} sessions start with it ({}). Use more of the uuid.",
-                    ids.join(", ")
-                );
+        // A uuid PREFIX must resolve to EXACTLY ONE session — else error (never silently pick).
+        for pfx in &session_prefixes {
+            match prefix_hits.get(pfx).map(std::collections::BTreeSet::len) {
+                None | Some(0) => bail!(
+                    "no session id starts with `{pfx}` under the resolved target(s) — check the \
+                     prefix, or widen the scope."
+                ),
+                Some(1) => {}
+                Some(n) => {
+                    let ids: Vec<&str> = prefix_hits[pfx].iter().map(String::as_str).collect();
+                    bail!(
+                        "`@{pfx}` is AMBIGUOUS: {n} sessions start with it ({}). Use more of the uuid.",
+                        ids.join(", ")
+                    );
+                }
             }
         }
+
+        // Subagent transcripts of each selected top-level session (empty unless scoped in).
+        let mut sub_files: Vec<PathBuf> = Vec::new();
+        if matches!(
+            scope,
+            SubagentScope::WithSubagents | SubagentScope::SubagentsOnly
+        ) {
+            for sf in &top_level {
+                sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
+            }
+        }
+        let session_files: Vec<PathBuf> = match scope {
+            SubagentScope::TopLevelOnly => top_level,
+            SubagentScope::SubagentsOnly => sub_files,
+            SubagentScope::WithSubagents => {
+                top_level.extend(sub_files);
+                top_level
+            }
+        };
+        // A given SESSION id that matched nothing is an honest error (a prefix already bailed).
+        if session_files.is_empty() && !session_ids.is_empty() {
+            bail!(
+                "no session file found for session id [{}] under the resolved target(s)",
+                session_ids.join(", ")
+            );
+        }
+        files.extend(session_files);
     }
 
-    // Subagent transcripts of each selected top-level session (empty unless the scope
-    // asks for them). The session-id restriction already applied to the parent above.
-    let mut sub_files: Vec<PathBuf> = Vec::new();
-    if matches!(
-        scope,
-        SubagentScope::WithSubagents | SubagentScope::SubagentsOnly
-    ) {
-        for sf in &top_level {
-            sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
-        }
+    // ── AGENT path: each `@<agent-hex>` resolves to the subagent + (unless `--no-subagents`)
+    // its TOPOLOGICAL descendants. Errors when no such agent exists in scope.
+    for hex in &agent_hexes {
+        files.extend(resolve_agent_subtree(&dirs, hex, scope)?);
     }
-
-    let mut files: Vec<PathBuf> = match scope {
-        SubagentScope::TopLevelOnly => top_level,
-        SubagentScope::SubagentsOnly => sub_files,
-        SubagentScope::WithSubagents => {
-            top_level.extend(sub_files);
-            top_level
-        }
-    };
 
     files.sort();
     files.dedup();
+    Ok(files)
+}
 
-    if files.is_empty() && !session_ids.is_empty() {
-        let ids = session_ids.join(", ");
-        // A bare-hex SUBAGENT id (17 hex, no dashes) never names a TOP-LEVEL jsonl — guide
-        // the caller to the right surface instead of implying the session is gone. The
-        // remediation is SUBCOMMAND-AWARE: only `files` has `--subagents-only`, so only its
-        // message may advise that flag (the other five would hit a parse error if the user
-        // followed it). All five fall back to the universally-valid `agents --agent <id>`.
-        if session_ids.iter().any(|s| is_bare_subagent_hex(s)) {
-            match caller {
-                Caller::Files => bail!(
-                    "no top-level session matched [{ids}]. If this is a SUBAGENT id from \
-                     `csift agents`, inspect its lifecycle with `csift agents --agent <id>`, \
-                     or pass the PARENT session uuid with `--subagents-only` to dump the \
-                     files ALL its subagents touched."
-                ),
-                Caller::Other => bail!(
-                    "no top-level session matched [{ids}]. A bare SUBAGENT id never names a \
-                     top-level session; inspect its lifecycle with `csift agents --agent \
-                     <id>`. (Single-subagent transcript scoping is not supported here — pass \
-                     the PARENT session uuid to operate on that whole conversation.)"
-                ),
+/// Resolve an `@<agent-hex>` target: the subagent's OWN transcript plus (unless
+/// `--no-subagents`) its TOPOLOGICAL descendants. Scans `dirs` for the session that owns the
+/// agent (its hex is globally unique), builds that session's topology, and emits transcripts
+/// per `scope`: `TopLevelOnly` = the agent alone; `WithSubagents` = the agent + descendants;
+/// `SubagentsOnly` = descendants only. Errors when no such agent exists in scope.
+fn resolve_agent_subtree(
+    dirs: &[ProjectDir],
+    hex: &str,
+    scope: SubagentScope,
+) -> Result<Vec<PathBuf>> {
+    for pd in dirs {
+        for top in top_level_jsonls(&pd.dir) {
+            let subs = crate::subagent::subagent_transcript_files(&top)?;
+            // agent_id (bare hex) → its transcript path, for this session.
+            let by_id: std::collections::HashMap<String, PathBuf> = subs
+                .iter()
+                .map(|p| (crate::subagent::session_id_from_path(p), p.clone()))
+                .collect();
+            if !by_id.contains_key(hex) {
+                continue; // not this session's agent
+            }
+            // Found the owning session. The descendants come from the agent→agent topology
+            // (`parent_agent_id`); on flat real data an agent has none, so the result is just
+            // the agent itself — correct, and it nests automatically once CC nests subagents.
+            let nodes = crate::subagent::build_topology(&top, false)?;
+            let descendants = subtree_agent_ids(&nodes, hex);
+            let mut out: Vec<PathBuf> = Vec::new();
+            if !matches!(scope, SubagentScope::SubagentsOnly) {
+                if let Some(p) = by_id.get(hex) {
+                    out.push(p.clone());
+                }
+            }
+            if !matches!(scope, SubagentScope::TopLevelOnly) {
+                for d in &descendants {
+                    if let Some(p) = by_id.get(d) {
+                        out.push(p.clone());
+                    }
+                }
+            }
+            return Ok(out);
+        }
+    }
+    bail!(
+        "no subagent `{hex}` found under the resolved target(s). List ids with \
+         `csift agents <session>`, then pass one as `@<agent-hex>`."
+    )
+}
+
+/// The bare-hex agent ids in `nodes` that DESCEND from `root` (children, grandchildren, …) via
+/// the `parent_agent_id` chain. Excludes `root` itself. Cycle-safe (a `visited` set).
+fn subtree_agent_ids(nodes: &[crate::subagent::SubagentNode], root: &str) -> Vec<String> {
+    let mut children: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+    for n in nodes {
+        if let Some(p) = n.parent_agent_id.as_deref() {
+            children.entry(p).or_default().push(n.agent_id.as_str());
+        }
+    }
+    let mut out = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    let mut stack = vec![root];
+    while let Some(cur) = stack.pop() {
+        if let Some(kids) = children.get(cur) {
+            for &k in kids {
+                if visited.insert(k) {
+                    out.push(k.to_string());
+                    stack.push(k);
+                }
             }
         }
-        bail!("no session file found for session id [{ids}] under the resolved target(s)");
     }
-    Ok(files)
+    out
+}
+
+/// The top-level `<uuid>.jsonl` session files directly in `dir` (non-recursive). Tolerates an
+/// unreadable/vanished dir (empty result).
+fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(read) = std::fs::read_dir(dir) {
+        for entry in read.flatten() {
+            let p = entry.path();
+            if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
+                && p.extension().is_some_and(|e| e == "jsonl")
+            {
+                out.push(p);
+            }
+        }
+    }
+    out
 }
 
 /// True when a TARGET token pins a SINGLE transcript/session (so `search --line` has one file

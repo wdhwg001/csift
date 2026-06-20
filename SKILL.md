@@ -181,10 +181,12 @@ csift search [PATTERN] [PATH...] [--no-subagents] [--subagent HEX]
   single row) — and is searched across all projects when no project path is given. A SHORTHAND
   `@<uuid-prefix>` (a 4–11-hex leading run, e.g. the first segment `@13d9645a`) resolves the UNIQUE
   session whose uuid starts with it (erroring with the candidate list if ambiguous — collisions are
-  near-impossible at 8 hex). A BARE uuid WITHOUT
-  `@` is NOT special — it is treated as a literal path/pattern and does NOT scope to a session. A bare
-  **subagent hex** is NOT accepted as a positional (it never names a top-level jsonl); inspect one
-  subagent with `csift agents --agent <hex>`, or pass the PARENT session's `@<uuid>`. `whoami` is the exception: it takes
+  near-impossible at 8 hex). An `@<agent-hex>` (a >=12-hex agent id from `csift agents`) scopes to that
+  SUBAGENT plus its topological descendants — or the agent ALONE under `--no-subagents` (the rule:
+  locating an agent → itself, or itself + descendants); a subagent `*.jsonl` path resolves the same way.
+  A BARE uuid or subagent hex WITHOUT
+  `@` is NOT special — it is treated as a literal path/pattern and does NOT scope (use `@<uuid>` /
+  `@<agent-hex>`). `whoami` is the exception: it takes
   NO target (it reads `$CLAUDE_CODE_SESSION_ID`, falling back to `CODEX_COMPANION_SESSION_ID`).
 - **Flag ordering** — the argv pre-pass routes declared flags (LONG and the search short flags
   `-t`/`-i`) away from the `[PATH]...` positional, so a flag works in ANY position, including
