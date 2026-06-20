@@ -1,0 +1,44 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="csift">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="0.55" stop-color="#7c9cff"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e2a45"/>
+      <stop offset="1" stop-color="#1b1828"/>
+    </linearGradient>
+    <clipPath id="lens"><circle cx="156" cy="116" r="48"/></clipPath>
+  </defs>
+
+  <!-- app panel: self-contained dark tile so the mark reads on light AND dark READMEs -->
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#panel)" stroke="#473f68" stroke-width="2.5"/>
+
+  <!-- the .jsonl transcript records -->
+  <g fill="#494363">
+    <rect x="46" y="62" width="118" height="11" rx="5.5"/>
+    <rect x="46" y="86" width="150" height="11" rx="5.5"/>
+    <rect x="46" y="110" width="96" height="11" rx="5.5"/>
+    <rect x="46" y="134" width="142" height="11" rx="5.5"/>
+    <rect x="46" y="158" width="80" height="11" rx="5.5"/>
+    <rect x="46" y="182" width="120" height="11" rx="5.5"/>
+  </g>
+
+  <!-- under the lens, the matches are revealed in the accent gradient -->
+  <g clip-path="url(#lens)">
+    <circle cx="156" cy="116" r="48" fill="#a78bfa" fill-opacity="0.10"/>
+    <g fill="url(#accent)">
+      <rect x="46" y="86" width="150" height="11" rx="5.5"/>
+      <rect x="46" y="110" width="96" height="11" rx="5.5"/>
+      <rect x="46" y="134" width="142" height="11" rx="5.5"/>
+    </g>
+  </g>
+
+  <!-- magnifier ring + handle -->
+  <circle cx="156" cy="116" r="48" fill="none" stroke="url(#accent)" stroke-width="9"/>
+  <line x1="191" y1="151" x2="214" y2="174" stroke="url(#accent)" stroke-width="13" stroke-linecap="round"/>
+
+  <!-- a CLI prompt caret -->
+  <path d="M44 199 l13 8 l-13 8 z" fill="url(#accent)" opacity="0.92"/>
+</svg>

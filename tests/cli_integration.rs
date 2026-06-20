@@ -698,19 +698,9 @@ fn search_short_i_after_positional_parses() {
 }
 
 #[test]
-fn search_with_explicit_path_target() {
-    // `--path <encoded>` exercises resolve_search_targets' explicit-paths branch
-    // (`paths.is_empty()` FALSE). The DEPRECATED `--path` alias still works.
-    let h = populated_home();
-    let out = h.run(&["search", "carry", "--path", ENC, "--no-subagents"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("matched"), "got: {}", out.stdout);
-}
-
-#[test]
 fn search_with_positional_path_target_like_siblings() {
-    // The fix: `csift search PATTERN <encoded>` — a POSITIONAL path, exactly like
-    // `files`/`recover`/`turns`. Previously errored "unexpected argument".
+    // `csift search PATTERN <encoded>` — a POSITIONAL path, exactly like
+    // `files`/`recover`/`turns`; exercises the explicit-paths branch (`paths.is_empty()` FALSE).
     let h = populated_home();
     let out = h.run(&["search", "carry", ENC, "--no-subagents"]);
     assert!(
@@ -1588,14 +1578,15 @@ fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
 }
 
 #[test]
-fn whoami_show_path_and_legacy_path_alias() {
-    // `--show-path` is the canonical boolean; `--path` still works as a hidden alias.
+fn whoami_show_path_flag() {
+    // `--show-path` forces the resolved jsonl path line.
     let h = populated_home();
-    for flag in ["--show-path", "--path", "--with-path"] {
-        let out = h.run_with_env(&["whoami", flag], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
-        assert!(out.success, "{flag} must parse; stderr: {}", out.stderr);
-        assert!(out.stdout.contains(SESS), "{flag} output: {}", out.stdout);
-    }
+    let out = h.run_with_env(
+        &["whoami", "--show-path"],
+        &[("CLAUDE_CODE_SESSION_ID", SESS)],
+    );
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains(SESS), "output: {}", out.stdout);
 }
 
 #[test]
@@ -2137,10 +2128,10 @@ fn whoami_json_format() {
 }
 
 #[test]
-fn whoami_path_flag_when_not_found() {
+fn whoami_show_path_when_not_found() {
     let h = Home::new(); // empty projects → the session id won't resolve to a file
     let out = h.run_with_env(
-        &["whoami", "--path"],
+        &["whoami", "--show-path"],
         &[(
             "CLAUDE_CODE_SESSION_ID",
             "ffffffff-0000-0000-0000-000000000000",
@@ -2252,7 +2243,10 @@ fn whoami_scan_skips_dirs_without_the_file() {
         &format!("-ZZZ-second/{sid}.jsonl"),
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
     );
-    let out = h.run_with_env(&["whoami", "--path"], &[("CLAUDE_CODE_SESSION_ID", sid)]);
+    let out = h.run_with_env(
+        &["whoami", "--show-path"],
+        &[("CLAUDE_CODE_SESSION_ID", sid)],
+    );
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("-ZZZ-second"),
@@ -2263,7 +2257,7 @@ fn whoami_scan_skips_dirs_without_the_file() {
 
 #[test]
 fn whoami_text_no_path_flag_when_not_found_is_silent() {
-    // The `None => {}` render arm: session resolved but file not found AND --path NOT
+    // The `None => {}` render arm: session resolved but file not found AND --show-path NOT
     // given → only the session line prints, no path note.
     let h = Home::new();
     let out = h.run_with_env(
@@ -2277,7 +2271,7 @@ fn whoami_text_no_path_flag_when_not_found_is_silent() {
     assert!(out.stdout.contains("11111111-2222-3333-4444-555555555555"));
     assert!(
         !out.stdout.contains("not found"),
-        "no path note without --path"
+        "no path note without --show-path"
     );
     assert!(
         !out.stdout.to_lowercase().contains("path"),

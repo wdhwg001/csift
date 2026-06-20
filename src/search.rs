@@ -1539,7 +1539,6 @@ mod tests {
         SearchArgs {
             pattern: pattern.to_string(),
             paths: Vec::new(),
-            path_flag: Vec::new(),
             categories: Vec::new(),
             ignore_case: false,
             multiline: false,

@@ -1,5 +1,5 @@
 //! Shared text helpers — the ONE implementation of "show an excerpt, mark the elision
-//! explicitly" and the inclusive `START..END` range parser, both previously copy-pasted
+//! explicitly" and the inclusive `START..END` range parser, both shared
 //! across `list`/`search`/`recover`/`files`/`turns`/`agents`.
 //!
 //! ## Why one place

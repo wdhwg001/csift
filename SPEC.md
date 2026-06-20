@@ -1,12 +1,12 @@
 # SPEC.md — csift
 
-> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. It merges the original project brief with empirically-verified research (real `~/.claude/projects` data, 51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records). **Where the research contradicted the brief, the research wins — each correction is called out inline as `[CORRECTION]`.** All nine subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
+> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All nine subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
 
 ---
 
 ## 0. Mission & non-negotiables
 
-**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Subcommands: `list`, `search`, `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `image` (list + extract the images a session carries, §6.9). `list`/`search`/`files`/`recover`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out).
+**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Nine subcommands: `list`, `search`, `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `turns` (turn-fidelity reconstruction across compaction, §6.8), `image` (list + extract the images a session carries, §6.9). `list`/`search`/`files`/`recover`/`plan`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `turns` is the exception (top-level thread only, `--include-subagents` opts in); `agents` lists subagents as its targets.
 
 - **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--json` for machine use.
 - **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
@@ -115,7 +115,7 @@ Every top-level session record carries `"cwd":"<absolute path>"`. After resolvin
 user  assistant  system  attachment  file-history-snapshot  queue-operation
 last-prompt  ai-title  agent-name  mode  permission-mode
 ```
-plus version-specific extras observed: `last-prompt`, and the catch-all must absorb any future addition. **`[CORRECTION] There is NO `type:"summary"` record in CC 2.1.x.** The brief's `{type:"summary", leafUuid}` compaction shape is **stale** — zero `summary` records exist across all 51 sampled sessions. Compaction is a `type:"user"` record + a `type:"system"` `compact_boundary` record (§4.7). Detection must key on `isCompactSummary`, and *defensively* still tolerate a legacy `type:"summary"` (older CC) without relying on it.
+plus version-specific extras observed: `last-prompt`, and the catch-all must absorb any future addition. **There is NO `type:"summary"` record in CC 2.1.x** — zero `summary` records exist across all 51 sampled sessions. Compaction is a `type:"user"` record + a `type:"system"` `compact_boundary` record (§4.7), so detection keys on `isCompactSummary` and never depends on a `type:"summary"`, while *defensively* still tolerating a legacy `type:"summary"` (older CC) without relying on it.
 
 ### 3.2 Common envelope
 
@@ -175,7 +175,7 @@ pub enum Block {
     Thinking { thinking: String, signature: Option<String> },   // signature = opaque base64, may be absent
     ToolUse  { id: Option<String>, name: Option<String>,
                input: Option<serde_json::Value>,
-               caller: Option<serde_json::Value> },              // [RESEARCH-EXTEND] caller:{type:"direct"} seen
+               caller: Option<serde_json::Value> },              // caller:{type:"direct"} observed on real records
     ToolResult { tool_use_id: Option<String>,
                  content: Option<serde_json::Value>,             // string OR array — keep raw, see §4.5
                  is_error: Option<bool> },
@@ -185,7 +185,7 @@ pub enum Block {
 }
 ```
 
-Block → category mapping is in §5. Note the `ToolResult` `content` can itself be an array containing `{type:"text",text}`, `{type:"image",…}`, and **`{type:"tool_reference", tool_name}`** ([RESEARCH-EXTEND] — emitted by ToolSearch results); model it as raw `Value` and inspect as needed.
+Block → category mapping is in §5. Note the `ToolResult` `content` can itself be an array containing `{type:"text",text}`, `{type:"image",…}`, and **`{type:"tool_reference", tool_name}`** (emitted by ToolSearch results); model it as raw `Value` and inspect as needed.
 
 ### 3.6 serde shape requirements (summary for the implementer)
 
@@ -207,7 +207,7 @@ A `type:"user"` record is **NOT** always a human turn. `tool_result` blocks ride
 **`is_genuine_user(record)` is true iff ALL of:**
 1. `type == "user"` AND `message.role == "user"`; AND
 2. `isCompactSummary` is falsey (excludes compaction summaries, §4.7); AND
-3. **`isMeta` is falsey** ([RESEARCH-EXTEND] — excludes system-injected pseudo-turns, §4.2); AND
+3. **`isMeta` is falsey** (excludes system-injected pseudo-turns, §4.2); AND
 4. content is a **string**, OR content is a block array containing a `text` block and **no** `tool_result` block.
 
 (`text` and `tool_result` never co-occur in one user record in real data, so "has a `text` block" is a clean genuine signal once carriers and meta are excluded.) `src/model.rs::is_genuine_user` implements (1)–(4); it **additionally** excludes the machine-synthesized markers of §4.2.1–.3 (interrupt strings, `<local-command-stdout>…`, `<command-name>…`) so they never start a turn (codepoint-safe exact `==`/`starts_with`, never a byte-offset slice).
@@ -217,11 +217,11 @@ A `type:"user"` record is **NOT** always a human turn. `tool_result` blocks ride
 2. an **answered AskUserQuestion** carrier (§4.4) — the answer IS the user's message; OR
 3. a **tool-use rejection carrying a typed user message** (§4.2.4) — the typed instruction IS the user's message.
 
-Cases 2–3 are previously-MISSED genuine user messages that now correctly become boundaries (a documented, intended behavior change — see §6.4). The reconstruction (`reconstructed_user_text`) renders the genuine-user body for each: the plain text, the full AUQ Q+options+answer unit, or the rejection instruction + a `[plan: <path>]` pointer.
+Cases 2–3 are genuine user messages, so each opens a turn (§6.4). The reconstruction (`reconstructed_user_text`) renders the genuine-user body for each: the plain text, the full AUQ Q+options+answer unit, or the rejection instruction + a `[plan: <path>]` pointer.
 
-### 4.2 `isMeta:true` pseudo-turns + synthesized markers — TRAP, must be excluded ([CORRECTION/EXTEND])
+### 4.2 `isMeta:true` pseudo-turns + synthesized markers — TRAP, must be excluded
 
-`isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from the `user` category **and** from turn-delimiting. The brief did not mention `isMeta`; it is load-bearing.
+`isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from the `user` category **and** from turn-delimiting. The `isMeta` exclusion is load-bearing.
 
 **Beyond `isMeta`, four NON-`isMeta` user-record shapes are also machine-synthesized and must NOT open a turn** (verified on real `~/.claude/projects` data; corpus counts in parentheses):
 
@@ -260,13 +260,13 @@ and the carrier's top-level `toolUseResult` echoes the full `questions[]` struct
 
 **The COMPLETE user message = QUESTION + OPTIONS + ANSWER as one unit.** The user does not click an option — she answers in prose (often a counter-question or a scope-expanding decision), so the answer is her selection *plus* her reasoning. `auq_exchange()` reconstructs the whole exchange as one genuine-user unit: `[AskUserQuestion · N questions]` then, per question, `Qn (header): question  options: a | b | …` and `An: <answer prose>`. It is built from the structured `toolUseResult.questions[]` zipped with `toolUseResult.answers{}` (clean), falling back to parsing the synthesized `"<q>"="<a>"` string only when `toolUseResult` is absent. Codepoint-safe (no byte-offset slice into a CJK question/answer).
 
-**The answer is a genuine-user TURN BOUNDARY** (`is_auq_answer_boundary` — true iff a non-errored `tool_result` carrier with a non-empty `toolUseResult.answers` OR the synthesized marker; a CANCELLED/rejected/validation-errored AUQ has `is_error:true` and no `answers` → NOT a boundary). This is the §6.4 behavior change: the answer (e.g. an AUQ answer that expanded the session scope) was previously folded into the prior turn and invisible; it now opens its own turn on every surface (turns/list/search/recover/budget/topology). The answer is also surfaced under the `user` category (§5).
+**The answer is a genuine-user TURN BOUNDARY** (`is_auq_answer_boundary` — true iff a non-errored `tool_result` carrier with a non-empty `toolUseResult.answers` OR the synthesized marker; a CANCELLED/rejected/validation-errored AUQ has `is_error:true` and no `answers` → NOT a boundary). An AUQ answer (e.g. one that expanded the session scope) is a genuine-user message, so it opens its own turn (§6.4) and is surfaced on every surface (turns/list/search/recover/budget/topology). The answer is also surfaced under the `user` category (§5).
 
 ### 4.5 `tool_result` (tool's response) → category `tool-response`
 
 Lives **inside a `type:"user"` carrier record's** `message.content` array, never on assistant. Fields: `tool_use_id?`, `content` (string OR array of `{type:text,text}`/`{type:image}`/`{type:tool_reference,tool_name}`), `is_error?`. Linkage to the originating `tool_use` is `tool_result.tool_use_id == tool_use.id`; **some legacy carriers omit the block-level `tool_use_id`** — fall back to the carrier's top-level `toolUseResult`/`sourceToolAssistantUUID` to resolve linkage.
 
-### 4.6 Externalised (persisted) large outputs ([CORRECTION/EXTEND] — cleaner pointer than the brief implied)
+### 4.6 Externalised (persisted) large outputs
 
 When a tool output is too large, the inline `tool_result.content` string is a pointer:
 ```
@@ -279,7 +279,7 @@ Preview (first 2KB):
 ```
 `<ABSOLUTE_PATH>` = `<ENCODED>/<session-uuid>/tool-results/<id>.txt` (`<id>` is a tool short-id like `b070yh2rb` or a hook form `hook-<uuid>-<n>-additionalContext`). **In addition**, the carrier's top-level `toolUseResult` object carries **structured** `persistedOutputPath` + `persistedOutputSize` (bytes) fields. **Resolution rule:** when `search --resolve-persisted` is set, read the file at `toolUseResult.persistedOutputPath` (exact — no regex on the inline marker needed); only fall back to regex-scraping the inline `Full output saved to:` path if the structured field is absent. Default (flag off): leave the inline pointer as-is (token economy). Resolution failures (missing file) are reported, never fatal.
 
-### 4.7 `type:"system"` records & compaction ([CORRECTION])
+### 4.7 `type:"system"` records & compaction
 
 `system` records carry the common envelope + `subtype` (+ `level?` ∈ {`info`,`error`}). Subtypes (complete, verified):
 
@@ -373,8 +373,8 @@ csift list --format json .                              # machine-readable index
 **Args (matches `cli::SearchArgs`):**
 | flag | short | type | default | meaning |
 |---|---|---|---|---|
-| `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is now a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
-| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main` (calling **top-level** session, env-resolved) / `@trap:<marker>` (the calling **SUBAGENT**, found by a unique literal marker the caller embeds in this csift command — §6.3a) / `@<agent-hex>` (a SUBAGENT + its topological descendants — or the agent alone under `--no-subagents`) / `*.jsonl` (one transcript — a subagent transcript scopes to that agent's subtree) — the same positional surface every sibling uses (`--path` survives as a DEPRECATED hidden alias) |
+| `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
+| `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main` (calling **top-level** session, env-resolved) / `@trap:<marker>` (the calling **SUBAGENT**, found by a unique literal marker the caller embeds in this csift command — §6.3a) / `@<agent-hex>` (a SUBAGENT + its topological descendants — or the agent alone under `--no-subagents`) / `*.jsonl` (one transcript — a subagent transcript scopes to that agent's subtree) — the same positional surface every sibling uses |
 | `--category C` | `-t` | repeatable enum | all | one of `thinking\|user\|tool\|tool-response\|agent` (§5) |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
@@ -436,14 +436,14 @@ csift search "persisted-output" --resolve-persisted --format json
 
 ### 6.3 `whoami` — identify the calling CC session (false-positive-safe)
 
-**Strategy ([CORRECTION] — the env var EXISTS; the brief left this conditional):**
+**Strategy (env-var-first — the calling session id is read directly from the environment):**
 
 1. **Primary — read `CLAUDE_CODE_SESSION_ID`.** Verified definitive: CC exports it into every Bash-tool environment and its value equals the calling session's own jsonl basename exactly (e.g. `0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d` → `…/<ENCODED>/0a1b2c3d-….jsonl`). Per-session, version-independent, survives arbitrary bash nesting, **zero false positives**. If set and a non-empty UUID, that **is** the answer. Match the **exact** name `CLAUDE_CODE_SESSION_ID` — never a loose `/session/i` regex (`SECURITYSESSIONID`, the macOS login session, is a false-positive trap; `CODEX_COMPANION_SESSION_ID` mirrors the value but is Codex-plugin-specific — accept it only as a secondary alias, prefer the canonical var).
-2. Resolve its transcript: encode `$PWD` (or an explicit `--path`) to the `<ENCODED>` dir and open `<ENCODED>/$CLAUDE_CODE_SESSION_ID.jsonl`. If `$PWD` doesn't resolve, scan projects-root dirs for the one containing `<id>.jsonl`.
+2. Resolve its transcript: encode `$PWD` to the `<ENCODED>` dir and open `<ENCODED>/$CLAUDE_CODE_SESSION_ID.jsonl`. If `$PWD` doesn't resolve, scan projects-root dirs for the one containing `<id>.jsonl`.
 3. **Fallback when the var is absent/empty — ERROR with actionable guidance, never guess.** Message: your session id was not found (`CLAUDE_CODE_SESSION_ID` unset — old CC build or running outside CC); pass an explicit `@<uuid>` target; your id is the basename of your own transcript, or grep a unique recent line you wrote to disambiguate; **do NOT trust most-recent-mtime** (many CC sessions may be live concurrently). It is acceptable for `whoami` to often say "ambiguous, pass an explicit `@<uuid>`".
 4. **FORBIDDEN as a whoami source:** process-tree walk and most-recent-mtime. (Evidence: 83 concurrent `claude` processes + 6 installed CC versions on one machine ⇒ ~83-way ambiguity and cross-version argv brittleness; the UUID isn't even on the process command line. mtime with 83 live sessions is almost always wrong.)
 
-**Args (matches `cli::WhoamiArgs`):** `--show-path` (visible alias `--with-path`; legacy alias `--path`) and `--format text|json`. The resolved `path` line is ALREADY printed by default whenever the id resolves; `--show-path` only FORCES a `path <not found …>` line in the unresolved case (instead of omitting it). `whoami` takes **no** target — it reads the env var, never a path argument.
+**Args (matches `cli::WhoamiArgs`):** `--show-path` and `--format text|json`. The resolved `path` line is ALREADY printed by default whenever the id resolves; `--show-path` only FORCES a `path <not found …>` line in the unresolved case (instead of omitting it). `whoami` takes **no** target — it reads the env var, never a path argument.
 
 **Text output:**
 ```
@@ -470,7 +470,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 
 **A "turn" is delimited by a boundary record** — `opens_turn(record)` (§4.1): a genuine human message, an answered AskUserQuestion (§4.4), or a tool-use rejection-with-message (§4.2.4). A non-boundary `tool_result`-carrier, an `isMeta` pseudo-turn, an interrupt / `<local-command-stdout>` / `<command-name>` synthesized marker (§4.2.1–.3), and a compaction summary never start a turn. Turn index is 0-based in boundary order within a session.
 
-**Behavior change (documented, intended).** An AUQ answer and a plan-rejection-with-message are previously-MISSED genuine user messages that now correctly open a turn — this re-indexes turns where such a message exists (e.g. such an AUQ answer becomes its own turn). The interrupt / local-command / slash-wrapper exclusions remove previously-SPURIOUS boundaries. A spurious new boundary would be a regression; these are not.
+**Boundary set (load-bearing for turn indexing).** An AUQ answer and a plan-rejection-with-message are genuine user messages, so each opens its own turn (e.g. an AUQ answer that expanded the session scope is its own turn). The interrupt / local-command / slash-wrapper markers are machine-synthesized, so they never open a turn. Getting either side wrong — a missed genuine boundary or a spurious synthetic one — corrupts the turn index, so both rules are part of the same `opens_turn` contract.
 
 **Records form a tree via `uuid`/`parentUuid`** (each record's `parentUuid` points at the record it follows). A single turn typically expands to a chain: `genuine-user → assistant(thinking…/tool_use…/text) → user-carrier(tool_result) → assistant(…) → …` until the next genuine-user.
 
@@ -498,7 +498,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 - **WorkflowRun nodes** are read from the UNSCANNED top-level `<session>/workflows/wf_*.json` manifests (NOT `subagents/workflows/`): `{runId, taskId, workflowName, status, agentCount, durationMs, totalTokens, totalToolCalls, defaultModel}`. In `--tree` each run is the parent of its `wf_<id>` agents (joined on `workflow_id == runId`).
 - **Nested subagents (agent→agent).** On disk the layout is FLAT at every depth: CC writes a subagent's transcript under `getSessionId()` = the MAIN session, regardless of who spawned it (verified vs the cleanroom — `getAgentTranscriptPath`/`Shell.ts` both key off the process-global main id; no `setSessionId` in agent code), so a sub-subagent lands flat in the SAME `<main>/subagents/` dir, never `subagents/.../subagents/`. Nesting is therefore LOGICAL, not structural: the child's spawning `Task`/`Agent` tool_use is recorded in its SPAWNING agent's transcript (not the main one), and the child's `meta.json` `toolUseId` points at it. `build_topology` recovers the tree with a GLOBAL spawn index (the main transcript + EVERY subagent transcript, each spawn id tagged with its issuing agent), then sets `parent_agent_id` (the issuer; `null` ⇒ a direct child of the session, depth 0) and walks that chain for `depth`. `--tree` (text + JSON) nests a sub-subagent UNDER its spawning agent; the flat list still emits every agent (so disk coverage and topology are both complete). All real data today is depth 0 (CC currently provisions most subagents without an agent-spawn tool — 0 sub-sub-agents across 2348 transcripts), but the linkage is reconstructed correctly the moment nesting occurs, validated against a contract-faithful synthetic fixture.
 
-**Id-form unification:** a subagent transcript's printed `session_id` is the **bare `<hex>`** everywhere (`agents`, `files`, `recover`, `list`) — the `agent-` filename prefix is stripped — so a file mutation or recovered event is joinable back to its `agents` node id. (Previously `files`/`recover`/`list` printed the un-stripped `agent-<hex>` stem, which did not join.)
+**Id-form unification:** a subagent transcript's printed `session_id` is the **bare `<hex>`** everywhere (`agents`, `files`, `recover`, `list`) — the `agent-` filename prefix is stripped — so a file mutation or recovered event is joinable back to its `agents` node id.
 
 **Subagent on-disk layout (empirically mapped against `~/.claude/projects`, 0 linkage mismatches across 600+ nested transcripts). Three shapes under a top-level session's sidecar `<ENCODED>/<session-uuid>/`:**
 
@@ -529,7 +529,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 
 **Status resolution (honest — never over-claims "failed"):** `completed` when a workflow `journal.jsonl` carries a `result` event for the agent OR the transcript terminates with a visible assistant end-of-turn message; `running` when records exist with a start but no completion signal; `unknown` when no timestamps are determinable.
 
-**Time window** is the same semantics as `search` (§6.2): records/rows with no timestamp on the chosen axis are never admitted by a *bounded* window; an unbounded window admits all. **Default-axis change (documented behavior change):** `--since`/`--until` now default to the **trigger** axis (the true spawn instant). This only sharpens the filter by seconds vs the old `start` default and is opt-out via `--by start`; it is non-breaking otherwise.
+**Time window** is the same semantics as `search` (§6.2): records/rows with no timestamp on the chosen axis are never admitted by a *bounded* window; an unbounded window admits all. **Default axis:** `--since`/`--until` filter on the **trigger** axis (the true spawn instant) by default — the sharpest, most accurate bound; `--by start` (the child's first-record ts) or `--by completion` opts to a different axis.
 
 **Example invocations:**
 ```bash
@@ -558,7 +558,7 @@ Bash's `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpect
 
 **Edit-before-Read boundaries (file changed outside the tool stream).** Beyond mutations, `files` also DETECTS the `File has been modified since read` integrity errors and attributes each to its file (the rejected op's `tool_use_id` ↔ that op's `file_path`, even though the op never landed). These are the points where a formatter / linter / husky-or-pre-commit hook / git / external editor changed the file out from under the harness and a fresh Read was forced — the same authoritative boundary `recover` segments on. Surfacing them in `files` is the DISCOVERY signal: "which files in this session are risky to reconstruct?" → then `recover --file <path> --coverage` for the precise per-boundary breakdown. The error-carrier line is kept by the prefilter (an `is_error` hook) so the detection survives. (csift does NOT hunt for HIDDEN boundaries — a change with no downstream `modified since read` error, e.g. a Read-first-then-windowed-edit, leaves no transcript signal and is undetectable; verified against the CC cleanroom + binary. What `files` surfaces is the detectable subset, honestly bounded.)
 
-Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of its record — the same join-back-to-the-transcript locator `recover`/`search`/`turns` provide (the parallel scan already produces it; it is no longer discarded).
+Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of its record — the same join-back-to-the-transcript locator `recover`/`search`/`turns` provide (the parallel scan already produces it).
 
 **Args (matches `cli::FilesArgs`):**
 | flag / positional | type | default | meaning |
@@ -721,7 +721,7 @@ csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chu
 
 ### 6.9 `image` — list + extract the images a session carries
 
-**Purpose.** A pasted/attached image (and a tool-result screenshot) is stored **inline** on a record as an `{type:"image", source:{type:"base64", media_type:"image/png", data:"<base64>"}}` block — verified on real `~/.claude/projects` data (2026-06-16): a single user record commonly carries several. The bytes are in the jsonl, so `image` lists them and decodes them straight back to files; nothing was externalised. Fills the gap that you previously could not get a sent image back out of a transcript without hand-parsing base64.
+**Purpose.** A pasted/attached image (and a tool-result screenshot) is stored **inline** on a record as an `{type:"image", source:{type:"base64", media_type:"image/png", data:"<base64>"}}` block — verified on real `~/.claude/projects` data (2026-06-16): a single user record commonly carries several. The bytes are in the jsonl, so `image` lists them and decodes them straight back to files; nothing was externalised. This is the way to get a sent image back out of a transcript without hand-parsing base64.
 
 **Two addresses, by design.**
 
@@ -854,23 +854,9 @@ JSON must be valid UTF-8; non-UTF-8 bytes in excerpts are lossily replaced (`Str
 
 ---
 
-## 10. Brief-vs-research corrections (consolidated)
-
-| # | Brief said | Verified reality (research wins) | Where |
-|---|---|---|---|
-| 1 | Compaction may be `{type:"summary", summary/leafUuid}` | **No `type:"summary"` exists in CC 2.1.x.** Compaction = `type:"user"` + `isCompactSummary:true` + `isVisibleInTranscriptOnly:true` (string summary) **and** a `type:"system"` `subtype:"compact_boundary"` (metrics in `compactMetadata`). Detect on `isCompactSummary`; tolerate legacy `summary` defensively but don't rely on it. | §3.1, §4.7 |
-| 2 | Path encoding "verify: collapse? dots?" | `[^A-Za-z0-9]→'-'`, **NO collapse**, `.`/`/`/`_`/space all →`-`, case preserved (proof: literal `--` from `/.`). Forward deterministic, reverse lossy. | §2 |
-| 3 | whoami env var "IF Claude Code exposes one" | It **does**: `CLAUDE_CODE_SESSION_ID` is definitive (== own jsonl basename). Build env-var-first; error-with-guidance only on absence. | §6.3 |
-| 4 | Genuine-user = string or text blocks (not tool_result-carrier) | Correct **but incomplete** — must **also** exclude `isMeta:true` pseudo-turns (`"Continue from where you left off."`, loop ticks, stop-hook feedback) and `isCompactSummary`. `isMeta` not in brief. | §4.1–§4.2 |
-| 5 | Persisted output = `<persisted-output>` inline pointer | True **plus** a structured `toolUseResult.persistedOutputPath` + `persistedOutputSize`; resolve via the structured field (no regex needed), inline marker is the fallback. | §4.6 |
-| 6 | `type` set = user/assistant/system + a few metadata | Full set incl. `attachment` (54% of records — dominant noise), `file-history-snapshot`, `queue-operation`; block extras `caller` (on tool_use), `tool_reference` (in tool_result content). Model must absorb all via tolerant parsing. | §3.1, §3.5, §4.8 |
-| 7 | Generic "mmap + memchr + rayon + lazy parse" | Quantified: 400 KB max single line ⇒ chunk-with-carry tail read; prefilter is two-stage (category memmem + keyword literal); rayon **across** files only (within-file is future opt-in); simd-json explicitly rejected for the default. | §7 |
-
----
-
 ## 11. Design notes & empirical grounding
 
-> The normative spec is §0–§10; this section records the **design rationale and the measurements** behind the three deepest features (`recover`, `turns`, `agents`) — *why* the algorithm is shaped as it is and *why* the magic numbers are what they are. It is the durable residue of the former standalone `RECOVERY_DESIGN` / `TURN_FIDELITY_DESIGN` / `TOPOLOGY_DESIGN` design docs, folded here (their implementation scaffolding — line-number maps, clap-wiring, files-touched, test plans — was execution-time material and is intentionally dropped; the code is the source of truth for that). All counts below are empirical, captured against the live `~/.claude/projects` corpus on the dates noted; treat them as representative magnitudes, not invariants (a live session's subagent counts drift upward as it spawns more).
+> The normative spec is §0–§9; this section records the **design rationale and the measurements** behind the three deepest features (`recover`, `turns`, `agents`) — *why* the algorithm is shaped as it is and *why* the magic numbers are what they are. All counts below are empirical, captured against the live `~/.claude/projects` corpus on the dates noted; treat them as representative magnitudes, not invariants (a live session's subagent counts drift upward as it spawns more).
 
 ### 11.1 `recover` — reference-tool survey + the `originalFile` boundary inversion
 
@@ -917,6 +903,6 @@ Three conclusions this *proves*: (1) a 40K ellipsized budget spans ≥2 boundari
 
 ### 11.3 `agents` — the topology fix + verified corpus
 
-**The problem it fixed.** Discovery of subagent transcripts was always lossless, but it was a *flat list* — each nested transcript treated as a detached session, with the LINKAGE back to the parent `tool_use` that spawned it missing. That made three of six real queries impossible (returned message, files-changed, the topology tree) and two lossy (the "when" was the lagging child-head ts; there was no workflow-run grouping). The fix is **additive**: a topology builder (`ParentSpawnIndex` — one forward scan of the parent transcript joining `tool_use_id → {spawn tool, trigger ts, description, subagent_type}`) layered on the existing discovery + lifecycle primitives; none of the good discovery code was rewritten. The two sanctioned behavior changes that fell out (both a previously-wrong/lossy output corrected, neither touching default top-level behavior) are in §6.5: `--by` defaults to the true `trigger` axis (not the lagging `start`), and a subagent row's printed id is the bare `<hex>` (joinable to an `agents` node), not the un-joinable `agent-<hex>` stem.
+**Why the topology layer matters.** Discovering subagent transcripts as a flat list — each nested transcript a detached session, with no LINKAGE back to the parent `tool_use` that spawned it — answers only three of six real queries and answers two more lossily (the "when" would be the lagging child-head ts; there would be no workflow-run grouping). `agents` therefore builds a topology on top of discovery: a `ParentSpawnIndex` (one forward scan of the parent transcript joining `tool_use_id → {spawn tool, trigger ts, description, subagent_type}`) joins each subagent to its spawning `tool_use`, recovering the returned message, files-changed, and the topology tree. Two consequences of the linkage are specified in §6.5: `--by` filters on the true `trigger` axis (the accurate spawn instant, sharper than the child-head `start` ts), and a subagent row's printed id is the bare `<hex>` (joinable to an `agents` node), not the un-joinable `agent-<hex>` stem.
 
 **Verified on-disk (a representative live session, 2026-06-08).** 152 built-in (`subagents/agent-<hex>.jsonl`) + 404 workflow (`subagents/workflows/wf_*/agent-<hex>.jsonl`) = 556 subagents, **0 nested** (depth uniformly 1 — Claude Code provisions subagents without an agent-spawn tool, so there are zero sub-sub-agents; confirmed across 2348 transcripts). The parent transcript carried 151 `Agent` + 22 `Workflow` tool_uses (this corpus spells the built-in spawn tool `Agent`, not `Task`; `Task` is matched defensively for other corpora), and 19 top-level `workflows/wf_*.json` run manifests. The **3-way returned-message resolve** broke down 147 sync-tool-result, 6 async-child-tail (the parent result was the `Async agent launched …` run-in-background sentinel → fall back to the child transcript tail), 403 workflow-journal (the `journal.jsonl` `result` event payload), 1 unresolved — 0 linkage mismatches.

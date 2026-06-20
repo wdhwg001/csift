@@ -1,9 +1,9 @@
 //! Command-line surface (clap derive).
 //!
-//! Eight subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`,
-//! `turns`. Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.7
-//! baseline invocations. `list`/`search`/`files`/`recover`/`plan` span each session's subagent
-//! transcripts by default (`--no-subagents` opts out); `turns` is the exception — a
+//! Nine subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`,
+//! `turns`, `image`. Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.9
+//! baseline invocations. `list`/`search`/`files`/`recover`/`plan`/`image` span each session's
+//! subagent transcripts by default (`--no-subagents` opts out); `turns` is the exception — a
 //! single-thread recovery tool whose per-session budget MULTIPLIES, so it defaults to the
 //! TOP-LEVEL thread only and opts INTO spanning via `--include-subagents`. `agents` reports a
 //! session's subagent lifecycle (it lists subagents as targets, so it has no subagent-span
@@ -12,11 +12,11 @@
 //! message-fetcher: `--line`/`--uuid` address specific records (rendered full) — the
 //! in-permission alternative to `Read`-ing the raw jsonl.
 //! The session-operating subcommands
-//! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`)
+//! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`/`image`)
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` that is a cwd / encoded
 //! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` session token, or a `*.jsonl` file.
-//! There is NO `--session` flag, and a BARE uuid (no `@`) is not special. (For `search` the
+//! A BARE uuid (no `@`) is not special — prefix it `@<uuid>`. (For `search` the
 //! first positional is PATTERN, so a session is targeted by an `@<uuid>` PATH positional — see
 //! [`SearchArgs::pattern`].) `whoami` is the exception (no target — it reads
 //! `$CLAUDE_CODE_SESSION_ID`).
@@ -128,7 +128,7 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
 
     // Long flags of this subcommand that TAKE a value (need their following token),
     // and the full set of declared long flags (to detect a value that is actually the
-    // NEXT flag, e.g. a user typo `--path --format`).
+    // NEXT flag, e.g. a user typo `--max-count --format`).
     let mut value_long: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut all_long: std::collections::HashSet<String> = std::collections::HashSet::new();
     // The declared SHORT flags of this subcommand, and which take a value. A `-x` short
@@ -202,11 +202,10 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
             } else if value_long.contains(tok) {
                 flags.push(tok.clone());
                 // A value-taking flag (arity 1) consumes its NEXT token as the value —
-                // INCLUDING a leading-`-` encoded token like `--path -Users-foo` (the
-                // `--path` option carries `allow_hyphen_values` too). The only tokens
-                // that are NOT its value: the `--` terminator, or another DECLARED long
-                // flag (a user typo such as `--path --format`, which we leave for clap
-                // to report). A bare short `-x` or an encoded `-Users-…` IS consumed.
+                // INCLUDING a leading-`-` token when that flag carries `allow_hyphen_values`.
+                // The only tokens that are NOT its value: the `--` terminator, or another
+                // DECLARED long flag (a user typo such as `--format --kind`, which we leave
+                // for clap to report). A bare short `-x` or an encoded `-Users-…` IS consumed.
                 if i + 1 < rest.len() && rest[i + 1] != "--" && !all_long.contains(&rest[i + 1]) {
                     flags.push(rest[i + 1].clone());
                     i += 2;
@@ -311,11 +310,13 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n  \
           recover  reconstruct a file's history from the transcript — segmented diff-patches,\n           \
                    point-in-time partial snapshot, or coverage scoping\n  \
+          plan     locate the Plan-Mode plan file bound to a session (recover --file @plan dumps it)\n  \
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
-                   back-and-forth a compaction summary clipped, within a char/token budget\n\n\
+                   back-and-forth a compaction summary clipped, within a char/token budget\n  \
+          image    list + extract the inline images a session carries (pastes/screenshots)\n\n\
         (`search` also FETCHES: `--line`/`--uuid` address specific records, rendered full — \
         the in-permission alternative to `Read`-ing the raw jsonl.)\n\n\
-        list/search/files/recover span each session's subagent transcripts by \
+        list/search/files/recover/plan/image span each session's subagent transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
         to restrict to top-level sessions. `turns` is the exception among the file-operating \
         commands — it defaults to the TOP-LEVEL thread only (single-thread recovery) and \
@@ -324,7 +325,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         A target is EITHER a real filesystem cwd (it gets path-encoded) OR an \
         already-encoded `-Users-...` projects-dir token; with no target, every \
         project under ~/.claude/projects is scanned.\n\n\
-        TARGETING a session/agent (the positional, no `--session` flag): `@<uuid>` (or its \
+        TARGETING a session/agent (always positional): `@<uuid>` (or its \
         leading-hex prefix, e.g. `@13d9645a`) scopes to one session; `@<agent-hex>` to one \
         subagent + its subtree; `@main` is the CALLING top-level session (read from \
         $CLAUDE_CODE_SESSION_ID); a `*.jsonl` path scopes to that one transcript. A BARE uuid \
@@ -353,6 +354,8 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift recover @<uuid> --file /abs/app.py    # segmented diff-patch history of a file\n  \
           csift recover . --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42\n  \
           csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
+          csift plan @<uuid>                          # locate the plan file bound to a session\n  \
+          csift image @<uuid> --out /tmp/imgs         # extract every pasted image to a dir\n  \
           csift search \"\" @<uuid> --no-subagents --line 46550   # fetch the exact message a hit reported, in full\n  \
           csift search \"\" @<uuid> --no-subagents --line 100-140 # fetch a contiguous span of records\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
@@ -538,7 +541,7 @@ pub struct ListArgs {
     /// `csift list -Users-testuser-Projects-foo`. Without this clap would reject the
     /// leading `-` token as an unknown flag (SPEC §6.1 baseline invocation). The
     /// `parse_project_target` value parser NARROWS that tolerance so a real flag
-    /// (`--format json`) is no longer swallowed as a PATH value in any position.
+    /// (`--format json`) is parsed as a flag in any position, never swallowed as a PATH value.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -718,18 +721,6 @@ pub struct SearchArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// DEPRECATED alias for the positional `[PATH]...` target — kept so existing
-    /// `--path <PATH>` invocations keep working. Prefer the positional form (it matches
-    /// every sibling subcommand). Merged with the positional targets by [`SearchArgs::targets`].
-    #[arg(
-        long = "path",
-        value_name = "PATH",
-        allow_hyphen_values = true,
-        value_parser = parse_project_target,
-        hide = true
-    )]
-    pub path_flag: Vec<PathBuf>,
-
     /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
     /// explicitness/symmetry — it never changes the result (the default already searches each
     /// in-scope session's SUBAGENT transcripts under `<session>/subagents/**`: built-in
@@ -880,15 +871,11 @@ impl SearchArgs {
         subagents_only_misplaced_error(self.subagents_only)
     }
 
-    /// The project targets to scope to: the positional `[PATH]...` plus any DEPRECATED
-    /// `--path` alias values, concatenated (positional first). With both empty, the
-    /// shared resolver scans every project. One surface for the caller — the alias is
-    /// invisible past this point.
+    /// The project targets to scope to: the positional `[PATH]...`. Empty ⇒ the shared
+    /// resolver scans every project.
     #[must_use]
     pub fn targets(&self) -> Vec<PathBuf> {
-        let mut t = self.paths.clone();
-        t.extend(self.path_flag.iter().cloned());
-        t
+        self.paths.clone()
     }
 }
 
@@ -1242,8 +1229,8 @@ pub struct FilesArgs {
 
     /// The COMPLEMENT of `--no-subagents`: report ONLY files the session's SUBAGENTS
     /// created/modified, with the top-level session's own mutations excluded. One
-    /// command for "what did the fan-out subagents touch?" — previously reachable only
-    /// as a two-run set-difference (default minus `--no-subagents`). Mutually exclusive
+    /// command for "what did the fan-out subagents touch?" (otherwise a two-run
+    /// set-difference of default minus `--no-subagents`). Mutually exclusive
     /// with `--no-subagents`.
     #[arg(long = "subagents-only", group = "subagent_scope")]
     pub subagents_only: bool,
@@ -2210,11 +2197,9 @@ impl TurnsArgs {
         JSON), so you cannot branch on \"am I a subagent?\" from whoami alone; feed the id to \
         `csift agents --agent <id> --format json` and read is_subagent / parent_session_id \
         there.\n\n\
-        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). The six \
-        session-operating subcommands (`list`/`search`/`agents`/`files`/`recover`/`turns`) \
-        take their target as a POSITIONAL `[PATH]...` — there is NO `--path <PATH>` flag on \
-        them (only `search` keeps a hidden, DEPRECATED `--path` alias). whoami's old `--path` \
-        spelling still works here as a hidden alias for `--show-path`.",
+        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). Every \
+        session-operating subcommand takes its target as a POSITIONAL `[PATH]...` / `@`-token; \
+        there is no target FLAG.",
     after_help = "SESSION-ID SOURCE\n  \
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
         its value IS the calling session's jsonl basename). If absent, csift falls back to \
@@ -2233,10 +2218,8 @@ impl TurnsArgs {
         include is_subagent / parent_session_id (unlike list/search/files/recover/turns \
         JSON).\n\n\
         FLAG NOTE\n  \
-          `--show-path` is a BOOLEAN toggle (no value). The six session-operating subcommands \
-        (list/search/agents/files/recover/turns) take their target as a POSITIONAL [PATH]... \
-        — there is NO `--path <PATH>` flag on them (only `search` keeps a hidden, deprecated \
-        `--path` alias). whoami's old `--path` spelling is a hidden alias for --show-path.\n\n\
+          `--show-path` is a BOOLEAN toggle (no value). Every session-operating subcommand \
+        takes its target as a POSITIONAL [PATH]... / `@`-token; there is no target flag.\n\n\
         EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
           csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
@@ -2250,11 +2233,8 @@ pub struct WhoamiArgs {
     /// FORCE a `path` line even when the jsonl can't be resolved (then it prints
     /// `path <not found …>`). The path is ALREADY shown by default whenever it resolves —
     /// plain `whoami` only OMITS the `path` line in the unresolved case; this flag adds the
-    /// explicit not-found line there. A BOOLEAN toggle (no value). The session-operating
-    /// subcommands take their target as a POSITIONAL `[PATH]...` (no `--path` flag; only
-    /// `search` keeps a hidden deprecated `--path` alias). whoami's old `--path` name is kept
-    /// here as a hidden alias for this boolean toggle.
-    #[arg(long = "show-path", visible_alias = "with-path", alias = "path")]
+    /// explicit not-found line there. A BOOLEAN toggle (no value).
+    #[arg(long = "show-path")]
     pub show_path: bool,
 
     /// Emit JSON instead of text.
@@ -2334,24 +2314,23 @@ mod tests {
     }
 
     #[test]
-    fn search_path_flag_ordering_fixed() {
-        // The DEPRECATED `--path` alias still parses (backward compat); its value lands in
-        // `path_flag` and `targets()` merges it. `--format json` after it still parses.
+    fn search_flag_after_encoded_target_parses() {
+        // A `--format json` flag is hoisted ahead of a leading-`-` encoded POSITIONAL target
+        // in any position (the allow_hyphen_values greedy-absorb fix).
         let cli = parse(&[
             "csift",
             "search",
             "carry",
-            "--path",
             "-Users-testuser-Projects-foo",
             "--format",
             "json",
         ])
-        .expect("search --path then --format must parse");
+        .expect("search <encoded> then --format must parse");
         match cli.command {
             Command::Search(a) => {
                 assert_eq!(a.format, OutputFormat::Json);
-                assert_eq!(a.path_flag.len(), 1, "--path alias feeds path_flag");
-                assert_eq!(a.targets().len(), 1, "targets() merges the alias");
+                assert_eq!(a.paths.len(), 1, "the encoded target is a positional");
+                assert_eq!(a.targets().len(), 1);
                 assert_eq!(a.pattern, "carry");
             }
             _ => panic!("expected search"),
@@ -2361,7 +2340,7 @@ mod tests {
     #[test]
     fn search_positional_path_like_siblings() {
         // The fix: `csift search PATTERN .` — a POSITIONAL path, the SAME surface every
-        // sibling subcommand uses. Previously errored "unexpected argument '.'".
+        // sibling subcommand uses.
         let cli = parse(&["csift", "search", "carry", "."]).expect("positional PATH must parse");
         match cli.command {
             Command::Search(a) => {
@@ -2369,22 +2348,6 @@ mod tests {
                 assert_eq!(a.paths.len(), 1);
                 assert_eq!(a.paths[0].to_string_lossy(), ".");
                 assert_eq!(a.targets().len(), 1);
-            }
-            _ => panic!("expected search"),
-        }
-    }
-
-    #[test]
-    fn search_positional_and_path_alias_merge() {
-        // Both surfaces feed `targets()` — positional first, then the `--path` alias.
-        let cli = parse(&["csift", "search", "carry", ".", "--path", "-Enc-Token"])
-            .expect("positional + alias parse");
-        match cli.command {
-            Command::Search(a) => {
-                let t = a.targets();
-                assert_eq!(t.len(), 2);
-                assert_eq!(t[0].to_string_lossy(), ".");
-                assert_eq!(t[1].to_string_lossy(), "-Enc-Token");
             }
             _ => panic!("expected search"),
         }
@@ -2450,8 +2413,8 @@ mod tests {
 
     #[test]
     fn list_routes_at_uuid_and_bare_uuid_as_positional() {
-        // There is NO `--session` flag any more: a session is an `@<uuid>` POSITIONAL token,
-        // which the parser lands in `paths` (the resolver does the routing, not the parser).
+        // A session is an `@<uuid>` POSITIONAL token, which the parser lands in `paths`
+        // (the resolver does the routing, not the parser).
         let at = format!("@{SESS_UUID}");
         let cli = parse(&["csift", "list", at.as_str()]).unwrap();
         match cli.command {
@@ -2461,7 +2424,7 @@ mod tests {
             }
             _ => panic!("expected list"),
         }
-        // A BARE uuid (no `@`) is no longer special — it is also just a positional (the
+        // A BARE uuid (no `@`) is NOT special — it is just a positional (the
         // resolver later fails it as "no project dir named <uuid>", by design).
         let cli = parse(&["csift", "list", SESS_UUID]).unwrap();
         match cli.command {
@@ -2482,7 +2445,7 @@ mod tests {
         let dead_flag = concat!("--", "session");
         assert!(
             parse(&["csift", "list", dead_flag, SESS_UUID]).is_err(),
-            "the removed session flag must no longer parse"
+            "a bare --session token must not parse"
         );
     }
 
@@ -2779,7 +2742,7 @@ mod tests {
 
     #[test]
     fn agents_session_target_and_window() {
-        // A session is now an `@<uuid>` POSITIONAL (no `--session` flag): it lands in `paths`.
+        // An `@<uuid>` session token is a POSITIONAL: it lands in `paths`.
         let at = format!("@{SESS_UUID}");
         let cli = parse(&[
             "csift",

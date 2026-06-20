@@ -119,7 +119,7 @@ fn locate_transcript(session_id: &str) -> Option<PathBuf> {
 
 fn render_text(me: &WhoAmI, args: &WhoamiArgs) {
     println!("session  {}", me.session_id);
-    // The `--path` flag opts into printing the resolved jsonl path; we also print
+    // The `--show-path` flag opts into printing the resolved jsonl path; we also print
     // it implicitly when found (it's the useful bit), but only error-note its
     // absence when the user explicitly asked for it.
     match &me.path {
