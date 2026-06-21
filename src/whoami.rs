@@ -97,71 +97,57 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
 
     let me = WhoAmI { session_id, path };
     match args.format {
-        OutputFormat::Text => render_text(&me, args),
+        OutputFormat::Text => render_text(&me),
         OutputFormat::Json => render_json(&me)?,
     }
     Ok(())
 }
 
-/// `whoami @trap:<marker>`: resolve the calling SUBAGENT (or confirm top-level) from the unique
-/// literal marker the caller embedded in THIS very command, reporting a complete, re-feedable
-/// identity (the bare hex + parent uuid). Env-independent — reliable for a built-in Task AND a
-/// workflow subagent (whose env id is the PARENT, not itself).
+/// `whoami @trap:<marker>`: resolve the caller's UPSTREAM ancestry chain from the unique literal
+/// marker it embedded in THIS very command, and report it self → ancestors → top-level root. This
+/// is the walk-UP mirror of `agents` (walk-DOWN): a subagent learns its own bare hex AND the whole
+/// re-feedable lineage above it. Env-independent — reliable for a built-in Task AND a workflow
+/// subagent (whose env id is the PARENT, not itself).
 fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
     use serde_json::json;
 
-    match path::resolve_trap_who(marker)? {
-        path::TrapWho::Agent {
-            agent_id,
-            parent_session,
-            path,
-        } => match args.format {
-            OutputFormat::Text => {
-                println!("subagent {agent_id}");
-                println!("parent   {parent_session}");
-                match &path {
-                    Some(p) => println!("path     {}", p.display()),
-                    None if args.show_path => {
-                        println!("path     <subagent transcript not found under projects root>");
-                    }
-                    None => {}
-                }
+    let chain = path::resolve_trap_who(marker)?;
+    match args.format {
+        OutputFormat::Text => {
+            // chain[0] = self (the marker carrier); chain.last() = the top-level root.
+            for (i, n) in chain.iter().enumerate() {
+                let role = if n.is_subagent { "subagent" } else { "session" };
+                let annot = match (i, n.is_subagent, n.depth) {
+                    (0, true, Some(d)) => format!("  <- you (subagent, depth {d})"),
+                    (0, true, None) => "  <- you (subagent)".to_string(),
+                    (0, false, _) => "  <- you (top-level session, not a subagent)".to_string(),
+                    (_, true, Some(d)) => format!("  ^ parent subagent (depth {d})"),
+                    (_, true, None) => "  ^ parent subagent".to_string(),
+                    (_, false, _) => "  ^ top-level root".to_string(),
+                };
+                println!("{role:8} {}{annot}", n.session_id);
             }
-            OutputFormat::Json => {
-                let obj = json!({
-                    "session_id": agent_id,
-                    "is_subagent": true,
-                    "parent_session_id": parent_session,
-                    "path": path.as_ref().map(|p| p.to_string_lossy().into_owned()),
-                });
-                println!("{}", serde_json::to_string(&obj)?);
+            // The self transcript path — the most useful "where am I".
+            match chain.first().and_then(|n| n.path.as_ref()) {
+                Some(p) => println!("path     {}", p.display()),
+                None => println!("path     <transcript not found under projects root>"),
             }
-        },
-        path::TrapWho::Session { session_id, path } => match args.format {
-            OutputFormat::Text => {
-                println!("session  {session_id}");
-                println!(
-                    "note     the marker was in the MAIN transcript — you are the TOP-LEVEL \
-                     session, not a subagent"
-                );
-                match &path {
-                    Some(p) => println!("path     {}", p.display()),
-                    None if args.show_path => {
-                        println!("path     <not found under projects root>");
-                    }
-                    None => {}
-                }
-            }
-            OutputFormat::Json => {
-                let obj = json!({
-                    "session_id": &session_id,
-                    "is_subagent": false,
-                    "parent_session_id": &session_id,
-                    "path": path.as_ref().map(|p| p.to_string_lossy().into_owned()),
-                });
-                println!("{}", serde_json::to_string(&obj)?);
-            }
-        },
+        }
+        OutputFormat::Json => {
+            let nodes: Vec<_> = chain
+                .iter()
+                .map(|n| {
+                    json!({
+                        "session_id": n.session_id,
+                        "is_subagent": n.is_subagent,
+                        "parent_session_id": n.parent_session_id,
+                        "depth": n.depth,
+                        "path": n.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string(&json!({ "chain": nodes }))?);
+        }
     }
     Ok(())
 }
@@ -196,17 +182,12 @@ fn locate_transcript(session_id: &str) -> Option<PathBuf> {
 
 // ── Rendering ──
 
-fn render_text(me: &WhoAmI, args: &WhoamiArgs) {
+fn render_text(me: &WhoAmI) {
     println!("session  {}", me.session_id);
-    // The `--show-path` flag opts into printing the resolved jsonl path; we also print
-    // it implicitly when found (it's the useful bit), but only error-note its
-    // absence when the user explicitly asked for it.
+    // The path is ALWAYS printed (it is the useful bit); a not-found note when it can't be located.
     match &me.path {
         Some(p) => println!("path     {}", p.display()),
-        None if args.show_path => {
-            println!("path     <not found under projects root for the current cwd>");
-        }
-        None => {}
+        None => println!("path     <not found under projects root for the current cwd>"),
     }
 }
 

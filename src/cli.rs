@@ -2193,14 +2193,13 @@ impl TurnsArgs {
         --format json`; if it returns the node, read `parent_session_id` for the ROOT (one \
         call); if it errors `no subagent matched`, the id is ALREADY top-level — use it \
         directly. (Or scan `csift agents .` / `csift list .` on the project PATH and find the \
-        parent uuid.) whoami JSON INTENTIONALLY carries only {session_id, path} — it does NOT \
-        include is_subagent / parent_session_id (unlike list/search/files/recover/turns \
-        JSON), so you cannot branch on \"am I a subagent?\" from whoami alone; feed the id to \
-        `csift agents --agent <id> --format json` and read is_subagent / parent_session_id \
-        there.\n\n\
-        FLAG NOTE: `whoami --show-path` is a BOOLEAN toggle (no value). Every \
-        session-operating subcommand takes its target as a POSITIONAL `[PATH]...` / `@`-token; \
-        there is no target FLAG.",
+        parent uuid.) The ENV form's JSON carries `{session_id, path}`; the `@trap:<marker>` form \
+        instead returns the UPSTREAM CHAIN `{chain:[{session_id, is_subagent, parent_session_id, \
+        depth, path}, …]}` (self first, top-level root last) — so a subagent reads is_subagent / \
+        parent_session_id directly, no `agents` round-trip.\n\n\
+        FLAG NOTE: whoami's only positional is the optional SELF token `@trap:<marker>` / `@main`; \
+        the `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes a \
+        general POSITIONAL `[PATH]...` / `@`-token; there is no target FLAG.",
     after_help = "SESSION-ID SOURCE\n  \
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
         its value IS the calling session's jsonl basename). If absent, csift falls back to \
@@ -2212,22 +2211,22 @@ impl TurnsArgs {
         subagent). In an ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) it \
         holds the PARENT session id (so `whoami` resolves the ROOT instead). For a DEFINITIVE, \
         env-INDEPENDENT answer use `whoami @trap:<marker>`: you embed a one-shot literal marker in \
-        that very command and csift maps it straight to your subagent hex + parent uuid (the @trap \
-        form's JSON carries the full {session_id, is_subagent, parent_session_id, path} trio). \
+        that very command and csift maps it to your subagent hex and walks the UPSTREAM CHAIN up to \
+        the top-level root (the @trap form's JSON is `{chain:[{session_id, is_subagent, \
+        parent_session_id, depth, path}, …]}`). \
         WITHOUT @trap, don't assume which id the env gave — feed it to `csift agents --agent <id> \
         --format json`; a returned node → read `parent_session_id` for the ROOT; `no subagent \
         matched` → the id is ALREADY top-level. Plain `whoami` JSON carries only {session_id, \
         path} — from the env alone it canNOT know is_subagent / parent_session_id (that is exactly \
         what `@trap` resolves).\n\n\
         FLAG NOTE\n  \
-          `--show-path` is a BOOLEAN toggle (no value). whoami takes an OPTIONAL positional SELF \
-        target — `@trap:<marker>` or `@main` ONLY; every OTHER session-operating subcommand takes \
-        a general POSITIONAL [PATH]... / `@`-token. There is no target flag anywhere.\n\n\
+          whoami takes an OPTIONAL positional SELF target — `@trap:<marker>` or `@main` ONLY; the \
+        `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes a general \
+        POSITIONAL [PATH]... / `@`-token. There is no target flag anywhere.\n\n\
         EXAMPLES\n  \
-          csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
-          csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
+          csift whoami                  # the calling session's uuid + its jsonl path\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
-          csift whoami @trap:JollyShinyBrook4283   # which SUBAGENT am I? -> bare hex + parent uuid (env-independent)\n  \
+          csift whoami @trap:JollyShinyBrook4283   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root), env-independent\n  \
           # FALLBACK (no @trap) — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
           csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json\n  \
           # …then scope the whole conversation with that parent uuid:\n  \
@@ -2238,18 +2237,12 @@ pub struct WhoamiArgs {
     /// the calling session from `$CLAUDE_CODE_SESSION_ID` (the historical behavior; `@main` is its
     /// explicit spelling). `@trap:<marker>` answers "which SUBAGENT am I?": a running subagent
     /// (whose own id CC withholds from the env) embeds a unique, literal, one-shot marker in THIS
-    /// very csift command and csift maps it back to the subagent's bare hex + parent uuid —
+    /// very csift command and csift maps it to the subagent's bare hex and walks the UPSTREAM
+    /// ancestry CHAIN up to the top-level root (the walk-UP mirror of `agents`' walk-DOWN) —
     /// env-INDEPENDENT, so it is reliable for a built-in Task AND a workflow subagent (whose env id
     /// is the PARENT). To inspect a DIFFERENT session, use `list`/`agents`, not `whoami`.
     #[arg(value_name = "SELF")]
     pub self_target: Option<String>,
-
-    /// FORCE a `path` line even when the jsonl can't be resolved (then it prints
-    /// `path <not found …>`). The path is ALREADY shown by default whenever it resolves —
-    /// plain `whoami` only OMITS the `path` line in the unresolved case; this flag adds the
-    /// explicit not-found line there. A BOOLEAN toggle (no value).
-    #[arg(long = "show-path")]
-    pub show_path: bool,
 
     /// Emit JSON instead of text.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]

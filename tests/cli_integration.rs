@@ -1578,15 +1578,17 @@ fn at_agent_hex_subtree_includes_descendants_unless_no_subagents() {
 }
 
 #[test]
-fn whoami_show_path_flag() {
-    // `--show-path` forces the resolved jsonl path line.
+fn whoami_always_prints_path() {
+    // The resolved jsonl path is ALWAYS printed (no flag — `--show-path` was removed).
     let h = populated_home();
-    let out = h.run_with_env(
-        &["whoami", "--show-path"],
-        &[("CLAUDE_CODE_SESSION_ID", SESS)],
-    );
+    let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains(SESS), "output: {}", out.stdout);
+    assert!(
+        out.stdout.contains("path"),
+        "path line always present: {}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -2128,10 +2130,10 @@ fn whoami_json_format() {
 }
 
 #[test]
-fn whoami_show_path_when_not_found() {
+fn whoami_prints_not_found_note_when_unresolved() {
     let h = Home::new(); // empty projects → the session id won't resolve to a file
     let out = h.run_with_env(
-        &["whoami", "--show-path"],
+        &["whoami"],
         &[(
             "CLAUDE_CODE_SESSION_ID",
             "ffffffff-0000-0000-0000-000000000000",
@@ -2243,10 +2245,7 @@ fn whoami_scan_skips_dirs_without_the_file() {
         &format!("-ZZZ-second/{sid}.jsonl"),
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
     );
-    let out = h.run_with_env(
-        &["whoami", "--show-path"],
-        &[("CLAUDE_CODE_SESSION_ID", sid)],
-    );
+    let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", sid)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("-ZZZ-second"),
@@ -2256,9 +2255,9 @@ fn whoami_scan_skips_dirs_without_the_file() {
 }
 
 #[test]
-fn whoami_text_no_path_flag_when_not_found_is_silent() {
-    // The `None => {}` render arm: session resolved but file not found AND --show-path NOT
-    // given → only the session line prints, no path note.
+fn whoami_text_prints_not_found_note_when_unresolved() {
+    // The path line is ALWAYS printed; a session id that resolves to no file gets a `not found`
+    // note (the old `--show-path`-gated silence was removed).
     let h = Home::new();
     let out = h.run_with_env(
         &["whoami"],
@@ -2270,12 +2269,14 @@ fn whoami_text_no_path_flag_when_not_found_is_silent() {
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("11111111-2222-3333-4444-555555555555"));
     assert!(
-        !out.stdout.contains("not found"),
-        "no path note without --show-path"
+        out.stdout.contains("not found"),
+        "not-found note always present when unresolved: {}",
+        out.stdout
     );
     assert!(
-        !out.stdout.to_lowercase().contains("path"),
-        "no path line at all"
+        out.stdout.to_lowercase().contains("path"),
+        "path line always present: {}",
+        out.stdout
     );
 }
 

@@ -516,47 +516,91 @@ fn resolve_trap(marker: &str) -> Result<TrapSelf> {
     }
 }
 
-/// The identity `whoami @trap:<marker>` resolves to — like [`TrapSelf`] but carrying the located
-/// transcript path + parent uuid, so `whoami` can answer "which subagent am I?" with a complete,
-/// re-feedable identity.
-pub enum TrapWho {
-    /// A SUBAGENT carried the marker: its bare-hex `agent_id`, the parent (calling top-level)
-    /// session id (the re-feedable `@<uuid>`), and the subagent transcript path if locatable.
-    Agent {
-        agent_id: String,
-        parent_session: String,
-        path: Option<PathBuf>,
-    },
-    /// Only the MAIN transcript carried the marker — the caller IS the top-level session.
-    Session {
-        session_id: String,
-        path: Option<PathBuf>,
-    },
+/// One node in the `whoami @trap` UPSTREAM ancestry chain — a subagent (or the top-level session)
+/// the caller belongs to. The chain runs SELF → ancestors → top-level root, so a subagent learns
+/// its own bare hex AND the whole re-feedable session lineage above it: `agents` walks the topology
+/// DOWN, `whoami` walks it UP.
+pub struct WhoNode {
+    /// Bare-hex agent id for a subagent node, or the uuid for the top-level session.
+    pub session_id: String,
+    pub is_subagent: bool,
+    /// The always-re-feedable owning top-level uuid (== `session_id` on the root node).
+    pub parent_session_id: String,
+    /// tool_use-graph nesting depth for a subagent (0 = a direct child of the session); `None` for
+    /// the top-level root.
+    pub depth: Option<usize>,
+    pub path: Option<PathBuf>,
 }
 
-/// Resolve `@trap:<marker>` for `whoami`: find the calling subagent (or confirm top-level) and
-/// locate its transcript. Reuses [`resolve_trap`]'s strict grammar + marker scan, then adds the
-/// path + parent so a subagent gets a complete, re-feedable identity (env-independent — it works
-/// for a built-in Task AND an orchestrated workflow subagent, whose env id is the PARENT, not itself).
-pub fn resolve_trap_who(marker: &str) -> Result<TrapWho> {
-    let parent_session = resolve_env_session()?;
+/// Resolve `@trap:<marker>` for `whoami` into the caller's UPSTREAM ancestry chain: the marker
+/// carrier FIRST (a subagent, or the top-level session itself), then each parent walked via the
+/// topology's `parent_agent_id`, ending at the top-level session. Reuses [`resolve_trap`]'s strict
+/// grammar + marker scan and [`crate::subagent::build_topology`] for the walk. Env-independent —
+/// reliable for a built-in Task AND a workflow subagent (whose env id is the PARENT, not itself).
+/// The topology is flat today (every subagent is depth 0), so the chain is `subagent → top-level`;
+/// the walk is future-proof for real nesting (depth > 0).
+pub fn resolve_trap_who(marker: &str) -> Result<Vec<WhoNode>> {
+    let root = resolve_env_session()?;
+    let main_jsonl = locate_session_jsonl(&root);
+
     match resolve_trap(marker)? {
-        TrapSelf::Agent(agent_id) => {
-            let path = locate_session_jsonl(&parent_session).and_then(|main| {
-                crate::subagent::subagent_transcript_files(&main)
-                    .ok()?
-                    .into_iter()
-                    .find(|p| crate::subagent::session_id_from_path(p) == agent_id)
-            });
-            Ok(TrapWho::Agent {
-                agent_id,
-                parent_session,
-                path,
-            })
-        }
+        // The marker was in the MAIN transcript → the caller IS the top-level session (no ancestry).
         TrapSelf::Session(session_id) => {
             let path = locate_session_jsonl(&session_id);
-            Ok(TrapWho::Session { session_id, path })
+            Ok(vec![WhoNode {
+                parent_session_id: session_id.clone(),
+                session_id,
+                is_subagent: false,
+                depth: None,
+                path,
+            }])
+        }
+        // A subagent carried it → walk UP from that hex to the top-level session.
+        TrapSelf::Agent(agent_id) => {
+            let nodes = main_jsonl
+                .as_deref()
+                .and_then(|m| crate::subagent::build_topology(m, false).ok())
+                .unwrap_or_default();
+            let sub_files = main_jsonl
+                .as_deref()
+                .and_then(|m| crate::subagent::subagent_transcript_files(m).ok())
+                .unwrap_or_default();
+            let locate_sub = |hex: &str| {
+                sub_files
+                    .iter()
+                    .find(|p| crate::subagent::session_id_from_path(p) == hex)
+                    .cloned()
+            };
+
+            let mut chain: Vec<WhoNode> = Vec::new();
+            let mut cur = Some(agent_id);
+            // Walk `parent_agent_id` up; the dedup guard makes any malformed cycle terminate.
+            while let Some(hex) = cur {
+                if chain.iter().any(|n| n.session_id == hex) {
+                    break;
+                }
+                let node = nodes.iter().find(|n| n.agent_id == hex);
+                let depth = node.map(|n| n.depth);
+                let next = node.and_then(|n| n.parent_agent_id.clone());
+                let path = locate_sub(&hex);
+                chain.push(WhoNode {
+                    session_id: hex,
+                    is_subagent: true,
+                    parent_session_id: root.clone(),
+                    depth,
+                    path,
+                });
+                cur = next;
+            }
+            // Append the top-level session as the chain root.
+            chain.push(WhoNode {
+                parent_session_id: root.clone(),
+                session_id: root,
+                is_subagent: false,
+                depth: None,
+                path: main_jsonl,
+            });
+            Ok(chain)
         }
     }
 }

@@ -96,9 +96,9 @@ Lists a session's subagents. **Kind = on-disk PATH LOCATION, not `agentType`**: 
 
 ## `whoami` - identify the calling session (false-positive-safe)
 ```
-csift whoami [@trap:<marker>|@main] [--show-path] [--format json]
+csift whoami [@trap:<marker>|@main] [--format json]
 ```
-Reads `$CLAUDE_CODE_SESSION_ID`; alias `$CODEX_COMPANION_SESSION_ID`. NEVER a loose `/session/i` regex (`SECURITYSESSIONID` is a trap). Neither set => **errors** (pass `@<uuid>`); never guesses by mtime. Optional positional **`@trap:<marker>`** = "which SUBAGENT am I?" (bare hex + parent uuid, env-INDEPENDENT; JSON adds `is_subagent`/`parent_session_id`); **`@main`/none** = env top-level. `--show-path` forces `path <not found …>`. JSON `{session_id, path}`.
+Reads `$CLAUDE_CODE_SESSION_ID`; alias `$CODEX_COMPANION_SESSION_ID`. NEVER a loose `/session/i` regex (`SECURITYSESSIONID` is a trap). Neither set => **errors** (pass `@<uuid>`); never guesses by mtime. The `path` line is ALWAYS printed (a `<not found>` note when unresolved). Optional positional **`@trap:<marker>`** = "which SUBAGENT am I?" → the full UPSTREAM ancestry CHAIN (self → … → top-level root; the walk-UP mirror of `agents`' walk-DOWN), env-INDEPENDENT (works for built-in Task AND workflow subagents); JSON `{chain:[{session_id,is_subagent,parent_session_id,depth,path}…]}`. **`@main`/none** = env top-level; JSON `{session_id, path}`.
 
 ## `files` - what a session changed, and when
 ```
