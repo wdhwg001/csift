@@ -6,12 +6,13 @@
 //! spawned it, and emit one [`SubagentNode`] per subagent carrying its id, kind,
 //! `agentType`, TRUE trigger time (the parent tool_use ts), start + completion
 //! timestamps, status, the 3-way-resolved returned message (on demand), and the
-//! files-changed list (on demand). `--tree` renders workflow RUN nodes (from the
-//! top-level `workflows/wf_*.json` manifests) as parents of their workflow agents.
+//! files-changed list (on demand). The output is ALWAYS the parent->child tree: workflow
+//! RUN nodes (from the top-level `workflows/wf_*.json` manifests) parent their workflow
+//! agents, and a nested sub-subagent renders under its spawning agent.
 //!
 //! `--since`/`--until` (ISO8601 or relative, system-local) filter by TRIGGER time by
-//! default; `--by start|completion` switch axis. Files are processed in parallel across
-//! sessions, then sorted for deterministic output.
+//! default; `--order-by start|completion` switch the ordering/window axis. Files are
+//! processed in parallel across sessions, then sorted for deterministic output.
 
 use std::path::Path;
 
@@ -68,11 +69,11 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         workflow_runs.extend(t.workflow_runs);
     }
 
-    // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--by time
+    // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--order-by time
     // window AND the --kind filter (a known id should resolve regardless of when it ran or
     // its shape), and a no-match is a hard error with discovery guidance — never the
     // ambiguous `no subagents found` (which a zero-subagent session also prints). The grab
-    // also wins over --tree: a single node is rendered, not the whole workflow tree.
+    // renders a single node (a tree of one), not the whole workflow tree.
     if let Some(want_id) = args.agent.as_deref() {
         nodes.retain(|n| n.agent_id == want_id);
         if nodes.is_empty() {
@@ -84,7 +85,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         }
     } else {
         nodes.retain(|n| kind_allowed(n.kind, &args.kinds));
-        nodes.retain(|n| window_admits(n, &time_window, args.by));
+        nodes.retain(|n| window_admits(n, &time_window, args.order_by));
     }
 
     // Deterministic order: by (parent session, trigger time, agent id).
@@ -103,18 +104,19 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 
     // A workflow dir can exist (with a journal + agents) BEFORE its top-level
     // `workflows/wf_*.json` run-manifest is written (an in-flight run) — or after the
-    // manifest is pruned. Without a synthesized stand-in, the `--tree` view drops every
+    // manifest is pruned. Without a synthesized stand-in, the tree view drops every
     // such agent, because both tree renderers emit a workflow agent ONLY as a child of a
     // matched run. Synthesize a minimal `WorkflowRun` for any in-scope workflow_id that no
     // real manifest covers, so the tree never silently loses a real workflow cluster.
     augment_unmanifested_runs(&nodes, &mut workflow_runs);
 
+    // The output is ALWAYS the parent->child tree. A single `--agent <hex>` grab renders
+    // just that one node (a tree of one): `single_node` suppresses the whole-workflow
+    // topology so the grab never dumps every sibling under a WORKFLOW header.
     let view = View {
         want_returned,
         want_files,
-        // A single `--agent` grab renders just that node — `--tree` (whole-workflow
-        // topology) is ignored, so `--agent <hex> --tree` no longer dumps every sibling.
-        tree: args.tree && args.agent.is_none(),
+        single_node: args.agent.is_some(),
     };
 
     match args.format {
@@ -128,7 +130,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 /// node but absent from `workflow_runs` (no top-level manifest — an in-flight or
 /// manifest-pruned run). The placeholder carries only the `run_id` (== `workflow_id`); its
 /// run-level fields stay `None` so the renderers print just the header + the nested agents.
-/// Without this, `--tree` silently drops those agents (they render only as a run's children).
+/// Without this, the tree silently drops those agents (they render only as a run's children).
 fn augment_unmanifested_runs(nodes: &[SubagentNode], workflow_runs: &mut Vec<WorkflowRun>) {
     use std::collections::BTreeSet;
     let known: BTreeSet<&str> = workflow_runs.iter().map(|r| r.run_id.as_str()).collect();
@@ -162,7 +164,9 @@ fn augment_unmanifested_runs(nodes: &[SubagentNode], workflow_runs: &mut Vec<Wor
 struct View {
     want_returned: bool,
     want_files: bool,
-    tree: bool,
+    /// A single `--agent <hex>` grab: render JUST the matched node (a tree of one), with no
+    /// SESSION/WORKFLOW headers and no nested-topology walk.
+    single_node: bool,
 }
 
 /// Build the linked topology + read the workflow-run manifests for one top-level session.
@@ -227,10 +231,13 @@ fn render_text(
         return;
     }
 
-    if view.tree {
-        render_tree_text(nodes, workflow_runs, view);
+    if view.single_node {
+        // A single `--agent <hex>` grab: just the matched node, no SESSION/WORKFLOW header.
+        for n in nodes {
+            print_node_block(n, view, 1);
+        }
     } else {
-        render_flat_text(nodes, view);
+        render_tree_text(nodes, workflow_runs, view);
     }
 
     // Footer with the filter context (so an empty-looking result is explained).
@@ -250,23 +257,8 @@ fn render_text(
     println!(
         "{} subagent(s)  ·  kind={kinds}  ·  window-axis={}",
         nodes.len(),
-        axis_label(args.by)
+        axis_label(args.order_by)
     );
-}
-
-/// Flat (non-tree) text: one block per node, grouped under its parent session header.
-fn render_flat_text(nodes: &[SubagentNode], view: &View) {
-    let mut last_session: Option<&str> = None;
-    for n in nodes {
-        if last_session != Some(n.parent_session_id.as_str()) {
-            if last_session.is_some() {
-                println!();
-            }
-            println!("SESSION  {}", n.parent_session_id);
-            last_session = Some(n.parent_session_id.as_str());
-        }
-        print_node_block(n, view, 1);
-    }
 }
 
 /// Tree text: each session → its workflow RUN nodes (with their agents nested) → then the
@@ -445,57 +437,59 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
 fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &View) -> Result<()> {
     use std::collections::BTreeSet;
 
-    if view.tree {
-        // Tree JSON: one object per workflow run with its agents nested, then the
-        // built-in agents at the top level — grouped per session.
-        use std::collections::BTreeMap;
-        let mut by_session: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
+    if view.single_node {
+        // A single `--agent <hex>` grab: one flat node object per line (just the matched
+        // node), NOT the per-session tree envelope — so a consumer reads the node directly.
         for n in nodes {
-            by_session
-                .entry(n.parent_session_id.as_str())
-                .or_default()
-                .push(n);
-        }
-        let in_scope_wf: BTreeSet<&str> = nodes
-            .iter()
-            .filter_map(|n| n.workflow_id.as_deref())
-            .collect();
-
-        for (session, snodes) in &by_session {
-            let mut runs_json = Vec::new();
-            for run in workflow_runs {
-                if !in_scope_wf.contains(run.run_id.as_str()) {
-                    continue;
-                }
-                let children: Vec<_> = snodes
-                    .iter()
-                    .filter(|n| n.workflow_id.as_deref() == Some(run.run_id.as_str()))
-                    .map(|n| node_json(n, view))
-                    .collect();
-                if children.is_empty() {
-                    continue;
-                }
-                runs_json.push(workflow_run_json(run, children));
-            }
-            let builtin_nodes: Vec<&SubagentNode> = snodes
-                .iter()
-                .filter(|n| n.workflow_id.is_none())
-                .copied()
-                .collect();
-            let builtins = nested_builtin_json(&builtin_nodes, view);
-            let obj = serde_json::json!({
-                "session_id": session,
-                "workflow_runs": runs_json,
-                "agents": builtins,
-            });
-            println!("{}", serde_json::to_string(&obj)?);
+            println!("{}", serde_json::to_string(&node_json(n, view))?);
         }
         return Ok(());
     }
 
-    // Flat JSON: one node per line.
+    // Tree JSON (ALWAYS, except a single-node grab above): one object per session with its
+    // workflow runs (each carrying its agents nested under `children`) plus the built-in
+    // agents at the top level.
+    use std::collections::BTreeMap;
+    let mut by_session: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
     for n in nodes {
-        println!("{}", serde_json::to_string(&node_json(n, view))?);
+        by_session
+            .entry(n.parent_session_id.as_str())
+            .or_default()
+            .push(n);
+    }
+    let in_scope_wf: BTreeSet<&str> = nodes
+        .iter()
+        .filter_map(|n| n.workflow_id.as_deref())
+        .collect();
+
+    for (session, snodes) in &by_session {
+        let mut runs_json = Vec::new();
+        for run in workflow_runs {
+            if !in_scope_wf.contains(run.run_id.as_str()) {
+                continue;
+            }
+            let children: Vec<_> = snodes
+                .iter()
+                .filter(|n| n.workflow_id.as_deref() == Some(run.run_id.as_str()))
+                .map(|n| node_json(n, view))
+                .collect();
+            if children.is_empty() {
+                continue;
+            }
+            runs_json.push(workflow_run_json(run, children));
+        }
+        let builtin_nodes: Vec<&SubagentNode> = snodes
+            .iter()
+            .filter(|n| n.workflow_id.is_none())
+            .copied()
+            .collect();
+        let builtins = nested_builtin_json(&builtin_nodes, view);
+        let obj = serde_json::json!({
+            "session_id": session,
+            "workflow_runs": runs_json,
+            "agents": builtins,
+        });
+        println!("{}", serde_json::to_string(&obj)?);
     }
     Ok(())
 }
@@ -771,7 +765,7 @@ mod tests {
         let lean = View {
             want_returned: false,
             want_files: false,
-            tree: false,
+            single_node: false,
         };
         let j = node_json(&n, &lean);
         assert!(j.get("returned_message").is_none());
@@ -782,7 +776,7 @@ mod tests {
         let rich = View {
             want_returned: true,
             want_files: true,
-            tree: false,
+            single_node: false,
         };
         let j2 = node_json(&n, &rich);
         assert!(j2.get("returned_message").is_some());
@@ -802,7 +796,7 @@ mod tests {
         let rich = View {
             want_returned: true,
             want_files: false,
-            tree: false,
+            single_node: false,
         };
         let j = node_json(&n, &rich);
         assert_eq!(j["returned_message"], "the answer");

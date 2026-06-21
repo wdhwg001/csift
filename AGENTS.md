@@ -137,7 +137,7 @@ parse.rs           # mmap_bytes + memchr head/tail/stream readers + lazy parse_l
 session.rs         # `list`: head+tail read -> SessionSummary rows (+ spans subagents by default)
 search.rs          # `search`: regex + filters -> complete round-trip Exchange; --line/--uuid fetch (--line <hex>:<spec> pins a subagent); -c/--count-only/--siblings <SPEC>/--resolve-persisted
 subagent.rs        # subagent discovery/classification (3 shapes, journal excluded) + lifecycle/status + ParentSpawnIndex + build_topology (flat-on-disk -> nested tree)
-agents.rs          # `agents`: per-subagent lifecycle rows via build_topology + --kind/--since/--until/--by filters
+agents.rs          # `agents`: per-subagent lifecycle tree via build_topology + --kind/--since/--until/--order-by filters (always-tree; no flat mode)
 files.rs           # `files`: which files/dirs a session changed + Edit-before-Read boundary detection; each row carries Lnnnn
 bash_mutations.rs  # heuristic regex-free Bash file-mutation parser (cp/mv/rm/redirects); feeds files + recover
 recover.rs         # `recover`: file-content reconstruction (default raw final content, else fail-if-partial -> --salvage/--patches/--at/--coverage); --file @plan sigil; --files-from/--out-dir batch (one parse per transcript, many files; aho-corasick basename prefilter)

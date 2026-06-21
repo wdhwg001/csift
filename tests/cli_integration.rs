@@ -2276,24 +2276,24 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
         r#"{"agentType":"Explore","description":"child agent","toolUseId":"call_child"}"#,
     );
 
-    // JSON (flat): both agents listed; child carries parent_agent_id=parentaaa + depth 1,
-    // and recovers its trigger/description from the PARENT transcript's spawn (not main).
+    // JSON (always the per-session tree): the parent is a top-level agent (depth 0, root)
+    // and the child nests UNDER it (depth 1, parent_agent_id=parentaaa), recovering its
+    // trigger/description from the PARENT transcript's spawn (not main).
     let j = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let objs: Vec<serde_json::Value> = j
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).expect("ndjson"))
-        .collect();
-    let child = objs
-        .iter()
-        .find(|o| o["agent_id"] == "childbbb")
-        .expect("child node");
-    let parent = objs
+    let env: serde_json::Value =
+        serde_json::from_str(j.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let top_agents = env["agents"].as_array().expect("agents array");
+    let parent = top_agents
         .iter()
         .find(|o| o["agent_id"] == "parentaaa")
-        .expect("parent node");
+        .expect("parent node at top level");
+    let child = parent["children"]
+        .as_array()
+        .expect("parent has children")
+        .iter()
+        .find(|o| o["agent_id"] == "childbbb")
+        .expect("child node nested under parent");
     assert_eq!(
         child["parent_agent_id"], "parentaaa",
         "child links to parent: {child}"
@@ -2314,8 +2314,8 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
         "parent depth 0: {parent}"
     );
 
-    // Tree JSON: child nests UNDER parent in the agents[].children array.
-    let tj = h.run(&["agents", at(sess).as_str(), "--tree", "--format", "json"]);
+    // Tree JSON (always on): child nests UNDER parent in the agents[].children array.
+    let tj = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
     assert!(tj.success, "stderr: {}", tj.stderr);
     let tree: serde_json::Value = serde_json::from_str(tj.stdout.lines().next().unwrap()).unwrap();
     let agents = tree["agents"].as_array().expect("agents array");
@@ -2333,8 +2333,8 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
         "child is NOT also a top-level tree node: {tree}"
     );
 
-    // Tree TEXT: child indented one level deeper than parent.
-    let tt = h.run(&["agents", at(sess).as_str(), "--tree"]);
+    // Tree TEXT (always on): child indented one level deeper than parent.
+    let tt = h.run(&["agents", at(sess).as_str()]);
     assert!(tt.success, "stderr: {}", tt.stderr);
     let pidx = tt.stdout.find("parentaaa").expect("parent in tree text");
     let cidx = tt.stdout.find("childbbb").expect("child in tree text");
@@ -2371,15 +2371,14 @@ fn agents_text_lists_lifecycle_rows() {
 
 #[test]
 fn agents_text_returned_files_and_tree_render() {
-    // Exercise the TEXT-render branches for `--returned-message` / `--with-files` / `--tree`
-    // (the print_node `returned`/`files`/topology arms) and the one_line returned-message
-    // preview path. A node with no resolvable returned message renders `(unresolved)`; a
-    // node with no files renders `files (none)`.
+    // Exercise the TEXT-render branches for `--returned-message` / `--with-files` + the
+    // always-on tree topology (the print_node `returned`/`files`/workflow-run arms) and the
+    // one_line returned-message preview path. A node with no resolvable returned message
+    // renders `(unresolved)`; a node with no files renders `files (none)`.
     let h = populated_home();
     let out = h.run(&[
         "agents",
         at(SESS).as_str(),
-        "--tree",
         "--returned-message",
         "--with-files",
     ]);
@@ -2406,9 +2405,9 @@ fn agents_text_returned_files_and_tree_render() {
 
 #[test]
 fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
-    // `--kind builtin-task --format json` hits the BuiltinTask JSON-label arm; `--tree
-    // --format json` nests `children`; a flat multi-node text render hits the inter-node
-    // blank-line arm. All on the populated home (a builtin + a workflow subagent).
+    // `--kind builtin-task --format json` hits the BuiltinTask JSON-label arm; the always-on
+    // tree JSON nests `children`; a multi-node text render shows every node's lifecycle. All
+    // on the populated home (a builtin + a workflow subagent).
     let h = populated_home();
     let bt = h.run(&[
         "agents",
@@ -2424,23 +2423,24 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
         "builtin-task JSON label missing: {}",
         bt.stdout
     );
-    let tree = h.run(&["agents", at(SESS).as_str(), "--tree", "--format", "json"]);
+    let tree = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(tree.success, "stderr: {}", tree.stderr);
     assert!(
         tree.stdout.contains("children"),
         "tree JSON must nest children: {}",
         tree.stdout
     );
-    // Flat text render with BOTH subagents → the inter-node blank line fires.
-    let flat = h.run(&["agents", at(SESS).as_str()]);
-    assert!(flat.success && flat.stdout.matches("triggered").count() >= 2);
+    // Text render with BOTH subagents → both lifecycle blocks print.
+    let text = h.run(&["agents", at(SESS).as_str()]);
+    assert!(text.success && text.stdout.matches("triggered").count() >= 2);
 }
 
 #[test]
 fn agents_with_files_renders_changed_list_and_summary_json() {
     // A subagent that ACTUALLY changed a file → the `--with-files` text path renders the
-    // `files N changed` + per-file create/op tag lines (vs the `(none)` arm), and `--by
-    // start` exercises the start-axis label. Also covers files `--summary --format json`.
+    // `files N changed` + per-file create/op tag lines (vs the `(none)` arm), and
+    // `--order-by start` exercises the start-axis label. Also covers files `--summary
+    // --format json`.
     let h = Home::new();
     let sess = "33333333-4444-5555-6666-777777777777";
     h.write(
@@ -2463,7 +2463,13 @@ fn agents_with_files_renders_changed_list_and_summary_json() {
         &format!("-Users-x-w/{sess}/subagents/agent-fff999.meta.json"),
         r#"{"agentType":"executor","toolUseId":"tk"}"#,
     );
-    let out = h.run(&["agents", at(sess).as_str(), "--with-files", "--by", "start"]);
+    let out = h.run(&[
+        "agents",
+        at(sess).as_str(),
+        "--with-files",
+        "--order-by",
+        "start",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("changed") && out.stdout.contains("new.rs"),
@@ -2546,12 +2552,12 @@ fn agents_bad_hex_errors_with_discovery_guidance() {
 }
 
 #[test]
-fn agents_agent_with_tree_renders_single_node_not_whole_workflow() {
-    // `--agent <hex> --tree`: the single-node grab wins; the whole workflow tree is NOT
-    // dumped. bbb222 is in workflow wf_abc alongside no other agent here, but the grab must
-    // render bbb222 and NOT the WORKFLOW run header.
+fn agents_agent_grab_renders_single_node_not_whole_workflow() {
+    // `--agent <hex>`: the single-node grab renders JUST that node (a tree of one); the
+    // always-on whole-workflow tree is NOT dumped. bbb222 is in workflow wf_abc alongside no
+    // other agent here, but the grab must render bbb222 and NOT the WORKFLOW run header.
     let h = populated_home();
-    let out = h.run(&["agents", at(SESS).as_str(), "--agent", "bbb222", "--tree"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--agent", "bbb222"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("bbb222"),
@@ -2584,11 +2590,23 @@ fn agents_json_rows() {
     let h = populated_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
+    // The per-session tree envelope: gather every node's `kind` from the top-level
+    // `agents[]` plus each workflow run's nested `children[]`.
     let mut kinds = Vec::new();
-    for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
-        let v: serde_json::Value = serde_json::from_str(line).expect("valid json");
+    let mut push_kind = |v: &serde_json::Value| {
         if let Some(k) = v.get("kind").and_then(|k| k.as_str()) {
             kinds.push(k.to_string());
+        }
+    };
+    for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
+        let env: serde_json::Value = serde_json::from_str(line).expect("valid json");
+        for n in env["agents"].as_array().into_iter().flatten() {
+            push_kind(n);
+        }
+        for run in env["workflow_runs"].as_array().into_iter().flatten() {
+            for c in run["children"].as_array().into_iter().flatten() {
+                push_kind(c);
+            }
         }
     }
     assert!(kinds.iter().any(|k| k == "builtin-task"));
@@ -2613,7 +2631,7 @@ fn agents_by_completion_axis_and_window() {
         at(SESS).as_str(),
         "--since",
         "2026-06-07T06:00:30Z",
-        "--by",
+        "--order-by",
         "completion",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -3124,11 +3142,13 @@ fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let builtin = out
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str::<serde_json::Value>(l).expect("json"))
+    // The per-session tree envelope: the built-in topo11 is a top-level `agents[]` node.
+    let env: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let builtin = env["agents"]
+        .as_array()
+        .expect("agents array")
+        .iter()
         .find(|v| v.get("agent_id").and_then(|a| a.as_str()) == Some("topo11"))
         .expect("the built-in topo11 node");
     assert_eq!(builtin["trigger_utc"], "2026-06-07T04:59:58.000Z");
@@ -3141,7 +3161,7 @@ fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
 #[test]
 fn agents_default_axis_is_trigger_not_start() {
     // A bound BETWEEN the trigger (04:59:58) and the start (05:00:00): the DEFAULT
-    // (trigger) axis EXCLUDES the built-in (triggered before the bound); `--by start`
+    // (trigger) axis EXCLUDES the built-in (triggered before the bound); `--order-by start`
     // INCLUDES it (started after the bound). Proves the default flipped to trigger.
     let h = topology_home();
     let default_axis = h.run(&[
@@ -3166,7 +3186,7 @@ fn agents_default_axis_is_trigger_not_start() {
         at(SESS).as_str(),
         "--since",
         "2026-06-07T04:59:59Z",
-        "--by",
+        "--order-by",
         "start",
         "--kind",
         "builtin-task",
@@ -3176,7 +3196,7 @@ fn agents_default_axis_is_trigger_not_start() {
     assert!(by_start.success, "stderr: {}", by_start.stderr);
     assert!(
         by_start.stdout.contains("topo11"),
-        "--by start must INCLUDE topo11 started after the bound: {}",
+        "--order-by start must INCLUDE topo11 started after the bound: {}",
         by_start.stdout
     );
     // The footer reflects the default axis.
@@ -3195,13 +3215,13 @@ fn agents_returned_message_three_way_resolution() {
         "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let nodes: Vec<serde_json::Value> = out
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).expect("json"))
-        .collect();
-    let builtin = nodes
+    // The per-session tree envelope: the built-in topo11 is a top-level `agents[]` node; the
+    // workflow topo22 nests under its run's `children[]`.
+    let env: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let builtin = env["agents"]
+        .as_array()
+        .expect("agents array")
         .iter()
         .find(|v| v["agent_id"] == "topo11")
         .expect("topo11");
@@ -3211,8 +3231,11 @@ fn agents_returned_message_three_way_resolution() {
         "SYNC-RETURN: the built-in carry answer"
     );
     assert_eq!(builtin["returned_message_source"], "sync-tool-result");
-    let wf = nodes
+    let wf = env["workflow_runs"]
+        .as_array()
+        .expect("workflow_runs array")
         .iter()
+        .flat_map(|r| r["children"].as_array().into_iter().flatten())
         .find(|v| v["agent_id"] == "topo22")
         .expect("topo22");
     // WORKFLOW → journal result payload.
@@ -3223,15 +3246,20 @@ fn agents_returned_message_three_way_resolution() {
 #[test]
 fn agents_returned_message_omitted_by_default() {
     // Without --returned-message (and without --agent), the returned message is NOT in
-    // the JSON — keeping a plain listing compact.
+    // the JSON — keeping a plain listing compact. Check a NODE inside the tree envelope.
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let first: serde_json::Value =
+    let env: serde_json::Value =
         serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let node = env["agents"]
+        .as_array()
+        .expect("agents array")
+        .first()
+        .expect("at least one top-level node");
     assert!(
-        first.get("returned_message").is_none(),
-        "returned_message must be omitted by default: {first}"
+        node.get("returned_message").is_none(),
+        "returned_message must be omitted by default: {node}"
     );
 }
 
@@ -3270,7 +3298,7 @@ fn agents_single_agent_grab_includes_returned_and_files() {
 #[test]
 fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     let h = topology_home();
-    let out = h.run(&["agents", at(SESS).as_str(), "--tree", "--format", "json"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // One object per session: workflow_runs[] (each with children[]) + agents[].
     let v: serde_json::Value =
@@ -3293,7 +3321,7 @@ fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     assert!(builtins.iter().any(|a| a["agent_id"] == "topo11"));
 
     // Text tree shows the WORKFLOW header with its run id + the nested agent.
-    let text = h.run(&["agents", at(SESS).as_str(), "--tree"]);
+    let text = h.run(&["agents", at(SESS).as_str()]);
     assert!(
         text.stdout.contains("WORKFLOW  wf_topo"),
         "got: {}",
@@ -3334,24 +3362,13 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     );
     // No `{ENC}/{SESS}/workflows/wf_orphan.json` manifest is written on purpose.
 
-    // FLAT view sees every agent (discovery is lossless): topo11 + topo22 + topo33.
-    let flat = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
-    assert!(flat.success, "stderr: {}", flat.stderr);
-    let flat_ids: Vec<String> = flat
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str::<serde_json::Value>(l).expect("json"))
-        .map(|v| v["agent_id"].as_str().unwrap().to_string())
-        .collect();
-    assert!(
-        flat_ids.iter().any(|id| id == "topo33"),
-        "flat view must include the manifest-less workflow agent: {flat_ids:?}"
-    );
+    // Discovery is lossless: the session has these three agents (topo11 built-in, topo22 in
+    // the manifested run, topo33 in the manifest-less wf_orphan). The tree must surface ALL.
+    let expected_ids = ["topo11", "topo22", "topo33"];
 
-    // TREE view must also surface topo33 — under a SYNTHESIZED run for wf_orphan whose
+    // TREE view (always on) must surface topo33 — under a SYNTHESIZED run for wf_orphan whose
     // run-level fields are null (no manifest) but whose children carry the agent.
-    let tree = h.run(&["agents", at(SESS).as_str(), "--tree", "--format", "json"]);
+    let tree = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(tree.success, "stderr: {}", tree.stderr);
     let v: serde_json::Value =
         serde_json::from_str(tree.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
@@ -3374,7 +3391,7 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     );
     assert_eq!(children[0]["agent_id"], "topo33");
 
-    // No agent is lost: every flat agent appears somewhere in the tree.
+    // No agent is lost: every discovered agent appears somewhere in the tree.
     let mut tree_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for a in v["agents"].as_array().unwrap() {
         tree_ids.insert(a["agent_id"].as_str().unwrap().to_string());
@@ -3384,15 +3401,15 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
             tree_ids.insert(c["agent_id"].as_str().unwrap().to_string());
         }
     }
-    for id in &flat_ids {
+    for id in expected_ids {
         assert!(
             tree_ids.contains(id),
-            "tree dropped agent {id} present in the flat view (tree={tree_ids:?})"
+            "tree dropped agent {id} (tree={tree_ids:?})"
         );
     }
 
     // Text tree shows the orphan run header + the agent (not silently omitted).
-    let text = h.run(&["agents", at(SESS).as_str(), "--tree"]);
+    let text = h.run(&["agents", at(SESS).as_str()]);
     assert!(
         text.stdout.contains("WORKFLOW  wf_orphan"),
         "text tree must show the stand-in run header: {}",

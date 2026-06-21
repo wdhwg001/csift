@@ -900,10 +900,12 @@ pub enum AgentKindFilter {
         terminates cleanly), else `running`/`unknown`.\n\n\
         `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
         timezone) filter to subagents whose TRIGGER time (the parent tool_use ts — the \
-        true spawn instant) falls in the window by default; `--by start` uses the \
-        transcript's first-record ts, `--by completion` the last.\n\n\
-        TOPOLOGY: `--tree` renders parent→child structure (workflow runs as parent nodes \
-        of their agents). `--agent <hex>` grabs ONE subagent with its returned message; \
+        true spawn instant) falls in the window by default; `--order-by start` uses the \
+        transcript's first-record ts, `--order-by completion` the last.\n\n\
+        TOPOLOGY: the output is ALWAYS the parent→child tree — workflow runs as parent \
+        nodes of their agents, and a nested sub-subagent under its spawning agent (text \
+        indents by depth; JSON nests `children`). Count by traversing the rendered tree / \
+        nested JSON. `--agent <hex>` grabs ONE subagent with its returned message; \
         `--returned-message` adds the 3-way-resolved returned message to every row; \
         `--with-files` attaches each node's files-changed list.",
     after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
@@ -916,29 +918,33 @@ pub enum AgentKindFilter {
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
         status, never listed). Status is `completed` when a workflow journal carries a \
         `result` event (or the transcript terminates cleanly), else `running`/`unknown`. \
-        `--tree` renders the parent→child topology (workflow runs as parents of their \
-        agents). `--agent <hex>` grabs ONE subagent by its bare-hex id (full node + returned \
-        message); it is a DIRECT lookup that IGNORES --since/--until/--by/--kind/--tree, and \
+        The output is ALWAYS the parent→child topology tree (workflow runs as parents of \
+        their agents; a nested sub-subagent under its spawning agent) — there is no flat \
+        mode; count by traversing the tree / nested JSON. `--agent <hex>` grabs ONE subagent \
+        by its bare-hex id (full node + returned \
+        message); it is a DIRECT lookup that IGNORES --since/--until/--order-by/--kind and \
+        renders just that node (a tree of one), and \
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
         `--kind` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
         axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
         by `turns`/`search -t user` — they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
-          csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagents\n  \
+          csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagent tree\n  \
           csift agents .                                                   # every session under this project\n  \
           csift agents . --kind workflow                                   # only workflow-shape agents (NOT the automation kind)\n  \
           csift agents @<uuid> --since 2h                                  # subagents TRIGGERED in the last 2h\n  \
-          csift agents @<uuid> --since 6h --by completion                  # COMPLETED in the last 6h\n  \
-          csift agents @<uuid> --since 2026-06-01T09:00:00Z --by completion  # COMPLETED since an ISO bound\n  \
+          csift agents @<uuid> --since 6h --order-by completion            # COMPLETED in the last 6h\n  \
+          csift agents @<uuid> --order-by completion                       # order/window on the completion axis\n  \
+          csift agents @<uuid> --since 2026-06-01T09:00:00Z --order-by completion  # COMPLETED since an ISO bound\n  \
           csift agents @<uuid>                                             # discover ids, then grab one:\n  \
-          csift agents --agent <hex>                                       #   grab ONE subagent (direct lookup; ignores time/kind/tree)\n  \
-          csift agents . --tree                                            # parent→child topology (workflow runs as parents of their agents)\n  \
+          csift agents --agent <hex>                                       #   grab ONE subagent (direct lookup; ignores time/kind)\n  \
           csift agents @<uuid> --with-files                                # each node + its files-changed list\n  \
           csift agents @<uuid> --returned-message                          # add the 3-way-resolved returned message to every row\n  \
-          csift agents . --format json                                     # machine-readable lifecycle rows\n\n\
+          csift agents . --format json                                     # machine-readable per-session tree\n\n\
         JSON SCHEMA (per --format json)\n  \
-          One object per subagent node (under `--tree`, children nest in a `children` \
-        array): {agent_id, agent_type, kind, status, parent_session_id, parent_agent_id, \
+          One object PER SESSION: {session_id, workflow_runs:[run], agents:[node]} — the \
+        nested tree shape (always). A node's sub-subagents nest under its `children` \
+        array: {agent_id, agent_type, kind, status, parent_session_id, parent_agent_id, \
         workflow_id, depth, description, spawn_tool, spawn_tool_use_id, trigger_utc, \
         trigger_local, started_utc, started_local, completed_utc, completed_local, duration, \
         skipped_lines}. `agent_type` is the semantic agent ROLE / subagent-type string (e.g. \
@@ -951,7 +957,9 @@ pub enum AgentKindFilter {
         `--with-files` adds a \
         `files_changed` array; `--returned-message` \
         (implied by a single `--agent`) adds `returned_message` + `returned_message_source`. \
-        Under `--tree`, a workflow RUN parent object is {run_id, task_id, workflow_name, \
+        A single `--agent <hex>` grab is the ONE exception to the per-session envelope: it \
+        emits just the matched node as a bare object (no enclosing {session_id, …} wrapper). \
+        A workflow RUN parent object is {run_id, task_id, workflow_name, \
         status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, \
         started_utc, started_local, children}. Every `_utc` field carries a paired `_local` \
         (system-local ISO). The malformed-line count rides on each node's `skipped_lines`. \
@@ -995,7 +1003,7 @@ pub struct AgentsArgs {
     /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`); an ISO8601 datetime
     /// (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL MIDNIGHT. Filters by
-    /// TRIGGER time by default (`--by start|completion` switches axis).
+    /// TRIGGER time by default (`--order-by start|completion` switches axis).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
@@ -1003,26 +1011,23 @@ pub struct AgentsArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Which timestamp `--since`/`--until` filter on: `trigger` (DEFAULT — the true
-    /// instant the parent spawned the subagent), `start` (the subagent's first transcript
-    /// record, which LAGS the trigger by seconds), or `completion`.
-    #[arg(long = "by", value_enum, default_value_t = AgentTimeAxis::Trigger)]
-    pub by: AgentTimeAxis,
-
-    /// Render the parent→child topology TREE (workflow runs as parent nodes of their
-    /// agents) instead of a flat list. JSON nests `children`; text indents by depth.
-    /// IGNORED when `--agent <hex>` is set — a single-node grab takes precedence (so
-    /// `--agent <hex> --tree` renders just that node, not the whole workflow).
-    #[arg(long)]
-    pub tree: bool,
+    /// The ORDERING axis: which timestamp sorts the tree AND bounds `--since`/`--until`.
+    /// `trigger` (DEFAULT — the true parent-tool_use spawn instant), `start` (the
+    /// subagent's first transcript record / child-head ts, which LAGS the trigger by
+    /// seconds), or `completion` (the last record). Named `--order-by` (not `--by`, which
+    /// reads like a projection) because it names the sort axis. (Sibling note: `files` uses
+    /// `--by` for a PROJECTION — a different meaning on a different subcommand.)
+    #[arg(long = "order-by", value_enum, default_value_t = AgentTimeAxis::Trigger)]
+    pub order_by: AgentTimeAxis,
 
     /// Grab ONE subagent by its bare-hex id: prints its full node incl. the returned
     /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
-    /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--by` and `--kind` (a
-    /// known id resolves regardless of when it ran or its shape), and `--tree` is ignored
-    /// (just the node is rendered). If the hex matches nothing in scope, it is a hard ERROR
-    /// with discovery guidance — not the ambiguous `no subagents found`. Discover ids first
-    /// with `csift agents @<uuid>` (the `agent_id` column / JSON field).
+    /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--order-by` and `--kind`
+    /// (a known id resolves regardless of when it ran or its shape), and just the matched
+    /// node is rendered (a tree of one — not the whole workflow tree). If the hex matches
+    /// nothing in scope, it is a hard ERROR with discovery guidance — not the ambiguous
+    /// `no subagents found`. Discover ids first with `csift agents @<uuid>` (the `agent_id`
+    /// column / JSON field).
     #[arg(long, value_name = "HEX")]
     pub agent: Option<String>,
 
@@ -1080,7 +1085,8 @@ fn subagents_only_misplaced_error(passed: bool) -> Option<&'static str> {
     }
 }
 
-/// Which lifecycle timestamp the `agents` time window filters on.
+/// Which lifecycle timestamp the `agents` ordering axis uses (`--order-by`) — it sorts the
+/// tree AND bounds the `--since`/`--until` window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum AgentTimeAxis {
     /// Filter on the TRUE TRIGGER instant — the parent `Task`/`Agent` tool_use timestamp
@@ -2764,7 +2770,7 @@ mod tests {
             at.as_str(),
             "--since",
             "2h",
-            "--by",
+            "--order-by",
             "completion",
         ])
         .unwrap();
@@ -2773,10 +2779,20 @@ mod tests {
                 assert_eq!(a.paths.len(), 1);
                 assert_eq!(a.paths[0].to_string_lossy(), at);
                 assert_eq!(a.since.as_deref(), Some("2h"));
-                assert_eq!(a.by, AgentTimeAxis::Completion);
+                assert_eq!(a.order_by, AgentTimeAxis::Completion);
             }
             _ => panic!("expected agents"),
         }
+    }
+
+    #[test]
+    fn agents_old_by_and_tree_flags_are_gone() {
+        // `--by` was renamed to `--order-by`, and `--tree` was removed (tree is always on);
+        // both now error as unknown arguments.
+        let by = parse(&["csift", "agents", ".", "--by", "trigger"]);
+        assert!(by.is_err(), "--by must be an unknown argument now");
+        let tree = parse(&["csift", "agents", ".", "--tree"]);
+        assert!(tree.is_err(), "--tree must be an unknown argument now");
     }
 
     #[test]
@@ -2786,11 +2802,10 @@ mod tests {
             Command::Agents(a) => {
                 assert_eq!(a.kinds, vec![AgentKindFilter::Workflow]);
                 assert_eq!(
-                    a.by,
+                    a.order_by,
                     AgentTimeAxis::Trigger,
                     "default axis is trigger (the true spawn instant)"
                 );
-                assert!(!a.tree);
                 assert!(a.agent.is_none());
                 assert!(!a.with_files);
                 assert!(!a.returned_message);
