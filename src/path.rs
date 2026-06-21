@@ -600,23 +600,43 @@ pub fn resolve_trap_who(marker: &str) -> Result<Vec<WhoNode>> {
     }
 }
 
+/// Markers that appear as the DOCUMENTED EXAMPLE in the SKILL / `--help` / SPEC. Because the doc
+/// text prints them right next to the literal `csift`, any command that quotes or greps that doc
+/// satisfies the marker-AND-`csift` scan; worse, every agent that lazily copies the example uses
+/// the SAME token, so it can never resolve to ONE transcript (it self-collides into ambiguity).
+/// They are RESERVED — [`validate_trap_marker`] always refuses them, forcing a fresh hand-invented
+/// marker. Keep this in lockstep with the example literal shown in every doc.
+const RESERVED_EXAMPLE_MARKERS: &[&str] = &["JollyShinyBrook4283"];
+
 /// Enforce the STRICT `@trap` marker grammar, rejecting every lazy shortcut at the source so the
 /// only way to satisfy it is to invent a fresh, imaginative token by hand. The marker must be
 /// EXACTLY 3 CamelCase words (each an uppercase letter + at least two lowercase letters — no single
 /// letters, no ALLCAPS acronyms like `HTML` / `USB`) followed by EXACTLY four digits, and those four
 /// digits must NOT form a trivial run (all-equal / consecutive / simple odd / simple even — e.g.
-/// `0000` / `1234` / `9876` / `1357` / `2468`). Good: `JollyShinyBrook4283`. The strictness IS
+/// `0000` / `1234` / `9876` / `1357` / `2468`). The grammar-valid SHAPE looks like
+/// `JollyShinyBrook4283`, but that exact literal is the RESERVED doc example (see
+/// `RESERVED_EXAMPLE_MARKERS`) and is always refused, so nobody ships a copy-pasted token. The
+/// strictness IS
 /// the point: it makes a hand-invented, imaginative, CONTEXT-INDEPENDENT literary token the path of
 /// least resistance and a scripted or boilerplate token fail loudly.
 fn validate_trap_marker(marker: &str) -> Result<()> {
     let guidance = "@trap needs a marker you INVENT one-shot, right now, by hand: EXACTLY 3 \
-                    imaginative, CONTEXT-INDEPENDENT CamelCase words + 4 random digits, e.g. \
-                    `@trap:JollyShinyBrook4283`. Put it VERBATIM in this csift command (no shell \
-                    variable / concatenation), and never generate it with a script. Rejected: not \
-                    exactly 3 words, single-letter or ALLCAPS \"words\", missing or !=4 trailing \
-                    digits, or trivial digits (1111 / 1234 / 9876 / 1357 / 2468 ...).";
+                    imaginative, CONTEXT-INDEPENDENT CamelCase words (each 1 uppercase + >=2 \
+                    lowercase) + 4 non-trivial digits. The shape looks like `JollyShinyBrook4283`, \
+                    but that literal is the RESERVED doc example and is itself refused — pick your \
+                    OWN. Put it VERBATIM in this csift command (no shell variable / concatenation), \
+                    and never generate it with a script. Rejected: not exactly 3 words, \
+                    single-letter or ALLCAPS \"words\", missing or !=4 trailing digits, trivial \
+                    digits (1111 / 1234 / 9876 / 1357 / 2468 ...), or the reserved doc example.";
     if marker.is_empty() {
         bail!("{guidance}");
+    }
+    if RESERVED_EXAMPLE_MARKERS.contains(&marker) {
+        bail!(
+            "@trap: marker `{marker}` is the RESERVED documentation example — the SKILL / --help / \
+             SPEC print it next to `csift`, so quoting the doc self-matches it and every agent that \
+             copies it clashes into ambiguity. csift always refuses it. {guidance}"
+        );
     }
     if !marker.is_ascii() || marker.len() < 13 {
         bail!("@trap: marker `{marker}` is malformed. {guidance}");
@@ -1473,7 +1493,7 @@ mod tests {
     #[test]
     fn pins_single_session_covers_at_tokens_and_jsonl() {
         assert!(pins_single_session("@main"));
-        assert!(pins_single_session("@trap:JollyShinyBrook4283"));
+        assert!(pins_single_session("@trap:CrimsonWillowFen5180"));
         assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
         assert!(pins_single_session("@ae24045bd6d4bdaff"));
         assert!(pins_single_session("@13d9645a")); // uuid-prefix
@@ -1500,7 +1520,7 @@ mod tests {
     fn validate_trap_marker_enforces_the_strict_grammar() {
         // Accepted: EXACTLY 3 imaginative CamelCase words + 4 non-trivial digits.
         for ok in [
-            "JollyShinyBrook4283",
+            "CrimsonWillowFen5180",
             "MossyLanternCove6024",
             "GildedHeronVale7391",
         ] {
@@ -1524,6 +1544,22 @@ mod tests {
             "DeepRiverStone2468",       // trivial: even run (+2)
         ] {
             assert!(validate_trap_marker(bad).is_err(), "should reject {bad:?}");
+        }
+    }
+
+    #[test]
+    fn validate_trap_marker_refuses_the_reserved_doc_example() {
+        // The literal printed in the SKILL / --help / SPEC is reserved: the doc shows it next to
+        // `csift` (so quoting the doc self-matches) and every copy-paste collides, so csift refuses
+        // it even though it passes the grammar — forcing a fresh hand-invented marker.
+        for reserved in RESERVED_EXAMPLE_MARKERS {
+            let err = validate_trap_marker(reserved)
+                .expect_err("the documented example must be refused")
+                .to_string();
+            assert!(
+                err.contains("RESERVED") && err.to_lowercase().contains("example"),
+                "reserved-marker error must explain it is the reserved doc example: {err}"
+            );
         }
     }
 

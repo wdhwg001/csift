@@ -338,7 +338,9 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         scopes to that agent's subtree — or to the session itself, if you are the main thread. \
         DISCIPLINE (enforced): invent the marker ONE-SHOT, by you, right now — an imaginative, \
         literary, random, CONTEXT-INDEPENDENT token of EXACTLY 3 CamelCase words + 4 random digits, \
-        e.g. `@trap:JollyShinyBrook4283`. NEVER generate it with a script (a generator would be \
+        shaped like `@trap:JollyShinyBrook4283` — but that exact literal is the RESERVED doc \
+        example, refused by csift (a copied example self-collides into ambiguity), so invent your \
+        OWN. NEVER generate it with a script (a generator would be \
         another `csift`-ish command carrying the marker → ambiguity); never build it from a \
         shell variable or string concatenation (it must appear VERBATIM in the recorded \
         command); never reuse a previous one. csift REJECTS lazy markers: not EXACTLY 3 words, \
@@ -2102,7 +2104,7 @@ impl TurnsArgs {
         EXAMPLES\n  \
           csift whoami                  # the calling session's uuid + its jsonl path\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
-          csift whoami @trap:JollyShinyBrook4283   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root), env-independent\n  \
+          csift whoami @trap:<invent-a-fresh-3word-4digit-marker>   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root); the marker is YOURS to invent, never a copied literal\n  \
           # FALLBACK (no @trap) — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
           csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json\n  \
           # …then scope the whole conversation with that parent uuid:\n  \
@@ -2144,10 +2146,10 @@ mod tests {
     fn whoami_accepts_trap_and_main_self_target_else_none() {
         // `@trap:<marker>` and `@main` land in whoami's optional positional; bare whoami = None.
         let cli =
-            parse(&["csift", "whoami", "@trap:JollyShinyBrook4283"]).expect("whoami @trap parses");
+            parse(&["csift", "whoami", "@trap:CrimsonWillowFen5180"]).expect("whoami @trap parses");
         match cli.command {
             Command::Whoami(a) => {
-                assert_eq!(a.self_target.as_deref(), Some("@trap:JollyShinyBrook4283"));
+                assert_eq!(a.self_target.as_deref(), Some("@trap:CrimsonWillowFen5180"));
             }
             _ => panic!("expected whoami"),
         }
