@@ -621,8 +621,8 @@ impl ListArgs {
         order) is mutually exclusive with `--since`/`--until`. Time bounds accept \
         ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
         `3d`, `90m`, `45s`, `1w`) meaning \"that long ago\" in the system local timezone.\n\n\
-        `--max-count` caps emitted exchanges but reports the dropped count — there is \
-        NO silent truncation anywhere.",
+        `--max-count` caps emitted exchanges but reports the dropped count (default: \
+        unlimited — no cap) — there is NO silent truncation anywhere.",
     after_help = "EXAMPLES\n  \
           csift search \"carry\"                                  # all projects, smart-case\n  \
           csift search \"carry\" .                                # this project (positional PATH, like every sibling)\n  \
@@ -631,22 +631,28 @@ impl ListArgs {
           csift search \"tail.read\" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
           csift search \"panic\" -t agent -t thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
-          csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c)\n  \
-          csift search \"refactor\" -l                            # LIST sessions that match (ripgrep -l)\n  \
-          csift search \"let's chat\" -t user --siblings          # the match WITH the agent's reply (sibling records)\n  \
-          csift search \"let's chat\" -t user --sibling-category agent  # …only the agent-side sibling\n  \
-          csift search \"let's chat\" -t user --sibling-category agent --full  # …and READ that reply end-to-end\n\n\
-        SIBLINGS (`--siblings` / `--sibling-category`)\n  \
-          A match renders only the records that MATCHED. `--siblings` additionally renders the \
-        OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
+          csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c idiom)\n  \
+          csift search \"\" @<uuid> --no-subagents --line 88     # fetch a record by line (FULL)\n  \
+          csift search \"\" @<parent> --line 7f3c9e21:88,495-500 # …in a SUBAGENT transcript (hex-prefixed --line)\n  \
+          csift search \"let's chat\" -t user --siblings 3        # the match WITH up to 3 sibling records\n  \
+          csift search \"let's chat\" -t user --siblings agent:1  # …only the agent-side sibling (cap 1)\n  \
+          csift search \"let's chat\" -t user --siblings agent:1 --full  # …and READ that reply end-to-end\n\n\
+        SIBLINGS (`--siblings <SPEC>`)\n  \
+          A match renders only the records that MATCHED. `--siblings <SPEC>` additionally renders \
+        the OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
         so a matched user question surfaces WITH the agent's reply — no need to drop to the raw \
-        jsonl. Default sibling set = every category EXCEPT the match `-t` (or ALL when no `-t`); \
-        `--sibling-category <cat>` (repeatable) narrows it. A record that itself matched is \
-        never duplicated as a sibling.\n\n\
-        COUNT / LIST (`-c` / `-l`)\n  \
-          `-c`/`--count` prints just the integer match total (ripgrep `-c`); `-l`/\
-        `--files-with-matches` prints just the distinct matching session ids, one per line \
-        (ripgrep `-l`). Both honor every filter; `-l` wins when both are passed.\n\n\
+        jsonl. Each SPEC token (repeatable / comma-joined) is a CAP: a bare `N` caps the TOTAL \
+        siblings (any category) at N; a `<cat>:N` (cat ∈ thinking|user|tool|tool-response|agent, \
+        ≥1) caps THAT category at N. When both forms are given, each typed cap governs its own \
+        category and the bare `N` caps every OTHER category; a category with no typed spec and no \
+        bare-`N` fallback is not shown. A record that itself matched is never duplicated as a \
+        sibling.\n\n\
+        COUNT (`-c` / `--count-only`)\n  \
+          `-c`/`--count-only` prints just the integer match total (ripgrep `-c`), honoring every \
+        filter. That total is ALSO always in the normal output's footer (alongside the \
+        distinct-session total); `--count-only` just isolates that ONE integer for a pipe. To \
+        list WHICH sessions matched, pipe `--format json` through \
+        `jq -r .session_id | sort -u`.\n\n\
         REGEX DIALECT — linear-time (RE2-class)\n  \
           The pattern is the Rust `regex` crate (regex::bytes), which GUARANTEES \
         linear-time matching in the input length: NO catastrophic backtracking, ever.\n  \
@@ -775,46 +781,35 @@ pub struct SearchArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Cap emitted exchanges. NO silent truncation — the drop count is reported.
+    /// Cap emitted exchanges (default: unlimited — no cap). NO silent truncation — the drop
+    /// count is reported.
     #[arg(long, value_name = "N")]
     pub max_count: Option<usize>,
 
     /// Print ONLY the total number of matching exchanges (one integer) — the ripgrep
     /// `-c` idiom for "how many times X?". Honors every filter (`-t`, time window,
     /// session/path scope) and reports the TRUE total even if `--max-count` would cap
-    /// the listing. With `--format json`, prints `{"matched":N}` instead. Mutually exclusive
-    /// with `-l`. (You rarely need it: the normal output's footer ALWAYS carries this same
-    /// match total plus the distinct-session total — `-c` just isolates it for a pipe.)
-    #[arg(long, short = 'c')]
-    pub count: bool,
-
-    /// List ONLY the distinct sessions that contain ≥1 match, one id per line — the
-    /// ripgrep `-l`/`--files-with-matches` idiom ("WHICH sessions mention X?"). Prints
-    /// each transcript's own id (a re-feedable top-level session uuid, or a bare
-    /// SUBAGENT hex annotated with its `parent <uuid>`); with `--format json`, one
-    /// `{session_id,is_subagent,parent_session_id}` object per line. Honors every
-    /// filter and is unaffected by `--max-count`. Mutually exclusive with `-c` (each is a
-    /// "return ONLY this" mode); the match total AND the session total are BOTH already in the
-    /// normal output's footer, so you only reach for `-l`/`-c` to isolate one for a pipe.
-    #[arg(long = "files-with-matches", short = 'l')]
-    pub files_with_matches: bool,
+    /// the listing. With `--format json`, prints `{"matched":N}` instead. (You rarely need
+    /// it: the normal output's footer ALWAYS carries this same match total plus the
+    /// distinct-session total — `--count-only` just isolates that ONE integer for a pipe,
+    /// hence "only".)
+    #[arg(long = "count-only", short = 'c')]
+    pub count_only: bool,
 
     /// Also render the SIBLING records of every matched turn — the rest of the
     /// back-and-forth, not only the matched line — so a matched USER question surfaces
-    /// WITH the agent's reply (answers "I said X, what did you say back?"). By default
-    /// the siblings shown are every category EXCEPT the match `-t` categories (so a
-    /// `-t user` match shows its non-user siblings); narrow them with
-    /// `--sibling-category`. A record that itself matched is never repeated as a
-    /// sibling. No effect under `-c`/`-l`.
-    #[arg(long)]
-    pub siblings: bool,
-
-    /// Restrict `--siblings` rendering to these categories (repeatable, same value set
-    /// as `-t`: thinking|user|tool|tool-response|agent). Implies `--siblings`. Default
-    /// (when `--siblings` is set without this) = every category except the match `-t`
-    /// set, or ALL categories when no `-t` was given.
-    #[arg(long = "sibling-category", value_enum)]
-    pub sibling_categories: Vec<Category>,
+    /// WITH the agent's reply (answers "I said X, what did you say back?"). Repeatable /
+    /// comma-joined SPEC tokens turn sibling rendering ON and CAP how many show:
+    /// a bare `N` caps the TOTAL siblings (any category) at N; a `<category>:N`
+    /// (category ∈ thinking|user|tool|tool-response|agent, the same set as `-t`) caps
+    /// THAT category at N (must be ≥1). Mix them — e.g. `--siblings tool:1 --siblings
+    /// thinking:2` or `--siblings 3`. When both a bare `N` and typed `<cat>:N` specs are
+    /// given, each typed cap governs its own category and the bare `N` caps every OTHER
+    /// category (the rest); a category with no typed spec and no bare-`N` fallback is NOT
+    /// shown. A record that itself matched is never repeated as a sibling. No effect under
+    /// `--count-only`.
+    #[arg(long, value_name = "SPEC", value_delimiter = ',')]
+    pub siblings: Vec<String>,
 
     /// Emit each matched (and `--siblings`) record's FULL text instead of the ~400-char
     /// excerpt — so you can READ a found message end-to-end (e.g. the question at the tail
@@ -829,8 +824,11 @@ pub struct SearchArgs {
     /// `Read`-ing the raw jsonl, built for BATCH. Repeatable AND comma-delimited, each token
     /// `N` or `A-B` (inclusive, ascending): `--line 87,495-500,992`. Addressed records render
     /// FULL. Lines are per-file, so `--line` needs the scope to pin a SINGLE transcript
-    /// (`@<uuid>` [`--no-subagents`], or `@<uuid> --subagent <hex>`). A range
-    /// CLAMPS to the file; an EXPLICIT line that resolves to nothing is reported as `unresolved`.
+    /// (`@<uuid>` [`--no-subagents`]); to address a SUBAGENT transcript, prefix the FIRST token
+    /// with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500` → subagent `7f3c9e21`,
+    /// lines 88,495-500). All hex-bearing tokens must name the SAME transcript (lines address
+    /// ONE file). A range CLAMPS to the file; an EXPLICIT line that resolves to nothing is
+    /// reported as `unresolved`.
     #[arg(long, value_name = "SPEC", value_delimiter = ',')]
     pub line: Vec<String>,
 
@@ -840,14 +838,6 @@ pub struct SearchArgs {
     /// to nothing is reported as `unresolved`.
     #[arg(long, value_name = "UUID", value_delimiter = ',')]
     pub uuid: Vec<String>,
-
-    /// SCOPE the search to ONE subagent transcript by its bare hex id (as shown by `csift
-    /// agents`): `@<parent> --subagent <hex>` searches only that subagent. Fail-CLOSED
-    /// — an unmatched hex is an error, never a silent widen to the whole corpus. It ALSO pins
-    /// the single transcript that `--line` addressing needs (`@<parent> --subagent
-    /// <hex> --line N`); without `--subagent`, `--line` addresses the top-level transcript.
-    #[arg(long, value_name = "HEX")]
-    pub subagent: Option<String>,
 
     /// Resolve `<persisted-output>` pointers to their `tool-results/<id>.txt` file.
     #[arg(long)]

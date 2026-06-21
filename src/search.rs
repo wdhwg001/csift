@@ -312,15 +312,47 @@ impl AddressSet {
     }
 }
 
-/// Parse `--line` tokens (already comma-split by clap) into ordered `(line, from_range)`
-/// addresses. `N` → one EXPLICIT line; `A-B` → an ascending inclusive RANGE (range members are
-/// non-explicit, so a miss inside a range is silent, not `unresolved`). Duplicates collapse to
-/// their first occurrence.
-fn parse_line_specs(tokens: &[String]) -> Result<Vec<(usize, bool)>> {
+/// An optional single subagent hex (parsed from a `--line <hex>:<spec>` prefix) plus the
+/// ordered `(line, from_range)` addresses.
+type ParsedLineSpecs = (Option<String>, Vec<(usize, bool)>);
+
+/// Parse `--line` tokens (already comma-split by clap) into an OPTIONAL single subagent hex
+/// prefix + ordered `(line, from_range)` addresses. A token carrying a `:` pins a SUBAGENT
+/// transcript: the part before the colon MUST be a bare subagent hex (as `csift agents` prints),
+/// the part after is the usual `N` / `A-B` spec. Every hex-bearing token must name the SAME hex
+/// (lines address ONE transcript) — a second, different hex is a hard error. A bare token
+/// (no colon) is a top-level line spec. `N` → one EXPLICIT line; `A-B` → an ascending inclusive
+/// RANGE (range members are non-explicit, so a miss inside a range is silent, not `unresolved`).
+/// Duplicates collapse to their first occurrence.
+fn parse_line_specs(tokens: &[String]) -> Result<ParsedLineSpecs> {
     let mut out: Vec<(usize, bool)> = Vec::new();
     let mut seen: BTreeSet<usize> = BTreeSet::new();
+    let mut hex: Option<String> = None;
     for tok in tokens {
-        let t = tok.trim();
+        let raw = tok.trim();
+        if raw.is_empty() {
+            continue;
+        }
+        // A `<hex>:<spec>` token pins one subagent transcript; the hex must be a bare subagent
+        // hex and all hex-bearing tokens must agree on the SAME hex.
+        let t = if let Some((prefix, rest)) = raw.split_once(':') {
+            let prefix = prefix.trim();
+            if !crate::path::is_bare_subagent_hex(prefix) {
+                bail!(
+                    "--line: '{raw}' — the part before ':' must be a subagent hex from \
+                     `csift agents`"
+                );
+            }
+            match &hex {
+                Some(prev) if prev != prefix => {
+                    bail!("--line: all addressed lines must be in ONE transcript")
+                }
+                _ => hex = Some(prefix.to_string()),
+            }
+            rest.trim()
+        } else {
+            raw
+        };
         if t.is_empty() {
             continue;
         }
@@ -359,21 +391,21 @@ fn parse_line_specs(tokens: &[String]) -> Result<Vec<(usize, bool)>> {
     if out.is_empty() {
         bail!("--line: no line numbers given");
     }
-    Ok(out)
+    Ok((hex, out))
 }
 
-/// Resolve the scope to exactly ONE transcript — for `--subagent <hex>` scoping (a hex names
-/// one subagent transcript) and/or `--line` addressing (lines are per-file). `--subagent <hex>`
-/// pins that subagent transcript; otherwise the top-level one. Fail-CLOSED: an unmatched hex or
-/// an ambiguous/empty scope is a pointed error, never a silent widen to the whole corpus.
-fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
-    let scope = if args.subagent.is_some() {
+/// Resolve the scope to exactly ONE transcript for `--line` addressing (lines are per-file).
+/// A `Some(hex)` (parsed from a `--line <hex>:<spec>` prefix) pins that SUBAGENT transcript;
+/// `None` pins the top-level one. Fail-CLOSED: an unmatched hex or an ambiguous/empty scope is a
+/// pointed error, never a silent widen to the whole corpus.
+fn resolve_single_transcript(args: &SearchArgs, subagent_hex: Option<&str>) -> Result<PathBuf> {
+    let scope = if subagent_hex.is_some() {
         SubagentScope::WithSubagents
     } else {
         SubagentScope::TopLevelOnly
     };
     let files = path::resolve_session_files(&args.targets(), scope, Caller::Other)?;
-    let target: Vec<PathBuf> = if let Some(hex) = args.subagent.as_deref() {
+    let target: Vec<PathBuf> = if let Some(hex) = subagent_hex {
         files
             .into_iter()
             .filter(|p| is_subagent_path(p) && session_id_from_path(p) == hex)
@@ -384,11 +416,10 @@ fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
     match target.as_slice() {
         [one] => Ok(one.clone()),
         [] => {
-            if args.subagent.is_some() {
+            if let Some(hex) = subagent_hex {
                 bail!(
-                    "--subagent: no subagent transcript `{}` found in scope — pass its parent \
-                     `@<uuid>` and check the hex with `csift agents`",
-                    args.subagent.as_deref().unwrap_or("")
+                    "--line: no subagent transcript `{hex}` found in scope — pass its parent \
+                     `@<uuid>` and check the hex with `csift agents`"
                 )
             }
             bail!(
@@ -398,7 +429,7 @@ fn resolve_single_transcript(args: &SearchArgs) -> Result<PathBuf> {
         }
         many => bail!(
             "--line is ambiguous: the scope resolves to {} transcripts. Narrow it with \
-             `@<uuid> --no-subagents` (or `@<uuid> --subagent <hex>`) so the \
+             `@<uuid> --no-subagents` (or address a subagent via `--line <hex>:<spec>`) so the \
              line numbers name one file.",
             many.len()
         ),
@@ -413,15 +444,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // ── Validate flag combinations up front (SPEC §6.2 validation) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
-    }
-    // `-c`/`-l` are each a "return ONLY this" mode — mutually exclusive (the cheap totals
-    // they each isolate are ALSO always in the normal footer, so you rarely need either).
-    if args.count && args.files_with_matches {
-        bail!(
-            "-c/--count and -l/--files-with-matches are mutually exclusive (each returns ONLY \
-             its own thing). Drop one: `-c` for the match total, `-l` for the session list. \
-             Both numbers are already in the normal output's footer."
-        );
     }
 
     // Unlike files/turns/list/agents/recover (whose first positional is the PATH/`@<uuid>`
@@ -446,8 +468,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         .filter_map(|p| p.to_str())
         .any(path::pins_single_session);
     // ── Address selectors (`--line` / `--uuid`): "fetch THESE records" (rendered full) ──
-    let line_specs = if args.line.is_empty() {
-        Vec::new()
+    // `--line` may carry a `<hex>:<spec>` subagent prefix → an optional single subagent hex.
+    let (line_subagent_hex, line_specs) = if args.line.is_empty() {
+        (None, Vec::new())
     } else {
         parse_line_specs(&args.line)?
     };
@@ -475,14 +498,16 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         );
     }
 
-    // ── Resolve targets → session files. `--subagent <hex>` names exactly ONE subagent
-    //    transcript, so it pins the scope to that single file (in EVERY mode, not just `--line`);
-    //    `--line` addressing is likewise PER-FILE and pins one transcript. Either ⇒ the
-    //    single-transcript resolver (which fail-CLOSES: an unmatched hex errors, never widens
-    //    scope to the whole corpus). Everything else uses the shared (optionally
-    //    subagent-spanning) resolver. ──
-    let session_files = if !args.line.is_empty() || args.subagent.is_some() {
-        vec![resolve_single_transcript(args)?]
+    // ── Resolve targets → session files. `--line` addressing is PER-FILE and pins one
+    //    transcript (the top-level one by default, or a SUBAGENT when a `--line <hex>:<spec>`
+    //    prefix names one) ⇒ the single-transcript resolver (which fail-CLOSES: an unmatched hex
+    //    errors, never widens scope to the whole corpus). Everything else uses the shared
+    //    (optionally subagent-spanning) resolver. ──
+    let session_files = if !args.line.is_empty() {
+        vec![resolve_single_transcript(
+            args,
+            line_subagent_hex.as_deref(),
+        )?]
     } else {
         path::resolve_session_files(
             &args.targets(),
@@ -491,6 +516,11 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         )?
     };
     let address_opt = address.is_active().then_some(&address);
+
+    // `--siblings <SPEC>`: parse the repeatable caps ONCE here (a malformed spec is a hard
+    // error, surfaced before any scan). `None` ⇒ siblings off. Parsed up front so the per-file
+    // parallel scan just borrows the result.
+    let sibling_caps = parse_sibling_specs(&args.siblings)?;
 
     // ── Parallel scan across files; collect order-stable, then merge ──
     let per_file: Vec<FileResult> = session_files
@@ -503,6 +533,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 turn_range.as_ref(),
                 &time_window,
                 address_opt,
+                sibling_caps.as_ref(),
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -538,13 +569,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             .cmp(&timestamp_sort_key(b.started_utc.as_deref()))
     });
 
-    // `-l`/--files-with-matches: list ONLY the distinct sessions that matched — computed
-    // from the FULL set, BEFORE `--max-count` can drop any (ripgrep `-l` ignores `-m`).
-    // Mutually exclusive with `-c` (rejected above). Plain/pipeable: no scope banner, no footer.
-    if args.files_with_matches {
-        return emit_files_with_matches(&all, args.format);
-    }
-
     if let Some(cap) = args.max_count {
         if all.len() > cap {
             outcome.dropped_by_cap = all.len() - cap;
@@ -579,9 +603,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         }
     }
 
-    // `--count`: emit only the TRUE total of matching exchanges (add back any capped by
+    // `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
     // `--max-count`), the ripgrep `-c` idiom — no per-exchange output.
-    if args.count {
+    if args.count_only {
         let total = outcome.exchanges.len() + outcome.dropped_by_cap;
         match args.format {
             OutputFormat::Text => println!("{total}"),
@@ -597,42 +621,8 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     Ok(())
 }
 
-/// Emit the `-l`/--files-with-matches listing: the DISTINCT sessions that contained ≥1
-/// matching exchange, in first-match chronological order (the sorted timeline's order). A
-/// top-level session prints its re-feedable uuid; a SUBAGENT transcript prints its bare hex
-/// annotated with the re-feedable `parent <uuid>`. `--format json` emits one
-/// `{session_id,is_subagent,parent_session_id}` object per line (pure JSONL, no footer).
-fn emit_files_with_matches(all: &[Exchange], format: OutputFormat) -> Result<()> {
-    let mut seen: Vec<&str> = Vec::new();
-    for ex in all {
-        if seen.contains(&ex.session_id.as_str()) {
-            continue;
-        }
-        seen.push(&ex.session_id);
-        match format {
-            OutputFormat::Text => {
-                if ex.is_subagent {
-                    println!("{}  (parent {})", ex.session_id, ex.parent_session_id);
-                } else {
-                    println!("{}", ex.session_id);
-                }
-            }
-            OutputFormat::Json => {
-                let obj = serde_json::json!({
-                    "session_id": ex.session_id,
-                    "is_subagent": ex.is_subagent,
-                    "parent_session_id": ex.parent_session_id,
-                });
-                println!("{}", serde_json::to_string(&obj)?);
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Count of DISTINCT sessions among these exchanges (by transcript `session_id`, in
-/// first-seen order). One cheap always-on number — surfaced in every search footer and the
-/// basis of the `-l` listing.
+/// first-seen order). One cheap always-on number — surfaced in every search footer.
 fn distinct_session_count(exchanges: &[Exchange]) -> usize {
     let mut seen: Vec<&str> = Vec::new();
     for ex in exchanges {
@@ -676,6 +666,7 @@ struct Kept {
 }
 
 /// Scan a single session file: prefilter → parse → delimit turns → match → stitch.
+#[allow(clippy::too_many_arguments)]
 fn search_one_file(
     path: &Path,
     args: &SearchArgs,
@@ -683,6 +674,7 @@ fn search_one_file(
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
+    sibling_caps: Option<&SiblingCaps>,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -728,6 +720,7 @@ fn search_one_file(
         turn_range,
         time_window,
         address,
+        sibling_caps,
     );
 
     Ok(FileResult {
@@ -750,6 +743,7 @@ fn line_is_transcript_candidate(line: &[u8]) -> bool {
 /// Walk retained records in file order, delimit turns by genuine-user records, and
 /// for each turn decide whether it matches the filters + regex; emit a complete
 /// Exchange per matching turn.
+#[allow(clippy::too_many_arguments)]
 fn reconstruct_and_match(
     path: &Path,
     records: &[Kept],
@@ -758,6 +752,7 @@ fn reconstruct_and_match(
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
+    sibling_caps: Option<&SiblingCaps>,
 ) -> Vec<Exchange> {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -780,15 +775,6 @@ fn reconstruct_and_match(
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
     let want_categories = &args.categories;
-    // Effective sibling categories (Some ⇒ `--siblings`/`--sibling-category` requested).
-    // An empty Some means "every match category was named so there is nothing else to show"
-    // → render no siblings (NOT "all", which `category_active` would treat an empty list as).
-    let sibling_cats: Option<Vec<Category>> =
-        if args.siblings || !args.sibling_categories.is_empty() {
-            Some(effective_sibling_categories(args))
-        } else {
-            None
-        };
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
     let tool_names = build_tool_name_index(records);
@@ -831,19 +817,20 @@ fn reconstruct_and_match(
             continue;
         }
 
-        // `--siblings`: render the turn's NON-matched records (the rest of the
-        // back-and-forth) so a matched user question surfaces with the agent's reply.
-        let siblings = match &sibling_cats {
-            Some(cats) if !cats.is_empty() => collect_turn_siblings(
+        // `--siblings <SPEC>`: render the turn's NON-matched records (the rest of the
+        // back-and-forth) so a matched user question surfaces with the agent's reply, capped
+        // per the parsed SPEC.
+        let siblings = match sibling_caps {
+            Some(caps) => collect_turn_siblings(
                 &turn,
-                cats,
+                caps,
                 &hit_idxs,
                 args.resolve_persisted,
                 excerpt_max,
                 &plan_index,
                 &tool_names,
             ),
-            _ => Vec::new(),
+            None => Vec::new(),
         };
 
         let record_uuids = turn
@@ -876,32 +863,97 @@ fn reconstruct_and_match(
     out
 }
 
-/// The set of categories `--siblings` renders. An explicit `--sibling-category` list wins
-/// (deduped, order-preserving); otherwise the default is EVERY category except the match
-/// `-t` set (so a `-t user` match shows its non-user siblings), or all five when no `-t`
-/// was given. The result MAY be empty (every category was named under `-t`), which the
-/// caller treats as "render no siblings".
-fn effective_sibling_categories(args: &SearchArgs) -> Vec<Category> {
-    const ALL: [Category; 5] = [
-        Category::Thinking,
-        Category::User,
-        Category::Tool,
-        Category::ToolResponse,
-        Category::Agent,
-    ];
-    if !args.sibling_categories.is_empty() {
-        let mut seen = Vec::new();
-        for c in &args.sibling_categories {
-            if !seen.contains(c) {
-                seen.push(*c);
-            }
-        }
-        return seen;
+/// Parsed `--siblings <SPEC>` caps. `per_cat` holds the explicit `<cat>:N` caps (cap of up to
+/// N siblings of THAT category); `bare` is the bare-`N` cap (cap of up to N siblings across
+/// every category that has NO typed cap — "the rest"). Sibling rendering is ON iff at least one
+/// spec token was given (so an empty `--siblings` vec → no `SiblingCaps`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct SiblingCaps {
+    per_cat: Vec<(Category, usize)>,
+    bare: Option<usize>,
+}
+
+impl SiblingCaps {
+    /// The cap for a specific category: its typed `<cat>:N` cap if one was given, else the
+    /// bare-`N` fallback (which caps "the rest"). `None` ⇒ this category is not shown at all.
+    fn cap_for(&self, cat: Category) -> Option<usize> {
+        self.per_cat
+            .iter()
+            .find(|(c, _)| *c == cat)
+            .map(|(_, n)| *n)
+            .or(self.bare)
     }
-    ALL.iter()
-        .copied()
-        .filter(|c| !args.categories.contains(c))
-        .collect()
+
+    /// True when ONLY a bare-`N` was given (no typed caps), so the `N` is a TOTAL cap across all
+    /// categories rather than a per-category one.
+    fn bare_is_total(&self) -> bool {
+        self.per_cat.is_empty()
+    }
+}
+
+/// Map a `--siblings` SPEC category token to its `Category` (the same value set as `-t`:
+/// thinking|user|tool|tool-response|agent).
+fn parse_sibling_category(token: &str) -> Option<Category> {
+    match token {
+        "thinking" => Some(Category::Thinking),
+        "user" => Some(Category::User),
+        "tool" => Some(Category::Tool),
+        "tool-response" => Some(Category::ToolResponse),
+        "agent" => Some(Category::Agent),
+        _ => None,
+    }
+}
+
+/// Parse the repeatable / comma-joined `--siblings <SPEC>` tokens into [`SiblingCaps`]. A bare
+/// `N` (positive integer) caps the total siblings (the categories with no typed cap); a
+/// `<category>:N` caps THAT category. `N` must be ≥1. An empty token list ⇒ `None` (siblings
+/// off). A malformed token (unknown category, non-numeric / zero cap) is a hard error.
+fn parse_sibling_specs(tokens: &[String]) -> Result<Option<SiblingCaps>> {
+    if tokens.is_empty() {
+        return Ok(None);
+    }
+    let mut caps = SiblingCaps::default();
+    for tok in tokens {
+        let t = tok.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if let Some((cat_tok, n_tok)) = t.split_once(':') {
+            let cat = parse_sibling_category(cat_tok.trim()).ok_or_else(|| {
+                anyhow!(
+                    "--siblings: '{t}' — unknown category '{}' (want \
+                     thinking|user|tool|tool-response|agent or a bare N)",
+                    cat_tok.trim()
+                )
+            })?;
+            let n: usize = n_tok.trim().parse().map_err(|_| {
+                anyhow!("--siblings: '{t}' — the cap after ':' must be a positive integer")
+            })?;
+            if n == 0 {
+                bail!("--siblings: '{t}' — the cap must be ≥1 (0 means 'do not show', so omit it)");
+            }
+            if let Some(slot) = caps.per_cat.iter_mut().find(|(c, _)| *c == cat) {
+                slot.1 = n; // last write wins for a repeated category
+            } else {
+                caps.per_cat.push((cat, n));
+            }
+        } else {
+            let n: usize = t.parse().map_err(|_| {
+                anyhow!(
+                    "--siblings: '{t}' — want a bare N or a <category>:N \
+                     (category ∈ thinking|user|tool|tool-response|agent)"
+                )
+            })?;
+            if n == 0 {
+                bail!("--siblings: '{t}' — the cap must be ≥1 (0 means 'do not show', so omit it)");
+            }
+            caps.bare = Some(n);
+        }
+    }
+    if caps.per_cat.is_empty() && caps.bare.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(caps))
 }
 
 /// One reconstructed turn (the opening genuine-user record + every record chained
@@ -1011,20 +1063,39 @@ fn backfill_address(hits: &mut [Hit], kept: &Kept) {
 }
 
 /// Render the SIBLING records of a turn — those that produced NO hit — as head-anchored
-/// Hits restricted to `cats`. Reuses [`collect_record_hits`] with a PURE-FILTER matcher
-/// (matches every record, so each category-eligible block of a sibling surfaces with a
-/// head excerpt). A record that matched (its index is in `hit_idxs`) is never repeated. The
-/// per-record time window is intentionally NOT re-applied: the turn already qualified, and
-/// the siblings are context for that qualifying turn.
+/// The turn's NON-matched records as sibling hits, restricted + CAPPED per the parsed
+/// `--siblings <SPEC>`. Reuses [`collect_record_hits`] with a PURE-FILTER matcher (matches
+/// every record, so each category-eligible block of a sibling surfaces with a head excerpt). A
+/// record that matched (its index is in `hit_idxs`) is never repeated. The per-record time
+/// window is intentionally NOT re-applied: the turn already qualified, and the siblings are
+/// context for that qualifying turn. Caps: a `<cat>:N` spec keeps the first N siblings of that
+/// category; a bare `N` keeps the first N across the categories that have no typed cap ("the
+/// rest"), and when ONLY a bare `N` was given it is a single TOTAL cap across all categories.
 fn collect_turn_siblings(
     turn: &Turn<'_>,
-    cats: &[Category],
+    caps: &SiblingCaps,
     hit_idxs: &[usize],
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
     tool_names: &HashMap<String, String>,
 ) -> Vec<Hit> {
+    // Categories with ANY cap (typed, or covered by a bare-N fallback) are sibling-eligible.
+    const ALL: [Category; 5] = [
+        Category::Thinking,
+        Category::User,
+        Category::Tool,
+        Category::ToolResponse,
+        Category::Agent,
+    ];
+    let eligible: Vec<Category> = ALL
+        .iter()
+        .copied()
+        .filter(|&c| caps.cap_for(c).is_some())
+        .collect();
+    if eligible.is_empty() {
+        return Vec::new();
+    }
     let pure = Matcher {
         regex: None,
         prefilter: None,
@@ -1037,7 +1108,7 @@ fn collect_turn_siblings(
         let before = sibs.len();
         collect_record_hits(
             &kept.rec,
-            cats,
+            &eligible,
             &pure,
             resolve_persisted,
             excerpt_max,
@@ -1047,6 +1118,56 @@ fn collect_turn_siblings(
         );
         backfill_address(&mut sibs[before..], kept);
     }
+    // Apply the caps in document order, keeping each category's first N (a bare-only spec is a
+    // single TOTAL cap; otherwise the bare-N caps the categories lacking a typed cap, pooled).
+    let bare_total = caps.bare_is_total();
+    let mut total_kept = 0usize;
+    let mut per_cat_kept: Vec<(Category, usize)> = Vec::new();
+    let mut bare_pool_kept = 0usize;
+    sibs.retain(|hit| {
+        if bare_total {
+            let cap = caps.bare.unwrap_or(0);
+            if total_kept < cap {
+                total_kept += 1;
+                return true;
+            }
+            return false;
+        }
+        match caps
+            .per_cat
+            .iter()
+            .find(|(c, _)| *c == hit.category)
+            .map(|(_, n)| *n)
+        {
+            Some(cap) => {
+                let kept = per_cat_kept
+                    .iter_mut()
+                    .find(|(c, _)| *c == hit.category)
+                    .map(|(_, n)| n);
+                match kept {
+                    Some(n) if *n < cap => {
+                        *n += 1;
+                        true
+                    }
+                    Some(_) => false,
+                    None => {
+                        per_cat_kept.push((hit.category, 1));
+                        cap >= 1
+                    }
+                }
+            }
+            None => {
+                // No typed cap → governed by the bare-N "rest" pool (if any).
+                match caps.bare {
+                    Some(cap) if bare_pool_kept < cap => {
+                        bare_pool_kept += 1;
+                        true
+                    }
+                    _ => false,
+                }
+            }
+        }
+    });
     sibs
 }
 
@@ -1546,14 +1667,11 @@ mod tests {
             since: None,
             until: None,
             max_count: None,
-            count: false,
-            files_with_matches: false,
-            siblings: false,
-            sibling_categories: Vec::new(),
+            count_only: false,
+            siblings: Vec::new(),
             full: false,
             line: Vec::new(),
             uuid: Vec::new(),
-            subagent: None,
             resolve_persisted: false,
             include_subagents: true,
             no_subagents: false,
@@ -1911,6 +2029,7 @@ mod tests {
             .transpose()
             .unwrap();
         let tw = TimeWindow::from_args(a.since.as_deref(), a.until.as_deref()).unwrap();
+        let sibling_caps = parse_sibling_specs(&a.siblings).unwrap();
         reconstruct_and_match(
             std::path::Path::new("/x/0a1b2c3d-0000-0000-0000-000000000000.jsonl"),
             &kept,
@@ -1919,6 +2038,7 @@ mod tests {
             tr.as_ref(),
             &tw,
             None,
+            sibling_caps.as_ref(),
         )
     }
 
@@ -2272,35 +2392,63 @@ mod tests {
         assert_eq!(full.chars().count(), n, "full text length preserved");
     }
 
+    fn specs(toks: &[&str]) -> Vec<String> {
+        toks.iter().map(|s| (*s).to_string()).collect()
+    }
+
     #[test]
-    fn effective_sibling_categories_default_and_explicit() {
-        use crate::cli::Category;
-        // No `-t`, no explicit list → all five categories are sibling-eligible.
-        assert_eq!(effective_sibling_categories(&args("x")).len(), 5);
-        // `-t user` → default siblings = the other four (the match category is excluded).
-        let mut a = args("x");
-        a.categories = vec![Category::User];
-        let got = effective_sibling_categories(&a);
-        assert_eq!(got.len(), 4);
-        assert!(!got.contains(&Category::User));
-        // An explicit `--sibling-category` list wins and is deduped, order-preserving.
-        let mut a = args("x");
-        a.categories = vec![Category::User];
-        a.sibling_categories = vec![Category::Agent, Category::Agent, Category::Tool];
-        assert_eq!(
-            effective_sibling_categories(&a),
-            vec![Category::Agent, Category::Tool]
-        );
-        // Every category named under `-t` → empty (caller then renders no siblings).
-        let mut a = args("x");
-        a.categories = vec![
-            Category::Thinking,
-            Category::User,
-            Category::Tool,
-            Category::ToolResponse,
-            Category::Agent,
-        ];
-        assert!(effective_sibling_categories(&a).is_empty());
+    fn parse_sibling_specs_empty_is_off() {
+        // No `--siblings` → None (sibling rendering off).
+        assert_eq!(parse_sibling_specs(&[]).unwrap(), None);
+        // A whitespace-only token is ignored and also yields None.
+        assert_eq!(parse_sibling_specs(&specs(&["  "])).unwrap(), None);
+    }
+
+    #[test]
+    fn parse_sibling_specs_bare_n_caps_total() {
+        // A bare `N` → a single TOTAL cap across all categories, no per-cat entries.
+        let caps = parse_sibling_specs(&specs(&["3"])).unwrap().unwrap();
+        assert_eq!(caps.bare, Some(3));
+        assert!(caps.per_cat.is_empty());
+        assert!(caps.bare_is_total());
+        // Every category resolves to the bare-N cap.
+        assert_eq!(caps.cap_for(Category::Agent), Some(3));
+        assert_eq!(caps.cap_for(Category::Tool), Some(3));
+    }
+
+    #[test]
+    fn parse_sibling_specs_cat_n_caps_that_category_only() {
+        // A `<cat>:N` → caps THAT category; others are not shown.
+        let caps = parse_sibling_specs(&specs(&["agent:1"])).unwrap().unwrap();
+        assert_eq!(caps.per_cat, vec![(Category::Agent, 1)]);
+        assert_eq!(caps.bare, None);
+        assert_eq!(caps.cap_for(Category::Agent), Some(1));
+        assert_eq!(caps.cap_for(Category::Tool), None); // not shown
+        assert!(!caps.bare_is_total());
+    }
+
+    #[test]
+    fn parse_sibling_specs_mixed_typed_and_bare() {
+        // `tool:1`, `thinking:2`, bare `3` → typed caps govern their categories; the bare
+        // caps the rest (the categories with no typed cap).
+        let caps = parse_sibling_specs(&specs(&["tool:1", "thinking:2", "3"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(caps.cap_for(Category::Tool), Some(1));
+        assert_eq!(caps.cap_for(Category::Thinking), Some(2));
+        assert_eq!(caps.cap_for(Category::Agent), Some(3)); // "the rest" via bare-N
+        assert_eq!(caps.cap_for(Category::User), Some(3));
+        assert!(!caps.bare_is_total());
+    }
+
+    #[test]
+    fn parse_sibling_specs_invalid_tokens_error() {
+        // Unknown category, non-numeric bare, bad typed cap, and a zero cap all error.
+        assert!(parse_sibling_specs(&specs(&["foo"])).is_err());
+        assert!(parse_sibling_specs(&specs(&["bad:2"])).is_err());
+        assert!(parse_sibling_specs(&specs(&["tool:x"])).is_err());
+        assert!(parse_sibling_specs(&specs(&["tool:0"])).is_err());
+        assert!(parse_sibling_specs(&specs(&["0"])).is_err());
     }
 
     #[test]

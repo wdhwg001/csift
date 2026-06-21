@@ -1172,9 +1172,9 @@ fn is_uuid(s: &str) -> bool {
 
 /// True for a bare-hex SUBAGENT id: a dash-less run of hex digits long enough to be an
 /// agent id (≥12), never a short word. (`agents` prints these; `bare_agent_id` produces
-/// them.) Used only to GUIDE the error, not to resolve — subagent transcripts are not
-/// top-level jsonl basenames.
-fn is_bare_subagent_hex(s: &str) -> bool {
+/// them.) Used to GUIDE the error (subagent transcripts are not top-level jsonl basenames)
+/// and, in `search`, to recognise a `--line <hex>:<spec>` subagent-pinning prefix.
+pub fn is_bare_subagent_hex(s: &str) -> bool {
     s.len() >= 12 && !s.contains('-') && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 

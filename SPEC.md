@@ -380,21 +380,18 @@ csift list --format json .                              # machine-readable index
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
 | `--turn-range START..END` | — | string | none | inclusive 0-based turn index range; **mutually exclusive** with `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | — | string | none | time bounds (ISO8601 or relative `2h`/`3d`/…, system-local; bare date ⇒ local midnight) |
-| `--max-count N` | — | usize | none | cap emitted exchanges; **reports dropped count** |
-| `--count` | `-c` | bool | off | print ONLY the match total (ripgrep `-c` idiom); honors every filter; mutually exclusive with `-l` |
-| `--files-with-matches` | `-l` | bool | off | list ONLY the distinct sessions containing ≥1 match (ripgrep `-l`); mutually exclusive with `-c` |
-| `--siblings` | — | bool | off | also render each matched turn's NON-matched records (the surrounding back-and-forth, e.g. a matched user question + the agent reply) |
-| `--sibling-category C` | — | repeatable enum | off | restrict `--siblings` rendering to these categories (implies `--siblings`) |
+| `--max-count N` | — | usize | none (**unlimited — no cap**) | cap emitted exchanges; **reports dropped count** |
+| `--count-only` | `-c` | bool | off | print ONLY the match total (one integer; ripgrep `-c` idiom); honors every filter. The total is ALSO in the normal footer, so `--count-only` just isolates it for a pipe. (For "which sessions matched", pipe `--format json` through `jq -r .session_id \| sort -u`.) |
+| `--siblings SPEC` | — | repeatable + comma | off | render each matched turn's NON-matched records (the surrounding back-and-forth), CAPPED per SPEC. Each token is a bare `N` (cap the total siblings of any not-typed category at N) or a `<category>:N` (cap THAT category at N, category ∈ thinking\|user\|tool\|tool-response\|agent, N ≥ 1). Mix them: a typed cap governs its category, a bare `N` caps "the rest"; a category with neither is not shown. Presence of any spec turns siblings ON |
 | `--full` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (alias `--no-truncate`) |
-| `--line SPEC` | — | repeatable + comma | none | ADDRESS by 1-based physical line(s)/ranges (`--line 87,495-500`) instead of/with pattern; needs a single-transcript scope; addressed records render FULL; an explicit miss is reported `unresolved` |
+| `--line SPEC` | — | repeatable + comma | none | ADDRESS by 1-based physical line(s)/ranges (`--line 87,495-500`) instead of/with pattern; needs a single-transcript scope; addressed records render FULL; an explicit miss is reported `unresolved`. To address a SUBAGENT transcript, prefix a token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`); all hex-bearing tokens must name the SAME transcript |
 | `--uuid U` | — | repeatable + comma | none | ADDRESS by record uuid(s) (globally unique); addressed records render FULL; a miss is `unresolved` |
-| `--subagent HEX` | — | string | none | pin `--line` addressing to one subagent transcript (bare hex from `agents`) |
 | `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6) |
 | `--include-subagents` | — | bool | `true` | also search each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`); **default ON** (passing it is a no-op for explicitness). Workflow `journal.jsonl` is never searched (not a transcript). |
 | `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions; **DOMINANT** — always wins when present, any flag order |
 | `--format text\|json` | — | enum | `text` | output format |
 
-**Addressing (record fetch) — `--line` / `--uuid`.** Beyond regex matching, a record can be selected by **physical line** (`--line`, per-file, needs a single-transcript scope) or **uuid** (`--uuid`, global). Addressed records emit at FULL length (you asked for *this* message, not a teaser); a pattern, if also given, further narrows within the addressed set. This is the permission-friendly alternative to `Read`-ing the raw jsonl. An explicitly-requested address that resolves to nothing is reported in an `unresolved:` footer line — never silently dropped.
+**Addressing (record fetch) — `--line` / `--uuid`.** Beyond regex matching, a record can be selected by **physical line** (`--line`, per-file, needs a single-transcript scope) or **uuid** (`--uuid`, global). Addressed records emit at FULL length (you asked for *this* message, not a teaser); a pattern, if also given, further narrows within the addressed set. This is the permission-friendly alternative to `Read`-ing the raw jsonl. An explicitly-requested address that resolves to nothing is reported in an `unresolved:` footer line — never silently dropped. `--line` addresses the top-level transcript by default; to address a **subagent** transcript, prefix the first token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`), fail-CLOSED — an unmatched hex errors, never widens scope. All hex-bearing tokens must name the same transcript (lines address ONE file).
 
 **Smart-case rule:** pattern is case-insensitive iff it contains no uppercase letter; `-i` forces insensitive regardless; the two never conflict (`-i` wins). Compile via `regex::bytes::RegexBuilder` (match on raw line bytes pre-JSON in the prefilter, then on decoded text for excerpting). `--multiline` sets `.dot_matches_new_line(true)` + multiline mode.
 
@@ -429,8 +426,10 @@ csift search "" -t user --since 2h .                   # pure filter: genuine us
 csift search "tail.read" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
 csift search "" @0a1b2c3d-… --no-subagents --line 992,1374   # fetch records by line (FULL)
+csift search "" @0a1b2c3d-… --line 7f3c9e21:88,495-500       # …in a SUBAGENT transcript (hex-prefixed --line)
 csift search "" --uuid 7f3c9e21-…                      # fetch a record by uuid, anywhere in scope
-csift search -l "deadline"                             # WHICH sessions mention it (ripgrep -l)
+csift search "deadline" --format json | jq -r .session_id | sort -u  # WHICH sessions mention it
+csift search "let's chat" -t user --siblings agent:1   # the match WITH up to 1 agent-side sibling
 csift search "persisted-output" --resolve-persisted --format json
 ```
 

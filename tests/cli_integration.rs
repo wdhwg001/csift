@@ -767,57 +767,9 @@ fn search_count_reports_true_total_despite_max_count() {
     );
 }
 
-#[test]
-fn search_files_with_matches_lists_distinct_sessions() {
-    // `-l`/--files-with-matches: one id per matching session, no exchange bodies, no footer.
-    // "carry" appears in the top-level session AND both subagents, so spanning yields three
-    // distinct ids — the top-level uuid plain, each subagent hex annotated with its parent.
-    let h = populated_home();
-    let out = h.run(&["search", "carry", "-l"]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    let lines: Vec<&str> = out
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .collect();
-    assert_eq!(
-        lines.len(),
-        3,
-        "three distinct matching transcripts: {lines:?}"
-    );
-    assert!(out.stdout.contains(SESS), "top-level uuid: {}", out.stdout);
-    assert!(
-        out.stdout.contains("aaa111"),
-        "subagent hex: {}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("(parent"),
-        "subagent rows annotate the re-feedable parent: {}",
-        out.stdout
-    );
-    // No exchange rendering or footer leaks through the plain listing.
-    assert!(!out.stdout.contains("TURN"), "got: {}", out.stdout);
-    assert!(!out.stdout.contains("matched "), "got: {}", out.stdout);
-
-    // `-l --format json`: one discrimination object per line, no footer.
-    let j = h.run(&["search", "carry", "-l", "--format", "json"]);
-    let objs: Vec<serde_json::Value> = j
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str(l).unwrap())
-        .collect();
-    assert_eq!(objs.len(), 3);
-    assert!(objs.iter().any(|o| o["is_subagent"] == true));
-    assert!(objs
-        .iter()
-        .all(|o| o.get("parent_session_id").is_some() && o.get("session_id").is_some()));
-}
-
-// (`-c` + `-l` together are now a hard error — see
-// `search_count_and_files_with_matches_are_mutually_exclusive`. They are each a "return ONLY
-// this" mode and the two totals both live in the normal footer, so there is no "winner".)
+// (`-l`/`--files-with-matches` was removed: the "which sessions matched" listing is now done
+// via `search PATTERN --format json | jq -r .session_id | sort -u`. There is no replacement
+// flag and no `-c`/`-l` mutual-exclusion check anymore.)
 
 #[test]
 fn search_siblings_surface_the_rest_of_the_turn() {
@@ -832,6 +784,7 @@ fn search_siblings_surface_the_rest_of_the_turn() {
         base.stdout
     );
 
+    // `--siblings 9` = a bare-N cap covering every category (well above the turn's sibling count).
     let out = h.run(&[
         "search",
         "needed",
@@ -839,6 +792,7 @@ fn search_siblings_surface_the_rest_of_the_turn() {
         "user",
         "--no-subagents",
         "--siblings",
+        "9",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -862,8 +816,8 @@ fn search_siblings_surface_the_rest_of_the_turn() {
 
 #[test]
 fn search_sibling_category_narrows_and_implies_siblings() {
-    // `--sibling-category agent` (without `--siblings`) implies siblings AND restricts them
-    // to the agent reply — the tool_use / tool_result siblings are excluded.
+    // `--siblings agent:1` turns siblings ON and restricts them to ONE agent reply — the
+    // tool_use / tool_result siblings (no typed cap, no bare-N) are excluded entirely.
     let h = populated_home();
     let out = h.run(&[
         "search",
@@ -871,8 +825,8 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "-t",
         "user",
         "--no-subagents",
-        "--sibling-category",
-        "agent",
+        "--siblings",
+        "agent:1",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -894,8 +848,8 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "-t",
         "user",
         "--no-subagents",
-        "--sibling-category",
-        "agent",
+        "--siblings",
+        "agent:1",
         "--format",
         "json",
     ]);
@@ -1019,18 +973,6 @@ fn search_footer_always_reports_match_and_session_totals() {
     .unwrap();
     assert_eq!(footer["sessions"], 1);
     assert!(footer["matched"].as_u64().unwrap() >= 1);
-}
-
-#[test]
-fn search_count_and_files_with_matches_are_mutually_exclusive() {
-    let h = populated_home();
-    let out = h.run(&["search", "carry", "-c", "-l"]);
-    assert!(!out.success, "passing both must error");
-    assert!(
-        out.stderr.contains("mutually exclusive"),
-        "stderr: {}",
-        out.stderr
-    );
 }
 
 // ── search addressing (the folded-in `get`): --line / --uuid fetch specific records, full ──
@@ -1231,17 +1173,42 @@ fn search_range_past_eof_is_clamped_not_reported() {
     );
 }
 
+// A self-contained fixture for `--line <hex>:<spec>` subagent addressing: a top-level session
+// that spawned ONE subagent whose bare hex is a realistic >=12-char id (a <12-char token would
+// not pass `is_bare_subagent_hex`, the gate the `<hex>:` prefix uses).
+fn line_hex_home() -> (Home, &'static str, &'static str) {
+    let enc = "-Users-testuser-Projects-linehex";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let hex = "aaa111bbb222ccc33"; // 17 hex, like real agent ids
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call0","name":"Agent","input":{"description":"do it"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aaa111bbb222ccc33","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"sub: do the thing about carry"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"sub done"}]}}"#, "\n",
+        ),
+    );
+    (h, sess, hex)
+}
+
 #[test]
-fn search_subagent_line_addresses_the_subagent_transcript() {
-    let h = populated_home();
+fn search_line_hex_addresses_the_subagent_transcript() {
+    // `--line <hex>:<spec>` pins ONE subagent transcript and addresses its lines (the
+    // `--subagent` flag was folded into `--line`). L1 of the subagent is its opening record.
+    let (h, sess, hex) = line_hex_home();
     let out = h.run(&[
         "search",
         "",
-        at(SESS).as_str(),
-        "--subagent",
-        "aaa111",
+        at(sess).as_str(),
         "--line",
-        "1",
+        &format!("{hex}:1"),
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -1250,107 +1217,52 @@ fn search_subagent_line_addresses_the_subagent_transcript() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("subagent") && out.stdout.contains("aaa111"),
+        out.stdout.contains("subagent") && out.stdout.contains(hex),
         "the label table marks it a subagent: {}",
         out.stdout
     );
 }
 
 #[test]
-fn search_subagent_scopes_a_normal_search_not_just_line_addressing() {
-    // REGRESSION (the `--subagent` silent no-op): without `--line`, `--subagent <hex>` used to
-    // be dropped entirely — the search ran over the WHOLE scope and fail-OPENed to the full
-    // corpus. Decisive fixture fact: "panic" lives ONLY in the top-level transcript; subagent
-    // `aaa111` contains "carry"/"sub" but NEVER "panic". So scoping to aaa111 MUST yield zero
-    // "panic" hits; the bug returned the top-level hit anyway.
-    let h = populated_home();
-
-    // Unscoped: "panic" matches (it is in the top-level session).
-    let unscoped = h.run(&["search", "panic", at(SESS).as_str(), "-c"]);
-    assert!(unscoped.success, "stderr: {}", unscoped.stderr);
-    assert_eq!(
-        unscoped.stdout.trim(),
-        "1",
-        "panic should match once unscoped: {}",
-        unscoped.stdout
-    );
-
-    // Scoped to the subagent that has NO "panic": must be 0 (was 1 with the no-op bug).
-    let scoped = h.run(&[
+fn search_line_hex_unknown_fails_closed() {
+    // The fail-OPEN footgun: an unmatched `--line <hex>:<spec>` hex must ERROR (so the caller
+    // knows the scope is empty), never silently fall back to the top-level / whole corpus.
+    let (h, sess, _hex) = line_hex_home();
+    let out = h.run(&[
         "search",
-        "panic",
-        at(SESS).as_str(),
-        "--subagent",
-        "aaa111",
-        "-c",
+        "",
+        at(sess).as_str(),
+        "--line",
+        "deadbeefdeadbeef0:1",
     ]);
-    assert!(scoped.success, "stderr: {}", scoped.stderr);
-    assert_eq!(
-        scoped.stdout.trim(),
-        "0",
-        "--subagent must SCOPE the search to aaa111 (no panic there), not widen it: {}",
-        scoped.stdout
-    );
-
-    // And a term that IS in aaa111 ("sub") still matches under the same scope — proving the
-    // scope is the subagent transcript, not an empty/echo result.
-    let positive = h.run(&[
-        "search",
-        "sub",
-        at(SESS).as_str(),
-        "--subagent",
-        "aaa111",
-        "-l",
-    ]);
-    assert!(positive.success, "stderr: {}", positive.stderr);
     assert!(
-        positive.stdout.contains("aaa111"),
-        "the in-scope subagent should still match its own content: {}",
-        positive.stdout
-    );
-    // -l lists exactly the one in-scope transcript: a single line, `aaa111 (parent <SESS>)`.
-    // The sibling wf agent bbb222 must be absent. (The parent-uuid annotation legitimately
-    // echoes SESS — that is the subagent's re-feedable parent, not a top-level hit.)
-    let lines: Vec<&str> = positive
-        .stdout
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .collect();
-    assert_eq!(
-        lines.len(),
-        1,
-        "scope must resolve to exactly one transcript: {}",
-        positive.stdout
+        !out.success,
+        "an unmatched --line hex must fail, not widen scope; stdout: {} stderr: {}",
+        out.stdout, out.stderr
     );
     assert!(
-        !positive.stdout.contains("bbb222"),
-        "scope must be ONLY aaa111, not the sibling subagent bbb222: {}",
-        positive.stdout
+        out.stderr.contains("--line") && out.stderr.contains("deadbeefdeadbeef0"),
+        "the error should name the flag + the unmatched hex: {}",
+        out.stderr
     );
 }
 
 #[test]
-fn search_subagent_unknown_hex_fails_closed() {
-    // The fail-OPEN footgun: an unmatched `--subagent` hex must ERROR (so the caller knows the
-    // scope is empty), never silently fall back to the whole corpus. Asserted WITHOUT `--line`
-    // — the path that previously ignored `--subagent` outright.
-    let h = populated_home();
+fn search_line_hex_must_name_one_transcript() {
+    // All hex-bearing `--line` tokens must agree on the SAME transcript: a second, different hex
+    // is a hard error.
+    let (h, sess, hex) = line_hex_home();
     let out = h.run(&[
         "search",
-        "carry",
-        at(SESS).as_str(),
-        "--subagent",
-        "deadbeef00",
-        "-c",
+        "",
+        at(sess).as_str(),
+        "--line",
+        &format!("{hex}:1,deadbeefdeadbeef0:2"),
     ]);
+    assert!(!out.success, "two distinct hexes must error");
     assert!(
-        !out.success,
-        "an unmatched --subagent hex must fail, not return corpus counts; stdout: {} stderr: {}",
-        out.stdout, out.stderr
-    );
-    assert!(
-        out.stderr.contains("--subagent") && out.stderr.contains("deadbeef00"),
-        "the error should name the flag + the unmatched hex: {}",
+        out.stderr.contains("ONE transcript"),
+        "the error should explain lines address one file: {}",
         out.stderr
     );
 }
@@ -10321,13 +10233,15 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
     );
 
     // Targeting the sibling's real path → only B (and B's subagent surfaces in search).
+    // (Which sessions matched is read off the `--format json` records' `session_id`.)
     let out_b = h.run(&[
         "search",
         "",
         "/Users/testuser/Projects/foo_bar",
         "-t",
         "user",
-        "-l",
+        "--format",
+        "json",
     ]);
     assert!(out_b.success, "stderr: {}", out_b.stderr);
     assert!(out_b.stdout.contains(sess_b) || out_b.stdout.contains("bbb999"));
