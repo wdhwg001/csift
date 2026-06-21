@@ -416,6 +416,12 @@ pub enum SubagentScope {
     /// Only the top-level `<uuid>.jsonl` session(s); no subagent transcripts.
     TopLevelOnly,
     /// Only the subagent transcripts; the top-level `<uuid>.jsonl` itself is excluded.
+    ///
+    /// Currently UNCONSTRUCTED: `files`' `--subagents-only` (the sole constructor) was
+    /// removed, but the resolution logic below still consumes this variant, so the mode
+    /// remains reachable for a future command. The crate-wide span-flag cleanup decides
+    /// whether to drop it entirely; until then the `allow` keeps clippy clean.
+    #[allow(dead_code)]
     SubagentsOnly,
 }
 

@@ -21,6 +21,8 @@ memchr = "2.8"
 memmap2 = "0.9"
 rayon = "1.12"
 anyhow = "1.0"
+# Glob matching for `files --glob <PAT>` (full-path patterns; `**` crosses `/`).
+globset = "0.4"
 # Modern datetime + timezone crate: ISO8601 parse + system-local timezone
 # rendering alongside raw UTC (jiff's default `tz-system` feature powers
 # `TimeZone::system()`).

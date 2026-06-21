@@ -1335,7 +1335,13 @@ fn files_bare_uuid_positional_routes_to_session() {
     // resolves as a session filter across all projects, not as a (nonexistent) project
     // dir. Previously errored "no Claude Code project dir for …/<uuid>".
     let h = populated_home();
-    let out = h.run(&["files", at(SESS).as_str(), "--summary", "--no-subagents"]);
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--by",
+        "summary",
+        "--no-subagents",
+    ]);
     // Routing success = the command resolved the session and ran (exit 0), NOT the old
     // "no Claude Code project dir for …/<uuid>" hard error.
     assert!(
@@ -1511,10 +1517,10 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
     let files = h.run(&[
         "files",
         at(SESS).as_str(),
-        "--by-file",
+        "--by",
+        "file",
         "--format",
         "json",
-        "--subagents-only",
     ]);
     let search = h.run(&["search", "", ENC, at(SESS).as_str(), "--format", "json"]);
     // turns now defaults to top-level-only, so opt INTO spanning subagents to exercise the
@@ -2465,7 +2471,14 @@ fn agents_with_files_renders_changed_list_and_summary_json() {
         out.stdout
     );
     // The summary JSON path (the `json_grouped` summary arm + trailing summary object).
-    let f = h.run(&["files", at(sess).as_str(), "--summary", "--format", "json"]);
+    let f = h.run(&[
+        "files",
+        at(sess).as_str(),
+        "--by",
+        "summary",
+        "--format",
+        "json",
+    ]);
     assert!(f.success, "stderr: {}", f.stderr);
     let last = f
         .stdout
@@ -3397,7 +3410,14 @@ fn agents_id_form_is_bare_hex_joinable_across_files_and_recover() {
     let agents_json = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(agents_json.stdout.contains(r#""agent_id":"topo11""#));
     // files spans subagents by default; the subagent row's session_id is bare hex.
-    let files_json = h.run(&["files", at(SESS).as_str(), "--format", "json", "--by-file"]);
+    let files_json = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--format",
+        "json",
+        "--by",
+        "file",
+    ]);
     assert!(files_json.success, "stderr: {}", files_json.stderr);
     assert!(
         files_json.stdout.contains(r#""session_id":"topo11""#)
@@ -3478,7 +3498,14 @@ fn files_default_summary_acid_test() {
 #[test]
 fn files_by_file_distinct_counts_via_json() {
     let h = files_scenario_home();
-    let out = h.run(&["files", at(SESS).as_str(), "--by-file", "--format", "json"]);
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--by",
+        "file",
+        "--format",
+        "json",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     let lines: Vec<&str> = out
         .stdout
@@ -3519,7 +3546,7 @@ fn files_by_file_distinct_counts_via_json() {
 #[test]
 fn files_timeline_is_chronological_with_heuristic_label() {
     let h = files_scenario_home();
-    let out = h.run(&["files", at(SESS).as_str(), "--timeline"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--by", "timeline"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("detail=timeline"));
     // The bash rm is the newest mutation (06:00) and carries the heuristic label.
@@ -3543,7 +3570,14 @@ fn files_timeline_is_chronological_with_heuristic_label() {
 #[test]
 fn files_by_dir_groups_and_counts() {
     let h = files_scenario_home();
-    let out = h.run(&["files", at(SESS).as_str(), "--by-dir", "--format", "json"]);
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--by",
+        "dir",
+        "--format",
+        "json",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     let mut saw_gaps_dir = false;
     for l in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
@@ -3647,7 +3681,13 @@ fn files_detects_edit_before_read_boundaries() {
     );
 
     // Text: timeline mutation rows carry Lnnnn; the boundary section names the file + kind + line.
-    let out = h.run(&["files", at(SESS).as_str(), "--no-subagents", "--timeline"]);
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--by",
+        "timeline",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("Edit-before-Read boundaries"),
@@ -3697,6 +3737,163 @@ fn files_detects_edit_before_read_boundaries() {
         .find(|o| o.get("detail_level").is_some())
         .expect("trailing summary");
     assert_eq!(summary["edit_before_read_boundaries"], serde_json::json!(1));
+}
+
+/// Fixture with three distinct mutated full paths (a `.rs` under `src/`, a `.md` under
+/// `docs/`, a top-level `.txt`) plus an Edit-before-Read boundary on the `.rs` file — so the
+/// `--regex`/`--glob` full-path filters can be exercised against a varied set, including the
+/// boundary section.
+fn path_filter_scenario(h: &Home) {
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/Users/testuser/Projects/foo/src/lib.rs","content":"x\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/Users/testuser/Projects/foo/src/lib.rs"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w2","name":"Write","input":{"file_path":"/Users/testuser/Projects/foo/docs/readme.md","content":"y\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:02.500Z","toolUseResult":{"type":"create","filePath":"/Users/testuser/Projects/foo/docs/readme.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w2","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w3","name":"Write","input":{"file_path":"/Users/testuser/Projects/foo/notes.txt","content":"z\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c3","timestamp":"2026-06-07T05:00:03.500Z","toolUseResult":{"type":"create","filePath":"/Users/testuser/Projects/foo/notes.txt"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w3","content":"ok"}]}}"#, "\n",
+            // Edit-before-Read boundary on the .rs file.
+            r#"{"type":"assistant","uuid":"a3","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/Users/testuser/Projects/foo/src/lib.rs","old_string":"x","new_string":"X"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
+        ),
+    );
+}
+
+#[test]
+fn files_regex_filters_full_path() {
+    let h = Home::new();
+    path_filter_scenario(&h);
+    // --regex '\.rs$' keeps ONLY the .rs path (and its boundary), drops .md + .txt.
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--by",
+        "file",
+        "--regex",
+        r"\.rs$",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("src/lib.rs"),
+        "kept .rs: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("readme.md") && !out.stdout.contains("notes.txt"),
+        "regex must drop non-.rs paths: {}",
+        out.stdout
+    );
+    // The boundary (on the .rs file) survives the same predicate.
+    assert!(
+        out.stdout.contains("Edit-before-Read boundaries"),
+        "the .rs boundary must survive the filter: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn files_glob_filters_full_path() {
+    let h = Home::new();
+    path_filter_scenario(&h);
+    // --glob '**/*.md' keeps ONLY the .md path; .rs + .txt (and the .rs boundary) drop out.
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--by",
+        "file",
+        "--glob",
+        "**/*.md",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("readme.md"), "kept .md: {}", out.stdout);
+    assert!(
+        !out.stdout.contains("lib.rs") && !out.stdout.contains("notes.txt"),
+        "glob must drop non-.md paths: {}",
+        out.stdout
+    );
+    // The boundary is on the .rs file, which the glob filters out → no boundary section.
+    assert!(
+        !out.stdout.contains("Edit-before-Read boundaries"),
+        "a filtered-out boundary must not show: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn files_regex_and_glob_combine_as_and() {
+    let h = Home::new();
+    path_filter_scenario(&h);
+    // Both filters AND: under a src/ dir AND ending in .rs → only lib.rs.
+    let both = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--by",
+        "file",
+        "--glob",
+        "**/src/**",
+        "--regex",
+        r"\.rs$",
+    ]);
+    assert!(both.success, "stderr: {}", both.stderr);
+    assert!(both.stdout.contains("src/lib.rs"), "got: {}", both.stdout);
+    assert!(
+        !both.stdout.contains("readme.md") && !both.stdout.contains("notes.txt"),
+        "AND of glob+regex: {}",
+        both.stdout
+    );
+    // A glob that matches src/ but a regex that excludes .rs → empty (the normal empty output).
+    let empty = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--by",
+        "file",
+        "--glob",
+        "**/src/**",
+        "--regex",
+        r"\.md$",
+    ]);
+    assert!(empty.success, "stderr: {}", empty.stderr);
+    assert!(
+        empty.stdout.contains("no file mutations found"),
+        "an empty filtered set yields the empty output: {}",
+        empty.stdout
+    );
+}
+
+#[test]
+fn files_invalid_regex_and_glob_are_hard_errors() {
+    let h = Home::new();
+    path_filter_scenario(&h);
+    // Invalid regex → hard error (unbalanced paren).
+    let bad_re = h.run(&["files", at(SESS).as_str(), "--regex", "("]);
+    assert!(
+        !bad_re.success,
+        "invalid regex must fail: {}",
+        bad_re.stdout
+    );
+    assert!(
+        bad_re.stderr.contains("invalid --regex"),
+        "regex error names the flag: {}",
+        bad_re.stderr
+    );
+    // Invalid glob → hard error (unterminated `[` class).
+    let bad_glob = h.run(&["files", at(SESS).as_str(), "--glob", "[abc"]);
+    assert!(
+        !bad_glob.success,
+        "invalid glob must fail: {}",
+        bad_glob.stdout
+    );
+    assert!(
+        bad_glob.stderr.contains("invalid --glob"),
+        "glob error names the flag: {}",
+        bad_glob.stderr
+    );
 }
 
 #[test]
@@ -3753,34 +3950,24 @@ fn subagents_only_scenario(h: &Home) {
 }
 
 #[test]
-fn files_subagents_only_returns_set_difference() {
+fn files_default_spans_subagents_and_no_subagents_restricts() {
     let h = Home::new();
     subagents_only_scenario(&h);
 
     // Default (spans subagents): BOTH the parent and subagent files surface.
-    let with = h.run(&["files", at(SESS).as_str(), "--by-file"]);
+    let with = h.run(&["files", at(SESS).as_str(), "--by", "file"]);
     assert!(with.success, "stderr: {}", with.stderr);
     assert!(with.stdout.contains("/parent/p.md"), "got: {}", with.stdout);
     assert!(with.stdout.contains("/sub/s.md"), "got: {}", with.stdout);
 
-    // --no-subagents: ONLY the parent file.
-    let top = h.run(&["files", at(SESS).as_str(), "--by-file", "--no-subagents"]);
+    // --no-subagents: ONLY the parent file (the subagent mutation drops out).
+    let top = h.run(&["files", at(SESS).as_str(), "--by", "file", "--no-subagents"]);
     assert!(top.success, "stderr: {}", top.stderr);
     assert!(top.stdout.contains("/parent/p.md"), "got: {}", top.stdout);
     assert!(
         !top.stdout.contains("/sub/s.md"),
         "--no-subagents must exclude the subagent file: {}",
         top.stdout
-    );
-
-    // --subagents-only: the COMPLEMENT — ONLY the subagent file, parent excluded.
-    let sub = h.run(&["files", at(SESS).as_str(), "--by-file", "--subagents-only"]);
-    assert!(sub.success, "stderr: {}", sub.stderr);
-    assert!(sub.stdout.contains("/sub/s.md"), "got: {}", sub.stdout);
-    assert!(
-        !sub.stdout.contains("/parent/p.md"),
-        "--subagents-only must exclude the parent file: {}",
-        sub.stdout
     );
 }
 
@@ -3791,7 +3978,14 @@ fn files_timeline_json_marks_subagent_rows_with_refeedable_parent() {
     // parent_session_id == session_id (so a consumer can always `csift turns <parent>`).
     let h = Home::new();
     subagents_only_scenario(&h);
-    let out = h.run(&["files", at(SESS).as_str(), "--timeline", "--format", "json"]);
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
     let parent_row = objs
@@ -3820,7 +4014,14 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
     let h = Home::new();
     subagents_only_scenario(&h);
 
-    let j = h.run(&["files", at(SESS).as_str(), "--by-file", "--format", "json"]);
+    let j = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--by",
+        "file",
+        "--format",
+        "json",
+    ]);
     assert!(j.success, "stderr: {}", j.stderr);
     let objs = json_lines(&j.stdout);
     let sub = objs
@@ -3837,7 +4038,7 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
     assert_eq!(parent["is_subagent"], serde_json::json!(false));
     assert_eq!(parent["parent_session_id"], serde_json::json!(SESS));
 
-    let t = h.run(&["files", at(SESS).as_str(), "--by-file"]);
+    let t = h.run(&["files", at(SESS).as_str(), "--by", "file"]);
     assert!(t.success, "stderr: {}", t.stderr);
     // The subagent group's header is branded SUBAGENT + the re-feedable parent uuid.
     assert!(
@@ -3979,7 +4180,14 @@ fn files_timeline_op_uses_underscore_spelling() {
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"n1","name":"NotebookEdit","input":{"notebook_path":"/p/nb.ipynb","new_source":"x"}}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["files", at(SESS).as_str(), "--timeline", "--format", "json"]);
+    let out = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
     let ops: Vec<&str> = objs.iter().filter_map(|o| o["op"].as_str()).collect();
@@ -4054,50 +4262,6 @@ fn search_bare_uuid_is_a_literal_pattern_not_a_scope() {
 }
 
 #[test]
-fn files_subagents_only_with_no_subagent_says_none() {
-    // A session that spawned NO subagents → --subagents-only finds nothing for it.
-    let h = Home::new();
-    h.write(
-        &format!("{ENC}/{SESS}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"touch /tmp/only-parent"}}]}}"#, "\n",
-        ),
-    );
-    let out = h.run(&["files", at(SESS).as_str(), "--subagents-only"]);
-    // No subagents under the session → the --session resolver bails (nothing to dump).
-    assert!(
-        !out.success,
-        "stdout: {}\nstderr: {}",
-        out.stdout, out.stderr
-    );
-    assert!(
-        out.stderr.contains("no session file found"),
-        "stderr: {}",
-        out.stderr
-    );
-}
-
-#[test]
-fn files_no_subagents_and_subagents_only_are_mutually_exclusive() {
-    let h = Home::new();
-    subagents_only_scenario(&h);
-    let out = h.run(&[
-        "files",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--subagents-only",
-    ]);
-    assert!(!out.success, "clap must reject the two together");
-    assert!(
-        out.stderr.contains("cannot be used with")
-            || out.stderr.to_lowercase().contains("subagents-only"),
-        "expected a clap conflict error: {}",
-        out.stderr
-    );
-}
-
-#[test]
 fn files_detects_new_bash_idioms_end_to_end() {
     // The previously-MISSED idiom classes (fd-redirects, curl -o, --junit-xml=, dd of=,
     // zip) reach the real CLI surface and surface their /tmp destinations; the noisy
@@ -4132,7 +4296,7 @@ fn files_detects_new_bash_idioms_end_to_end() {
     lines.push('\n');
     h.write(&format!("{ENC}/{SESS}.jsonl"), &lines);
 
-    let out = h.run(&["files", at(SESS).as_str(), "--by-file", "--no-subagents"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--by", "file", "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     for (cmd, want) in cmds {
         assert!(
@@ -4187,13 +4351,22 @@ fn files_help_mentions_detail_levels_and_heuristic() {
     let h = Home::new();
     let out = h.run(&["files", "--help"]);
     assert!(out.success);
-    assert!(out.stdout.contains("--summary"));
-    assert!(out.stdout.contains("--by-dir"));
-    assert!(out.stdout.contains("--by-file"));
-    assert!(out.stdout.contains("--timeline"));
+    // The detail level is now a single `--by <summary|dir|file|timeline>` value-enum.
+    assert!(out.stdout.contains("--by"));
+    assert!(out.stdout.contains("summary"));
+    assert!(out.stdout.contains("dir"));
+    assert!(out.stdout.contains("file"));
+    assert!(out.stdout.contains("timeline"));
+    // The new full-path filters are documented.
     assert!(
-        out.stdout.contains("--subagents-only"),
-        "help must document the --subagents-only flag: {}",
+        out.stdout.contains("--regex") && out.stdout.contains("--glob"),
+        "help must document the --regex / --glob path filters: {}",
+        out.stdout
+    );
+    // The removed flag must NOT appear.
+    assert!(
+        !out.stdout.contains("--subagents-only"),
+        "help must NOT mention the removed --subagents-only flag: {}",
         out.stdout
     );
     assert!(
@@ -8789,7 +8962,7 @@ fn interrupt_does_not_split_a_turn() {
 #[test]
 fn scope_banner_uniform_across_spanning_subcommands() {
     let h = populated_home();
-    let f = h.run(&["files", at(SESS).as_str(), "--by-file"]);
+    let f = h.run(&["files", at(SESS).as_str(), "--by", "file"]);
     assert!(
         f.stdout.contains("sessions in scope"),
         "files banner:\n{}",
@@ -8820,7 +8993,7 @@ fn scope_banner_uniform_across_spanning_subcommands() {
         l.stdout
     );
     // The banner is SUPPRESSED under --no-subagents (single top-level transcript).
-    let f2 = h.run(&["files", at(SESS).as_str(), "--by-file", "--no-subagents"]);
+    let f2 = h.run(&["files", at(SESS).as_str(), "--by", "file", "--no-subagents"]);
     assert!(
         !f2.stdout.contains("sessions in scope"),
         "files --no-subagents banner leaked:\n{}",
@@ -8838,7 +9011,14 @@ fn scope_json_header_uniform_across_spanning_subcommands() {
     let at_sess = at(SESS);
     for args in [
         vec!["list", at_sess.as_str(), "--format", "json"],
-        vec!["files", at_sess.as_str(), "--by-file", "--format", "json"],
+        vec![
+            "files",
+            at_sess.as_str(),
+            "--by",
+            "file",
+            "--format",
+            "json",
+        ],
         vec!["search", "carry", at_sess.as_str(), "--format", "json"],
         vec![
             "recover",
@@ -8901,7 +9081,8 @@ fn no_subagents_dominant_regardless_of_order_end_to_end() {
     assert!(!span(&h.run(&[
         "files",
         at(SESS).as_str(),
-        "--by-file",
+        "--by",
+        "file",
         "--no-subagents",
         "--include-subagents"
     ])));
@@ -8923,25 +9104,33 @@ fn subagents_only_misplaced_gives_pointed_error() {
         let out = h.run(&[sub, at(SESS).as_str(), "--subagents-only"]);
         assert!(!out.success, "{sub} --subagents-only should fail");
         assert!(
-            out.stderr.contains("`files`-only flag") && out.stderr.contains("--no-subagents"),
-            "{sub}: expected pointed error, got: {}",
+            out.stderr.contains("was REMOVED") && out.stderr.contains("--no-subagents"),
+            "{sub}: expected the removed-flag migration error, got: {}",
             out.stderr
         );
     }
     // search too (pattern positional first).
     let out = h.run(&["search", "x", at(SESS).as_str(), "--subagents-only"]);
     assert!(!out.success);
+    assert!(out.stderr.contains("was REMOVED"), "search: {}", out.stderr);
+    // `--subagents-only` was REMOVED from `files` itself — it is now an unknown argument
+    // there too (the user-facing flag is gone; only the sibling hidden no-op remains).
+    let gone = h.run(&[
+        "files",
+        at(SESS).as_str(),
+        "--subagents-only",
+        "--by",
+        "file",
+    ]);
     assert!(
-        out.stderr.contains("`files`-only flag"),
-        "search: {}",
-        out.stderr
+        !gone.success,
+        "files --subagents-only must now be rejected: {}",
+        gone.stdout
     );
-    // files itself still accepts it as the real flag.
-    let ok = h.run(&["files", at(SESS).as_str(), "--subagents-only", "--by-file"]);
     assert!(
-        ok.success,
-        "files --subagents-only must work: {}",
-        ok.stderr
+        gone.stderr.contains("unexpected argument"),
+        "files --subagents-only should be an unknown argument: {}",
+        gone.stderr
     );
 }
 

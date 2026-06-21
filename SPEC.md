@@ -484,7 +484,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 4. The emitted Exchange carries: `session_id`, `is_subagent` + the always-re-feedable `parent_session_id` (the id-domain discriminators; `parent_session_id == session_id` for a top-level hit), `turn_index`, `started_utc` (the turn-opening timestamp = the exchange's chronological position; falls back to the earliest hit's ts, `None` only when neither exists), the list of `Hit`s (category + excerpt + UTC timestamp + `tool_name`), and `record_uuids` (every record stitched in — the §6.4 round-trip-completeness evidence) — matching `search::Exchange`.
 5. **AUQ pairing:** an `AskUserQuestion` `tool_use` and its answering `tool_result` (§4.4) are one pair; the answer is surfaced under `user` AND — per the §4.4 boundary rule — **opens its own turn** (`opens_turn`). The reconstructed turn opener is the full Q+options+answer unit (`auq_exchange`).
 6. **Compaction continuity:** a `compact_boundary`'s `logicalParentUuid`/`preservedSegment` may be used (best-effort) to keep turn indices monotonic across a compaction, but turn delimiting still keys on genuine-user records; never crash if these fields are absent.
-7. **Combined stable chronological timeline.** Across the WHOLE scope, emitted Exchanges are sorted ASCENDING by `started_utc` (ISO-8601 UTC sorts lexicographically as text), so subagent exchanges INTERLEAVE with top-level ones by absolute time rather than grouping per file; timestamp-less exchanges sort LAST, with a deterministic tie-break (sorted file order → turn order, preserved by a stable sort — same shape as `files --timeline`). The GLOBAL `--max-count` cap is applied AFTER the sort (keeping the earliest N and reporting the dropped remainder — never silent).
+7. **Combined stable chronological timeline.** Across the WHOLE scope, emitted Exchanges are sorted ASCENDING by `started_utc` (ISO-8601 UTC sorts lexicographically as text), so subagent exchanges INTERLEAVE with top-level ones by absolute time rather than grouping per file; timestamp-less exchanges sort LAST, with a deterministic tie-break (sorted file order → turn order, preserved by a stable sort — same shape as `files --by timeline`). The GLOBAL `--max-count` cap is applied AFTER the sort (keeping the earliest N and reporting the dropped remainder — never silent).
 
 ### 6.5 `agents` — a session's subagent TOPOLOGY (kind, trigger/start/completion, returned message, files)
 
@@ -543,7 +543,7 @@ csift agents @<uuid> --returned-message --format json         # every node's ret
 
 ### 6.6 `files` — which files/dirs a session modified, when
 
-**Purpose.** Report the files + directories a session changed, attributed to genuine-user turns, with a context-blow-up guard (a compact per-dir **summary** is the default; the full chronological list is opt-in). Answers the acid-test question "how many distinct gap docs did this session touch, and how many `/tmp` docs did it create?".
+**Purpose.** Report the files + directories a session changed, attributed to genuine-user turns, with a context-blow-up guard (a compact per-dir **summary** is the default via `--by summary`; the full chronological list is opt-in via `--by timeline`). Answers the acid-test question "how many distinct gap docs did this session touch, and how many `/tmp` docs did it create?". Optional `--regex` / `--glob` full-path filters narrow the reported set.
 
 **Extraction (verified against the live `~/.claude/projects` corpus, 2026-06-08) — authoritative vs heuristic:**
 
@@ -563,32 +563,36 @@ Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level parent session |
-| `--include-subagents` / `--no-subagents` / `--subagents-only` | mutually-exclusive (clap group `subagent_scope`) | `--include-subagents` | subagent scope: default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only; `--subagents-only` = the complement (only what the session's subagents touched) |
-| `--summary` / `--by-dir` / `--by-file` / `--timeline` | mutually-exclusive enum (clap group `detail`) | `--summary` | detail level (below) |
+| `--include-subagents` / `--no-subagents` | bool | spans subagents | subagent scope: default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only. `files` now matches every other default-on command (`want_subagents()` → `SubagentScope::from(bool)`); there is no `--subagents-only`. |
+| `--by <summary\|dir\|file\|timeline>` | value-enum | `summary` | detail level (below) |
+| `--regex RE` | string | none | keep only mutated paths whose **full absolute path** matches the Rust `regex` pattern ANYWHERE (used as-is; invalid pattern = hard error) |
+| `--glob PAT` | string | none | keep only mutated paths whose **full absolute path** matches the glob (`**` crosses `/`, via `globset`; invalid pattern = hard error) |
 | `--turn-range START..END` | string | none | inclusive 0-based turn range; **mutually exclusive** with `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local) |
 | `--format text\|json` | enum | `text` | output format |
 
-**Detail levels (the context-blow-up guard — exactly one is active, default `--summary`):**
-- **`--summary` (DEFAULT)** — compact per-top-level-dir rollup with op counts (e.g. `"/tmp: 12 write, 3 edit; spec/gaps: 4 edit"`); the smallest output, answers the acid test directly. Bucket = the mutation path's parent directory; a bare relative filename buckets under `./`.
-- **`--by-dir`** — one row per distinct directory (full path) with per-op counts + distinct-file count + first/last timestamp.
-- **`--by-file`** — one row per distinct absolute path with per-op counts + first/last timestamp (where "how many distinct gap docs touched" is exactly answerable).
-- **`--timeline`** — full chronological list, one line per mutation `(Lnnnn, timestamp, turn index, op, path)`. The verbose mode; never the default.
+**Detail levels — `--by <value>` (the context-blow-up guard — exactly one is active, default `summary`):**
+- **`--by summary` (DEFAULT)** — compact per-top-level-dir rollup with op counts (e.g. `"/tmp: 12 write, 3 edit; spec/gaps: 4 edit"`); the smallest output, answers the acid test directly. Bucket = the mutation path's parent directory; a bare relative filename buckets under `./`.
+- **`--by dir`** — one row per distinct directory (full path) with per-op counts + distinct-file count + first/last timestamp.
+- **`--by file`** — one row per distinct absolute path with per-op counts + first/last timestamp (where "how many distinct gap docs touched" is exactly answerable).
+- **`--by timeline`** — full chronological list, one line per mutation `(Lnnnn, timestamp, turn index, op, path)`. The verbose mode; never the default.
 
 Regardless of detail level, an **Edit-before-Read boundaries** section follows the mutation body (and shows on its own when a session ONLY hit boundaries, no mutations), one row per boundary `(⚠ path, Lnnnn, turn, ts, kind)`.
 
-**Filtering** is per-mutation: `--turn-range` (turn index assigned by the §6.4 genuine-user delimiter, shared with `search`) and `--since`/`--until` (a mutation with no timestamp never falls inside a *bounded* window — same rule as §6.2). **No silent truncation:** skipped malformed lines are counted and surfaced.
+**Filtering** is per-mutation. **Path filters** `--regex` / `--glob` are OPTIONAL, combinable with each other and with `--by`, and **ANDed** (a path must satisfy every supplied filter); both match against the **full absolute path** and are applied to mutations AND boundaries **BEFORE** the `--by` rollup, so summary/dir/file/timeline and the boundary section all reflect the filtered set (a filter that removes everything yields the normal `no file mutations found`). **Time/turn filters** `--turn-range` (turn index assigned by the §6.4 genuine-user delimiter, shared with `search`) and `--since`/`--until` (a mutation with no timestamp never falls inside a *bounded* window — same rule as §6.2). **No silent truncation:** skipped malformed lines are counted and surfaced.
 
-**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then the Edit-before-Read boundary section (if any), then a footer: distinct files + total mutations + boundary count, the active detail level, the turn/time filter context, the Bash-heuristic caveat, and the skipped-line count. Empty result (no mutations AND no boundaries) prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--timeline` with `{path, op, ts_utc, ts_local, turn_index, line_no, is_create, heuristic}`), then one `{type:"edit_before_read_boundary", path, line_no, turn_index, kind, ts_utc, ts_local, session_id, is_subagent, parent_session_id}` per boundary (in every detail mode), then a trailing summary object `{distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention).
+**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then the Edit-before-Read boundary section (if any), then a footer: distinct files + total mutations + boundary count, the active detail level, the turn/time filter context, the Bash-heuristic caveat, and the skipped-line count. Empty result (no mutations AND no boundaries) prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--by timeline` with `{path, op, ts_utc, ts_local, turn_index, line_no, is_create, heuristic}`), then one `{type:"edit_before_read_boundary", path, line_no, turn_index, kind, ts_utc, ts_local, session_id, is_subagent, parent_session_id}` per boundary (in every detail mode), then a trailing summary object `{distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention).
 
 **Perf shape** is `search`'s: a single forward pass per file (mmap + SIMD newline scan + a pre-JSON mutation byte-prefilter, full parse only on candidate lines), no large-blob retention (extract small `FileMutation` strings, drop the record — never hold `originalFile`/`content`/`structuredPatch`), rayon across files on the default pool (= CPU count).
 
 **Example invocations:**
 ```bash
 csift files @<uuid>                         # default summary: per-top-level-dir op rollup
-csift files @<uuid> --by-file               # per-file op counts + first/last touch
-csift files @<uuid> --timeline --since 2h   # full chronological, last 2h (heavy)
-csift files . --format json --by-dir        # machine-readable per-dir rollup
+csift files @<uuid> --by file               # per-file op counts + first/last touch
+csift files @<uuid> --by file --regex '\.rs$'         # only .rs paths, per-file
+csift files @<uuid> --by timeline --glob '**/src/**'  # mutations anywhere under a src/ dir
+csift files @<uuid> --by timeline --since 2h          # full chronological, last 2h (heavy)
+csift files . --format json --by dir        # machine-readable per-dir rollup
 csift files @<uuid> --format json | jq 'select(.type=="edit_before_read_boundary")'  # which files changed outside the tool stream
 ```
 

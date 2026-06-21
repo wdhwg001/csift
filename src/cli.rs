@@ -55,7 +55,7 @@ pub fn parse_argv() -> Cli {
 /// `/` encodes to one `-`), so a DOUBLE-dash token can never be a real target — it is an
 /// unknown / typo'd flag the `allow_hyphen_values` positional would otherwise swallow,
 /// surfacing the misleading `no project dir named "--xxx"` error instead of clap's clean
-/// `unexpected argument '--xxx'` + `did you mean --by-file?` suggestion. Returning `Err`
+/// `unexpected argument '--xxx'` + `did you mean --no-subagents?` suggestion. Returning `Err`
 /// here makes clap reconsider the token and emit that standard message uniformly across
 /// every scope-operating subcommand (search/whoami already did; the rest did not). A SINGLE
 /// `-` token is still accepted (it is a genuine encoded target). The [`normalize_argv`]
@@ -351,7 +351,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift search \"\" -t user --since 2h .        # pure filter: user turns, last 2h, here\n  \
           csift agents @<uuid> --since 2h             # subagents TRIGGERED in the last 2h\n  \
           csift whoami                                # who am I (this CC session)?\n  \
-          csift files @<uuid> --by-file               # which files this session modified, when\n  \
+          csift files @<uuid> --by file               # which files this session modified, when\n  \
           csift recover @<uuid> --file /abs/app.py    # segmented diff-patch history of a file\n  \
           csift recover . --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42\n  \
           csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
@@ -1062,20 +1062,18 @@ impl AgentsArgs {
     }
 }
 
-/// The pointed error when `--subagents-only` (a `files`-ONLY scope flag) is mistyped onto a
-/// sibling subcommand. `--subagents-only` is accepted as a HIDDEN no-op on list/search/
-/// recover/turns ONLY so this message fires instead of the misleading generic clap
-/// `invalid value '--subagents-only' for '[PATH]...'` PATH-swallow (the `allow_hyphen_values`
-/// positional eats it otherwise) — mirroring `agents`' `span_flag_error` courtesy. Returns
-/// `None` when the flag was not passed.
+/// The pointed migration error when the REMOVED `--subagents-only` is passed. It is kept as a
+/// HIDDEN no-op on the default-on subcommands ONLY so this message fires instead of the
+/// misleading generic clap `invalid value '--subagents-only' for '[PATH]...'` PATH-swallow (the
+/// `allow_hyphen_values` positional eats it otherwise). Returns `None` when not passed. (The
+/// crate-wide span-flag cleanup decides whether to drop the hidden no-op entirely.)
 #[must_use]
 fn subagents_only_misplaced_error(passed: bool) -> Option<&'static str> {
     if passed {
         Some(
-            "`--subagents-only` is a `files`-only flag (report ONLY subagent file mutations). \
-             It is not valid here. To restrict THIS subcommand to the top-level session use \
-             `--no-subagents`; to span subagents (the default) drop the flag. For subagent-only \
-             FILE attribution run `csift files --subagents-only @<uuid>`.",
+            "`--subagents-only` was REMOVED — there is no subagent-only mode any more. Subagents \
+             are spanned by default; use `--no-subagents` to restrict a subcommand to the \
+             top-level session.",
         )
     } else {
         None
@@ -1097,19 +1095,26 @@ pub enum AgentTimeAxis {
     Completion,
 }
 
-/// The aggregation detail level for `files` (exactly one is active; default summary).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The aggregation detail level for `files`, selected by `--by <summary|dir|file|timeline>`
+/// (exactly one is active; default `summary`). Doubles as the clap `ValueEnum` for `--by`,
+/// so the value spellings (`summary`/`dir`/`file`/`timeline`) ARE the variants' value names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum FilesDetail {
     /// Coarse TOP-LEVEL-prefix op rollup — buckets each path on its first few directory
     /// segments (so a whole project tree collapses to one row), the smallest output and the
-    /// DEFAULT. Strictly coarser than `--by-dir` (which keys on the FULL parent dir).
+    /// DEFAULT. Strictly coarser than `--by dir` (which keys on the FULL parent dir).
+    #[default]
+    #[value(name = "summary")]
     Summary,
     /// One row per distinct directory (the FULL parent path) with per-op + distinct-file
-    /// counts — finer than `--summary`'s top-level-prefix rollup.
+    /// counts — finer than `--by summary`'s top-level-prefix rollup.
+    #[value(name = "dir")]
     ByDir,
     /// One row per distinct file with per-op counts + first/last touch timestamps.
+    #[value(name = "file")]
     ByFile,
     /// Full chronological list, one line per mutation (the verbose, opt-in mode).
+    #[value(name = "timeline")]
     Timeline,
 }
 
@@ -1124,50 +1129,59 @@ pub enum FilesDetail {
           • HEURISTIC      Bash file mutations, parsed LEXICALLY from the command \
         string (rm/mv/cp/mkdir/touch/tee/sed -i/git/redirection). Bash carries no path \
         field in its result, so these are best-effort and ALWAYS labelled `(heuristic)`.\n\n\
-        DETAIL LEVELS (mutually exclusive; exactly one applies; STRICTLY coarsening):\n  \
-          --summary   (DEFAULT) coarse TOP-LEVEL-PREFIX rollup (first few dir segments — a\n              \
-                      whole project tree collapses to one row); the smallest output\n  \
-          --by-dir    one row per distinct directory (the FULL parent path — finer than\n              \
-                      --summary) with per-op + distinct-file counts + first/last\n  \
-          --by-file   one row per distinct file (per-op counts + first/last touch)\n  \
-          --timeline  full chronological list, one line per mutation (HEAVY — opt-in only)\n\n\
+        DETAIL LEVEL — `--by <summary|dir|file|timeline>` (DEFAULT `summary`; STRICTLY \
+        coarsening):\n  \
+          --by summary   (DEFAULT) coarse TOP-LEVEL-PREFIX rollup (first few dir segments — a\n              \
+                         whole project tree collapses to one row); the smallest output\n  \
+          --by dir       one row per distinct directory (the FULL parent path — finer than\n              \
+                         summary) with per-op + distinct-file counts + first/last\n  \
+          --by file      one row per distinct file (per-op counts + first/last touch)\n  \
+          --by timeline  full chronological list, one line per mutation (HEAVY — opt-in only)\n\n\
+        PATH FILTERS (optional, combinable with each other AND with --by; matched against \
+        each mutation's FULL absolute path):\n  \
+          --regex <RE>   keep a path iff the Rust `regex` pattern matches ANYWHERE in it\n  \
+          --glob <PAT>   keep a path iff the glob matches the full path (`**` crosses `/`)\n  \
+        Both filters AND together (a path must satisfy EVERY supplied filter) and apply \
+        BEFORE the --by rollup, so summary/dir/file/timeline AND the Edit-before-Read \
+        boundary section all reflect the filtered set; an invalid pattern is a hard error \
+        and a filter that removes everything yields the normal empty output.\n\n\
         The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it; with neither, all projects are \
         scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
-        in subagents): `--no-subagents` restricts to the TOP-LEVEL session only; \
-        `--subagents-only` is its COMPLEMENT — ONLY the files the session's subagents \
-        touched, with the top-level session's own mutations excluded (one command for \
-        the subagent set-difference). The two are mutually exclusive.\n\n\
+        in subagents): `--no-subagents` restricts to the TOP-LEVEL session only.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on genuine-user order) \
         is mutually exclusive with `--since`/`--until`. Time bounds accept ISO8601 \
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
         with no timestamp never falls inside a bounded window.\n\n\
         No silent truncation: skipped malformed lines are counted and surfaced.",
-    after_help = "DETAIL LEVEL (choose AT MOST ONE; default --summary, strictly coarsening)\n  \
-          --summary (coarse top-level-prefix rollup) < --by-dir (full parent dir) < --by-file \
-        (per file) < --timeline (per mutation). They are MUTUALLY EXCLUSIVE — passing two \
-        (e.g. `--by-file --timeline`) is a parse error. SUBAGENT SCOPE: --no-subagents and \
-        --subagents-only are likewise mutually exclusive (default spans subagents).\n\n\
+    after_help = "DETAIL LEVEL — `--by <summary|dir|file|timeline>` (default summary, strictly coarsening)\n  \
+          --by summary (coarse top-level-prefix rollup) < --by dir (full parent dir) < --by file \
+        (per file) < --by timeline (per mutation). PATH FILTERS: --regex <RE> (Rust regex, \
+        matches anywhere in the full path) and --glob <PAT> (full-path glob, `**` crosses `/`) \
+        are optional, combinable with each other and with --by, and AND together over the \
+        full absolute path BEFORE the rollup. SUBAGENT SCOPE: --no-subagents restricts to the \
+        top-level session (default spans subagents).\n\n\
         EXAMPLES\n  \
-          csift files @<uuid>                         # default summary: coarse top-level-prefix op rollup\n  \
-          csift files @<uuid> --by-file               # per-file op counts + first/last touch\n  \
-          csift files @<uuid> --subagents-only --by-file   # ONLY files the session's subagents touched\n  \
-          csift files @<uuid> --timeline --since 2h   # full chronological, last 2h (heavy)\n  \
-          csift files . --format json --by-dir        # machine-readable per-dir rollup\n\n\
+          csift files @<uuid>                          # default summary: coarse top-level-prefix op rollup\n  \
+          csift files @<uuid> --by file                # per-file op counts + first/last touch\n  \
+          csift files @<uuid> --by file --regex '\\.rs$'   # ONLY .rs paths, per-file\n  \
+          csift files @<uuid> --by timeline --glob '**/src/**'  # mutations anywhere under a src/ dir\n  \
+          csift files @<uuid> --by timeline --since 2h # full chronological, last 2h (heavy)\n  \
+          csift files . --format json --by dir         # machine-readable per-dir rollup\n\n\
         ACID TEST: \"how many distinct gap docs touched / how many /tmp docs created?\"\n  \
-          csift files @<uuid> --by-file                       # count rows ending in gaps-style docs\n  \
-          csift files @<uuid> --timeline --format json        # filter is_create==true (path under /tmp)\n  \
+          csift files @<uuid> --by file                       # count rows ending in gaps-style docs\n  \
+          csift files @<uuid> --by timeline --format json     # filter is_create==true (path under /tmp)\n  \
           (there is NO `op` value `create` — `op` is one of {bash,edit,write,multi_edit,\n   \
            notebook_edit}; create-vs-edit is the SEPARATE `is_create` boolean, so a /tmp-doc\n   \
            CREATE test filters `is_create==true` [optionally AND op in {write,multi_edit,\n   \
            notebook_edit}], never `op==\"create\"`.)\n  \
-        (NOTE: BOTH the per-mutation `op` AND `is_create` keys live ONLY in `--timeline`\n   \
-         JSON; a `--by-file` row carries per-op COUNT fields (write/edit/bash/multi_edit/\n   \
+        (NOTE: BOTH the per-mutation `op` AND `is_create` keys live ONLY in `--by timeline`\n   \
+         JSON; a `--by file` row carries per-op COUNT fields (write/edit/bash/multi_edit/\n   \
          notebook_edit/total) + first/last timestamps, NOT `op`/`is_create` — so use\n   \
-         `--timeline` to test create-vs-edit or filter by op.)\n\n\
+         `--by timeline` to test create-vs-edit or filter by op.)\n\n\
         JSON SCHEMAS (per --format json)\n  \
-          --timeline : one object per mutation — {session_id, is_subagent, parent_session_id,\n             \
+          --by timeline : one object per mutation — {session_id, is_subagent, parent_session_id,\n             \
                        path, op, ts_utc, ts_local, turn_index, is_create, heuristic} + a\n             \
                        trailing summary object. (session_id is the transcript's own id — a\n             \
                        top-level uuid, or a bare SUBAGENT hex when is_subagent=true, which is\n             \
@@ -1176,13 +1190,13 @@ pub enum FilesDetail {
                        guessed path/op lexically parsed from a shell command, lower confidence;\n             \
                        false = a definitive Edit/Write/Notebook/MultiEdit tool call with an\n             \
                        exact file_path. Filter heuristic==false for confirmed mutations only.)\n  \
-          --by-file  : one object per file — {session_id, is_subagent, parent_session_id,\n             \
+          --by file  : one object per file — {session_id, is_subagent, parent_session_id,\n             \
                        file, write, edit, bash, multi_edit, notebook_edit, total,\n             \
                        distinct_files, first_utc, first_local, last_utc, last_local} + a\n             \
                        trailing summary object. (is_subagent + parent_session_id discriminate\n             \
-                       the id-domain on EVERY grouped view, same as --timeline — a subagent\n             \
+                       the id-domain on EVERY grouped view, same as --by timeline — a subagent\n             \
                        row's session_id is a bare hex; re-feed parent_session_id.)\n  \
-          --by-dir / --summary : the same per-op count keys + the same {session_id,\n             \
+          --by dir / --by summary : the same per-op count keys + the same {session_id,\n             \
                        is_subagent, parent_session_id} discriminators, grouped under a\n             \
                        `dir`/`bucket` key, + a trailing summary {distinct_files,\n             \
                        total_mutations, skipped_lines, detail_level}."
@@ -1194,8 +1208,8 @@ pub struct FilesArgs {
     /// when no project path is given), so `csift files @<uuid>` works as the EXAMPLES show;
     /// `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to that
     /// transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent with
-    /// `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>` with
-    /// `--subagents-only` to scope its subagents.
+    /// `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>` (its
+    /// subagents are spanned by default).
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1207,40 +1221,38 @@ pub struct FilesArgs {
     /// explicitness/symmetry — it never changes the result (the default already attributes
     /// file mutations a SUBAGENT performed under the session: built-in Task/Agent-tool, OMC,
     /// and Workflow agents — important because OMC fan-out edits happen in subagents). The
-    /// REAL controls are `--no-subagents` (top-level only) and `--subagents-only` (subagents
-    /// only); `--no-subagents` ALWAYS wins over this flag when present, in any order.
+    /// REAL control is `--no-subagents` (top-level only); `--no-subagents` ALWAYS wins over
+    /// this flag when present, in any order.
     #[arg(long = "include-subagents", default_value_t = true)]
     pub include_subagents: bool,
 
     /// Exclude subagent transcripts — report only the top-level `<uuid>.jsonl` session's
     /// mutations. DOMINANT over `--include-subagents` (wins when present, any order).
-    /// Mutually exclusive with `--subagents-only`.
-    #[arg(long = "no-subagents", group = "subagent_scope")]
+    #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
-    /// The COMPLEMENT of `--no-subagents`: report ONLY files the session's SUBAGENTS
-    /// created/modified, with the top-level session's own mutations excluded. One
-    /// command for "what did the fan-out subagents touch?" (otherwise a two-run
-    /// set-difference of default minus `--no-subagents`). Mutually exclusive
-    /// with `--no-subagents`.
-    #[arg(long = "subagents-only", group = "subagent_scope")]
-    pub subagents_only: bool,
+    /// Detail level — `--by <summary|dir|file|timeline>` (DEFAULT `summary`, strictly
+    /// coarsening): `summary` = coarse top-level-prefix op rollup (smallest output);
+    /// `dir` = one row per distinct directory (full parent path) with per-op +
+    /// distinct-file counts + first/last; `file` = one row per distinct file (per-op
+    /// counts + first/last touch); `timeline` = full chronological list, one line per
+    /// mutation (HEAVY — opt-in only).
+    #[arg(long = "by", value_enum, default_value_t = FilesDetail::Summary)]
+    pub by: FilesDetail,
 
-    /// DEFAULT detail level: compact per-top-level-dir op rollup (the smallest output).
-    #[arg(long, group = "detail")]
-    pub summary: bool,
+    /// Keep only mutated paths whose FULL absolute path matches this Rust `regex` pattern
+    /// ANYWHERE (used as-is, no smart-case). Combinable with `--glob` (ANDed) and `--by`;
+    /// applied BEFORE the rollup so every view + the boundary section reflect the filtered
+    /// set. An invalid pattern is a hard error.
+    #[arg(long = "regex", value_name = "RE")]
+    pub regex: Option<String>,
 
-    /// One row per distinct directory (full path) with per-op + distinct-file counts.
-    #[arg(long = "by-dir", group = "detail")]
-    pub by_dir: bool,
-
-    /// One row per distinct file with per-op counts + first/last touch timestamps.
-    #[arg(long = "by-file", group = "detail")]
-    pub by_file: bool,
-
-    /// Full chronological list, one line per mutation (HEAVY — never the default).
-    #[arg(long, group = "detail")]
-    pub timeline: bool,
+    /// Keep only mutated paths whose FULL absolute path matches this glob (`**` crosses
+    /// `/`). Combinable with `--regex` (ANDed) and `--by`; applied BEFORE the rollup so
+    /// every view + the boundary section reflect the filtered set. An invalid pattern is a
+    /// hard error.
+    #[arg(long = "glob", value_name = "PAT")]
+    pub glob: Option<String>,
 
     /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
@@ -1268,37 +1280,19 @@ pub struct FilesArgs {
 }
 
 impl FilesArgs {
-    /// Resolve the three subagent-span flags into a single [`SubagentScope`]. clap's
-    /// `group = "subagent_scope"` (multiple=false) rejects `--no-subagents` AND
-    /// `--subagents-only` together at parse time, so at most one is set:
-    /// `--subagents-only` ⇒ `SubagentsOnly`; `--no-subagents` ⇒ `TopLevelOnly`; neither
-    /// ⇒ the default `WithSubagents`.
+    /// Whether subagent transcripts are spanned (the default). `files` now matches every
+    /// other default-on command: `--no-subagents` restricts to the top-level session;
+    /// otherwise subagents are spanned. Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
-    pub fn scope(&self) -> crate::path::SubagentScope {
-        use crate::path::SubagentScope;
-        if self.subagents_only {
-            SubagentScope::SubagentsOnly
-        } else if self.no_subagents {
-            SubagentScope::TopLevelOnly
-        } else {
-            SubagentScope::WithSubagents
-        }
+    pub fn want_subagents(&self) -> bool {
+        !self.no_subagents
     }
 
-    /// Resolve the four detail-level bool flags into the active [`FilesDetail`]. clap's
-    /// `group = "detail"` (which is `multiple = false` by default) rejects more than one
-    /// at parse time, so at most one is set here; none set ⇒ the `Summary` default.
+    /// The active [`FilesDetail`], selected directly by `--by` (clap validates the value
+    /// against the `ValueEnum`, defaulting to `Summary`).
     #[must_use]
     pub fn detail(&self) -> FilesDetail {
-        if self.by_dir {
-            FilesDetail::ByDir
-        } else if self.by_file {
-            FilesDetail::ByFile
-        } else if self.timeline {
-            FilesDetail::Timeline
-        } else {
-            FilesDetail::Summary
-        }
+        self.by
     }
 }
 
@@ -2745,12 +2739,12 @@ mod tests {
                 ),
                 _ => panic!("expected recover"),
             }
-            // files resolves through scope() → SubagentScope; no-subagents ⇒ TopLevelOnly.
+            // files now uses want_subagents() like every other default-on command;
+            // --no-subagents must win regardless of order.
             let cli = parse(&["csift", "files", SESS_UUID, order[0], order[1]]).unwrap();
             match cli.command {
-                Command::Files(a) => assert_eq!(
-                    a.scope(),
-                    crate::path::SubagentScope::TopLevelOnly,
+                Command::Files(a) => assert!(
+                    !a.want_subagents(),
                     "files: no-subagents must win, order {order:?}"
                 ),
                 _ => panic!("expected files"),
@@ -2814,11 +2808,9 @@ mod tests {
         match cli.command {
             Command::Files(a) => {
                 assert_eq!(a.detail(), FilesDetail::Summary, "default is summary");
-                assert_eq!(
-                    a.scope(),
-                    crate::path::SubagentScope::WithSubagents,
-                    "subagents spanned by default"
-                );
+                assert!(a.want_subagents(), "subagents spanned by default");
+                assert_eq!(a.regex, None);
+                assert_eq!(a.glob, None);
                 assert_eq!(a.paths.len(), 1);
                 assert_eq!(a.paths[0].to_string_lossy(), at);
             }
@@ -2829,7 +2821,7 @@ mod tests {
     #[test]
     fn files_by_file_selects_by_file() {
         let at = format!("@{SESS_UUID}");
-        let cli = parse(&["csift", "files", at.as_str(), "--by-file"]).unwrap();
+        let cli = parse(&["csift", "files", at.as_str(), "--by", "file"]).unwrap();
         match cli.command {
             Command::Files(a) => assert_eq!(a.detail(), FilesDetail::ByFile),
             _ => panic!("expected files"),
@@ -2838,12 +2830,13 @@ mod tests {
 
     #[test]
     fn files_by_dir_and_timeline_select_levels() {
-        let by_dir = parse(&["csift", "files", ".", "--by-dir"]).unwrap();
+        let by_dir = parse(&["csift", "files", ".", "--by", "dir"]).unwrap();
         match by_dir.command {
             Command::Files(a) => assert_eq!(a.detail(), FilesDetail::ByDir),
             _ => panic!("expected files"),
         }
-        let timeline = parse(&["csift", "files", ".", "--timeline", "--since", "2h"]).unwrap();
+        let timeline =
+            parse(&["csift", "files", ".", "--by", "timeline", "--since", "2h"]).unwrap();
         match timeline.command {
             Command::Files(a) => {
                 assert_eq!(a.detail(), FilesDetail::Timeline);
@@ -2854,8 +2847,8 @@ mod tests {
     }
 
     #[test]
-    fn files_explicit_summary_flag_is_summary() {
-        let cli = parse(&["csift", "files", ".", "--summary"]).unwrap();
+    fn files_explicit_summary_value_is_summary() {
+        let cli = parse(&["csift", "files", ".", "--by", "summary"]).unwrap();
         match cli.command {
             Command::Files(a) => assert_eq!(a.detail(), FilesDetail::Summary),
             _ => panic!("expected files"),
@@ -2863,39 +2856,63 @@ mod tests {
     }
 
     #[test]
-    fn files_two_detail_flags_conflict() {
-        // The clap `group = "detail"` (multiple=false) rejects two detail flags.
-        let err = parse(&["csift", "files", ".", "--by-file", "--by-dir"]);
-        assert!(err.is_err(), "two detail levels must be a clap conflict");
+    fn files_by_rejects_unknown_value() {
+        // The clap `ValueEnum` for `--by` rejects a spelling outside the four allowed values
+        // (in particular the OLD `--by-dir`-style value name is NOT accepted).
+        let err = parse(&["csift", "files", ".", "--by", "by-dir"]);
+        assert!(err.is_err(), "an unknown --by value must be a parse error");
+        let err2 = parse(&["csift", "files", ".", "--by", "files"]);
+        assert!(err2.is_err(), "an unknown --by value must be a parse error");
+    }
+
+    #[test]
+    fn files_old_detail_flags_are_gone() {
+        // The 4 old boolean detail flags were replaced by `--by <value>`; passing one now
+        // errors as an unknown argument.
+        for flag in ["--summary", "--by-dir", "--by-file", "--timeline"] {
+            let err = parse(&["csift", "files", ".", flag]);
+            assert!(err.is_err(), "{flag} must be an unknown argument now");
+        }
     }
 
     #[test]
     fn files_no_subagents_excludes() {
         let cli = parse(&["csift", "files", ".", "--no-subagents"]).unwrap();
         match cli.command {
-            Command::Files(a) => {
-                assert_eq!(a.scope(), crate::path::SubagentScope::TopLevelOnly)
-            }
+            Command::Files(a) => assert!(!a.want_subagents()),
             _ => panic!("expected files"),
         }
     }
 
     #[test]
-    fn files_subagents_only_scope() {
-        let cli = parse(&["csift", "files", ".", "--subagents-only"]).unwrap();
+    fn files_subagents_only_flag_is_gone() {
+        // `--subagents-only` was removed from `files`; it is now an unknown argument.
+        let err = parse(&["csift", "files", ".", "--subagents-only"]);
+        assert!(err.is_err(), "--subagents-only must be gone from files");
+    }
+
+    #[test]
+    fn files_regex_and_glob_parse() {
+        let cli = parse(&[
+            "csift",
+            "files",
+            ".",
+            "--by",
+            "file",
+            "--regex",
+            r"\.rs$",
+            "--glob",
+            "**/src/**",
+        ])
+        .unwrap();
         match cli.command {
             Command::Files(a) => {
-                assert_eq!(a.scope(), crate::path::SubagentScope::SubagentsOnly)
+                assert_eq!(a.detail(), FilesDetail::ByFile);
+                assert_eq!(a.regex.as_deref(), Some(r"\.rs$"));
+                assert_eq!(a.glob.as_deref(), Some("**/src/**"));
             }
             _ => panic!("expected files"),
         }
-    }
-
-    #[test]
-    fn files_no_subagents_and_subagents_only_conflict() {
-        // The clap `group = "subagent_scope"` (multiple=false) rejects both together.
-        let err = parse(&["csift", "files", ".", "--no-subagents", "--subagents-only"]);
-        assert!(err.is_err(), "the two subagent-scope flags must conflict");
     }
 
     #[test]

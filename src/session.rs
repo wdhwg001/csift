@@ -90,8 +90,8 @@ fn truncate_excerpt(s: &str) -> String {
 
 /// Entry point for `csift list`.
 pub fn run_list(args: &ListArgs) -> Result<()> {
-    // Pointed error if a sibling's scope flag (`--subagents-only`, a files-only flag) was
-    // mistyped here — instead of clap's misleading generic PATH-swallow.
+    // Pointed migration error if the REMOVED `--subagents-only` was passed here — instead of
+    // clap's misleading generic PATH-swallow.
     if let Some(msg) = args.span_flag_error() {
         anyhow::bail!(msg);
     }
