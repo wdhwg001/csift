@@ -516,21 +516,66 @@ fn resolve_trap(marker: &str) -> Result<TrapSelf> {
     }
 }
 
+/// The identity `whoami @trap:<marker>` resolves to — like [`TrapSelf`] but carrying the located
+/// transcript path + parent uuid, so `whoami` can answer "which subagent am I?" with a complete,
+/// re-feedable identity.
+pub enum TrapWho {
+    /// A SUBAGENT carried the marker: its bare-hex `agent_id`, the parent (calling top-level)
+    /// session id (the re-feedable `@<uuid>`), and the subagent transcript path if locatable.
+    Agent {
+        agent_id: String,
+        parent_session: String,
+        path: Option<PathBuf>,
+    },
+    /// Only the MAIN transcript carried the marker — the caller IS the top-level session.
+    Session {
+        session_id: String,
+        path: Option<PathBuf>,
+    },
+}
+
+/// Resolve `@trap:<marker>` for `whoami`: find the calling subagent (or confirm top-level) and
+/// locate its transcript. Reuses [`resolve_trap`]'s strict grammar + marker scan, then adds the
+/// path + parent so a subagent gets a complete, re-feedable identity (env-independent — it works
+/// for a built-in Task AND an orchestrated workflow subagent, whose env id is the PARENT, not itself).
+pub fn resolve_trap_who(marker: &str) -> Result<TrapWho> {
+    let parent_session = resolve_env_session()?;
+    match resolve_trap(marker)? {
+        TrapSelf::Agent(agent_id) => {
+            let path = locate_session_jsonl(&parent_session).and_then(|main| {
+                crate::subagent::subagent_transcript_files(&main)
+                    .ok()?
+                    .into_iter()
+                    .find(|p| crate::subagent::session_id_from_path(p) == agent_id)
+            });
+            Ok(TrapWho::Agent {
+                agent_id,
+                parent_session,
+                path,
+            })
+        }
+        TrapSelf::Session(session_id) => {
+            let path = locate_session_jsonl(&session_id);
+            Ok(TrapWho::Session { session_id, path })
+        }
+    }
+}
+
 /// Enforce the STRICT `@trap` marker grammar, rejecting every lazy shortcut at the source so the
 /// only way to satisfy it is to invent a fresh, imaginative token by hand. The marker must be
-/// `>=3` CamelCase words (each an uppercase letter + at least two lowercase letters — no single
-/// letters, no ALLCAPS acronyms like `HTML`) followed by EXACTLY four digits, and those four
+/// EXACTLY 3 CamelCase words (each an uppercase letter + at least two lowercase letters — no single
+/// letters, no ALLCAPS acronyms like `HTML` / `USB`) followed by EXACTLY four digits, and those four
 /// digits must NOT form a trivial run (all-equal / consecutive / simple odd / simple even — e.g.
 /// `0000` / `1234` / `9876` / `1357` / `2468`). Good: `JollyShinyBrook4283`. The strictness IS
-/// the point: it makes a hand-invented literary token the path of least resistance and a scripted
-/// or boilerplate token fail loudly.
+/// the point: it makes a hand-invented, imaginative, CONTEXT-INDEPENDENT literary token the path of
+/// least resistance and a scripted or boilerplate token fail loudly.
 fn validate_trap_marker(marker: &str) -> Result<()> {
-    let guidance = "@trap needs a marker you INVENT one-shot, right now, by hand: >=3 imaginative \
-                    CamelCase words + 4 random digits, e.g. `@trap:JollyShinyBrook4283`. Put it \
-                    VERBATIM in this csift command (no shell variable / concatenation), and never \
-                    generate it with a script. Rejected: <3 words, single-letter or ALLCAPS \
-                    \"words\", missing or !=4 trailing digits, or trivial digits (1111 / 1234 / \
-                    9876 / 1357 / 2468 ...).";
+    let guidance = "@trap needs a marker you INVENT one-shot, right now, by hand: EXACTLY 3 \
+                    imaginative, CONTEXT-INDEPENDENT CamelCase words + 4 random digits, e.g. \
+                    `@trap:JollyShinyBrook4283`. Put it VERBATIM in this csift command (no shell \
+                    variable / concatenation), and never generate it with a script. Rejected: not \
+                    exactly 3 words, single-letter or ALLCAPS \"words\", missing or !=4 trailing \
+                    digits, or trivial digits (1111 / 1234 / 9876 / 1357 / 2468 ...).";
     if marker.is_empty() {
         bail!("{guidance}");
     }
@@ -542,9 +587,9 @@ fn validate_trap_marker(marker: &str) -> Result<()> {
         bail!("@trap: marker `{marker}` must END with exactly 4 digits. {guidance}");
     }
     match camel_words(words) {
-        Some(w) if w.len() >= 3 => {}
+        Some(w) if w.len() == 3 => {}
         _ => bail!(
-            "@trap: marker `{marker}` must be >=3 CamelCase words (each: 1 uppercase + >=2 \
+            "@trap: marker `{marker}` must be EXACTLY 3 CamelCase words (each: 1 uppercase + >=2 \
              lowercase) before the 4 digits. {guidance}"
         ),
     }
@@ -1421,30 +1466,30 @@ mod tests {
 
     #[test]
     fn validate_trap_marker_enforces_the_strict_grammar() {
-        // Accepted: >=3 imaginative CamelCase words + 4 non-trivial digits.
+        // Accepted: EXACTLY 3 imaginative CamelCase words + 4 non-trivial digits.
         for ok in [
             "JollyShinyBrook4283",
             "MossyLanternCove6024",
             "GildedHeronVale7391",
-            "WistfulAmberGlenMoor8135", // 4 words is fine too
         ] {
             assert!(validate_trap_marker(ok).is_ok(), "should accept {ok}");
         }
         // Rejected — every lazy shortcut fails loudly.
         for bad in [
-            "",                   // empty
-            "foo",                // too short / not the shape
-            "CrimsonOwlPond",     // no trailing 4 digits
-            "DeepRiverStone12",   // only 2 digits
-            "OneTwo4283",         // 2 words (< 3)
-            "GoFooBars4283",      // "Go" is a 2-letter word (need >=3 chars)
-            "HTTPSPROXYGATE4827", // ALLCAPS "word" — no lowercase tail
-            "HTML0000",           // the acronym + zeros loophole
-            "DeepRiverStone1234", // trivial: consecutive
-            "DeepRiverStone0000", // trivial: all-equal
-            "DeepRiverStone9876", // trivial: descending
-            "DeepRiverStone1357", // trivial: odd run (+2)
-            "DeepRiverStone2468", // trivial: even run (+2)
+            "",                         // empty
+            "foo",                      // too short / not the shape
+            "CrimsonOwlPond",           // no trailing 4 digits
+            "DeepRiverStone12",         // only 2 digits
+            "OneTwo4283",               // 2 words (must be EXACTLY 3)
+            "WistfulAmberGlenMoor8135", // 4 words (must be EXACTLY 3, not >=3)
+            "GoFooBars4283",            // "Go" is a 2-letter word (need >=3 chars)
+            "HTTPSPROXYGATE4827",       // ALLCAPS "word" — no lowercase tail
+            "HTML0000",                 // the acronym + zeros loophole
+            "DeepRiverStone1234",       // trivial: consecutive
+            "DeepRiverStone0000",       // trivial: all-equal
+            "DeepRiverStone9876",       // trivial: descending
+            "DeepRiverStone1357",       // trivial: odd run (+2)
+            "DeepRiverStone2468",       // trivial: even run (+2)
         ] {
             assert!(validate_trap_marker(bad).is_err(), "should reject {bad:?}");
         }

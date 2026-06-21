@@ -70,8 +70,24 @@ pub struct WhoAmI {
     pub path: Option<PathBuf>,
 }
 
-/// Entry point for `csift whoami`.
+/// Entry point for `csift whoami`. With no target (or `@main`), identify the calling session from
+/// the environment; with `@trap:<marker>`, resolve which SUBAGENT the caller is (env-independent).
 pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
+    match args.self_target.as_deref() {
+        None | Some("@main") => run_whoami_env(args),
+        Some(t) if t.starts_with("@trap:") => {
+            run_whoami_trap(t.strip_prefix("@trap:").unwrap_or(""), args)
+        }
+        Some(other) => bail!(
+            "whoami accepts no target except `@trap:<marker>` (which SUBAGENT am I?) or `@main` \
+             (the calling top-level session — the default). Got `{other}`. To inspect a DIFFERENT \
+             session, use `csift list @<uuid>` / `csift agents @<uuid>`."
+        ),
+    }
+}
+
+/// `whoami` (env form): the calling session id from `$CLAUDE_CODE_SESSION_ID` + its jsonl path.
+fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
     let Some(session_id) = detect_session_id() else {
         // SPEC §6.3 step 3: never guess — error with actionable guidance.
         bail!("{AMBIGUOUS_GUIDANCE}");
@@ -83,6 +99,69 @@ pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
     match args.format {
         OutputFormat::Text => render_text(&me, args),
         OutputFormat::Json => render_json(&me)?,
+    }
+    Ok(())
+}
+
+/// `whoami @trap:<marker>`: resolve the calling SUBAGENT (or confirm top-level) from the unique
+/// literal marker the caller embedded in THIS very command, reporting a complete, re-feedable
+/// identity (the bare hex + parent uuid). Env-independent — reliable for a built-in Task AND a
+/// workflow subagent (whose env id is the PARENT, not itself).
+fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
+    use serde_json::json;
+
+    match path::resolve_trap_who(marker)? {
+        path::TrapWho::Agent {
+            agent_id,
+            parent_session,
+            path,
+        } => match args.format {
+            OutputFormat::Text => {
+                println!("subagent {agent_id}");
+                println!("parent   {parent_session}");
+                match &path {
+                    Some(p) => println!("path     {}", p.display()),
+                    None if args.show_path => {
+                        println!("path     <subagent transcript not found under projects root>");
+                    }
+                    None => {}
+                }
+            }
+            OutputFormat::Json => {
+                let obj = json!({
+                    "session_id": agent_id,
+                    "is_subagent": true,
+                    "parent_session_id": parent_session,
+                    "path": path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+                });
+                println!("{}", serde_json::to_string(&obj)?);
+            }
+        },
+        path::TrapWho::Session { session_id, path } => match args.format {
+            OutputFormat::Text => {
+                println!("session  {session_id}");
+                println!(
+                    "note     the marker was in the MAIN transcript — you are the TOP-LEVEL \
+                     session, not a subagent"
+                );
+                match &path {
+                    Some(p) => println!("path     {}", p.display()),
+                    None if args.show_path => {
+                        println!("path     <not found under projects root>");
+                    }
+                    None => {}
+                }
+            }
+            OutputFormat::Json => {
+                let obj = json!({
+                    "session_id": &session_id,
+                    "is_subagent": false,
+                    "parent_session_id": &session_id,
+                    "path": path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+                });
+                println!("{}", serde_json::to_string(&obj)?);
+            }
+        },
     }
     Ok(())
 }

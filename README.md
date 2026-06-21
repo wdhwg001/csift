@@ -68,7 +68,7 @@ Most CLIs are read by a human at a terminal. `csift`'s primary user is **the AI 
 Claude Code session searching its own or a peer session's history. That one constraint shapes
 everything: output is terse and parseable, every record carries a re-feedable `Lnnnn` locator and
 `@<uuid>` handle, ambiguity is an explicit error rather than a silent guess, and a running session
-can even ask *"which subagent am I?"* with `@trap:<marker>`. It's the rare tool whose UX is tuned
+can even ask *"which subagent am I?"* with `whoami @trap:<marker>`. It's the rare tool whose UX is tuned
 for a model, not a person.
 
 ## The summary is a selection. csift keeps the conversation.

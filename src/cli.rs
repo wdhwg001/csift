@@ -330,19 +330,20 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         subagent + its subtree; `@main` is the CALLING top-level session (read from \
         $CLAUDE_CODE_SESSION_ID); a `*.jsonl` path scopes to that one transcript. A BARE uuid \
         (no `@`) is NOT special.\n\n\
-        @trap:<marker> — \"which subagent am I?\". CC withholds a subagent's OWN id from its \
-        Bash environment, so a running subagent cannot name itself via env. Instead you INVENT \
-        a marker and embed it LITERALLY in this very csift command; csift finds the transcript \
-        whose Bash `csift` command carries that marker (CC records the tool_use to disk before \
-        it runs) and scopes to that agent's subtree — or to the session itself, if you are the \
-        main thread. DISCIPLINE (enforced): invent the marker ONE-SHOT, by you, right now — an \
-        imaginative, literary, random token of >=3 CamelCase words + 4 random digits, e.g. \
-        `@trap:JollyShinyBrook4283`. NEVER generate it with a script (a generator would be \
+        @trap:<marker> — \"which subagent am I?\", on EVERY subcommand (including `whoami`, which \
+        reports your bare hex + parent uuid). CC withholds a subagent's OWN id from its Bash \
+        environment, so a running subagent cannot name itself via env. Instead you INVENT a marker \
+        and embed it LITERALLY in this very csift command; csift finds the transcript whose Bash \
+        `csift` command carries that marker (CC records the tool_use to disk before it runs) and \
+        scopes to that agent's subtree — or to the session itself, if you are the main thread. \
+        DISCIPLINE (enforced): invent the marker ONE-SHOT, by you, right now — an imaginative, \
+        literary, random, CONTEXT-INDEPENDENT token of EXACTLY 3 CamelCase words + 4 random digits, \
+        e.g. `@trap:JollyShinyBrook4283`. NEVER generate it with a script (a generator would be \
         another `csift`-ish command carrying the marker → ambiguity); never build it from a \
         shell variable or string concatenation (it must appear VERBATIM in the recorded \
-        command); never reuse a previous one. csift REJECTS lazy markers: fewer than 3 words, \
-        single-letter or ALLCAPS \"words\" (HTML…), not exactly 4 trailing digits, or trivial \
-        digits (1111 / 1234 / 9876 / 1357 / 2468).",
+        command); never reuse a previous one. csift REJECTS lazy markers: not EXACTLY 3 words, \
+        single-letter or ALLCAPS \"words\" (`HTML`/`USB`…), not exactly 4 trailing digits, or \
+        trivial digits (1111 / 1234 / 9876 / 1357 / 2468).",
     after_help = "EXAMPLES\n  \
           csift list                                  # index every session, all projects\n  \
           csift list .                                # just this cwd's project\n  \
@@ -2209,27 +2210,40 @@ impl TurnsArgs {
           What the env var names depends on HOW the subagent was spawned. In a built-in \
         Task/Agent SUBAGENT it holds the SUBAGENT's OWN id (so `whoami` identifies the \
         subagent). In an ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) it \
-        holds the PARENT session id (so `whoami` resolves the ROOT instead). Don't assume \
-        which — disambiguate via the recovery: feed the resolved id to `csift agents --agent \
-        <id> --format json`; if it returns the node, read `parent_session_id` for the ROOT \
-        (one call); if it errors `no subagent matched`, the id is ALREADY top-level — use it \
-        directly. (Or scan `csift agents .` / `csift list .` on the project PATH to find the \
-        parent uuid.) whoami JSON INTENTIONALLY carries only {session_id, path} — it does NOT \
-        include is_subagent / parent_session_id (unlike list/search/files/recover/turns \
-        JSON).\n\n\
+        holds the PARENT session id (so `whoami` resolves the ROOT instead). For a DEFINITIVE, \
+        env-INDEPENDENT answer use `whoami @trap:<marker>`: you embed a one-shot literal marker in \
+        that very command and csift maps it straight to your subagent hex + parent uuid (the @trap \
+        form's JSON carries the full {session_id, is_subagent, parent_session_id, path} trio). \
+        WITHOUT @trap, don't assume which id the env gave — feed it to `csift agents --agent <id> \
+        --format json`; a returned node → read `parent_session_id` for the ROOT; `no subagent \
+        matched` → the id is ALREADY top-level. Plain `whoami` JSON carries only {session_id, \
+        path} — from the env alone it canNOT know is_subagent / parent_session_id (that is exactly \
+        what `@trap` resolves).\n\n\
         FLAG NOTE\n  \
-          `--show-path` is a BOOLEAN toggle (no value). Every session-operating subcommand \
-        takes its target as a POSITIONAL [PATH]... / `@`-token; there is no target flag.\n\n\
+          `--show-path` is a BOOLEAN toggle (no value). whoami takes an OPTIONAL positional SELF \
+        target — `@trap:<marker>` or `@main` ONLY; every OTHER session-operating subcommand takes \
+        a general POSITIONAL [PATH]... / `@`-token. There is no target flag anywhere.\n\n\
         EXAMPLES\n  \
           csift whoami                  # print the calling session's uuid (+ its jsonl path if found)\n  \
           csift whoami --show-path      # always show the resolved jsonl path (or a not-found note)\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
-          # FROM A SUBAGENT — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
+          csift whoami @trap:JollyShinyBrook4283   # which SUBAGENT am I? -> bare hex + parent uuid (env-independent)\n  \
+          # FALLBACK (no @trap) — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
           csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json\n  \
           # …then scope the whole conversation with that parent uuid:\n  \
           csift search \"<pattern>\" \"@$(csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json | jq -r .parent_session_id)\""
 )]
 pub struct WhoamiArgs {
+    /// Optional SELF target — `@trap:<marker>` or `@main` (nothing else). With NO target, identify
+    /// the calling session from `$CLAUDE_CODE_SESSION_ID` (the historical behavior; `@main` is its
+    /// explicit spelling). `@trap:<marker>` answers "which SUBAGENT am I?": a running subagent
+    /// (whose own id CC withholds from the env) embeds a unique, literal, one-shot marker in THIS
+    /// very csift command and csift maps it back to the subagent's bare hex + parent uuid —
+    /// env-INDEPENDENT, so it is reliable for a built-in Task AND a workflow subagent (whose env id
+    /// is the PARENT). To inspect a DIFFERENT session, use `list`/`agents`, not `whoami`.
+    #[arg(value_name = "SELF")]
+    pub self_target: Option<String>,
+
     /// FORCE a `path` line even when the jsonl can't be resolved (then it prints
     /// `path <not found …>`). The path is ALREADY shown by default whenever it resolves —
     /// plain `whoami` only OMITS the `path` line in the unresolved case; this flag adds the
@@ -2255,6 +2269,29 @@ mod tests {
     #[test]
     fn command_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn whoami_accepts_trap_and_main_self_target_else_none() {
+        // `@trap:<marker>` and `@main` land in whoami's optional positional; bare whoami = None.
+        let cli =
+            parse(&["csift", "whoami", "@trap:JollyShinyBrook4283"]).expect("whoami @trap parses");
+        match cli.command {
+            Command::Whoami(a) => {
+                assert_eq!(a.self_target.as_deref(), Some("@trap:JollyShinyBrook4283"));
+            }
+            _ => panic!("expected whoami"),
+        }
+        let cli = parse(&["csift", "whoami", "@main"]).expect("whoami @main parses");
+        match cli.command {
+            Command::Whoami(a) => assert_eq!(a.self_target.as_deref(), Some("@main")),
+            _ => panic!("expected whoami"),
+        }
+        let cli = parse(&["csift", "whoami"]).expect("bare whoami parses");
+        match cli.command {
+            Command::Whoami(a) => assert!(a.self_target.is_none()),
+            _ => panic!("expected whoami"),
+        }
     }
 
     /// Parse through the SAME normalization pass the real entrypoint uses

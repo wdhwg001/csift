@@ -36,7 +36,7 @@ A pre-pass REORDERS declared flags + values ahead of leading-dash project-target
 
 ### `@trap:<marker>` - "which subagent am I?"
 CC sets `$CLAUDE_CODE_SESSION_ID` to the TOP-LEVEL id even inside a subagent, so it can't name itself via env. Fix: INVENT a marker, put it LITERALLY in THIS csift command; csift scans the session's main + subagent transcripts for a **Bash `tool_use`** whose **`input.command`** holds BOTH the marker AND literal `csift`. Matching the tool_use INPUT (not the line / a `tool_result`) avoids a false hit on an ECHOED marker. CC flushes the tool_use BEFORE it runs => resolves first-try. Resolution: 1 subagent => that agent; only main => session; 0 => error (re-run); >1 => ambiguity error.
-**Marker grammar (ENFORCED, rejects loudly)**: one-shot, invented NOW; ASCII + **byte length >= 13**; **>=3 CamelCase words** (each 1 upper + >=2 lower - no single letters, no ALLCAPS like `HTML`) + **exactly 4 trailing digits**, not a trivial run (3 EQUAL consecutive digit-diffs with step in `-2..=2` => rejects `0000`/`1234`/`1357` etc.). NEVER script-generate (a generator call itself carries the marker => ambiguity), never from a shell var/concat (must appear verbatim), never reuse. From MAIN use `@main` (its marker flushes only at turn end => may need re-run).
+**Marker grammar (ENFORCED, rejects loudly)**: one-shot, invented NOW, imaginative + CONTEXT-INDEPENDENT; ASCII + **byte length >= 13**; **EXACTLY 3 CamelCase words** (each 1 upper + >=2 lower - no single letters, no ALLCAPS like `HTML`/`USB`) + **exactly 4 trailing digits**, not a trivial run (constant digit-step -2..2 => rejects `0000`/`1234`/`1357` etc.). NEVER script-generate (a generator call itself carries the marker => ambiguity), never from a shell var/concat (must appear verbatim), never reuse. From MAIN use `@main` (its marker flushes only at turn end => may need re-run).
 
 ## Categories (`search -t`) - `thinking | user | tool | tool-response | agent`
 - `thinking` = assistant thinking. `tool` = `tool_use` (AUQ counts). `tool-response` = `tool_result` (each names its tool). `agent` = visible assistant end-of-turn text.
@@ -96,9 +96,9 @@ Lists a session's subagents. **Kind = on-disk PATH LOCATION, not `agentType`**: 
 
 ## `whoami` - identify the calling session (false-positive-safe)
 ```
-csift whoami [--show-path] [--format json]
+csift whoami [@trap:<marker>|@main] [--show-path] [--format json]
 ```
-Reads `$CLAUDE_CODE_SESSION_ID`; alias `$CODEX_COMPANION_SESSION_ID`. NEVER a loose `/session/i` regex (`SECURITYSESSIONID` is a trap). Neither set => **errors** with guidance to pass `@<uuid>`; never guesses by mtime/process-tree. NO target. `--show-path` forces `path <not found …>`. JSON `{session_id, path}`. "Am I a subagent?" -> feed the id to `csift agents --agent <id> --format json`, read `parent_session_id`/`is_subagent` (a workflow subagent's env holds the PARENT id, a built-in Task's own; else `@trap`).
+Reads `$CLAUDE_CODE_SESSION_ID`; alias `$CODEX_COMPANION_SESSION_ID`. NEVER a loose `/session/i` regex (`SECURITYSESSIONID` is a trap). Neither set => **errors** (pass `@<uuid>`); never guesses by mtime. Optional positional **`@trap:<marker>`** = "which SUBAGENT am I?" (bare hex + parent uuid, env-INDEPENDENT; JSON adds `is_subagent`/`parent_session_id`); **`@main`/none** = env top-level. `--show-path` forces `path <not found …>`. JSON `{session_id, path}`.
 
 ## `files` - what a session changed, and when
 ```
