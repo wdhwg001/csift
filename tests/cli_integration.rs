@@ -2572,14 +2572,14 @@ fn agents_agent_grab_renders_single_node_not_whole_workflow() {
 }
 
 #[test]
-fn agents_rejects_subagent_span_flags_with_pointed_error() {
+fn agents_rejects_no_subagents_with_pointed_error() {
     // `agents --no-subagents` (a flag it does not have) is rejected with a pointed message,
     // NOT swallowed as a bogus PATH value by allow_hyphen_values.
     let h = populated_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--no-subagents"]);
     assert!(!out.success, "the no-op span flag must error");
     assert!(
-        out.stderr.contains("no --include-subagents") || out.stderr.contains("no subagent-span"),
+        out.stderr.contains("no subagent-span flag"),
         "stderr should explain agents has no span flag; got: {}",
         out.stderr
     );
@@ -3946,8 +3946,8 @@ fn files_spans_subagent_mutations() {
 }
 
 /// A session whose TOP-LEVEL turn writes `/parent/p.md` and whose SUBAGENT writes
-/// `/sub/s.md`. `--subagents-only` returns the exact set-difference (subagent file
-/// only, parent file excluded) — the complement of `--no-subagents` (parent only).
+/// `/sub/s.md` — the fixture for span-scope tests: the default spans both files, while
+/// `--no-subagents` keeps only the parent file.
 fn subagents_only_scenario(h: &Home) {
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -8709,7 +8709,7 @@ fn turns_budget_respected_under_rich_and_all_modes() {
 #[test]
 fn turns_rich_filters_subagent_runs_too() {
     // The shared code path: a SUBAGENT transcript carrying a long agent run is richness-
-    // filtered with the same flags (default --include-subagents). The subagent's pure
+    // filtered with the same flags (explicit --include-subagents opt-in). The subagent's pure
     // declarations collapse; its rich member + EOT survive.
     let h = turns_home();
     // A subagent sidecar with a long agent run under the session.
@@ -9076,23 +9076,17 @@ fn scope_json_header_uniform_across_spanning_subcommands() {
     }
 }
 
-/// `--no-subagents` is DOMINANT regardless of flag order (the r6→r7 `overrides_with` removal):
-/// passing `--include-subagents` LAST no longer re-enables the fan-out the user suppressed.
+/// `--no-subagents` is the only span flag on the default-ON commands and suppresses the
+/// fan-out the user asked to drop. The former no-op `--include-subagents` is GONE there, so the
+/// only way to restrict span is `--no-subagents` — and it always restricts.
 #[test]
-fn no_subagents_dominant_regardless_of_order_end_to_end() {
+fn no_subagents_restricts_span_end_to_end() {
     let h = populated_home();
     let span = |out: &Output| out.stdout.contains("sessions in scope");
-    // Both orders must suppress the banner (top-level only).
+    // `--no-subagents` suppresses the banner (top-level only) on every default-on command.
     assert!(!span(&h.run(&[
         "list",
         at(SESS).as_str(),
-        "--no-subagents",
-        "--include-subagents"
-    ])));
-    assert!(!span(&h.run(&[
-        "list",
-        at(SESS).as_str(),
-        "--include-subagents",
         "--no-subagents"
     ])));
     assert!(!span(&h.run(&[
@@ -9100,38 +9094,47 @@ fn no_subagents_dominant_regardless_of_order_end_to_end() {
         at(SESS).as_str(),
         "--by",
         "file",
-        "--no-subagents",
-        "--include-subagents"
+        "--no-subagents"
     ])));
     assert!(!span(&h.run(&[
         "search",
         "carry",
         at(SESS).as_str(),
-        "--no-subagents",
-        "--include-subagents"
+        "--no-subagents"
     ])));
+    // The removed `--include-subagents` is now an unknown argument on a default-on command.
+    let gone = h.run(&["list", at(SESS).as_str(), "--include-subagents"]);
+    assert!(
+        !gone.success,
+        "list --include-subagents must be rejected: {}",
+        gone.stdout
+    );
 }
 
-/// `--subagents-only` is a `files`-only flag; mistyped onto a sibling it now produces a
-/// POINTED error (naming the right flag), not the generic clap PATH-swallow.
+/// `--subagents-only` is GONE crate-wide (no user-facing flag, no hidden migration no-op). On
+/// every span-aware subcommand it now falls through to the generic clap "unexpected argument"
+/// rejection — the acceptable outcome once the pointed-migration machinery was removed.
 #[test]
-fn subagents_only_misplaced_gives_pointed_error() {
+fn subagents_only_is_an_unknown_argument_everywhere() {
     let h = populated_home();
     for sub in ["turns", "recover", "list"] {
         let out = h.run(&[sub, at(SESS).as_str(), "--subagents-only"]);
         assert!(!out.success, "{sub} --subagents-only should fail");
         assert!(
-            out.stderr.contains("was REMOVED") && out.stderr.contains("--no-subagents"),
-            "{sub}: expected the removed-flag migration error, got: {}",
+            out.stderr.contains("unexpected argument"),
+            "{sub}: expected the generic unknown-argument error, got: {}",
             out.stderr
         );
     }
     // search too (pattern positional first).
     let out = h.run(&["search", "x", at(SESS).as_str(), "--subagents-only"]);
     assert!(!out.success);
-    assert!(out.stderr.contains("was REMOVED"), "search: {}", out.stderr);
-    // `--subagents-only` was REMOVED from `files` itself — it is now an unknown argument
-    // there too (the user-facing flag is gone; only the sibling hidden no-op remains).
+    assert!(
+        out.stderr.contains("unexpected argument"),
+        "search: {}",
+        out.stderr
+    );
+    // files itself rejects it as an unknown argument (the user-facing flag was removed earlier).
     let gone = h.run(&[
         "files",
         at(SESS).as_str(),

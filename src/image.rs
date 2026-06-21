@@ -605,9 +605,6 @@ fn ambiguity_error(ambiguous: &[(usize, Vec<&ImageRef>)], path: Option<&Path>) -
 }
 
 pub fn run_image(args: &ImageArgs) -> Result<()> {
-    if let Some(msg) = args.span_flag_error() {
-        bail!(msg);
-    }
     let extracting = args.out.is_some();
     let selection = parse_id_selection(&args.id)?;
 

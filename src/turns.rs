@@ -441,10 +441,6 @@ struct ScanResult {
 
 /// Entry point for `csift turns`.
 pub fn run_turns(args: &TurnsArgs) -> Result<()> {
-    // Pointed error if the files-only `--subagents-only` was mistyped here.
-    if let Some(msg) = args.span_flag_error() {
-        bail!(msg);
-    }
     // ── Validate window mutual-exclusion (same rule + wording as recover/files) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");

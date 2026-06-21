@@ -437,10 +437,6 @@ fn resolve_single_transcript(args: &SearchArgs, subagent_hex: Option<&str>) -> R
 }
 
 pub fn run_search(args: &SearchArgs) -> Result<()> {
-    // Pointed error if the files-only `--subagents-only` was mistyped here.
-    if let Some(msg) = args.span_flag_error() {
-        bail!(msg);
-    }
     // ── Validate flag combinations up front (SPEC §6.2 validation) ──
     if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
         bail!("--turn-range is mutually exclusive with --since/--until");
@@ -1673,9 +1669,7 @@ mod tests {
             line: Vec::new(),
             uuid: Vec::new(),
             resolve_persisted: false,
-            include_subagents: true,
             no_subagents: false,
-            subagents_only: false,
             format: OutputFormat::Text,
         }
     }

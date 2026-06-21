@@ -35,16 +35,16 @@ struct SessionTopology {
 
 /// Entry point for `csift agents`.
 pub fn run_agents(args: &AgentsArgs) -> Result<()> {
-    // `agents` has no subagent-span flag — reject the (hidden, no-op) ones with a pointed
-    // message instead of letting `allow_hyphen_values` swallow them as a bogus PATH value.
+    // `agents` has no subagent-span flag — reject the (hidden, no-op) `--no-subagents` with a
+    // pointed message instead of letting `allow_hyphen_values` swallow it as a bogus PATH value.
     if let Some(msg) = args.span_flag_error() {
         bail!(msg);
     }
 
     // Resolve the target session files from the positional target(s). With none, every
     // project is scanned — the same target model as list/search. `agents` discovers each
-    // session's subagents itself, so it never spans subagent TRANSCRIPT files here
-    // (include_subagents=false).
+    // session's subagents itself, so it never spans subagent TRANSCRIPT files here — pass
+    // `false` (⇒ `SubagentScope::TopLevelOnly`).
     let session_files =
         path::resolve_session_files(&args.paths, false.into(), path::Caller::Other)?;
 

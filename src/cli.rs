@@ -550,25 +550,11 @@ pub struct ListArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
-    /// explicitness/symmetry — it never changes the result (the default already discovers +
-    /// lists each session's SUBAGENT transcripts under `<session>/subagents/**`: built-in
-    /// Task/Agent-tool, OMC, and Workflow agents). The REAL control is `--no-subagents`, which
-    /// ALWAYS wins when present regardless of flag order. Workflow `journal.jsonl` event logs
-    /// are never transcripts and are always excluded.
-    #[arg(long = "include-subagents", default_value_t = true)]
-    pub include_subagents: bool,
-
     /// Exclude subagent transcripts — list only the top-level `<uuid>.jsonl` sessions (the
-    /// pre-subagent behavior). DOMINANT: when present it always wins, even if
-    /// `--include-subagents` is also passed (in any order).
+    /// pre-subagent behavior). Subagent transcripts are spanned by default; this is the only
+    /// span flag.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
-
-    /// HIDDEN no-op — accepted only to emit a pointed "that's a `files`-only flag" error
-    /// instead of the generic clap PATH-swallow. See [`subagents_only_misplaced_error`].
-    #[arg(long = "subagents-only", hide = true)]
-    pub subagents_only: bool,
 
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
@@ -576,17 +562,11 @@ pub struct ListArgs {
 }
 
 impl ListArgs {
-    /// Resolve to a single decision. `--no-subagents` is DOMINANT (the only signal read);
-    /// `--include-subagents` is a default-ON no-op, so a present `--no-subagents` always wins.
+    /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
+    /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         !self.no_subagents
-    }
-
-    /// Pointed error if the `files`-only `--subagents-only` was mistyped here, else `None`.
-    #[must_use]
-    pub fn span_flag_error(&self) -> Option<&'static str> {
-        subagents_only_misplaced_error(self.subagents_only)
     }
 }
 
@@ -728,26 +708,11 @@ pub struct SearchArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
-    /// explicitness/symmetry — it never changes the result (the default already searches each
-    /// in-scope session's SUBAGENT transcripts under `<session>/subagents/**`: built-in
-    /// Task/Agent-tool, OMC, and Workflow agents, so a hit in a subagent's work surfaces
-    /// alongside the main thread). The REAL control is `--no-subagents`, which ALWAYS wins
-    /// when present regardless of flag order. Workflow `journal.jsonl` event logs are not
-    /// transcripts and are never searched.
-    #[arg(long = "include-subagents", default_value_t = true)]
-    pub include_subagents: bool,
-
     /// Exclude subagent transcripts — search only the top-level `<uuid>.jsonl` sessions.
-    /// DOMINANT: when present it always wins, even if `--include-subagents` is also passed
-    /// (in any order).
+    /// Subagent transcripts are searched by default; this is the only span flag. Workflow
+    /// `journal.jsonl` event logs are not transcripts and are never searched.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
-
-    /// HIDDEN no-op — accepted only to emit a pointed "that's a `files`-only flag" error
-    /// instead of the generic clap PATH-swallow. See [`subagents_only_misplaced_error`].
-    #[arg(long = "subagents-only", hide = true)]
-    pub subagents_only: bool,
 
     /// Filter to one or more categories. Repeatable.
     #[arg(short = 't', long = "category", value_enum)]
@@ -849,17 +814,11 @@ pub struct SearchArgs {
 }
 
 impl SearchArgs {
-    /// Resolve to a single decision. `--no-subagents` is DOMINANT (the only signal read);
-    /// `--include-subagents` is a default-ON no-op, so a present `--no-subagents` always wins.
+    /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
+    /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         !self.no_subagents
-    }
-
-    /// Pointed error if the `files`-only `--subagents-only` was mistyped here, else `None`.
-    #[must_use]
-    pub fn span_flag_error(&self) -> Option<&'static str> {
-        subagents_only_misplaced_error(self.subagents_only)
     }
 
     /// The project targets to scope to: the positional `[PATH]...`. Empty ⇒ the shared
@@ -978,16 +937,12 @@ pub struct AgentsArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// HIDDEN no-op subagent-span flags. `agents` has NO subagent-span control: it DISCOVERS
-    /// subagents as its primary output, so `--include-subagents`/`--no-subagents` are
-    /// meaningless here (unlike list/search/files/recover, which span their session's
-    /// subagent transcripts). They are accepted only to emit a pointed error instead of
-    /// letting `allow_hyphen_values` swallow them as a bogus PATH value (the misleading
-    /// `invalid value '--no-subagents' for '[PATH]...'`). See [`AgentsArgs::reject_span_flags`].
-    #[arg(long = "include-subagents", hide = true)]
-    pub include_subagents: bool,
-
-    /// HIDDEN no-op (see `include_subagents`).
+    /// HIDDEN no-op subagent-span flag. `agents` has NO subagent-span control: it DISCOVERS
+    /// subagents as its primary output, so `--no-subagents` is meaningless here (unlike
+    /// list/search/files/recover, which span their session's subagent transcripts). It is
+    /// accepted only to emit a pointed error instead of letting `allow_hyphen_values` swallow
+    /// it as a bogus PATH value (the misleading `invalid value '--no-subagents' for
+    /// '[PATH]...'`). See [`AgentsArgs::span_flag_error`].
     #[arg(long = "no-subagents", hide = true)]
     pub no_subagents: bool,
 
@@ -1047,41 +1002,23 @@ pub struct AgentsArgs {
 }
 
 impl AgentsArgs {
-    /// The error string when a (no-op) subagent-span flag is passed to `agents`, or `None`
-    /// when neither was. `agents` has no subagent-span control (it lists subagents AS its
-    /// output), so these flags are meaningless — but accepting + rejecting them gives a
-    /// pointed message instead of the misleading `allow_hyphen_values` PATH-swallow error.
+    /// The error string when the (no-op) `--no-subagents` span flag is passed to `agents`, or
+    /// `None` when it was not. `agents` has no subagent-span control (it lists subagents AS its
+    /// output), so the flag is meaningless — but accepting + rejecting it gives a pointed
+    /// message instead of the misleading `allow_hyphen_values` PATH-swallow error.
     #[must_use]
     pub fn span_flag_error(&self) -> Option<&'static str> {
-        if self.include_subagents || self.no_subagents {
+        if self.no_subagents {
             Some(
-                "`agents` has no --include-subagents / --no-subagents flag: it DISCOVERS a \
-                 session's subagents as its primary output (there is nothing to span over). \
-                 Drop the flag. To list a session's subagents run `csift agents @<uuid>`; to \
-                 scope another subcommand's subagent span use that subcommand's \
-                 flag (e.g. `csift files --no-subagents @<uuid>`).",
+                "`agents` has no subagent-span flag: it DISCOVERS a session's subagents as its \
+                 primary output (there is nothing to span over). Drop `--no-subagents`. To list \
+                 a session's subagents run `csift agents @<uuid>`; to scope another subcommand's \
+                 subagent span use that subcommand's flag (e.g. `csift files --no-subagents \
+                 @<uuid>`).",
             )
         } else {
             None
         }
-    }
-}
-
-/// The pointed migration error when the REMOVED `--subagents-only` is passed. It is kept as a
-/// HIDDEN no-op on the default-on subcommands ONLY so this message fires instead of the
-/// misleading generic clap `invalid value '--subagents-only' for '[PATH]...'` PATH-swallow (the
-/// `allow_hyphen_values` positional eats it otherwise). Returns `None` when not passed. (The
-/// crate-wide span-flag cleanup decides whether to drop the hidden no-op entirely.)
-#[must_use]
-fn subagents_only_misplaced_error(passed: bool) -> Option<&'static str> {
-    if passed {
-        Some(
-            "`--subagents-only` was REMOVED — there is no subagent-only mode any more. Subagents \
-             are spanned by default; use `--no-subagents` to restrict a subcommand to the \
-             top-level session.",
-        )
-    } else {
-        None
     }
 }
 
@@ -1223,17 +1160,10 @@ pub struct FilesArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
-    /// explicitness/symmetry — it never changes the result (the default already attributes
-    /// file mutations a SUBAGENT performed under the session: built-in Task/Agent-tool, OMC,
-    /// and Workflow agents — important because OMC fan-out edits happen in subagents). The
-    /// REAL control is `--no-subagents` (top-level only); `--no-subagents` ALWAYS wins over
-    /// this flag when present, in any order.
-    #[arg(long = "include-subagents", default_value_t = true)]
-    pub include_subagents: bool,
-
     /// Exclude subagent transcripts — report only the top-level `<uuid>.jsonl` session's
-    /// mutations. DOMINANT over `--include-subagents` (wins when present, any order).
+    /// mutations. Subagent mutations are attributed by default (built-in Task/Agent-tool, OMC,
+    /// and Workflow agents — important because OMC fan-out edits happen in subagents); this is
+    /// the only span flag.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
@@ -1436,23 +1366,10 @@ pub struct RecoverArgs {
     #[arg(long, value_name = "ABS_PATH")]
     pub file: Option<String>,
 
-    /// Subagent span is ON BY DEFAULT, so this flag is a NO-OP that exists only for
-    /// explicitness/symmetry — it never changes the result (the default already reconstructs
-    /// from SUBAGENT transcripts under the session: built-in Task/Agent-tool, OMC, and
-    /// Workflow agents). The REAL control is `--no-subagents`, which ALWAYS wins when present
-    /// regardless of flag order.
-    #[arg(long = "include-subagents", default_value_t = true)]
-    pub include_subagents: bool,
-
-    /// Exclude subagent transcripts — reconstruct only from the top-level session. DOMINANT:
-    /// when present it always wins over `--include-subagents` (in any order).
+    /// Exclude subagent transcripts — reconstruct only from the top-level session. Subagent
+    /// transcripts are spanned by default; this is the only span flag.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
-
-    /// HIDDEN no-op — accepted only to emit a pointed "that's a `files`-only flag" error
-    /// instead of the generic clap PATH-swallow. See [`subagents_only_misplaced_error`].
-    #[arg(long = "subagents-only", hide = true)]
-    pub subagents_only: bool,
 
     /// Best-effort line-numbered FINAL-state fragment — restore's never-fails sibling. Where
     /// the default restore REFUSES a partial file, `--salvage` dumps whatever survived (known
@@ -1549,17 +1466,11 @@ pub struct RecoverArgs {
 }
 
 impl RecoverArgs {
-    /// Resolve to a single decision. `--no-subagents` is DOMINANT (the only signal read);
-    /// `--include-subagents` is a default-ON no-op, so a present `--no-subagents` always wins.
+    /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
+    /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         !self.no_subagents
-    }
-
-    /// Pointed error if the `files`-only `--subagents-only` was mistyped here, else `None`.
-    #[must_use]
-    pub fn span_flag_error(&self) -> Option<&'static str> {
-        subagents_only_misplaced_error(self.subagents_only)
     }
 
     /// Resolve the mode flags into the active [`RecoverMode`]. clap's `group = "mode"`
@@ -1653,19 +1564,10 @@ pub struct ImageArgs {
     #[arg(long, value_name = "PATH")]
     pub out: Option<PathBuf>,
 
-    /// Subagent span is ON BY DEFAULT (a tool screenshot may live in a subagent transcript);
-    /// this flag is an explicit no-op. The REAL control is `--no-subagents`.
-    #[arg(long = "include-subagents", default_value_t = true)]
-    pub include_subagents: bool,
-
-    /// Exclude subagent transcripts — scan only the top-level session. DOMINANT (wins over
-    /// `--include-subagents`, any order).
+    /// Exclude subagent transcripts — scan only the top-level session. Subagent transcripts are
+    /// scanned by default (a tool screenshot may live in one); this is the only span flag.
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
-
-    /// HIDDEN no-op — accepted only to emit a pointed "that's a `files`-only flag" error.
-    #[arg(long = "subagents-only", hide = true)]
-    pub subagents_only: bool,
 
     /// Emit JSON (one object per image + a trailing summary) instead of the text listing.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
@@ -1673,16 +1575,11 @@ pub struct ImageArgs {
 }
 
 impl ImageArgs {
-    /// Subagent span is ON by default; `--no-subagents` is dominant.
+    /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
+    /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         !self.no_subagents
-    }
-
-    /// Pointed error if the `files`-only `--subagents-only` was mistyped here, else `None`.
-    #[must_use]
-    pub fn span_flag_error(&self) -> Option<&'static str> {
-        subagents_only_misplaced_error(self.subagents_only)
     }
 }
 
@@ -1942,11 +1839,6 @@ pub struct TurnsArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
-    /// HIDDEN no-op — accepted only to emit a pointed "that's a `files`-only flag" error
-    /// instead of the generic clap PATH-swallow. See [`subagents_only_misplaced_error`].
-    #[arg(long = "subagents-only", hide = true)]
-    pub subagents_only: bool,
-
     /// Stop walking back after crossing N compaction boundaries (0 = unlimited;
     /// default 0). A guard, not a target.
     #[arg(long = "max-compactions", value_name = "N", default_value_t = 0)]
@@ -2091,12 +1983,6 @@ impl TurnsArgs {
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         self.include_subagents && !self.no_subagents
-    }
-
-    /// Pointed error if the `files`-only `--subagents-only` was mistyped here, else `None`.
-    #[must_use]
-    pub fn span_flag_error(&self) -> Option<&'static str> {
-        subagents_only_misplaced_error(self.subagents_only)
     }
 
     /// Resolve the agent-message policy into a [`crate::turns::RichnessCfg`]. A `--profile`
@@ -2710,51 +2596,90 @@ mod tests {
     }
 
     #[test]
-    fn no_subagents_is_dominant_regardless_of_flag_order() {
-        // The r6→r7 fix: `--no-subagents` ALWAYS wins on the default-ON spanning subcommands,
-        // even when `--include-subagents` is passed LAST. Before the `overrides_with` removal,
-        // `--no-subagents --include-subagents` let include win (a 633-way fan-out the user
-        // asked to suppress). Both orders must now suppress subagents.
-        for order in [
-            ["--no-subagents", "--include-subagents"],
-            ["--include-subagents", "--no-subagents"],
+    fn include_subagents_is_gone_from_the_default_on_commands() {
+        // `--include-subagents` was a no-op on the default-ON spanning commands (the mode it
+        // requested was already the default) and is REMOVED there. Only `turns` — which
+        // defaults to top-level-only — keeps it as a meaningful opt-in.
+        for argv in [
+            vec!["csift", "list", SESS_UUID, "--include-subagents"],
+            vec!["csift", "search", "x", SESS_UUID, "--include-subagents"],
+            vec!["csift", "files", SESS_UUID, "--include-subagents"],
+            vec!["csift", "recover", SESS_UUID, "--include-subagents"],
+            vec!["csift", "image", SESS_UUID, "--include-subagents"],
         ] {
-            let cli = parse(&["csift", "list", SESS_UUID, order[0], order[1]]).unwrap();
-            match cli.command {
-                Command::List(a) => {
-                    assert!(
-                        !a.want_subagents(),
-                        "list: no-subagents must win, order {order:?}"
-                    )
-                }
-                _ => panic!("expected list"),
-            }
-            let cli = parse(&["csift", "search", "x", SESS_UUID, order[0], order[1]]).unwrap();
-            match cli.command {
-                Command::Search(a) => assert!(
-                    !a.want_subagents(),
-                    "search: no-subagents must win, order {order:?}"
-                ),
-                _ => panic!("expected search"),
-            }
-            let cli = parse(&["csift", "recover", SESS_UUID, order[0], order[1]]).unwrap();
-            match cli.command {
-                Command::Recover(a) => assert!(
-                    !a.want_subagents(),
-                    "recover: no-subagents must win, order {order:?}"
-                ),
-                _ => panic!("expected recover"),
-            }
-            // files now uses want_subagents() like every other default-on command;
-            // --no-subagents must win regardless of order.
-            let cli = parse(&["csift", "files", SESS_UUID, order[0], order[1]]).unwrap();
-            match cli.command {
-                Command::Files(a) => assert!(
-                    !a.want_subagents(),
-                    "files: no-subagents must win, order {order:?}"
-                ),
-                _ => panic!("expected files"),
-            }
+            assert!(
+                parse(&argv).is_err(),
+                "{argv:?}: --include-subagents must be an unknown argument now"
+            );
+        }
+        // turns KEEPS it (the opt-in).
+        let cli = parse(&["csift", "turns", SESS_UUID, "--include-subagents"]).unwrap();
+        match cli.command {
+            Command::Turns(a) => assert!(a.want_subagents(), "turns --include-subagents opts in"),
+            _ => panic!("expected turns"),
+        }
+    }
+
+    #[test]
+    fn no_subagents_excludes_on_every_default_on_command() {
+        // On the default-ON spanning commands the only span flag is `--no-subagents`; it
+        // restricts to the top-level session regardless of position.
+        let cli = parse(&["csift", "list", SESS_UUID, "--no-subagents"]).unwrap();
+        match cli.command {
+            Command::List(a) => assert!(!a.want_subagents(), "list: no-subagents excludes"),
+            _ => panic!("expected list"),
+        }
+        let cli = parse(&["csift", "search", "x", SESS_UUID, "--no-subagents"]).unwrap();
+        match cli.command {
+            Command::Search(a) => assert!(!a.want_subagents(), "search: no-subagents excludes"),
+            _ => panic!("expected search"),
+        }
+        let cli = parse(&["csift", "recover", SESS_UUID, "--no-subagents"]).unwrap();
+        match cli.command {
+            Command::Recover(a) => assert!(!a.want_subagents(), "recover: no-subagents excludes"),
+            _ => panic!("expected recover"),
+        }
+        let cli = parse(&["csift", "files", SESS_UUID, "--no-subagents"]).unwrap();
+        match cli.command {
+            Command::Files(a) => assert!(!a.want_subagents(), "files: no-subagents excludes"),
+            _ => panic!("expected files"),
+        }
+        let cli = parse(&["csift", "image", SESS_UUID, "--no-subagents"]).unwrap();
+        match cli.command {
+            Command::Image(a) => assert!(!a.want_subagents(), "image: no-subagents excludes"),
+            _ => panic!("expected image"),
+        }
+    }
+
+    #[test]
+    fn turns_include_then_no_subagents_cancels_the_opt_in() {
+        // `turns` defaults to top-level-only; `--include-subagents` opts in. A LATER
+        // `--no-subagents` cancels it — the field's `overrides_with` makes the last flag win,
+        // and `want_subagents()` ANDs `include && !no_subagents`. (Bare opt-in spans; the
+        // trailing `--no-subagents` here suppresses it.)
+        let cli = parse(&[
+            "csift",
+            "turns",
+            SESS_UUID,
+            "--include-subagents",
+            "--no-subagents",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Turns(a) => assert!(
+                !a.want_subagents(),
+                "turns: a trailing --no-subagents must cancel --include-subagents"
+            ),
+            _ => panic!("expected turns"),
+        }
+        // Default (no span flag) is top-level only.
+        let cli = parse(&["csift", "turns", SESS_UUID]).unwrap();
+        match cli.command {
+            Command::Turns(a) => assert!(
+                !a.want_subagents(),
+                "turns defaults to top-level only (no opt-in)"
+            ),
+            _ => panic!("expected turns"),
         }
     }
 

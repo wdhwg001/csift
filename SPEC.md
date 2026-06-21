@@ -332,8 +332,7 @@ When no `--category` is given, **all five** categories are eligible (search ever
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | a real cwd OR an encoded dir (§2.3); 0 args ⇒ every dir under projects root |
 | `--format text\|json` | enum | `text` | output format |
-| `--include-subagents` | bool | `true` | also list each session's subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`); **default ON**. Workflow `journal.jsonl` is excluded (not a transcript). |
-| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only; **DOMINANT** (always wins when present, any flag order) |
+| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only. Subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`) are listed by default; this is the only span flag. Workflow `journal.jsonl` is excluded (not a transcript). |
 
 **Per-session fields emitted:** `session-id`, **first** genuine-user message (+ts), **last** genuine-user message (+ts), **last** agent message (+ts), the session `cwd` (decoded from data, §2.4), `version`, `gitBranch`. Each message is a one-line excerpt (truncated with an explicit `… (+N chars)` marker — never silent).
 
@@ -350,7 +349,7 @@ SESSION  0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
   first ◂  2026-06-07 14:01:09 AEST (2026-06-07T04:01:09.123Z)
            Write the AUTHORITATIVE SPEC.md for csift…
   last ◂   2026-06-07 15:48:22 AEST (2026-06-07T05:48:22.880Z)
-           also add an --include-subagents flag please
+           also add a --no-subagents flag please
   last ▸   2026-06-07 15:49:10 AEST (2026-06-07T05:49:10.004Z)
            Done — SPEC.md rewritten; summary below.
 ```
@@ -387,8 +386,7 @@ csift list --format json .                              # machine-readable index
 | `--line SPEC` | — | repeatable + comma | none | ADDRESS by 1-based physical line(s)/ranges (`--line 87,495-500`) instead of/with pattern; needs a single-transcript scope; addressed records render FULL; an explicit miss is reported `unresolved`. To address a SUBAGENT transcript, prefix a token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`); all hex-bearing tokens must name the SAME transcript |
 | `--uuid U` | — | repeatable + comma | none | ADDRESS by record uuid(s) (globally unique); addressed records render FULL; a miss is `unresolved` |
 | `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6) |
-| `--include-subagents` | — | bool | `true` | also search each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`); **default ON** (passing it is a no-op for explicitness). Workflow `journal.jsonl` is never searched (not a transcript). |
-| `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions; **DOMINANT** — always wins when present, any flag order |
+| `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions. Each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`) are searched by default; this is the only span flag. Workflow `journal.jsonl` is never searched (not a transcript). |
 | `--format text\|json` | — | enum | `text` | output format |
 
 **Addressing (record fetch) — `--line` / `--uuid`.** Beyond regex matching, a record can be selected by **physical line** (`--line`, per-file, needs a single-transcript scope) or **uuid** (`--uuid`, global). Addressed records emit at FULL length (you asked for *this* message, not a teaser); a pattern, if also given, further narrows within the addressed set. This is the permission-friendly alternative to `Read`-ing the raw jsonl. An explicitly-requested address that resolves to nothing is reported in an `unresolved:` footer line — never silently dropped. `--line` addresses the top-level transcript by default; to address a **subagent** transcript, prefix the first token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`), fail-CLOSED — an unmatched hex errors, never widens scope. All hex-bearing tokens must name the same transcript (lines address ONE file).
@@ -488,7 +486,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 
 ### 6.5 `agents` — a session's subagent TOPOLOGY (kind, trigger/start/completion, returned message, files)
 
-**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. The output is ALWAYS the parent→child tree: workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) parent their agents, and a nested sub-subagent renders under its spawning agent (there is no flat mode). Complements `--include-subagents` on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents. (Design rationale + verified corpus counts: **§11.3**.)
+**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. The output is ALWAYS the parent→child tree: workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) parent their agents, and a nested sub-subagent renders under its spawning agent (there is no flat mode). Complements the default subagent span on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents. (Design rationale + verified corpus counts: **§11.3**.)
 
 **Topology linkage (the spawn join).** A built-in subagent's `meta.json` carries `toolUseId` — the id of the parent `Task`/`Agent` `tool_use` that spawned it. csift builds a per-session `ParentSpawnIndex` (one forward scan of the parent transcript) mapping `tool_use_id → {spawn tool name, trigger ts, description, subagent_type}` and `tool_use_id → paired tool_result text`. Each subagent joins on its `spawn_tool_use_id`, recovering:
 
@@ -562,7 +560,7 @@ Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level parent session |
-| `--include-subagents` / `--no-subagents` | bool | spans subagents | subagent scope: default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only. `files` now matches every other default-on command (`want_subagents()` → `SubagentScope::from(bool)`); there is no `--subagents-only`. |
+| `--no-subagents` | bool | spans subagents | subagent scope: by default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only. `files` matches every other default-on command (`want_subagents()` → `SubagentScope::from(bool)`); this is the only span flag (no `--include-subagents`, no `--subagents-only`). |
 | `--by <summary\|dir\|file\|timeline>` | value-enum | `summary` | detail level (below) |
 | `--regex RE` | string | none | keep only mutated paths whose **full absolute path** matches the Rust `regex` pattern ANYWHERE (used as-is; invalid pattern = hard error) |
 | `--glob PAT` | string | none | keep only mutated paths whose **full absolute path** matches the glob (`**` crosses `/`, via `globset`; invalid pattern = hard error) |
@@ -621,7 +619,7 @@ csift files @<uuid> --format json | jq 'select(.type=="edit_before_read_boundary
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level parent session |
 | `--file ABS_PATH` \| `@plan` | string | none | the file to reconstruct (exact raw-string match + basename-suffix fallback); **REQUIRED** for every mode. The magic value `@plan` resolves the session-bound plan file (§6.7.1) and reconstructs it like any other file |
-| `--include-subagents` / `--no-subagents` | bool | `true` | span subagent transcripts (OMC fan-out edits happen there) |
+| `--no-subagents` | bool | spans subagents | restrict to the top-level session; subagent transcripts are spanned by default (OMC fan-out edits happen there). The only span flag. |
 | `--salvage` / `--patches` / `--at WHEN` / `--coverage` (alias `--dry-run`) | clap group `mode` | restore (none set) | the reconstruction mode (mutually exclusive; with NONE set, the default restore mode applies) |
 | `--turn-range START..END` | string | none | inclusive 0-based turn range; mutually exclusive with `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 / relative) |
@@ -741,7 +739,7 @@ csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chu
 | `--turn-range A..B` | string | none | 0-based inclusive turn window — a per-transcript `#N` disambiguator (turn indices come from the shared §6.4 delimiter) |
 | `--uuid PREFIX` | string | none | restrict to the record whose uuid starts with this — a `#N` disambiguator (the uuid is shown in the ambiguity list / JSON) |
 | `--out PATH` | path | none | EXTRACT. The path's EXTENSION drives the format (the `convert in out.jpg` idiom): a **directory** (or any path with no `png`/`jpg`/`jpeg`/`gif`/`webp` extension) writes each image auto-named `<session-short>[-img<N>]-L<line>i<n>.<ext>` in its SOURCE format; a path WITH one of those extensions writes the **single** selected image to exactly that file, CONVERTING if the format differs (see below). >1 image with a file path is an error. Without `--out`, only LIST |
-| `--include-subagents` / `--no-subagents` | bool | `true` | span subagent transcripts (a tool screenshot may live there); `--no-subagents` dominant |
+| `--no-subagents` | bool | spans subagents | restrict to the top-level session; subagent transcripts are scanned by default (a tool screenshot may live there). The only span flag. |
 | `--format text\|json` | enum | `text` | output format |
 
 **Behaviour.** Same scan shape as `recover`/`files` (mmap + a pre-JSON image byte prefilter + parse only candidate lines, line-numbered 1:1). The media type (and thus the default extension) is read **per image** from its `source.media_type` — never assumed PNG; real sessions carry a mix (png, jpeg, …), and the `~/.claude/image-cache/*.png` mirror is a lossy `.png` rename that the inline bytes do not share. The **LISTING is content-deduped**: the same image re-injected across context windows (every prompt re-sends attached images + compaction re-includes them) is shown **once**, keeping its latest occurrence, via a cheap `<len>:<head>:<tail>` base64 fingerprint; two DISTINCT-content images sharing a `#N` both survive (so the reuse is visible — and `--id #N` errors on it). Decoded size is **estimated** for the listing (4 b64 chars → 3 bytes) without decoding the large payload; extraction decodes in full and reports the exact byte count. A `source.type == "url"` image has no inline bytes — it is reported (with its URL), never fabricated into a file. **No silent truncation / no silent miss:** an explicitly-requested `--id` that matches nothing is an error; a base64 that fails to decode is an error (never a wrong file); skipped malformed lines are counted. Base64 decoding is a small in-crate standard-alphabet decoder; format transcoding uses the `image` crate + libwebp (the heavyweight dependencies — only `image.rs` touches them).

@@ -163,10 +163,6 @@ struct ScanResult {
 
 /// Entry point for `csift recover`.
 pub fn run_recover(args: &RecoverArgs) -> Result<()> {
-    // Pointed error if the files-only `--subagents-only` was mistyped here.
-    if let Some(msg) = args.span_flag_error() {
-        bail!(msg);
-    }
     // BATCH MODE: many files in one corpus scan (parse each transcript ONCE).
     if args.files_from.is_some() {
         return run_recover_batch(args);

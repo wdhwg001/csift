@@ -90,11 +90,6 @@ fn truncate_excerpt(s: &str) -> String {
 
 /// Entry point for `csift list`.
 pub fn run_list(args: &ListArgs) -> Result<()> {
-    // Pointed migration error if the REMOVED `--subagents-only` was passed here — instead of
-    // clap's misleading generic PATH-swallow.
-    if let Some(msg) = args.span_flag_error() {
-        anyhow::bail!(msg);
-    }
     // 1+2. Resolve targets → the concrete session jsonl files, via the SAME shared resolver
     //       every other session-operating subcommand uses (`path::resolve_session_files`).
     //       This routes an `@<uuid>` / `@<hex>` POSITIONAL (and a `*.jsonl` file) to the session

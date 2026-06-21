@@ -402,45 +402,34 @@ pub fn all_project_dirs() -> Result<Vec<ProjectDir>> {
     Ok(dirs)
 }
 
-/// Whether a session-file resolution spans subagent transcripts, and how.
+/// Whether a session-file resolution spans subagent transcripts.
 ///
-/// `search` / `agents` / `recover` / `turns` / `list` only ever need the two-state
-/// include/exclude decision (built from a `--no-subagents` bool via `From<bool>`).
-/// `files` additionally offers `--subagents-only`, the COMPLEMENT of `--no-subagents`:
-/// dump ONLY the files a session's subagents touched, with the top-level session's own
-/// `<uuid>.jsonl` excluded — previously reachable only by a two-run set-difference.
+/// Every span-aware subcommand (`search` / `agents` / `recover` / `turns` / `list` / `files` /
+/// `image` / `plan`) needs only the two-state include/exclude decision, built from a
+/// `--no-subagents` bool via `From<bool>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubagentScope {
     /// Top-level session jsonl(s) PLUS each one's subagent transcripts (the default).
     WithSubagents,
     /// Only the top-level `<uuid>.jsonl` session(s); no subagent transcripts.
     TopLevelOnly,
-    /// Only the subagent transcripts; the top-level `<uuid>.jsonl` itself is excluded.
-    ///
-    /// Currently UNCONSTRUCTED: `files`' `--subagents-only` (the sole constructor) was
-    /// removed, but the resolution logic below still consumes this variant, so the mode
-    /// remains reachable for a future command. The crate-wide span-flag cleanup decides
-    /// whether to drop it entirely; until then the `allow` keeps clippy clean.
-    #[allow(dead_code)]
-    SubagentsOnly,
 }
 
-/// Which subcommand is resolving session files — threaded into [`resolve_session_files`] so
-/// the bare-subagent-hex remediation message is SUBCOMMAND-AWARE. Only `files` offers
-/// `--subagents-only`, so only its error may advise that flag; the other five must not (the
-/// flag does not exist there and would be a parse error if the user followed the advice).
+/// Which subcommand is resolving session files — threaded into [`resolve_session_files`] so a
+/// future subcommand-aware remediation message can branch on the caller. Inert today (the body
+/// does not read it), kept for that extension point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Caller {
-    /// `csift files` — the only subcommand with `--subagents-only`.
+    /// `csift files`.
     Files,
-    /// Any of `search` / `agents` / `recover` / `turns` / `list` — no `--subagents-only`.
+    /// Any other span-aware subcommand (`search` / `agents` / `recover` / `turns` / `list` /
+    /// `image` / `plan`).
     Other,
 }
 
 impl From<bool> for SubagentScope {
-    /// `true` (the historical `include_subagents`) ⇒ `WithSubagents`; `false` ⇒
-    /// `TopLevelOnly`. There is no bool that maps to `SubagentsOnly` — that mode is
-    /// only reachable by constructing the variant directly (the `files` surface).
+    /// `true` (subagents spanned) ⇒ `WithSubagents`; `false` (`--no-subagents`) ⇒
+    /// `TopLevelOnly`.
     fn from(include_subagents: bool) -> Self {
         if include_subagents {
             SubagentScope::WithSubagents
@@ -825,12 +814,10 @@ pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
 /// [`SubagentScope`]:
 /// - `WithSubagents` — top-level session(s) + their subagents (the default).
 /// - `TopLevelOnly` — only the top-level `<uuid>.jsonl` session(s).
-/// - `SubagentsOnly` — only the subagent transcripts (the top-level jsonl is dropped).
 ///
 /// Bails (never returns an empty silent result) when a session id was pinned but no matching
-/// file exists under the resolved target(s) — in `SubagentsOnly` this fires when the session
-/// exists but spawned no subagents. With no id pin, an empty result is allowed (the caller
-/// renders an honest "nothing found").
+/// file exists under the resolved target(s). With no id pin, an empty result is allowed (the
+/// caller renders an honest "nothing found").
 pub fn resolve_session_files(
     paths: &[std::path::PathBuf],
     scope: SubagentScope,
@@ -1009,17 +996,13 @@ pub fn resolve_session_files(
 
         // Subagent transcripts of each selected top-level session (empty unless scoped in).
         let mut sub_files: Vec<PathBuf> = Vec::new();
-        if matches!(
-            scope,
-            SubagentScope::WithSubagents | SubagentScope::SubagentsOnly
-        ) {
+        if matches!(scope, SubagentScope::WithSubagents) {
             for sf in &top_level {
                 sub_files.extend(crate::subagent::subagent_transcript_files(sf)?);
             }
         }
         let session_files: Vec<PathBuf> = match scope {
             SubagentScope::TopLevelOnly => top_level,
-            SubagentScope::SubagentsOnly => sub_files,
             SubagentScope::WithSubagents => {
                 top_level.extend(sub_files);
                 top_level
@@ -1049,8 +1032,8 @@ pub fn resolve_session_files(
 /// Resolve an `@<agent-hex>` target: the subagent's OWN transcript plus (unless
 /// `--no-subagents`) its TOPOLOGICAL descendants. Scans `dirs` for the session that owns the
 /// agent (its hex is globally unique), builds that session's topology, and emits transcripts
-/// per `scope`: `TopLevelOnly` = the agent alone; `WithSubagents` = the agent + descendants;
-/// `SubagentsOnly` = descendants only. Errors when no such agent exists in scope.
+/// per `scope`: `TopLevelOnly` = the agent alone; `WithSubagents` = the agent + descendants.
+/// Errors when no such agent exists in scope.
 fn resolve_agent_subtree(
     dirs: &[ProjectDir],
     hex: &str,
@@ -1073,10 +1056,9 @@ fn resolve_agent_subtree(
             let nodes = crate::subagent::build_topology(&top, false)?;
             let descendants = subtree_agent_ids(&nodes, hex);
             let mut out: Vec<PathBuf> = Vec::new();
-            if !matches!(scope, SubagentScope::SubagentsOnly) {
-                if let Some(p) = by_id.get(hex) {
-                    out.push(p.clone());
-                }
+            // The agent's OWN transcript is always included (both scopes keep the target itself).
+            if let Some(p) = by_id.get(hex) {
+                out.push(p.clone());
             }
             if !matches!(scope, SubagentScope::TopLevelOnly) {
                 for d in &descendants {
