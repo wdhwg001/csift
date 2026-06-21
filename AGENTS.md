@@ -1,189 +1,215 @@
-# AGENTS.md — csift operating manual
+# AGENTS.md - csift operating manual
 
-Project-specific operating manual for any AI agent (Claude Code, Codex, Cursor) working in this repo. Read this first when a conversation opens.
+Project-specific operating manual for any AI agent (Claude Code, Codex, Cursor) working in this repo. Read this first when a conversation opens. This file is sufficient for **repo mechanics + invariants** - directory map, dispatch wiring, test harness, the rules you must not break - so a fresh mid-size model can add/modify a subcommand or fix a bug respecting every invariant without spelunking the source. For the exact **behavioural contract** of a subcommand (precise flag semantics, output shape, edge cases), open the matching `SPEC.md` section 6 subsection; SPEC is the authority on *what* each command does, this file on *how* to work in the repo.
 
-> **About this file.** `AGENTS.md` is the canonical, vendor-neutral filename (Codex / Cursor / GPT-tooling convention). `CLAUDE.md` is Claude Code's expected filename and is a **symlink to `AGENTS.md`**, so the same content loads whichever tool is driving. **Edit `AGENTS.md` only; `CLAUDE.md` follows automatically.**
->
-> **Companion doc.** [`SPEC.md`](./SPEC.md) is the product/behaviour spec — the record model, the per-subcommand spec, the performance contract, and (§11) the design rationale + empirical grounding for `recover` / `turns` / `agents`. This file is authoritative for _how to work in the repo_; SPEC.md for _what to build_.
+> **About this file.** `AGENTS.md` is the canonical, vendor-neutral filename. `CLAUDE.md` is a **symlink to `AGENTS.md`** - edit `AGENTS.md` only; the symlink follows. **Companion doc:** [`SPEC.md`](./SPEC.md) (~124KB) is the product/behaviour spec - open it whenever you change search/turns/recover/etc. behaviour. Concrete pointers: SPEC **section 4** = record semantics, **section 5** = the full Category mapping (`search -t`), **section 6** = per-subcommand specifications (flags, output shape, edge cases - lines 322-770), **section 7** = the performance contract. This file = how to work in the repo; SPEC.md = what to build. `SKILL.md` is the LLM-facing usage cheat-sheet; `README.md` the human-facing one. When code and a doc disagree, **code wins** - re-verify, then fix the doc.
 
 ---
 
 ## 1. What csift is
 
-**csift — "ripgrep for Claude Code session transcripts".** A fast Rust CLI that **lists** and **regex-searches** Claude Code session `.jsonl` files.
+**csift - "ripgrep for Claude Code session transcripts".** A fast Rust CLI that **lists** and **regex-searches** Claude Code session `.jsonl` files under `~/.claude/projects/`, plus recovers files, reconstructs compaction-clipped turns, maps subagents, and extracts pasted images.
 
-- **Primary consumer is an LLM** — a Claude Code agent searching/recovering its own or a peer session. Output must be clean, token-efficient, and regex-driven. Default output is human/LLM-readable with clear session/turn/category/timestamp headers; `--json` is the machine format.
-- **Targeting** (shared resolver `path::resolve_session_files`): a positional `[PATH]...` = real cwd / encoded `-Users-…` dir / `.`; `@<uuid>` or its leading-hex prefix `@13d9645a` = one session; `@main` = the calling TOP-LEVEL session (`$CLAUDE_CODE_SESSION_ID`); `@trap:<marker>` = the calling SUBAGENT (a unique literal marker the caller embeds in this csift command, found in its Bash `tool_use`); `@<agent-hex>` = a subagent + its topological subtree; a `*.jsonl` path = one transcript. A bare uuid (no `@`) is not special — prefix it.
-- **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
-- **Subcommands (nine):** `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `image`. `list`/`search`/`files`/`recover`/`plan`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `turns` is the exception (its per-session budget MULTIPLIES, so it defaults to the top-level thread only, `--include-subagents` opts in); `agents` LISTS subagents as its targets (so it has no span flag), reporting a session's subagent lifecycle (kind / start / completion / status), with `--since`/`--until` + `--by start|completion` window filters. `files` reports which files/dirs a session changed AND detects Edit-before-Read boundaries (files changed outside the tool stream — the discovery signal for risky-to-reconstruct files), every row carrying its `Lnnnn`. `recover` defaults to restoring a file's RAW final content (or failing, never a holey file, when the session saw only part — reach for `--salvage` then, the best-effort line-numbered fragment); `recover --file @plan` reconstructs the session-bound plan file; `plan` locates it (via the `plan_mode` attachment). `image` lists + extracts the inline base64 images a session carries — addressed by the `#N` handle the session uses (or the exact `L<line>i<n>` locator), `--out <dir>` decodes to files; `turns`/`search` surface the ids inline. An ambiguous `#N` (CC reuses them across prompts) errors with the occurrence list — disambiguate via the locator or `--since`/`--turn-range`/`--uuid`; the `--out` PATH extension drives the format (a `.jpg`/`.gif`/`.webp` file converts a single image, a directory keeps source formats). See SPEC §6.5–6.9.
-
----
-
-## 2. Git & quality gate
-
-No CI service runs here; the pre-commit hook (§5) is the entire quality gate.
+- **Primary consumer is an LLM** - a Claude Code agent searching/recovering its own or a peer session. Output is clean, token-efficient, regex-driven. Default output is human/LLM-readable (session/turn/category/timestamp headers); `--json` / `--format json` is the machine format.
+- **Explicitly NO BM25 / embeddings / semantic search.** Pure regex only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point. Never add semantic search.
+- **Nine subcommands** (`Command` enum, `cli.rs`): `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`, `turns`, `image`.
+- **Subagent spanning default:** `list`/`search`/`files`/`recover`/`plan`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out). `turns` is the exception (its per-session token budget MULTIPLIES, so it defaults to top-level thread only; `--include-subagents` opts in). `agents` LISTS subagents as its targets, so it has no span flag. Most `*Args` expose a `want_subagents() -> bool` helper that maps its own flag(s) to the bool fed to `SubagentScope::from`; `files` is the exception - it needs the third `SubagentsOnly` mode no bool can express, so it has NO `want_subagents()` and instead exposes `scope() -> SubagentScope` (see section 6).
 
 ---
 
-## 3. Stack
+## 2. Targeting grammar (@-tokens) - shared resolver `path::resolve_session_files`
 
-| Layer | Choice | Why |
-| --- | --- | --- |
-| Language | Rust 2021, `rust-version = 1.89` | Fast byte/IO, strong types over dense jsonl |
-| CLI | `clap` (derive) | Subcommands + example-rich `--help` |
-| Regex | `regex` | ripgrep-like matching, smart-case |
-| Multi-literal | `aho-corasick` | `recover --files-from` batch prefilter — match all manifest basenames against a transcript in one pass (already transitive via `regex`) |
-| JSON | `serde` + `serde_json` | Lazy parse only on candidate lines |
-| Scan | `memchr` (SIMD newline) + `memmap2` (mmap) | 200MB+ files without full-buffer reads |
-| Parallel | `rayon` | Fan-out across many session files |
-| Errors | `anyhow` | Error chains surfaced on stderr; no `unwrap` in lib paths |
-| Date/TZ | `jiff` | ISO8601 parse + system-local timezone render alongside raw UTC (auto-detected via `TimeZone::system()`) |
-| Images | `image` (features `png`/`jpeg`/`gif`/`webp`/`color_quant`) + `webp` (libwebp) + `color_quant` | `image --out <file.ext>` transcoding: decode any of the four Claude-API types via `image`; re-encode png/jpeg(q90)/gif(Floyd-Steinberg dithered, NeuQuant palette) via `image`, and webp(q90 lossy) via libwebp (the `webp` crate). The heavyweight deps — only `image.rs` touches them |
-| Hooks | `cargo-husky` (dev-dep, `user-hooks`) | Installs the pre-commit gate |
+Every session-operating subcommand resolves its target(s) through ONE function:
+`path::resolve_session_files(paths: &[PathBuf], scope: SubagentScope, caller: Caller) -> Result<Vec<PathBuf>>` (path.rs:739). It returns the concrete jsonl files to scan. `whoami` is the only subcommand with no target (reads `$CLAUDE_CODE_SESSION_ID`).
 
-Versions are pinned by `^`-range in `Cargo.toml` + `Cargo.lock`. **Do not bump majors without an explicit reason.**
+Each positional token (for `search` the FIRST positional is PATTERN, sessions come as later `@<uuid>` positionals):
+- **real cwd path** / `.` -> encode it, locate the matching `~/.claude/projects/<encoded>` dir.
+- **encoded `-Users-...` dir token** -> used directly (single leading `-`; a `--`-leading token is rejected as a mistyped flag by `parse_project_target`, cli.rs:64).
+- **`~/.claude/projects/<encoded>` path** -> used as-is.
+- **`@<uuid>`** -> that one top-level session (`is_uuid`).
+- **`@<uuid-prefix>`** e.g. `@13d9645a` -> the leading hex of a uuid (4..=11 dashless chars); unique-resolved against enumerated sessions, else ambiguity error (`is_uuid_prefix`).
+- **`@main`** -> the CALLING TOP-LEVEL session, read from `$CLAUDE_CODE_SESSION_ID` (`resolve_env_session`).
+- **`@trap:<marker>`** -> the CALLING SUBAGENT (or main thread). CC withholds a subagent's OWN id from its Bash env, so a running subagent cannot name itself. The caller INVENTS a unique literal marker, embeds it in *this very* csift command; csift finds the transcript whose Bash `tool_use` carries it (`resolve_trap`). STRICT marker grammar (path.rs:519): >=3 CamelCase words + exactly 4 non-trivial trailing digits, e.g. `@trap:JollyShinyBrook4283`. Malformed/ambiguous -> hard bail with guidance.
+- **`@<agent-hex>`** -> a subagent (bare hex, len >=12, `is_bare_subagent_hex`) + its TOPOLOGICAL subtree (unless `--no-subagents`).
+- **`*.jsonl` file** -> one transcript; a path containing a `subagents` component is treated as a subagent (+ subtree), else a top-level session.
+- **bare uuid (no `@`)** is NOT special - it falls to the path branch and fails as "no project dir named <uuid>". Always prefix with `@`.
 
----
-
-## 4. Conventions — read before changing code
-
-- **No `unwrap`/`expect` in library/hot paths.** Propagate with `anyhow::Result` and `?`. Tests may `unwrap`. The `main` shim is the only place that turns an error into an exit code.
-- **No silent truncation.** If a result set is capped (`--max-count`), the output MUST state how many were dropped. A skipped malformed line must be counted, never hidden.
-- **Tolerant parsing.** Real jsonl carries far more fields than any doc lists (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`, `toolUseResult`, `slug`, …) and some records have no `timestamp`. Deserialize only what's used, ignore the rest, never crash on a new field or block type. The `Block` enum has a `#[serde(other)] Unknown` arm for exactly this.
-- **Performance is a contract, not a nicety.** `list`/`search` must stay fast on 200MB+ files: mmap + `memchr` line scan + a cheap byte/regex prefilter, with full `serde_json` only on candidate lines; tail reads SEEK from EOF backward (never parse the whole file); `rayon` parallelizes across files.
-- **`PascalCase` types, `snake_case` items, one module per concern** (`cli`, `path`, `model`, `parse`, `session`, `search`, `subagent`, `agents`, `files`, `recover`, `plan`, `turns`, `time_window`, `timez`, `whoami`).
-- **Comments capture _why_ / a non-obvious constraint**, not what the code already says.
-- **Dead-code allows:** there is no crate-level `#![allow(dead_code)]`. The only `#[allow(dead_code)]` is targeted on `model::Record`/`Block` for SPEC-mandated record-shape fields that are deserialized for tolerance/completeness but not yet read by a handler (justified inline). Do not add a crate-wide allow — it would mask real dead code.
+Resolution is **fail-closed/fail-loud**: an id that was pinned but matches no file bails (never a silent empty). `0 paths` => every project under the root. `Caller` (path.rs:427) is a subcommand discriminator threaded through for FUTURE subcommand-aware remediation text - but it is currently **INERT** inside `resolve_session_files` (`let _ = caller;`, path.rs:843); pass the right variant for forward-compat, but no remediation text varies by it today. `SubagentScope` (path.rs:415): `WithSubagents` (default) / `TopLevelOnly` / `SubagentsOnly`; `SubagentScope::from(bool)` maps `true->WithSubagents`, `false->TopLevelOnly` (no bool maps to `SubagentsOnly`; that mode is selected explicitly).
 
 ---
 
-## 5. Commands
+## 3. The Claude Code jsonl domain model (load-bearing - verified against real data)
+
+### 3.1 Data location + path encoding
+```
+~/.claude/projects/<ENCODED_CWD>/<session-uuid>.jsonl                                  # a session transcript
+~/.claude/projects/<ENCODED>/<uuid>/subagents/agent-<hex>.jsonl                         # (A) built-in Task/Agent subagent
+~/.claude/projects/<ENCODED>/<uuid>/subagents/workflows/wf_<id>/agent-<hex>.jsonl       # (B) workflow / OMC subagent (dominant)
+~/.claude/projects/<ENCODED>/<uuid>/subagents/workflows/wf_<id>/journal.jsonl           # (C) workflow EVENT log - NOT a transcript (excluded)
+~/.claude/projects/<ENCODED>/<uuid>/subagents/**/*.meta.json                            # {agentType, description?} companions
+~/.claude/projects/<ENCODED>/<uuid>/tool-results/<id>.txt                               # externalised tool output
+```
+**Encoding** (deterministic forward, lossy reverse): CC replaces **every** non-`[A-Za-z0-9]` byte of the absolute cwd with a single `-`. NO consecutive-dash collapsing; `.`,`/`,`_`,space all -> `-`. E.g. `/Users/u/Projects/w_app` -> `-Users-u-Projects-w-app`; a `/.claude/` segment -> `--claude-`. Reverse is lossy (`-` could be `/`,`_`,`.`) so we NEVER reverse. Accept either a real fs path (encode + locate) or a direct encoded dir. **>200-char cap:** CC caps the encoded name at `MAX_SANITIZED_LENGTH = 200` (path.rs:283); a longer cwd is stored `<first-200>-<hash>`. The hash is NOT reconstructible (CLI uses Bun.hash, SDK djb2 - different digests), so a long path is resolved by **prefix-scanning** the projects root for `<first-200>-` (path.rs:262, `find_dir_by_prefix`); among collisions, disambiguate by the in-record `cwd` (authoritative).
+
+### 3.2 Record model (one JSON object per line)
+Top-level fields used: `type`, `uuid`, `parentUuid`, `timestamp` (ISO8601 UTC), `sessionId`, `cwd`, `version`, `gitBranch`, `isSidechain`, `userType`, `message`, + `subtype`/`content` on system records, `isCompactSummary` on compaction summaries. Many more exist and are IGNORED (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`, `toolUseResult`, `sourceToolAssistantUUID`, `slug`, `promptId`, ...).
+
+`type` values: `user`, `assistant`, `system`, plus metadata-only `last-prompt`/`ai-title`/`agent-name`/`mode`/`permission-mode`/`attachment`/`file-history-snapshot`/`queue-operation` (these often have **no `timestamp`** - skip in time logic, never crash).
+
+**Block types** (`Block` enum, model.rs): `{type:text,text}`, `{type:thinking,thinking,signature?}`, `{type:tool_use,id,name,input}`, `{type:tool_result,tool_use_id,content,is_error?}`, `{type:image,source}`. `tool_result.content` may be a string OR an array of `{type:text,text}`/`{type:image}`. The enum has a `#[serde(other)] Unknown` arm - new/unknown block types parse, never crash.
+
+### 3.3 Turn boundary = `opens_turn` (3 cases), NOT just `is_genuine_user`
+A `type:"user"` record's `message.content` is EITHER a string (genuine text, older format) OR an array of blocks. **CRUCIAL: a "user" record is NOT always a human turn** - `tool_result` blocks ride on `role:user` records too. Real ratio in one session: ~393 genuine vs ~1619 tool_result-carriers. `model::Record::is_genuine_user` returns true iff: `type:"user"` AND `role=="user"` AND `isCompactSummary` falsey AND (content is a string OR blocks contain a `text` block and NO `tool_result` block). A tool_result-carrier is NOT genuine.
+
+**But `is_genuine_user` is NOT the turn delimiter.** The single boundary predicate every surface keys on is `model::Record::opens_turn` (model.rs:745):
+```
+opens_turn() = is_genuine_user()  OR  is_auq_answer_boundary()  OR  is_plan_rejection_boundary()
+```
+A turn opens on ANY of three cases (using ONLY `is_genuine_user` drops two of them - an AUQ-answer turn and a plan-rejection turn vanish):
+1. **genuine human message** (`is_genuine_user`).
+2. **answered AskUserQuestion** (`is_auq_answer_boundary`, model.rs:501) - the user's ANSWER is their message; rides on a non-errored `tool_result` carrier (a cancelled / `is_error:true` / `Cancelled...` / `<tool_use_error>` AUQ is NOT a boundary).
+3. **tool-use rejection-with-message** (`is_plan_rejection_boundary`, model.rs:735) - a rejection carrying a typed `To tell you how to proceed, the user said:\n` tail; a bare rejection (no typed tail) is NOT a boundary.
+
+**EXCLUDED from opening a turn** (machine pseudo-turns that LOOK human - never delimiters, dropped/folded as turn MEMBERS): `isMeta` records; the two interrupt markers (`[Request interrupted by user]` / `...for tool use]`); `<local-command-stdout>...`; `<command-name>...` slash-command expansions (prose typed AFTER the command, in `<command-args>`, IS surfaced via `slash_command_args`); compaction summaries (`isCompactSummary`).
+
+**`<task-notification>...` automation pulse** (model.rs:382-440) is the one exception that DOES open a turn (it passes every `is_genuine_user` gate) but is a machine trigger, not operator prose. Render it via `Record::automation_label()` -> `[<kind> <task-id> <status>] <summary>` (kind = one of FIVE `AutomationKind` slugs `background-command`/`workflow`/`agent`/`monitor`/`task` parsed from the summary, model.rs:1427; status falls back to `<event>` then `completed`) - NEVER dump the raw `<task-id>`/`<output-file>`/`<status>` XML. `monitor` is the Monitor/ScheduleWakeup cadence pulse (from_summary model.rs:1407/1417; for it the status slot renders the `<event>`, NOT a fabricated `completed`, model.rs:419-434 - directly relevant to monitoring/cron transcripts). **Standing caution: these section-3 enumerations can LAG the enum - verify the live set against `AutomationKind::slug` (model.rs:1427) before trusting a fixed list.**
+
+**Render + group via the shared helpers, never hand-roll:** `Record::reconstructed_user_text(plan_index)` (model.rs:763) yields the normalized opener body for ALL three cases (genuine text / full AUQ Q+options+answer unit / rejection text + optional `[plan: <path>]` pointer when `plan_index` resolves the rejected id; `None` = does not open a turn). Delimit with `group_turn_indices_deduped` (model.rs:1233, production - drops esc-cancel/edit-resend superseded-draft openers via shared `parentUuid`) or the bare `group_turn_indices` (test-only bool-fixture base). Both `search` exchange reconstruction and `files` mutation attribution route through these so they never drift.
+
+### 3.4 AskUserQuestion
+A `tool_use` block with `name=="AskUserQuestion"`. **HARD-WON: a PENDING/unanswered AskUserQuestion is NEVER flushed to jsonl** - only answered ones appear, with the answer arriving as a later user/tool_result record. So an option-picker freeze looks identical to a stall on disk. The user's answer to an AskUserQuestion classifies as the `user` category.
+
+### 3.5 Compaction shape
+The summary is a `type:"user"` record with `isCompactSummary:true` + `isVisibleInTranscriptOnly:true` carrying **string** content (NOT a `type:"summary"` record). A separate `type:"system"` `subtype:"compact_boundary"` record carries `compactMetadata:{trigger,preTokens,postTokens,durationMs}`. A compaction summary MUST be excluded from "genuine user". `turns` reconstructs the verbatim exchange a summary clipped.
+
+### 3.6 Externalised output
+Large tool outputs are moved to a sibling `tool-results/<id>.txt`, leaving an inline `<persisted-output>` pointer (absolute path + preview). `search --resolve-persisted` replaces the pointer with full file content BEFORE matching: prefers structured `toolUseResult.persistedOutputPath` (model.rs:825), falls back to scraping `Full output saved to: <ABS_PATH>`. Read failure is non-fatal - keeps inline + appends `[csift: could not resolve persisted output ...]`.
+
+### 3.7 Subagent on-disk shapes, flat nesting, topology
+Three shapes: (A) built-in Task/Agent under `subagents/agent-<hex>.jsonl`; (B) workflow/OMC under `subagents/workflows/wf_*/agent-<hex>.jsonl`; (C) `journal.jsonl` event log = NOT a transcript (read only for completion status, never listed/searched). **Kind = on-disk location, NOT `agentType`** (`BuiltinTask` vs `Workflow`, subagent.rs). Canonical agent id = bare `<hex>` (= the record/journal `agentId`). The parent uuid is the dir segment above `subagents/`.
+
+**Flat on disk, nesting reconstructed:** all subagent transcripts sit flat under one session; depth>1 nesting (an agent spawning an agent) is NOT encoded in the path. `build_topology(session_jsonl, with_files)` (subagent.rs:1014) rebuilds the tree: build a GLOBAL spawn index (`build_global_spawn_index`, subagent.rs:693) by forward-scanning the main transcript PLUS every subagent transcript for `Task`/`Agent`/`Workflow` `tool_use` spawn records, keyed by `spawn_tool_use_id`; each child's `spawn_tool_use_id` (from its head record / meta) joins to its issuer -> `parent_agent_id`; `assign_depths` walks the id->parent chain (cycle-guarded). `SubagentNode` carries `agent_id`, `kind`, `parent_session_id`, `parent_agent_id`, `spawn_tool_use_id`, `spawn_tool`, `workflow_id`, `agent_type`, `description`, `trigger_utc` (true spawn = parent tool_use ts; falls back to child-head `started_utc`), `completed_utc`, `returned_message` (+`_source`), `status`, `files_changed`, `depth`, `children`. **Workflow-subagent env quirk:** a workflow `agent()` subagent's `$CLAUDE_CODE_SESSION_ID` holds the PARENT session uuid, not its own (opposite of a built-in Task subagent) - don't assume env == self.
+
+**r5 id shape - EVERY emitted row carries `is_subagent` + `parent_session_id` (REQUIRED, not optional).** A subagent transcript's `session_id` is a bare `<hex>` - it is NOT a re-feedable `@<uuid>` target (`csift turns <hex>` fails). So `list`/`search`/`files`/`turns`/`recover` rows are a TRIO, not a lone id: `session_id` (display) + `is_subagent` (id-domain discriminator) + `parent_session_id` (the always-re-feedable owning uuid; == `session_id` for a top-level row). Emitting only the hex = unusable rows. **Derive all three with `crate::subagent` helpers - NEVER read the path stem yourself** (the stem is `agent-<hex>` -> reading it gives the wrong `agent-`-prefixed id): `session_id_from_path` (subagent.rs:66 - strips the `agent-` prefix to the bare-hex canonical `agentId`), `is_subagent_path` (subagent.rs:97 - true iff a `subagents/` path component), `parent_session_id_from_path` (subagent.rs:81 - the dir component just before `subagents/`; `None` for a top-level file, so callers `.unwrap_or_else(|| session_id.clone())`). To re-feed a subagent match downstream, use `parent_session_id`, never the bare hex. **There is NO shared row-trio JSON helper** (unlike `text::scope_header_json`, text.rs:87, which IS shared): the `session_id`/`is_subagent`/`parent_session_id` keys are hand-built in EACH module's `json!` projector - session.rs:336, search.rs:623 + 1500, files.rs:911, plan.rs:213 - with nothing central enforcing the key names or their presence. When adding a JSON surface that spans subagents, replicate all three keys by hand and derive their values via the `crate::subagent` helpers above; omitting one yields the unusable lone-hex row this paragraph warns about, and nothing will catch it for you.
+
+### 3.8 whoami detection
+CC exports `$CLAUDE_CODE_SESSION_ID` into the Bash tool env == the session's own jsonl basename. Definitive, per-session, version-independent, zero false positives. Use it and nothing else. When absent/empty, **DO NOT GUESS** (concurrent sessions; most-recent-mtime is a false-positive trap) - error with guidance to pass `@<uuid>`. whoami saying "ambiguous" is acceptable. (`CODEX_COMPANION_SESSION_ID` mirrors it but is Codex-specific.)
+
+---
+
+## 4. Invariants + design decisions (with rationale)
+
+- **No `unwrap`/`expect` in library/hot paths.** Propagate via `anyhow::Result` + `?`. Tests may `unwrap`. Only `main.rs` turns an error into an exit code. Rationale: a panic in a transcript-recovery tool destroys the recovery; surface the full chain instead.
+- **No silent truncation / no silent failure.** Any cap (`--max-count`) MUST report the drop count; a skipped malformed line is counted, never hidden. `resolve_session_files` bails when a pinned id matches nothing rather than returning empty. Rationale: a quietly-shortened search result is a correctness bug for an LLM consumer that trusts completeness.
+- **Tolerant parsing.** Real jsonl carries far more fields than documented and some records lack `timestamp`. Deserialize only what's used, ignore the rest, never crash on a new field/block type (the `#[serde(other)] Unknown` arm). EXTEND the model tolerantly when CC evolves; never tighten it into a crash.
+- **JSON output = the `serde_json::json!` macro ONLY, never `#[derive(Serialize)]`.** There is ZERO `Serialize` derive in `src/` (verify: `grep -rn "derive(Serialize" src/` is empty). A fresh model's instinct - "add `#[derive(Serialize)]` to the row struct" - is WRONG and breaks the house style. Every JSON line is hand-built with `json!({...})` in a per-module `*_json` projector (`hit_json`/`preview_json`/`scope_header_json`/...) then `serde_json::to_string(&value)?` + `println!`. **One JSON object per line** (JSONL, not a pretty array). Render structs stay plain (`#[derive(Debug, Clone)]`); the projector maps struct -> `json!` explicitly, so the wire shape is decoupled from field layout. **Envelope (search + turns):** when the resolved scope spans >=1 subagent (`sub > 0`), the FIRST line is the shared `text::scope_header_json(top, sub)` record `{kind:"session_header", sessions_in_scope, top_level_sessions, subagent_sessions}` (search.rs:1480-1492; `list`/`files`/`recover` emit it too); `search` ALSO prints a TRAILING summary object `{matched, sessions, dropped_by_cap, skipped_lines, unresolved}` as the last line (search.rs:1519-1529). Reproduce BOTH when adding a JSON surface that spans/caps.
+- **Shared `text::` + `timez::` helpers are REQUIRED, not optional.** Do NOT hand-roll truncation, the scope banner, the malformed-line note, or a range parser - a divergent fourth copy (`agents::one_line` dropping the elision count) is exactly the silent-truncation contract bug this consolidation killed. REUSE:
+
+  | Need | Helper | Notes |
+  | --- | --- | --- |
+  | excerpt + explicit `... (+N chars)` | `text::truncate_excerpt(s, max)` | CHAR-counted (codepoint-safe); cap = **200** for `list`/`agents` scannable previews, **400** for `search`/`recover` context excerpts |
+  | flatten multiline + truncate | `text::collapse_and_truncate(s, max)` | the `agents` returned-message preview |
+  | malformed-line note fragment | `text::malformed_note(n)` | bare `N malformed line(s) skipped`; caller frames it |
+  | scope span wording | `text::scope_span_fragment(top, sub)` | the one phrasing |
+  | text scope banner (suppress when `sub==0`) | `text::emit_scope_banner(top, sub)` | `list`/`files`/`search`/`recover` |
+  | JSON scope header line | `text::scope_header_json(top, sub)` | the envelope's line 1 |
+  | inclusive `START..END` range | `text::parse_range(s, label, one_based)` | replaces the 4 `parse_turn_range` + `parse_line_range` clones |
+  | timestamp `YYYY-MM-DD HH:MM:SS <TZ> (raw)` | `timez::format_timestamp(raw)` | system-local via jiff, infallible |
+  | compact local instant (no UTC copy) | `timez::format_local_compact(raw)` | for token-lean text |
+  | JSON `ts_local` ISO+offset | `timez::local_iso(raw)` | `None` if absent/unparseable |
+  | the detected local zone | `timez::local_tz()` | `TimeZone::system()` |
+
+- **Performance is a contract** (SPEC section 7). `list`/`search` stay fast on 200MB+ files via: **mmap** (`parse::mmap_bytes`) + **`memchr` SIMD newline scan** (`scan_lines_bytes`, `memchr_iter`) + a cheap **byte/regex prefilter** with full `serde_json::from_slice` ONLY on candidate lines (`parse_candidates_parallel`) + **tail reads that SEEK from EOF backward** newest-first (`tail_records`, never parse the whole file to find the last user/agent msg) + **`rayon`** fan-out across files (`scan_lines_parallel`). Don't regress these: don't `BufReader`-copy a whole file, don't full-parse every line, don't lose the prefilter. **Prefilter silent-drop landmine (where "no silent truncation" actually bites).** `search`'s literal prefilter (`required_literal`, search.rs:248-288) is the ONE place a naive optimisation silently drops matches. It scans RAW JSON line bytes, where string content is JSON-encoded (`"` -> `\"`, every control char `< 0x20` + DEL -> `\uXXXX`/`\n`/...), so it emits a `memmem` literal ONLY when the pattern has NO regex metachar AND NO JSON-escaped char (`json_escapes_in_string`: `"` / control / DEL). A literal like `Say"Xello` would otherwise be sought verbatim in the raw line, falsely report "absent", and drop a line whose DECODED text matches. NEVER extract a literal more aggressively (e.g. HIR-based literal extraction from a regex) and NEVER prefilter decoded content - when a literal is unsafe, fall back to running the regex on the raw bytes (still pre-JSON, just no cheap short-circuit). Non-ASCII (`>= 0x80`) survives verbatim as UTF-8, so it stays prefilter-eligible.
+- **`unsafe_code = "deny"` crate-wide, ONE exception.** `deny` (not `forbid`) is deliberate: it bans every `unsafe` block EXCEPT the single audited mmap site in `parse.rs:71-73` (`#[allow(unsafe_code)] unsafe { Mmap::map(&file) }`), which is irreducibly unsafe and SPEC-mandated. `forbid` cannot be locally overridden so it would refuse to compile mmap. Any OTHER `unsafe` without an explicit allow is a hard error. Do NOT add a second allow.
+- **No crate-level `#![allow(dead_code)]`.** The only `#[allow(dead_code)]` is targeted on `model::Record`/`Block` fields deserialized for tolerance but not yet read. A crate-wide allow would mask real dead code.
+- **Exit codes** (main.rs:33-52): `Ok(()) -> ExitCode::SUCCESS` (0); any `Err -> eprintln!("csift: error: {err:#}")` (full anyhow chain, alternate `:#`) + `ExitCode::FAILURE` (non-zero, no custom numeric codes). NOT errors (exit 0): `turns --slice` out-of-range prints nothing; `search --line N`/`--uuid U` resolving to no record prints an `unresolved: ...` line on stdout. HARD non-zero: `recover` partial/no-history (`bail!` pointing at `--salvage`/`--patches`/`--coverage`); `image --id` no-match or ambiguous `#N` (`bail!`).
+
+---
+
+## 5. Module map (`src/*.rs`, one line each)
+
+```
+main.rs            # binary entrypoint: parse_argv -> install --claude-home override -> dispatch Command -> error->ExitCode
+cli.rs             # clap derive: Cli + Command(9 variants) + per-cmd *Args + Category enum; parse_argv/normalize_argv; want_subagents() helpers; ALL --help text
+path.rs            # encode_cwd, projects-root, >200-char prefix-scan, resolve_session_files (the @-grammar), SubagentScope, Caller, resolve_trap/@main
+model.rs           # serde Record/Message/Content/Block + is_genuine_user + persisted-output path resolution
+parse.rs           # mmap_bytes + memchr head/tail/stream readers + lazy parse_line + parse_candidates_parallel + scan_lines_(bytes|parallel) [the ONE unsafe mmap site]
+session.rs         # `list`: head+tail read -> SessionSummary rows (+ spans subagents by default)
+search.rs          # `search`: regex + filters -> complete round-trip Exchange; --line/--uuid fetch; -c/-l/--siblings/--sibling-category/--subagent/--resolve-persisted
+subagent.rs        # subagent discovery/classification (3 shapes, journal excluded) + lifecycle/status + ParentSpawnIndex + build_topology (flat-on-disk -> nested tree)
+agents.rs          # `agents`: per-subagent lifecycle rows via build_topology + --kind/--since/--until/--by filters
+files.rs           # `files`: which files/dirs a session changed + Edit-before-Read boundary detection; each row carries Lnnnn
+bash_mutations.rs  # heuristic regex-free Bash file-mutation parser (cp/mv/rm/redirects); feeds files + recover
+recover.rs         # `recover`: file-content reconstruction (default raw final content, else fail-if-partial -> --salvage/--patches/--at/--coverage); --file @plan sigil; --files-from/--out-dir batch (one parse per transcript, many files; aho-corasick basename prefilter)
+plan.rs            # `plan`: FORWARD (session->plan binding, the plan_mode attachment) + REVERSE (--reverse <plan_file> -> bound session(s), run_plan_reverse plan.rs:158) + shared @plan resolution. NO-target forward mode resolves the CALLING session via whoami::detect_session_id + bails with whoami::AMBIGUOUS_GUIDANCE when absent (plan.rs:228) - never scans all projects. Reuses whoami's detect_session_id/AMBIGUOUS_GUIDANCE (the only out-of-module consumers, plan.rs:234/238) -> a whoami change ripples to plan.
+turns.rs           # `turns`: turn-fidelity reconstruction of a compaction-clipped exchange; --slice/--slices fixed-fleet chunking
+image.rs           # `image`: list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error; --out extension-driven transcode via image + libwebp)
+time_window.rs     # --since/--until parsing (absolute + relative, system-local); shared by search + agents
+timez.rs           # REQUIRED shared time helpers: format_timestamp/format_local_compact/local_iso/local_tz (jiff system-tz)
+text.rs            # REQUIRED shared helpers (section 4): truncate_excerpt/collapse_and_truncate (explicit ... (+N), 200|400 cap) + malformed_note + scope_span_fragment + emit_scope_banner + scope_header_json + parse_range
+whoami.rs          # `whoami`: CLAUDE_CODE_SESSION_ID detection, false-positive-safe
+recover/tests.rs, turns/tests.rs   # unit tests beside their module (the only two subdirs of src/)
+```
+
+**`search` flags from the verified audit** (cli.rs:779-853, search.rs): `-c/--count` prints ONLY the integer total `exchanges.len() + dropped_by_cap` (adds back the `--max-count` remainder); `-l/--files-with-matches` lists distinct matching session ids one-per-line from the FULL set before `--max-count` (ignores `-m`); `-c` and `-l` are mutually exclusive (hard `bail!`). `--siblings` renders the matched turn's NON-matched records (a user question WITH the agent reply); `--sibling-category <CAT>` (repeatable value-enum, IMPLIES `--siblings`) REPLACES the default sibling set (default = all categories except the match `-t` set). `--subagent <HEX>` scopes to one subagent transcript, fail-closed on unmatched/ambiguous hex, and anchors `--line` to that subagent (without it `--line` addresses the top-level transcript). `--resolve-persisted` rewrites tool-response text pre-match (failures soft-noted).
+
+**argv normalization:** the entrypoint is `cli::parse_argv` (NOT `Cli::parse`): it runs `cli::normalize_argv` to reorder declared flags ahead of leading-`-` encoded-project positionals, fixing clap's `allow_hyphen_values` greedy-absorb bug (#3880). Flag discovery is zero-drift via `Cli::command()` introspection (action `Set`/`Append` take a value; `SetTrue`/`SetFalse`/`Count`/help/version do not). So `csift list <ENCODED> --format json` works.
+
+---
+
+## 6. How to add or modify a subcommand
+
+1. **Args struct** in `cli.rs`: add `pub struct FooArgs` (`#[derive(Args, Debug)]`). Positionals that target sessions use `#[arg(value_parser = parse_project_target)]` so a `--`-typo errors cleanly. Put example-rich text in `#[command(after_help = "...")]`/doc comments (the `--help` is the LLM's manual - keep it usable from `--help` alone). If the subcommand spans subagents, add the span flag(s) + a `pub fn want_subagents(&self) -> bool` mirroring the existing ones (cli.rs:581/864/1564/...).
+2. **Command variant**: add `Foo(FooArgs)` to `enum Command` (cli.rs:378).
+3. **Dispatch**: add one arm to `run()` in `main.rs:54`. The real arm shape is `Command::Foo(args) => foo::run_foo(&args)` (handler fn convention is `run_<subcommand>`: `run_list`/`run_search`/`run_agents`/...). **The dispatch MODULE need not be named after the `Command` variant** - the precedent is `Command::List(args) => session::run_list(&args)` (main.rs:56): `list` lives in `session.rs` (`pub fn run_list`, session.rs:92); there is NO `src/list.rs`. Variant->module is NOT 1:1; pick whatever module already owns the concern. Every handler returns `anyhow::Result<()>`, so `?`/`bail!` funnel to the single FAILURE arm; never `eprintln!`+exit yourself.
+4. **Module**: host the handler in a `src/*.rs` (a new `src/foo.rs`, or fold into an existing module as `list` did into `session.rs`); declare `mod foo;` in `main.rs` if new (keep alphabetical-ish). The handler `run_foo` should, FIRST, surface a misplaced-span-flag error if the args struct has one - `if let Some(msg) = args.span_flag_error() { anyhow::bail!(msg); }` (session.rs:95; `span_flag_error` returns the pointed message for a sibling-only flag mistyped here, e.g. `files`' `--subagents-only` - the flag is a `hide = true` field clap's positional would otherwise silently swallow). THEN resolve targets via the shared resolver:
+   `let scope = SubagentScope::from(args.want_subagents()); let files = path::resolve_session_files(&args.paths, scope, path::Caller::Other)?;`
+   - **Resolve via `&args.paths`** - that is the convention for `list`/`agents`/`files`/`recover`/`turns`/`image`/`plan` (session.rs:107, agents.rs:48, files.rs:107, recover.rs:209/373, turns.rs:512, image.rs:615, plan.rs:162/241). The ONE exception is `search`: its first positional is `PATTERN`, so `SearchArgs` adds the SOLE `targets()` helper (cli.rs:877 - the only `fn targets` in the tree) that returns the path positionals only (`self.paths.clone()`, excluding the pattern); `search` resolves `&args.targets()` (search.rs:375, 488). Do NOT add a `targets()` method to a non-`search` struct (it has none -> compile error); use `args.paths`.
+   - **Scope resolution has two shapes.** For on/off subagent span, expose `want_subagents() -> bool` and resolve `SubagentScope::from(args.want_subagents())` (the `list`/`search`/`recover`/`turns`/`image` recipe). `files` is the EXCEPTION: it needs the third mode (subagents-only), which NO bool can produce (`SubagentScope::from` maps only `true->WithSubagents`, `false->TopLevelOnly`; path.rs:434). So `FilesArgs` has NO `want_subagents()`; it declares `--no-subagents` + `--subagents-only` in a clap `group = "subagent_scope"` and exposes `scope() -> SubagentScope` (cli.rs:1286) that returns `SubagentsOnly` directly - `files` passes `args.scope()` (files.rs:107), not `SubagentScope::from(...)`. If a new subcommand needs subagents-only, follow `files`; else use the bool recipe.
+   - `agents` passes `false.into()` because it LISTS subagents rather than spanning them.
+   - The `path::Caller` arg is currently **INERT** - `resolve_session_files` does `let _ = caller;` (path.rs:843, "reserved for future subcommand-aware guidance"). Pass `path::Caller::Other` (or the matching variant) to stay future-proof, but do NOT expect it to change remediation text today; the doc's "Caller tunes messages" is forward-looking, not live.
+   Read files via `parse::mmap_bytes` + the head/tail/parallel scanners; lazy-parse only candidate lines; **derive each row's id trio with the `crate::subagent` helpers** (`session_id_from_path` / `is_subagent_path` / `parent_session_id_from_path` - never read the stem, see section 3.7); render via `text::` excerpt helpers + `timez::` timestamps. Honor: no `unwrap`, report any cap's drop count, support `--json` via a `json!` projector (section 4 JSON invariant - no `derive(Serialize)`).
+5. **Tests**: add an end-to-end case to `tests/cli_integration.rs` (drives the built binary against synthetic transcripts). **Isolation mechanism (load-bearing - reuse it, don't hand-roll a fixture scheme):** the e2e harness never touches the real `~/.claude`. The `Home` struct (cli_integration.rs:27) makes a TempDir, creates `.claude/projects` under it, and `Home::write(rel, contents)` drops a fixture jsonl at `$HOME/.claude/projects/<rel>` (e.g. `<ENC>/<uuid>.jsonl`). Its `run`/`run_with_env`/`run_full` invoke the binary via `env!("CARGO_BIN_EXE_csift")` (the exact build cargo produced) with `.env("HOME", &self.root)` and `.env_remove("CLAUDE_CODE_SESSION_ID").env_remove("CODEX_COMPANION_SESSION_ID")` for deterministic `whoami` (a test that needs a session id sets it back via `run_with_env`). This works because `claude_home()` (path.rs:108) falls back to `$HOME/.claude` when no `--claude-home`/`$CLAUDE_CONFIG_DIR` is set. Start from the `populated_home()` builder (cli_integration.rs:103) - the canonical fixture, used in ~198 cases (`populated_home()`/`Home::new()` combined) - rather than inventing a new tree.
+   Unit tests local to a module go in an inline `#[cfg(test)] mod tests { ... }`, OR in `src/<mod>/tests.rs` if large. The latter is wired by a plain `#[cfg(test)] mod tests;` at the bottom of `src/<mod>.rs` (recover.rs:3261, turns.rs:2776); Rust resolves it to the same-named child dir (`src/recover/tests.rs`, `src/turns/tests.rs`) automatically - **no `#[path = "..."]` attribute needed**. Those two are the only `src/` subdirs. Run `cargo test`.
+
+---
+
+## 7. Commands + quality gate
 
 ```bash
-cargo build                                  # debug build (GATE: must succeed)
+cargo build                                  # debug (GATE: must succeed)
 cargo build --release                        # optimised (thin-LTO, 1 cgu) for real scans
-cargo run -- list [PATH...]                  # list sessions (+ subagents by default; --no-subagents to skip)
-cargo run -- search PATTERN [flags]          # regex search (spans subagents by default)
-cargo run -- agents [PATH... | @<uuid>]      # subagent lifecycle (kind/start/completion/status; --since/--until/--by)
-cargo run -- whoami [--show-path]            # identify the calling CC session
-cargo fmt --all                              # format
+cargo run -- <subcommand> ...                # run a subcommand
 cargo fmt --all -- --check                   # format gate
 cargo clippy --all-targets -- -D warnings    # lint gate (warnings-as-errors)
-cargo test                                   # unit tests (also installs the hook)
+cargo test                                   # unit + integration tests (also installs the hook on first run)
 ```
-
-**Pre-commit gate (cargo-husky).** On the first `cargo test`/`cargo build` after checkout, cargo-husky installs `.git/hooks/pre-commit` from `.cargo-husky/hooks/pre-commit`. It runs, in order: `cargo fmt --all -- --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`. A failure blocks the commit. Edit the **source** hook (`.cargo-husky/hooks/pre-commit`), not the installed copy, then re-run `cargo test` to reinstall. Genuine-WIP bypass: `git commit --no-verify` (use sparingly).
+**Pointing csift at a fixture tree (not the real `~/.claude`).** csift resolves its data root (`claude_home()`, path.rs:108) with precedence `--claude-home <DIR>` > `$CLAUDE_CONFIG_DIR` > `$HOME/.claude`, then reads `<root>/projects/<encoded>/*.jsonl` (`projects_root`). `--claude-home` is a clap **global** flag (`global = true`, cli.rs:373; installed in `main` before dispatch, main.rs:41), so it is honored by EVERY subcommand and `normalize_argv` lets it sit before OR after the subcommand: `csift --claude-home /tmp/fix list` and `csift list --claude-home /tmp/fix` both work. Use `--claude-home <dir>` (or export `$CLAUDE_CONFIG_DIR`) to run a manual repro against a synthetic projects dir instead of your live transcripts. All three positions are exercised by the `custom_claude_home_via_env_var_and_flag` e2e test. **Test-isolation trap:** `--claude-home` installs via `set_claude_home_override`, which writes a SET-ONCE process-global `OnceLock<PathBuf>` (`CLAUDE_HOME_OVERRIDE`, path.rs:69; `let _ = ...set(dir)` silently ignores later sets, path.rs:79). So an IN-PROCESS unit test CANNOT relocate the data root via the override - the first set wins for the whole test binary (all tests share one process). For path-resolution unit tests call the PURE `resolve_claude_home(flag, env, home)` (path.rs:87, factored out precisely so precedence is testable WITHOUT touching the OnceLock); for e2e use the `Home` harness, which spawns a fresh subprocess per test with `$HOME` set (cli_integration.rs `run_full`). Don't write a flaky test that calls the global `claude_home()`.
+**Pre-commit gate (cargo-husky).** On the first `cargo test`/`cargo build` after checkout, cargo-husky (dev-dep, `user-hooks` feature) installs `.git/hooks/pre-commit` from `.cargo-husky/hooks/pre-commit`. It runs, in order: `cargo fmt --all -- --check` -> `cargo clippy --all-targets -- -D warnings` -> `cargo test`. A failure blocks the commit. No CI service runs - this hook is the ENTIRE gate. Edit the **source** hook (`.cargo-husky/hooks/pre-commit`), never the installed `.git/hooks` copy, then re-run `cargo test` to reinstall. Genuine-WIP bypass: `git commit --no-verify` (sparingly). Test layout: `tests/cli_integration.rs` (large e2e), `tests/turns_pre_feature_baseline.txt` (golden), `src/recover/tests.rs`, `src/turns/tests.rs`, and inline `#[cfg(test)]` modules.
 
 ---
 
-## 6. The Claude Code jsonl knowledge (verified empirically 2026-06-07)
+## 8. Conventions
 
-This is the load-bearing domain knowledge. Verified against real `~/.claude/projects/**/*.jsonl`.
-
-### 6.1 Data location
-
-```
-~/.claude/projects/<ENCODED_PROJECT_DIR>/<session-uuid>.jsonl                          # a session transcript
-~/.claude/projects/<ENCODED>/<session-uuid>/subagents/agent-<hex>.jsonl                # (A) built-in Task/Agent subagent transcript
-~/.claude/projects/<ENCODED>/<session-uuid>/subagents/workflows/wf_*/agent-<hex>.jsonl # (B) workflow / OMC subagent transcript
-~/.claude/projects/<ENCODED>/<session-uuid>/subagents/workflows/wf_*/journal.jsonl     # (C) workflow EVENT log — NOT a transcript (excluded)
-~/.claude/projects/<ENCODED>/<session-uuid>/subagents/**/*.meta.json                   # {agentType, description?, …} companions
-~/.claude/projects/<ENCODED>/<session-uuid>/tool-results/<id>.txt                      # externalised tool output
-```
-Kind = path location (A→builtin-task, B→workflow), NOT `agentType`. Canonical agent id = bare `<hex>` (the record/journal `agentId`). `journal.jsonl` is read only for completion status, never listed/searched. See SPEC §6.5 + `src/subagent.rs`.
-
-### 6.2 Path encoding (verified, deterministic forward / lossy reverse)
-
-Claude Code encodes a project's absolute cwd into a dir name by replacing **every** non-`[A-Za-z0-9]` byte with a single `-`. **No** consecutive-dash collapsing; `.`, `/`, `_`, space all map to `-`. Confirmed:
-
-- `/Users/testuser/Projects/widget_app_prototype` → `-Users-testuser-Projects-widget-app-prototype` (both `/` and `_` → `-`).
-- `/Users/testuser/Projects/Acme/widget_factory-worktrees/main` → `-Users-testuser-Projects-Acme-widget-factory-worktrees-main`.
-- A `/.claude/` segment → `--claude-` (a literal `--` double-dash — proves no collapse, and `.` → `-`).
-
-Forward is deterministic; **reverse is lossy** (a `-` could have been `/`, `_`, `.`, …) so we never reverse. The tool ACCEPTS either (a) an actual filesystem path (encode it, locate the matching dir) or (b) a direct `~/.claude/projects/<encoded>` path (use as-is). Detect which by whether the arg resolves under the projects root.
-
-### 6.3 Record model (one JSON object per line)
-
-**Top-level fields used:** `type`, `uuid`, `parentUuid`, `timestamp` (ISO8601 UTC, e.g. `2026-06-07T05:43:00.000Z`), `sessionId`, `cwd`, `version`, `gitBranch`, `isSidechain`, `userType`, `message`, plus `subtype`/`content` on system records and `isCompactSummary` on compaction summaries. **Many more fields exist and are ignored** (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`, `toolUseResult`, `sourceToolAssistantUUID`, `slug`, `entrypoint`, `promptId`, …).
-
-**`type` values seen:** `user`, `assistant`, `system`, plus metadata-only records `last-prompt`, `ai-title`, `agent-name`, `mode`, `permission-mode`, `attachment`, `file-history-snapshot`, `queue-operation` (the metadata-only ones often have **no `timestamp`** — skip in time logic, never crash).
-
-**`type:"user"`** — `message.role="user"`; `message.content` is EITHER a string (genuine user text, older format) OR an array of blocks. **CRUCIAL: a "user" record is NOT always a human turn** — `tool_result` blocks are carried on `role:user` records too. In one real session: 332 genuine string-content + 61 text-block users vs **1619 tool_result-carriers**. The genuine-user classification is load-bearing.
-
-**`type:"assistant"`** — `message.role="assistant"`; `message.content` = array of blocks.
-
-**Block types:** `{type:text,text}`, `{type:thinking,thinking,signature?}`, `{type:tool_use,id,name,input}`, `{type:tool_result,tool_use_id,content,is_error?}`, `{type:image,source}`. `tool_result.content` may be a string OR an array of `{type:text,text}` / `{type:image}`.
-
-**AskUserQuestion** = a `tool_use` block with `name="AskUserQuestion"`. **HARD-WON:** a PENDING/unanswered AskUserQuestion is **not** flushed to jsonl — only answered ones appear (the answer returns as a later `tool_result`/user record).
-
-**`type:"system"`** — `{subtype, content?, level?, toolUseID?}`. Subtypes seen: `stop_hook_summary`, `turn_duration`, `away_summary` (a short auto-summary of what the session was doing when it went idle), `compact_boundary`.
-
-**Compaction (verified shape):** the summary is a `type:"user"` record with `isCompactSummary:true` + `isVisibleInTranscriptOnly:true` carrying **string** content (NOT a `type:"summary"` record). A separate `type:"system"` `subtype:"compact_boundary"` record carries `compactMetadata:{trigger,preTokens,postTokens,durationMs}`. **A compaction summary must be excluded from "genuine user".**
-
-**Externalised output:** large tool outputs may be moved to a sibling `tool-results/<id>.txt`, with an inline `<persisted-output>` pointer (carrying an absolute path + a preview). Optionally resolved with `--resolve-persisted`.
-
-### 6.4 Genuine-user vs tool-result-carrier (the filter that everything hinges on)
-
-A GENUINE user turn (for the `user` category and for turn-delimiting):
-
-1. `type:"user"` with `message.role == "user"`, AND
-2. `isCompactSummary` is falsey, AND
-3. content is a string, OR content blocks contain a `text` block and NO `tool_result` block.
-
-A `tool_result`-carrier record does **not** count as genuine user and does **not** start a turn. See `model::Record::is_genuine_user`.
-
-### 6.5 Categories (`search -t/--category`, repeatable)
-
-- `thinking` = assistant thinking blocks.
-- `user` = genuine user input + user answers to AskUserQuestion (NOT tool_result-carriers).
-- `tool` = `tool_use` blocks (AskUserQuestion is a tool_use).
-- `tool-response` = `tool_result` blocks.
-- `agent` = assistant visible end-of-turn text (the agent message; "agent includes AskUserQuestion").
-
-### 6.6 Complete round-trip (exchange)
-
-On a match, return the COMPLETE exchange, not a fragment: a matched `tool_use` WITH its `tool_result`; a matched user turn WITH the agent response. Reconstruct via `uuid`/`parentUuid` linking. A **turn** is delimited by genuine-user messages.
-
-### 6.7 whoami detection (verified)
-
-Claude Code exports **`CLAUDE_CODE_SESSION_ID`** into its Bash tool env, equal to the session's own jsonl basename (verified: env value `0a1b2c3d-…` matched `…/0a1b2c3d-….jsonl` in this project dir). This is definitive — per-session, version-independent, survives bash nesting, zero false positives. Use it and nothing else. When absent/empty, **DO NOT GUESS** (concurrent sessions, different binaries; most-recent-mtime is a false-positive trap) — error with guidance to pass an explicit `@<uuid>` target. It is acceptable for whoami to often say "ambiguous". (`CODEX_COMPANION_SESSION_ID` mirrors it but is Codex-plugin-specific; prefer the canonical var.)
+- `PascalCase` types, `snake_case` items, one module per concern.
+- Comments capture WHY / a non-obvious constraint, not what the code already says.
+- `Cargo.toml` lints: `unsafe_code = "deny"`, `missing_debug_implementations = "warn"`, clippy `all = warn` with a few pedantic allows. Deps pinned by `^`-range + `Cargo.lock`.
+- Output discipline: errors -> stderr (`csift: error:` + full chain); data -> stdout; `--json` is the machine contract (one object per line where it makes sense).
+- ASCII-only source/docs unless a test fixture intentionally exercises multi-byte (then keep it neutral: emoji / accented Latin).
 
 ---
 
-## 7. Module map
+## 9. What NOT to do
 
-```
-src/main.rs      # binary entrypoint: parse args, dispatch, error→exit code
-src/cli.rs       # clap derive: Cli/Command + ListArgs/SearchArgs/WhoamiArgs + Category
-src/path.rs      # encode_cwd + projects-root + target resolution (real-path vs encoded; >200-char prefix-scan)
-src/model.rs     # serde Record/Message/Content/Block + is_genuine_user
-src/parse.rs     # mmap + memchr head/tail/stream readers + lazy parse_line
-src/session.rs   # `list`: head+tail read → SessionSummary (+ spans subagents by default)
-src/search.rs    # `search`: regex + filters → complete round-trip Exchange (+ spans subagents)
-src/subagent.rs  # subagent discovery/classification (3 on-disk shapes, journal excluded) + lifecycle/status + agent→agent topology (flat on disk; nesting reconstructed via a GLOBAL spawn index → parent_agent_id/depth/tree)
-src/agents.rs    # `agents`: per-subagent lifecycle rows + --kind/--since/--until/--by filters
-src/files.rs     # `files`: which files/dirs a session changed + Edit-before-Read boundary detection (each row carries Lnnnn)
-src/bash_mutations.rs # heuristic regex-free Bash file-mutation parser (cp/mv/rm/redirects) — feeds files + recover
-src/time_window.rs # `--since`/`--until` parsing (absolute + relative, system-local); shared by search + agents
-src/timez.rs     # shared system-local timestamp rendering (format_timestamp / local_iso / local_tz)
-src/text.rs      # shared excerpt-with-explicit-elision renderer + inclusive Lnnnn range parser (used by every surface)
-src/whoami.rs    # `whoami`: CLAUDE_CODE_SESSION_ID detection, false-positive-safe
-src/recover.rs   # `recover`: file-content reconstruction (default restore = raw final content, or a SMART fail-if-partial that lists every external-change boundary + recommends the pre-change dump + patches-since + reconcile; --salvage/--patches/--at/--coverage) + the `--file @plan` sigil; modified-since-read invalidates the final-state buffer; --patches uses FULL context (all read lines, Read-before-Edit-guaranteed); basename prefilter + `--files-from`/`--out-dir` batch (parse each transcript once for many files)
-src/plan.rs      # `plan`: plan-file binding resolver (the `plan_mode` attachment) + shared @plan resolution
-src/turns.rs     # `turns`: turn-fidelity reconstruction of a compaction-clipped exchange
-src/image.rs     # `image`: list + extract inline base64 images (#N handle + L<line>i<n> locator; ambiguous-#N error + --since/--turn-range/--uuid disambiguators; --out extension-driven transcode via image + libwebp)
-src/recover/, src/turns/   # each holds the module's tests.rs (unit tests beside the module)
-```
-The CLI entrypoint is `cli::parse_argv` (NOT `Cli::parse`): it runs an argv-normalization pass (`cli::normalize_argv`) so a `--format`/`--kind`/… flag works in ANY position relative to a leading-`-` encoded project target — fixes clap's `allow_hyphen_values` greedy-absorb bug (#3880) with zero-drift flag discovery via clap introspection.
-
----
-
-## 8. What NOT to do
-
-- **Don't introduce BM25 / embeddings / semantic search.** Regex only (§1).
-- **Don't `unwrap`/`expect` in library paths**, and **don't silently truncate** (§4).
-- **Don't parse a whole 200MB file** when a head or tail read answers the question (§4, §6).
-- **Don't trust most-recent-mtime for `whoami`** (§6.7).
-- **Don't blindly trust this doc's field list** — real jsonl evolves; re-verify against `~/.claude/projects` and EXTEND the model tolerantly rather than tightening it.
+- **Don't introduce BM25 / embeddings / semantic search.** Regex only.
+- **Don't `unwrap`/`expect` in library paths**, and **don't silently truncate** - always report the drop count.
+- **Don't parse a whole 200MB file** when a head/tail read answers the question; don't lose mmap+memchr+prefilter+tail+rayon.
+- **Don't add a second `unsafe` allow** beyond the audited mmap site; don't switch `deny` to `forbid` (it would refuse to compile mmap).
+- **Don't trust most-recent-mtime for `whoami`**; don't guess when `$CLAUDE_CODE_SESSION_ID` is absent.
+- **Don't reverse a path encoding** (lossy); don't assume a workflow subagent's env `$CLAUDE_CODE_SESSION_ID` is its own id (it is the parent's).
+- **Don't blindly trust this doc's field list** - real jsonl evolves; re-verify against `~/.claude/projects` and EXTEND the model tolerantly rather than tightening it into a crash.
 - **Don't bump a dependency major** without an explicit reason.
-- **Don't edit `.git/hooks/pre-commit` directly** — edit `.cargo-husky/hooks/pre-commit` and re-run `cargo test`.
+- **Don't edit `.git/hooks/pre-commit` directly** - edit `.cargo-husky/hooks/pre-commit` and re-run `cargo test`.
+- **Don't add semantic/numeric exit codes** - 0 / non-zero only, full chain to stderr.
+- **Don't edit `CLAUDE.md`** - it's a symlink; edit `AGENTS.md`.
+```

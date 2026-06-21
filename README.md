@@ -43,7 +43,7 @@ agent actually did… and it's also a 200 MB wall of JSON. When you (or your age
 - *what did that session decide about X — and where's the code?*
 - *which files did it touch, and did any change behind the tool stream's back?*
 - *recover the file it rewrote five times — or the plan it deleted.*
-- *what did the compaction summary throw away?* (the standing directive, the earlier decision)
+- *what's the verbatim exchange a compaction summary compressed to a single line?*
 - *which subagent ran what, and how did the fan-out nest?*
 
 …`csift` answers it in one command. It's `grep` that understands the transcript: it returns the
@@ -70,6 +70,27 @@ everything: output is terse and parseable, every record carries a re-feedable `L
 `@<uuid>` handle, ambiguity is an explicit error rather than a silent guess, and a running session
 can even ask *"which subagent am I?"* with `@trap:<marker>`. It's the rare tool whose UX is tuned
 for a model, not a person.
+
+## The summary is a selection. csift keeps the conversation.
+
+When Claude Code compacts, it regenerates a dense summary — kilobytes standing in for dozens of
+compactions of history. It's a *good* selection: it keeps the key findings (what changed, with
+file:line) and often your standing directives verbatim. But it is a selection, re-abstracted every
+time, and the axis it optimizes is **task continuation** — not the conversation.
+
+`csift turns` keeps the other axis: the verbatim **User↔Agent exchange** — what you actually said,
+and what the agent actually reported back when it finished — with the hundreds of tool calls in
+between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue the
+summary compressed to a line or two: not just your directive, but the agent's *"validated against
+HEAD — the premise holds, here's the evidence"* report-back, the kind of thing a task-findings
+selection simply doesn't carry.
+
+So it doesn't replace the summary — it's **orthogonal** to it, and it **extends** the
+post-compaction context with the recent conversation at full fidelity. It's budget-bounded and
+newest-first (it won't reach the oldest turns, and your never-compacted Plan file still owns the
+plan), but filling the dialogue the summary abstracted away is exactly the point: *better, not
+complete.* Wire it into a `SessionStart(compact)` hook — see [SKILL.md](SKILL.md) — and every
+compaction arrives with the recent verbatim conversation attached.
 
 ## Install
 
