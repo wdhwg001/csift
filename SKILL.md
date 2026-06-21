@@ -40,7 +40,7 @@ CC sets `$CLAUDE_CODE_SESSION_ID` to the TOP-LEVEL id even inside a subagent, so
 
 ## Categories (`search -t`) - `thinking | user | tool | tool-response | agent`
 - `thinking` = assistant thinking. `tool` = `tool_use` (AUQ counts). `tool-response` = `tool_result` (each names its tool). `agent` = visible assistant end-of-turn text.
-- `user` = GENUINE human input + **AUQ answers** + machine **automation-trigger openers** (`<task-notification>` -> `[<kind> <id> <status>] <summary>`); NOT tool_result carriers.
+- `user` = GENUINE human input + **AUQ answers** + machine **automation-trigger openers** (`<task-notification>` -> `[<kind> <id> <status>] <summary>`); NOT tool_result carriers (which ride `role:"user"` too, ~4-5x as many). An UNanswered AUQ never reaches disk; only an ANSWERED one opens a turn.
 - **Automation `kind`** (longest leading prefix of `<summary>`, case-insensitive): `background command`->`background-command`, `dynamic workflow`/`workflow`->`workflow`, `monitor`/`scheduled`/`cron`->`monitor`, `agent`->`agent`, else->`task`. **Monitor RECLASSIFICATION (load-bearing)**: a captured monitor loop is often a `&`-detached **`Background command "<name>"`** leading with `background command`, so a pure prefix check buries it all under `background-command` and `monitor` matches zero. Rescue: scan the **QUOTED command NAME** (between the first `"` pair) - a monitor-cadence token there (standalone word `monitor` or `liveness`, or substring `re-arm` / `relaunch monitor`; `tick`/`cadence` EXCLUDED as too broad) re-routes to `monitor`. Quoted-name-only so trailing prose mentioning "monitor" isn't over-captured; no quotes => `background-command`.
 - **isMeta wakeup-tick BYPASS**: classification only sees `<task-notification>` COMPLETION pulses. The `ScheduleWakeup` **wakeup-tick prompts** DRIVING a monitor/cron cadence are `isMeta:true` user records, NOT `<task-notification>`s - they bypass automation parsing via the isMeta gate in `is_genuine_user` (neither genuine-user nor classified-automation), so driving ticks don't surface as `-t user`.
 
@@ -77,8 +77,8 @@ Empty PATTERN (`""`) = pure filter (combine `-t`/`--since`/`--turn-range`). A hi
 
 ```bash
 csift search "panic" @<uuid> -t agent --since 6h
-csift search "" @<uuid> --no-subagents --line 46550           # the exact cited message, full
-csift search "Full output" --resolve-persisted --format json  # inline persisted-output, then match
+csift search "" @<uuid> --no-subagents --line 46550 # the exact cited message, full
+csift search "Full output" --resolve-persisted --format json # inline persisted-output, then match
 ```
 
 ## `agents` - subagent lifecycle + topology
@@ -133,8 +133,8 @@ Replays the file's Read/Write/Edit stream in transcript order into a sparse buff
 - The four non-restore modes emit NDJSON + leading `session_header`, closed by the NESTED `{"summary":{sessions, file, mode, skipped_lines}}`. Restore is the lone single-object form (NO header/trailer).
 
 ```bash
-csift recover @<uuid> --file /abs/gone.py --salvage         # survivors, gaps explicit
-csift recover @<uuid> --file @plan --out /tmp/plan.md        # rebuild the bound plan (deleted ok)
+csift recover @<uuid> --file /abs/gone.py --salvage # survivors, gaps explicit
+csift recover @<uuid> --file @plan --out /tmp/plan.md # rebuild the bound plan (deleted ok)
 ```
 
 ## `plan` - locate the plan bound to a session
@@ -181,8 +181,8 @@ Pasted/screenshot images live INLINE as `{type:"image",source:{type:"base64",…
 - JSON list per image: `{handle, seq, id(=L<line>i<n>), line_no, img_index, session_id, is_subagent, parent_session_id, source_kind, media_type, b64_len, est_bytes, url, record_uuid, ts_utc/local}` + summary `{images, transcripts, skipped_lines}`. Extract JSON: `{path, bytes, media_type, source_media_type, converted, notes}`. `turns`/`search` surface these ids inline (`[N image(s): #32…]`).
 
 ```bash
-csift image @<uuid>  # list (deduped)
-csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg  # locator -> convert to jpeg
+csift image @<uuid> # list (deduped)
+csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg # locator -> convert to jpeg
 ```
 
 ---
@@ -190,32 +190,35 @@ csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg  # locator -
 ## Recipes - shell pipe + jq
 
 ```bash
-# Distinct sessions for a topic. search -l = PURE NDJSON (raw .session_id); DEFAULT mode emits a header (needs select()):
-csift search -l "rate limit" --format json | jq -r '.session_id'
 # Every abs path a session touched (authoritative only, drop Bash heuristics):
 csift files @<uuid> --by-file --format json | jq -r 'select(.path and (.heuristic|not))|.path'
-# Subagent ids + status + return source, as TSV:
-csift agents @<uuid> --returned-message --format json | jq -r '[.agent_id,.kind,.status,.returned_message_source]|@tsv'
-# Batch-restore every file a botched recovery nuked (manifest -> --files-from):
-csift files @<uuid> --by-file --format json | jq -r 'select(.path)|.path' > /tmp/m.txt && csift recover @<uuid> --files-from /tmp/m.txt --out-dir /tmp/restore
-# Per-segment unified diffs of a reconstruction (FULL text per segment):
-csift recover @<uuid> --file /abs/x.py --patches --format json | jq -r '.unified_diff // empty'
-# Only HARD (authoritative) integrity boundaries (skip heuristic Bash drift):
-csift recover @<uuid> --file /abs/x.py --coverage --format json | jq -r '.boundaries[]|select(.confidence=="authoritative")|"\(.kind) L\(.line_no)"'
 ```
 
-### SessionStart hook - supplement the compaction summary with verbatim recent turns
-A compaction summary is a task-continuation SELECTION (it often keeps standing directives verbatim, but re-abstracts the rest). Wire `turns --slices` into N `SessionStart(compact)` hooks to ALSO re-inject the recent verbatim User<->Agent turns - orthogonal to the summary, extending the window. The injected `additionalContext` becomes a **`type:"attachment"`** transcript record (csift treats `attachment` as metadata, so it never re-surfaces as a turn). **GOTCHA: same-event hooks run CONCURRENTLY; CC collects their output in COMPLETION order.** Fix via **fixed-fleet slicing**: N hooks, hook *i* prints `--slices N --slice i` + an `i/N` header so the model re-assembles (the deployed hook also forces order with a PID-scoped done-flag barrier).
+### SessionStart(compact) hook - install turns as a post-compaction verbatim supplement (the #1 recipe)
+N `SessionStart(matcher:"compact")` hooks run `turns --slices N --slice i` (slice mechanics above) to re-inject the recent verbatim User<->Agent turns - a SUPPLEMENT to the summary, orthogonal + window-extending. The text lands as a **`type:"attachment"`** record (csift ignores `attachment` => never a turn). Safe to re-fire each compaction: the old copy is summarized away, re-injected fresh = one (no pile-up); resume won't match.
 
-```jsonc
-// ~/.claude/settings.json: N=3 hooks, matcher "compact"; each prints an order-keyed chunk.
-// session id from the hook's stdin payload ($CLAUDE_CODE_SESSION_ID is not guaranteed at SessionStart):
-"command": "sid=$(jq -r .session_id); printf '<<csift-turns 1/3>>\\n'; csift turns \"@$sid\" --slices 3 --slice 1 --window 9000"
-// two more entries: 2/3 --slice 2, and 3/3 --slice 3.
+**The slice race is load-bearing.** CC runs same-event hooks CONCURRENTLY, collecting output in COMPLETION (not registration) order, so they arrive scrambled - a turn split across a chunk glues back wrong. A `$PPID`-namespaced **done-flag barrier** forces order: slice i waits for slice i-1's `.done`. ONE script, registered N times with a different slice arg, reproduces the installed hook:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+slice="${1:?1-based slice index}"; N=4; WINDOW=9000 # N MUST equal the number of registered hooks
+SEQ="/tmp/csift-turns-slice-$PPID" # $PPID = the CC process; isolates concurrent sessions
+release(){ mkdir -p "$SEQ"; touch "$SEQ/s$slice.done"; [ "$slice" = "$N" ] && rm -rf "$SEQ"; return 0; }
+trap release EXIT # release on EVERY exit path so the chain can't stall
+if [ "$slice" -le 1 ]; then rm -rf "$SEQ"; mkdir -p "$SEQ" # slice 1 resets stale flags from a prior PID collision
+else u=$(($(date +%s)+5)); until [ -f "$SEQ/s$((slice-1)).done" ] || [ "$(date +%s)" -ge "$u" ]; do sleep 0.05; done; fi
+command -v jq >/dev/null || exit 0 # ANY failure path injects nothing + exits 0 (never block start)
+in=$(cat); [ "$(jq -r '.source//empty' <<<"$in")" = compact ] || exit 0 # backstop the matcher
+C=$(command -v csift||true); [ -x "$C" ] || C=$HOME/.cargo/bin/csift; [ -x "$C" ] || exit 0 # resolve csift; hooks get no PATH
+sid=$(jq -r '.session_id//empty' <<<"$in"); [ -n "$sid" ] || exit 0 # id from stdin, NOT $CLAUDE_CODE_SESSION_ID
+chunk=$("$C" turns "@$sid" --slices $N --window $WINDOW --slice "$slice" 2>/dev/null||true)
+[ -n "$chunk" ] || exit 0 # out-of-range slice prints nothing -> self-trims
+jq -n --arg c "Verbatim turns the compaction summary clipped (part $slice - a supplement; the summary still owns task state):
+$chunk" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c}}'
 ```
-- `--window 9000` keeps headroom under the ~10000 `additionalContext` cap for the `i/N` key. Same N + `--window` in every hook; bump N when the recon outgrows `N*window` (oldest drop first).
+Register N times in settings.json: each `{"matcher":"compact","hooks":[{"type":"command","command":"/ABS/csift-turns-slice.sh i"}]}`, i=1..N. ABSOLUTE path for a global `~/.claude/` install (`$CLAUDE_PROJECT_DIR` is unset there). `--window 9000` stays under the 10K cap.
 
 ## Practical tips
-- A `type:"user"` record is usually NOT a human turn - `tool_result` carriers ride `role:"user"` too (often 4-5x the genuine ones). `-t user` = real input + AUQ answers only. A PENDING AUQ is NOT in the jsonl; only an ANSWERED one opens a turn.
 - `search -l` (which sessions) before `search` (what); `recover --coverage` before trusting a `--salvage`.
-- Sub-second on 200MB+ files (mmap + SIMD + byte-prefilter + rayon); never fear an unscoped `search`/`files`.
+- Sub-second on 200MB+ files (mmap + SIMD + prefilter + rayon); never fear an unscoped scan.
