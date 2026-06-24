@@ -353,6 +353,68 @@ fn replay_full_snapshot_resets_then_partial_splices_without_padding() {
 }
 
 #[test]
+fn reset_to_full_drops_phantom_trailing_line_from_separator_count_total() {
+    // CC's Read / file-attachment `totalLines` is a SEPARATOR count: a 2-line file ending in
+    // `\n` reports totalLines=3. We hold the full content, so split_lines (2) is authoritative —
+    // the phantom 3rd line must NOT inflate seen_total (else restore/salvage/at/coverage report a
+    // spurious unknown trailing line). Regression for the node24-migrate.sh 96/97 (98%) bug.
+    let mut buf = SparseBuffer::default();
+    buf.reset_to_full("a\nb\n", 3, 10);
+    assert_eq!(buf.known_lines(), vec![(1, "a".into()), (2, "b".into())]);
+    assert_eq!(
+        buf.seen_total_lines,
+        Some(2),
+        "separator-count total 3 must normalise to the terminator count 2"
+    );
+    // A non-newline-terminated full snapshot keeps its total verbatim (there is no phantom line).
+    let mut buf2 = SparseBuffer::default();
+    buf2.reset_to_full("a\nb", 2, 10);
+    assert_eq!(buf2.seen_total_lines, Some(2));
+}
+
+#[test]
+fn replay_full_read_after_write_does_not_invent_trailing_gap() {
+    // The real node24-migrate.sh sequence: a Write creates the file (terminator count), then a
+    // later full READ / file-attachment re-observes it with a SEPARATOR-count `totalLines` (N+1
+    // for a newline-terminated file). The read is the LAST event, so it sets the final
+    // seen_total — which must stay N, not N+1, so `recover` (restore) sees a COMPLETE file.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: Some("2026-06-09T00:00:00.000Z".into()),
+            kind: EventKind::FullSnapshot {
+                content: "l1\nl2\nl3\n".into(),
+                total_lines: 3, // Write: terminator count
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 1,
+            timestamp_utc: Some("2026-06-09T00:01:00.000Z".into()),
+            kind: EventKind::FullSnapshot {
+                content: "l1\nl2\nl3\n".into(),
+                total_lines: 4, // Read / file-attachment: SEPARATOR count (the phantom +1)
+                source: SnapSource::FileAttachment,
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(rep.final_buffer.known_lines().len(), 3);
+    assert_eq!(
+        rep.final_buffer.seen_total_lines,
+        Some(3),
+        "the separator-count read must not invent a phantom 4th line"
+    );
+    // complete == (known.len() == seen_total) → restore succeeds instead of hard-failing.
+    assert_eq!(
+        rep.final_buffer.known_lines().len(),
+        rep.final_buffer.seen_total_lines.unwrap()
+    );
+}
+
+#[test]
 fn replay_edit_applies_to_running_buffer_not_originalfile() {
     // The buffer holds a\nb\nc; an edit's structuredPatch changes line 2 b→B. We apply to
     // the BUFFER (structured patch), not the originalFile field.

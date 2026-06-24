@@ -1358,7 +1358,16 @@ impl SparseBuffer {
         // A full-content anchor is the authority on trailing-newline status (used to
         // normalise later windowed reads' separator-counted totals).
         self.content_ends_with_newline = content.ends_with('\n');
-        self.seen_total_lines = Some(total_lines.max(self.known.len()));
+        // CC's Read / file-attachment `totalLines` is a SEPARATOR count: a newline-terminated
+        // file reports `split_lines + 1` (a phantom empty last line — e.g. a 96-line file ending
+        // in `\n` reports 97). We hold the FULL content here, so `split_lines` (== `known.len()`)
+        // is authoritative — normalise the reported total down by that phantom before recording
+        // it, else a fully-recovered newline-terminated file is mis-reported as missing its
+        // trailing line (restore HARD-FAILS as "partial"; --salvage/--at show a spurious
+        // `??? line N+1 unknown`; --coverage shows N/N+1). A Write already passes a terminator
+        // count, and the `.max(known.len())` floor keeps every non-phantom case unchanged.
+        let normalized_total = self.normalize_total(total_lines);
+        self.seen_total_lines = Some(normalized_total.max(self.known.len()));
     }
 
     /// Convert a tool-reported `total_lines` (SEPARATOR count) to the TERMINATOR count used
