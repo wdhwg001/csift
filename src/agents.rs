@@ -191,6 +191,7 @@ fn kind_allowed(kind: SubagentKind, want: &[AgentKindFilter]) -> bool {
     want.iter().any(|w| match w {
         AgentKindFilter::BuiltinTask => kind == SubagentKind::BuiltinTask,
         AgentKindFilter::Workflow => kind == SubagentKind::Workflow,
+        AgentKindFilter::Teammate => kind == SubagentKind::Teammate,
     })
 }
 
@@ -249,6 +250,7 @@ fn render_text(
             .map(|k| match k {
                 AgentKindFilter::BuiltinTask => "builtin-task",
                 AgentKindFilter::Workflow => "workflow",
+                AgentKindFilter::Teammate => "teammate",
             })
             .collect::<Vec<_>>()
             .join(",")
@@ -390,6 +392,13 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     head.push_str(&format!("  {}", n.status.label()));
     println!("{head}");
 
+    // A teammate's team + handle (the team-lead addresses it by `@<name>`); shown only when set.
+    if let Some(tn) = &n.team_name {
+        match &n.name {
+            Some(nm) => println!("{ind2}team       {tn}  (@{nm})"),
+            None => println!("{ind2}team       {tn}"),
+        }
+    }
     if let Some(d) = &n.description {
         println!("{ind2}desc       {d}");
     }
@@ -547,6 +556,8 @@ fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "spawn_tool": n.spawn_tool,
         "workflow_id": n.workflow_id,
         "agent_type": n.agent_type,
+        "name": n.name,
+        "team_name": n.team_name,
         "description": n.description,
         "trigger_utc": n.trigger_utc,
         "trigger_local": n.trigger_utc.as_deref().and_then(local_iso),
@@ -658,6 +669,8 @@ mod tests {
             spawn_tool: Some("Agent".to_string()),
             workflow_id: None,
             agent_type: None,
+            name: None,
+            team_name: None,
             description: None,
             trigger_utc: trigger.map(str::to_string),
             started_utc: start.map(str::to_string),

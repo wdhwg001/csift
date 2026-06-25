@@ -841,6 +841,10 @@ pub enum AgentKindFilter {
     /// Workflow / OMC workflow-subagent transcripts
     /// (`subagents/workflows/wf_*/agent-<hex>.jsonl`).
     Workflow,
+    /// "Teammate" agents (`taskKind:"in_process_teammate"`) — Claude Code's persistent,
+    /// directly-addressable team members. They share the built-in on-disk location
+    /// (`subagents/agent-<id>.jsonl`); the meta.json `taskKind` is the discriminator.
+    Teammate,
 }
 
 #[derive(Debug, Args)]
@@ -850,7 +854,8 @@ pub enum AgentKindFilter {
         and a determinable status. Three on-disk shapes are discovered under \
         `<session>/subagents/**` (verified empirically against ~/.claude/projects):\n  \
           • builtin-task  subagents/agent-<hex>.jsonl                 (Task/Agent tool)\n  \
-          • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n\
+          • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n  \
+          • teammate      subagents/agent-a<Name>-<hex>.jsonl         (in_process_teammate / FleetView; meta taskKind)\n\
         Workflow `journal.jsonl` event logs are NOT transcripts — they are read only \
         to corroborate completion status, never listed as agents.\n\n\
         The TARGET selects the parent session: pass `@<uuid>` for one \
@@ -872,10 +877,11 @@ pub enum AgentKindFilter {
     after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
           The TARGET selects the PARENT session whose subagents to list: pass `@<uuid>` \
         (or `@main`/`@trap:<marker>`) for ONE session, or a project PATH/encoded-dir \
-        to cover every session under it (each session's subagents grouped under it). Three \
-        on-disk subagent shapes are discovered under `<session>/subagents/**`:\n    \
+        to cover every session under it (each session's subagents grouped under it). \
+        Subagent shapes discovered under `<session>/subagents/**`:\n    \
             • builtin-task  subagents/agent-<hex>.jsonl                       (Task/Agent tool)\n    \
-            • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl     (OMC workflows)\n  \
+            • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl     (OMC workflows)\n    \
+            • teammate      subagents/agent-a<Name>-<hex>.jsonl              (in_process_teammate; meta taskKind)\n  \
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
         status, never listed). Status is `completed` when a workflow journal carries a \
         `result` event (or the transcript terminates cleanly), else `running`/`unknown`. \

@@ -2230,6 +2230,87 @@ fn whoami_trims_surrounding_whitespace() {
 // ── agents ──
 
 #[test]
+fn agents_classifies_teammate_and_id_round_trips() {
+    // The NEW "teammate" subagent (taskKind:in_process_teammate). On disk it sits at the
+    // built-in location (subagents/agent-<id>.jsonl) with a NAME-embedded id and a meta that
+    // omits toolUseId + overloads agentType with the handle. csift must: (1) classify it as
+    // `teammate`, (2) recover the real subagent_type + spawn linkage via the NAME-join to the
+    // `Agent` tool_use, and (3) let the printed id round-trip as an `@<id>` target.
+    let enc = "-Users-testuser-Projects-team";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let tid = "aVSRepro-68a2a1661c9390c1";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"fix the slider"}}"#, "\n",
+            // The Agent tool_use that spawned the teammate: input.name is the join key, and
+            // subagent_type is the REAL type (the teammate meta only has the handle).
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_team","name":"Agent","input":{"description":"repro the bug","subagent_type":"oh-my-claudecode:qa-tester","name":"VSRepro"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{tid}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aVSRepro-68a2a1661c9390c1","timestamp":"2026-06-07T05:00:01.500Z","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\">repro the speed slider</teammate-message>"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"the multi-region matrix result"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{tid}.meta.json"),
+        r#"{"agentType":"VSRepro","description":"repro the bug","name":"VSRepro","taskKind":"in_process_teammate","teamName":"session-25f56dee","color":"purple"}"#,
+    );
+
+    // (1)+(2) classification + name-join recovery, via JSON.
+    let out = h.run(&["agents", &format!("@{sess}"), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let node = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .flat_map(|v| {
+            v.get("agents")
+                .and_then(|a| a.as_array())
+                .cloned()
+                .unwrap_or_default()
+        })
+        .find(|n| n.get("kind").and_then(|k| k.as_str()) == Some("teammate"))
+        .expect("a teammate node in agents JSON");
+    assert_eq!(node["agent_id"], tid);
+    assert_eq!(node["agent_type"], "oh-my-claudecode:qa-tester"); // real type, not the handle
+    assert_eq!(node["name"], "VSRepro");
+    assert_eq!(node["team_name"], "session-25f56dee");
+    assert_eq!(node["spawn_tool"], "Agent");
+    assert_eq!(node["spawn_tool_use_id"], "toolu_team"); // recovered via the name-join
+    assert_eq!(node["trigger_utc"], "2026-06-07T05:00:01.000Z"); // the TRUE spawn instant
+
+    // `--kind teammate` filters to it; text shows the team line.
+    let kind = h.run(&["agents", &format!("@{sess}"), "--kind", "teammate"]);
+    assert!(kind.success, "stderr: {}", kind.stderr);
+    assert!(
+        kind.stdout.contains(tid),
+        "kind filter dropped it: {}",
+        kind.stdout
+    );
+    assert!(kind.stdout.contains("teammate"));
+    assert!(
+        kind.stdout.contains("session-25f56dee"),
+        "no team line: {}",
+        kind.stdout
+    );
+
+    // (3) the printed id round-trips as an `@<id>` target (previously failed — fell through to
+    // path resolution). search default-spans the teammate subtree and finds its content.
+    let refed = h.run(&["search", "matrix result", &format!("@{tid}"), "-t", "agent"]);
+    assert!(refed.success, "re-feed failed: {}", refed.stderr);
+    assert!(
+        refed.stdout.contains("multi-region matrix result"),
+        "re-fed teammate search found nothing: {}",
+        refed.stdout
+    );
+}
+
+#[test]
 fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     // A NESTED subagent (agent spawned BY another agent). On-disk the layout is FLAT — both
     // agents sit directly under <session>/subagents/ — because CC writes every subagent's

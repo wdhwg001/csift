@@ -107,6 +107,14 @@ pub enum SubagentKind {
     BuiltinTask,
     /// `subagents/workflows/wf_<id>/agent-<hex>.jsonl` — a workflow / OMC agent.
     Workflow,
+    /// A "teammate" (`taskKind:"in_process_teammate"`) — Claude Code's persistent, directly
+    /// addressable team-member agent. It lands at the built-in on-disk LOCATION
+    /// (`subagents/agent-<id>.jsonl`), so location alone can't tell it apart; the discriminator
+    /// is the meta.json `taskKind`. Its canonical id embeds the teammate name
+    /// (`aVSRepro-68a2a1661c9390c1`, see [`crate::path::is_subagent_id`]), its meta carries
+    /// `teamName`/`color`/`model` and NO `toolUseId`, and it is spawned by an `Agent` tool_use
+    /// joined by NAME (not tool_use id) — see [`ParentSpawnIndex::spawn_id_for_name`].
+    Teammate,
 }
 
 impl SubagentKind {
@@ -116,6 +124,7 @@ impl SubagentKind {
         match self {
             SubagentKind::BuiltinTask => "builtin-task",
             SubagentKind::Workflow => "workflow",
+            SubagentKind::Teammate => "teammate",
         }
     }
 }
@@ -141,6 +150,14 @@ pub struct Subagent {
     /// the parent transcript's spawn index ([`ParentSpawnIndex`]) — it recovers the true
     /// trigger time + the returned message.
     pub spawn_tool_use_id: Option<String>,
+    /// The agent's `name` from meta.json (the `Agent` tool's `name` param, e.g. a teammate
+    /// handle like `VSRepro` or an OMC lane name like `LaneDONE`). `None` when absent. For a
+    /// teammate this is the NAME-join key into the spawning `Agent` tool_use (whose meta carries
+    /// no `toolUseId`), recovering the spawn linkage the flat layout otherwise drops.
+    pub name: Option<String>,
+    /// The `teamName` from meta.json — present only for a teammate (`taskKind:in_process_teammate`);
+    /// `None` for built-in/workflow agents. Identifies the team a teammate belongs to.
+    pub team_name: Option<String>,
 }
 
 /// Lifecycle facts derived from a subagent transcript (+ its workflow journal, when
@@ -412,6 +429,17 @@ fn make_subagent(
     let meta_path = path.with_extension("meta.json");
     let meta_path = meta_path.is_file().then_some(meta_path);
     let meta = read_meta(meta_path.as_deref());
+    // A built-in-LOCATION agent whose meta declares `taskKind:"in_process_teammate"` is a
+    // teammate, not a plain Task subagent — the only way to tell them apart (both sit at
+    // `subagents/agent-<id>.jsonl`). Workflow agents never carry this taskKind, so the upgrade
+    // only ever fires from BuiltinTask.
+    let kind = if kind == SubagentKind::BuiltinTask
+        && meta.task_kind.as_deref() == Some("in_process_teammate")
+    {
+        SubagentKind::Teammate
+    } else {
+        kind
+    };
     Subagent {
         agent_id,
         kind,
@@ -420,13 +448,16 @@ fn make_subagent(
         workflow_id,
         meta_path,
         spawn_tool_use_id: meta.tool_use_id,
+        name: meta.name,
+        team_name: meta.team_name,
     }
 }
 
 /// The fields csift reads from a subagent's `meta.json`. A built-in meta carries
-/// `{agentType, description, toolUseId}` (+ rarely `name`); a workflow agent meta carries
-/// only `{agentType}`. All four are optional — a malformed / missing / key-absent meta
-/// yields all-`None` (never an error; the lifecycle still resolves from the transcript).
+/// `{agentType, description, toolUseId}` (+ often `name`); a workflow agent meta carries only
+/// `{agentType}`; a TEAMMATE meta carries `{agentType, description, name, taskKind, teamName,
+/// color, model, …}` and NO `toolUseId`. All are optional — a malformed / missing / key-absent
+/// meta yields all-`None` (never an error; the lifecycle still resolves from the transcript).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MetaFields {
     pub agent_type: Option<String>,
@@ -435,11 +466,17 @@ pub struct MetaFields {
     /// key). Captured here so the previously-dropped `toolUseId` reaches the topology.
     pub tool_use_id: Option<String>,
     pub name: Option<String>,
+    /// `taskKind` — `"in_process_teammate"` marks a teammate (the only way to distinguish it
+    /// from a built-in Task subagent, since both share the on-disk location). `None`/other for
+    /// a plain built-in or workflow agent.
+    pub task_kind: Option<String>,
+    /// `teamName` — the team a teammate belongs to (teammate metas only).
+    pub team_name: Option<String>,
 }
 
-/// Read `{agentType, description, toolUseId, name}` from a subagent's `meta.json`, if
-/// readable. Returns [`MetaFields::default`] (all `None`) for a missing path, unreadable
-/// file, malformed JSON, or any key absent.
+/// Read `{agentType, description, toolUseId, name, taskKind, teamName}` from a subagent's
+/// `meta.json`, if readable. Returns [`MetaFields::default`] (all `None`) for a missing path,
+/// unreadable file, malformed JSON, or any key absent.
 fn read_meta(meta_path: Option<&Path>) -> MetaFields {
     let Some(p) = meta_path else {
         return MetaFields::default();
@@ -460,6 +497,8 @@ fn read_meta(meta_path: Option<&Path>) -> MetaFields {
         description: str_field("description"),
         tool_use_id: str_field("toolUseId"),
         name: str_field("name"),
+        task_kind: str_field("taskKind"),
+        team_name: str_field("teamName"),
     }
 }
 
@@ -646,6 +685,12 @@ pub struct ParentSpawnIndex {
     /// `None` when issued by the main session itself. Populated only when the index is built
     /// GLOBALLY ([`build_global_spawn_index`]); a single-transcript build leaves it empty.
     issuer: std::collections::HashMap<String, Option<String>>,
+    /// `spawn input.name → [(trigger_utc, tool_use_id)]` for every spawn tool_use that named
+    /// its agent. The NAME-join fallback for a TEAMMATE, whose meta carries no `toolUseId` (so
+    /// the usual id-join can't reach its spawning `Agent` tool_use). Keyed by the `Agent` tool's
+    /// `name` param (== the teammate's meta `name`). A name may recur across a session, so the
+    /// values are a list disambiguated by trigger time in [`Self::spawn_id_for_name`].
+    by_name: std::collections::HashMap<String, Vec<(Option<String>, String)>>,
 }
 
 impl ParentSpawnIndex {
@@ -668,6 +713,30 @@ impl ParentSpawnIndex {
     #[must_use]
     pub fn parent_agent_for(&self, spawn_tool_use_id: &str) -> Option<String> {
         self.issuer.get(spawn_tool_use_id).cloned().flatten()
+    }
+
+    /// The spawning tool_use id for a NAMED spawn (the teammate name-join, §FIX3). Among the
+    /// spawns that share `name`, prefer the LATEST whose trigger ≤ `at_or_before` (the child's
+    /// head ts — the spawn always precedes the child), so a recurring name binds to the right
+    /// launch; fall back to the first recorded spawn when none qualifies (or no bound given).
+    /// `None` when the name was never used to spawn. ISO8601-UTC strings compare chronologically.
+    #[must_use]
+    pub fn spawn_id_for_name(&self, name: &str, at_or_before: Option<&str>) -> Option<String> {
+        let cands = self.by_name.get(name)?;
+        if let Some(bound) = at_or_before {
+            if let Some(best) = cands
+                .iter()
+                .filter(|(ts, _)| ts.as_deref().is_some_and(|ts| ts <= bound))
+                .max_by(|a, b| {
+                    a.0.as_deref()
+                        .unwrap_or("")
+                        .cmp(b.0.as_deref().unwrap_or(""))
+                })
+            {
+                return Some(best.1.clone());
+            }
+        }
+        cands.first().map(|(_, id)| id.clone())
     }
 }
 
@@ -739,6 +808,14 @@ fn scan_spawns_into(jsonl: &Path, issuer: Option<&str>, idx: &mut ParentSpawnInd
                         },
                     );
                     idx.issuer.insert(id.clone(), issuer.map(str::to_string));
+                    // Index by the spawn's `input.name` (the `Agent` tool's `name` param) so a
+                    // teammate — whose meta has no `toolUseId` — can name-join to its launch.
+                    if let Some(spawn_name) = str_in("name") {
+                        idx.by_name
+                            .entry(spawn_name)
+                            .or_default()
+                            .push((rec.timestamp.clone(), id.clone()));
+                    }
                 }
                 Block::ToolResult {
                     tool_use_id: Some(id),
@@ -845,6 +922,11 @@ pub struct SubagentNode {
     pub spawn_tool: Option<String>,
     pub workflow_id: Option<String>,
     pub agent_type: Option<String>,
+    /// The agent's `name` (meta.json `name` = the `Agent` tool's `name` param) — a teammate
+    /// handle (`VSRepro`) or an OMC lane name (`LaneDONE`). `None` when unnamed.
+    pub name: Option<String>,
+    /// The `teamName` for a teammate (`kind == Teammate`); `None` otherwise.
+    pub team_name: Option<String>,
     pub description: Option<String>,
     /// TRUE trigger time = the parent tool_use ts (§4); falls back to the child-head ts
     /// (`started_utc`) when the spawn index has no entry.
@@ -1061,10 +1143,20 @@ fn node_for(
     with_files: bool,
 ) -> Result<SubagentNode> {
     let lc = lifecycle(subagent)?;
-    let spawn = subagent
-        .spawn_tool_use_id
-        .as_deref()
-        .and_then(|id| index.spawn(id));
+    // Effective spawn id: the meta `toolUseId` for a built-in/workflow agent, OR — for a
+    // TEAMMATE, whose meta carries none — the NAME-join to its spawning `Agent` tool_use. This
+    // single resolution lights up the whole spawn linkage below (trigger, parent, tool, type).
+    let effective_spawn_id = subagent.spawn_tool_use_id.clone().or_else(|| {
+        if subagent.kind == SubagentKind::Teammate {
+            subagent
+                .name
+                .as_deref()
+                .and_then(|nm| index.spawn_id_for_name(nm, lc.started_utc.as_deref()))
+        } else {
+            None
+        }
+    });
+    let spawn = effective_spawn_id.as_deref().and_then(|id| index.spawn(id));
     // True trigger time = parent tool_use ts; fall back to the child-head ts.
     let trigger_utc = spawn
         .and_then(|s| s.trigger_utc.clone())
@@ -1074,12 +1166,19 @@ fn node_for(
         .description
         .clone()
         .or_else(|| spawn.and_then(|s| s.description.clone()));
-    // agentType: prefer the meta's, fall back to the spawn's `subagent_type` (richer than
-    // the bare `workflow-subagent` for an unlabeled meta).
-    let agent_type = lc
-        .agent_type
-        .clone()
-        .or_else(|| spawn.and_then(|s| s.subagent_type.clone()));
+    // agentType: a TEAMMATE meta overloads `agentType` with the teammate NAME (e.g. `VSRepro`),
+    // so prefer the spawn's real `subagent_type` (`oh-my-claudecode:qa-tester`) and keep the
+    // meta name only as a fallback. For built-in/workflow, prefer the meta then fall back to the
+    // spawn's `subagent_type` (richer than the bare `workflow-subagent` for an unlabeled meta).
+    let agent_type = if subagent.kind == SubagentKind::Teammate {
+        spawn
+            .and_then(|s| s.subagent_type.clone())
+            .or_else(|| lc.agent_type.clone())
+    } else {
+        lc.agent_type
+            .clone()
+            .or_else(|| spawn.and_then(|s| s.subagent_type.clone()))
+    };
     let spawn_tool = spawn.and_then(|s| s.name.clone());
     let (returned_message, returned_message_source) = resolve_returned_message(subagent, index);
     let files_changed = if with_files {
@@ -1091,14 +1190,15 @@ fn node_for(
         agent_id: subagent.agent_id.clone(),
         kind: subagent.kind,
         parent_session_id: subagent.parent_session_id.clone(),
-        parent_agent_id: subagent
-            .spawn_tool_use_id
+        parent_agent_id: effective_spawn_id
             .as_deref()
             .and_then(|id| index.parent_agent_for(id)),
-        spawn_tool_use_id: subagent.spawn_tool_use_id.clone(),
+        spawn_tool_use_id: effective_spawn_id.clone(),
         spawn_tool,
         workflow_id: subagent.workflow_id.clone(),
         agent_type,
+        name: subagent.name.clone(),
+        team_name: subagent.team_name.clone(),
         description,
         trigger_utc,
         started_utc: lc.started_utc.clone(),
@@ -1248,6 +1348,71 @@ mod tests {
         );
 
         session
+    }
+
+    /// A session that spawned ONE teammate (`taskKind:in_process_teammate`) via an `Agent`
+    /// tool_use carrying `input.name` (the name-join key) + the real `subagent_type`. The
+    /// teammate meta deliberately overloads `agentType` with the handle (as CC does) and omits
+    /// `toolUseId`, so only the NAME-join can recover its spawn linkage + real type.
+    fn teammate_layout(fx: &Fixture) -> PathBuf {
+        let enc = "-Users-testuser-Projects-foo";
+        let session = fx.write(
+            &format!("{enc}/{SESS}.jsonl"),
+            concat!(
+                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
+                // The Agent tool_use that spawned the teammate: NO paired meta toolUseId on the
+                // child, so the topology must join by input.name. Its ts is the TRUE trigger,
+                // ~0.5s before the child head (05:00:00.500).
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_team\",\"name\":\"Agent\",\"input\":{\"description\":\"repro the bug\",\"subagent_type\":\"oh-my-claudecode:qa-tester\",\"name\":\"VSRepro\"}}]}}\n"
+            ),
+        );
+        fx.write(
+            &format!("{enc}/{SESS}/subagents/agent-aVSRepro-68a2a1661c9390c1.jsonl"),
+            concat!(
+                "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"aVSRepro-68a2a1661c9390c1\",\"sessionId\":\"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\",\"timestamp\":\"2026-06-07T05:00:00.500Z\",\"message\":{\"role\":\"user\",\"content\":\"<teammate-message teammate_id=\\\"team-lead\\\">repro it</teammate-message>\"}}\n",
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:10:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"the matrix result\"}]}}\n"
+            ),
+        );
+        fx.write(
+            &format!("{enc}/{SESS}/subagents/agent-aVSRepro-68a2a1661c9390c1.meta.json"),
+            "{\"agentType\":\"VSRepro\",\"description\":\"repro the bug\",\"name\":\"VSRepro\",\"taskKind\":\"in_process_teammate\",\"teamName\":\"session-25f56dee\",\"color\":\"purple\"}",
+        );
+        session
+    }
+
+    #[test]
+    fn classifies_teammate_and_recovers_spawn_via_name_join() {
+        let fx = Fixture::new();
+        let session = teammate_layout(&fx);
+
+        // Discovery + classification: the in_process_teammate taskKind upgrades the kind.
+        let subs = discover_subagents(&session).unwrap();
+        assert_eq!(subs.len(), 1, "got: {subs:?}");
+        let s = &subs[0];
+        assert_eq!(s.kind, SubagentKind::Teammate);
+        assert_eq!(s.agent_id, "aVSRepro-68a2a1661c9390c1");
+        assert_eq!(s.name.as_deref(), Some("VSRepro"));
+        assert_eq!(s.team_name.as_deref(), Some("session-25f56dee"));
+        // The teammate meta carries NO toolUseId — the id-join would find nothing.
+        assert_eq!(s.spawn_tool_use_id, None);
+
+        // The full node: the NAME-join recovers the spawn linkage the id-join can't.
+        let nodes = build_topology(&session, false).unwrap();
+        let n = nodes
+            .iter()
+            .find(|n| n.kind == SubagentKind::Teammate)
+            .expect("the teammate node");
+        // agent_type prefers the spawn's REAL subagent_type over the meta's overloaded handle.
+        assert_eq!(n.agent_type.as_deref(), Some("oh-my-claudecode:qa-tester"));
+        assert_eq!(n.spawn_tool.as_deref(), Some("Agent"));
+        assert_eq!(n.spawn_tool_use_id.as_deref(), Some("toolu_team"));
+        // trigger = the Agent tool_use ts (the TRUE spawn instant), earlier than the child head.
+        assert_eq!(n.trigger_utc.as_deref(), Some("2026-06-07T05:00:00.000Z"));
+        assert_eq!(n.started_utc.as_deref(), Some("2026-06-07T05:00:00.500Z"));
+        assert_eq!(n.name.as_deref(), Some("VSRepro"));
+        assert_eq!(n.team_name.as_deref(), Some("session-25f56dee"));
+        // The returned message still resolves (child tail), unaffected by the name-join.
+        assert_eq!(n.returned_message.as_deref(), Some("the matrix result"));
     }
 
     #[test]
@@ -1490,6 +1655,8 @@ mod tests {
                 description: None,
                 tool_use_id: Some("toolu_x".to_string()),
                 name: None,
+                task_kind: None,
+                team_name: None,
             }
         );
     }
@@ -1510,6 +1677,8 @@ mod tests {
                 description: Some("run it".to_string()),
                 tool_use_id: Some("toolu_01R7Zi2gHHGkaTvzuDMH7bK3".to_string()),
                 name: None,
+                task_kind: None,
+                team_name: None,
             }
         );
     }

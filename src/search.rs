@@ -333,14 +333,16 @@ fn parse_line_specs(tokens: &[String]) -> Result<ParsedLineSpecs> {
         if raw.is_empty() {
             continue;
         }
-        // A `<hex>:<spec>` token pins one subagent transcript; the hex must be a bare subagent
-        // hex and all hex-bearing tokens must agree on the SAME hex.
+        // A `<id>:<spec>` token pins one subagent transcript; the id must be a subagent id (a
+        // bare hex OR a name-embedded teammate id) and all id-bearing tokens must agree on the
+        // SAME id. The split is on the FIRST `:` — safe because a subagent id never contains one.
         let t = if let Some((prefix, rest)) = raw.split_once(':') {
             let prefix = prefix.trim();
-            if !crate::path::is_bare_subagent_hex(prefix) {
+            if !crate::path::is_subagent_id(prefix) {
                 bail!(
-                    "--line: '{raw}' — the part before ':' must be a subagent hex from \
-                     `csift agents`"
+                    "--line: '{raw}' — the part before ':' must be a subagent id from \
+                     `csift agents` (a bare hex, or a name-embedded teammate id like \
+                     `aVSRepro-68a2a1661c9390c1`)"
                 );
             }
             match &hex {

@@ -893,7 +893,7 @@ pub fn resolve_session_files(
                     session_ids.push(id.to_string());
                     session_target = true;
                 }
-                _ if is_bare_subagent_hex(id) => agent_hexes.push(id.to_string()),
+                _ if is_subagent_id(id) => agent_hexes.push(id.to_string()),
                 // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
                 // never a full uuid (32+dashes) or an agent hex (≥12) — resolve it uniquely.
                 _ if is_uuid_prefix(id) => {
@@ -1148,7 +1148,7 @@ pub fn pins_single_session(token: &str) -> bool {
         return id == "main"
             || id.starts_with("trap:")
             || is_uuid(id)
-            || is_bare_subagent_hex(id)
+            || is_subagent_id(id)
             || is_uuid_prefix(id);
     }
     token.ends_with(".jsonl")
@@ -1184,6 +1184,34 @@ fn is_uuid(s: &str) -> bool {
 /// and, in `search`, to recognise a `--line <hex>:<spec>` subagent-pinning prefix.
 pub fn is_bare_subagent_hex(s: &str) -> bool {
     s.len() >= 12 && !s.contains('-') && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// True for the NEW "teammate" subagent id shape (`taskKind:"in_process_teammate"`): the
+/// canonical agent id EMBEDS the teammate name, e.g. `aVSRepro-68a2a1661c9390c1` — a leading
+/// `a`, an alphanumeric name, then `-<hex≥12>`. Unlike a built-in/workflow agent (a bare hex
+/// run) it carries a dash + uppercase, so [`is_bare_subagent_hex`] rejects it. Recognised here
+/// so the id `csift agents` prints round-trips back as an `@<agent-id>` target. An encoded
+/// project dir can never collide (those start with `-`, the leading-slash sanitisation), and a
+/// uuid is already matched earlier in the grammar; the strict `a`-led, all-alphanumeric head +
+/// hex tail keeps the false-positive surface empty.
+fn is_teammate_agent_id(s: &str) -> bool {
+    let Some((head, tail)) = s.rsplit_once('-') else {
+        return false;
+    };
+    head.len() >= 2
+        && head.starts_with('a')
+        && head.bytes().all(|b| b.is_ascii_alphanumeric())
+        && tail.len() >= 12
+        && tail.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// True for ANY canonical subagent id `csift agents` emits — a bare hex run
+/// ([`is_bare_subagent_hex`], built-in/workflow) OR a name-embedded teammate id
+/// ([`is_teammate_agent_id`]). This is the single gate the `@<agent-id>` grammar branch and the
+/// `search --line <id>:<spec>` subagent-pin prefix key on, so EVERY emitted agent_id round-trips
+/// regardless of shape (downstream resolution already matches a subagent by exact id).
+pub fn is_subagent_id(s: &str) -> bool {
+    is_bare_subagent_hex(s) || is_teammate_agent_id(s)
 }
 
 /// True for a session-uuid PREFIX `@13d9645a` form: a dash-less hex run of 4..=11 chars — long
@@ -1491,11 +1519,44 @@ mod tests {
     }
 
     #[test]
+    fn is_teammate_agent_id_recognizes_name_embedded_ids() {
+        // The new `in_process_teammate` shape: a<Name>-<hex>. These are the canonical ids
+        // `csift agents` prints for a teammate, and must round-trip as `@<id>` targets.
+        assert!(is_teammate_agent_id("aVSRepro-68a2a1661c9390c1"));
+        assert!(is_teammate_agent_id("aVSSpeedField-d5dab904cc98a239"));
+        assert!(is_teammate_agent_id("aVSMultiRegion-06fb13dd400b53a5"));
+        // A bare hex (built-in/workflow) has no dash → NOT teammate-shaped (it routes via
+        // is_bare_subagent_hex instead).
+        assert!(!is_teammate_agent_id("ae24045bd6d4bdaff"));
+        // A uuid: the head after the last dash is hex but the head segment carries dashes →
+        // rejected (and is_uuid catches it earlier in the grammar regardless).
+        assert!(!is_teammate_agent_id(
+            "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        ));
+        // An encoded project dir starts with `-` (leading-slash sanitisation) → head not `a`.
+        assert!(!is_teammate_agent_id("-Users-testuser-Projects-foo"));
+        // Hex tail too short, or a non-hex tail → rejected.
+        assert!(!is_teammate_agent_id("aVSRepro-68a2a1")); // tail < 12
+        assert!(!is_teammate_agent_id("aVSRepro-zzzzzzzzzzzz")); // non-hex tail
+    }
+
+    #[test]
+    fn is_subagent_id_accepts_both_bare_hex_and_teammate() {
+        // The unified gate the @-grammar + `--line <id>:` prefix key on.
+        assert!(is_subagent_id("ae24045bd6d4bdaff")); // built-in/workflow bare hex
+        assert!(is_subagent_id("aVSRepro-68a2a1661c9390c1")); // teammate
+        assert!(!is_subagent_id("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")); // uuid
+        assert!(!is_subagent_id("-Users-testuser-Projects-foo")); // encoded dir
+        assert!(!is_subagent_id("abc123")); // too short
+    }
+
+    #[test]
     fn pins_single_session_covers_at_tokens_and_jsonl() {
         assert!(pins_single_session("@main"));
         assert!(pins_single_session("@trap:CrimsonWillowFen5180"));
         assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
         assert!(pins_single_session("@ae24045bd6d4bdaff"));
+        assert!(pins_single_session("@aVSRepro-68a2a1661c9390c1")); // teammate id pins one
         assert!(pins_single_session("@13d9645a")); // uuid-prefix
         assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
         // A bare uuid (no `@`), an encoded token, a plain path, `.` → NOT a session pin.
