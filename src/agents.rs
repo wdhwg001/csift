@@ -22,7 +22,8 @@ use rayon::prelude::*;
 use crate::cli::{AgentKindFilter, AgentTimeAxis, AgentsArgs, OutputFormat};
 use crate::path;
 use crate::subagent::{
-    build_topology, discover_workflow_runs, duration_label, SubagentKind, SubagentNode, WorkflowRun,
+    build_topology, discover_workflow_runs, duration_label, PendingClassification, SubagentKind,
+    SubagentNode, WorkflowRun,
 };
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -427,6 +428,25 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     head.push_str(&format!("  {}", n.status.label()));
     println!("{head}");
 
+    // A FROZEN lane: the status above says `running`, but it is blocked at an unreturned tool_use.
+    // Surface WHY prominently — the disambiguation a flat `running` (or, before the fix, `completed`)
+    // hid. escalation-blocked = waiting for a human Yes; awaiting-execution = slow-or-wedged.
+    if let Some(class) = n.pending_classification {
+        let tool = n.pending_tool_name.as_deref().unwrap_or("?");
+        let id = n.pending_tool_use_id.as_deref().unwrap_or("?");
+        println!(
+            "{ind2}PENDING    {} · {tool} ({id}) · frozen since {}",
+            class.label(),
+            format_timestamp(n.pending_since_utc.as_deref())
+        );
+        if class == PendingClassification::EscalationBlocked {
+            println!(
+                "{ind2}           ↑ a dangerous-rm Bash CC HOISTS for human approval even under \
+                 bypass — almost certainly waiting for a Yes (approve/deny in the main UI), NOT dead."
+            );
+        }
+    }
+
     // A teammate's team + handle (the team-lead addresses it by `@<name>`); shown only when set.
     if let Some(tn) = &n.team_name {
         match &n.name {
@@ -445,12 +465,16 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         "{ind2}started    {}",
         format_timestamp(n.started_utc.as_deref())
     );
-    println!(
-        "{ind2}completed  {}",
-        format_timestamp(n.completed_utc.as_deref())
-    );
-    if let Some(dur) = duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()) {
-        println!("{ind2}duration   {dur}");
+    // A frozen lane is not completed — its last-record ts is the freeze instant, already shown on
+    // the PENDING line as "frozen since". Suppress the misleading "completed"/"duration" lines.
+    if n.pending_classification.is_none() {
+        println!(
+            "{ind2}completed  {}",
+            format_timestamp(n.completed_utc.as_deref())
+        );
+        if let Some(dur) = duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()) {
+            println!("{ind2}duration   {dur}");
+        }
     }
     if view.want_returned {
         if let (Some(msg), Some(src)) = (&n.returned_message, n.returned_message_source) {
@@ -602,6 +626,11 @@ fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "completed_local": n.completed_utc.as_deref().and_then(local_iso),
         "duration": duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()),
         "status": n.status.label(),
+        "pending_tool_use_id": n.pending_tool_use_id,
+        "pending_tool_name": n.pending_tool_name,
+        "pending_classification": n.pending_classification.map(PendingClassification::label),
+        "pending_since_utc": n.pending_since_utc,
+        "pending_since_local": n.pending_since_utc.as_deref().and_then(local_iso),
         "depth": n.depth,
         "skipped_lines": n.skipped_lines,
     });
@@ -721,6 +750,10 @@ mod tests {
             returned_message: None,
             returned_message_source: None,
             status: SubagentStatus::Completed,
+            pending_tool_use_id: None,
+            pending_tool_name: None,
+            pending_classification: None,
+            pending_since_utc: None,
             files_changed: Vec::new(),
             depth: 0,
             children: Vec::new(),

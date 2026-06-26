@@ -6,6 +6,7 @@
 //! work lives in the modules.
 
 mod agents;
+mod bash_danger;
 mod bash_mutations;
 mod cli;
 mod files;

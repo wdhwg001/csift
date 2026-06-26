@@ -2333,6 +2333,86 @@ fn agents_classifies_teammate_and_id_round_trips() {
 }
 
 #[test]
+fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
+    // A background built-in subagent whose teardown Bash (dangerous `rm` of `$VAR/$f`) CC HOISTED
+    // to a human approval prompt EVEN under bypass — its transcript freezes at the unreturned
+    // tool_use, PRECEDED by assistant text (the L629→L630 shape that made the old walk-back
+    // mis-report `completed`). csift must report it running + escalation-blocked, then NOT pending
+    // once the result lands (Yes clicked). Mirrors the real fixture agent-ab8a4c5868015a8be.
+    let enc = "-Users-testuser-Projects-frozen";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let hex = "ab8a4c5868015a8be";
+    let frozen = concat!(
+        r#"{"type":"user","isSidechain":true,"agentId":"ab8a4c5868015a8be","timestamp":"2026-06-26T10:40:00.000Z","message":{"role":"user","content":"teardown"}}"#,
+        "\n",
+        r#"{"type":"assistant","timestamp":"2026-06-26T10:42:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Removing the transient credential files."}]}}"#,
+        "\n",
+        r#"{"type":"assistant","timestamp":"2026-06-26T10:43:31.906Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_0137gHdLDnXKsa94qGmmnbqV","name":"Bash","input":{"command":"for f in a.txt b.txt; do [ -f \"$SCRATCH/$f\" ] && rm -f \"$SCRATCH/$f\"; done"}}]}}"#,
+        "\n",
+    );
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-26T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+    );
+    h.write(&format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"), frozen);
+
+    let find = |stdout: &str| -> serde_json::Value {
+        stdout
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .flat_map(|v| {
+                v.get("agents")
+                    .and_then(|a| a.as_array())
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .find(|n| n["agent_id"] == hex)
+            .expect("the subagent node")
+    };
+
+    // FROZEN: running + escalation-blocked, NOT completed.
+    let out = h.run(&["agents", &format!("@{sess}"), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let node = find(&out.stdout);
+    assert_eq!(
+        node["status"], "running",
+        "a frozen lane must not be completed: {node}"
+    );
+    assert_eq!(node["pending_classification"], "escalation-blocked");
+    assert_eq!(node["pending_tool_name"], "Bash");
+    assert_eq!(
+        node["pending_tool_use_id"],
+        "toolu_0137gHdLDnXKsa94qGmmnbqV"
+    );
+    // Text surfaces the disambiguation prominently.
+    let txt = h.run(&["agents", &format!("@{sess}")]);
+    assert!(
+        txt.stdout.contains("PENDING") && txt.stdout.contains("escalation-blocked"),
+        "no pending line: {}",
+        txt.stdout
+    );
+
+    // RESOLVED (Yes clicked → tool_result + closing text) → completed, no pending.
+    let resolved = format!(
+        "{frozen}{}{}",
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-26T11:20:13.911Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_0137gHdLDnXKsa94qGmmnbqV\",\"content\":\"shredded\"}]}}\n",
+        "{\"type\":\"assistant\",\"timestamp\":\"2026-06-26T11:21:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Teardown complete.\"}]}}\n"
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"),
+        &resolved,
+    );
+    let out2 = h.run(&["agents", &format!("@{sess}"), "--format", "json"]);
+    let node2 = find(&out2.stdout);
+    assert_eq!(node2["status"], "completed");
+    assert!(
+        node2["pending_classification"].is_null(),
+        "resolved lane must not be pending: {node2}"
+    );
+}
+
+#[test]
 fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     // A NESTED subagent (agent spawned BY another agent). On-disk the layout is FLAT — both
     // agents sit directly under <session>/subagents/ — because CC writes every subagent's

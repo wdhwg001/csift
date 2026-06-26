@@ -179,6 +179,10 @@ pub struct SubagentLifecycle {
     pub completed_utc: Option<String>,
     /// Resolved status (see [`SubagentStatus`]).
     pub status: SubagentStatus,
+    /// The FROZEN-lane signal: `Some` when the newest meaningful record is an unreturned tool_use
+    /// (the lane is blocked AT it, never "completed"). Drives the status override + the agents
+    /// `pending_*` fields. `None` for a normally-running/completed lane.
+    pub pending: Option<PendingToolUse>,
     /// Malformed lines skipped while reading the transcript (never hidden).
     pub skipped_lines: usize,
 }
@@ -205,6 +209,45 @@ impl SubagentStatus {
             SubagentStatus::Unknown => "unknown",
         }
     }
+}
+
+/// Why a lane is FROZEN at an unreturned tool_use (its newest meaningful record is an assistant
+/// tool_use with no following tool_result — see [`SubagentLifecycle::pending`]). The escalation
+/// itself never reaches jsonl (it lives only in CC process memory), so these three states share
+/// one on-disk signature; only the danger heuristic can POSITIVELY distinguish the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PendingClassification {
+    /// The pending tool_use is a Bash command CC's classifier would HOIST for human approval even
+    /// under bypass-permissions (a dangerous `rm`/`rmdir`, see [`crate::bash_danger`]). Almost
+    /// certainly waiting for a human to click "Yes", NOT dying. The high-value disambiguation.
+    EscalationBlocked,
+    /// A pending tool_use that is NOT a known-hoisted danger — a (possibly slow) tool still
+    /// executing, OR an interrupted/wedged lane. jsonl alone CANNOT tell those apart (same
+    /// signature); the caller should weigh elapsed-since-`pending_since_utc` for staleness.
+    AwaitingExecution,
+}
+
+impl PendingClassification {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            PendingClassification::EscalationBlocked => "escalation-blocked",
+            PendingClassification::AwaitingExecution => "awaiting-execution",
+        }
+    }
+}
+
+/// A FROZEN lane's unreturned tool_use (the raw facts; [`node_for`] adds the classification). A
+/// lane is frozen when its newest meaningful record is an assistant tool_use that no later
+/// tool_result resolves — it is the last record, so nothing followed it.
+#[derive(Debug, Clone)]
+pub struct PendingToolUse {
+    pub tool_use_id: String,
+    pub tool_name: String,
+    /// The Bash `input.command`, when `tool_name == "Bash"` (the danger-heuristic input).
+    pub command: Option<String>,
+    /// The pending tool_use record's timestamp — when the lane froze.
+    pub since_utc: Option<String>,
 }
 
 /// The sidecar directory `<ENCODED>/<session-uuid>/` for a top-level session jsonl,
@@ -558,17 +601,32 @@ pub fn lifecycle(subagent: &Subagent) -> Result<SubagentLifecycle> {
         true
     })?;
 
-    // TAIL: last record's timestamp == completion (best-effort), and whether the
-    // transcript terminates with a visible assistant message (a clean finish).
+    // TAIL: last record's timestamp == completion (best-effort), whether the transcript
+    // terminates with a visible assistant message (a clean finish), AND whether the lane is
+    // FROZEN at an unreturned tool_use. The frozen verdict comes from the NEWEST meaningful
+    // record only (the first non-metadata record from EOF): if it is an assistant tool_use, no
+    // tool_result followed it (it IS the last record) ⇒ the lane is blocked there, NOT done. The
+    // terminal_agent_msg walk-back is UNCHANGED for every non-frozen lane.
     let mut completed_utc: Option<String> = None;
     let mut terminal_agent_msg = false;
     let mut saw_any = false;
+    let mut newest_decided = false;
+    let mut pending: Option<PendingToolUse> = None;
     let tail_skipped = tail_records(&subagent.path, |rec| {
         saw_any = true;
         if completed_utc.is_none() {
             if let Some(ts) = &rec.timestamp {
                 completed_utc = Some(ts.clone());
             }
+        }
+        if !newest_decided {
+            if let Some(tu) = newest_pending_tool_use(rec) {
+                pending = Some(tu); // newest meaningful record is an unreturned tool_use → frozen
+                newest_decided = true;
+            } else if record_is_meaningful(rec) {
+                newest_decided = true; // newest meaningful record is resolved/active → not frozen
+            }
+            // else: isMeta / system / metadata-only → keep looking for the newest meaningful one
         }
         // The newest assistant record carrying visible text == a clean end-of-turn.
         if !terminal_agent_msg && rec.agent_text().is_some() {
@@ -580,12 +638,25 @@ pub fn lifecycle(subagent: &Subagent) -> Result<SubagentLifecycle> {
     })?;
 
     let journal_done = journal_reports_completion(subagent);
-    let status = resolve_status(
-        saw_any,
-        journal_done,
-        terminal_agent_msg,
-        started_utc.is_some(),
-    );
+    // Clear the frozen signal when it would be meaningless: a journal-completed (workflow) agent is
+    // trusted done regardless of a tail tool_use; and a transcript with NO timestamps has
+    // undetermined timing (status Unknown), so we cannot claim "frozen" vs merely unreadable.
+    if journal_done || started_utc.is_none() {
+        pending = None;
+    }
+    // A genuinely frozen lane is NEVER "completed": override the terminal-text walk-back, which
+    // would otherwise find an EARLIER end-of-turn (the assistant's text before the frozen
+    // tool_use) and mis-report the stuck lane as done.
+    let status = if pending.is_some() {
+        SubagentStatus::Running
+    } else {
+        resolve_status(
+            saw_any,
+            journal_done,
+            terminal_agent_msg,
+            started_utc.is_some(),
+        )
+    };
 
     Ok(SubagentLifecycle {
         agent_type,
@@ -593,8 +664,71 @@ pub fn lifecycle(subagent: &Subagent) -> Result<SubagentLifecycle> {
         started_utc,
         completed_utc,
         status,
+        pending,
         skipped_lines: head_skipped + tail_skipped,
     })
+}
+
+/// The newest-meaningful-record frozen check: if `rec` is an assistant carrying ≥1 tool_use block,
+/// return the pending tool_use (the DANGEROUS Bash one if present, else the first) — because it is
+/// the last record, no tool_result resolved it. `None` for any non-(assistant-with-tool_use) record.
+fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
+    if !rec.is_type("assistant") {
+        return None;
+    }
+    let blocks = rec.blocks()?;
+    let mut chosen: Option<(String, String, Option<String>)> = None;
+    for b in blocks {
+        let Block::ToolUse {
+            id: Some(id),
+            name: Some(name),
+            input,
+        } = b
+        else {
+            continue;
+        };
+        let command = if name == "Bash" {
+            input
+                .as_ref()
+                .and_then(|v| v.get("command"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        } else {
+            None
+        };
+        // Prefer a tool_use CC would hoist (dangerous rm) so classification is escalation-blocked.
+        if command
+            .as_deref()
+            .is_some_and(crate::bash_danger::is_dangerous_rm)
+        {
+            return Some(PendingToolUse {
+                tool_use_id: id.clone(),
+                tool_name: name.clone(),
+                command,
+                since_utc: rec.timestamp.clone(),
+            });
+        }
+        if chosen.is_none() {
+            chosen = Some((id.clone(), name.clone(), command));
+        }
+    }
+    chosen.map(|(tool_use_id, tool_name, command)| PendingToolUse {
+        tool_use_id,
+        tool_name,
+        command,
+        since_utc: rec.timestamp.clone(),
+    })
+}
+
+/// True for a record that resolves/advances the lane — a tool_result carrier, a clean assistant
+/// end-of-turn text, or a genuine user message. (NOT an unreturned tool_use, NOT isMeta/system
+/// metadata.) Used to find the newest MEANINGFUL record when deciding the frozen verdict.
+fn record_is_meaningful(rec: &Record) -> bool {
+    rec.agent_text().is_some()
+        || rec.is_genuine_user()
+        || rec
+            .blocks()
+            .is_some_and(|bs| bs.iter().any(|b| matches!(b, Block::ToolResult { .. })))
 }
 
 /// Status resolution rule (honest, never over-claiming "failed"):
@@ -938,6 +1072,14 @@ pub struct SubagentNode {
     pub returned_message: Option<String>,
     pub returned_message_source: Option<ReturnedMsgSource>,
     pub status: SubagentStatus,
+    /// FROZEN-lane disambiguation (all `None` for a normal lane). When the newest meaningful
+    /// record is an unreturned tool_use, `status` is `Running` and these carry: the pending
+    /// tool_use id/name, its [`PendingClassification`] (escalation-blocked vs awaiting-execution),
+    /// and when it froze. Lets a monitor tell "waiting for a human Yes" from "about to die".
+    pub pending_tool_use_id: Option<String>,
+    pub pending_tool_name: Option<String>,
+    pub pending_classification: Option<PendingClassification>,
+    pub pending_since_utc: Option<String>,
     /// Files this subagent mutated (reuses the `files`/`bash_mutations` extractors over the
     /// node's own transcript). Each is `(path, op_label, is_create)`.
     pub files_changed: Vec<(String, String, bool)>,
@@ -1181,6 +1323,29 @@ fn node_for(
     };
     let spawn_tool = spawn.and_then(|s| s.name.clone());
     let (returned_message, returned_message_source) = resolve_returned_message(subagent, index);
+    // Classify a frozen lane (if any): a pending Bash whose command CC would hoist (dangerous rm)
+    // is escalation-blocked (waiting for a human); anything else pending is awaiting-execution.
+    let (pending_tool_use_id, pending_tool_name, pending_classification, pending_since_utc) =
+        match &lc.pending {
+            Some(p) => {
+                let class = if p.tool_name == "Bash"
+                    && p.command
+                        .as_deref()
+                        .is_some_and(crate::bash_danger::is_dangerous_rm)
+                {
+                    PendingClassification::EscalationBlocked
+                } else {
+                    PendingClassification::AwaitingExecution
+                };
+                (
+                    Some(p.tool_use_id.clone()),
+                    Some(p.tool_name.clone()),
+                    Some(class),
+                    p.since_utc.clone(),
+                )
+            }
+            None => (None, None, None, None),
+        };
     let files_changed = if with_files {
         node_files_changed(&subagent.path)?
     } else {
@@ -1206,6 +1371,10 @@ fn node_for(
         returned_message,
         returned_message_source,
         status: lc.status,
+        pending_tool_use_id,
+        pending_tool_name,
+        pending_classification,
+        pending_since_utc,
         files_changed,
         depth: 0,
         children: Vec::new(),
@@ -2140,6 +2309,71 @@ mod tests {
         // with_files=false leaves it empty (the cheap default).
         let lean = build_topology(&session, false).unwrap();
         assert!(lean[0].files_changed.is_empty());
+    }
+
+    #[test]
+    fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
+        let fx = Fixture::new();
+        let enc = "-Users-frozen";
+        let session = fx.write(
+            &format!("{enc}/{SESS}.jsonl"),
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+        );
+        // (1) FROZEN at a dangerous-rm Bash (unreturned), PRECEDED by assistant TEXT — the exact
+        // L629→L630 shape that made the old walk-back mis-report `completed`. → escalation-blocked.
+        fx.write(
+            &format!("{enc}/{SESS}/subagents/agent-aesc111.jsonl"),
+            concat!(
+                "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"aesc111\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"teardown\"}}\n",
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:01:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Now removing the scratch files.\"}]}}\n",
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:02:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_rm\",\"name\":\"Bash\",\"input\":{\"command\":\"for f in a b; do rm -rf \\\"$SCRATCH/$f\\\"; done\"}}]}}\n"
+            ),
+        );
+        // (2) FROZEN at a non-danger tool_use (Read, unreturned) → awaiting-execution.
+        fx.write(
+            &format!("{enc}/{SESS}/subagents/agent-await22.jsonl"),
+            concat!(
+                "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"await22\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"read\"}}\n",
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:02:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_read\",\"name\":\"Read\",\"input\":{\"file_path\":\"/x/big.log\"}}]}}\n"
+            ),
+        );
+        // (3) RESOLVED: a dangerous Bash whose tool_result + closing text arrived → NOT pending.
+        fx.write(
+            &format!("{enc}/{SESS}/subagents/agent-done333.jsonl"),
+            concat!(
+                "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"done333\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"teardown\"}}\n",
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:02:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_rm2\",\"name\":\"Bash\",\"input\":{\"command\":\"rm -rf $SCRATCH/*\"}}]}}\n",
+                "{\"type\":\"user\",\"timestamp\":\"2026-06-07T05:40:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_rm2\",\"content\":\"done\"}]}}\n",
+                "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T05:41:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Teardown complete.\"}]}}\n"
+            ),
+        );
+
+        let nodes = build_topology(&session, false).unwrap();
+        let esc = nodes.iter().find(|n| n.agent_id == "aesc111").unwrap();
+        // The frozen escalation lane is RUNNING (not completed — the bug) + escalation-blocked.
+        assert_eq!(esc.status, SubagentStatus::Running);
+        assert_eq!(
+            esc.pending_classification,
+            Some(PendingClassification::EscalationBlocked)
+        );
+        assert_eq!(esc.pending_tool_name.as_deref(), Some("Bash"));
+        assert_eq!(esc.pending_tool_use_id.as_deref(), Some("toolu_rm"));
+        assert_eq!(
+            esc.pending_since_utc.as_deref(),
+            Some("2026-06-07T05:02:00.000Z")
+        );
+
+        let awa = nodes.iter().find(|n| n.agent_id == "await22").unwrap();
+        assert_eq!(awa.status, SubagentStatus::Running);
+        assert_eq!(
+            awa.pending_classification,
+            Some(PendingClassification::AwaitingExecution)
+        );
+        assert_eq!(awa.pending_tool_name.as_deref(), Some("Read"));
+
+        let done = nodes.iter().find(|n| n.agent_id == "done333").unwrap();
+        assert_eq!(done.status, SubagentStatus::Completed);
+        assert!(done.pending_classification.is_none());
     }
 
     #[test]
