@@ -296,6 +296,29 @@ $chunk" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c}
 ```
 Register N times in settings.json: each `{"matcher":"compact","hooks":[{"type":"command","command":"/ABS/csift-turns-slice.sh i"}]}`, i=1..N. ABSOLUTE path for a global `~/.claude/` install (`$CLAUDE_PROJECT_DIR` is unset there). `--window 9000` stays under the 10K cap.
 
+### PostToolUseFailure(TaskStop) hook - redirect a failed teammate-kill to SendMessage shutdown_request
+A teammate (`taskKind:in_process_teammate`) is terminated via the **`SendMessage`** tool BY NAME (`message:{type:"shutdown_request"}`), NOT `TaskStop` (a `run_in_background` `task_id` tool — it rejects EVERY teammate id: the name, `Name@team`, and the `aName-<hash>` agentId, all `No task found with ID`) and NOT `pkill` (in-process, shares the orchestrator PID). A real session burned ~30 min on this. This hook fires on **`PostToolUseFailure`** matching `TaskStop`, uses **csift to CONFIRM** the failed id is actually a teammate (so it never misfires on a genuine background-task failure), and if so injects `additionalContext` naming the correct call. FAIL-OPEN: jq/csift missing, csift error, or no teammate match → emit nothing.
+
+```bash
+#!/usr/bin/env bash
+set -uo pipefail
+in=$(cat)
+command -v jq >/dev/null 2>&1 || exit 0
+CSIFT=$(command -v csift 2>/dev/null||true); [ -x "$CSIFT" ]||CSIFT="$HOME/.cargo/bin/csift"; [ -x "$CSIFT" ]||exit 0
+[ "$(jq -r '.tool_name//empty' <<<"$in" 2>/dev/null)" = TaskStop ] || exit 0  # matcher already filters; defensive
+id=$(jq -r '.tool_input.task_id//.tool_input.shell_id//empty' <<<"$in" 2>/dev/null); [ -n "$id" ]||exit 0
+sid=$(jq -r '.session_id//empty' <<<"$in" 2>/dev/null); [ -n "$sid" ]||exit 0
+run(){ if command -v timeout >/dev/null 2>&1; then timeout 20 "$@"; elif command -v gtimeout >/dev/null 2>&1; then gtimeout 20 "$@"; else "$@"; fi; }
+tm=$(run "$CSIFT" agents "@$sid" --kind teammate --format json 2>/dev/null)||exit 0; [ -n "$tm" ]||exit 0
+# Accept the name, Name@team, and aName-<hash> agentId; a bare hash matches no teammate → not flagged.
+m=$(printf '%s' "$tm" | jq -rs --arg id "$id" '[ .[]?|..|objects|select(.kind?=="teammate") ] as $t
+  | ($id|split("@")[0]) as $b | ( $t[]|select(.name==$id or .agent_id==$id or .name==$b)|.name )' 2>/dev/null | head -n1)
+[ -n "$m" ]||exit 0
+ctx="TaskStop cannot terminate \"$id\" — csift confirms it is the teammate \"$m\" (in-process Agent subagent, no task_id / no separate PID). Use SendMessage: {\"to\":\"$m\",\"message\":{\"type\":\"shutdown_request\",\"reason\":\"<why>\"}}. A plain message only QUEUES until its current run ends; shutdown_request is the interrupt."
+jq -n --arg c "$ctx" '{hookSpecificOutput:{hookEventName:"PostToolUseFailure",additionalContext:$c}}'
+```
+Register in settings.json (ABSOLUTE path for a global `~/.claude/` install): `{"matcher":"TaskStop","hooks":[{"type":"command","command":"/ABS/taskstop-teammate-redirect.sh"}]}` under `"hooks":{"PostToolUseFailure":[…]}`. (PostToolUseFailure fires only on a tool FAILURE + supports `hookSpecificOutput.additionalContext`; `agents @<sid> --kind teammate` is the authoritative confirm — ~4s on a 300MB session, but only on a rare TaskStop failure.)
+
 ## Practical tips
 - `search --format json | jq .session_id` (which sessions) before a full `search` (what); `recover --coverage` before trusting a `--salvage`.
 - A subagent's bare-hex `session_id` is NOT re-feedable as `@<uuid>` - always re-feed `parent_session_id` (§JSON conventions).
