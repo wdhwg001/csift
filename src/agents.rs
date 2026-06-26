@@ -213,6 +213,33 @@ fn window_admits(node: &SubagentNode, window: &TimeWindow, axis: AgentTimeAxis) 
 
 // ── Rendering ──
 
+/// True if any node in the tree (self or any descendant) is a teammate.
+fn any_teammate(nodes: &[SubagentNode]) -> bool {
+    nodes
+        .iter()
+        .any(|n| n.kind == SubagentKind::Teammate || any_teammate(&n.children))
+}
+
+/// Control-mechanism hint for teammates (`in_process_teammate`), surfaced in `agents` text
+/// output whenever the scope holds ≥1 teammate. csift is the LLM's only window into a session's
+/// teammates, so it is the natural place to point at the CORRECT control tool — a real session
+/// burned ~30 min trying to `TaskStop` / `pkill` a runaway teammate (feeding it the name, the
+/// `Name@team` form, AND the exact `aName-<hash>` agentId csift prints) before discovering the
+/// mechanism. The ids were not wrong; the TOOL was. Stated from the verified `SendMessage`
+/// contract (address by NAME; `message:{type:"shutdown_request"}` terminates), not a guess.
+/// Read-only csift cannot act — it only names the tool that can.
+const TEAMMATE_CONTROL_HINT_L1: &str = "note: teammate rows are in-process Agent subagents — address one BY NAME (the `(@name)` shown) \
+via SendMessage to steer it, and `message:{\"type\":\"shutdown_request\"}` to terminate it.";
+const TEAMMATE_CONTROL_HINT_L2: &str =
+    "      A teammate is NOT a background task (TaskStop / a `task_id` will not find it) and has no \
+separate OS process (it shares the orchestrator PID — `pkill` won't help).";
+
+/// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2` — emitted as a teammate
+/// node's `control_hint` field so a `--format json` consumer gets the same pointer.
+const TEAMMATE_CONTROL_HINT_JSON: &str = "in-process teammate: SendMessage to `name` to steer; \
+message {type:\"shutdown_request\"} terminates. Not a TaskStop background task; shares the \
+orchestrator PID (no separate process to kill).";
+
 fn axis_label(axis: AgentTimeAxis) -> &'static str {
     match axis {
         AgentTimeAxis::Trigger => "trigger",
@@ -261,6 +288,14 @@ fn render_text(
         nodes.len(),
         axis_label(args.order_by)
     );
+
+    // When a teammate is in scope, point at the CORRECT control tool (SendMessage by name),
+    // since the natural-but-wrong reach (TaskStop / pkill) silently fails on a teammate id.
+    if any_teammate(nodes) {
+        println!();
+        println!("{TEAMMATE_CONTROL_HINT_L1}");
+        println!("{TEAMMATE_CONTROL_HINT_L2}");
+    }
 }
 
 /// Tree text: each session → its workflow RUN nodes (with their agents nested) → then the
@@ -571,6 +606,14 @@ fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "skipped_lines": n.skipped_lines,
     });
     let map = obj.as_object_mut().expect("json object");
+    // A teammate carries the control-mechanism pointer inline (the JSON twin of the text note)
+    // so a `--format json` consumer learns the right tool without the text footer.
+    if n.kind == SubagentKind::Teammate {
+        map.insert(
+            "control_hint".to_string(),
+            serde_json::Value::String(TEAMMATE_CONTROL_HINT_JSON.to_string()),
+        );
+    }
     if view.want_returned {
         map.insert(
             "returned_message".to_string(),

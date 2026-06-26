@@ -2283,6 +2283,12 @@ fn agents_classifies_teammate_and_id_round_trips() {
     assert_eq!(node["spawn_tool"], "Agent");
     assert_eq!(node["spawn_tool_use_id"], "toolu_team"); // recovered via the name-join
     assert_eq!(node["trigger_utc"], "2026-06-07T05:00:01.000Z"); // the TRUE spawn instant
+                                                                 // The JSON node carries the control-mechanism pointer (the wrong-tool guard).
+    let chint = node["control_hint"].as_str().unwrap_or("");
+    assert!(
+        chint.contains("SendMessage") && chint.contains("shutdown_request"),
+        "teammate node missing control_hint: {node}"
+    );
 
     // `--kind teammate` filters to it; text shows the team line.
     let kind = h.run(&["agents", &format!("@{sess}"), "--kind", "teammate"]);
@@ -2297,6 +2303,22 @@ fn agents_classifies_teammate_and_id_round_trips() {
         kind.stdout.contains("session-25f56dee"),
         "no team line: {}",
         kind.stdout
+    );
+    // The control-mechanism hint points at the CORRECT tool (SendMessage shutdown_request)
+    // and warns off the wrong one (TaskStop) — the exact 30-min failure it prevents.
+    assert!(
+        kind.stdout.contains("SendMessage")
+            && kind.stdout.contains("shutdown_request")
+            && kind.stdout.contains("TaskStop"),
+        "no teammate control hint: {}",
+        kind.stdout
+    );
+    // A scope with NO teammate (filter to builtin-task; the fixture has none) → no hint noise.
+    let bt = h.run(&["agents", &format!("@{sess}"), "--kind", "builtin-task"]);
+    assert!(
+        !bt.stdout.contains("shutdown_request"),
+        "control hint must not appear without a teammate in scope: {}",
+        bt.stdout
     );
 
     // (3) the printed id round-trips as an `@<id>` target (previously failed — fell through to
