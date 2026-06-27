@@ -400,9 +400,6 @@ pub enum Command {
     Turns(TurnsArgs),
     /// List + extract the images a session carries (inline base64 blocks → files).
     Image(ImageArgs),
-    /// Surface sessions currently BLOCKED on a human elicitation (AskUserQuestion /
-    /// ExitPlanMode / MCP), read from the hook-written `elicitations.jsonl` sidecar.
-    Pending(PendingArgs),
 }
 
 /// How to interpret `--budget`: as raw characters (default) or as tokens (estimated
@@ -2134,81 +2131,6 @@ pub struct WhoamiArgs {
     /// Emit JSON instead of text.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
-}
-
-#[derive(Debug, Args)]
-#[command(
-    long_about = "Surface sessions currently BLOCKED on a human elicitation — the stalls that \
-        are INVISIBLE or ambiguous in the native transcript. Three Claude Code elicitations \
-        wait on a human yet leave no clear on-disk turn: AskUserQuestion (a pending pick is \
-        NEVER flushed to the jsonl), ExitPlanMode (the whole turn is buffered until the plan is \
-        answered), and an MCP Elicitation (the inner request lives in memory). A Claude Code \
-        hook records each one to an append-only SIDECAR jsonl at \
-        `<claude-home>/projects/<ENC>/<uuid>/elicitations.jsonl` (the same dir that holds \
-        `subagents/`): a `phase:\"pending\"` line when it OPENS, a `phase:\"resolved\"` line when \
-        it CLOSES. `pending` reads those markers and reports only the still-UNRESOLVED ones.\n\n\
-        A `key` is CURRENTLY PENDING iff it has ≥1 `pending` record and NO later matching \
-        `resolved`. Pairing is greedy LIFO per key (robust to a weak/reused key like a duplicate \
-        MCP server name). A malformed sidecar line is skipped AND COUNTED (never silently \
-        dropped); a non-marker line is skipped. A session with no sidecar / no open elicitation \
-        contributes nothing.\n\n\
-        A PATH is either a real cwd (path-encoded for you) or an already-encoded `-Users-...` \
-        token; an `@<uuid>` scopes to one session; with no target, every project is scanned. The \
-        sidecar lives beside the TOP-LEVEL session file, so a resolved subagent transcript is \
-        mapped to its parent session and each session's sidecar is read once.",
-    after_help = "EXAMPLES\n  \
-          csift pending                                   # every project — what is blocked on me right now?\n  \
-          csift pending .                                 # just this project's sessions\n  \
-          csift pending @<uuid>                           # one session\n  \
-          csift pending @<uuid> --no-subagents            # …without spanning its subagents\n  \
-          csift pending --format json                     # machine-readable (NDJSON + summary)\n\n\
-        TEXT OUTPUT\n  \
-          Per session with ≥1 pending elicitation: a `SESSION <uuid>` header, then per pending \
-        one `⏳ <kind>  since <local-ts>  (key <key>)` line + a detail line (the first question \
-        for AskUserQuestion, `[plan: …]` for ExitPlanMode, `<server>: <message> (mode)` for an \
-        MCP elicitation). Nothing pending ⇒ `no pending elicitations`.\n\n\
-        JSON SCHEMA (per --format json)\n  \
-          One BARE object per currently-pending elicitation (NDJSON): \
-        {session_id, kind, key, since_utc, since_local, detail, hook_event}. The LAST line is an \
-        untagged summary {sessions, pending, skipped_lines} (sessions = how many had ≥1 pending; \
-        skipped_lines = malformed sidecar lines, never silent)."
-)]
-pub struct PendingArgs {
-    /// One or more targets: an actual filesystem cwd, a direct
-    /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir, or an `@`-prefixed session
-    /// token. Repeatable. Defaults to all projects. `@<uuid>` scopes to that one top-level
-    /// session; a `*.jsonl` file scopes to that transcript. The default SPANS subagents, but the
-    /// elicitation sidecar lives beside the TOP-LEVEL session, so a spanned subagent transcript
-    /// is mapped back to its parent session (each session's sidecar is read once).
-    ///
-    /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-` (an absolute cwd's
-    /// leading `/` encodes to `-`); the `parse_project_target` value parser narrows that
-    /// tolerance so a real flag (`--format json`) is never swallowed as a PATH value.
-    #[arg(
-        value_name = "PATH",
-        allow_hyphen_values = true,
-        value_parser = parse_project_target
-    )]
-    pub paths: Vec<PathBuf>,
-
-    /// Exclude subagent transcripts from the resolved scope — only the top-level `<uuid>.jsonl`
-    /// sessions. Subagent transcripts are spanned by default (then mapped to their parent
-    /// session's sidecar); this is the only span flag.
-    #[arg(long = "no-subagents")]
-    pub no_subagents: bool,
-
-    /// Emit JSON (NDJSON + a trailing summary) instead of the headered text format.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
-    pub format: OutputFormat,
-}
-
-impl PendingArgs {
-    /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
-    /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
-    #[must_use]
-    pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
-    }
 }
 
 #[cfg(test)]

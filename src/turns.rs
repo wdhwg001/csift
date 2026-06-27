@@ -306,6 +306,11 @@ struct TurnUnit {
     ts_utc: Option<String>,
     /// True once dedup flags this unit as already present in the newest summary.
     also_in_summary: bool,
+    /// True when this unit was merged from the elicitation SIDECAR (§3.10) — an
+    /// unresolved-pending AskUserQuestion/ExitPlanMode/MCP missing from the native transcript.
+    /// Such a unit has no physical line (`line_no` 0); its header renders `(elicitation
+    /// sidecar)` instead of `Lnnnn` and the JSON carries `source:"elicitation-sidecar"`.
+    from_sidecar: bool,
 }
 
 /// Position of an agent message within its turn's ordered agent-message run. A
@@ -641,7 +646,21 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
         }
     })?;
 
-    let (turns, summaries) = build(&records);
+    // ── Transparent elicitation-sidecar merge (§3.10) ──
+    // A TOP-LEVEL session's unresolved-pending elicitations (AskUserQuestion/ExitPlanMode/MCP)
+    // are MISSING from the native transcript (whole-turn buffered / in-memory). Append them as
+    // native-shaped records with line_no 0 (no physical line — `from_sidecar`); `build` turns
+    // each into its own pending turn unit so the reconstruction includes it. Subagent
+    // transcripts have no sidecar (it is keyed by the top-level session). Near-free when
+    // nothing is pending.
+    let mut sidecar: Vec<Record> = Vec::new();
+    if !is_subagent {
+        let (pending, pending_skipped) = crate::elicitation::unresolved_pending(path)?;
+        skipped += pending_skipped;
+        sidecar = pending;
+    }
+
+    let (turns, summaries) = build(&records, &sidecar);
     Ok(ScanResult {
         session_id,
         is_subagent,
@@ -672,7 +691,7 @@ fn line_is_turn_candidate(line: &[u8]) -> bool {
 /// [`group_turn_indices_deduped`], so an esc-cancel / edit-resend draft never surfaces as a
 /// phantom turn (§6.4.1); a compaction summary is a turn MEMBER (it is excluded from
 /// genuine-user), so the walk is transparent to it.
-fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
+fn build(records: &[(usize, Record)], sidecar: &[Record]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
     let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
     let turns = group_turn_indices_deduped(&recs, |r| *r);
     // ExitPlanMode plan pointers for this session, so a rejection-with-message turn
@@ -811,6 +830,31 @@ fn build(records: &[(usize, Record)]) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
         });
     }
 
+    // ── Elicitation-sidecar pending units (§3.10) ──
+    // Each unresolved-pending elicitation becomes its OWN turn unit, appended AFTER the native
+    // turns (a pending elicitation is the LATEST activity — it is what the session is currently
+    // blocked on). It is rendered as the USER side (the question/plan/elicitation put TO the
+    // user, awaiting the answer), with `from_sidecar` so the header shows `(elicitation
+    // sidecar)` instead of a fabricated `Lnnnn`. `compactions_before` is 0 (it post-dates every
+    // summary). These never dedup against a summary (a summary cannot quote a not-yet-answered
+    // elicitation).
+    for rec in sidecar {
+        let Some(text) = crate::elicitation::pending_text(rec) else {
+            continue;
+        };
+        let turn_index = slices.len();
+        slices.push(TurnSlice {
+            turn_index,
+            user: Some(make_unit(0, Role::User, &text, rec)),
+            tool_calls: 0,
+            image_ids: Vec::new(),
+            agents: Vec::new(),
+            compactions_before: 0,
+            is_automation: false,
+            automation: None,
+        });
+    }
+
     (slices, summaries)
 }
 
@@ -827,6 +871,7 @@ fn make_unit(line_no: usize, role: Role, text: &str, rec: &Record) -> TurnUnit {
         orig_newlines,
         ts_utc: rec.timestamp.clone(),
         also_in_summary: false,
+        from_sidecar: rec.is_elicitation_marker(),
     }
 }
 
@@ -1432,10 +1477,16 @@ fn unit_header_line(unit: &TurnUnit) -> String {
     } else {
         ""
     };
+    // A merged elicitation-sidecar unit (§3.10) has no physical jsonl line — render the
+    // provenance locator instead of a fabricated `Lnnnn`.
+    let locator = if unit.from_sidecar {
+        "(elicitation sidecar)".to_string()
+    } else {
+        format!("L{}", unit.line_no)
+    };
     format!(
-        "{} L{}  {}  ({}){dup}",
+        "{} {locator}  {}  ({}){dup}",
         unit_glyph(unit.role),
-        unit.line_no,
         unit.role.label().to_uppercase(),
         format_timestamp(unit.ts_utc.as_deref())
     )
@@ -1855,6 +1906,12 @@ fn plan_session(
 /// opener line and its LATEST agent message line (the EOT anchor == `agents.last()`,
 /// which is the highest agent line by construction), 0 if neither.
 fn turn_latest_line(t: &TurnSlice) -> usize {
+    // A pending elicitation-sidecar unit (§3.10) has no physical line (line_no 0) yet IS the
+    // latest activity — what the session is currently blocked on — so it ranks as most-recent
+    // (usize::MAX) for recency-first selection rather than sorting as the oldest.
+    if t.user.as_ref().is_some_and(|u| u.from_sidecar) {
+        return usize::MAX;
+    }
     let u = t.user.as_ref().map(|x| x.line_no).unwrap_or(0);
     let a = t.assistant_eot().map(|x| x.line_no).unwrap_or(0);
     u.max(a)
@@ -2091,6 +2148,11 @@ fn render_text(
                 "  dedup: {} units also present in summary L{} (demoted, flagged)",
                 plan.dedup_demoted, sline
             );
+        }
+        // Announce that ≥1 selected unit is a hook-backfilled elicitation-sidecar record (§3.10)
+        // — the consumer is reading merged records, not raw native jsonl.
+        if plan_has_sidecar(plan) {
+            println!("  with elicitation sidecar");
         }
         println!("  {}", "─".repeat(60));
 
@@ -2369,6 +2431,17 @@ fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usize) {
     (u, a)
 }
 
+/// True when this plan SELECTED ≥1 elicitation-sidecar unit (§3.10) — drives the per-session
+/// `with elicitation sidecar` note (text) / the JSON header flag, so a consumer knows the
+/// output includes hook-backfilled records.
+fn plan_has_sidecar(plan: &SessionPlan) -> bool {
+    plan.selected.iter().any(|sel| {
+        find_turn(plan, sel.turn_index)
+            .and_then(|t| t.user.as_ref())
+            .is_some_and(|u| u.from_sidecar)
+    })
+}
+
 /// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a
 /// `--include-subagents` query that spans S subagents realizes up to `budget × (1 + S)`
 /// chars. The banner must report the TRUE scope (every discovered session) — NOT only what
@@ -2598,6 +2671,9 @@ fn render_json(
         "automation_triggers": total_automation,
         "automation_by_kind": by_kind,
         "automation_in_scope_by_kind": in_scope_by_kind,
+        // True when ≥1 selected unit was merged from the elicitation sidecar (§3.10) — the
+        // machine echo of the per-session `with elicitation sidecar` text note.
+        "with_elicitation_sidecar": plans.iter().any(plan_has_sidecar),
     });
     {
         let s = serde_json::to_string(&header)?;
@@ -2682,7 +2758,10 @@ fn emit_unit_json(
         "is_subagent": sr.is_subagent,
         "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,
-        "line_no": unit.line_no,
+        // A merged elicitation-sidecar unit (§3.10) has NO physical line — `line_no` is null
+        // and `source:"elicitation-sidecar"` marks the provenance; a native unit omits `source`.
+        "line_no": if unit.from_sidecar { serde_json::Value::Null } else { json!(unit.line_no) },
+        "source": if unit.from_sidecar { json!("elicitation-sidecar") } else { serde_json::Value::Null },
         "role": unit.role.label(),
         "ts_utc": unit.ts_utc,
         "ts_local": unit.ts_utc.as_deref().and_then(local_iso),

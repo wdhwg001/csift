@@ -204,6 +204,34 @@ pub struct Record {
     /// content. Additive + tolerant.
     #[serde(default)]
     pub snapshot: Option<serde_json::Value>,
+
+    /// csift's own provenance marker on an ELICITATION SIDECAR record (§3.10). A
+    /// hook-written `elicitations.jsonl` line carries `csift:"elicitation-marker-v1"`
+    /// on every record so a merged sidecar record is distinguishable from a native CC
+    /// record. `None` on every native transcript record. Additive + tolerant.
+    #[serde(default)]
+    pub csift: Option<String>,
+
+    /// The sidecar record's pairing PHASE — `"pending"` (an unanswered elicitation,
+    /// missing from the native transcript) or `"resolved"` (a lightweight close marker
+    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.
+    #[serde(default, rename = "csiftPhase")]
+    pub csift_phase: Option<String>,
+
+    /// The sidecar elicitation KIND — `"AskUserQuestion"` / `"ExitPlanMode"` /
+    /// `"mcp-elicitation"`. `None` on a native record.
+    #[serde(default, rename = "csiftKind")]
+    pub csift_kind: Option<String>,
+
+    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) — groups a
+    /// `pending` with its later `resolved`. `None` on a native record.
+    #[serde(default, rename = "csiftKey")]
+    pub csift_key: Option<String>,
+
+    /// The MCP server name on an `mcp-elicitation` sidecar record (for the rendered
+    /// detail). `None` otherwise. Additive + tolerant.
+    #[serde(default, rename = "csiftMcpServer")]
+    pub csift_mcp_server: Option<String>,
 }
 
 /// The `message` object on user / assistant records.
@@ -275,11 +303,23 @@ pub enum Block {
     Unknown,
 }
 
+/// The provenance value every csift elicitation-sidecar record carries in its `csift`
+/// field (§3.10). A line lacking this is a native CC record / foreign line.
+pub const ELICITATION_MARKER: &str = "elicitation-marker-v1";
+
 impl Record {
     /// True when this record is `type == "<t>"`.
     #[must_use]
     pub fn is_type(&self, t: &str) -> bool {
         self.r#type.as_deref() == Some(t)
+    }
+
+    /// True when this record is a csift ELICITATION-SIDECAR marker (§3.10) — it carries
+    /// `csift:"elicitation-marker-v1"`. Distinguishes a hook-backfilled record (merged
+    /// into search/turns/list) from a native CC transcript record.
+    #[must_use]
+    pub fn is_elicitation_marker(&self) -> bool {
+        self.csift.as_deref() == Some(ELICITATION_MARKER)
     }
 
     /// True when this record is a GENUINE human turn (or a user answer to

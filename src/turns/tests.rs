@@ -18,6 +18,7 @@ fn unit(role: Role, line_no: usize, text: &str, orig_newlines: usize) -> TurnUni
         orig_newlines,
         ts_utc: Some("2026-06-07T05:00:00.000Z".to_string()),
         also_in_summary: false,
+        from_sidecar: false,
     }
 }
 
@@ -769,7 +770,7 @@ fn build_produces_round_trip_with_tool_count_and_compaction() {
             ),
         ),
     ];
-    let (turns, summaries) = build(&records);
+    let (turns, summaries) = build(&records, &[]);
     assert_eq!(turns.len(), 2);
     // turn 0: round-trip, 2 tool calls, before the (one) summary → compactions_before 1.
     assert!(turns[0].is_round_trip());
@@ -803,7 +804,7 @@ fn build_pure_tool_call_turn_has_no_assistant_eot() {
             ),
         ),
     ];
-    let (turns, _s) = build(&records);
+    let (turns, _s) = build(&records, &[]);
     assert_eq!(turns.len(), 1);
     assert!(turns[0].user.is_some());
     assert!(
@@ -1168,7 +1169,7 @@ fn build_orphan_assistant_lead_has_no_user() {
             ),
         ),
     ];
-    let (turns, _s) = build(&records);
+    let (turns, _s) = build(&records, &[]);
     // The orphan lead folds into turn 0 (the first real user turn), so turn 0 has the
     // user AND carries the orphan assistant text as its EOT (last assistant in the turn).
     assert_eq!(turns.len(), 1);
@@ -1207,7 +1208,7 @@ fn end_to_end_live_dedup_through_build_and_plan() {
         (4, rec(r#"{"type":"user","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"the live duplicate ask verbatim"}}"#)),
         (5, rec(r#"{"type":"assistant","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"live reply"}]}}"#)),
     ];
-    let (turns, summaries) = build(&records);
+    let (turns, summaries) = build(&records, &[]);
     assert_eq!(summaries.len(), 1);
     assert!(summaries[0]
         .fingerprints
@@ -1336,7 +1337,7 @@ fn build_summary_with_block_body_is_not_captured() {
             ),
         ),
     ];
-    let (turns, summaries) = build(&records);
+    let (turns, summaries) = build(&records, &[]);
     assert!(summaries.is_empty(), "block-bodied summary not captured");
     // The turn still builds; the block summary contributes no boundary.
     assert_eq!(turns[0].compactions_before, 0);
@@ -1499,7 +1500,7 @@ fn build_skips_non_genuine_user_opener() {
             ),
         ),
     ];
-    let (turns, _s) = build(&records);
+    let (turns, _s) = build(&records, &[]);
     assert_eq!(turns.len(), 1);
     assert_eq!(turns[0].user.as_ref().unwrap().text, "real opener");
     assert!(turns[0].assistant_eot().is_some());
@@ -1641,7 +1642,7 @@ fn build_skips_non_candidate_records_in_scan() {
             ),
         ),
     ];
-    let (turns, summaries) = build(&records);
+    let (turns, summaries) = build(&records, &[]);
     assert_eq!(turns.len(), 1);
     assert!(turns[0].is_round_trip());
     assert!(summaries.is_empty());

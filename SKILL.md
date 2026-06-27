@@ -1,12 +1,12 @@
 ---
 name: csift
-description: Search, recover, and audit Claude Code (CC) session + subagent transcripts - the `.jsonl` logs under ~/.claude/projects. Reach for csift for ANY task touching a PAST or the CURRENT CC session; regex-search what was said/done across sessions; list sessions to answer "which session is this"; recover a file's content (or a DELETED plan) from the transcript's Read/Write/Edit stream; restore the verbatim user/assistant turns a context-compaction summary clipped (standing directives, an earlier decision); see which files/dirs a session changed and when; inspect a session's subagents (built-in Task + workflow/OMC agents) - lifecycle, status, topology; locate the plan bound to a session; identify the calling session; fetch one exact message in full; extract pasted images; detect sessions currently BLOCKED on a human elicitation (AskUserQuestion/ExitPlanMode/MCP) that leaves no live trace in the native jsonl. Ten subcommands - list search agents whoami files recover plan turns image pending. Pure regex; no embeddings/BM25/semantic.
+description: Search, recover, and audit Claude Code (CC) session + subagent transcripts - the `.jsonl` logs under ~/.claude/projects. Reach for csift for ANY task touching a PAST or the CURRENT CC session; regex-search what was said/done across sessions; list sessions to answer "which session is this"; recover a file's content (or a DELETED plan) from the transcript's Read/Write/Edit stream; restore the verbatim user/assistant turns a context-compaction summary clipped (standing directives, an earlier decision); see which files/dirs a session changed and when; inspect a session's subagents (built-in Task + workflow/OMC agents) - lifecycle, status, topology; locate the plan bound to a session; identify the calling session; fetch one exact message in full; extract pasted images; surface a session currently BLOCKED on a human elicitation (AskUserQuestion/ExitPlanMode/MCP) that leaves no live trace in the native jsonl - csift TRANSPARENTLY merges the hook-written elicitation sidecar wherever it reads a session. Nine subcommands - list search agents whoami files recover plan turns image. Pure regex; no embeddings/BM25/semantic.
 user-invocable: true
 ---
 
 # csift - ripgrep for Claude Code session transcripts
 
-Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. LLM-facing: clean token-efficient regex text; `--format json` for machines. **Pure regex - no embeddings/BM25/semantic.** Regex = Rust `regex` 1.12 (RE2-class, linear-time): classes, alternation, groups, quantifiers (+lazy `*?`), anchors, inline flags `(?i)(?m)(?s)(?x)`, `\p{…}`. NOT supported (fail-to-compile, by design): backrefs `\1`, lookaround `(?=)(?!)(?<=)(?<!)`, atomic/possessive `(?>)`/`a*+`. Default **smart-case** (insensitive unless the pattern has an uppercase). Ten subcommands: `list search agents whoami files recover plan turns image pending`. Run `csift <cmd> --help` for the live flag list (the `--help` is the authoritative manual).
+Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. LLM-facing: clean token-efficient regex text; `--format json` for machines. **Pure regex - no embeddings/BM25/semantic.** Regex = Rust `regex` 1.12 (RE2-class, linear-time): classes, alternation, groups, quantifiers (+lazy `*?`), anchors, inline flags `(?i)(?m)(?s)(?x)`, `\p{…}`. NOT supported (fail-to-compile, by design): backrefs `\1`, lookaround `(?=)(?!)(?<=)(?<!)`, atomic/possessive `(?>)`/`a*+`. Default **smart-case** (insensitive unless the pattern has an uppercase). Nine subcommands: `list search agents whoami files recover plan turns image`. Run `csift <cmd> --help` for the live flag list (the `--help` is the authoritative manual).
 
 ## Global conventions (every subcommand)
 - `--claude-home <DIR>` (global, ANY position, before OR after the subcommand): repoint `~/.claude`. Priority **flag > `$CLAUDE_CONFIG_DIR` > `$HOME/.claude`**. Transcripts read from `<DIR>/projects/<enc>/*.jsonl`.
@@ -262,22 +262,11 @@ csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg   # locator 
 
 ---
 
-## `pending` - sessions currently BLOCKED on a human elicitation
-```
-csift pending [PATH|@<uuid>...] [--no-subagents] [--format json]
-```
-Reports sessions waiting on a human for one of the THREE elicitations that leave **no usable live trace in the native jsonl**: **AskUserQuestion** + **ExitPlanMode** (CC buffers the whole assistant turn until answered - nothing on disk during pending) and **MCP Elicitation** (the inner request is in-memory only). csift cannot see these by reading the transcript; instead it reads a **SIDECAR** jsonl that a CC hook writes when each elicitation OPENS and CLOSES (install: see the recipe below). 0 targets => scan every project; `@<uuid>`/path scope as usual.
-
-The sidecar is `<session-sidecar-dir>/elicitations.jsonl` (the `<uuid>/` dir beside `subagents/`; NEVER the native transcript - it is not polluted). Each line is a near-native record carrying a `csift` magic marker + `phase`(`pending`|`resolved`) + `kind`(`AskUserQuestion`|`ExitPlanMode`|`mcp-elicitation`) + `key`(pair id) + `timestamp` + the full `hookInput`. csift pairs open/close by `key` (per-key LIFO; a `resolved` clears the latest open); a key with an unmatched `pending` = CURRENTLY blocked. Malformed lines are skipped + counted (never silent). Missing sidecar => not blocked. **Keyed by the TOP-LEVEL session** (the hook's `session_id` is always the top-level/leader uuid, never a subagent's - AskUserQuestion/ExitPlanMode are main-thread-only anyway; a subagent's MCP elicitation surfaces under its top-level session, agent-blind).
-
-```
-SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
-  ⏳ AskUserQuestion  since 2026-06-27 11:51:23 AEST (2026-06-27T01:51:23.000Z)  (key toolu_01Vw…)
-     How do you want to proceed with the push?
-  ⏳ mcp-elicitation  since 2026-06-27 11:52:01 AEST (2026-06-27T01:52:01.000Z)  (key el-9)
-     gdrive: Authorize Google Drive access (url)
-```
-Nothing pending => `no pending elicitations`. JSON: one object per currently-pending elicitation `{session_id, kind, key, since_utc, since_local, detail, hook_event}`, then a trailing untagged summary `{sessions, pending, skipped_lines}`. `since_*` = when it opened (the wait start); compute elapsed against now for staleness.
+## Elicitation sidecar - the TRANSPARENT merge (AskUserQuestion / ExitPlanMode / MCP)
+While **pending**, **AskUserQuestion** and **ExitPlanMode** are NOT written to disk (CC buffers the whole assistant turn until answered) and an **MCP Elicitation**'s inner request isn't either (in-memory only) - so a session blocked on a human shows NOTHING new in the native jsonl. A CC hook backfills each to a per-session **SIDECAR** `<session-sidecar-dir>/elicitations.jsonl` (the `<uuid>/` dir beside `subagents/`; NEVER the native transcript). csift then merges the sidecar's UNRESOLVED-pending records TRANSPARENTLY wherever it reads a session - no separate subcommand:
+- **`search`/`turns`/`list`** include the unresolved-pending records as if native - all three elicitation kinds surface under `-t tool` (an AUQ/ExitPlanMode via its `tool_use`; the MCP `system` record via its `content`, so `csift search <elicitation-text>` finds even an MCP elicit); turns shows each as the latest turn unit; list annotates the row. Once the elicitation is ANSWERED, CC wrote the real record and the pending is paired off (dropped) → no duplicates, automatic.
+- A merged record has no physical jsonl line: it renders **`(elicitation sidecar)`** in place of `Lnnnn` (JSON `source:"elicitation-sidecar"`, null `line`/`line_no`), and any surface that merged ≥1 record prints **`with elicitation sidecar`** (JSON `with_elicitation_sidecar:true`). Malformed sidecar lines are skipped + counted (folded into that surface's `skipped_lines`); a missing sidecar ⇒ nothing merged (not an error).
+- The sidecar is **keyed by the TOP-LEVEL session** (subagent transcripts have none) and **CANNOT be targeted directly** - `csift search "x" <…>/elicitations.jsonl` errors (it is read automatically when you target its session). Install the hook (recipe below) to make the merge work.
 
 ---
 
@@ -338,8 +327,8 @@ jq -n --arg c "$ctx" '{hookSpecificOutput:{hookEventName:"PostToolUseFailure",ad
 ```
 Register in settings.json (ABSOLUTE path for a global `~/.claude/` install): `{"matcher":"TaskStop","hooks":[{"type":"command","command":"/ABS/taskstop-teammate-redirect.sh"}]}` under `"hooks":{"PostToolUseFailure":[…]}`. (PostToolUseFailure fires only on a tool FAILURE + supports `hookSpecificOutput.additionalContext`; `agents @<sid> --kind teammate` is the authoritative confirm — ~4s on a 300MB session, but only on a rare TaskStop failure.)
 
-### Elicitation-marker hook — make `csift pending` work (the ONLY live signal for AskUserQuestion / ExitPlanMode / MCP elicitation)
-These three block the session on a human but leave NO usable live trace in the native jsonl (whole-turn buffered / in-memory). This hook fires when each OPENS and CLOSES and appends a marker to a per-session SIDECAR `<session-sidecar-dir>/elicitations.jsonl` (never the native transcript). VERIFIED live on 2.1.191: the `pending` marker was written at the instant the picker appeared and sat there the entire ~2.5h wait, while the native record stayed buffered until the answer. Fail-open; derives the sidecar from the hook's `transcript_path` so it works wherever the Claude home lives.
+### Elicitation-marker hook — backfill the sidecar csift transparently merges (AskUserQuestion / ExitPlanMode / MCP)
+These three block the session on a human but leave NO usable live trace in the native jsonl (whole-turn buffered / in-memory). This hook fires when each OPENS and CLOSES and appends a marker to a per-session SIDECAR `<session-sidecar-dir>/elicitations.jsonl` (never the native transcript). A `pending` line is shaped like the NATIVE record CC will eventually write (the buffered AUQ/ExitPlanMode `tool_use` on a `type:"assistant"` record, or an MCP `type:"system"` record) PLUS the `csift*` provenance fields, so csift classifies + renders it exactly as a native record; a `resolved` line is a lightweight `type:"csift-elicitation-resolved"` close marker (for pairing only). VERIFIED live on 2.1.191: the `pending` marker was written at the instant the picker appeared and sat there the entire ~2.5h wait, while the native record stayed buffered until the answer. Fail-open; derives the sidecar from the hook's `transcript_path` so it works wherever the Claude home lives.
 
 ```bash
 #!/usr/bin/env bash
@@ -357,17 +346,30 @@ esac
 [ -n "$kind" ] || exit 0
 tp=$(jq -r '.transcript_path//empty' <<<"$in" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<"$in" 2>/dev/null)
 key=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // "unknown"' <<<"$in" 2>/dev/null)
+srv=$(jq -r '.mcp_server_name//empty' <<<"$in" 2>/dev/null)
 sidecar=""
 if [ -n "$tp" ] && [ "${tp%.jsonl}" != "$tp" ]; then sidecar="${tp%.jsonl}/elicitations.jsonl"
 elif [ -n "$sid" ]; then f=$(ls "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$sid".jsonl 2>/dev/null|head -1); [ -n "$f" ] && sidecar="${f%.jsonl}/elicitations.jsonl"; fi
 [ -n "$sidecar" ] || exit 0
 mkdir -p "$(dirname "$sidecar")" 2>/dev/null || exit 0
 ts=$(date -u +%Y-%m-%dT%H:%M:%S.000Z); uuid=$( (command -v uuidgen>/dev/null 2>&1 && uuidgen) || echo "csift-$$-$ts")
-rec=$(jq -cn --arg p "$phase" --arg k "$kind" --arg key "$key" --arg ev "$ev" --arg sid "$sid" --arg ts "$ts" --arg u "$uuid" --argjson hi "$in" \
-  '{type:"csift-elicitation",csift:"elicitation-marker-v1",phase:$p,kind:$k,key:$key,hookEvent:$ev,sessionId:$sid,timestamp:$ts,uuid:$u,hookInput:$hi}' 2>/dev/null) || exit 0
+if [ "$phase" = resolved ]; then
+  # Lightweight close marker (pairing only) — csift drops the paired pending so no dup.
+  rec=$(jq -cn --arg k "$kind" --arg key "$key" --arg sid "$sid" --arg ts "$ts" --arg u "$uuid" \
+    '{type:"csift-elicitation-resolved",uuid:$u,timestamp:$ts,sessionId:$sid,csift:"elicitation-marker-v1",csiftPhase:"resolved",csiftKind:$k,csiftKey:$key}' 2>/dev/null) || exit 0
+elif [ "$kind" = mcp-elicitation ]; then
+  msg=$(jq -r '.message//empty' <<<"$in" 2>/dev/null); mode=$(jq -r '.mode//"elicitation"' <<<"$in" 2>/dev/null)
+  rec=$(jq -cn --arg key "$key" --arg sid "$sid" --arg ts "$ts" --arg u "$uuid" --arg srv "$srv" \
+    --arg content "MCP elicitation [$srv] ($mode): $msg" --argjson hi "$in" \
+    '{type:"system",subtype:"mcp_elicitation",uuid:$u,timestamp:$ts,sessionId:$sid,isSidechain:false,content:$content,csift:"elicitation-marker-v1",csiftPhase:"pending",csiftKind:"mcp-elicitation",csiftKey:$key,csiftMcpServer:$srv,hookInput:$hi}' 2>/dev/null) || exit 0
+else
+  # AskUserQuestion / ExitPlanMode pending: native-shaped assistant tool_use + csift fields.
+  rec=$(jq -cn --arg k "$kind" --arg key "$key" --arg sid "$sid" --arg ts "$ts" --arg u "$uuid" --argjson hi "$in" \
+    '{type:"assistant",uuid:$u,timestamp:$ts,sessionId:$sid,isSidechain:false,message:{role:"assistant",stop_reason:"tool_use",content:[{type:"tool_use",id:$key,name:$k,input:($hi.tool_input//{})}]},csift:"elicitation-marker-v1",csiftPhase:"pending",csiftKind:$k,csiftKey:$key,csiftHookEvent:"PreToolUse",hookInput:$hi}' 2>/dev/null) || exit 0
+fi
 printf '%s\n' "$rec" >>"$sidecar" 2>/dev/null || exit 0
 ```
-Register 4 events (one script), ABSOLUTE path: `PreToolUse`+`PostToolUse` matcher `"AskUserQuestion|ExitPlanMode"`, and `Elicitation`+`ElicitationResult` (omit matcher = all MCP servers) — each `{"hooks":[{"type":"command","command":"/ABS/csift-elicitation-marker.sh"}]}`. The script MUST print NOTHING (an Elicitation/PreToolUse hook that emits `hookSpecificOutput` would auto-respond/alter the gate — we only OBSERVE). Then `csift pending` surfaces them.
+Register 4 events (one script), ABSOLUTE path: `PreToolUse`+`PostToolUse` matcher `"AskUserQuestion|ExitPlanMode"`, and `Elicitation`+`ElicitationResult` (omit matcher = all MCP servers) — each `{"hooks":[{"type":"command","command":"/ABS/csift-elicitation-marker.sh"}]}`. The script MUST print NOTHING (an Elicitation/PreToolUse hook that emits `hookSpecificOutput` would auto-respond/alter the gate — we only OBSERVE). Once installed, the unresolved-pending records are auto-merged into `search`/`turns`/`list` (shown as `with elicitation sidecar`) — there is no `pending` subcommand to run.
 
 ## Practical tips
 - `search --format json | jq .session_id` (which sessions) before a full `search` (what); `recover --coverage` before trusting a `--salvage`.

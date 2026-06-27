@@ -74,6 +74,12 @@ pub struct Hit {
     /// SAME extractable id as `turns`/`image` (feed it to `csift image <session> --id <ID>`).
     /// Backfilled onto the record's first hit only (avoids repeating it per matched block).
     pub image_ids: Vec<String>,
+    /// True when this hit came from a hook-backfilled ELICITATION SIDECAR record (§3.10) — an
+    /// unresolved-pending AskUserQuestion/ExitPlanMode/MCP that is MISSING from the native
+    /// transcript. Such a hit has NO physical `line` (it is not a real jsonl line), so it
+    /// renders `(elicitation sidecar)` in place of `Lnnnn` and carries `source:"elicitation-
+    /// sidecar"` in JSON. Backfilled with the address.
+    pub from_sidecar: bool,
 }
 
 /// A complete reconstructed request/response exchange (round-trip) containing the
@@ -619,6 +625,18 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     Ok(())
 }
 
+/// True when ANY emitted hit/sibling came from the elicitation sidecar (§3.10) — drives the
+/// `with elicitation sidecar` note so a consumer knows the output includes hook-backfilled
+/// records, not raw native jsonl.
+fn merged_any_sidecar(exchanges: &[Exchange]) -> bool {
+    exchanges.iter().any(|ex| {
+        ex.hits
+            .iter()
+            .chain(ex.siblings.iter())
+            .any(|h| h.from_sidecar)
+    })
+}
+
 /// Count of DISTINCT sessions among these exchanges (by transcript `session_id`, in
 /// first-seen order). One cheap always-on number — surfaced in every search footer.
 fn distinct_session_count(exchanges: &[Exchange]) -> usize {
@@ -659,8 +677,13 @@ struct Kept {
     can_hit: bool,
     /// 1-based PHYSICAL line number of this record in its source jsonl (from the scanner) —
     /// a stable address (jsonl is append-only), surfaced per hit so `csift search --line N` (and
-    /// raw `sed -n 'Np'`) can re-fetch the exact record.
+    /// raw `sed -n 'Np'`) can re-fetch the exact record. `0` for a merged elicitation-sidecar
+    /// record (it has no physical transcript line — see `from_sidecar`).
     line_no: usize,
+    /// True when this record was merged from the elicitation SIDECAR (§3.10), not scanned from
+    /// the native jsonl. Such a record has no physical `line_no` (0); its hits render
+    /// `(elicitation sidecar)` instead of `Lnnnn`.
+    from_sidecar: bool,
 }
 
 /// Scan a single session file: prefilter → parse → delimit turns → match → stitch.
@@ -694,7 +717,7 @@ fn search_one_file(
     // Parse all transcript-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool)
     // so a single giant transcript is not scanned on one core. The stage-2 keyword prefilter
     // (`can_hit`) is computed per line inside the parallel scan, where the raw bytes are in hand.
-    let (records, skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
+    let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_transcript_candidate(line) {
             return crate::parse::LineVerdict::Ignore;
         }
@@ -704,11 +727,32 @@ fn search_one_file(
                 rec,
                 can_hit,
                 line_no,
+                from_sidecar: false,
             }),
             Ok(None) => crate::parse::LineVerdict::Ignore,
             Err(_) => crate::parse::LineVerdict::Skip,
         }
     });
+
+    // ── Transparent elicitation-sidecar merge (§3.10) ──
+    // A TOP-LEVEL session may have a hook-written `elicitations.jsonl` carrying the
+    // unresolved-pending AskUserQuestion/ExitPlanMode/MCP records that are MISSING from the
+    // native transcript (whole-turn buffered / in-memory). Merge them in as native-shaped
+    // records so they classify + match normally; they have no physical line (line_no 0,
+    // from_sidecar). Subagent transcripts have no sidecar (it is keyed by the top-level
+    // session). The merge is near-free when nothing is pending (typically 0 records).
+    if !crate::subagent::is_subagent_path(path) {
+        let (pending, pending_skipped) = crate::elicitation::unresolved_pending(path)?;
+        skipped += pending_skipped;
+        for rec in pending {
+            records.push(Kept {
+                rec,
+                can_hit: true, // no physical line to prefilter — let the matcher decide.
+                line_no: 0,
+                from_sidecar: true,
+            });
+        }
+    }
 
     let exchanges = reconstruct_and_match(
         path,
@@ -1054,6 +1098,7 @@ fn backfill_address(hits: &mut [Hit], kept: &Kept) {
     for h in hits.iter_mut() {
         h.line = kept.line_no;
         h.uuid = kept.rec.uuid.clone();
+        h.from_sidecar = kept.from_sidecar;
     }
     if let Some(first) = hits.first_mut() {
         first.image_ids = crate::image::image_ids_for_record(&kept.rec, kept.line_no);
@@ -1205,6 +1250,36 @@ fn collect_record_hits(
                     span,
                     ts.clone(),
                     None,
+                    excerpt_max,
+                ));
+            }
+        }
+    }
+
+    // ── elicitation-sidecar non-tool_use marker (§3.10) ──
+    // An MCP-elicitation pending marker is a `system` record carrying its prose in the
+    // top-level `content` string (no blocks, not genuine-user), so BOTH the genuine-user path
+    // above AND the block-bearing loop below miss it — leaving `search` unable to find a
+    // session blocked on an MCP elicitation (`list`/`turns` surface it via `pending_text`, so
+    // only `search` had the gap). Match that `content` so it surfaces like the
+    // AskUserQuestion/ExitPlanMode tool_use markers do. GUARDED to a marker with NO `tool_use`
+    // block, so AQ/ExitPlanMode (which DO carry a tool_use block and match via the
+    // `Block::ToolUse` arm below, category Tool) never double-emit. Tagged `Tool` for
+    // consistency — every merged elicitation surfaces under `-t tool`.
+    if category_active(want, Category::Tool)
+        && rec.is_elicitation_marker()
+        && rec
+            .blocks()
+            .is_none_or(|bs| !bs.iter().any(|b| matches!(b, Block::ToolUse { .. })))
+    {
+        if let Some(text) = rec.content.as_ref().and_then(serde_json::Value::as_str) {
+            if let Some(span) = matcher.locate(text) {
+                hits.push(make_hit(
+                    Category::Tool,
+                    text,
+                    span,
+                    ts.clone(),
+                    rec.csift_kind.clone(),
                     excerpt_max,
                 ));
             }
@@ -1376,6 +1451,7 @@ fn make_hit(
         line: 0,
         uuid: None,
         image_ids: Vec::new(),
+        from_sidecar: false,
     }
 }
 
@@ -1538,6 +1614,9 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         print!(" · {} dropped by --max-count", outcome.dropped_by_cap);
     }
     println!();
+    if merged_any_sidecar(&outcome.exchanges) {
+        println!("with elicitation sidecar");
+    }
     emit_unresolved(&outcome.unresolved);
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
@@ -1555,9 +1634,16 @@ fn print_record_line(marker: char, h: &Hit) {
         .map(|n| format!(" {n}"))
         .unwrap_or_default();
     let images = image_suffix(&h.image_ids);
+    // A merged elicitation-sidecar hit has no physical jsonl line — render the provenance
+    // locator instead of a fabricated `Lnnnn` (§3.10).
+    let locator = if h.from_sidecar {
+        "(elicitation sidecar)".to_string()
+    } else {
+        format!("L{}", h.line)
+    };
     println!(
-        "  {marker} {label}{name}  L{}  {}{}",
-        h.line, h.excerpt, images
+        "  {marker} {label}{name}  {locator}  {}{}",
+        h.excerpt, images
     );
 }
 
@@ -1588,9 +1674,12 @@ fn hit_json(h: &Hit) -> serde_json::Value {
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
         "tool_name": h.tool_name,
-        // The `csift search --line/--uuid` address: 1-based source line + the record uuid (when present).
-        "line": h.line,
+        // The `csift search --line/--uuid` address: 1-based source line + the record uuid (when
+        // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
+        // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.
+        "line": if h.from_sidecar { serde_json::Value::Null } else { serde_json::json!(h.line) },
         "uuid": h.uuid,
+        "source": if h.from_sidecar { serde_json::json!("elicitation-sidecar") } else { serde_json::Value::Null },
         // Extractable image ids (`#N`/`L<line>i<n>`) the record carries; empty array when none.
         "image_ids": h.image_ids,
     })
@@ -1644,6 +1733,9 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
         "unresolved": outcome.unresolved,
+        // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) — the
+        // machine echo of the `with elicitation sidecar` text note.
+        "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
     });
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
@@ -1923,6 +2015,64 @@ mod tests {
     }
 
     #[test]
+    fn collect_hits_mcp_elicitation_system_marker() {
+        // §3.10: an MCP-elicitation pending marker is a `system` record with NO tool_use
+        // block — `search` must still find it via its top-level `content` string (the gap the
+        // §3.10 arm closes), tagged `Tool` and named by `csiftKind`.
+        let r = rec(
+            r#"{"type":"system","subtype":"mcp_elicitation","timestamp":"2026-06-27T02:00:00.000Z","content":"MCP elicitation [gdrive] (url): authorize wibblewobble access","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp-elicitation","csiftKey":"el-1","csiftMcpServer":"gdrive"}"#,
+        );
+        let m = build_matcher(&args("wibblewobble")).unwrap();
+        let mut hits = Vec::new();
+        collect_record_hits(
+            &r,
+            &[Category::Tool],
+            &m,
+            false,
+            EXCERPT_MAX,
+            &PlanIndex::default(),
+            &HashMap::new(),
+            &mut hits,
+        );
+        assert_eq!(
+            hits.len(),
+            1,
+            "MCP system marker must produce exactly one hit"
+        );
+        assert_eq!(hits[0].category, Category::Tool);
+        assert_eq!(hits[0].tool_name.as_deref(), Some("mcp-elicitation"));
+        assert!(hits[0].excerpt.contains("wibblewobble"));
+    }
+
+    #[test]
+    fn collect_hits_auq_marker_does_not_double_emit() {
+        // §3.10: an AskUserQuestion pending marker DOES carry a tool_use block, so it matches
+        // via the `Block::ToolUse` arm. The §3.10 non-tool_use arm is guarded to markers with
+        // NO tool_use block, so this must yield EXACTLY ONE hit (not two).
+        let r = rec(
+            r#"{"type":"assistant","timestamp":"2026-06-27T01:00:00.000Z","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"k1","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"k1","name":"AskUserQuestion","input":{"questions":[{"question":"pick wibblewobble?"}]}}]}}"#,
+        );
+        let m = build_matcher(&args("wibblewobble")).unwrap();
+        let mut hits = Vec::new();
+        collect_record_hits(
+            &r,
+            &[Category::Tool],
+            &m,
+            false,
+            EXCERPT_MAX,
+            &PlanIndex::default(),
+            &HashMap::new(),
+            &mut hits,
+        );
+        assert_eq!(
+            hits.len(),
+            1,
+            "AQ marker must not double-emit via the §3.10 arm"
+        );
+        assert_eq!(hits[0].tool_name.as_deref(), Some("AskUserQuestion"));
+    }
+
+    #[test]
     fn collect_hits_auq_answer_under_user() {
         let r = rec(
             r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"chosen\". You can now continue."}]}}"#,
@@ -2010,6 +2160,7 @@ mod tests {
                     rec: serde_json::from_slice(raw).expect("valid fixture record"),
                     can_hit: matcher.line_may_match(raw),
                     line_no: 1,
+                    from_sidecar: false,
                 }
             })
             .collect()
@@ -2458,6 +2609,7 @@ mod tests {
             rec: serde_json::from_slice(raw).unwrap(),
             can_hit: m.line_may_match(raw),
             line_no: 1,
+            from_sidecar: false,
         };
         assert!(!kept.can_hit);
         let turn = Turn {
@@ -2490,6 +2642,7 @@ mod tests {
             rec: serde_json::from_slice(raw).unwrap(),
             can_hit: m.line_may_match(raw),
             line_no: 1,
+            from_sidecar: false,
         };
         let turn = Turn {
             index: 0,

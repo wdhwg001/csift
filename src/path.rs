@@ -912,6 +912,19 @@ pub fn resolve_session_files(
         // top-level `<uuid>.jsonl` → that session. Either way its project dir scopes the search.
         if t.ends_with(".jsonl") {
             let file = Path::new(t);
+            // An elicitation SIDECAR (hook-written backfill, csift-elicitation marker records
+            // only) is not a Claude Code transcript — it is read AUTOMATICALLY when you target
+            // its session and cannot be searched directly. Reject it loudly so a stray target is
+            // never silently scanned as a session (the merge is the only supported access).
+            if crate::elicitation::is_sidecar_path(file) {
+                bail!(
+                    "{} is a csift elicitation sidecar (hook-written backfill, \
+                     csift-elicitation marker records only), not a Claude Code session \
+                     transcript. It is read automatically when you target its session; it \
+                     cannot be searched directly.",
+                    file.display()
+                );
+            }
             let is_sub = file
                 .components()
                 .any(|c| c.as_os_str().to_str() == Some("subagents"));

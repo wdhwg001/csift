@@ -10653,172 +10653,316 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
     );
 }
 
-// ── pending ──
+// ── elicitation sidecar (transparent merge into search/turns/list) ──
 
-/// A minimal home with one top-level session jsonl (no sidecar yet) for the `pending`
-/// tests — each test then drops its own `elicitations.jsonl` content.
-fn pending_home() -> Home {
+/// A minimal top-level session jsonl (one genuine-user + one assistant turn) for the
+/// elicitation-sidecar tests. Each test drops its own `<SESS>/elicitations.jsonl` content.
+fn sidecar_session_home() -> Home {
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
         concat!(
-            r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"hi"}}"#,
-            "\n",
+            r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the work"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"working on it"}]}}"#, "\n",
         ),
     );
     h
 }
 
+/// An unresolved AskUserQuestion pending sidecar record (native-shaped assistant tool_use +
+/// csift marker fields).
+fn auq_pending_line(key: &str, ts: &str, question: &str) -> String {
+    format!(
+        r#"{{"type":"assistant","uuid":"u-{key}","timestamp":"{ts}","sessionId":"{SESS}","cwd":"/Users/testuser/Projects/foo","isSidechain":false,"message":{{"role":"assistant","stop_reason":"tool_use","content":[{{"type":"tool_use","id":"{key}","name":"AskUserQuestion","input":{{"questions":[{{"question":"{question}"}}]}}}}]}},"csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"{key}","csiftHookEvent":"PreToolUse","hookInput":{{}}}}"#
+    )
+}
+
+fn resolved_line(key: &str, ts: &str) -> String {
+    format!(
+        r#"{{"type":"csift-elicitation-resolved","uuid":"r-{key}","timestamp":"{ts}","sessionId":"{SESS}","csift":"elicitation-marker-v1","csiftPhase":"resolved","csiftKind":"AskUserQuestion","csiftKey":"{key}"}}"#
+    )
+}
+
+fn mcp_pending_line(key: &str, ts: &str, server: &str, message: &str) -> String {
+    format!(
+        r#"{{"type":"system","subtype":"mcp_elicitation","uuid":"m-{key}","timestamp":"{ts}","sessionId":"{SESS}","isSidechain":false,"content":"MCP elicitation [{server}] (url): {message}","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp-elicitation","csiftKey":"{key}","csiftMcpServer":"{server}","hookInput":{{}}}}"#
+    )
+}
+
 #[test]
-fn pending_shows_unresolved_askuserquestion_text_and_json() {
-    let h = pending_home();
+fn search_finds_unresolved_askuserquestion_via_sidecar() {
+    let h = sidecar_session_home();
     h.write(
         &format!("{ENC}/{SESS}/elicitations.jsonl"),
-        concat!(
-            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:02:03.000Z","hookInput":{"tool_input":{"questions":[{"question":"Which branch should I target?"}]}}}"#,
-            "\n",
+        &format!(
+            "{}\n",
+            auq_pending_line(
+                "toolu_AQ1",
+                "2026-06-27T01:02:03.000Z",
+                "Which branch should I target?"
+            )
         ),
     );
 
-    // TEXT
-    let out = h.run(&["pending", &at(SESS)]);
+    // TEXT — the pending AUQ is found and marked `(elicitation sidecar)` (no fake Lnnnn).
+    let out = h.run(&["search", "Which branch should I target", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains(&format!("SESSION {SESS}")),
-        "session header:\n{}",
+        out.stdout.contains("(elicitation sidecar)"),
+        "a sidecar hit must render `(elicitation sidecar)`, not Lnnnn:\n{}",
         out.stdout
     );
     assert!(
-        out.stdout.contains("⏳ AskUserQuestion"),
-        "kind line:\n{}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("(key toolu_AQ1)"),
-        "key:\n{}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("Which branch should I target?"),
-        "question detail:\n{}",
+        out.stdout.contains("with elicitation sidecar"),
+        "the merged-records note must appear:\n{}",
         out.stdout
     );
 
-    // JSON — one object per pending + a trailing summary.
-    let j = h.run(&["pending", &at(SESS), "--format", "json"]);
+    // JSON — the hit carries source:"elicitation-sidecar", null line; summary flags it.
+    let j = h.run(&[
+        "search",
+        "Which branch should I target",
+        &at(SESS),
+        "--format",
+        "json",
+    ]);
     assert!(j.success, "stderr: {}", j.stderr);
     let lines: Vec<&str> = j.stdout.lines().filter(|l| !l.trim().is_empty()).collect();
-    assert_eq!(lines.len(), 2, "one pending + one summary:\n{}", j.stdout);
-    let obj: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-    assert_eq!(obj["session_id"], SESS);
-    assert_eq!(obj["kind"], "AskUserQuestion");
-    assert_eq!(obj["key"], "toolu_AQ1");
-    assert_eq!(obj["detail"], "Which branch should I target?");
-    assert_eq!(obj["since_utc"], "2026-06-27T01:02:03.000Z");
-    assert_eq!(obj["hook_event"], "PreToolUse");
-    assert!(obj["since_local"].is_string(), "since_local present");
-    let summary: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
-    assert_eq!(summary["sessions"], 1);
-    assert_eq!(summary["pending"], 1);
-    assert_eq!(summary["skipped_lines"], 0);
+    let ex: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    let hit = &ex["hits"][0];
+    assert_eq!(hit["source"], "elicitation-sidecar");
+    assert!(
+        hit["line"].is_null(),
+        "no fabricated line for a sidecar hit: {hit}"
+    );
+    let summary: serde_json::Value = serde_json::from_str(lines.last().unwrap()).unwrap();
+    assert_eq!(summary["with_elicitation_sidecar"], true);
 }
 
 #[test]
-fn pending_resolved_pair_is_not_shown() {
-    let h = pending_home();
+fn turns_includes_pending_askuserquestion() {
+    let h = sidecar_session_home();
     h.write(
         &format!("{ENC}/{SESS}/elicitations.jsonl"),
-        concat!(
-            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:02:03.000Z","hookInput":{"tool_input":{"questions":[{"question":"q"}]}}}"#, "\n",
-            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"resolved","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PostToolUse","timestamp":"2026-06-27T01:05:00.000Z"}"#, "\n",
+        &format!(
+            "{}\n",
+            auq_pending_line(
+                "toolu_AQ1",
+                "2026-06-27T01:02:03.000Z",
+                "Pick a deployment target"
+            )
         ),
     );
-    let out = h.run(&["pending", &at(SESS)]);
+    let out = h.run(&["turns", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.trim() == "no pending elicitations",
-        "an open+close pair must NOT be reported pending:\n{}",
+        out.stdout
+            .contains("AskUserQuestion: Pick a deployment target"),
+        "turns must include the pending AUQ as a unit:\n{}",
         out.stdout
     );
-}
-
-#[test]
-fn pending_malformed_sidecar_line_is_skipped_and_counted() {
-    let h = pending_home();
-    h.write(
-        &format!("{ENC}/{SESS}/elicitations.jsonl"),
-        concat!(
-            "BROKEN { not json\n",
-            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:02:03.000Z","hookInput":{"tool_input":{"questions":[{"question":"q"}]}}}"#, "\n",
-        ),
-    );
-    let out = h.run(&["pending", &at(SESS)]);
-    assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("1 malformed line(s) skipped"),
-        "malformed-line count must be surfaced, never silent:\n{}",
+        out.stdout.contains("(elicitation sidecar)"),
+        "the pending unit's locator must be `(elicitation sidecar)`:\n{}",
         out.stdout
     );
-    // The valid pending still shows.
-    assert!(out.stdout.contains("⏳ AskUserQuestion"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("with elicitation sidecar"),
+        "the merged-records note must appear:\n{}",
+        out.stdout
+    );
 
-    // JSON surfaces the skip count in the trailing summary.
-    let j = h.run(&["pending", &at(SESS), "--format", "json"]);
-    let last = j
+    // JSON header flags it; the unit carries source + null line_no.
+    let j = h.run(&["turns", &at(SESS), "--format", "json"]);
+    let header: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    assert_eq!(header["with_elicitation_sidecar"], true);
+    let unit = j
         .stdout
         .lines()
-        .filter(|l| !l.trim().is_empty())
-        .next_back();
-    let summary: serde_json::Value = serde_json::from_str(last.unwrap()).unwrap();
-    assert_eq!(summary["skipped_lines"], 1);
-    assert_eq!(summary["pending"], 1);
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["source"] == "elicitation-sidecar")
+        .expect("a sidecar unit object");
+    assert!(
+        unit["line_no"].is_null(),
+        "sidecar unit has null line_no: {unit}"
+    );
 }
 
 #[test]
-fn pending_shows_mcp_elicitation() {
-    let h = pending_home();
+fn list_shows_with_elicitation_sidecar() {
+    let h = sidecar_session_home();
     h.write(
         &format!("{ENC}/{SESS}/elicitations.jsonl"),
-        concat!(
-            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"mcp-elicitation","key":"github","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:20:00.000Z","hookInput":{"mcp_server_name":"github","message":"Approve the force-push to main?","mode":"confirm"}}"#,
-            "\n",
+        &format!(
+            "{}\n",
+            auq_pending_line(
+                "toolu_AQ1",
+                "2026-06-27T01:02:03.000Z",
+                "Confirm the migration?"
+            )
         ),
     );
-    let out = h.run(&["pending", &at(SESS)]);
+    let out = h.run(&["list", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("⏳ mcp-elicitation"),
-        "kind:\n{}",
+        out.stdout.contains("with elicitation sidecar"),
+        "list must annotate the pending session:\n{}",
         out.stdout
     );
     assert!(
         out.stdout
-            .contains("github: Approve the force-push to main? (confirm)"),
-        "mcp detail:\n{}",
+            .contains("AskUserQuestion: Confirm the migration?"),
+        "list surfaces the pending kind:\n{}",
+        out.stdout
+    );
+
+    let j = h.run(&["list", &at(SESS), "--format", "json"]);
+    let row: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    assert_eq!(row["with_elicitation_sidecar"], true);
+    assert!(row["pending_elicitations"].as_array().unwrap().len() == 1);
+}
+
+#[test]
+fn resolved_pair_is_not_merged() {
+    let h = sidecar_session_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            auq_pending_line(
+                "toolu_AQ1",
+                "2026-06-27T01:02:03.000Z",
+                "Which branch should I target?"
+            ),
+            resolved_line("toolu_AQ1", "2026-06-27T01:05:00.000Z"),
+        ),
+    );
+    // The question is gone from the sidecar's unresolved set → search does NOT find it via merge.
+    let out = h.run(&["search", "Which branch should I target", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no matching exchanges"),
+        "a resolved pair must not be merged:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("with elicitation sidecar"),
+        "no merged records → no note:\n{}",
         out.stdout
     );
 }
 
 #[test]
-fn pending_no_sidecar_reports_none() {
-    // pending_home() writes the session jsonl but NO elicitations.jsonl sidecar.
-    let h = pending_home();
-    let out = h.run(&["pending", &at(SESS)]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    assert_eq!(
-        out.stdout.trim(),
-        "no pending elicitations",
-        "a session with no sidecar reports nothing pending (not an error):\n{}",
+fn targeting_a_sidecar_file_directly_errors() {
+    let h = sidecar_session_home();
+    let sidecar = h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n",
+            auq_pending_line("toolu_AQ1", "2026-06-27T01:02:03.000Z", "q")
+        ),
+    );
+    let out = h.run(&["search", "q", sidecar.to_str().unwrap()]);
+    assert!(
+        !out.success,
+        "targeting a sidecar file must error:\n{}",
         out.stdout
     );
+    assert!(
+        out.stderr.contains("csift elicitation sidecar")
+            && out.stderr.contains("cannot be searched directly"),
+        "the rejection message must name the sidecar:\n{}",
+        out.stderr
+    );
+}
 
-    // JSON: an all-zero summary, no per-pending objects.
-    let j = h.run(&["pending", &at(SESS), "--format", "json"]);
+#[test]
+fn targeting_a_renamed_sidecar_errors_via_content_sniff() {
+    let h = sidecar_session_home();
+    // A sidecar moved / renamed to a non-`elicitations.jsonl` name → content sniff still rejects.
+    let renamed = h.write(
+        &format!("{ENC}/{SESS}/backup-markers.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            auq_pending_line("toolu_AQ1", "2026-06-27T01:02:03.000Z", "q"),
+            resolved_line("toolu_AQ1", "2026-06-27T01:05:00.000Z"),
+        ),
+    );
+    let out = h.run(&["search", "q", renamed.to_str().unwrap()]);
+    assert!(
+        !out.success,
+        "a renamed sidecar must still error:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("csift elicitation sidecar"),
+        "the content-sniff rejection must name the sidecar:\n{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn malformed_sidecar_line_is_skipped_and_counted_in_search() {
+    let h = sidecar_session_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "BROKEN {{ not json\n{}\n",
+            auq_pending_line(
+                "toolu_AQ1",
+                "2026-06-27T01:02:03.000Z",
+                "Which branch should I target?"
+            )
+        ),
+    );
+    let j = h.run(&[
+        "search",
+        "Which branch should I target",
+        &at(SESS),
+        "--format",
+        "json",
+    ]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let lines: Vec<&str> = j.stdout.lines().filter(|l| !l.trim().is_empty()).collect();
-    assert_eq!(lines.len(), 1, "only the summary line:\n{}", j.stdout);
-    let summary: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-    assert_eq!(summary["pending"], 0);
-    assert_eq!(summary["sessions"], 0);
-    assert_eq!(summary["skipped_lines"], 0);
+    let summary: serde_json::Value = serde_json::from_str(
+        j.stdout
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .next_back()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        summary["skipped_lines"], 1,
+        "a malformed sidecar line is counted, never silent"
+    );
+    assert_eq!(summary["matched"], 1, "the valid pending still merges");
+}
+
+#[test]
+fn mcp_pending_is_merged_into_turns() {
+    let h = sidecar_session_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n",
+            mcp_pending_line(
+                "el-9",
+                "2026-06-27T01:10:00.000Z",
+                "gdrive",
+                "Authorize Google Drive access"
+            )
+        ),
+    );
+    let out = h.run(&["turns", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("mcp-elicitation: [gdrive]"),
+        "turns must include the pending MCP elicitation:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("with elicitation sidecar"),
+        "the merged-records note must appear:\n{}",
+        out.stdout
+    );
 }

@@ -63,6 +63,12 @@ pub struct SessionSummary {
     pub last_agent: Option<MessagePreview>,
     /// Count of malformed lines skipped while reading this session (never hidden).
     pub skipped_lines: usize,
+    /// One-line renders of this session's UNRESOLVED-pending elicitations (§3.10) merged from
+    /// the hook-written sidecar — what the session is currently blocked on (AskUserQuestion /
+    /// ExitPlanMode / MCP), MISSING from the native transcript. Empty for a top-level session
+    /// with no sidecar / no pending, and ALWAYS empty for a subagent row (the sidecar is keyed
+    /// by the top-level session). Drives the `with elicitation sidecar` annotation.
+    pub pending_elicitations: Vec<String>,
 }
 
 /// A short, timestamped preview of one message for the `list` view.
@@ -193,6 +199,23 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
 
+    // ── Transparent elicitation-sidecar merge (§3.10) ──
+    // A TOP-LEVEL session's unresolved-pending elicitations (the latest activity, MISSING from
+    // the native transcript) annotate the row with `with elicitation sidecar` + the pending
+    // kind. A subagent transcript has no sidecar (keyed by the top-level session). The sidecar
+    // is tiny → a plain read; its malformed-line count folds into `skipped_lines` (never silent).
+    let mut sidecar_skipped = 0usize;
+    let pending_elicitations = if is_subagent {
+        Vec::new()
+    } else {
+        let (pending, skipped) = crate::elicitation::unresolved_pending(path)?;
+        sidecar_skipped = skipped;
+        pending
+            .iter()
+            .filter_map(crate::elicitation::pending_text)
+            .collect()
+    };
+
     Ok(SessionSummary {
         session_id,
         is_subagent,
@@ -204,7 +227,8 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         first_user,
         last_user,
         last_agent,
-        skipped_lines: head_skipped + tail_skipped,
+        skipped_lines: head_skipped + tail_skipped + sidecar_skipped,
+        pending_elicitations,
     })
 }
 
@@ -282,6 +306,18 @@ fn render_text(summaries: &[SessionSummary]) {
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
 
+        // Currently-pending elicitation(s) merged from the sidecar (§3.10) — the session is
+        // blocked on a human; this is its LATEST activity, missing from the native transcript.
+        if !s.pending_elicitations.is_empty() {
+            println!("  pending  with elicitation sidecar");
+            for p in &s.pending_elicitations {
+                println!(
+                    "           ⏳ {}",
+                    crate::text::truncate_excerpt(p, EXCERPT_MAX)
+                );
+            }
+        }
+
         if s.skipped_lines > 0 {
             println!(
                 "  note     {}",
@@ -338,6 +374,11 @@ fn render_json(summaries: &[SessionSummary]) -> Result<()> {
             "last_user": preview_json(s.last_user.as_ref()),
             "last_agent": preview_json(s.last_agent.as_ref()),
             "skipped_lines": s.skipped_lines,
+            // Unresolved-pending elicitations merged from the sidecar (§3.10): the one-line
+            // renders + a `with_elicitation_sidecar` flag (the machine echo of the text note).
+            // Empty / false for a session with no pending and for every subagent row.
+            "pending_elicitations": s.pending_elicitations,
+            "with_elicitation_sidecar": !s.pending_elicitations.is_empty(),
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
