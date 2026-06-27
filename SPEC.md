@@ -766,6 +766,16 @@ csift image @<uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs     # di
 csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg         # one image to a FILE → convert to jpeg
 ```
 
+### 6.10 `pending` — sessions BLOCKED on a human elicitation (sidecar-based)
+
+`csift pending [PATH|@<uuid>…] [--no-subagents] [--format json]`. Reports sessions currently waiting on a human for the three elicitations that leave NO usable live trace in the native transcript: **AskUserQuestion** + **ExitPlanMode** (CC buffers the whole assistant turn until answered — see §4: the assistant tool_use is committed to the persisted message array only after the interactive tool resolves, so nothing is on disk during the pending window) and **MCP Elicitation** (the inner `elicitation/create` request is an in-memory MCP-client callback, never a transcript record). Reading the jsonl cannot detect these; csift instead reads a SIDECAR.
+
+**Sidecar:** `<sidecar_dir>/elicitations.jsonl` (the `<uuid>/` dir beside `subagents/`, via `crate::subagent::sidecar_dir_for_session`), written by the `csift-elicitation-marker` CC hook (SKILL.md recipe) on the `PreToolUse`/`PostToolUse` (AskUserQuestion|ExitPlanMode) and `Elicitation`/`ElicitationResult` events. NEVER the native transcript (no pollution). Append-only; one near-native record per line carrying a `csift` magic marker, `phase`∈{`pending`,`resolved`}, `kind`∈{`AskUserQuestion`,`ExitPlanMode`,`mcp-elicitation`}, `key` (pair id: tool_use_id / elicitation_id / mcp server), `timestamp` (open/close instant), and the full `hookInput`. **Keyed by the TOP-LEVEL session** — the hook's `session_id`/`transcript_path` is always the top-level/leader uuid (process-global, never per-subagent); AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind — the Elicitation hook carries no `agent_id`).
+
+**Pairing:** per-`key` LIFO — a `resolved` clears the latest matching open; a key with an unmatched `pending` is CURRENTLY blocked, `since` = its open `timestamp`. Malformed lines skipped + COUNTED (never silent). Missing dir/file ⇒ not blocked (not an error). 0 targets ⇒ scan every project.
+
+**Output.** TEXT: per session with ≥1 pending, a `SESSION <uuid>` header then `⏳ <kind>  since <local-ts>  (key <key>)` + a detail line (first question / `[plan: …]` / `<server>: <message> (mode)`); `no pending elicitations` when none; a `note  N malformed line(s) skipped` when applicable. JSON: NDJSON one object per currently-pending elicitation `{session_id, kind, key, since_utc, since_local, detail, hook_event}`, closed by an untagged summary `{sessions, pending, skipped_lines}`. Like `agents`/`plan`, header-free. Exit 0 even when nothing pending. Verified live on 2.1.191: the `pending` marker is written the instant the picker appears and persists through the entire wait while the native record stays buffered.
+
 ---
 
 ## 7. Performance design (NON-FUNCTIONAL contract)

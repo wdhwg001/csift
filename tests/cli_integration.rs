@@ -10652,3 +10652,173 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
         both.stdout
     );
 }
+
+// ── pending ──
+
+/// A minimal home with one top-level session jsonl (no sidecar yet) for the `pending`
+/// tests — each test then drops its own `elicitations.jsonl` content.
+fn pending_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"hi"}}"#,
+            "\n",
+        ),
+    );
+    h
+}
+
+#[test]
+fn pending_shows_unresolved_askuserquestion_text_and_json() {
+    let h = pending_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        concat!(
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:02:03.000Z","hookInput":{"tool_input":{"questions":[{"question":"Which branch should I target?"}]}}}"#,
+            "\n",
+        ),
+    );
+
+    // TEXT
+    let out = h.run(&["pending", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(&format!("SESSION {SESS}")),
+        "session header:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("⏳ AskUserQuestion"),
+        "kind line:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("(key toolu_AQ1)"),
+        "key:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("Which branch should I target?"),
+        "question detail:\n{}",
+        out.stdout
+    );
+
+    // JSON — one object per pending + a trailing summary.
+    let j = h.run(&["pending", &at(SESS), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let lines: Vec<&str> = j.stdout.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(lines.len(), 2, "one pending + one summary:\n{}", j.stdout);
+    let obj: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(obj["session_id"], SESS);
+    assert_eq!(obj["kind"], "AskUserQuestion");
+    assert_eq!(obj["key"], "toolu_AQ1");
+    assert_eq!(obj["detail"], "Which branch should I target?");
+    assert_eq!(obj["since_utc"], "2026-06-27T01:02:03.000Z");
+    assert_eq!(obj["hook_event"], "PreToolUse");
+    assert!(obj["since_local"].is_string(), "since_local present");
+    let summary: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+    assert_eq!(summary["sessions"], 1);
+    assert_eq!(summary["pending"], 1);
+    assert_eq!(summary["skipped_lines"], 0);
+}
+
+#[test]
+fn pending_resolved_pair_is_not_shown() {
+    let h = pending_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        concat!(
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:02:03.000Z","hookInput":{"tool_input":{"questions":[{"question":"q"}]}}}"#, "\n",
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"resolved","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PostToolUse","timestamp":"2026-06-27T01:05:00.000Z"}"#, "\n",
+        ),
+    );
+    let out = h.run(&["pending", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.trim() == "no pending elicitations",
+        "an open+close pair must NOT be reported pending:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn pending_malformed_sidecar_line_is_skipped_and_counted() {
+    let h = pending_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        concat!(
+            "BROKEN { not json\n",
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_AQ1","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:02:03.000Z","hookInput":{"tool_input":{"questions":[{"question":"q"}]}}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["pending", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("1 malformed line(s) skipped"),
+        "malformed-line count must be surfaced, never silent:\n{}",
+        out.stdout
+    );
+    // The valid pending still shows.
+    assert!(out.stdout.contains("⏳ AskUserQuestion"), "{}", out.stdout);
+
+    // JSON surfaces the skip count in the trailing summary.
+    let j = h.run(&["pending", &at(SESS), "--format", "json"]);
+    let last = j
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .next_back();
+    let summary: serde_json::Value = serde_json::from_str(last.unwrap()).unwrap();
+    assert_eq!(summary["skipped_lines"], 1);
+    assert_eq!(summary["pending"], 1);
+}
+
+#[test]
+fn pending_shows_mcp_elicitation() {
+    let h = pending_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        concat!(
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"mcp-elicitation","key":"github","hookEvent":"PreToolUse","timestamp":"2026-06-27T01:20:00.000Z","hookInput":{"mcp_server_name":"github","message":"Approve the force-push to main?","mode":"confirm"}}"#,
+            "\n",
+        ),
+    );
+    let out = h.run(&["pending", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("⏳ mcp-elicitation"),
+        "kind:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("github: Approve the force-push to main? (confirm)"),
+        "mcp detail:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn pending_no_sidecar_reports_none() {
+    // pending_home() writes the session jsonl but NO elicitations.jsonl sidecar.
+    let h = pending_home();
+    let out = h.run(&["pending", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout.trim(),
+        "no pending elicitations",
+        "a session with no sidecar reports nothing pending (not an error):\n{}",
+        out.stdout
+    );
+
+    // JSON: an all-zero summary, no per-pending objects.
+    let j = h.run(&["pending", &at(SESS), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let lines: Vec<&str> = j.stdout.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(lines.len(), 1, "only the summary line:\n{}", j.stdout);
+    let summary: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(summary["pending"], 0);
+    assert_eq!(summary["sessions"], 0);
+    assert_eq!(summary["skipped_lines"], 0);
+}

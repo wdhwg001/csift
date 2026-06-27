@@ -14,6 +14,7 @@ mod image;
 mod model;
 mod parse;
 mod path;
+mod pending;
 mod plan;
 mod recover;
 mod search;
@@ -63,5 +64,6 @@ fn run(cli: Cli) -> Result<()> {
         Command::Plan(args) => plan::run_plan(&args),
         Command::Turns(args) => turns::run_turns(&args),
         Command::Image(args) => image::run_image(&args),
+        Command::Pending(args) => pending::run_pending(&args),
     }
 }
