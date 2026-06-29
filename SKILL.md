@@ -375,3 +375,4 @@ Register 4 events (one script), ABSOLUTE path: `PreToolUse`+`PostToolUse` matche
 - `search --format json | jq .session_id` (which sessions) before a full `search` (what); `recover --coverage` before trusting a `--salvage`.
 - A subagent's bare-hex `session_id` is NOT re-feedable as `@<uuid>` - always re-feed `parent_session_id` (§JSON conventions).
 - Sub-second on 200MB+ files (mmap + SIMD + prefilter + rayon); never fear an unscoped scan.
+- **Retention — raise `cleanupPeriodDays` or lose old sessions.** CC auto-deletes session transcripts older than `cleanupPeriodDays` (default **30**, measured by last-activity date), and csift can only read what is still on disk — a pruned session is GONE, unrecoverable. Check it: `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` (`null` ⇒ the 30-day default). Recommend bumping it to **180** or **365** in `~/.claude/settings.json` so important sessions survive long enough to search/recover.
