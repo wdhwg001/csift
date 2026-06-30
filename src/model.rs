@@ -134,6 +134,13 @@ pub const PEER_MESSAGE_PREAMBLE: &str = "Another Claude session sent a message:"
 /// `from="…"` attribute ⇨ self), never `user.message`.
 pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 
+/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result
+/// (`"Async agent launched successfully.\nagentId: …"`). This is a launch ACK, NOT the child's
+/// report — the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 → inbox).
+/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:"async_launched"}`
+/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).
+pub const ASYNC_LAUNCH_ACK_PREFIX: &str = "Async agent launched successfully";
+
 /// The fixed harness-injected continuation marker (GOLD §5) — `harness.schedule.continuation`.
 /// A `type:"user"` (`isMeta`) record CC injects to resume a session from where it left off.
 /// Verified across real `~/.claude/projects` data (522 occurrences), exact content.
@@ -535,29 +542,14 @@ impl Record {
     /// opener in place of the raw `<task-notification>` XML blob.
     #[must_use]
     pub fn automation_label(&self) -> Option<String> {
-        let t = self.automation_trigger()?;
-        let id = t.task_id.as_deref().unwrap_or("?");
-        // The status slot prefers the explicit `<status>`; when it is absent (the common
-        // Monitor/ScheduleWakeup case) the real outcome lives in `<event>` — so render THAT
-        // (e.g. `STAGE2_OUTPUT_READY`, a timeout notice) rather than fabricating `completed`,
-        // which would invert a timed-out monitor's attribution. Only when BOTH are missing do
-        // we fall back to `completed`. An event payload is whitespace-normalized for the label.
-        let event_norm = t
-            .event
-            .as_deref()
-            .filter(|e| !e.is_empty())
-            .map(normalize_line);
-        let status = t
-            .status
-            .as_deref()
-            .map(str::to_string)
-            .or(event_norm)
-            .unwrap_or_else(|| "completed".to_string());
-        let head = format!("[{} {id} {status}]", t.kind.slug());
-        Some(match t.summary.as_deref() {
-            Some(sum) if !sum.is_empty() => format!("{head} {}", normalize_line(sum)),
-            _ => head,
-        })
+        let content = self.message.as_ref()?.content.as_ref()?;
+        let Content::Text(s) = content else {
+            return None;
+        };
+        if !s.starts_with(TASK_NOTIFICATION_PREFIX) {
+            return None;
+        }
+        Some(automation_label_for_section(s))
     }
 
     /// Plain-text rendering of a GENUINE user message for the `list`/`search`
@@ -1982,6 +1974,10 @@ struct PeerSection {
     from: Option<String>,
     is_signal: bool,
     offset: usize,
+    /// The raw section slice (open tag through close tag) — the per-section render body (GOLD
+    /// §3 G4/G5). Excludes the relay preamble and the trailing security footer (both fall
+    /// OUTSIDE the tag span), so a batched record renders each peer message on its own.
+    text: String,
 }
 
 /// Scan ALL inbound peer-message sections (`<teammate-message>` AND `<agent-message>`) in
@@ -1998,6 +1994,7 @@ fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
                 from: extract_xml_attr(section, "teammate_id"),
                 is_signal: teammate_signal_type(section).is_some(),
                 offset,
+                text: section.to_string(),
             });
         },
     );
@@ -2010,6 +2007,7 @@ fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
                 from: extract_xml_attr(section, "from"),
                 is_signal: false,
                 offset,
+                text: section.to_string(),
             });
         },
     );
@@ -2124,6 +2122,36 @@ fn notification_class(kind: AutomationKind) -> Class {
 /// (edge-fixtures G1): a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
 const NOTIFICATION_RESULT_TAG: &str = "<result>";
 
+/// Build the `[<kind> <id> <status>] <summary>` attribution label for ONE
+/// `<task-notification>…</task-notification>` section string. Shared by
+/// [`Record::automation_label`] (whole-record = the single section) and the batched per-section
+/// render ([`Record::record_text_sections`]) so the two never drift. The status slot prefers the
+/// explicit `<status>`; absent (the common Monitor/ScheduleWakeup case), the real outcome lives in
+/// `<event>` so render THAT rather than fabricating `completed`; only when BOTH are missing do we
+/// fall back to `completed`. A missing field is elided gracefully.
+fn automation_label_for_section(section: &str) -> String {
+    let task_id = extract_xml_tag(section, "task-id");
+    let status = extract_xml_tag(section, "status");
+    let summary = extract_xml_tag(section, "summary");
+    let event = extract_xml_tag(section, "event");
+    let kind = AutomationKind::from_summary(summary.as_deref());
+    let id = task_id.as_deref().unwrap_or("?");
+    let event_norm = event
+        .as_deref()
+        .filter(|e| !e.is_empty())
+        .map(normalize_line);
+    let status = status
+        .as_deref()
+        .map(str::to_string)
+        .or(event_norm)
+        .unwrap_or_else(|| "completed".to_string());
+    let head = format!("[{} {id} {status}]", kind.slug());
+    match summary.as_deref() {
+        Some(sum) if !sum.is_empty() => format!("{head} {}", normalize_line(sum)),
+        _ => head,
+    }
+}
+
 /// Classify ALL batched sections of a `type:"user"` record's raw text (edge-fixtures G4/G5 +
 /// P1c M1/M3): scan for BOTH `<task-notification>` automation pulse(s) AND inbound peer
 /// message(s) (`<teammate-message>` / `<agent-message>`), unioning every section's labels
@@ -2177,6 +2205,22 @@ fn classify_batched_sections(raw: &str, out: &mut Vec<Class>) -> bool {
         matched = true;
     }
     matched
+}
+
+/// One renderable record-level text SECTION of a (possibly batched) `type:"user"` record (GOLD
+/// §3 G4/G5 per-section render): its leaf [`Class`], the display text to excerpt, and the comm
+/// `from ⇨ to` direction for a communication leaf. Built by [`Record::record_text_sections`] so a
+/// record batching several `<task-notification>` / inbound-peer sections of MIXED kind renders ONE
+/// hit PER section (each with its own label + direction) rather than collapsing to one.
+#[derive(Debug, Clone)]
+pub struct RecordTextSection {
+    /// The leaf class for THIS section (a `harness.notification.*` / `agent.communication.*`).
+    pub class: Class,
+    /// The display text to match + excerpt (a per-section automation label, the `<result>` report
+    /// body, or the raw peer-message section slice).
+    pub text: String,
+    /// `from ⇨ to` for a communication leaf (GOLD §4); `None` for a `harness.notification.*`.
+    pub direction: Option<(String, String)>,
 }
 
 /// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) — preserves
@@ -2333,17 +2377,55 @@ impl Record {
             == Some("teammate_spawned")
     }
 
+    /// True when this carrier is an ASYNC-LAUNCH ACK, not a child return (smoke-found bug): an
+    /// ASYNC/background `Agent` spawn's tool_result is the immediate launch confirmation
+    /// (`"Async agent launched successfully.\nagentId: …"`), shaped on disk as
+    /// `toolUseResult.{isAsync:true, status:"async_launched"}`. It shares the spawn
+    /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it — but it is the LAUNCH ack, not
+    /// the work product. The async child's real report arrives LATER via the
+    /// `<task-notification>` `<result>` pulse (G1 → `agent.communication.inbox`), never via this
+    /// tool_result. So a launch ack is `agent.tool.result` ONLY (unlike a SYNC one-shot Task
+    /// return, which IS the child's reply → `…inbox`). Robust dual detection: the structured
+    /// `toolUseResult` shape first, then the content prefix ([`ASYNC_LAUNCH_ACK_PREFIX`]) for a
+    /// record lacking the structured field.
+    fn is_async_launch_ack(&self) -> bool {
+        if let Some(tur) = self.tool_use_result.as_ref() {
+            if tur.get("status").and_then(serde_json::Value::as_str) == Some("async_launched")
+                || tur.get("isAsync").and_then(serde_json::Value::as_bool) == Some(true)
+            {
+                return true;
+            }
+        }
+        self.blocks().is_some_and(|blocks| {
+            blocks.iter().any(|b| match b {
+                Block::ToolResult {
+                    content: Some(c), ..
+                } => tool_result_content_text(c).starts_with(ASYNC_LAUNCH_ACK_PREFIX),
+                _ => false,
+            })
+        })
+    }
+
+    /// True when this carrier is a spawn LAUNCH ACK rather than a child RETURN — either a
+    /// persistent teammate spawn ([`Record::is_teammate_spawn_ack`]) or an async/background
+    /// `Agent` launch ([`Record::is_async_launch_ack`]). Both share the spawn `tool_use_id`
+    /// (so the [`SpawnLookup`] would resolve them) yet are the launch confirmation, not the
+    /// work product → `agent.tool.result` ONLY, never `…inbox`/a child ⇨ self direction.
+    fn is_spawn_launch_ack(&self) -> bool {
+        self.is_teammate_spawn_ack() || self.is_async_launch_ack()
+    }
+
     /// True when this record is a SUBAGENT RETURN (GOLD §3) — a tool_result whose
     /// `tool_use_id` the spawn lookup resolves to a spawned child (the Task tool_result of a
     /// ONE-SHOT spawn = the child's return, child ⇨ self). `false` without a [`SpawnLookup`]
-    /// in `ctx`, AND `false` for a teammate-spawn ACK ([`Record::is_teammate_spawn_ack`]) —
-    /// the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it is not a
-    /// return.
+    /// in `ctx`, AND `false` for a spawn LAUNCH ACK ([`Record::is_spawn_launch_ack`] — teammate
+    /// or async) — the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it
+    /// is not a return.
     fn is_subagent_return(&self, ctx: &ClassifyCtx) -> bool {
         let Some(spawn) = ctx.spawn else {
             return false;
         };
-        if self.is_teammate_spawn_ack() {
+        if self.is_spawn_launch_ack() {
             return false;
         }
         let Some(blocks) = self.blocks() else {
@@ -2584,6 +2666,81 @@ impl Record {
         Some(first.from.unwrap_or_else(|| "peer".to_string()))
     }
 
+    /// The per-section record-level text emissions of a BATCHED `type:"user"` record (≥1
+    /// `<task-notification>` and/or inbound peer `<teammate-message>` / `<agent-message>` section)
+    /// — GOLD §3 G4/G5 per-section render. One [`RecordTextSection`] per section's label, MIRRORING
+    /// [`classify_batched_sections`] EXACTLY (same notification-span precedence/masking) so the text
+    /// render never drifts from the classification: each `<task-notification>` yields its
+    /// `harness.notification.<kind>` (text = the per-section automation label) PLUS, when it carries
+    /// a `<result>` (G1), an `agent.communication.inbox` section (child ⇨ self via the embedded
+    /// `<tool-use-id>`, degrading to `?` without a [`SpawnLookup`]); each inbound peer section
+    /// outside every notification span yields `agent.communication.{inbox,signal}` (sender ⇨ self).
+    /// EMPTY when the record carries no such section — the caller then falls back to the single
+    /// richest-label record-text emission.
+    #[must_use]
+    pub fn record_text_sections(&self, ctx: &ClassifyCtx) -> Vec<RecordTextSection> {
+        let mut out: Vec<RecordTextSection> = Vec::new();
+        let Some(raw) = self.raw_message_text() else {
+            return out;
+        };
+        let owner = || ctx.owner_id.unwrap_or("self").to_string();
+        // (a) <task-notification> sections (+ the G1 inbox view of a <result>-bearing pulse),
+        //     recording each span to mask a peer tag quoted inside it.
+        let mut notif_spans: Vec<(usize, usize)> = Vec::new();
+        scan_tag_sections(
+            &raw,
+            TASK_NOTIFICATION_PREFIX,
+            "</task-notification>",
+            |offset, section| {
+                let kind =
+                    AutomationKind::from_summary(extract_xml_tag(section, "summary").as_deref());
+                let label = automation_label_for_section(section);
+                out.push(RecordTextSection {
+                    class: notification_class(kind),
+                    text: label.clone(),
+                    direction: None,
+                });
+                if section.contains(NOTIFICATION_RESULT_TAG) {
+                    let child = extract_xml_tag(section, "tool-use-id")
+                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))
+                        .unwrap_or_else(|| "?".to_string());
+                    // The inbox view excerpts the child's REPORT (the <result> body); fall back to
+                    // the attribution label when the body is absent/empty.
+                    let report = extract_xml_tag(section, "result")
+                        .map(|r| normalize_line(&r))
+                        .filter(|r| !r.is_empty())
+                        .unwrap_or(label);
+                    out.push(RecordTextSection {
+                        class: Class::CommInbox,
+                        text: report,
+                        direction: Some((child, owner())),
+                    });
+                }
+                notif_spans.push((offset, offset + section.len()));
+            },
+        );
+        // (b) inbound peer sections OUTSIDE every notification span (precedence + cross-family).
+        for peer in parse_all_peer_sections(&raw) {
+            if notif_spans
+                .iter()
+                .any(|&(s, e)| peer.offset >= s && peer.offset < e)
+            {
+                continue;
+            }
+            let from = peer.from.clone().unwrap_or_else(|| "peer".to_string());
+            out.push(RecordTextSection {
+                class: if peer.is_signal {
+                    Class::CommSignal
+                } else {
+                    Class::CommInbox
+                },
+                text: normalize_line(&peer.text),
+                direction: Some((from, owner())),
+            });
+        }
+        out
+    }
+
     /// The comm direction `(from, to)` for a communication record (GOLD §4), or `None` for a
     /// non-comm record. The `self` side is `ctx.owner_id` (falls back to the literal `"self"`
     /// so direction is testable without a real id); record-supplied ids (teammate_id, the
@@ -2650,12 +2807,13 @@ impl Record {
                         }
                     }
                     // Subagent return: child ⇨ self (the Task tool_result of a one-shot spawn).
-                    // A teammate-spawn ACK shares the spawn id but is NOT a return → no
-                    // direction (the teammate's real reply comes later as a teammate-message).
+                    // A spawn LAUNCH ACK (teammate OR async/background Agent) shares the spawn id
+                    // but is NOT a return → no direction (the real reply comes later — a teammate
+                    // via a teammate-message, an async agent via the <task-notification> result).
                     Block::ToolResult {
                         tool_use_id: Some(tid),
                         ..
-                    } if !self.is_teammate_spawn_ack() => {
+                    } if !self.is_spawn_launch_ack() => {
                         if let Some(child) =
                             ctx.spawn.and_then(|s| s.child_for_spawn_tool_use_id(tid))
                         {
@@ -4646,6 +4804,75 @@ mod tests {
         );
         // And it produces NO child ⇨ self direction (the real reply arrives later).
         assert!(r.direction(&ctx).is_none());
+    }
+
+    #[test]
+    fn classify_async_launch_ack_is_tool_result_only_not_inbox() {
+        // Smoke-found bug: an ASYNC/background `Agent` spawn's tool_result is the LAUNCH ack
+        // (`toolUseResult.{isAsync:true,status:"async_launched"}`, content begins "Async agent
+        // launched successfully…"). It shares the spawn tool_use_id (so the lookup WOULD
+        // resolve it), but it is NOT the child's return — the report arrives LATER via the
+        // <task-notification> <result> (G1 → inbox). So agent.tool.result ONLY, no …inbox.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"ad8012462a52f5c25","description":"draft the fold"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":[{"type":"text","text":"Async agent launched successfully.\nagentId: ad8012462a52f5c25 (internal ID - do not mention to user.)"}]}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert!(r.is_async_launch_ack());
+        assert!(r.is_spawn_launch_ack());
+        assert_eq!(
+            r.classify(&ctx),
+            vec![Class::AgentToolResult],
+            "the async-launch ACK must NOT carry agent.communication.inbox"
+        );
+        // And it produces NO child ⇨ self direction (the real report arrives later).
+        assert!(
+            r.direction(&ctx).is_none(),
+            "a launch ack carries no child ⇨ self direction"
+        );
+    }
+
+    #[test]
+    fn classify_async_launch_ack_detected_by_content_prefix_fallback() {
+        // A record lacking the structured `toolUseResult` still detects the ack from the
+        // tool_result content prefix alone — and still resolves to tool.result-only.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"Async agent launched successfully.\nagentId: ad80 (internal ID)"}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert!(r.is_async_launch_ack());
+        assert_eq!(r.classify(&ctx), vec![Class::AgentToolResult]);
+        assert!(r.direction(&ctx).is_none());
+    }
+
+    #[test]
+    fn classify_sync_task_return_still_tool_result_plus_inbox_vs_async_ack() {
+        // Contrast guard: a SYNC one-shot Task tool_result IS the child's reply (no ack shape,
+        // no launch-ack prefix) → [agent.tool.result, agent.communication.inbox] with a child ⇨
+        // self direction — the async-launch ACK fix must NOT regress this.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"subagent done: 3 files changed"}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert!(!r.is_spawn_launch_ack());
+        assert_eq!(
+            r.classify(&ctx),
+            vec![Class::AgentToolResult, Class::CommInbox]
+        );
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("child-abc".to_string(), "parent".to_string()))
+        );
     }
 
     #[test]

@@ -1104,15 +1104,34 @@ impl SpawnLookup for DiscoveredSpawns {
     }
 }
 
-/// Build the [`DiscoveredSpawns`] lookup for a TOP-LEVEL session file (`None` for a subagent
-/// transcript — comm there is rare and the lookup would need the parent's discovery). A failed /
-/// empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing + small
-/// `meta.json` reads, bounded by the subagent count — never a transcript content scan.
-fn build_spawn_lookup(path: &Path) -> Option<DiscoveredSpawns> {
-    if is_subagent_path(path) {
-        return None;
+/// The TOP-LEVEL parent session `.jsonl` for a subagent transcript path
+/// `<ENCODED>/<uuid>/subagents/…/agent-<hex>.jsonl` → `<ENCODED>/<uuid>.jsonl`. `None` when `path`
+/// is not under a `subagents/` dir. The parent's sidecar holds the FLAT set of ALL subagents under
+/// it, so a lookup built from it resolves an in-subagent spawn / Task-return (GOLD §4).
+fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
+    for anc in path.ancestors() {
+        if anc.file_name().and_then(|n| n.to_str()) == Some("subagents") {
+            // The `<uuid>/` dir sits directly above `subagents/`; the parent session file is its
+            // `.jsonl` sibling (a uuid carries no `.`, so `with_extension` only appends).
+            return anc.parent().map(|d| d.with_extension("jsonl"));
+        }
     }
-    let subs = discover_subagents(path).ok()?;
+    None
+}
+
+/// Build the [`DiscoveredSpawns`] lookup powering comm direction (`self ⇨ child`) + subagent-return
+/// detection. For a TOP-LEVEL session, discover from itself; for a SUBAGENT transcript, discover
+/// from its PARENT session (whose sidecar holds the flat set of ALL subagents under it) so an
+/// in-subagent spawn / Task-return resolves instead of degrading to a raw name / missing inbox.
+/// A failed / empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing +
+/// small `meta.json` reads, bounded by the subagent count — never a transcript content scan.
+fn build_spawn_lookup(path: &Path) -> Option<DiscoveredSpawns> {
+    let discovery_root = if is_subagent_path(path) {
+        parent_session_jsonl(path)?
+    } else {
+        path.to_path_buf()
+    };
+    let subs = discover_subagents(&discovery_root).ok()?;
     if subs.is_empty() {
         return None;
     }
@@ -1446,9 +1465,10 @@ fn collect_record_hits(
     let sel = |c: Class| label_selected(selectors, c.path());
     let has = |c: Class| labels.contains(&c);
     // Direction is per-record (the first comm direction); computed only when a comm label is
-    // present (it parses peer sections / scans blocks), and attached to comm hits only.
+    // present (it parses peer sections / scans blocks), and attached to comm hits only. The
+    // owner's own id renders as `self` (GOLD §3/§4: `self ⇨ to`, `from ⇨ self`).
     let direction = if labels.iter().copied().any(is_comm_class) {
-        rec.direction(ctx)
+        alias_self(rec.direction(ctx), ctx.owner_id)
     } else {
         None
     };
@@ -1480,17 +1500,40 @@ fn collect_record_hits(
         }
     };
 
-    // ── 1. Record-level TEXT unit (user.message / agent.communication.{inbox,signal} / every
-    //    harness.* string record). The richest SELECTED record-text class drives it; the §1 fix
-    //    (teammate → inbox) + the `<task-notification>` → harness.notification reparent flow in
-    //    here straight from `classify`. ──
-    if let Some((class, text)) = record_text_emission(rec, &labels, selectors, plan_index) {
-        let dir = if is_comm_class(class) {
-            direction.clone()
-        } else {
-            None
-        };
-        emit(class, &text, None, dir, None);
+    // ── 1. Record-level TEXT unit(s). A BATCHED record (≥1 `<task-notification>` / inbound-peer
+    //    section) renders ONE hit PER section (GOLD §3 G4/G5), each with its own label + direction
+    //    — so a notification-with-`<result>` ALSO surfaces its `agent.communication.inbox`
+    //    (child ⇨ self, G1), and several mixed-kind sections no longer collapse to one. Any other
+    //    record-text class (user.message, harness markers, compaction, a subagent-opener inbox)
+    //    renders ONE richest-label hit. The §1 fix (teammate → inbox) + the `<task-notification>`
+    //    → harness.notification reparent flow straight from `classify`. ──
+    let sections = rec.record_text_sections(ctx);
+    if sections.is_empty() {
+        if let Some((class, text)) = record_text_emission(rec, &labels, selectors, plan_index) {
+            let dir = if is_comm_class(class) {
+                direction.clone()
+            } else {
+                None
+            };
+            emit(class, &text, None, dir, None);
+        }
+    } else {
+        for crate::model::RecordTextSection {
+            class,
+            text,
+            direction: dir,
+        } in sections
+        {
+            if !label_selected(selectors, class.path()) {
+                continue;
+            }
+            let dir = if is_comm_class(class) {
+                alias_self(dir, ctx.owner_id)
+            } else {
+                None
+            };
+            emit(class, &text, None, dir, None);
+        }
     }
 
     // ── 2. Record-level user-facing tool_result DUAL (AUQ answer / typed rejection) ──
@@ -1618,6 +1661,20 @@ fn collect_record_hits(
 /// True for the three `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).
 fn is_comm_class(c: Class) -> bool {
     matches!(c, Class::CommInbox | Class::CommSent | Class::CommSignal)
+}
+
+/// Render the transcript owner's own id as the literal `self` on either side of a comm direction
+/// (GOLD §3/§4 notation: `self ⇨ to`, `from ⇨ self`) — a verbose session uuid / bare agent hex on
+/// the self side becomes `self`, while a peer id/name on the OTHER side is kept verbatim (a peer
+/// never equals the owner). No-op when `owner_id` is `None`.
+fn alias_self(dir: Option<(String, String)>, owner_id: Option<&str>) -> Option<(String, String)> {
+    let Some(owner) = owner_id else {
+        return dir;
+    };
+    dir.map(|(from, to)| {
+        let sub = |s: String| if s == owner { "self".to_string() } else { s };
+        (sub(from), sub(to))
+    })
 }
 
 /// True for a RECORD-LEVEL text class — one classified from a record's string / text-block
