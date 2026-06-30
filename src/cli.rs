@@ -618,7 +618,7 @@ impl ListArgs {
           csift search \"\" @<parent> --line 7f3c9e21:88,495-500 # …in a SUBAGENT transcript (hex-prefixed --line)\n  \
           csift search \"let's chat\" -t user --siblings 3        # the match WITH up to 3 sibling records\n  \
           csift search \"let's chat\" -t user --siblings agent:1  # …only the agent-side sibling (cap 1)\n  \
-          csift search \"let's chat\" -t user --siblings agent:1 --full  # …and READ that reply end-to-end\n\n\
+          csift search \"let's chat\" -t user --siblings agent:1 --no-truncate  # …and READ that reply end-to-end\n\n\
         SIBLINGS (`--siblings <SPEC>`)\n  \
           A match renders only the records that MATCHED. `--siblings <SPEC>` additionally renders \
         the OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
@@ -782,9 +782,9 @@ pub struct SearchArgs {
     /// excerpt — so you can READ a found message end-to-end (e.g. the question at the tail
     /// of a long reply) without dropping to the raw jsonl. Newlines are still collapsed to
     /// single spaces (one line per record). The default excerpt stays centered on the match
-    /// with an explicit `… (+N chars)` marker; `--full` removes the cap entirely.
-    #[arg(long, visible_alias = "no-truncate")]
-    pub full: bool,
+    /// with an explicit `… (+N chars)` marker; `--no-truncate` removes the cap entirely.
+    #[arg(long)]
+    pub no_truncate: bool,
 
     /// ADDRESS by physical line(s): fetch the record(s) at these 1-based line numbers / ranges
     /// instead of (or as well as) pattern-matching — the permission-friendly alternative to

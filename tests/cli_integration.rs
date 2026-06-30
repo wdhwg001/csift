@@ -609,7 +609,7 @@ fn search_truncated_excerpt_emits_reader_caution() {
     h.write(&format!("{enc}/{sess}.jsonl"), &body);
     let at = format!("@{sess}");
 
-    // Default (truncating): the caution appears with all three pieces (what it is + --full +
+    // Default (truncating): the caution appears with all three pieces (what it is + --no-truncate +
     // --line/--uuid).
     let out = h.run(&["search", "NEEDLEXYZ", &at]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -619,8 +619,8 @@ fn search_truncated_excerpt_emits_reader_caution() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("--full"),
-        "no --full hint:\n{}",
+        out.stdout.contains("--no-truncate"),
+        "no --no-truncate hint:\n{}",
         out.stdout
     );
     assert!(
@@ -629,12 +629,12 @@ fn search_truncated_excerpt_emits_reader_caution() {
         out.stdout
     );
 
-    // --full lifts the cap → no truncation → NO caution, and the whole text is shown.
-    let full = h.run(&["search", "NEEDLEXYZ", &at, "--full"]);
+    // --no-truncate lifts the cap → no truncation → NO caution, and the whole text is shown.
+    let full = h.run(&["search", "NEEDLEXYZ", &at, "--no-truncate"]);
     assert!(full.success, "stderr: {}", full.stderr);
     assert!(
         !full.stdout.contains("TRUNCATED"),
-        "caution must be suppressed under --full:\n{}",
+        "caution must be suppressed under --no-truncate:\n{}",
         full.stdout
     );
     assert!(
@@ -654,8 +654,15 @@ fn search_truncated_excerpt_emits_reader_caution() {
     let summary: serde_json::Value = serde_json::from_str(last).unwrap();
     assert_eq!(summary["excerpts_truncated"], serde_json::Value::Bool(true));
 
-    // And under --full the flag flips false.
-    let json_full = h.run(&["search", "NEEDLEXYZ", &at, "--full", "--format", "json"]);
+    // And under --no-truncate the flag flips false.
+    let json_full = h.run(&[
+        "search",
+        "NEEDLEXYZ",
+        &at,
+        "--no-truncate",
+        "--format",
+        "json",
+    ]);
     let last_full = json_full
         .stdout
         .lines()
@@ -976,11 +983,11 @@ fn search_sibling_category_narrows_and_implies_siblings() {
 }
 
 #[test]
-fn search_full_emits_the_untruncated_record() {
+fn search_no_truncate_emits_the_untruncated_record() {
     // A message far longer than the ~400-char excerpt cap, with a token at the very TAIL.
     // The default excerpt truncates (explicit `… (+N chars)` marker) and hides the tail;
-    // `--full` (and its `--no-truncate` alias) emit the whole record so the tail is readable
-    // — the gap that otherwise forces a drop to the raw jsonl.
+    // `--no-truncate` emits the whole record so the tail is readable — the gap that otherwise
+    // forces a drop to the raw jsonl.
     let h = Home::new();
     let filler = "x".repeat(900);
     h.write(
@@ -1003,24 +1010,25 @@ fn search_full_emits_the_untruncated_record() {
         def.stdout
     );
 
-    let full = h.run(&["search", "needle", "--no-subagents", "--full"]);
+    let full = h.run(&["search", "needle", "--no-subagents", "--no-truncate"]);
     assert!(
         full.stdout.contains("taIlToken9z"),
-        "--full must surface the tail: {}",
+        "--no-truncate must surface the tail: {}",
         full.stdout
     );
     assert!(
         !full.stdout.contains("… (+"),
-        "--full removes the truncation marker: {}",
+        "--no-truncate removes the truncation marker: {}",
         full.stdout
     );
 
-    // The `--no-truncate` alias behaves identically.
-    let alias = h.run(&["search", "needle", "--no-subagents", "--no-truncate"]);
+    // Zero back-compat: the old `--full` spelling is GONE — it must ERROR (unknown argument),
+    // never silently work, so existing users are forced onto the unambiguous `--no-truncate`.
+    let removed = h.run(&["search", "needle", "--no-subagents", "--full"]);
     assert!(
-        alias.stdout.contains("taIlToken9z"),
-        "--no-truncate alias must surface the tail too: {}",
-        alias.stdout
+        !removed.success,
+        "--full was removed and must be rejected, got success:\n{}",
+        removed.stdout
     );
 }
 

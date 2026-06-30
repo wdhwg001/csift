@@ -82,7 +82,7 @@ pub struct Hit {
     pub from_sidecar: bool,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) — i.e. the reader is seeing a fragment, not the
-    /// whole record. ALWAYS false under `--full`/`--no-truncate` and in `--line`/`--uuid` fetch
+    /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch
     /// mode (both lift the cap to `usize::MAX`), so it doubles as the "default truncation was in
     /// effect AND bit" signal that drives the trailing reader-caution note (`render_text`) and
     /// the JSON summary's `excerpts_truncated` flag.
@@ -646,7 +646,7 @@ fn merged_any_sidecar(exchanges: &[Exchange]) -> bool {
 
 /// True when ANY emitted hit/sibling excerpt was CLIPPED to the default cap — drives the
 /// trailing reader-caution note (text) / the `excerpts_truncated` JSON flag. Always false under
-/// `--full`/`--no-truncate` and in `--line`/`--uuid` fetch mode (the cap is lifted to
+/// `--no-truncate` and in `--line`/`--uuid` fetch mode (the cap is lifted to
 /// `usize::MAX`, so no hit can be truncated), so a single check both detects truncation AND
 /// auto-suppresses the note exactly when the reader already asked for whole records.
 fn any_truncated_excerpt(exchanges: &[Exchange]) -> bool {
@@ -841,9 +841,9 @@ fn reconstruct_and_match(
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
     let tool_names = build_tool_name_index(records);
-    // `--full` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
+    // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
-    let excerpt_max = if args.full || address.is_some() {
+    let excerpt_max = if args.no_truncate || address.is_some() {
         usize::MAX
     } else {
         EXCERPT_MAX
@@ -1453,7 +1453,7 @@ fn auq_answer_text(rec: &Record) -> Option<String> {
 }
 
 /// Build a hit with a normalized excerpt CENTERED on the match (`span`), capped at
-/// `excerpt_max` chars (`usize::MAX` under `--full` ⇒ the whole record, uncapped).
+/// `excerpt_max` chars (`usize::MAX` under `--no-truncate` ⇒ the whole record, uncapped).
 fn make_hit(
     category: Category,
     text: &str,
@@ -1480,7 +1480,7 @@ fn make_hit(
 
 /// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
 /// Test-only: production excerpting goes through [`match_excerpt`], which carries the
-/// caller's (possibly `--full`) budget; this fixed-budget wrapper backs the unit tests.
+/// caller's (possibly `--no-truncate`) budget; this fixed-budget wrapper backs the unit tests.
 #[cfg(test)]
 fn truncate_excerpt(s: &str) -> String {
     crate::text::truncate_excerpt(s, EXCERPT_MAX)
@@ -1499,11 +1499,11 @@ fn truncate_excerpt(s: &str) -> String {
 ///
 /// Returns `(excerpt, truncated)` — `truncated` is true iff content was CLIPPED to fit `max`
 /// (the head form when the normalized text exceeds `max`, or any match-centered window). Under
-/// `--full`'s `usize::MAX` budget nothing is ever clipped, so `truncated` is always false there.
+/// `--no-truncate`'s `usize::MAX` budget nothing is ever clipped, so `truncated` is always false there.
 fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> (String, bool) {
     let total = text.chars().count();
-    // Pure filter, or the whole message already fits (incl. `--full`'s `usize::MAX`): keep
-    // the head-anchored form, capped at `max` (uncapped under `--full`). Truncated iff the
+    // Pure filter, or the whole message already fits (incl. `--no-truncate`'s `usize::MAX`): keep
+    // the head-anchored form, capped at `max` (uncapped under `--no-truncate`). Truncated iff the
     // normalized body still overruns `max`.
     let head_form = |text: &str| -> (String, bool) {
         let norm = normalize_line(text);
@@ -1659,7 +1659,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // ── Reader-caution (LAST, only when the default cap actually CLIPPED ≥1 excerpt) ──
     // The excerpts above are match-centered FRAGMENTS, not summaries — a consumer that trusts the
     // first sentences of a clipped fragment can badly misread the record's full intent. Tell it
-    // exactly how to get the whole text. Auto-suppressed under --full / --line / --uuid (those
+    // exactly how to get the whole text. Auto-suppressed under --no-truncate / --line / --uuid (those
     // lift the cap, so nothing is truncated → `any_truncated_excerpt` is false).
     if any_truncated_excerpt(&outcome.exchanges) {
         emit_truncation_caution();
@@ -1677,7 +1677,7 @@ fn emit_truncation_caution() {
          can read very differently from the record's full intent, so do NOT draw conclusions from \
          it alone."
     );
-    println!("  whole records: re-run with --full (alias --no-truncate)");
+    println!("  whole records: re-run with --no-truncate");
     println!(
         "  one record in full: --line <N> (the L<n> shown on a row) or --uuid <U> (uuids via \
          --format json)"
@@ -1799,7 +1799,7 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
         // True when ≥1 emitted excerpt was CLIPPED to the default cap — the machine echo of the
         // trailing reader-caution. A consumer seeing this should re-fetch the record in full
-        // (per-hit `excerpt` is a match-centered fragment, not the whole text) via `--full`, or a
+        // (per-hit `excerpt` is a match-centered fragment, not the whole text) via `--no-truncate`, or a
         // single record via `--line`/`--uuid`. Always false under those (the cap is lifted).
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
     });
@@ -1825,7 +1825,7 @@ mod tests {
             max_count: None,
             count_only: false,
             siblings: Vec::new(),
-            full: false,
+            no_truncate: false,
             line: Vec::new(),
             uuid: Vec::new(),
             resolve_persisted: false,
@@ -2593,7 +2593,7 @@ mod tests {
 
     #[test]
     fn match_excerpt_full_budget_emits_whole_message() {
-        // `--full` passes `usize::MAX` as the budget: a message longer than EXCERPT_MAX is
+        // `--no-truncate` passes `usize::MAX` as the budget: a message longer than EXCERPT_MAX is
         // emitted whole, with NO truncation marker — whereas the default budget truncates.
         let n = EXCERPT_MAX + 200;
         let text = "🤖".repeat(n);
@@ -2610,7 +2610,7 @@ mod tests {
         );
         assert!(
             !full_truncated,
-            "--full's usize::MAX budget never truncates — the signal the caution note keys on"
+            "--no-truncate's usize::MAX budget never truncates — the signal the caution note keys on"
         );
         assert_eq!(full.chars().count(), n, "full text length preserved");
     }
