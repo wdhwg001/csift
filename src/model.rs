@@ -112,6 +112,34 @@ pub const PLAN_REJECTION_MARKER: &str = "The user doesn't want to proceed with t
 /// carries no typed message and must NOT open a turn.
 pub const PLAN_REJECTION_USER_PREFIX: &str = "To tell you how to proceed, the user said:\n";
 
+/// The opening tag of an inbound `<teammate-message …>` peer-agent message (GOLD §5). A
+/// teammate (another Claude session on the same team / FleetView) sends prose or a control
+/// signal that Claude Code delivers as a `type:"user"`, `role:"user"`, STRING-content record
+/// — so it LOOKS like a human turn ([`Record::is_genuine_user`] used to return `true` for it,
+/// counting 106 peer messages as the human user in one real session). It is a peer message,
+/// never the operator: classified `agent.communication.{inbox,signal}`, never `user`.
+pub const TEAMMATE_MESSAGE_OPEN: &str = "<teammate-message";
+
+/// The preamble Claude Code prepends to a peer message it relays into a session (GOLD §5):
+/// `Another Claude session sent a message:\n<teammate-message …>`. Detection keys on the tag
+/// itself (see [`is_teammate_message`]), not this preamble; the constant is retained for P2 to
+/// STRIP the preamble (and the trailing security footer) when rendering the message body.
+#[allow(dead_code)]
+pub const PEER_MESSAGE_PREAMBLE: &str = "Another Claude session sent a message:";
+
+/// The fixed harness-injected continuation marker (GOLD §5) — `harness.schedule.continuation`.
+/// A `type:"user"` (`isMeta`) record CC injects to resume a session from where it left off.
+/// Verified across real `~/.claude/projects` data (522 occurrences), exact content.
+pub const SCHEDULE_CONTINUATION_MARKER: &str = "Continue from where you left off.";
+
+/// The autonomous-loop wakeup sentinel (GOLD §5) — `harness.schedule.wakeup`. When a
+/// `ScheduleWakeup` tool fires, the harness injects its `prompt`; the autonomous-loop cadence
+/// uses this fixed sentinel as that prompt. NOTE: this is the ONLY reliably-fixed wakeup-tick
+/// marker — a cron/monitor tick's injected prompt is operator-authored free text with no
+/// universal marker (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action,
+/// classified `agent.tool.use`, not the fired tick). See the GOLD-gap note in the module docs.
+pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
+
 /// A single parsed jsonl line. Unknown top-level fields are ignored by serde.
 ///
 /// Several fields below are deserialized for completeness of the documented record
@@ -362,8 +390,15 @@ impl Record {
         if msg.role.as_deref() != Some("user") {
             return false;
         }
+        // GOLD §1 BUG FIX: an inbound `<teammate-message>` is `type:user`/`role:user`/
+        // string content and matches no synthetic marker, so it used to slip through as a
+        // GENUINE HUMAN turn (106 peer messages mislabeled as the user in one real session).
+        // It is a PEER-AGENT message — never the operator. Excluded here (it still OPENS a
+        // turn via [`Record::opens_turn`], but classifies `agent.communication.inbox`, not
+        // `user`). The check is on the borrowed content (no allocation on the common path);
+        // [`is_teammate_message`] is tolerant of whitespace-normalized block joins too.
         match &msg.content {
-            Some(Content::Text(s)) => !is_synthetic_user_marker(s),
+            Some(Content::Text(s)) => !is_synthetic_user_marker(s) && !is_teammate_message(s),
             Some(Content::Blocks(blocks)) => {
                 let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));
                 let has_text = blocks.iter().any(|b| matches!(b, Block::Text { .. }));
@@ -373,7 +408,7 @@ impl Record {
                 // §4.2.1: an interrupt marker arrives as a single `text` block whose text
                 // is EXACTLY the marker — exclude it (exact match, codepoint-safe).
                 let joined = flatten_content_text(msg.content.as_ref().unwrap());
-                !is_synthetic_user_marker(&joined)
+                !is_synthetic_user_marker(&joined) && !is_teammate_message(&joined)
             }
             None => false,
         }
@@ -778,12 +813,20 @@ impl Record {
 
     /// The single boundary predicate (§6.4): this record opens a new turn iff it is a
     /// genuine human message, an ANSWERED AskUserQuestion (the answer is the user's
-    /// message), or a tool-use rejection carrying a typed user instruction. Every surface
-    /// (turns / search / recover / files) keys turn delimiting on THIS predicate so they
-    /// never drift.
+    /// message), a tool-use rejection carrying a typed user instruction, OR an inbound
+    /// teammate/peer message. Every surface (turns / search / recover / files) keys turn
+    /// delimiting on THIS predicate so they never drift.
+    ///
+    /// GOLD §1: a teammate message is no longer [`Record::is_genuine_user`] (it is a peer,
+    /// not the operator), but it MUST still delimit a turn — so the dedicated clause keeps
+    /// `opens_turn` UNCHANGED for teammate records (true before and after the fix), leaving
+    /// turn grouping in every consumer byte-identical while the `user` mislabel is removed.
     #[must_use]
     pub fn opens_turn(&self) -> bool {
-        self.is_genuine_user() || self.is_auq_answer_boundary() || self.is_plan_rejection_boundary()
+        self.is_genuine_user()
+            || self.is_auq_answer_boundary()
+            || self.is_plan_rejection_boundary()
+            || self.is_teammate_message_record()
     }
 
     /// The rendered genuine-user text for any boundary-opening record, normalized to a
@@ -821,6 +864,16 @@ impl Record {
         // input — surface it so `search -t user` still finds it within its turn.
         if let Some(args) = self.slash_command_args() {
             return Some(args);
+        }
+        // GOLD §1: an inbound teammate/peer message opens a turn but is NOT genuine-user, so
+        // the genuine-user arm above no longer yields its body. Render the message text here
+        // so a teammate-opened turn is not BLANK — preserving the exact text `turns`/`search`/
+        // `list` produced before the `is_genuine_user` fix (the P2 cutover replaces this with
+        // the `agent.communication.inbox` label + `from ⇨ to` direction).
+        if self.is_teammate_message_record() {
+            if let Some(content) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
+                return Some(flatten_content_text(content));
+            }
         }
         None
     }
@@ -1562,6 +1615,764 @@ pub(crate) fn normalize_line(s: &str) -> String {
         out.pop();
     }
     out
+}
+
+// ============================================================================
+// role.class.sub classification engine (GOLD plan §2–§6) — ADDITIVE, P1.
+//
+// This is the NEW taxonomy core, testable in isolation. It is NOT yet wired into any
+// consumer (the legacy `cli::Category` + `-t` selector still drive output); P2 cuts the
+// surfaces over to [`Record::classify`] and removes the old enum. Until then the new
+// items carry a targeted `#[allow(dead_code)]` (the binary never calls them yet).
+//
+// GOLD GAPS surfaced during P1 (reported upstream, not silently absorbed):
+//   - `harness.schedule.wakeup`: a fired wakeup tick has NO universal fixed marker (its
+//     injected prompt is operator-authored); only the autonomous-loop sentinel
+//     [`SCHEDULE_WAKEUP_MARKER`] is reliable. The `ScheduleWakeup` *tool_use* (the agent
+//     ARMING a wakeup) is classified `agent.tool.use`, not the harness tick.
+//   - `agent.thinking` covers `Block::Thinking`; a `redacted_thinking` block (absent in the
+//     current corpus) parses as `Block::Unknown`, so it is NOT classified — adding a
+//     `Block::RedactedThinking` variant would touch the 8 `Block` match sites in OTHER
+//     modules, which P1's "model.rs-only, no consumer edits" scope forbids; deferred to P2.
+//   - An `<agent-message from="…">` peer form (distinct from `<teammate-message>`, seen
+//     isMeta in real data) is NOT covered by GOLD §5; left as `user`/harness for now.
+// ============================================================================
+
+/// The top-level ROLE of a classified record (GOLD §2). The first dot-segment of every
+/// [`Class::path`]. A multi-label record can span roles (e.g. an AUQ answer is both
+/// [`Role::User`] and [`Role::Agent`]).
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Role {
+    /// The human operator.
+    User,
+    /// The assistant (incl. its tool I/O and peer communication).
+    Agent,
+    /// Claude Code machinery (notifications, compaction, slash wrappers, interrupts, schedule).
+    Harness,
+}
+
+#[allow(dead_code)]
+impl Role {
+    /// The stable lowercase slug (the first dot-segment of a [`Class::path`]).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Role::User => "user",
+            Role::Agent => "agent",
+            Role::Harness => "harness",
+        }
+    }
+}
+
+/// A LEAF class in the role.class.sub taxonomy (GOLD §2). One variant per leaf; the dotted
+/// [`Class::path`] is the canonical wire/selector form and [`Class::role`] its top-level role.
+/// A record carries a `Vec<Class>` (multi-label, GOLD §3) via [`Record::classify`].
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Class {
+    /// `user.message` — genuine human prose (incl. slash-command `<command-args>`).
+    UserMessage,
+    /// `user.answer` — an AskUserQuestion answer (the Q+options+answer unit). Dual-labeled
+    /// with [`Class::AgentToolResult`] (it rides on the answering tool_result carrier).
+    UserAnswer,
+    /// `user.rejection` — a plan/tool rejection carrying a typed instruction. Dual-labeled
+    /// with [`Class::AgentToolResult`].
+    UserRejection,
+    /// `agent.message` — the assistant's visible end-of-turn text block(s).
+    AgentMessage,
+    /// `agent.thinking` — a thinking block (see the GOLD-gap note re `redacted_thinking`).
+    AgentThinking,
+    /// `agent.tool.use` — a tool_use block (incl. a pending elicitation sidecar marker).
+    AgentToolUse,
+    /// `agent.tool.result` — a tool_result block (incl. errored).
+    AgentToolResult,
+    /// `agent.communication.inbox` — a received peer message / spawn prompt / subagent return.
+    CommInbox,
+    /// `agent.communication.sent` — a sent peer message (`SendMessage`) or a spawn.
+    CommSent,
+    /// `agent.communication.signal` — a control/status comm (idle_notification, shutdown_*).
+    CommSignal,
+    /// `harness.notification.workflow` — a `<task-notification>` for a dynamic/OMC workflow.
+    NotificationWorkflow,
+    /// `harness.notification.monitor` — a monitor/cron cadence completion pulse.
+    NotificationMonitor,
+    /// `harness.notification.subagent` — a spawned-subagent completion pulse (renamed from
+    /// [`AutomationKind::Agent`] so it never collides with the `agent` role).
+    NotificationSubagent,
+    /// `harness.notification.background-command` — a `&`-detached shell command pulse.
+    NotificationBackgroundCommand,
+    /// `harness.notification.task` — any other / unclassified `<task-notification>`.
+    NotificationTask,
+    /// `harness.compaction.summary` — the `isCompactSummary` summary record.
+    CompactionSummary,
+    /// `harness.compaction.boundary` — the `system`/`compact_boundary` metrics record.
+    CompactionBoundary,
+    /// `harness.command.invocation` — a `<command-name>…` slash-command wrapper.
+    CommandInvocation,
+    /// `harness.command.stdout` — a `<local-command-stdout>…` local-command output.
+    CommandStdout,
+    /// `harness.interrupt.user` — `[Request interrupted by user]`.
+    InterruptUser,
+    /// `harness.interrupt.tool` — `[Request interrupted by user for tool use]`.
+    InterruptTool,
+    /// `harness.schedule.wakeup` — a fired autonomous-loop wakeup tick (sentinel-marked).
+    ScheduleWakeup,
+    /// `harness.schedule.continuation` — a `Continue from where you left off.` resume tick.
+    ScheduleContinuation,
+}
+
+#[allow(dead_code)]
+impl Class {
+    /// The canonical dotted path (GOLD §2) — the `-t` selector form (P2) and render label.
+    #[must_use]
+    pub fn path(self) -> &'static str {
+        match self {
+            Class::UserMessage => "user.message",
+            Class::UserAnswer => "user.answer",
+            Class::UserRejection => "user.rejection",
+            Class::AgentMessage => "agent.message",
+            Class::AgentThinking => "agent.thinking",
+            Class::AgentToolUse => "agent.tool.use",
+            Class::AgentToolResult => "agent.tool.result",
+            Class::CommInbox => "agent.communication.inbox",
+            Class::CommSent => "agent.communication.sent",
+            Class::CommSignal => "agent.communication.signal",
+            Class::NotificationWorkflow => "harness.notification.workflow",
+            Class::NotificationMonitor => "harness.notification.monitor",
+            Class::NotificationSubagent => "harness.notification.subagent",
+            Class::NotificationBackgroundCommand => "harness.notification.background-command",
+            Class::NotificationTask => "harness.notification.task",
+            Class::CompactionSummary => "harness.compaction.summary",
+            Class::CompactionBoundary => "harness.compaction.boundary",
+            Class::CommandInvocation => "harness.command.invocation",
+            Class::CommandStdout => "harness.command.stdout",
+            Class::InterruptUser => "harness.interrupt.user",
+            Class::InterruptTool => "harness.interrupt.tool",
+            Class::ScheduleWakeup => "harness.schedule.wakeup",
+            Class::ScheduleContinuation => "harness.schedule.continuation",
+        }
+    }
+
+    /// The top-level role (the first dot-segment of [`Class::path`]). Exhaustive (no
+    /// wildcard) so a future leaf forces an explicit role decision at compile time.
+    #[must_use]
+    pub fn role(self) -> Role {
+        match self {
+            Class::UserMessage | Class::UserAnswer | Class::UserRejection => Role::User,
+            Class::AgentMessage
+            | Class::AgentThinking
+            | Class::AgentToolUse
+            | Class::AgentToolResult
+            | Class::CommInbox
+            | Class::CommSent
+            | Class::CommSignal => Role::Agent,
+            Class::NotificationWorkflow
+            | Class::NotificationMonitor
+            | Class::NotificationSubagent
+            | Class::NotificationBackgroundCommand
+            | Class::NotificationTask
+            | Class::CompactionSummary
+            | Class::CompactionBoundary
+            | Class::CommandInvocation
+            | Class::CommandStdout
+            | Class::InterruptUser
+            | Class::InterruptTool
+            | Class::ScheduleWakeup
+            | Class::ScheduleContinuation => Role::Harness,
+        }
+    }
+}
+
+/// A parsed inbound `<teammate-message …>` (GOLD §4/§5): the `teammate_id` attribute (the
+/// comm FROM) and, when the body is a `{"type":"<sig>"}` JSON payload, the control-signal
+/// type (e.g. `idle_notification`). A prose message has `signal_type == None`.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeammateMessage {
+    /// The `teammate_id` attribute = the SENDER (the FROM of the comm direction).
+    pub teammate_id: Option<String>,
+    /// The control-signal type when the body is `{"type":"<sig>"}` (idle_notification /
+    /// shutdown_request / teammate_terminated / shutdown_approved / …); `None` for prose.
+    pub signal_type: Option<String>,
+}
+
+#[allow(dead_code)]
+impl TeammateMessage {
+    /// True when this is a control SIGNAL (a `{"type":…}` payload), not a prose message →
+    /// classifies `agent.communication.signal` rather than `…inbox`.
+    #[must_use]
+    pub fn is_signal(&self) -> bool {
+        self.signal_type.is_some()
+    }
+}
+
+/// True when `content` is an inbound teammate/peer message (GOLD §5) — it CONTAINS the
+/// [`TEAMMATE_MESSAGE_OPEN`] tag. Real data (edge-fixtures scout): the bare-start form occurs
+/// **0** times; the real shape is ALWAYS the relayed wrapper `Another Claude session sent a
+/// message:\n<teammate-message …>\n<BODY>\n</teammate-message>\n\n<security footer>` (126 of
+/// 126). So detection keys on the tag itself (robust to any preamble/footer wording change),
+/// NOT a `starts_with` on the preamble. CONTAINS deliberately also catches a body that quotes
+/// the tag — an accepted trade-off, since a genuine human typing the literal tag is unseen in
+/// the corpus and reclassifying it as a peer message is the safe failure direction.
+#[allow(dead_code)]
+#[must_use]
+pub fn is_teammate_message(content: &str) -> bool {
+    content.contains(TEAMMATE_MESSAGE_OPEN)
+}
+
+/// Parse an inbound teammate/peer message (GOLD §5) into its `teammate_id` + optional signal
+/// type. `None` when `content` is not a teammate message. CODEPOINT-SAFE: every slice is
+/// taken on ASCII byte offsets returned by `str::find` (the tag/attribute delimiters), never
+/// inside a (possibly CJK) message body.
+#[allow(dead_code)]
+#[must_use]
+pub fn parse_teammate_message(content: &str) -> Option<TeammateMessage> {
+    if !is_teammate_message(content) {
+        return None;
+    }
+    let open_at = content.find(TEAMMATE_MESSAGE_OPEN)?;
+    let after_open = &content[open_at..];
+    Some(TeammateMessage {
+        teammate_id: extract_xml_attr(after_open, "teammate_id"),
+        signal_type: teammate_signal_type(after_open),
+    })
+}
+
+/// Extract a `name="value"` attribute's value from the start of an XML-ish tag, trimmed
+/// (empty → `None`). Codepoint-safe: ASCII-offset `find` only.
+fn extract_xml_attr(s: &str, attr: &str) -> Option<String> {
+    let needle = format!("{attr}=\"");
+    let start = s.find(&needle)? + needle.len();
+    let rel = s[start..].find('"')?;
+    let val = s[start..start + rel].trim();
+    if val.is_empty() {
+        None
+    } else {
+        Some(val.to_string())
+    }
+}
+
+/// The control-signal `type` of a `<teammate-message …>{"type":"<sig>"}</teammate-message>`
+/// body (GOLD §5), or `None` for a prose body. Extracts the body between the opening tag's
+/// `>` and `</teammate-message>`, and — only when it is a JSON object — reads its `type`.
+fn teammate_signal_type(after_open: &str) -> Option<String> {
+    let gt = after_open.find('>')?;
+    let body_start = gt + 1;
+    const CLOSE: &str = "</teammate-message>";
+    let body_end = after_open[body_start..]
+        .find(CLOSE)
+        .map_or(after_open.len(), |rel| body_start + rel);
+    let body = after_open[body_start..body_end].trim();
+    if !body.starts_with('{') {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    v.get("type")
+        .and_then(serde_json::Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// True for a spawn tool (GOLD §5): `Task` / `Agent` / `Workflow` — a tool_use that spawns a
+/// subagent (the `self ⇨ child` comm). Kept local so `model.rs` stays dependency-free.
+fn is_spawn_tool_name(name: &str) -> bool {
+    matches!(name, "Task" | "Agent" | "Workflow")
+}
+
+/// True when a `SendMessage` `input` is a control SIGNAL rather than a prose message (GOLD
+/// §3): the top-level `type` (or a nested `message.type`) is present and is NOT `message`/
+/// `direct` (e.g. `shutdown_request`/`shutdown_response`/…). Absent type ⇒ a plain message.
+fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {
+    let Some(input) = input else {
+        return false;
+    };
+    let type_at = |v: &serde_json::Value| {
+        v.get("type")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    if let Some(t) = type_at(input) {
+        return !matches!(t.as_str(), "message" | "direct");
+    }
+    if let Some(t) = input.get("message").and_then(type_at) {
+        return !matches!(t.as_str(), "message" | "direct");
+    }
+    false
+}
+
+/// The recipient id of a `SendMessage` (the comm TO) — `input.to` preferred, else
+/// `input.recipient`. `None` when neither is a non-empty string.
+fn send_message_recipient(input: Option<&serde_json::Value>) -> Option<String> {
+    let input = input?;
+    for key in ["to", "recipient"] {
+        if let Some(v) = input.get(key).and_then(serde_json::Value::as_str) {
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// The spawn target NAME of a spawn tool_use (`input.name` for a teammate/named spawn, else
+/// `input.subagent_type`) — used to resolve the spawned child id (the comm TO). `None` when
+/// neither is present.
+fn spawn_target_name(input: Option<&serde_json::Value>) -> Option<String> {
+    let input = input?;
+    for key in ["name", "subagent_type"] {
+        if let Some(v) = input.get(key).and_then(serde_json::Value::as_str) {
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Map a parsed `<task-notification>` [`AutomationKind`] to its `harness.notification.*`
+/// [`Class`] (GOLD §2 — `Agent` becomes `subagent` to avoid the `agent` role collision).
+fn notification_class(kind: AutomationKind) -> Class {
+    match kind {
+        AutomationKind::BackgroundCommand => Class::NotificationBackgroundCommand,
+        AutomationKind::Workflow => Class::NotificationWorkflow,
+        AutomationKind::Agent => Class::NotificationSubagent,
+        AutomationKind::Monitor => Class::NotificationMonitor,
+        AutomationKind::Task => Class::NotificationTask,
+    }
+}
+
+/// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) — preserves
+/// first-seen order so the richest/most-salient label leads.
+fn push_unique(out: &mut Vec<Class>, c: Class) {
+    if !out.contains(&c) {
+        out.push(c);
+    }
+}
+
+/// A read-only lookup for spawn pairing (GOLD §4/§7), supplied via [`ClassifyCtx`]. Backed in
+/// P2 by the global spawn index (`subagent::ParentSpawnIndex` / `build_global_spawn_index`),
+/// behind a trait so `model.rs` does not depend on `subagent.rs`. Both queries key on the
+/// SAME join as the topology builder, so they resolve the spawn `self ⇨ child` direction AND
+/// detect a `child ⇨ self` subagent return (the Task tool_result whose id was a spawn).
+#[allow(dead_code)]
+pub trait SpawnLookup {
+    /// The spawned child's agent id for a spawn `tool_use_id` (the `id` of a Task/Agent/
+    /// Workflow tool_use; equivalently the `tool_use_id` of its returning tool_result).
+    /// `Some` ⇒ that id spawned a subagent — used for the spawn TO and the return FROM.
+    fn child_for_spawn_tool_use_id(&self, tool_use_id: &str) -> Option<String>;
+    /// The spawned child's agent id for a spawn by NAME / `subagent_type` (the teammate
+    /// name-join, where the meta carries no `toolUseId`). The fallback when the id-join misses.
+    fn child_for_spawn_name(&self, name: &str) -> Option<String>;
+}
+
+/// Cross-record context [`Record::classify`] / [`Record::direction`] need that a single record
+/// cannot supply (GOLD §6). Construct with [`ClassifyCtx::top_level`] and set the relevant
+/// fields. **What P2 must populate per record:**
+/// - `owner_id`: the transcript owner's re-feedable id — the session uuid for a top-level
+///   transcript, or the bare agent id for a subagent (the `self` of every comm direction).
+/// - `owner_name`: the owner's teammate/agent NAME when known (display only; optional).
+/// - `is_subagent`: whether THIS transcript lives under `subagents/`
+///   (`subagent::is_subagent_path`).
+/// - `parent_id`: the owning/parent session-or-agent id (the FROM of a subagent opener) —
+///   `subagent::parent_session_id_from_path` / the topology `parent_agent_id`.
+/// - `is_transcript_opener`: `true` ONLY for the positional FIRST turn-opener of a subagent
+///   transcript (the spawn-prompt seed) — flips that genuine-user-shaped record from
+///   `user.message` to `agent.communication.inbox` (parent ⇨ self). P2 sets it positionally.
+/// - `spawn`: the [`SpawnLookup`] (the global spawn index) for comm direction + subagent-return
+///   detection. `None` ⇒ direction degrades gracefully (spawn TO / return falls back to the
+///   raw name or `?`), so the engine is fully testable without a real index.
+#[allow(dead_code)]
+pub struct ClassifyCtx<'a> {
+    /// The transcript owner's re-feedable id (session uuid / bare agent id) = comm `self`.
+    pub owner_id: Option<&'a str>,
+    /// The owner's teammate/agent name, when known (display only).
+    pub owner_name: Option<&'a str>,
+    /// Whether THIS transcript is a subagent transcript (under `subagents/`).
+    pub is_subagent: bool,
+    /// The owning/parent session-or-agent id (the FROM of a subagent opener).
+    pub parent_id: Option<&'a str>,
+    /// `true` only for the positional first turn-opener of a subagent transcript (the seed).
+    pub is_transcript_opener: bool,
+    /// Spawn pairing lookup for comm direction + subagent-return detection.
+    pub spawn: Option<&'a dyn SpawnLookup>,
+}
+
+#[allow(dead_code)]
+impl<'a> ClassifyCtx<'a> {
+    /// A bare top-level context: no owner identity, not a subagent, no spawn lookup. The
+    /// neutral base for tests and for classifying a top-level transcript before P2 enriches it.
+    #[must_use]
+    pub fn top_level() -> Self {
+        ClassifyCtx {
+            owner_id: None,
+            owner_name: None,
+            is_subagent: false,
+            parent_id: None,
+            is_transcript_opener: false,
+            spawn: None,
+        }
+    }
+}
+
+// `ClassifyCtx` holds a `&dyn SpawnLookup` (not `Debug`), so derive is impossible; render the
+// lookup as a presence flag to satisfy `missing_debug_implementations`.
+impl std::fmt::Debug for ClassifyCtx<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClassifyCtx")
+            .field("owner_id", &self.owner_id)
+            .field("owner_name", &self.owner_name)
+            .field("is_subagent", &self.is_subagent)
+            .field("parent_id", &self.parent_id)
+            .field("is_transcript_opener", &self.is_transcript_opener)
+            .field("has_spawn_lookup", &self.spawn.is_some())
+            .finish()
+    }
+}
+
+#[allow(dead_code)]
+impl Record {
+    /// True when this is the `system`/`compact_boundary` metrics record (GOLD §5) —
+    /// `harness.compaction.boundary`.
+    #[must_use]
+    pub fn is_compact_boundary(&self) -> bool {
+        self.is_type("system") && self.subtype.as_deref() == Some("compact_boundary")
+    }
+
+    /// The parsed inbound teammate/peer message (GOLD §5) carried by this `type:"user"`
+    /// record, or `None`. Reads the raw (un-normalized) message text so the peer preamble's
+    /// `\n` survives. Gated to `type:"user"` (the only place a teammate message arrives).
+    #[must_use]
+    pub fn teammate_message(&self) -> Option<TeammateMessage> {
+        if !self.is_type("user") {
+            return None;
+        }
+        let text = self.raw_message_text()?;
+        parse_teammate_message(&text)
+    }
+
+    /// True when this record is an inbound teammate/peer message (GOLD §1) — the predicate
+    /// `is_genuine_user` excludes and `opens_turn` includes.
+    #[must_use]
+    pub fn is_teammate_message_record(&self) -> bool {
+        self.teammate_message().is_some()
+    }
+
+    /// The raw textual body of this message for MARKER detection — the bare string, or text
+    /// blocks joined with `\n` (NOT whitespace-normalized, so `\n`-bearing markers survive).
+    /// `None` when there is no message / no text. (Distinct from [`flatten_content_text`],
+    /// which normalizes whitespace for display.)
+    fn raw_message_text(&self) -> Option<String> {
+        let content = self.message.as_ref()?.content.as_ref()?;
+        match content {
+            Content::Text(s) => Some(s.clone()),
+            Content::Blocks(blocks) => {
+                let parts: Vec<&str> = blocks
+                    .iter()
+                    .filter_map(|b| match b {
+                        Block::Text { text } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+                if parts.is_empty() {
+                    None
+                } else {
+                    Some(parts.join("\n"))
+                }
+            }
+        }
+    }
+
+    /// True when this carrier is a TEAMMATE-SPAWN ACK, not a child return (edge-fixtures
+    /// correction): a persistent teammate `Agent` spawn's tool_result is an immediate
+    /// `toolUseResult.status == "teammate_spawned"` acknowledgement — the teammate's actual
+    /// work returns LATER as inbound `<teammate-message>`s, never via this tool_result. So an
+    /// ACK is `agent.tool.result` ONLY, never `…inbox` (unlike a one-shot Task return).
+    fn is_teammate_spawn_ack(&self) -> bool {
+        self.tool_use_result
+            .as_ref()
+            .and_then(|tur| tur.get("status"))
+            .and_then(serde_json::Value::as_str)
+            == Some("teammate_spawned")
+    }
+
+    /// True when this record is a SUBAGENT RETURN (GOLD §3) — a tool_result whose
+    /// `tool_use_id` the spawn lookup resolves to a spawned child (the Task tool_result of a
+    /// ONE-SHOT spawn = the child's return, child ⇨ self). `false` without a [`SpawnLookup`]
+    /// in `ctx`, AND `false` for a teammate-spawn ACK ([`Record::is_teammate_spawn_ack`]) —
+    /// the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it is not a
+    /// return.
+    fn is_subagent_return(&self, ctx: &ClassifyCtx) -> bool {
+        let Some(spawn) = ctx.spawn else {
+            return false;
+        };
+        if self.is_teammate_spawn_ack() {
+            return false;
+        }
+        let Some(blocks) = self.blocks() else {
+            return false;
+        };
+        blocks.iter().any(|b| match b {
+            Block::ToolResult {
+                tool_use_id: Some(id),
+                ..
+            } => spawn.child_for_spawn_tool_use_id(id).is_some(),
+            _ => false,
+        })
+    }
+
+    /// Classify this record into ALL applicable leaf [`Class`]es (GOLD §3, multi-label,
+    /// deduped, richest-first order). Pure + tolerant + no `unwrap` — an unmodeled record
+    /// yields an empty `Vec`. Cross-record facts come from `ctx` (see [`ClassifyCtx`]).
+    #[must_use]
+    pub fn classify(&self, ctx: &ClassifyCtx) -> Vec<Class> {
+        let mut out: Vec<Class> = Vec::new();
+
+        // Elicitation sidecar markers (§3.10): a PENDING marker stands in for the native
+        // tool_use CC has not yet written → agent.tool.use (covers the MCP `system` form too,
+        // which carries no tool_use block). A RESOLVED marker is a pairing artifact → no label.
+        if self.is_elicitation_marker() {
+            if self.csift_phase.as_deref() == Some("pending") {
+                push_unique(&mut out, Class::AgentToolUse);
+            }
+            return out;
+        }
+
+        match self.r#type.as_deref() {
+            Some("system") => {
+                if self.is_compact_boundary() {
+                    push_unique(&mut out, Class::CompactionBoundary);
+                }
+            }
+            Some("assistant") => self.classify_assistant(&mut out),
+            Some("user") => self.classify_user(ctx, &mut out),
+            _ => {}
+        }
+        out
+    }
+
+    /// Classify an `assistant` record's blocks (GOLD §2/§3): visible text → `agent.message`;
+    /// thinking → `agent.thinking`; tool_use → `agent.tool.use` (+ `…sent`/`…signal` for a
+    /// `SendMessage`/spawn); tool_result (rare on assistant) → `agent.tool.result`.
+    fn classify_assistant(&self, out: &mut Vec<Class>) {
+        let Some(blocks) = self.blocks() else {
+            // A bare-string assistant body (rare) is a visible message (§ `agent_text`).
+            if self.agent_text().is_some() {
+                push_unique(out, Class::AgentMessage);
+            }
+            return;
+        };
+        for b in blocks {
+            match b {
+                Block::Text { text } if !text.trim().is_empty() => {
+                    push_unique(out, Class::AgentMessage);
+                }
+                Block::Text { .. } => {}
+                Block::Thinking { .. } => push_unique(out, Class::AgentThinking),
+                Block::ToolUse { name, input, .. } => {
+                    push_unique(out, Class::AgentToolUse);
+                    match name.as_deref() {
+                        Some("SendMessage") => {
+                            if send_message_is_signal(input.as_ref()) {
+                                push_unique(out, Class::CommSignal);
+                            } else {
+                                push_unique(out, Class::CommSent);
+                            }
+                        }
+                        Some(n) if is_spawn_tool_name(n) => push_unique(out, Class::CommSent),
+                        _ => {}
+                    }
+                }
+                Block::ToolResult { .. } => push_unique(out, Class::AgentToolResult),
+                _ => {}
+            }
+        }
+    }
+
+    /// Classify a `user` record (GOLD §2/§3): compaction summary; teammate inbox/signal (the
+    /// §1 fix); then string-content vs block-content sub-cases.
+    fn classify_user(&self, ctx: &ClassifyCtx, out: &mut Vec<Class>) {
+        if self.is_compact_summary.unwrap_or(false) {
+            push_unique(out, Class::CompactionSummary);
+            return;
+        }
+        if let Some(tm) = self.teammate_message() {
+            push_unique(
+                out,
+                if tm.is_signal() {
+                    Class::CommSignal
+                } else {
+                    Class::CommInbox
+                },
+            );
+            return;
+        }
+        match self.message.as_ref().and_then(|m| m.content.as_ref()) {
+            Some(Content::Text(s)) => self.classify_user_string(ctx, s, out),
+            Some(Content::Blocks(blocks)) => self.classify_user_blocks(ctx, blocks, out),
+            None => {}
+        }
+    }
+
+    /// Classify the string body of a `user` record (also reused for the joined text of a
+    /// no-tool_result block record): the harness markers (`<task-notification>`, interrupts,
+    /// `<local-command-stdout>`, `<command-name>`, schedule ticks), else genuine prose — or
+    /// `agent.communication.inbox` when this is a subagent transcript opener (parent ⇨ self).
+    fn classify_user_string(&self, ctx: &ClassifyCtx, s: &str, out: &mut Vec<Class>) {
+        if let Some(trig) = self.automation_trigger() {
+            push_unique(out, notification_class(trig.kind));
+            return;
+        }
+        if s == INTERRUPT_MARKERS[0] {
+            push_unique(out, Class::InterruptUser);
+            return;
+        }
+        if s == INTERRUPT_MARKERS[1] {
+            push_unique(out, Class::InterruptTool);
+            return;
+        }
+        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {
+            push_unique(out, Class::CommandStdout);
+            return;
+        }
+        if s.starts_with(COMMAND_NAME_PREFIX) {
+            push_unique(out, Class::CommandInvocation);
+            // Prose typed after the slash command (`<command-args>`) IS genuine user input.
+            if self.slash_command_args().is_some() {
+                push_unique(out, Class::UserMessage);
+            }
+            return;
+        }
+        if s.trim_start().starts_with(SCHEDULE_CONTINUATION_MARKER) {
+            push_unique(out, Class::ScheduleContinuation);
+            return;
+        }
+        if s.contains(SCHEDULE_WAKEUP_MARKER) {
+            push_unique(out, Class::ScheduleWakeup);
+            return;
+        }
+        // Otherwise genuine human prose — unless this is the spawn-prompt seed of a subagent
+        // transcript, which is an inbound comm (parent ⇨ self), not the operator (GOLD §3).
+        if ctx.is_subagent && ctx.is_transcript_opener {
+            push_unique(out, Class::CommInbox);
+        } else {
+            push_unique(out, Class::UserMessage);
+        }
+    }
+
+    /// Classify a block-content `user` record (GOLD §3). A tool_result carrier →
+    /// `agent.tool.result`, plus the dual labels (`user.answer` for an AUQ answer,
+    /// `user.rejection` for a typed rejection, `agent.communication.inbox` for a subagent
+    /// return). A no-tool_result block record is routed through the string classifier on its
+    /// joined text (interrupt markers / genuine prose can ride on a text block).
+    fn classify_user_blocks(&self, ctx: &ClassifyCtx, blocks: &[Block], out: &mut Vec<Class>) {
+        let has_tool_result = blocks.iter().any(|b| matches!(b, Block::ToolResult { .. }));
+        if has_tool_result {
+            // Order follows the GOLD §3 table (label A then label B): the user-facing dual
+            // label (`user.answer`/`user.rejection`) leads its carrier; a subagent return
+            // leads with its `agent.tool.result` base then the `…inbox` comm view. These
+            // dual-label shapes are mutually exclusive, so an if/else chain is deterministic.
+            if self.is_auq_answer_boundary() {
+                push_unique(out, Class::UserAnswer);
+                push_unique(out, Class::AgentToolResult);
+            } else if self.is_plan_rejection_boundary() {
+                push_unique(out, Class::UserRejection);
+                push_unique(out, Class::AgentToolResult);
+            } else if self.is_subagent_return(ctx) {
+                push_unique(out, Class::AgentToolResult);
+                push_unique(out, Class::CommInbox);
+            } else {
+                push_unique(out, Class::AgentToolResult);
+            }
+            return;
+        }
+        let joined = blocks
+            .iter()
+            .filter_map(|b| match b {
+                Block::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if joined.trim().is_empty() {
+            return; // image-only / empty → nothing in the taxonomy
+        }
+        self.classify_user_string(ctx, &joined, out);
+    }
+
+    /// The comm direction `(from, to)` for a communication record (GOLD §4), or `None` for a
+    /// non-comm record. The `self` side is `ctx.owner_id` (falls back to the literal `"self"`
+    /// so direction is testable without a real id); record-supplied ids (teammate_id, the
+    /// SendMessage recipient) are used verbatim; a spawn child / subagent-return FROM is
+    /// resolved via the [`SpawnLookup`], degrading to the raw spawn name or `"?"`. A record
+    /// carrying multiple comm blocks returns the FIRST (most salient) direction.
+    #[must_use]
+    pub fn direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {
+        let owner = || ctx.owner_id.unwrap_or("self").to_string();
+
+        // Inbound teammate/peer message: teammate_id ⇨ self.
+        if let Some(tm) = self.teammate_message() {
+            let from = tm.teammate_id.unwrap_or_else(|| "peer".to_string());
+            return Some((from, owner()));
+        }
+
+        if let Some(blocks) = self.blocks() {
+            for b in blocks {
+                match b {
+                    Block::ToolUse { id, name, input } => {
+                        let Some(name) = name.as_deref() else {
+                            continue;
+                        };
+                        if name == "SendMessage" {
+                            let to = send_message_recipient(input.as_ref())
+                                .unwrap_or_else(|| "?".to_string());
+                            return Some((owner(), to));
+                        }
+                        if is_spawn_tool_name(name) {
+                            // TO = the spawned child: id-join first, then the name-join, else
+                            // the raw spawn name, else `?`.
+                            let to = id
+                                .as_deref()
+                                .and_then(|i| {
+                                    ctx.spawn.and_then(|s| s.child_for_spawn_tool_use_id(i))
+                                })
+                                .or_else(|| {
+                                    spawn_target_name(input.as_ref()).map(|n| {
+                                        ctx.spawn
+                                            .and_then(|s| s.child_for_spawn_name(&n))
+                                            .unwrap_or(n)
+                                    })
+                                })
+                                .unwrap_or_else(|| "?".to_string());
+                            return Some((owner(), to));
+                        }
+                    }
+                    // Subagent return: child ⇨ self (the Task tool_result of a one-shot spawn).
+                    // A teammate-spawn ACK shares the spawn id but is NOT a return → no
+                    // direction (the teammate's real reply comes later as a teammate-message).
+                    Block::ToolResult {
+                        tool_use_id: Some(tid),
+                        ..
+                    } if !self.is_teammate_spawn_ack() => {
+                        if let Some(child) =
+                            ctx.spawn.and_then(|s| s.child_for_spawn_tool_use_id(tid))
+                        {
+                            return Some((child, owner()));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Subagent transcript opener (the spawn-prompt seed): parent ⇨ self.
+        if ctx.is_subagent && ctx.is_transcript_opener && self.opens_turn() {
+            let from = ctx.parent_id.unwrap_or("parent").to_string();
+            return Some((from, owner()));
+        }
+
+        None
+    }
 }
 
 #[cfg(test)]
@@ -3060,5 +3871,856 @@ mod tests {
         // A record with no blocks → None.
         let no_blocks = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
         assert!(no_blocks.bash_command().is_none());
+    }
+
+    // ============================================================================
+    // role.class.sub classification engine (GOLD §2–§6) — P1 unit tests.
+    // ============================================================================
+
+    /// A spawn lookup stub: `toolu_spawn` spawned `child-abc`; the teammate name `VSRepro`
+    /// resolves to its name-embedded id. Everything else is unknown (graceful degrade path).
+    struct FakeSpawn;
+    impl SpawnLookup for FakeSpawn {
+        fn child_for_spawn_tool_use_id(&self, id: &str) -> Option<String> {
+            (id == "toolu_spawn").then(|| "child-abc".to_string())
+        }
+        fn child_for_spawn_name(&self, name: &str) -> Option<String> {
+            (name == "VSRepro").then(|| "aVSRepro-deadbeef".to_string())
+        }
+    }
+
+    // ── Class::path() + role() for EVERY variant (the canonical wire forms) ──
+
+    #[test]
+    fn class_path_for_every_variant() {
+        let table = [
+            (Class::UserMessage, "user.message"),
+            (Class::UserAnswer, "user.answer"),
+            (Class::UserRejection, "user.rejection"),
+            (Class::AgentMessage, "agent.message"),
+            (Class::AgentThinking, "agent.thinking"),
+            (Class::AgentToolUse, "agent.tool.use"),
+            (Class::AgentToolResult, "agent.tool.result"),
+            (Class::CommInbox, "agent.communication.inbox"),
+            (Class::CommSent, "agent.communication.sent"),
+            (Class::CommSignal, "agent.communication.signal"),
+            (Class::NotificationWorkflow, "harness.notification.workflow"),
+            (Class::NotificationMonitor, "harness.notification.monitor"),
+            (Class::NotificationSubagent, "harness.notification.subagent"),
+            (
+                Class::NotificationBackgroundCommand,
+                "harness.notification.background-command",
+            ),
+            (Class::NotificationTask, "harness.notification.task"),
+            (Class::CompactionSummary, "harness.compaction.summary"),
+            (Class::CompactionBoundary, "harness.compaction.boundary"),
+            (Class::CommandInvocation, "harness.command.invocation"),
+            (Class::CommandStdout, "harness.command.stdout"),
+            (Class::InterruptUser, "harness.interrupt.user"),
+            (Class::InterruptTool, "harness.interrupt.tool"),
+            (Class::ScheduleWakeup, "harness.schedule.wakeup"),
+            (Class::ScheduleContinuation, "harness.schedule.continuation"),
+        ];
+        for (c, p) in table {
+            assert_eq!(c.path(), p, "path mismatch for {c:?}");
+            // The role is always the first dot-segment of the path.
+            let head = p.split('.').next().unwrap();
+            assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
+        }
+        // No two leaves share a path (the selector space is unambiguous).
+        let mut paths: Vec<&str> = table.iter().map(|(c, _)| c.path()).collect();
+        paths.sort_unstable();
+        let n = paths.len();
+        paths.dedup();
+        assert_eq!(paths.len(), n, "duplicate Class path");
+    }
+
+    #[test]
+    fn role_as_str_and_class_role_partition() {
+        assert_eq!(Role::User.as_str(), "user");
+        assert_eq!(Role::Agent.as_str(), "agent");
+        assert_eq!(Role::Harness.as_str(), "harness");
+        // Spot-check the role partition.
+        assert_eq!(Class::UserAnswer.role(), Role::User);
+        assert_eq!(Class::CommSignal.role(), Role::Agent);
+        assert_eq!(Class::AgentToolResult.role(), Role::Agent);
+        assert_eq!(Class::CompactionBoundary.role(), Role::Harness);
+        assert_eq!(Class::ScheduleWakeup.role(), Role::Harness);
+    }
+
+    // ── is_teammate_message + parse_teammate_message (GOLD §5) ──
+
+    #[test]
+    fn is_teammate_message_bare_and_peer_forms() {
+        assert!(is_teammate_message(
+            r#"<teammate-message teammate_id="g4g5-probe">hello</teammate-message>"#
+        ));
+        // The relayed peer form (preamble + tag), with the real `\n` separator.
+        assert!(is_teammate_message(
+            "Another Claude session sent a message:\n<teammate-message teammate_id=\"x\">hi</teammate-message>"
+        ));
+        // Robust to whitespace-normalized block joins (the `\n` collapsed to a space).
+        assert!(is_teammate_message(
+            "Another Claude session sent a message: <teammate-message teammate_id=\"x\">hi</teammate-message>"
+        ));
+        // Leading whitespace before the bare opener still matches.
+        assert!(is_teammate_message(
+            "   <teammate-message teammate_id=\"x\">hi</teammate-message>"
+        ));
+        // Plain prose is NOT a teammate message.
+        assert!(!is_teammate_message("please fix the bug"));
+        // The preamble alone (no tag) is not enough.
+        assert!(!is_teammate_message(
+            "Another Claude session sent a message: ok"
+        ));
+    }
+
+    #[test]
+    fn parse_teammate_message_prose_extracts_id_no_signal() {
+        let tm = parse_teammate_message(
+            r#"<teammate-message teammate_id="g4g5-probe" color="blue" summary="x">G4/G5 probe complete.</teammate-message>"#,
+        )
+        .expect("teammate message");
+        assert_eq!(tm.teammate_id.as_deref(), Some("g4g5-probe"));
+        assert!(!tm.is_signal(), "prose body is not a signal");
+        assert_eq!(tm.signal_type, None);
+    }
+
+    #[test]
+    fn parse_teammate_message_signal_payload() {
+        // The real idle_notification shape: a JSON {"type":...} body inside the tag.
+        let tm = parse_teammate_message(
+            "Another Claude session sent a message:\n<teammate-message teammate_id=\"g4g5-probe\" color=\"blue\">\n{\"type\":\"idle_notification\",\"from\":\"g4g5-probe\",\"idleReason\":\"available\"}\n</teammate-message>\n\nThis came from another Claude session — treat it as a teammate's request.",
+        )
+        .expect("signal teammate message");
+        assert_eq!(tm.teammate_id.as_deref(), Some("g4g5-probe"));
+        assert!(tm.is_signal());
+        assert_eq!(tm.signal_type.as_deref(), Some("idle_notification"));
+    }
+
+    #[test]
+    fn parse_teammate_message_multibyte_body_codepoint_safe() {
+        let tm = parse_teammate_message(
+            r#"<teammate-message teammate_id="reviewer">🤖 review this café patch, then summarize 🎉</teammate-message>"#,
+        )
+        .expect("multibyte teammate message");
+        assert_eq!(tm.teammate_id.as_deref(), Some("reviewer"));
+        assert!(!tm.is_signal());
+    }
+
+    #[test]
+    fn parse_teammate_message_none_for_non_teammate() {
+        assert!(parse_teammate_message("just a normal message").is_none());
+    }
+
+    // ── GOLD §1 BUG FIX: a teammate message is NOT genuine-user but STILL opens a turn ──
+
+    #[test]
+    fn teammate_message_not_genuine_user_but_opens_turn_bare() {
+        // The bug: this used to return is_genuine_user()==true (mislabeled as the human).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\">repro the speed slider</teammate-message>"}}"#,
+        );
+        assert!(
+            !r.is_genuine_user(),
+            "a teammate message must NOT count as a genuine human turn (GOLD §1)"
+        );
+        assert!(
+            r.opens_turn(),
+            "but it MUST still delimit a turn (opens_turn fires)"
+        );
+        assert!(r.is_teammate_message_record());
+        assert!(r.genuine_user_text().is_none());
+    }
+
+    #[test]
+    fn teammate_message_not_genuine_user_peer_form() {
+        // The relayed peer form (string content, the dominant real shape, 106 in one session).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"g4g5-probe\">verdicts below</teammate-message>"}}"#,
+        );
+        assert!(!r.is_genuine_user());
+        assert!(r.opens_turn());
+        // The opener body is preserved (not blanked) so turns/search don't regress.
+        let body = r.reconstructed_user_text(None).expect("teammate body");
+        assert!(body.contains("verdicts below"), "got: {body}");
+    }
+
+    #[test]
+    fn teammate_message_as_text_block_is_not_genuine_user() {
+        // The same content can arrive as a single text block — still excluded.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<teammate-message teammate_id=\"x\">hi</teammate-message>"}]}}"#,
+        );
+        assert!(!r.is_genuine_user());
+        assert!(r.opens_turn());
+    }
+
+    #[test]
+    fn is_teammate_message_detects_tag_anywhere() {
+        // Edge-fixtures correction: detect by CONTAINS the tag (bare-start occurs 0× in the
+        // corpus; the real form is always the wrapped relay). A tag with NO preamble and NOT
+        // at the start is still detected — robust to any preamble/footer wording change.
+        assert!(is_teammate_message(
+            r#"<teammate-message teammate_id="x">hi</teammate-message>"#
+        ));
+        assert!(is_teammate_message(
+            "noise before <teammate-message teammate_id=\"x\">hi</teammate-message> noise after"
+        ));
+        assert!(!is_teammate_message("no tag at all"));
+    }
+
+    #[test]
+    fn embedded_teammate_tag_classifies_as_inbox_accepted_tradeoff() {
+        // CONTAINS deliberately catches a body that QUOTES the tag — the accepted trade-off
+        // (a genuine human typing the literal tag is unseen in the corpus, and treating it as
+        // a peer message is the safe failure direction, per the edge-fixtures directive).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"why does a <teammate-message ...> show up in my logs?"}}"#,
+        );
+        assert!(!r.is_genuine_user());
+        assert!(r.opens_turn());
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommInbox]
+        );
+    }
+
+    // ── classify(): single-label record shapes ──
+
+    #[test]
+    fn classify_genuine_user_message() {
+        let r = parse(r#"{"type":"user","message":{"role":"user","content":"please fix it"}}"#);
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserMessage]
+        );
+    }
+
+    #[test]
+    fn classify_assistant_text_is_message() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentMessage]
+        );
+    }
+
+    #[test]
+    fn classify_assistant_thinking_only() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm","signature":"s"}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentThinking]
+        );
+    }
+
+    #[test]
+    fn classify_assistant_thinking_then_tool_use_multilabel() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"plan"},{"type":"tool_use","id":"t","name":"Bash","input":{"command":"ls"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentThinking, Class::AgentToolUse]
+        );
+    }
+
+    #[test]
+    fn classify_assistant_text_and_tool_use_multilabel() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"running it"},{"type":"tool_use","id":"t","name":"Read","input":{"file_path":"/x"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentMessage, Class::AgentToolUse]
+        );
+    }
+
+    #[test]
+    fn classify_assistant_bare_string_message() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":"surprise bare string"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentMessage]
+        );
+    }
+
+    // ── classify(): communication (GOLD §3 + §4) ──
+
+    #[test]
+    fn classify_sendmessage_message_is_tool_use_plus_sent() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"ab9018739543b1df0","type":"message","message":"do the thing"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSent]
+        );
+    }
+
+    #[test]
+    fn classify_sendmessage_direct_is_sent_not_signal() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"x","type":"direct","message":"hi"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSent]
+        );
+    }
+
+    #[test]
+    fn classify_sendmessage_no_type_defaults_to_sent() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"x","message":"hi"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSent]
+        );
+    }
+
+    #[test]
+    fn classify_sendmessage_shutdown_request_is_signal() {
+        // Top-level type:"shutdown_request" (the real shape).
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"S-Sync","type":"shutdown_request","recipient":"S-Sync","reason":"done"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSignal]
+        );
+    }
+
+    #[test]
+    fn classify_sendmessage_nested_shutdown_payload_is_signal() {
+        // The nested message:{type:shutdown_request} form (also real).
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"x","message":{"type":"shutdown_request","reason":"done"}}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSignal]
+        );
+    }
+
+    #[test]
+    fn classify_spawn_tool_use_is_tool_use_plus_sent() {
+        for tool in ["Task", "Agent", "Workflow"] {
+            let r = parse(&format!(
+                r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t","name":"{tool}","input":{{"subagent_type":"executor","description":"go"}}}}]}}}}"#
+            ));
+            assert_eq!(
+                r.classify(&ClassifyCtx::top_level()),
+                vec![Class::AgentToolUse, Class::CommSent],
+                "spawn tool {tool}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_teammate_prose_is_inbox() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"reviewer\">verdict: LGTM</teammate-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommInbox]
+        );
+    }
+
+    #[test]
+    fn classify_teammate_signal_is_signal() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"peer\">\n{\"type\":\"idle_notification\",\"from\":\"peer\"}\n</teammate-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommSignal]
+        );
+    }
+
+    // ── classify(): dual-label user carriers (GOLD §3) ──
+
+    #[test]
+    fn classify_auq_answer_is_user_answer_plus_tool_result() {
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"questions":[{"question":"which?","options":[{"label":"A"}]}],"answers":{"which?":"go with A"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"go with A\"."}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserAnswer, Class::AgentToolResult]
+        );
+    }
+
+    #[test]
+    fn classify_plan_rejection_is_user_rejection_plus_tool_result() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"p","is_error":true,"content":"The user doesn't want to proceed with this tool use. To tell you how to proceed, the user said:\nadd tests first"}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserRejection, Class::AgentToolResult]
+        );
+    }
+
+    #[test]
+    fn classify_plain_tool_result_carrier_is_tool_result_only() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok, ran fine"}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolResult]
+        );
+    }
+
+    #[test]
+    fn classify_subagent_return_is_tool_result_plus_inbox() {
+        // A tool_result whose tool_use_id was a spawn → the subagent return (child ⇨ self).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"subagent done: 3 files changed"}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.classify(&ctx),
+            vec![Class::AgentToolResult, Class::CommInbox]
+        );
+        // Without a spawn lookup it is just a tool_result (no return detection).
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolResult]
+        );
+    }
+
+    #[test]
+    fn classify_teammate_spawn_ack_is_tool_result_only_not_inbox() {
+        // Edge-fixtures correction #3: a persistent teammate `Agent` spawn's tool_result is an
+        // immediate {status:"teammate_spawned"} ACK that shares the spawn tool_use_id (so the
+        // lookup WOULD resolve it), but it is NOT the child's return → agent.tool.result ONLY.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"status":"teammate_spawned","name":"P1-engine","agent_id":"aP1-engine-9cf2","agent_type":"executor"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"teammate spawned"}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert!(r.is_teammate_spawn_ack());
+        assert_eq!(
+            r.classify(&ctx),
+            vec![Class::AgentToolResult],
+            "the ACK must NOT carry agent.communication.inbox"
+        );
+        // And it produces NO child ⇨ self direction (the real reply arrives later).
+        assert!(r.direction(&ctx).is_none());
+    }
+
+    #[test]
+    fn classify_teammate_terminated_signal_id_is_system() {
+        // Edge-fixtures correction #5: a teammate_terminated payload has teammate_id="system"
+        // on the attr; the dead agent is named in the BODY, not the attr. Direction FROM is
+        // "system", never the dead agent.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"system\">\n{\"type\":\"teammate_terminated\",\"message\":\"B38F1Check has shut down.\"}\n</teammate-message>"}}"#,
+        );
+        let tm = r.teammate_message().expect("teammate message");
+        assert_eq!(tm.teammate_id.as_deref(), Some("system"));
+        assert_eq!(tm.signal_type.as_deref(), Some("teammate_terminated"));
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommSignal]
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("me"),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("system".to_string(), "me".to_string())),
+            "FROM is system, NOT the dead agent named in the body"
+        );
+    }
+
+    #[test]
+    fn classify_shutdown_approved_signal() {
+        // The real f-shutdown_approved shape (JSON body with requestId etc.).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"B38F1Check\" color=\"yellow\">\n{\"type\":\"shutdown_approved\",\"requestId\":\"shutdown-1@B38F1Check\",\"from\":\"B38F1Check\",\"backendType\":\"in-process\"}\n</teammate-message>"}}"#,
+        );
+        let tm = r.teammate_message().unwrap();
+        assert_eq!(tm.signal_type.as_deref(), Some("shutdown_approved"));
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommSignal]
+        );
+    }
+
+    #[test]
+    fn classify_sendmessage_real_shutdown_request_dict_message_shape() {
+        // The exact real f-shutdown_request shape: top-level type=shutdown_request, message is
+        // a DICT {type,reason} (polymorphic vs the string form), to==recipient = a NAME.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"GraftBoard","message":{"type":"shutdown_request","reason":"done"},"summary":"shut down","type":"shutdown_request","recipient":"GraftBoard","content":"done"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSignal]
+        );
+        // Direction TO is the teammate NAME (not always a re-feedable id).
+        assert_eq!(
+            r.direction(&ClassifyCtx::top_level()),
+            Some(("self".to_string(), "GraftBoard".to_string()))
+        );
+    }
+
+    #[test]
+    fn classify_subagent_opener_is_inbox_via_ctx() {
+        // The spawn-prompt seed of a subagent transcript: a genuine-user-shaped record that
+        // ctx reclassifies as parent ⇨ self inbox.
+        let r = parse(
+            r#"{"type":"user","isSidechain":true,"message":{"role":"user","content":"go repro the bug"}}"#,
+        );
+        let ctx = ClassifyCtx {
+            is_subagent: true,
+            is_transcript_opener: true,
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(r.classify(&ctx), vec![Class::CommInbox]);
+        // The SAME record on a top-level transcript is a plain user message.
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserMessage]
+        );
+    }
+
+    // ── classify(): harness records (GOLD §2/§5) ──
+
+    #[test]
+    fn classify_task_notification_each_kind() {
+        // Summaries kept quote-free so they embed cleanly in the JSON content string; the
+        // kind classifier keys on the leading word, which is unaffected.
+        let cases = [
+            ("Dynamic workflow x completed", Class::NotificationWorkflow),
+            (
+                "Background command build completed (exit code 0)",
+                Class::NotificationBackgroundCommand,
+            ),
+            ("Agent executor finished", Class::NotificationSubagent),
+            ("Monitor event tick", Class::NotificationMonitor),
+            ("something unclassified", Class::NotificationTask),
+        ];
+        for (summary, want) in cases {
+            let r = parse(&format!(
+                r#"{{"type":"user","message":{{"role":"user","content":"<task-notification>\n<task-id>id1</task-id>\n<status>completed</status>\n<summary>{summary}</summary>\n</task-notification>"}}}}"#
+            ));
+            assert_eq!(
+                r.classify(&ClassifyCtx::top_level()),
+                vec![want],
+                "summary: {summary}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_compaction_summary_and_boundary() {
+        let summary = parse(
+            r#"{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued..."}}"#,
+        );
+        assert_eq!(
+            summary.classify(&ClassifyCtx::top_level()),
+            vec![Class::CompactionSummary]
+        );
+        let boundary = parse(
+            r#"{"type":"system","subtype":"compact_boundary","compactMetadata":{"trigger":"auto","preTokens":1}}"#,
+        );
+        assert!(boundary.is_compact_boundary());
+        assert_eq!(
+            boundary.classify(&ClassifyCtx::top_level()),
+            vec![Class::CompactionBoundary]
+        );
+    }
+
+    #[test]
+    fn classify_command_invocation_with_and_without_args() {
+        let no_args = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args></command-args>"}}"#,
+        );
+        assert_eq!(
+            no_args.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommandInvocation]
+        );
+        let with_args = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>just shipped, summarize</command-args>"}}"#,
+        );
+        assert_eq!(
+            with_args.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommandInvocation, Class::UserMessage]
+        );
+    }
+
+    #[test]
+    fn classify_local_command_stdout() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<local-command-stdout>✓ done</local-command-stdout>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommandStdout]
+        );
+    }
+
+    #[test]
+    fn classify_interrupts_user_and_tool() {
+        let u = parse(
+            r#"{"type":"user","message":{"role":"user","content":"[Request interrupted by user]"}}"#,
+        );
+        assert_eq!(
+            u.classify(&ClassifyCtx::top_level()),
+            vec![Class::InterruptUser]
+        );
+        let t = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#,
+        );
+        assert_eq!(
+            t.classify(&ClassifyCtx::top_level()),
+            vec![Class::InterruptTool]
+        );
+    }
+
+    #[test]
+    fn classify_schedule_continuation_and_wakeup() {
+        let cont = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Continue from where you left off."}]}}"#,
+        );
+        assert_eq!(
+            cont.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleContinuation]
+        );
+        let wake = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<<autonomous-loop-dynamic>>"}}"#,
+        );
+        assert_eq!(
+            wake.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleWakeup]
+        );
+    }
+
+    #[test]
+    fn classify_elicitation_pending_and_resolved() {
+        let pending = parse(
+            r#"{"type":"assistant","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"k","message":{"role":"assistant","content":[{"type":"tool_use","id":"q","name":"AskUserQuestion","input":{}}]}}"#,
+        );
+        assert_eq!(
+            pending.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse]
+        );
+        // An MCP pending marker is a system record with NO tool_use block — still tool.use.
+        let mcp = parse(
+            r#"{"type":"system","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp-elicitation","csiftKey":"srv","content":"elicitation"}"#,
+        );
+        assert_eq!(
+            mcp.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse]
+        );
+        let resolved = parse(
+            r#"{"type":"csift-elicitation-resolved","csift":"elicitation-marker-v1","csiftPhase":"resolved","csiftKey":"k"}"#,
+        );
+        assert!(
+            resolved.classify(&ClassifyCtx::top_level()).is_empty(),
+            "a resolved marker is a pairing artifact, no label"
+        );
+    }
+
+    #[test]
+    fn classify_unmodeled_records_are_empty() {
+        // A system away_summary is outside the taxonomy → no labels (never crash).
+        let sys = parse(r#"{"type":"system","subtype":"away_summary","content":"gone 5m"}"#);
+        assert!(sys.classify(&ClassifyCtx::top_level()).is_empty());
+        // A metadata-only record likewise.
+        let meta = parse(r#"{"type":"last-prompt","leafUuid":"x"}"#);
+        assert!(meta.classify(&ClassifyCtx::top_level()).is_empty());
+        // An image-only user record (no text, no tool_result) → empty.
+        let img = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"image","source":{}}]}}"#,
+        );
+        assert!(img.classify(&ClassifyCtx::top_level()).is_empty());
+    }
+
+    #[test]
+    fn classify_dedups_repeated_labels() {
+        // Two SendMessage blocks in one record → each label appears ONCE.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"a","name":"SendMessage","input":{"to":"x","message":"1"}},{"type":"tool_use","id":"b","name":"SendMessage","input":{"to":"y","message":"2"}}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolUse, Class::CommSent]
+        );
+    }
+
+    // ── direction() (GOLD §4) ──
+
+    #[test]
+    fn direction_teammate_inbox_from_peer_to_self() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"g4g5-probe\">verdicts</teammate-message>"}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("session-uuid-1"),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("g4g5-probe".to_string(), "session-uuid-1".to_string()))
+        );
+        // Without an owner id, the self side falls back to the literal "self".
+        assert_eq!(
+            r.direction(&ClassifyCtx::top_level()),
+            Some(("g4g5-probe".to_string(), "self".to_string()))
+        );
+    }
+
+    #[test]
+    fn direction_sendmessage_self_to_recipient() {
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"to":"ab9018739543b1df0","message":"hi"}}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("me"),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("me".to_string(), "ab9018739543b1df0".to_string()))
+        );
+    }
+
+    #[test]
+    fn direction_sendmessage_recipient_fallback_field() {
+        // No `to`, only `recipient`.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"SendMessage","input":{"recipient":"team-lead","type":"shutdown_response","approve":true}}]}}"#,
+        );
+        assert_eq!(
+            r.direction(&ClassifyCtx::top_level()),
+            Some(("self".to_string(), "team-lead".to_string()))
+        );
+    }
+
+    #[test]
+    fn direction_spawn_resolves_child_via_lookup_then_degrades() {
+        // id-join hit.
+        let by_id = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_spawn","name":"Task","input":{"subagent_type":"executor"}}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            by_id.direction(&ctx),
+            Some(("parent".to_string(), "child-abc".to_string()))
+        );
+        // name-join hit (the teammate spawn: meta has no toolUseId, joins by input.name).
+        let by_name = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"other","name":"Agent","input":{"name":"VSRepro","subagent_type":"qa-tester"}}]}}"#,
+        );
+        assert_eq!(
+            by_name.direction(&ctx),
+            Some(("parent".to_string(), "aVSRepro-deadbeef".to_string()))
+        );
+        // No lookup at all → degrade to the raw spawn name.
+        assert_eq!(
+            by_name.direction(&ClassifyCtx::top_level()),
+            Some(("self".to_string(), "VSRepro".to_string()))
+        );
+    }
+
+    #[test]
+    fn direction_subagent_return_child_to_self() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"done"}]}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("child-abc".to_string(), "parent".to_string()))
+        );
+    }
+
+    #[test]
+    fn direction_subagent_opener_parent_to_self() {
+        let r = parse(
+            r#"{"type":"user","isSidechain":true,"message":{"role":"user","content":"go do the thing"}}"#,
+        );
+        let ctx = ClassifyCtx {
+            owner_id: Some("child-id"),
+            parent_id: Some("parent-id"),
+            is_subagent: true,
+            is_transcript_opener: true,
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("parent-id".to_string(), "child-id".to_string()))
+        );
+    }
+
+    #[test]
+    fn direction_none_for_non_comm_records() {
+        let user = parse(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#);
+        assert!(user.direction(&ClassifyCtx::top_level()).is_none());
+        let agent = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}"#,
+        );
+        assert!(agent.direction(&ClassifyCtx::top_level()).is_none());
+        // A plain (non-spawn) tool_result is not a comm without a spawn match.
+        let tr = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#,
+        );
+        assert!(tr.direction(&ClassifyCtx::top_level()).is_none());
+    }
+
+    // ── send_message_is_signal helper edge arms ──
+
+    #[test]
+    fn send_message_is_signal_arms() {
+        use serde_json::json;
+        assert!(!send_message_is_signal(Some(&json!({"type":"message"}))));
+        assert!(!send_message_is_signal(Some(&json!({"type":"direct"}))));
+        assert!(send_message_is_signal(Some(
+            &json!({"type":"shutdown_request"})
+        )));
+        assert!(send_message_is_signal(Some(
+            &json!({"message":{"type":"shutdown_response"}})
+        )));
+        assert!(!send_message_is_signal(Some(&json!({"to":"x"})))); // no type → message
+        assert!(!send_message_is_signal(None));
+    }
+
+    #[test]
+    fn classify_ctx_debug_renders_spawn_presence() {
+        let ctx = ClassifyCtx {
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        let dbg = format!("{ctx:?}");
+        assert!(dbg.contains("has_spawn_lookup: true"), "got: {dbg}");
     }
 }
