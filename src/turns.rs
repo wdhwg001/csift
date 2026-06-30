@@ -777,11 +777,11 @@ fn build(records: &[(usize, Record)], sidecar: &[Record]) -> (Vec<TurnSlice>, Ve
                     automation = rec.automation_trigger();
                     user = Some(make_unit(line_no, Role::User, &label, rec));
                 } else if let Some(ic) = rec.inbound_comm_preview() {
-                    // An inbound `<teammate-message>` opener (GOLD §1): render the CLEAN body with
-                    // an `agent.communication.{inbox,signal}  <from> ⇨ self` header in place of the
-                    // raw XML it used to dump into the `▽ USER` lane. Only teammate-messages reach
-                    // here (the only peer form `opens_turn` admits — an isMeta `<agent-message>`
-                    // never opens a turn), so the turn count is unchanged.
+                    // An inbound PEER opener — `<teammate-message>` (GOLD §1) OR `<agent-message>`
+                    // (FINDING-2, now an `opens_turn` boundary too): render the CLEAN body with an
+                    // `agent.communication.{inbox,signal}  <from> ⇨ self` header in place of the raw
+                    // XML it used to dump into the `▽ USER` lane. `inbound_comm_preview` covers BOTH
+                    // peer forms (boundary-anchored, FINDING-1), so neither shows raw XML.
                     let mut u = make_unit(line_no, Role::User, &ic.body, rec);
                     u.inbound = Some(ic);
                     user = Some(u);

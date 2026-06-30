@@ -52,7 +52,7 @@ agent     agent.message         visible end-of-turn assistant text
           agent.tool.result     tool_result (each names its tool; incl. errored)
           agent.communication.{inbox,sent,signal}   peer comms — render `from ⇨ to`
 harness   harness.notification.{workflow,monitor,subagent,background-command,task}   <task-notification> pulses
-          harness.compaction.{summary,boundary}      isCompactSummary (searchable) + system compact_boundary (classify-only: system records are dropped by search's perf prefilter)
+          harness.compaction.{summary,boundary}      isCompactSummary + system compact_boundary (BOTH searchable; boundary renders its compactMetadata: trigger/preTokens/postTokens/durationMs)
           harness.command.{invocation,stdout}        <command-name> wrapper + <local-command-stdout>
           harness.interrupt.{user,tool}              [Request interrupted by user]/…for tool use]
           harness.schedule.{wakeup,continuation}     fired timer tick / "Continue from where you left off."

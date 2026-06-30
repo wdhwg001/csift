@@ -2671,9 +2671,11 @@ fn search_rejects_old_flat_category_selector() {
 
 #[test]
 fn search_skips_non_transcript_noise_lines() {
-    // A session padded with attachment / system / file-history-snapshot lines (no
+    // A session padded with attachment / file-history-snapshot / queue-operation lines (no
     // role marker) → search's pre-JSON category prefilter drops them (the
-    // `!line_is_transcript_candidate` TRUE arm) while still matching the real turn.
+    // `!line_is_transcript_candidate` TRUE arm) while still matching the real turn. (The
+    // `compact_boundary` line IS kept by the prefilter now (D7), but carries no `carry` literal
+    // and no compactMetadata here, so it produces no spurious hit.)
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -2688,6 +2690,67 @@ fn search_skips_non_transcript_noise_lines() {
     let out = h.run(&["search", "carry", "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("matched 1"), "got: {}", out.stdout);
+}
+
+#[test]
+fn search_quoted_tags_mid_prose_stay_user_message() {
+    // FINDING-1: a genuine user message that merely QUOTES `<task-notification>` /
+    // `<teammate-message>` mid-prose stays `user.message` — it is NOT reclassified
+    // `harness.notification` / `agent.communication.inbox` (this bit csift's OWN dev sessions,
+    // which quote these tags constantly).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"In csift the <task-notification> pulse and the <teammate-message peer form both route through classify zzquoted."}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ack"}]}}"#, "\n",
+        ),
+    );
+    // Found under user.message …
+    let um = h.run(&[
+        "search",
+        "zzquoted",
+        "-t",
+        "user.message",
+        &at(SESS),
+        "--no-subagents",
+    ]);
+    assert!(um.success, "stderr: {}", um.stderr);
+    assert!(
+        um.stdout.contains("user.message"),
+        "FINDING-1: quoted tags stay user.message:\n{}",
+        um.stdout
+    );
+    // … and NOT under harness.notification …
+    let notif = h.run(&[
+        "search",
+        "zzquoted",
+        "-t",
+        "harness.notification",
+        &at(SESS),
+        "--no-subagents",
+    ]);
+    assert!(notif.success, "stderr: {}", notif.stderr);
+    assert!(
+        notif.stdout.contains("no matching exchanges"),
+        "FINDING-1: a quoted <task-notification> is not a notification:\n{}",
+        notif.stdout
+    );
+    // … and NOT under agent.communication.inbox.
+    let inbox = h.run(&[
+        "search",
+        "zzquoted",
+        "-t",
+        "agent.communication.inbox",
+        &at(SESS),
+        "--no-subagents",
+    ]);
+    assert!(inbox.success, "stderr: {}", inbox.stderr);
+    assert!(
+        inbox.stdout.contains("no matching exchanges"),
+        "FINDING-1: a quoted <teammate-message> is not inbox:\n{}",
+        inbox.stdout
+    );
 }
 
 #[test]
@@ -11732,12 +11795,11 @@ fn mcp_pending_is_merged_into_turns() {
 // search-reachable and renders its dotted label + decoration. Rows already covered elsewhere are
 // re-asserted here so the matrix is self-contained.
 //
-// Two rows are NOT search-surfaced, by design — documented here so a regression is caught:
-//   • D7 harness.compaction.boundary — a `type:"system"` record dropped by search's §7 stage-1
-//     transcript-candidate prefilter (`role:user`/`role:assistant` only). It IS a valid classify
-//     label (engine unit test `model::…::classify_compaction_summary_and_boundary`); search just
-//     never sees it. Its sibling D6 harness.compaction.summary is a `type:"user"` record → searchable.
+// One row is NOT search-surfaced, by design — documented here so a regression is caught:
 //   • E / J — excluded shapes (attachment; an isMeta record matching no harness marker) → no label.
+// D7 harness.compaction.boundary IS now search-surfaced (user-reversed): the §7 prefilter keeps the
+// `compact_boundary` `type:"system"` record (one extra memmem) and `record_raw_text` renders its
+// top-level content + compactMetadata, so compaction points are enumerable + inspectable.
 // ============================================================================
 
 const ACC_ENC: &str = "-Users-x-acc";
@@ -11984,11 +12046,12 @@ fn acceptance_harness_schedule_and_meta() {
 }
 
 #[test]
-fn acceptance_compaction_summary_searchable_boundary_classify_only() {
+fn acceptance_compaction_summary_and_boundary_searchable() {
     // §D6 the isCompactSummary record is a `type:"user"` record → searchable as
-    // `harness.compaction.summary`. §D7 the `compact_boundary` is a `type:"system"` record dropped by
-    // search's §7 transcript-candidate prefilter — a valid classify label (engine-tested) but NOT
-    // search-surfaced; assert the documented limitation so a future change is caught.
+    // `harness.compaction.summary`. §D7 (user-reversed): the `compact_boundary` is a `type:"system"`
+    // record NOW ALSO search-surfaced — the §7 prefilter keeps it (one memmem on `compact_boundary`)
+    // and `record_raw_text` renders its top-level content + compactMetadata as the match/excerpt, so
+    // compaction points can be enumerated + inspected.
     let h = acceptance_home();
 
     let summary = acc(&h, "zzsummary", "harness.compaction.summary");
@@ -12002,9 +12065,14 @@ fn acceptance_compaction_summary_searchable_boundary_classify_only() {
     let boundary = acc(&h, "zzboundary", "harness.compaction.boundary");
     assert!(boundary.success, "D7: stderr {}", boundary.stderr);
     assert!(
-        boundary.stdout.contains("no matching exchanges"),
-        "D7 compact_boundary (a system record) is dropped by the §7 prefilter, so search must NOT \
-         surface it (classify-only — see model::…::classify_compaction_summary_and_boundary):\n{}",
+        boundary.stdout.contains("harness.compaction.boundary"),
+        "D7 compact_boundary → now searchable:\n{}",
+        boundary.stdout
+    );
+    // The compactMetadata renders as the excerpt (trigger / pre/post tokens / duration).
+    assert!(
+        boundary.stdout.contains("trigger") && boundary.stdout.contains("auto"),
+        "D7 boundary excerpt carries its compactMetadata:\n{}",
         boundary.stdout
     );
 }

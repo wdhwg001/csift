@@ -826,7 +826,7 @@ fn search_one_file(
 }
 
 /// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
-/// transcript message (user/assistant role marker) — drops `attachment`, `system`,
+/// transcript message (user/assistant role marker) — drops `attachment`,
 /// `file-history-snapshot`, `queue-operation`, and metadata noise pre-JSON. Kept
 /// deliberately permissive (substring, not structural) so no genuine turn is lost.
 fn line_is_transcript_candidate(line: &[u8]) -> bool {
@@ -834,6 +834,12 @@ fn line_is_transcript_candidate(line: &[u8]) -> bool {
     // (Genuine-user string content, tool carriers, assistant blocks all do.)
     memmem::find(line, br#""role":"user""#).is_some()
         || memmem::find(line, br#""role":"assistant""#).is_some()
+        // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
+        // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
+        // inspect their `compactMetadata`. ONE extra `memmem`, and the `||` short-circuit runs it ONLY
+        // on lines that already failed BOTH role checks — boundary records are rare, so the added
+        // parse cost is negligible and the perf contract (§7) holds.
+        || memmem::find(line, b"compact_boundary").is_some()
 }
 
 /// Walk retained records in file order, delimit turns by genuine-user records, and
@@ -1761,9 +1767,16 @@ fn record_text_emission(
 }
 
 /// The raw textual body of a record for harness-marker matching: the bare string, or the text
-/// blocks joined with `\n` (mirrors the engine's `raw_message_text`). `None` when there is none.
+/// blocks joined with `\n` (mirrors the engine's `raw_message_text`). For a MESSAGE-LESS record (a
+/// `type:"system"` record — e.g. the `compact_boundary` metrics record) it falls back (D7) to the
+/// top-level `content` plus a readable `compactMetadata` excerpt, so the boundary is BOTH matchable
+/// and rendered. `None` when there is no text anywhere.
 fn record_raw_text(rec: &Record) -> Option<String> {
-    match rec.message.as_ref()?.content.as_ref()? {
+    let Some(msg) = rec.message.as_ref() else {
+        // No `message` blocks → a system record. D7: the boundary's content + compactMetadata.
+        return system_record_text(rec);
+    };
+    match msg.content.as_ref()? {
         Content::Text(s) => Some(s.clone()),
         Content::Blocks(blocks) => {
             let parts: Vec<&str> = blocks
@@ -1776,6 +1789,48 @@ fn record_raw_text(rec: &Record) -> Option<String> {
             (!parts.is_empty()).then(|| parts.join("\n"))
         }
     }
+}
+
+/// D7: the searchable + renderable text of a MESSAGE-LESS system record — in practice the
+/// `compact_boundary` metrics record (the only message-less system record `classify` labels).
+/// Combines the top-level `content` string (`"Conversation compacted …"`) with a readable
+/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE
+/// what each compaction clipped. `None` when neither is present (no fabricated text).
+fn system_record_text(rec: &Record) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(serde_json::Value::String(s)) = rec.content.as_ref() {
+        let s = s.trim();
+        if !s.is_empty() {
+            parts.push(s.to_string());
+        }
+    }
+    if let Some(excerpt) = rec
+        .compact_metadata
+        .as_ref()
+        .and_then(compact_metadata_excerpt)
+    {
+        parts.push(excerpt);
+    }
+    (!parts.is_empty()).then(|| parts.join(" "))
+}
+
+/// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt —
+/// `[compaction boundary: trigger=auto preTokens=1000 postTokens=200 durationMs=50]` (only the
+/// present fields, stable order, scalars unquoted). `None` when it is not an object or carries none
+/// of the known fields.
+fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {
+    let obj = meta.as_object()?;
+    let mut fields: Vec<String> = Vec::new();
+    for key in ["trigger", "preTokens", "postTokens", "durationMs"] {
+        if let Some(v) = obj.get(key) {
+            let rendered = match v {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            fields.push(format!("{key}={rendered}"));
+        }
+    }
+    (!fields.is_empty()).then(|| format!("[compaction boundary: {}]", fields.join(" ")))
 }
 
 /// The communication [`Class`] a `tool_use` block carries (GOLD §3): a `SendMessage` →
