@@ -692,10 +692,11 @@ fn search_short_match_has_no_truncation_caution() {
 #[test]
 fn search_category_filter_and_max_count() {
     let h = populated_home();
-    // -t user restricts to user text; "carry" matches the user record in the top-level session
-    // AND in two subagents, so --max-count 1 caps to one and DROPS the rest (drop note appears
-    // only when something is actually dropped — the footer no longer prints "0 dropped").
-    let out = h.run(&["search", "carry", "-t", "user", "--max-count", "1"]);
+    // "carry" matches the top-level session AND both subagents (each is one exchange), so
+    // --max-count 1 caps to one and DROPS the rest (the drop note appears only when something is
+    // actually dropped — the footer no longer prints "0 dropped"). (No `-t`: the subagent "carry"
+    // records are spawn-prompt openers, now `agent.communication.inbox`, not `user`.)
+    let out = h.run(&["search", "carry", "--max-count", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("matched 1"), "{}", out.stdout);
     assert!(
@@ -922,8 +923,8 @@ fn search_siblings_surface_the_rest_of_the_turn() {
 
 #[test]
 fn search_sibling_category_narrows_and_implies_siblings() {
-    // `--siblings agent:1` turns siblings ON and restricts them to ONE agent reply — the
-    // tool_use / tool_result siblings (no typed cap, no bare-N) are excluded entirely.
+    // `--siblings agent.message:1` turns siblings ON and restricts them to ONE agent reply — the
+    // thinking / tool_use / tool_result siblings (no typed cap, no bare-N) are excluded entirely.
     let h = populated_home();
     let out = h.run(&[
         "search",
@@ -932,17 +933,17 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "user",
         "--no-subagents",
         "--siblings",
-        "agent:1",
+        "agent.message:1",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("· agent"),
-        "agent sibling present: {}",
+        out.stdout.contains("· agent.message"),
+        "agent.message sibling present: {}",
         out.stdout
     );
     assert!(
-        !out.stdout.contains("· tool"),
-        "non-agent siblings must be excluded: {}",
+        !out.stdout.contains("· agent.tool"),
+        "non-agent.message siblings must be excluded: {}",
         out.stdout
     );
 
@@ -955,14 +956,14 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "user",
         "--no-subagents",
         "--siblings",
-        "agent:1",
+        "agent.message:1",
         "--format",
         "json",
     ]);
     let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
     let sibs = env["siblings"].as_array().expect("siblings array present");
     assert_eq!(sibs.len(), 1);
-    assert_eq!(sibs[0]["category"], "agent");
+    assert_eq!(sibs[0]["label"], "agent.message");
 
     let plain = h.run(&[
         "search",
@@ -1039,7 +1040,7 @@ fn search_hit_carries_line_and_uuid_address() {
     let out = h.run(&["search", "needed", "-t", "user", "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("user  L1  "),
+        out.stdout.contains("user.message  L1  "),
         "the hit header carries its `L<line>` address: {}",
         out.stdout
     );
@@ -1098,7 +1099,7 @@ fn search_line_address_fetches_the_record_in_full() {
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("◂ user  L1  "),
+        out.stdout.contains("◂ user.message  L1  "),
         "the addressed user record, with its L1 address: {}",
         out.stdout
     );
@@ -1384,11 +1385,13 @@ fn search_tool_response_names_the_tool_it_answers() {
         at(SESS).as_str(),
         "--no-subagents",
         "-t",
-        "tool-response",
+        "agent.tool.result",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
+    // Its tool_use (L3) is in scope, so the label renders the `▹` pair; the `Read` tool name still
+    // trails it (so the `agent.tool.result Read` substring holds).
     assert!(
-        out.stdout.contains("tool-response Read"),
+        out.stdout.contains("agent.tool.result Read"),
         "the response names the tool it answers: {}",
         out.stdout
     );
@@ -1806,10 +1809,25 @@ fn turns_and_search_label_automation_triggers() {
         t.stdout
     );
 
-    // search -t user: the same label is matchable; the raw blob is not surfaced. The label
-    // now reflects the TRUE kind, so `-t user 'background-command'` matches it (the prior
-    // mislabel meant the prefix and the summary disagreed).
+    // search: the same attribution label is matchable; the raw blob is not surfaced. The
+    // `<task-notification>` now classifies as `harness.notification.background-command` (NOT
+    // `user` — the §1 reparent), so it surfaces under that selector (or `-t harness.notification`).
     let s = h.run(&[
+        "search",
+        "background-command",
+        "-t",
+        "harness.notification.background-command",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(s.success, "stderr: {}", s.stderr);
+    assert!(
+        s.stdout.contains("[background-command wf12abc completed]"),
+        "search must surface the attribution label under harness.notification; got: {}",
+        s.stdout
+    );
+    // And it must NOT surface under `-t user` anymore (the reparent — regression guard).
+    let not_user = h.run(&[
         "search",
         "background-command",
         "-t",
@@ -1817,11 +1835,11 @@ fn turns_and_search_label_automation_triggers() {
         at(sess).as_str(),
         "--no-subagents",
     ]);
-    assert!(s.success, "stderr: {}", s.stderr);
+    assert!(not_user.success, "stderr: {}", not_user.stderr);
     assert!(
-        s.stdout.contains("[background-command wf12abc completed]"),
-        "search -t user must surface the attribution label; got: {}",
-        s.stdout
+        not_user.stdout.contains("no matching exchanges"),
+        "a <task-notification> must NOT surface under -t user; got: {}",
+        not_user.stdout
     );
     assert!(
         !s.stdout.contains("<output-file>"),
@@ -2013,11 +2031,207 @@ fn search_resolve_persisted_reads_pointed_file() {
     ]);
     assert!(with.success, "stderr: {}", with.stderr);
     assert!(
-        with.stdout.contains("tool-response"),
+        with.stdout.contains("agent.tool.result"),
         "resolved match: {}",
         with.stdout
     );
     assert!(with.stdout.contains("matched 1"));
+}
+
+// ── P2 cutover: role.class.sub classify() wiring (selectors, dedup, ▹ pairing, ⇨ direction) ──
+
+#[test]
+fn search_teammate_message_is_inbox_not_user_regression() {
+    // GOLD §1 / oracle §H: an inbound `<teammate-message>` is `type:user/role:user/string` and
+    // matches NO synthetic marker, so the OLD `is_genuine_user` counted it as the human. The
+    // cutover classifies it `agent.communication.inbox` (from ⇨ self) and DROPS it from `user`.
+    let h = Home::new();
+    let sess = "11111111-2222-3333-4444-555555555555";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"11111111-2222-3333-4444-555555555555","cwd":"/Users/x/team","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the human asks about throughput"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+        r#"{"type":"user","uuid":"tm0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"VSMultiRegion\" color=\"blue\">\nplease check the rate limit handling\n</teammate-message>"}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-team/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    // Under `-t agent.communication.inbox` it surfaces WITH the `from ⇨ to` direction.
+    let inbox = h.run(&[
+        "search",
+        "rate limit",
+        "-t",
+        "agent.communication.inbox",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(inbox.success, "stderr: {}", inbox.stderr);
+    assert!(
+        inbox.stdout.contains("agent.communication.inbox"),
+        "teammate message must classify as inbox; got: {}",
+        inbox.stdout
+    );
+    assert!(
+        inbox.stdout.contains("VSMultiRegion ⇨"),
+        "the comm direction `from ⇨ to` must render; got: {}",
+        inbox.stdout
+    );
+
+    // Under `-t user` it must NOT appear (the §1 bug fix) — the human turn does, the peer does not.
+    let user = h.run(&[
+        "search",
+        "rate limit",
+        "-t",
+        "user",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(user.success, "stderr: {}", user.stderr);
+    assert!(
+        user.stdout.contains("no matching exchanges"),
+        "a teammate message must NOT surface under -t user; got: {}",
+        user.stdout
+    );
+}
+
+#[test]
+fn search_renders_tool_use_result_pairing() {
+    // GOLD §7: a tool_use joined to its tool_result by tool_use_id renders `▹`; an unreturned
+    // tool_use renders `(no result — pending)`.
+    let h = Home::new();
+    let sess = "22222222-3333-4444-5555-666666666666";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"22222222-3333-4444-5555-666666666666","cwd":"/Users/x/pair","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"run it"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call1","name":"Bash","input":{"command":"echo zzpaired"}}]}}"#,
+        r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call1","content":"zzpaired done"}]}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"c0","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call2","name":"Bash","input":{"command":"echo zzpending"}}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-pair/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    let paired = h.run(&[
+        "search",
+        "zzpaired",
+        "-t",
+        "agent.tool",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(paired.success, "stderr: {}", paired.stderr);
+    assert!(
+        paired.stdout.contains("agent.tool.use ▹ agent.tool.result"),
+        "a use joined to its result renders ▹; got: {}",
+        paired.stdout
+    );
+
+    let pending = h.run(&[
+        "search",
+        "zzpending",
+        "-t",
+        "agent.tool.use",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(pending.success, "stderr: {}", pending.stderr);
+    assert!(
+        pending
+            .stdout
+            .contains("agent.tool.use (no result — pending)"),
+        "an unreturned use renders the pending note; got: {}",
+        pending.stdout
+    );
+}
+
+#[test]
+fn search_sendmessage_dedups_to_comm_sent_with_direction() {
+    // GOLD §3 Q4 dedup + §4 direction: a `SendMessage` tool_use carries BOTH `agent.tool.use` and
+    // `agent.communication.sent`; with no `-t` the richest (comm) view wins (ONE hit), rendering
+    // `self ⇨ to`, and JSON `labels` still lists both.
+    let h = Home::new();
+    let sess = "33333333-4444-5555-6666-777777777777";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"33333333-4444-5555-6666-777777777777","cwd":"/Users/x/send","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"coordinate"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sm1","name":"SendMessage","input":{"to":"GraftBoard","type":"message","message":"ship the zzmsg fix"}}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-send/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    let j = h.run(&[
+        "search",
+        "zzmsg",
+        at(sess).as_str(),
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let hits = env["hits"].as_array().expect("hits");
+    assert_eq!(
+        hits.len(),
+        1,
+        "the dual-label SendMessage emits ONCE: {}",
+        j.stdout
+    );
+    assert_eq!(hits[0]["label"], "agent.communication.sent");
+    assert_eq!(hits[0]["to"], "GraftBoard");
+    let labels = hits[0]["labels"].as_array().expect("labels");
+    assert!(
+        labels.iter().any(|l| l == "agent.tool.use")
+            && labels.iter().any(|l| l == "agent.communication.sent"),
+        "labels lists the full set: {}",
+        j.stdout
+    );
+}
+
+#[test]
+fn search_auq_answer_dedups_to_user_answer() {
+    // GOLD §3 Q4: an AUQ answer carries BOTH `user.answer` and `agent.tool.result`; with no `-t`
+    // the richest (user.answer) view wins — ONE hit, not two.
+    let h = Home::new();
+    let sess = "44444444-5555-6666-7777-888888888888";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"44444444-5555-6666-7777-888888888888","cwd":"/Users/x/auq","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
+        r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"the zzopt option\". You can now continue."}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-auq/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    let j = h.run(&[
+        "search",
+        "zzopt",
+        at(sess).as_str(),
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let hits = env["hits"].as_array().expect("hits");
+    assert_eq!(hits.len(), 1, "the AUQ answer emits ONCE: {}", j.stdout);
+    assert_eq!(hits[0]["label"], "user.answer");
+}
+
+#[test]
+fn search_rejects_old_flat_category_selector() {
+    // 0 back-compat (GOLD §6): the old flat `-t tool-response` is a HARD clap error that lists the
+    // valid selectors; the dotted form works.
+    let h = populated_home();
+    let bad = h.run(&["search", "carry", "-t", "tool-response"]);
+    assert!(!bad.success, "old flat -t must error; got:\n{}", bad.stdout);
+    assert!(
+        bad.stderr.contains("agent.tool.result"),
+        "the error lists the valid selectors; stderr: {}",
+        bad.stderr
+    );
 }
 
 #[test]

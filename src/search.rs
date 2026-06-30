@@ -26,7 +26,7 @@
 //! match phase skips regex work on records that provably lack the literal. Turn
 //! reconstruction then runs over the retained transcript records.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -34,14 +34,16 @@ use memchr::memmem;
 use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
 
-use crate::cli::{Category, OutputFormat, SearchArgs};
+use crate::cli::{
+    label_selected, selector_is_segment_prefix, selector_is_valid, OutputFormat, SearchArgs,
+};
 use crate::model::{
-    group_turn_indices_deduped, is_auq_answer_text, normalize_line, tool_result_content_text,
-    Block, PlanIndex, Record,
+    group_turn_indices_deduped, normalize_line, tool_result_content_text, Block, Class,
+    ClassifyCtx, Content, PlanIndex, Record, SpawnLookup,
 };
 use crate::parse::mmap_bytes;
 use crate::path::{self, Caller, SubagentScope};
-use crate::subagent::{is_subagent_path, session_id_from_path};
+use crate::subagent::{discover_subagents, is_subagent_path, session_id_from_path};
 use crate::time_window::TimeWindow;
 use crate::timez::{format_local_compact, local_iso};
 
@@ -53,15 +55,40 @@ use crate::timez::{format_local_compact, local_iso};
 /// is a dense at-a-glance identity index. The difference is intentional.
 const EXCERPT_MAX: usize = 400;
 
-/// A single category-tagged hit inside an exchange.
+/// The `agent.tool.use ▹ agent.tool.result` pairing state of a tool hit (GOLD §7), joined by
+/// `tool_use_id` across the transcript. Drives the render (`▹` / `(no result — pending)` /
+/// `(use not in scope)`). `None` on a non-tool hit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pairing {
+    /// The use↔result partner is in scope (renders `agent.tool.use ▹ agent.tool.result`).
+    Paired,
+    /// An `agent.tool.use` whose `tool_result` is not in scope (frozen / elicitation / unreturned).
+    PendingNoResult,
+    /// An `agent.tool.result` whose `tool_use` is not in scope (compacted / sliced away).
+    OrphanResult,
+}
+
+/// A single label-tagged hit inside an exchange.
 #[derive(Debug, Clone)]
 pub struct Hit {
-    pub category: Category,
+    /// The matched LEAF [`Class`] — its [`Class::path`] is the rendered/JSON `label` (GOLD §6).
+    pub class: Class,
+    /// The full label path SET this record carries ([`Record::classify`]), for JSON `labels`.
+    pub labels: Vec<&'static str>,
     /// The matched text excerpt (whitespace-normalized, explicitly truncated).
     pub excerpt: String,
     pub timestamp_utc: Option<String>,
-    /// Tool name when the hit is a `tool`/`tool-response` block, for the header.
+    /// Tool name when the hit is a tool-use/tool-result block, for the header.
     pub tool_name: Option<String>,
+    /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`
+    /// (GOLD §4); `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
+    pub direction: Option<(String, String)>,
+    /// The block's `tool_use_id` (the use's `id` / the result's `tool_use_id`) for the GOLD §7
+    /// `▹` pairing join; `None` on a non-tool hit.
+    pub tool_use_id: Option<String>,
+    /// The resolved [`Pairing`] of a tool hit (filled by the per-file pairing pass); `None` on a
+    /// non-tool hit or before the pass runs.
+    pub pair: Option<Pairing>,
     /// 1-based PHYSICAL line number of the source record in its session jsonl — the stable
     /// address `csift search --line N` re-fetches. Backfilled by the turn collector (make_hit
     /// leaves it 0); 0 means "not located" (never happens for a real scanned hit).
@@ -837,10 +864,29 @@ fn reconstruct_and_match(
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
-    let want_categories = &args.categories;
+    let selectors = &args.categories;
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
     let tool_names = build_tool_name_index(records);
+    // The `▹` pairing id sets (GOLD §7): every `tool_use` id + every `tool_result` `tool_use_id`
+    // in this transcript, joined GLOBALLY (not by contiguity) so a use↔result pair resolves across
+    // records / parallel calls. A use with no result-id ⇒ pending; a result with no use-id ⇒ orphan.
+    let (use_ids, result_ids) = tool_pair_ids(records);
+    // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
+    // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup (built from the
+    // top-level session's discovered subagents — cheap dir+meta, no transcript rescan).
+    let spawn_lookup = build_spawn_lookup(path);
+    let first_opener_line = records
+        .iter()
+        .find(|k| k.rec.opens_turn())
+        .map(|k| k.line_no);
+    let env = ClassifyEnv {
+        owner_id: &session_id,
+        is_subagent,
+        parent_id: &parent_session_id,
+        first_opener_line,
+        spawn: spawn_lookup.as_ref().map(|s| s as &dyn SpawnLookup),
+    };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
     let excerpt_max = if args.no_truncate || address.is_some() {
@@ -865,9 +911,9 @@ fn reconstruct_and_match(
 
         // Collect the hits in this turn that satisfy category + time + regex, plus the
         // turn-record indices that produced them (so siblings can exclude matched records).
-        let (hits, hit_idxs) = collect_turn_hits(
+        let (mut hits, hit_idxs) = collect_turn_hits(
             &turn,
-            want_categories,
+            selectors,
             matcher,
             time_window,
             args.resolve_persisted,
@@ -875,6 +921,7 @@ fn reconstruct_and_match(
             &plan_index,
             &tool_names,
             address,
+            &env,
         );
         if hits.is_empty() {
             continue;
@@ -883,7 +930,7 @@ fn reconstruct_and_match(
         // `--siblings <SPEC>`: render the turn's NON-matched records (the rest of the
         // back-and-forth) so a matched user question surfaces with the agent's reply, capped
         // per the parsed SPEC.
-        let siblings = match sibling_caps {
+        let mut siblings = match sibling_caps {
             Some(caps) => collect_turn_siblings(
                 &turn,
                 caps,
@@ -892,9 +939,16 @@ fn reconstruct_and_match(
                 excerpt_max,
                 &plan_index,
                 &tool_names,
+                &env,
             ),
             None => Vec::new(),
         };
+
+        // Resolve the `▹` tool-pairing state of every tool hit/sibling against the file-level id
+        // sets (GOLD §7) now that the hits are collected.
+        for h in hits.iter_mut().chain(siblings.iter_mut()) {
+            set_pairing(h, &use_ids, &result_ids);
+        }
 
         let record_uuids = turn
             .records
@@ -926,45 +980,49 @@ fn reconstruct_and_match(
     out
 }
 
-/// Parsed `--siblings <SPEC>` caps. `per_cat` holds the explicit `<cat>:N` caps (cap of up to
-/// N siblings of THAT category); `bare` is the bare-`N` cap (cap of up to N siblings across
-/// every category that has NO typed cap — "the rest"). Sibling rendering is ON iff at least one
-/// spec token was given (so an empty `--siblings` vec → no `SiblingCaps`).
+/// Parsed `--siblings <SPEC>` caps. `per_sel` holds the explicit `<selector>:N` caps (cap of up
+/// to N siblings whose label is UNDER that dotted selector); `bare` is the bare-`N` cap (cap of
+/// up to N siblings across every label with NO typed cap — "the rest"). Sibling rendering is ON
+/// iff at least one spec token was given (so an empty `--siblings` vec → no `SiblingCaps`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct SiblingCaps {
-    per_cat: Vec<(Category, usize)>,
+    per_sel: Vec<(String, usize)>,
     bare: Option<usize>,
 }
 
 impl SiblingCaps {
-    /// The cap for a specific category: its typed `<cat>:N` cap if one was given, else the
-    /// bare-`N` fallback (which caps "the rest"). `None` ⇒ this category is not shown at all.
-    fn cap_for(&self, cat: Category) -> Option<usize> {
-        self.per_cat
+    /// The cap governing a hit's leaf [`Class`]: the FIRST typed `<selector>:N` whose selector is
+    /// a segment-prefix of the class path (so `agent.tool:2` governs both use+result), else the
+    /// bare-`N` fallback ("the rest"). `None` ⇒ this label is not shown at all. (Test-only: the
+    /// production retain pools by [`Self::matched_selector`]; this is the per-class convenience the
+    /// `parse_sibling_specs` unit tests assert.)
+    #[cfg(test)]
+    fn cap_for(&self, class: Class) -> Option<usize> {
+        self.matched_selector(class).map(|(_, n)| n).or(self.bare)
+    }
+
+    /// The first typed `(selector, cap)` whose selector is a segment-prefix of `class`'s path —
+    /// the cap-pooling KEY (so two leaves under one selector share its counter). `None` ⇒ no
+    /// typed cap governs this class (it falls to the bare-`N` pool).
+    fn matched_selector(&self, class: Class) -> Option<(&str, usize)> {
+        self.per_sel
             .iter()
-            .find(|(c, _)| *c == cat)
-            .map(|(_, n)| *n)
-            .or(self.bare)
+            .find(|(sel, _)| selector_is_segment_prefix(sel, class.path()))
+            .map(|(sel, n)| (sel.as_str(), *n))
     }
 
     /// True when ONLY a bare-`N` was given (no typed caps), so the `N` is a TOTAL cap across all
-    /// categories rather than a per-category one.
+    /// labels rather than a per-selector one.
     fn bare_is_total(&self) -> bool {
-        self.per_cat.is_empty()
+        self.per_sel.is_empty()
     }
 }
 
-/// Map a `--siblings` SPEC category token to its `Category` (the same value set as `-t`:
-/// thinking|user|tool|tool-response|agent).
-fn parse_sibling_category(token: &str) -> Option<Category> {
-    match token {
-        "thinking" => Some(Category::Thinking),
-        "user" => Some(Category::User),
-        "tool" => Some(Category::Tool),
-        "tool-response" => Some(Category::ToolResponse),
-        "agent" => Some(Category::Agent),
-        _ => None,
-    }
+/// Validate a `--siblings` SPEC selector token (the same dotted value set as `-t`): returns the
+/// trimmed selector when valid, else `None` (the caller frames the error).
+fn parse_sibling_category(token: &str) -> Option<String> {
+    let t = token.trim();
+    selector_is_valid(t).then(|| t.to_string())
 }
 
 /// Parse the repeatable / comma-joined `--siblings <SPEC>` tokens into [`SiblingCaps`]. A bare
@@ -982,10 +1040,10 @@ fn parse_sibling_specs(tokens: &[String]) -> Result<Option<SiblingCaps>> {
             continue;
         }
         if let Some((cat_tok, n_tok)) = t.split_once(':') {
-            let cat = parse_sibling_category(cat_tok.trim()).ok_or_else(|| {
+            let sel = parse_sibling_category(cat_tok.trim()).ok_or_else(|| {
                 anyhow!(
-                    "--siblings: '{t}' — unknown category '{}' (want \
-                     thinking|user|tool|tool-response|agent or a bare N)",
+                    "--siblings: '{t}' — unknown selector '{}' (want a dotted role.class.sub path, \
+                     the same set as -t, or a bare N)",
                     cat_tok.trim()
                 )
             })?;
@@ -995,16 +1053,16 @@ fn parse_sibling_specs(tokens: &[String]) -> Result<Option<SiblingCaps>> {
             if n == 0 {
                 bail!("--siblings: '{t}' — the cap must be ≥1 (0 means 'do not show', so omit it)");
             }
-            if let Some(slot) = caps.per_cat.iter_mut().find(|(c, _)| *c == cat) {
-                slot.1 = n; // last write wins for a repeated category
+            if let Some(slot) = caps.per_sel.iter_mut().find(|(s, _)| *s == sel) {
+                slot.1 = n; // last write wins for a repeated selector
             } else {
-                caps.per_cat.push((cat, n));
+                caps.per_sel.push((sel, n));
             }
         } else {
             let n: usize = t.parse().map_err(|_| {
                 anyhow!(
-                    "--siblings: '{t}' — want a bare N or a <category>:N \
-                     (category ∈ thinking|user|tool|tool-response|agent)"
+                    "--siblings: '{t}' — want a bare N or a <selector>:N \
+                     (selector = a dotted role.class.sub path, the same set as -t)"
                 )
             })?;
             if n == 0 {
@@ -1013,7 +1071,7 @@ fn parse_sibling_specs(tokens: &[String]) -> Result<Option<SiblingCaps>> {
             caps.bare = Some(n);
         }
     }
-    if caps.per_cat.is_empty() && caps.bare.is_none() {
+    if caps.per_sel.is_empty() && caps.bare.is_none() {
         return Ok(None);
     }
     Ok(Some(caps))
@@ -1024,6 +1082,83 @@ fn parse_sibling_specs(tokens: &[String]) -> Result<Option<SiblingCaps>> {
 struct Turn<'a> {
     index: usize,
     records: Vec<&'a Kept>,
+}
+
+/// A [`SpawnLookup`] for one session, built from its discovered subagents (a cheap
+/// `discover_subagents` dir+meta scan — NOT a transcript re-read). Maps the spawn `tool_use_id`
+/// → the spawned child's agent id (the id-join) and the spawn NAME → child (the teammate
+/// name-join, GOLD §4). Powers comm direction (`self ⇨ child`) + subagent-return detection in
+/// [`Record::classify`]/[`Record::direction`]. Absent ⇒ those degrade to the raw name / `?`.
+#[derive(Debug, Default)]
+struct DiscoveredSpawns {
+    by_tool_use_id: HashMap<String, String>,
+    by_name: HashMap<String, String>,
+}
+
+impl SpawnLookup for DiscoveredSpawns {
+    fn child_for_spawn_tool_use_id(&self, tool_use_id: &str) -> Option<String> {
+        self.by_tool_use_id.get(tool_use_id).cloned()
+    }
+    fn child_for_spawn_name(&self, name: &str) -> Option<String> {
+        self.by_name.get(name).cloned()
+    }
+}
+
+/// Build the [`DiscoveredSpawns`] lookup for a TOP-LEVEL session file (`None` for a subagent
+/// transcript — comm there is rare and the lookup would need the parent's discovery). A failed /
+/// empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing + small
+/// `meta.json` reads, bounded by the subagent count — never a transcript content scan.
+fn build_spawn_lookup(path: &Path) -> Option<DiscoveredSpawns> {
+    if is_subagent_path(path) {
+        return None;
+    }
+    let subs = discover_subagents(path).ok()?;
+    if subs.is_empty() {
+        return None;
+    }
+    let mut out = DiscoveredSpawns::default();
+    for s in subs {
+        if let Some(tuid) = s.spawn_tool_use_id {
+            out.by_tool_use_id.entry(tuid).or_insert(s.agent_id.clone());
+        }
+        if let Some(name) = s.name {
+            out.by_name.entry(name).or_insert(s.agent_id.clone());
+        }
+    }
+    if out.by_tool_use_id.is_empty() && out.by_name.is_empty() {
+        return None;
+    }
+    Some(out)
+}
+
+/// The per-file cross-record context [`Record::classify`]/[`Record::direction`] need (GOLD §6):
+/// the transcript-owner identity, whether it is a subagent transcript, the parent id (a subagent
+/// opener's FROM), the FIRST turn-opener line (the spawn-prompt seed), and the spawn lookup.
+/// [`Self::ctx_for`] mints the per-record [`ClassifyCtx`] (only `is_transcript_opener` varies).
+struct ClassifyEnv<'a> {
+    owner_id: &'a str,
+    is_subagent: bool,
+    parent_id: &'a str,
+    /// The physical line of the first record that `opens_turn()` — the subagent spawn-prompt seed
+    /// (flips it from `user.message` to `agent.communication.inbox`). `None` ⇒ no opener.
+    first_opener_line: Option<usize>,
+    spawn: Option<&'a dyn SpawnLookup>,
+}
+
+impl ClassifyEnv<'_> {
+    fn ctx_for(&self, kept: &Kept) -> ClassifyCtx<'_> {
+        ClassifyCtx {
+            owner_id: Some(self.owner_id),
+            owner_name: None,
+            is_subagent: self.is_subagent,
+            parent_id: Some(self.parent_id),
+            // Only the subagent transcript's first opener (a real native line) is the seed.
+            is_transcript_opener: self.is_subagent
+                && kept.line_no != 0
+                && Some(kept.line_no) == self.first_opener_line,
+            spawn: self.spawn,
+        }
+    }
 }
 
 /// Gather the category-eligible, time-windowed, regex-matching hits inside a turn, plus the
@@ -1051,13 +1186,63 @@ fn build_tool_name_index(records: &[Kept]) -> HashMap<String, String> {
     map
 }
 
+/// The `▹` pairing id sets for a file (GOLD §7): every `tool_use` block's `id` and every
+/// `tool_result` block's `tool_use_id`. Joined GLOBALLY (membership, not contiguity) so a use
+/// pairs with its result across records / parallel calls.
+fn tool_pair_ids(records: &[Kept]) -> (HashSet<String>, HashSet<String>) {
+    let mut uses = HashSet::new();
+    let mut results = HashSet::new();
+    for k in records {
+        if let Some(blocks) = k.rec.blocks() {
+            for b in blocks {
+                match b {
+                    Block::ToolUse { id: Some(id), .. } => {
+                        uses.insert(id.clone());
+                    }
+                    Block::ToolResult {
+                        tool_use_id: Some(id),
+                        ..
+                    } => {
+                        results.insert(id.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    (uses, results)
+}
+
+/// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7): an
+/// `agent.tool.use` is paired iff its result-id is present (else pending — frozen / elicitation /
+/// unreturned); an `agent.tool.result` is paired iff its use-id is present (else orphan —
+/// compacted / sliced away). A non-tool hit (or one with no id) is left `None`.
+fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &HashSet<String>) {
+    let Some(id) = h.tool_use_id.as_deref() else {
+        return;
+    };
+    h.pair = match h.class {
+        Class::AgentToolUse => Some(if result_ids.contains(id) {
+            Pairing::Paired
+        } else {
+            Pairing::PendingNoResult
+        }),
+        Class::AgentToolResult => Some(if use_ids.contains(id) {
+            Pairing::Paired
+        } else {
+            Pairing::OrphanResult
+        }),
+        _ => None,
+    };
+}
+
 // Internal pipeline function: the arg list grew as `tool_names` (tool-response naming) and
 // `address` (--line/--uuid selector) were threaded through the per-turn scan. Bundling into a
 // struct would only relocate the same fields without simplifying the data flow.
 #[allow(clippy::too_many_arguments)]
 fn collect_turn_hits(
     turn: &Turn<'_>,
-    want: &[Category],
+    selectors: &[String],
     matcher: &Matcher,
     time_window: &TimeWindow,
     resolve_persisted: bool,
@@ -1065,6 +1250,7 @@ fn collect_turn_hits(
     plan_index: &PlanIndex,
     tool_names: &HashMap<String, String>,
     address: Option<&AddressSet>,
+    env: &ClassifyEnv<'_>,
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
@@ -1093,12 +1279,13 @@ fn collect_turn_hits(
         let before = hits.len();
         collect_record_hits(
             rec,
-            want,
+            selectors,
             matcher,
             resolve_persisted,
             excerpt_max,
             plan_index,
             tool_names,
+            &env.ctx_for(kept),
             &mut hits,
         );
         // Backfill the source record's address onto every hit this record produced.
@@ -1126,15 +1313,15 @@ fn backfill_address(hits: &mut [Hit], kept: &Kept) {
     }
 }
 
-/// Render the SIBLING records of a turn — those that produced NO hit — as head-anchored
 /// The turn's NON-matched records as sibling hits, restricted + CAPPED per the parsed
 /// `--siblings <SPEC>`. Reuses [`collect_record_hits`] with a PURE-FILTER matcher (matches
-/// every record, so each category-eligible block of a sibling surfaces with a head excerpt). A
+/// every record, so each label-eligible unit of a sibling surfaces with a head excerpt). A
 /// record that matched (its index is in `hit_idxs`) is never repeated. The per-record time
 /// window is intentionally NOT re-applied: the turn already qualified, and the siblings are
-/// context for that qualifying turn. Caps: a `<cat>:N` spec keeps the first N siblings of that
-/// category; a bare `N` keeps the first N across the categories that have no typed cap ("the
-/// rest"), and when ONLY a bare `N` was given it is a single TOTAL cap across all categories.
+/// context for that qualifying turn. Caps: a `<selector>:N` spec keeps the first N siblings under
+/// that selector; a bare `N` keeps the first N across the labels with no typed cap ("the rest"),
+/// and when ONLY a bare `N` was given it is a single TOTAL cap across all labels.
+#[allow(clippy::too_many_arguments)]
 fn collect_turn_siblings(
     turn: &Turn<'_>,
     caps: &SiblingCaps,
@@ -1143,21 +1330,16 @@ fn collect_turn_siblings(
     excerpt_max: usize,
     plan_index: &PlanIndex,
     tool_names: &HashMap<String, String>,
+    env: &ClassifyEnv<'_>,
 ) -> Vec<Hit> {
-    // Categories with ANY cap (typed, or covered by a bare-N fallback) are sibling-eligible.
-    const ALL: [Category; 5] = [
-        Category::Thinking,
-        Category::User,
-        Category::Tool,
-        Category::ToolResponse,
-        Category::Agent,
-    ];
-    let eligible: Vec<Category> = ALL
-        .iter()
-        .copied()
-        .filter(|&c| caps.cap_for(c).is_some())
-        .collect();
-    if eligible.is_empty() {
+    // Eligible selectors fed to the collector: when a bare-`N` is present it covers "the rest", so
+    // EVERY label is eligible (empty selectors ⇒ all); otherwise only the typed selectors are.
+    let eligible: Vec<String> = if caps.bare.is_some() {
+        Vec::new()
+    } else {
+        caps.per_sel.iter().map(|(s, _)| s.clone()).collect()
+    };
+    if eligible.is_empty() && caps.bare.is_none() {
         return Vec::new();
     }
     let pure = Matcher {
@@ -1178,15 +1360,18 @@ fn collect_turn_siblings(
             excerpt_max,
             plan_index,
             tool_names,
+            &env.ctx_for(kept),
             &mut sibs,
         );
         backfill_address(&mut sibs[before..], kept);
     }
-    // Apply the caps in document order, keeping each category's first N (a bare-only spec is a
-    // single TOTAL cap; otherwise the bare-N caps the categories lacking a typed cap, pooled).
+    // Apply the caps in document order, keeping each selector's first N (a bare-only spec is a
+    // single TOTAL cap; otherwise the bare-N caps the labels lacking a typed cap, pooled). The
+    // typed-cap counter pools by the MATCHED selector string (so `agent.tool:2` caps use+result
+    // together).
     let bare_total = caps.bare_is_total();
     let mut total_kept = 0usize;
-    let mut per_cat_kept: Vec<(Category, usize)> = Vec::new();
+    let mut per_sel_kept: Vec<(String, usize)> = Vec::new();
     let mut bare_pool_kept = 0usize;
     sibs.retain(|hit| {
         if bare_total {
@@ -1197,16 +1382,11 @@ fn collect_turn_siblings(
             }
             return false;
         }
-        match caps
-            .per_cat
-            .iter()
-            .find(|(c, _)| *c == hit.category)
-            .map(|(_, n)| *n)
-        {
-            Some(cap) => {
-                let kept = per_cat_kept
+        match caps.matched_selector(hit.class) {
+            Some((sel, cap)) => {
+                let kept = per_sel_kept
                     .iter_mut()
-                    .find(|(c, _)| *c == hit.category)
+                    .find(|(s, _)| s == sel)
                     .map(|(_, n)| n);
                 match kept {
                     Some(n) if *n < cap => {
@@ -1215,7 +1395,7 @@ fn collect_turn_siblings(
                     }
                     Some(_) => false,
                     None => {
-                        per_cat_kept.push((hit.category, 1));
+                        per_sel_kept.push((sel.to_string(), 1));
                         cap >= 1
                     }
                 }
@@ -1235,164 +1415,199 @@ fn collect_turn_siblings(
     sibs
 }
 
-/// Emit hits for every category-eligible piece of `rec` that matches the regex.
-// Internal pipeline function; `tool_names` was threaded in so a `tool-response` hit can name the
-// tool it answers. Same rationale as `collect_turn_hits` for not bundling into a struct.
+/// Emit hits for every label-eligible UNIT of `rec` that matches the regex (the P2 cutover —
+/// GOLD §6). The record is classified ONCE via [`Record::classify`]; each emission UNIT (the
+/// record-level user/comm/harness text, the user-facing tool_result dual, or a block) picks the
+/// RICHEST selected [`Class`] among its candidate labels (GOLD §3 Q4 dedup) and emits ONE hit.
+/// Comm units carry the `from ⇨ to` direction ([`Record::direction`]); tool units carry the
+/// `tool_use_id` for the later `▹` pairing pass. A record carrying NO label (metadata / an
+/// excluded isMeta pseudo-turn) yields nothing.
+// Internal pipeline function; `tool_names` (tool-response naming) + `ctx` (cross-record classify
+// context) are threaded through. Same rationale as `collect_turn_hits` for not bundling into a
+// struct.
 #[allow(clippy::too_many_arguments)]
 fn collect_record_hits(
     rec: &Record,
-    want: &[Category],
+    selectors: &[String],
     matcher: &Matcher,
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
     tool_names: &HashMap<String, String>,
+    ctx: &ClassifyCtx,
     hits: &mut Vec<Hit>,
 ) {
+    let labels = rec.classify(ctx);
+    if labels.is_empty() {
+        return; // unmodeled / excluded record — carries no role.class.sub label
+    }
     let ts = rec.timestamp.clone();
+    let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
+    let sel = |c: Class| label_selected(selectors, c.path());
+    let has = |c: Class| labels.contains(&c);
+    // Direction is per-record (the first comm direction); computed only when a comm label is
+    // present (it parses peer sections / scans blocks), and attached to comm hits only.
+    let direction = if labels.iter().copied().any(is_comm_class) {
+        rec.direction(ctx)
+    } else {
+        None
+    };
 
-    // ── user category: genuine-user text, an answered AskUserQuestion (Q+options+answer
-    // as one unit), or a tool-use rejection-with-message (+plan pointer) (§4.1, §4.4,
-    // §4.2.4, §5). `reconstructed_user_text` returns the clean answer prose from the
-    // structured `toolUseResult.answers` (not the noisy synthesized string), and a
-    // `[plan: <path>]` pointer for a rejection. ──
-    if category_active(want, Category::User) {
-        // An automation trigger (`<task-notification>`) opens a user turn but renders as the
-        // parsed `[workflow <id> …] <summary>` ATTRIBUTION label, never the raw XML wrapper —
-        // matched against the LABEL so a `-t user` search surfaces the clean attribution.
-        let text = rec
-            .automation_label()
-            .or_else(|| rec.reconstructed_user_text(Some(plan_index)));
-        if let Some(text) = text {
-            if let Some(span) = matcher.locate(&text) {
-                hits.push(make_hit(
-                    Category::User,
-                    &text,
-                    span,
-                    ts.clone(),
-                    None,
-                    excerpt_max,
-                ));
-            }
+    // One emission: locate the match, build the match-centered excerpt, carry class/labels/
+    // direction/tool_use_id. `pair` is filled later by the per-file pairing pass.
+    let mut emit = |class: Class,
+                    text: &str,
+                    tool_name: Option<String>,
+                    dir: Option<(String, String)>,
+                    tuid: Option<String>| {
+        if let Some(span) = matcher.locate(text) {
+            let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
+            hits.push(Hit {
+                class,
+                labels: label_paths.clone(),
+                excerpt,
+                timestamp_utc: ts.clone(),
+                tool_name,
+                direction: dir,
+                tool_use_id: tuid,
+                pair: None,
+                line: 0,
+                uuid: None,
+                image_ids: Vec::new(),
+                from_sidecar: false,
+                truncated,
+            });
+        }
+    };
+
+    // ── 1. Record-level TEXT unit (user.message / agent.communication.{inbox,signal} / every
+    //    harness.* string record). The richest SELECTED record-text class drives it; the §1 fix
+    //    (teammate → inbox) + the `<task-notification>` → harness.notification reparent flow in
+    //    here straight from `classify`. ──
+    if let Some((class, text)) = record_text_emission(rec, &labels, selectors, plan_index) {
+        let dir = if is_comm_class(class) {
+            direction.clone()
+        } else {
+            None
+        };
+        emit(class, &text, None, dir, None);
+    }
+
+    // ── 2. Record-level user-facing tool_result DUAL (AUQ answer / typed rejection) ──
+    // These are RECORD-level facts, so emit ONCE (not per tool_result block); GOLD §3 Q4: the
+    // user-facing view is RICHEST, superseding the agent.tool.result copy (the block loop then
+    // skips it). `reconstructed_user_text` yields the clean Q+options+answer / rejection (+[plan:])
+    // unit. When neither user-facing label is SELECTED, `user_dual` is None and the block loop
+    // surfaces the plain agent.tool.result instead (so `-t agent.tool.result` still finds it).
+    let user_dual = if has(Class::UserAnswer) && sel(Class::UserAnswer) {
+        Some(Class::UserAnswer)
+    } else if has(Class::UserRejection) && sel(Class::UserRejection) {
+        Some(Class::UserRejection)
+    } else {
+        None
+    };
+    if let Some(class) = user_dual {
+        if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
+            emit(class, &text, None, None, None);
         }
     }
 
-    // ── elicitation-sidecar non-tool_use marker (§3.10) ──
-    // An MCP-elicitation pending marker is a `system` record carrying its prose in the
-    // top-level `content` string (no blocks, not genuine-user), so BOTH the genuine-user path
-    // above AND the block-bearing loop below miss it — leaving `search` unable to find a
-    // session blocked on an MCP elicitation (`list`/`turns` surface it via `pending_text`, so
-    // only `search` had the gap). Match that `content` so it surfaces like the
-    // AskUserQuestion/ExitPlanMode tool_use markers do. GUARDED to a marker with NO `tool_use`
-    // block, so AQ/ExitPlanMode (which DO carry a tool_use block and match via the
-    // `Block::ToolUse` arm below, category Tool) never double-emit. Tagged `Tool` for
-    // consistency — every merged elicitation surfaces under `-t tool`.
-    if category_active(want, Category::Tool)
+    // ── 3. §3.10 MCP elicitation marker with NO tool_use block → agent.tool.use (content string).
+    // The AUQ/ExitPlanMode markers DO carry a tool_use block and surface via the block loop, so
+    // this arm is GUARDED to a no-tool_use marker to avoid a double emit (keep the guard). ──
+    if has(Class::AgentToolUse)
+        && sel(Class::AgentToolUse)
         && rec.is_elicitation_marker()
         && rec
             .blocks()
             .is_none_or(|bs| !bs.iter().any(|b| matches!(b, Block::ToolUse { .. })))
     {
         if let Some(text) = rec.content.as_ref().and_then(serde_json::Value::as_str) {
-            if let Some(span) = matcher.locate(text) {
-                hits.push(make_hit(
-                    Category::Tool,
-                    text,
-                    span,
-                    ts.clone(),
-                    rec.csift_kind.clone(),
-                    excerpt_max,
-                ));
-            }
+            emit(
+                Class::AgentToolUse,
+                text,
+                rec.csift_kind.clone(),
+                None,
+                None,
+            );
         }
     }
 
-    // ── block-bearing categories: thinking / tool / tool-response / agent ──
+    // ── 4. Block-bearing units: thinking / agent text / tool_use (+comm) / tool_result (+comm). ──
     if let Some(blocks) = rec.blocks() {
         for block in blocks {
             match block {
-                Block::Thinking { thinking, .. } if category_active(want, Category::Thinking) => {
-                    if let Some(span) = matcher.locate(thinking) {
-                        hits.push(make_hit(
-                            Category::Thinking,
-                            thinking,
-                            span,
-                            ts.clone(),
-                            None,
-                            excerpt_max,
-                        ));
-                    }
+                Block::Thinking { thinking, .. }
+                    if has(Class::AgentThinking) && sel(Class::AgentThinking) =>
+                {
+                    emit(Class::AgentThinking, thinking, None, None, None);
                 }
-                Block::Text { text } if category_active(want, Category::Agent) => {
-                    // Only assistant `text` blocks are the agent message; a user
-                    // `text` block is genuine-user (handled above).
-                    let span = if rec.is_type("assistant") {
-                        matcher.locate(text)
-                    } else {
-                        None
+                Block::Text { text }
+                    if rec.is_type("assistant")
+                        && has(Class::AgentMessage)
+                        && sel(Class::AgentMessage) =>
+                {
+                    // Only assistant `text` blocks are the agent message; a user `text` block is
+                    // a record-text unit (handled above), never agent.message.
+                    emit(Class::AgentMessage, text, None, None, None);
+                }
+                Block::ToolUse { id, name, input } => {
+                    // Richest-selected for this tool_use: comm (sent/signal) > agent.tool.use.
+                    let comm = tool_use_comm_class(name.as_deref(), input.as_ref());
+                    let class = match comm {
+                        Some(cc) if has(cc) && sel(cc) => Some(cc),
+                        _ if has(Class::AgentToolUse) && sel(Class::AgentToolUse) => {
+                            Some(Class::AgentToolUse)
+                        }
+                        _ => None,
                     };
-                    if let Some(span) = span {
-                        hits.push(make_hit(
-                            Category::Agent,
-                            text,
-                            span,
-                            ts.clone(),
-                            None,
-                            excerpt_max,
-                        ));
-                    }
-                }
-                Block::ToolUse { name, input, .. } if category_active(want, Category::Tool) => {
-                    let rendered = render_tool_use(name.as_deref(), input.as_ref());
-                    if let Some(span) = matcher.locate(&rendered) {
-                        hits.push(make_hit(
-                            Category::Tool,
-                            &rendered,
-                            span,
-                            ts.clone(),
-                            name.clone(),
-                            excerpt_max,
-                        ));
+                    if let Some(class) = class {
+                        let rendered = render_tool_use(name.as_deref(), input.as_ref());
+                        let dir = if is_comm_class(class) {
+                            direction.clone()
+                        } else {
+                            None
+                        };
+                        emit(class, &rendered, name.clone(), dir, id.clone());
                     }
                 }
                 Block::ToolResult {
                     content: Some(c),
                     tool_use_id,
                     ..
-                } if category_active(want, Category::ToolResponse) => {
-                    let mut text = tool_result_content_text(c);
-                    // §5 de-dup: an AUQ answer IS a tool_result, so it is eligible for
-                    // BOTH `user` (the §4.1 exception, emitted above) and
-                    // `tool-response`. "Do not double-count within a single emitted
-                    // exchange" — so when the `user` category is ALSO active we skip
-                    // the tool-response copy (the answer already surfaced as `user`).
-                    // A `-t tool-response` filter that does NOT name `user` still
-                    // surfaces it, so the answer is never lost, just not duplicated.
-                    if is_auq_answer_text(&text) && category_active(want, Category::User) {
+                } => {
+                    // The user-facing dual was SELECTED + emitted as the richest view (§3 Q4) → skip
+                    // the agent.tool.result duplicate. (When the dual is present but NOT selected —
+                    // e.g. `-t agent.tool.result` alone — `user_dual` is None, so the plain result
+                    // still surfaces and the answer is never lost.)
+                    if user_dual.is_some() {
                         continue;
                     }
-                    // §4.6: when asked, replace the inline persisted-output pointer
-                    // with the real file content (matching runs against the resolved
-                    // text so a regex can hit the full output).
+                    // Richest-selected: agent.communication.inbox (subagent return) > tool.result.
+                    let class = if has(Class::CommInbox) && sel(Class::CommInbox) {
+                        Class::CommInbox
+                    } else if has(Class::AgentToolResult) && sel(Class::AgentToolResult) {
+                        Class::AgentToolResult
+                    } else {
+                        continue;
+                    };
+                    let mut text = tool_result_content_text(c);
+                    // §4.6: when asked, replace the inline persisted-output pointer with the real
+                    // file content (matching runs against the resolved text).
                     if resolve_persisted {
                         if let Some(path) = rec.persisted_output_path() {
                             text = resolve_persisted_text(&path, &text);
                         }
                     }
-                    if let Some(span) = matcher.locate(&text) {
-                        // Name the tool this response answers (joined via `tool_use_id`).
-                        let name = tool_use_id
-                            .as_deref()
-                            .and_then(|id| tool_names.get(id).cloned());
-                        hits.push(make_hit(
-                            Category::ToolResponse,
-                            &text,
-                            span,
-                            ts.clone(),
-                            name,
-                            excerpt_max,
-                        ));
-                    }
+                    let name = tool_use_id
+                        .as_deref()
+                        .and_then(|id| tool_names.get(id).cloned());
+                    let dir = if class == Class::CommInbox {
+                        direction.clone()
+                    } else {
+                        None
+                    };
+                    emit(class, &text, name, dir, tool_use_id.clone());
                 }
                 _ => {}
             }
@@ -1400,9 +1615,132 @@ fn collect_record_hits(
     }
 }
 
-/// True when `cat` is requested (or no category filter was given ⇒ all eligible).
-fn category_active(want: &[Category], cat: Category) -> bool {
-    want.is_empty() || want.contains(&cat)
+/// True for the three `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).
+fn is_comm_class(c: Class) -> bool {
+    matches!(c, Class::CommInbox | Class::CommSent | Class::CommSignal)
+}
+
+/// True for a RECORD-LEVEL text class — one classified from a record's string / text-block
+/// content (NOT a per-block agent class, and NOT the tool_result duals `user.answer`/
+/// `user.rejection`, which are handled in the ToolResult arm). Drives [`record_text_emission`].
+fn is_record_text_class(c: Class) -> bool {
+    matches!(
+        c,
+        Class::UserMessage
+            | Class::CommInbox
+            | Class::CommSignal
+            | Class::NotificationWorkflow
+            | Class::NotificationMonitor
+            | Class::NotificationSubagent
+            | Class::NotificationBackgroundCommand
+            | Class::NotificationTask
+            | Class::CompactionSummary
+            | Class::CompactionBoundary
+            | Class::CommandInvocation
+            | Class::CommandStdout
+            | Class::InterruptUser
+            | Class::InterruptTool
+            | Class::ScheduleWakeup
+            | Class::ScheduleContinuation
+            | Class::MetaHook
+            | Class::MetaLoop
+    )
+}
+
+/// The richest SELECTED record-level text class + its display text (GOLD §3/§6). Iterates the
+/// record's labels in `classify`'s richest-first order, taking the first record-text class that
+/// is selected, then resolving its text source: a `<task-notification>` → `automation_label`; a
+/// genuine/AUQ/rejection/teammate-prose/subagent-opener → `reconstructed_user_text`; any other
+/// harness marker / compaction summary / teammate-signal → the raw string. `None` ⇒ no record-
+/// text class is selected (or it has no text).
+fn record_text_emission(
+    rec: &Record,
+    labels: &[Class],
+    selectors: &[String],
+    plan_index: &PlanIndex,
+) -> Option<(Class, String)> {
+    for &c in labels {
+        if !is_record_text_class(c) || !label_selected(selectors, c.path()) {
+            continue;
+        }
+        let text = match c {
+            Class::NotificationWorkflow
+            | Class::NotificationMonitor
+            | Class::NotificationSubagent
+            | Class::NotificationBackgroundCommand
+            | Class::NotificationTask => rec.automation_label(),
+            Class::UserMessage | Class::CommInbox => rec.reconstructed_user_text(Some(plan_index)),
+            // A teammate signal rides on the raw string; `reconstructed_user_text` returns it for a
+            // teammate record (it flattens the content), with the raw text as the fallback.
+            Class::CommSignal => rec
+                .reconstructed_user_text(Some(plan_index))
+                .or_else(|| record_raw_text(rec)),
+            _ => record_raw_text(rec),
+        };
+        if let Some(text) = text {
+            return Some((c, text));
+        }
+    }
+    None
+}
+
+/// The raw textual body of a record for harness-marker matching: the bare string, or the text
+/// blocks joined with `\n` (mirrors the engine's `raw_message_text`). `None` when there is none.
+fn record_raw_text(rec: &Record) -> Option<String> {
+    match rec.message.as_ref()?.content.as_ref()? {
+        Content::Text(s) => Some(s.clone()),
+        Content::Blocks(blocks) => {
+            let parts: Vec<&str> = blocks
+                .iter()
+                .filter_map(|b| match b {
+                    Block::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            (!parts.is_empty()).then(|| parts.join("\n"))
+        }
+    }
+}
+
+/// The communication [`Class`] a `tool_use` block carries (GOLD §3): a `SendMessage` →
+/// `…sent`/`…signal`; a `Task`/`Agent`/`Workflow` spawn → `…sent`. `None` for any other tool.
+/// REPLICATES the engine's per-record decision per-BLOCK (so a record with mixed comm/non-comm
+/// tool_use blocks labels each correctly) — kept faithful to model.rs `classify_assistant`.
+fn tool_use_comm_class(name: Option<&str>, input: Option<&serde_json::Value>) -> Option<Class> {
+    match name? {
+        "SendMessage" => Some(if send_message_is_signal(input) {
+            Class::CommSignal
+        } else {
+            Class::CommSent
+        }),
+        n if is_spawn_tool_name(n) => Some(Class::CommSent),
+        _ => None,
+    }
+}
+
+/// Replica of the engine's spawn-tool set (model.rs `is_spawn_tool_name`).
+fn is_spawn_tool_name(name: &str) -> bool {
+    matches!(name, "Task" | "Agent" | "Workflow")
+}
+
+/// Replica of the engine's `send_message_is_signal` (model.rs): a `SendMessage` whose top-level
+/// (or nested `message`) `type` is present and is NOT `message`/`direct` is a control SIGNAL.
+fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {
+    let Some(input) = input else {
+        return false;
+    };
+    let type_at = |v: &serde_json::Value| {
+        v.get("type")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    if let Some(t) = type_at(input) {
+        return !matches!(t.as_str(), "message" | "direct");
+    }
+    if let Some(t) = input.get("message").and_then(type_at) {
+        return !matches!(t.as_str(), "message" | "direct");
+    }
+    false
 }
 
 /// Render a `tool_use` block to searchable text: `name {json-input}`. The name is
@@ -1444,38 +1782,12 @@ fn auq_answer_text(rec: &Record) -> Option<String> {
         } = b
         {
             let t = tool_result_content_text(c);
-            if is_auq_answer_text(&t) {
+            if crate::model::is_auq_answer_text(&t) {
                 return Some(t);
             }
         }
     }
     None
-}
-
-/// Build a hit with a normalized excerpt CENTERED on the match (`span`), capped at
-/// `excerpt_max` chars (`usize::MAX` under `--no-truncate` ⇒ the whole record, uncapped).
-fn make_hit(
-    category: Category,
-    text: &str,
-    span: Option<(usize, usize)>,
-    ts: Option<String>,
-    tool_name: Option<String>,
-    excerpt_max: usize,
-) -> Hit {
-    let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
-    Hit {
-        category,
-        excerpt,
-        timestamp_utc: ts,
-        tool_name,
-        // line/uuid/image_ids are per-RECORD, not known here — the turn collector backfills
-        // them onto the hits it appends (it holds the `Kept`, which carries line + record).
-        line: 0,
-        uuid: None,
-        image_ids: Vec::new(),
-        from_sidecar: false,
-        truncated,
-    }
 }
 
 /// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
@@ -1547,22 +1859,38 @@ fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
 // Timestamp formatting (system-local + raw UTC) lives in `crate::timez`, shared
 // with `list` so the local-timezone choice is defined once.
 
-fn category_label(c: Category) -> &'static str {
-    match c {
-        Category::Thinking => "thinking",
-        Category::User => "user",
-        Category::Tool => "tool",
-        Category::ToolResponse => "tool-response",
-        Category::Agent => "agent",
+/// Glyph for the ROLE a hit sits on (GOLD §6): `◂` user, `▸` agent, `⚙` harness machinery.
+/// (`⚙`/gear is the chosen distinct harness marker — visually separate from the two
+/// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.)
+fn role_glyph(class: Class) -> char {
+    match class.role() {
+        crate::model::Role::User => '◂',
+        crate::model::Role::Agent => '▸',
+        crate::model::Role::Harness => '⚙',
     }
 }
 
-/// Glyph for the side of the exchange a hit sits on (◂ user, ▸ agent-side).
-fn category_glyph(c: Category) -> char {
-    match c {
-        Category::User => '◂',
-        _ => '▸',
+/// The rendered label for a hit: the dotted [`Class::path`], DECORATED with the GOLD §4/§7
+/// markers — a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
+fn render_label(h: &Hit) -> String {
+    // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
+    match (h.class, h.pair) {
+        (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {
+            return "agent.tool.use ▹ agent.tool.result".to_string();
+        }
+        (Class::AgentToolUse, Some(Pairing::PendingNoResult)) => {
+            return "agent.tool.use (no result — pending)".to_string();
+        }
+        (Class::AgentToolResult, Some(Pairing::OrphanResult)) => {
+            return "agent.tool.result (use not in scope)".to_string();
+        }
+        _ => {}
     }
+    // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
+    if let Some((from, to)) = &h.direction {
+        return format!("{}  {from} ⇨ {to}", h.class.path());
+    }
+    h.class.path().to_string()
 }
 
 fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
@@ -1615,7 +1943,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             format_local_compact(ex.started_utc.as_deref())
         );
         for hit in &ex.hits {
-            print_record_line(category_glyph(hit.category), hit);
+            print_record_line(role_glyph(hit.class), hit);
         }
         // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
         // they read as surrounding back-and-forth, not as matches.
@@ -1629,11 +1957,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     let cat = if args.categories.is_empty() {
         "all".to_string()
     } else {
-        args.categories
-            .iter()
-            .map(|c| category_label(*c))
-            .collect::<Vec<_>>()
-            .join(",")
+        args.categories.join(",")
     };
     println!();
     let n = outcome.exchanges.len();
@@ -1685,10 +2009,11 @@ fn emit_truncation_caution() {
 }
 
 /// One hit/sibling line: `<marker> <label>[ <tool>]  L<line>  <excerpt>` (excerpt inline; its
-/// newlines are already collapsed to single spaces). `marker` is the category glyph for a match
-/// or a dim `·` for a `--siblings` context record.
+/// newlines are already collapsed to single spaces). `marker` is the role glyph for a match or a
+/// dim `·` for a `--siblings` context record; `<label>` is the dotted path with the GOLD §4/§7
+/// `⇨`/`▹` decorations ([`render_label`]).
 fn print_record_line(marker: char, h: &Hit) {
-    let label = category_label(h.category);
+    let label = render_label(h);
     let name = h
         .tool_name
         .as_deref()
@@ -1729,12 +2054,33 @@ fn emit_unresolved(unresolved: &[String]) {
 /// Render one `Hit` (a match OR a `--siblings` context record) to its JSON object — the
 /// shared per-hit shape used by both the `hits` and `siblings` envelope arrays.
 fn hit_json(h: &Hit) -> serde_json::Value {
+    // Comm direction (GOLD §4): `from`/`to` only for an `agent.communication.*` hit, else null.
+    let (from, to) = match &h.direction {
+        Some((f, t)) => (serde_json::json!(f), serde_json::json!(t)),
+        None => (serde_json::Value::Null, serde_json::Value::Null),
+    };
+    // Tool pairing (GOLD §7): the `▹` join state of an agent.tool.use/result hit, else null.
+    let pairing = match h.pair {
+        Some(Pairing::Paired) => serde_json::json!("paired"),
+        Some(Pairing::PendingNoResult) => serde_json::json!("pending"),
+        Some(Pairing::OrphanResult) => serde_json::json!("orphan"),
+        None => serde_json::Value::Null,
+    };
     serde_json::json!({
-        "category": category_label(h.category),
+        // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
+        "label": h.class.path(),
+        "labels": h.labels,
         "excerpt": h.excerpt,
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
         "tool_name": h.tool_name,
+        // Comm direction (`agent.communication.*`); null on a non-comm hit.
+        "from": from,
+        "to": to,
+        // Tool-pairing (§7): the use↔result join state + the joining `tool_use_id`; null on a
+        // non-tool hit.
+        "pairing": pairing,
+        "tool_use_id": h.tool_use_id,
         // The `csift search --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.
@@ -1836,6 +2182,18 @@ mod tests {
 
     fn rec(line: &str) -> Record {
         serde_json::from_str(line).expect("valid record")
+    }
+
+    /// A neutral top-level [`ClassifyEnv`] for the `collect_turn_hits` unit tests (no subagent,
+    /// no spawn lookup) — the per-record ctx degrades to [`ClassifyCtx::top_level`]'s behavior.
+    fn test_env() -> ClassifyEnv<'static> {
+        ClassifyEnv {
+            owner_id: "0a1b2c3d-0000-0000-0000-000000000000",
+            is_subagent: false,
+            parent_id: "0a1b2c3d-0000-0000-0000-000000000000",
+            first_opener_line: None,
+            spawn: None,
+        }
     }
 
     #[test]
@@ -1988,12 +2346,13 @@ mod tests {
         let mut no_resolve = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::ToolResponse],
+            &["agent.tool.result".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut no_resolve,
         );
         assert!(no_resolve.is_empty(), "deep token must NOT match inline");
@@ -2002,16 +2361,17 @@ mod tests {
         let mut with_resolve = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::ToolResponse],
+            &["agent.tool.result".to_string()],
             &m,
             true,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut with_resolve,
         );
         assert_eq!(with_resolve.len(), 1, "deep token matches after resolution");
-        assert_eq!(with_resolve[0].category, Category::ToolResponse);
+        assert_eq!(with_resolve[0].class, Class::AgentToolResult);
 
         std::fs::remove_file(&p).ok();
     }
@@ -2025,16 +2385,17 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::Thinking],
+            &["agent.thinking".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].category, Category::Thinking);
+        assert_eq!(hits[0].class, Class::AgentThinking);
         assert!(hits[0].excerpt.contains("carry"));
     }
 
@@ -2047,16 +2408,17 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::Agent],
+            &["agent.message".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].category, Category::Agent);
+        assert_eq!(hits[0].class, Class::AgentMessage);
     }
 
     #[test]
@@ -2068,12 +2430,13 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::Tool],
+            &["agent.tool.use".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
@@ -2092,12 +2455,13 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::Tool],
+            &["agent.tool.use".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(
@@ -2105,7 +2469,7 @@ mod tests {
             1,
             "MCP system marker must produce exactly one hit"
         );
-        assert_eq!(hits[0].category, Category::Tool);
+        assert_eq!(hits[0].class, Class::AgentToolUse);
         assert_eq!(hits[0].tool_name.as_deref(), Some("mcp-elicitation"));
         assert!(hits[0].excerpt.contains("wibblewobble"));
     }
@@ -2122,12 +2486,13 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::Tool],
+            &["agent.tool.use".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(
@@ -2147,16 +2512,17 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::User],
+            &["user".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].category, Category::User);
+        assert_eq!(hits[0].class, Class::UserAnswer);
     }
 
     #[test]
@@ -2169,12 +2535,13 @@ mod tests {
         // User category must NOT surface a plain tool_result carrier.
         collect_record_hits(
             &r,
-            &[Category::User],
+            &["user".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(hits.len(), 0);
@@ -2182,16 +2549,17 @@ mod tests {
         let mut hits2 = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::ToolResponse],
+            &["agent.tool.result".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits2,
         );
         assert_eq!(hits2.len(), 1);
-        assert_eq!(hits2[0].category, Category::ToolResponse);
+        assert_eq!(hits2[0].class, Class::AgentToolResult);
     }
 
     // ── End-to-end exchange reconstruction over a synthetic multi-turn fixture ──
@@ -2280,7 +2648,7 @@ mod tests {
             r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply carry"}]}}"#,
         ];
         let mut a = args("carry");
-        a.categories = vec![Category::Agent];
+        a.categories = vec!["agent.message".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(ex.len(), 1);
         assert_eq!(
@@ -2319,12 +2687,12 @@ mod tests {
         // include the WHOLE turn 0 chain (user, thinking, tool_use, carrier, agent),
         // proving the complete round-trip is stitched, not just the matched record.
         let mut a = args("straddling");
-        a.categories = vec![Category::Thinking];
+        a.categories = vec!["agent.thinking".to_string()];
         let ex = search(&fixture(), &a);
         assert_eq!(ex.len(), 1);
         assert_eq!(ex[0].turn_index, 0);
         assert_eq!(ex[0].hits.len(), 1);
-        assert_eq!(ex[0].hits[0].category, Category::Thinking);
+        assert_eq!(ex[0].hits[0].class, Class::AgentThinking);
         // Full turn membership (the carry's complete round-trip).
         let uuids = &ex[0].record_uuids;
         for expected in ["u0", "a0t", "a0u", "c0", "a0f"] {
@@ -2342,12 +2710,12 @@ mod tests {
         // `-t agent` over a pattern present in both an agent text and a thinking
         // block must only surface the agent hit.
         let mut a = args("carry");
-        a.categories = vec![Category::Agent];
+        a.categories = vec!["agent.message".to_string()];
         let ex = search(&fixture(), &a);
         // "carry" appears in turn 0's thinking AND agent text; with -t agent only
         // the agent hit is emitted (one exchange, one agent hit).
         assert_eq!(ex.len(), 1);
-        assert!(ex[0].hits.iter().all(|h| h.category == Category::Agent));
+        assert!(ex[0].hits.iter().all(|h| h.class == Class::AgentMessage));
     }
 
     #[test]
@@ -2384,7 +2752,7 @@ mod tests {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"the bold option\". You can now continue."}]}}"#,
         ];
         let mut a = args("bold option");
-        a.categories = vec![Category::User];
+        a.categories = vec!["user".to_string()];
         let ex = search(&lines, &a);
         // The AUQ answer is surfaced under `user` (it rides on a carrier) AND — the
         // sanctioned behavior change (§6.4) — it now OPENS a new turn (the answer is a
@@ -2395,7 +2763,7 @@ mod tests {
         assert!(ex[0]
             .hits
             .iter()
-            .any(|h| h.category == Category::User && h.excerpt.contains("bold option")));
+            .any(|h| h.class == Class::UserAnswer && h.excerpt.contains("bold option")));
     }
 
     #[test]
@@ -2409,7 +2777,7 @@ mod tests {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which?\"=\"the teal option\". You can now continue with these answers in mind."}]}}"#,
         ];
         let mut a = args("teal option");
-        a.categories = vec![Category::User];
+        a.categories = vec!["user".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(
             ex.len(),
@@ -2422,7 +2790,7 @@ mod tests {
         assert!(ex[0]
             .hits
             .iter()
-            .any(|h| h.category == Category::User && h.excerpt.contains("teal option")));
+            .any(|h| h.class == Class::UserAnswer && h.excerpt.contains("teal option")));
     }
 
     #[test]
@@ -2434,31 +2802,83 @@ mod tests {
             r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"zzqq choice\". You can now continue."}]}}"#,
         ];
-        // No category filter → all five eligible.
+        // No selector filter → every label eligible.
         let ex = search(&lines, &args("zzqq"));
         assert_eq!(ex.len(), 1);
-        let cats: Vec<Category> = ex[0].hits.iter().map(|h| h.category).collect();
+        let cats: Vec<Class> = ex[0].hits.iter().map(|h| h.class).collect();
         assert_eq!(
             cats,
-            vec![Category::User],
-            "AUQ answer must appear once under `user`, not also tool-response"
+            vec![Class::UserAnswer],
+            "AUQ answer must appear ONCE as the richest view `user.answer`, not also agent.tool.result"
         );
     }
 
-    // ── Branch-completeness for the pure helpers ──
+    // ── Branch-completeness for the pure render helpers ──
 
     #[test]
-    fn category_label_and_glyph_all_variants() {
-        for (c, label, glyph) in [
-            (Category::Thinking, "thinking", '▸'),
-            (Category::User, "user", '◂'),
-            (Category::Tool, "tool", '▸'),
-            (Category::ToolResponse, "tool-response", '▸'),
-            (Category::Agent, "agent", '▸'),
-        ] {
-            assert_eq!(category_label(c), label);
-            assert_eq!(category_glyph(c), glyph);
+    fn class_path_and_role_glyph_cover_every_leaf() {
+        // Every Class::ALL leaf round-trips through path() (the rendered/JSON label) and maps to a
+        // role glyph (◂ user, ▸ agent, ⚙ harness) — the cutover replacement for the old flat
+        // category_label/glyph table.
+        for &c in Class::ALL {
+            assert!(!c.path().is_empty());
+            let g = role_glyph(c);
+            assert!(matches!(g, '◂' | '▸' | '⚙'), "{} -> {g}", c.path());
         }
+        assert_eq!(role_glyph(Class::UserMessage), '◂');
+        assert_eq!(role_glyph(Class::AgentMessage), '▸');
+        assert_eq!(role_glyph(Class::CommInbox), '▸'); // comm is agent-side
+        assert_eq!(role_glyph(Class::NotificationWorkflow), '⚙');
+    }
+
+    #[test]
+    fn render_label_decorates_pairing_and_direction() {
+        // ▹ pairing: a paired tool.use renders the two-sided form; a pending use / orphan result
+        // render their notes. ⇨ direction: a comm hit appends `from ⇨ to`.
+        let paired = Hit {
+            class: Class::AgentToolUse,
+            labels: vec!["agent.tool.use"],
+            excerpt: String::new(),
+            timestamp_utc: None,
+            tool_name: None,
+            direction: None,
+            tool_use_id: Some("t1".into()),
+            pair: Some(Pairing::Paired),
+            line: 0,
+            uuid: None,
+            image_ids: Vec::new(),
+            from_sidecar: false,
+            truncated: false,
+        };
+        assert_eq!(render_label(&paired), "agent.tool.use ▹ agent.tool.result");
+        let pending = Hit {
+            pair: Some(Pairing::PendingNoResult),
+            ..paired.clone()
+        };
+        assert_eq!(
+            render_label(&pending),
+            "agent.tool.use (no result — pending)"
+        );
+        let orphan = Hit {
+            class: Class::AgentToolResult,
+            pair: Some(Pairing::OrphanResult),
+            ..paired.clone()
+        };
+        assert_eq!(
+            render_label(&orphan),
+            "agent.tool.result (use not in scope)"
+        );
+        let comm = Hit {
+            class: Class::CommInbox,
+            direction: Some(("VSMultiRegion".into(), "self".into())),
+            tool_use_id: None,
+            pair: None,
+            ..paired.clone()
+        };
+        assert_eq!(
+            render_label(&comm),
+            "agent.communication.inbox  VSMultiRegion ⇨ self"
+        );
     }
 
     #[test]
@@ -2513,12 +2933,13 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::User],
+            &["user".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert!(
@@ -2629,48 +3050,58 @@ mod tests {
 
     #[test]
     fn parse_sibling_specs_bare_n_caps_total() {
-        // A bare `N` → a single TOTAL cap across all categories, no per-cat entries.
+        // A bare `N` → a single TOTAL cap across all labels, no per-selector entries.
         let caps = parse_sibling_specs(&specs(&["3"])).unwrap().unwrap();
         assert_eq!(caps.bare, Some(3));
-        assert!(caps.per_cat.is_empty());
+        assert!(caps.per_sel.is_empty());
         assert!(caps.bare_is_total());
-        // Every category resolves to the bare-N cap.
-        assert_eq!(caps.cap_for(Category::Agent), Some(3));
-        assert_eq!(caps.cap_for(Category::Tool), Some(3));
+        // Every label resolves to the bare-N cap.
+        assert_eq!(caps.cap_for(Class::AgentMessage), Some(3));
+        assert_eq!(caps.cap_for(Class::AgentToolUse), Some(3));
     }
 
     #[test]
     fn parse_sibling_specs_cat_n_caps_that_category_only() {
-        // A `<cat>:N` → caps THAT category; others are not shown.
-        let caps = parse_sibling_specs(&specs(&["agent:1"])).unwrap().unwrap();
-        assert_eq!(caps.per_cat, vec![(Category::Agent, 1)]);
+        // A `<selector>:N` → caps labels under THAT selector; others are not shown.
+        let caps = parse_sibling_specs(&specs(&["agent.message:1"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(caps.per_sel, vec![("agent.message".to_string(), 1)]);
         assert_eq!(caps.bare, None);
-        assert_eq!(caps.cap_for(Category::Agent), Some(1));
-        assert_eq!(caps.cap_for(Category::Tool), None); // not shown
+        assert_eq!(caps.cap_for(Class::AgentMessage), Some(1));
+        assert_eq!(caps.cap_for(Class::AgentToolUse), None); // not shown
         assert!(!caps.bare_is_total());
+        // A ROLE/intermediate selector pools its whole subtree: `agent.tool:2` governs use+result.
+        let pooled = parse_sibling_specs(&specs(&["agent.tool:2"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(pooled.cap_for(Class::AgentToolUse), Some(2));
+        assert_eq!(pooled.cap_for(Class::AgentToolResult), Some(2));
     }
 
     #[test]
     fn parse_sibling_specs_mixed_typed_and_bare() {
-        // `tool:1`, `thinking:2`, bare `3` → typed caps govern their categories; the bare
-        // caps the rest (the categories with no typed cap).
-        let caps = parse_sibling_specs(&specs(&["tool:1", "thinking:2", "3"]))
+        // `agent.tool.use:1`, `agent.thinking:2`, bare `3` → typed caps govern their labels; the
+        // bare caps the rest (the labels with no typed cap).
+        let caps = parse_sibling_specs(&specs(&["agent.tool.use:1", "agent.thinking:2", "3"]))
             .unwrap()
             .unwrap();
-        assert_eq!(caps.cap_for(Category::Tool), Some(1));
-        assert_eq!(caps.cap_for(Category::Thinking), Some(2));
-        assert_eq!(caps.cap_for(Category::Agent), Some(3)); // "the rest" via bare-N
-        assert_eq!(caps.cap_for(Category::User), Some(3));
+        assert_eq!(caps.cap_for(Class::AgentToolUse), Some(1));
+        assert_eq!(caps.cap_for(Class::AgentThinking), Some(2));
+        assert_eq!(caps.cap_for(Class::AgentMessage), Some(3)); // "the rest" via bare-N
+        assert_eq!(caps.cap_for(Class::UserMessage), Some(3));
         assert!(!caps.bare_is_total());
     }
 
     #[test]
     fn parse_sibling_specs_invalid_tokens_error() {
-        // Unknown category, non-numeric bare, bad typed cap, and a zero cap all error.
+        // Unknown selector, non-numeric bare, bad typed cap, a zero cap, AND the old flat values
+        // (`tool`, `thinking`) all error (0 back-compat).
         assert!(parse_sibling_specs(&specs(&["foo"])).is_err());
         assert!(parse_sibling_specs(&specs(&["bad:2"])).is_err());
-        assert!(parse_sibling_specs(&specs(&["tool:x"])).is_err());
-        assert!(parse_sibling_specs(&specs(&["tool:0"])).is_err());
+        assert!(parse_sibling_specs(&specs(&["tool:x"])).is_err()); // old flat selector
+        assert!(parse_sibling_specs(&specs(&["agent.tool.use:x"])).is_err());
+        assert!(parse_sibling_specs(&specs(&["agent.tool.use:0"])).is_err());
         assert!(parse_sibling_specs(&specs(&["0"])).is_err());
     }
 
@@ -2703,6 +3134,7 @@ mod tests {
             &PlanIndex::default(),
             &HashMap::new(),
             None,
+            &test_env(),
         );
         assert!(hits.is_empty(), "a can_hit=false record yields no hits");
         assert!(hit_idxs.is_empty(), "no record produced a hit");
@@ -2735,7 +3167,8 @@ mod tests {
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
-            None
+            None,
+            &test_env()
         )
         .0
         .is_empty());
@@ -2750,7 +3183,8 @@ mod tests {
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
-            None
+            None,
+            &test_env()
         )
         .0
         .is_empty());
@@ -2788,7 +3222,7 @@ mod tests {
         ];
         // Search tool-response category so the orphan carriers can produce a hit.
         let mut a = args("carry");
-        a.categories = vec![Category::ToolResponse];
+        a.categories = vec!["agent.tool.result".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(ex.len(), 1);
         assert_eq!(ex[0].turn_index, 0);
@@ -2826,12 +3260,13 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::ToolResponse],
+            &["agent.tool.result".to_string()],
             &m,
             true,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert_eq!(
@@ -2839,7 +3274,7 @@ mod tests {
             1,
             "inline text still matches when there is no pointer"
         );
-        assert_eq!(hits[0].category, Category::ToolResponse);
+        assert_eq!(hits[0].class, Class::AgentToolResult);
     }
 
     #[test]
@@ -2853,12 +3288,13 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &[Category::Agent],
+            &["agent.message".to_string()],
             &m,
             false,
             EXCERPT_MAX,
             &PlanIndex::default(),
             &HashMap::new(),
+            &ClassifyCtx::top_level(),
             &mut hits,
         );
         assert!(hits.is_empty(), "a user text block is not an agent hit");
@@ -2874,13 +3310,10 @@ mod tests {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"zzqq choice\". You can now continue."}]}}"#,
         ];
         let mut a = args("zzqq");
-        a.categories = vec![Category::ToolResponse];
+        a.categories = vec!["agent.tool.result".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(ex.len(), 1);
-        assert!(ex[0]
-            .hits
-            .iter()
-            .all(|h| h.category == Category::ToolResponse));
+        assert!(ex[0].hits.iter().all(|h| h.class == Class::AgentToolResult));
         assert_eq!(ex[0].hits.len(), 1, "exactly one tool-response hit");
     }
 }

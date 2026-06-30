@@ -32,6 +32,8 @@ use std::path::PathBuf;
 
 use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
 
+use crate::model::Class;
+
 /// Parse + normalize the process argv into a [`Cli`] (the real entrypoint).
 ///
 /// This wraps [`Cli::parse`] with an argv NORMALIZATION pass that fixes the
@@ -413,24 +415,71 @@ pub enum BudgetUnit {
     Tokens,
 }
 
-/// A transcript content category, used by `search --category/-t` (repeatable).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Category {
-    /// Assistant thinking blocks.
-    Thinking,
-    /// GENUINE human input + AskUserQuestion answers + machine AUTOMATION-TRIGGER openers
-    /// (`<task-notification>`, rendered as the parsed `[<kind> <id> <status>] <summary>`
-    /// attribution label, where `<kind>` is background-command / workflow / agent / monitor /
-    /// task) — NOT tool_result carriers. The automation openers DO open a turn, so they surface
-    /// under `user`; recognize them by the `[<kind> …]` prefix.
-    User,
-    /// `tool_use` blocks (agent calling a tool); AskUserQuestion is a tool_use.
-    Tool,
-    /// `tool_result` blocks (the tool's response).
-    #[value(name = "tool-response")]
-    ToolResponse,
-    /// Assistant visible end-of-turn text (the agent message).
-    Agent,
+/// True iff `selector` (a dotted `role.class.sub` path) is a dot-SEGMENT prefix of `path` —
+/// the `-t` match rule (GOLD §6). `agent` matches `agent.tool.use`; `agent.tool` matches
+/// `agent.tool.use`/`agent.tool.result` but NOT a hypothetical `agent.toolbar` (segment-wise,
+/// so a partial trailing segment never leaks). Shared by the `-t` gate and the `--siblings` caps.
+#[must_use]
+pub fn selector_is_segment_prefix(selector: &str, path: &str) -> bool {
+    match path.strip_prefix(selector) {
+        Some(rest) => rest.is_empty() || rest.starts_with('.'),
+        None => false,
+    }
+}
+
+/// Every VALID `-t` selector: each dot-segment prefix of every [`Class::path`] in [`Class::ALL`]
+/// (role / role.class / role.class.sub), in taxonomy order, de-duplicated. The single source of
+/// truth for the `-t` value space — the clap value_parser validates against it and the `--help`
+/// / error text lists it (so a new [`Class`] leaf automatically widens the selector space).
+#[must_use]
+pub fn category_selectors() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for class in Class::ALL {
+        let segs: Vec<&str> = class.path().split('.').collect();
+        for i in 1..=segs.len() {
+            let prefix = segs[..i].join(".");
+            if !out.contains(&prefix) {
+                out.push(prefix);
+            }
+        }
+    }
+    out
+}
+
+/// True iff `selector` is a valid `-t` value (some [`Class`] path has it as a segment-prefix).
+#[must_use]
+pub fn selector_is_valid(selector: &str) -> bool {
+    Class::ALL
+        .iter()
+        .any(|c| selector_is_segment_prefix(selector, c.path()))
+}
+
+/// Does a record-label `path` satisfy the active `-t` selectors? Empty selectors ⇒ every label is
+/// eligible (no `-t` filter). Otherwise the label matches iff ANY selector is a segment-prefix of
+/// it (GOLD §6) — so `-t agent` surfaces the whole agent role, `-t agent.tool` use+result.
+#[must_use]
+pub fn label_selected(selectors: &[String], path: &str) -> bool {
+    selectors.is_empty()
+        || selectors
+            .iter()
+            .any(|s| selector_is_segment_prefix(s, path))
+}
+
+/// clap value_parser for one `-t`/`--category` selector: accept a dotted `role.class.sub` path
+/// that is a segment-prefix of some [`Class`] path; reject anything else with a HARD error that
+/// LISTS the valid selectors (0 back-compat — the old flat `thinking`/`tool`/`tool-response`
+/// therefore error; bare `user`/`agent`/`harness` are now valid ROLE selectors — GOLD §6).
+fn parse_category_selector(s: &str) -> Result<String, String> {
+    let s = s.trim();
+    if selector_is_valid(s) {
+        Ok(s.to_string())
+    } else {
+        Err(format!(
+            "unknown category selector '{s}'. A selector is a dotted role.class.sub path or any \
+             prefix of one. Valid: {}",
+            category_selectors().join(", ")
+        ))
+    }
 }
 
 /// How to render matches.
@@ -586,19 +635,26 @@ impl ListArgs {
         pure filter — it matches every category-eligible record, so combine it with \
         `--category` / `--since` / `--turn-range` (a bare empty pattern with no other \
         filter warns that it will emit a lot).\n\n\
-        CATEGORIES (`-t`, repeatable): thinking | user | tool | tool-response | agent. \
-        With none given, all five are eligible. `user` is the genuine human turn PLUS \
-        the answer to an AskUserQuestion (the full Q+options+answer unit) PLUS a \
-        plan-rejection-with-message (+ a [plan: …] pointer) PLUS a machine AUTOMATION \
-        trigger; it excludes plain tool_result carriers, interrupts, and slash-command \
-        wrappers. `tool` includes AskUserQuestion tool_use calls.\n\n\
+        CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
+        record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
+        whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
+        user.message | user.answer | user.rejection | agent.message | agent.thinking | \
+        agent.tool.use | agent.tool.result | agent.communication.{inbox,sent,signal} | \
+        harness.notification.{workflow,monitor,subagent,background-command,task} | \
+        harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
+        harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
+        harness.meta.{hook,loop}. With none given, EVERY label is eligible. The human turn is \
+        `user.message`; an AskUserQuestion answer is `user.answer` (the full Q+options+answer \
+        unit); a plan-rejection-with-message is `user.rejection` (+ a [plan: …] pointer). An \
+        inbound peer/teammate message is `agent.communication.inbox` (NOT `user`); a \
+        `<task-notification>` automation pulse is `harness.notification.*` (NOT `user`).\n\n\
         AUTOMATION TRIGGERS: a `<task-notification>` (a background-command / workflow / \
-        spawned-agent COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
-        OPENS a turn like a human message, so it surfaces under `-t user`. It renders as a \
-        parsed attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
-        background-command | workflow | agent | monitor | task, read from the summary) — \
-        never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
-        `search 'background-command' -t user`).\n\n\
+        spawned-agent / monitor COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
+        OPENS a turn like a human message but classifies under `harness.notification.<kind>` \
+        (kind = background-command | workflow | subagent | monitor | task, read from the \
+        summary). It renders as the parsed `[<kind> <task-id> <status>] <summary>` attribution \
+        label — never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
+        `search 'background-command' -t harness.notification.background-command`).\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on turn-boundary \
         order) is mutually exclusive with `--since`/`--until`. Time bounds accept \
         ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
@@ -608,27 +664,27 @@ impl ListArgs {
     after_help = "EXAMPLES\n  \
           csift search \"carry\"                                  # all projects, smart-case\n  \
           csift search \"carry\" .                                # this project (positional PATH, like every sibling)\n  \
-          csift search -i \"askuserquestion\" -t tool             # tool_use blocks naming AUQ\n  \
+          csift search -i \"askuserquestion\" -t agent.tool.use  # tool_use blocks naming AUQ\n  \
           csift search \"\" -t user --since 2h .                  # user turns, last 2h, this project\n  \
           csift search \"tail.read\" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
-          csift search \"panic\" -t agent -t thinking --turn-range 10..20 --max-count 50\n  \
+          csift search \"panic\" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c idiom)\n  \
           csift search \"\" @<uuid> --no-subagents --line 88     # fetch a record by line (FULL)\n  \
           csift search \"\" @<parent> --line 7f3c9e21:88,495-500 # …in a SUBAGENT transcript (hex-prefixed --line)\n  \
           csift search \"let's chat\" -t user --siblings 3        # the match WITH up to 3 sibling records\n  \
-          csift search \"let's chat\" -t user --siblings agent:1  # …only the agent-side sibling (cap 1)\n  \
-          csift search \"let's chat\" -t user --siblings agent:1 --no-truncate  # …and READ that reply end-to-end\n\n\
+          csift search \"let's chat\" -t user --siblings agent.message:1  # …only the agent-message sibling (cap 1)\n  \
+          csift search \"let's chat\" -t user --siblings agent.message:1 --no-truncate  # …and READ that reply end-to-end\n\n\
         SIBLINGS (`--siblings <SPEC>`)\n  \
           A match renders only the records that MATCHED. `--siblings <SPEC>` additionally renders \
         the OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
         so a matched user question surfaces WITH the agent's reply — no need to drop to the raw \
         jsonl. Each SPEC token (repeatable / comma-joined) is a CAP: a bare `N` caps the TOTAL \
-        siblings (any category) at N; a `<cat>:N` (cat ∈ thinking|user|tool|tool-response|agent, \
-        ≥1) caps THAT category at N. When both forms are given, each typed cap governs its own \
-        category and the bare `N` caps every OTHER category; a category with no typed spec and no \
-        bare-`N` fallback is not shown. A record that itself matched is never duplicated as a \
-        sibling.\n\n\
+        siblings (any category) at N; a `<selector>:N` (selector = a dotted `role.class.sub` path, \
+        the same value set as `-t`, ≥1) caps the labels under THAT selector at N. When both forms \
+        are given, each typed cap governs its own selector and the bare `N` caps every OTHER \
+        label; a label with no typed spec and no bare-`N` fallback is not shown. A record that \
+        itself matched is never duplicated as a sibling.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
           `-c`/`--count-only` prints just the integer match total (ripgrep `-c`), honoring every \
         filter. That total is ALSO always in the normal output's footer (alongside the \
@@ -650,22 +706,24 @@ impl ListArgs {
           Case: smart-case by default (insensitive unless the pattern has an uppercase \
         letter); -i forces insensitive. --multiline lives in the SAME dialect (it sets \
         the (?s)(?m) flags).\n\n\
-        AUTOMATION TRIGGERS (under `-t user`)\n  \
+        AUTOMATION TRIGGERS (`harness.notification.*`)\n  \
           A machine `<task-notification>` (a background-command / workflow / spawned-agent / \
-        monitor-tick COMPLETION pulse) OPENS a user turn, so it surfaces under `-t user`. It \
-        renders as a PARSED attribution label `[<kind> <task-id> <status>] <summary>` (kind = \
-        background-command | workflow | agent | monitor | task, read from the summary) — \
-        never the raw XML. Match it like any text, e.g. `csift search 'background-command' -t \
-        user`. The `<kind>` prefix distinguishes a machine opener from a genuine human \
-        message.\n\n\
+        monitor-tick COMPLETION pulse) OPENS a turn but classifies under \
+        `harness.notification.<kind>` (NOT `user`). It renders as a PARSED attribution label \
+        `[<kind> <task-id> <status>] <summary>` (kind = background-command | workflow | subagent | \
+        monitor | task, read from the summary) — never the raw XML. Match it like any text, e.g. \
+        `csift search 'background-command' -t harness.notification`. The `<kind>` prefix \
+        distinguishes a machine opener from a genuine human message.\n\n\
         CATEGORY DEFAULT\n  \
-          With NO `-t`/`--category`, ALL FIVE categories are searched (thinking, user, tool, \
-        tool-response, agent) — a zero-hit result then means the pattern truly matched \
-        nothing, not that a category was excluded.\n\n\
+          With NO `-t`/`--category`, EVERY label is searched (the whole user / agent / harness \
+        taxonomy) — a zero-hit result then means the pattern truly matched nothing, not that a \
+        label was excluded.\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
-        record_uuids:[…], hits:[{category, excerpt, tool_name, ts_utc, ts_local}, …]} — the \
+        record_uuids:[…], hits:[{label, labels:[…], excerpt, tool_name, from, to, ts_utc, \
+        ts_local}, …]} — `label` is the matched dotted path, `labels` the record's full label \
+        set, `from`/`to` the comm direction when the hit is `agent.communication.*`. The \
         per-hit objects carry no session_id; it lives on the envelope. With `--siblings`, the \
         envelope also carries a `siblings:[…]` array (same per-hit shape) for the turn's \
         non-matched records. Envelopes stream in \
@@ -716,9 +774,19 @@ pub struct SearchArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
-    /// Filter to one or more categories. Repeatable.
-    #[arg(short = 't', long = "category", value_enum)]
-    pub categories: Vec<Category>,
+    /// Filter to one or more `-t`/`--category` SELECTORS (dotted `role.class.sub`, repeatable). A
+    /// selector matches a record label iff it is a dot-SEGMENT prefix of the label's path:
+    /// `-t user` (the whole user role), `-t agent.message`, `-t agent.thinking`, `-t agent.tool`
+    /// (use+result), `-t agent.communication` (inbox/sent/signal), `-t harness.notification`. An
+    /// invalid selector is a HARD error listing the valid set; with none given, every label is
+    /// eligible. (0 back-compat: the old flat `thinking`/`tool`/`tool-response` now error.)
+    #[arg(
+        short = 't',
+        long = "category",
+        value_name = "SELECTOR",
+        value_parser = parse_category_selector
+    )]
+    pub categories: Vec<String>,
 
     /// Case-insensitive match (overrides smart-case).
     #[arg(short = 'i', long)]
@@ -767,14 +835,14 @@ pub struct SearchArgs {
     /// back-and-forth, not only the matched line — so a matched USER question surfaces
     /// WITH the agent's reply (answers "I said X, what did you say back?"). Repeatable /
     /// comma-joined SPEC tokens turn sibling rendering ON and CAP how many show:
-    /// a bare `N` caps the TOTAL siblings (any category) at N; a `<category>:N`
-    /// (category ∈ thinking|user|tool|tool-response|agent, the same set as `-t`) caps
-    /// THAT category at N (must be ≥1). Mix them — e.g. `--siblings tool:1 --siblings
-    /// thinking:2` or `--siblings 3`. When both a bare `N` and typed `<cat>:N` specs are
-    /// given, each typed cap governs its own category and the bare `N` caps every OTHER
-    /// category (the rest); a category with no typed spec and no bare-`N` fallback is NOT
-    /// shown. A record that itself matched is never repeated as a sibling. No effect under
-    /// `--count-only`.
+    /// a bare `N` caps the TOTAL siblings (any label) at N; a `<selector>:N`
+    /// (selector = a dotted `role.class.sub` path, the same set as `-t`) caps the labels
+    /// under THAT selector at N (must be ≥1). Mix them — e.g. `--siblings agent.tool.use:1
+    /// --siblings agent.thinking:2` or `--siblings 3`. When both a bare `N` and typed
+    /// `<selector>:N` specs are given, each typed cap governs its own selector and the bare
+    /// `N` caps every OTHER label (the rest); a label with no typed spec and no bare-`N`
+    /// fallback is NOT shown. A record that itself matched is never repeated as a sibling. No
+    /// effect under `--count-only`.
     #[arg(long, value_name = "SPEC", value_delimiter = ',')]
     pub siblings: Vec<String>,
 
@@ -2536,17 +2604,60 @@ mod tests {
 
     #[test]
     fn parse_search_short_t_after_positional_sets_category() {
-        // End-to-end through clap: the hoisted `-t user` lands as a category, positional intact.
+        // End-to-end through clap: the hoisted `-t user` lands as a selector, positional intact.
         let cli =
             parse(&["csift", "search", "spec", ".", "-t", "user"]).expect("short flag after path");
         match cli.command {
             Command::Search(a) => {
-                assert_eq!(a.categories, vec![Category::User]);
+                assert_eq!(a.categories, vec!["user".to_string()]);
                 assert_eq!(a.paths.len(), 1);
                 assert_eq!(a.pattern, "spec");
             }
             _ => panic!("expected search"),
         }
+    }
+
+    #[test]
+    fn parse_search_rejects_old_flat_category() {
+        // 0 back-compat (GOLD §6): the old flat `thinking`/`tool`/`tool-response` HARD-error.
+        assert!(parse(&["csift", "search", "x", "-t", "thinking"]).is_err());
+        assert!(parse(&["csift", "search", "x", "-t", "tool-response"]).is_err());
+        // …while a dotted selector + a bare role are accepted.
+        assert!(parse(&["csift", "search", "x", "-t", "agent.thinking"]).is_ok());
+        assert!(parse(&["csift", "search", "x", "-t", "agent"]).is_ok());
+        assert!(parse(&["csift", "search", "x", "-t", "agent.tool"]).is_ok());
+        assert!(parse(&["csift", "search", "x", "-t", "harness.notification"]).is_ok());
+    }
+
+    #[test]
+    fn category_selector_prefix_and_validity() {
+        // The segment-prefix rule (GOLD §6): a partial trailing segment never leaks.
+        assert!(selector_is_segment_prefix("agent", "agent.tool.use"));
+        assert!(selector_is_segment_prefix(
+            "agent.tool",
+            "agent.tool.result"
+        ));
+        assert!(selector_is_segment_prefix(
+            "agent.tool.use",
+            "agent.tool.use"
+        ));
+        assert!(!selector_is_segment_prefix("agent.too", "agent.tool.use"));
+        assert!(!selector_is_segment_prefix("user", "agent.message"));
+        // Validity is derived from Class::ALL: every emitted selector is valid; junk is not.
+        for s in category_selectors() {
+            assert!(selector_is_valid(&s), "{s} must be valid");
+        }
+        assert!(selector_is_valid("user"));
+        assert!(selector_is_valid("agent.communication.inbox"));
+        assert!(!selector_is_valid("thinking")); // old flat value
+        assert!(!selector_is_valid("bogus.path"));
+        // label_selected: empty ⇒ all; otherwise prefix-gated.
+        assert!(label_selected(&[], "harness.interrupt.user"));
+        assert!(label_selected(&["agent".to_string()], "agent.tool.use"));
+        assert!(!label_selected(
+            &["user".to_string()],
+            "agent.communication.inbox"
+        ));
     }
 
     #[test]
