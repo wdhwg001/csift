@@ -771,8 +771,14 @@ fn search_one_file(
     // Parse all transcript-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool)
     // so a single giant transcript is not scanned on one core. The stage-2 keyword prefilter
     // (`can_hit`) is computed per line inside the parallel scan, where the raw bytes are in hand.
+    // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector: only look
+    // for the rare `type:"system"` boundary line when a selector can actually reach
+    // `harness.compaction.boundary` (or no `-t` = match-all). A `-t user` / `-t agent.*` search can
+    // never match a boundary, so it pays ZERO for the extra check — the hard `-t` filter PRUNES the
+    // byte-scan instead of taxing it (computed once here, captured by the parallel closure).
+    let needs_compact_boundary = label_selected(&args.categories, Class::CompactionBoundary.path());
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
-        if !line_is_transcript_candidate(line) {
+        if !line_is_transcript_candidate(line, needs_compact_boundary) {
             return crate::parse::LineVerdict::Ignore;
         }
         let can_hit = matcher.line_may_match(line);
@@ -829,17 +835,19 @@ fn search_one_file(
 /// transcript message (user/assistant role marker) — drops `attachment`,
 /// `file-history-snapshot`, `queue-operation`, and metadata noise pre-JSON. Kept
 /// deliberately permissive (substring, not structural) so no genuine turn is lost.
-fn line_is_transcript_candidate(line: &[u8]) -> bool {
+fn line_is_transcript_candidate(line: &[u8], needs_compact_boundary: bool) -> bool {
     // Every user/assistant record carries `"role":"user"`/`"role":"assistant"`.
     // (Genuine-user string content, tool carriers, assistant blocks all do.)
     memmem::find(line, br#""role":"user""#).is_some()
         || memmem::find(line, br#""role":"assistant""#).is_some()
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
-        // inspect their `compactMetadata`. ONE extra `memmem`, and the `||` short-circuit runs it ONLY
-        // on lines that already failed BOTH role checks — boundary records are rare, so the added
-        // parse cost is negligible and the perf contract (§7) holds.
-        || memmem::find(line, b"compact_boundary").is_some()
+        // inspect their `compactMetadata` — but ONLY when an active `-t` selector can reach that label
+        // (`needs_compact_boundary`, derived once via `label_selected`). For every other query the
+        // `&&` short-circuits BEFORE the memmem, so a non-boundary search pays ZERO. When it IS run,
+        // the `||` chain still reaches this memmem only on lines that already failed both role checks,
+        // and boundary records are rare — so the §7 perf contract holds either way.
+        || (needs_compact_boundary && memmem::find(line, b"compact_boundary").is_some())
 }
 
 /// Walk retained records in file order, delimit turns by genuine-user records, and
