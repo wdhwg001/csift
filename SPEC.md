@@ -185,7 +185,7 @@ pub enum Block {
 }
 ```
 
-Block → category mapping is in §5. Note the `ToolResult` `content` can itself be an array containing `{type:"text",text}`, `{type:"image",…}`, and **`{type:"tool_reference", tool_name}`** (emitted by ToolSearch results); model it as raw `Value` and inspect as needed.
+Block → label mapping is in §5. Note the `ToolResult` `content` can itself be an array containing `{type:"text",text}`, `{type:"image",…}`, and **`{type:"tool_reference", tool_name}`** (emitted by ToolSearch results); model it as raw `Value` and inspect as needed.
 
 ### 3.6 serde shape requirements (summary for the implementer)
 
@@ -202,7 +202,7 @@ Block → category mapping is in §5. Note the `ToolResult` `content` can itself
 
 ### 4.1 Genuine-user vs tool_result-carrier (THE load-bearing distinction)
 
-A `type:"user"` record is **NOT** always a human turn. `tool_result` blocks ride on `role:"user"` records — such a record is a tool-result *carrier*, not human input. Magnitudes are extreme: in one real session **177 genuine** users (167 string + 10 text-block) vs **8 675 tool_result-carriers** (98% of `user` records); another had 332+61 genuine vs 1 619 carriers. Getting this wrong corrupts both the `user` category and turn-delimiting.
+A `type:"user"` record is **NOT** always a human turn. `tool_result` blocks ride on `role:"user"` records — such a record is a tool-result *carrier*, not human input. Magnitudes are extreme: in one real session **177 genuine** users (167 string + 10 text-block) vs **8 675 tool_result-carriers** (98% of `user` records); another had 332+61 genuine vs 1 619 carriers. Getting this wrong corrupts both the `user` label and turn-delimiting. Two further `role:"user"` shapes that *look* human but are NOT — and now leave the `user` role under the §5 taxonomy — are an inbound `<teammate-message>`/`<agent-message>` (→ `agent.communication.*`, the GOLD §1 fix) and a `<task-notification>` automation pulse (→ `harness.notification.*`).
 
 **`is_genuine_user(record)` is true iff ALL of:**
 1. `type == "user"` AND `message.role == "user"`; AND
@@ -210,18 +210,19 @@ A `type:"user"` record is **NOT** always a human turn. `tool_result` blocks ride
 3. **`isMeta` is falsey** (excludes system-injected pseudo-turns, §4.2); AND
 4. content is a **string**, OR content is a block array containing a `text` block and **no** `tool_result` block.
 
-(`text` and `tool_result` never co-occur in one user record in real data, so "has a `text` block" is a clean genuine signal once carriers and meta are excluded.) `src/model.rs::is_genuine_user` implements (1)–(4); it **additionally** excludes the machine-synthesized markers of §4.2.1–.3 (interrupt strings, `<local-command-stdout>…`, `<command-name>…`) so they never start a turn (codepoint-safe exact `==`/`starts_with`, never a byte-offset slice).
+(`text` and `tool_result` never co-occur in one user record in real data, so "has a `text` block" is a clean genuine signal once carriers and meta are excluded.) `src/model.rs::is_genuine_user` implements (1)–(4); it **additionally** excludes the machine-synthesized markers of §4.2.1–.3 (interrupt strings, `<local-command-stdout>…`, `<command-name>…`) AND an inbound `<teammate-message>`/`<agent-message>` (`is_teammate_message`, the GOLD §1 fix — a peer-agent message is never the operator) so none of them start a turn AS the human (codepoint-safe exact `==`/`starts_with`/contains, never a byte-offset slice).
 
 **Boundary predicate `opens_turn(record)` — the single turn delimiter (§6.4).** Turn-delimiting keys on `opens_turn`, NOT on `is_genuine_user` alone. A turn opens on ANY of:
 1. `is_genuine_user` (above); OR
 2. an **answered AskUserQuestion** carrier (§4.4) — the answer IS the user's message; OR
-3. a **tool-use rejection carrying a typed user message** (§4.2.4) — the typed instruction IS the user's message.
+3. a **tool-use rejection carrying a typed user message** (§4.2.4) — the typed instruction IS the user's message; OR
+4. an **inbound peer message** (`is_teammate_message_record` — a `<teammate-message>`/`<agent-message>` from another session) — a real delivered message, so it stays a turn-opener even though `is_genuine_user` excludes it (the §1 fix keeps segmentation/turn-COUNT byte-stable; only the §5 label changes, to `agent.communication.*`).
 
-Cases 2–3 are genuine user messages, so each opens a turn (§6.4). The reconstruction (`reconstructed_user_text`) renders the genuine-user body for each: the plain text, the full AUQ Q+options+answer unit, or the rejection instruction + a `[plan: <path>]` pointer.
+Cases 2–3 are genuine user messages, so each opens a turn (§6.4). **Turn-opening is a SEPARATE axis from the §5 label:** `opens_turn` segments the transcript, `Record::classify` assigns the searchable `role.class.sub` label(s). The reconstruction (`reconstructed_user_text`) renders the opener body for each case: the plain genuine text (`user.message`), the full AUQ Q+options+answer unit (`user.answer`), the rejection instruction + a `[plan: <path>]` pointer (`user.rejection`), or the teammate-message body (`agent.communication.inbox`).
 
 ### 4.2 `isMeta:true` pseudo-turns + synthesized markers — TRAP, must be excluded
 
-`isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from the `user` category **and** from turn-delimiting. The `isMeta` exclusion is load-bearing.
+`isMeta:true` `user` records have string/text content that *looks* human but is **system-injected**, e.g. `"Continue from where you left off."`, `"# Autonomous loop tick"`, `"Stop hook feedback: …"`, `"<local-command-caveat>…"`, `"[Image: source: …]"`. These are **not** genuine human input and must be excluded from `user.message` **and** from turn-delimiting. The `isMeta` exclusion is load-bearing. Under the §5 taxonomy these are not dropped from search — `classify` reparents the recognized ones to `harness.schedule.{wakeup,continuation}` (a fired `ScheduleWakeup`/autonomous-loop timer tick / a `Continue from where you left off.` resume) or `harness.meta.{hook,loop}` (stop-hook / `<local-command-caveat>` / edit-retry feedback; an autonomous-loop driver tick). An `isMeta` record that matches NO harness marker (a novel hook wrapper, the `[Image: source:…]` reference) classifies **empty** (excluded), never `user.message` (the M2b root-fix: a genuine `user.message` is never `isMeta`).
 
 **Beyond `isMeta`, four NON-`isMeta` user-record shapes are also machine-synthesized and must NOT open a turn** (verified on real `~/.claude/projects` data; corpus counts in parentheses):
 
@@ -229,21 +230,21 @@ Cases 2–3 are genuine user messages, so each opens a turn (§6.4). The reconst
 A `type:"user"` `text`-block (or bare-string) record whose content is **EXACTLY** `"[Request interrupted by user]"` or `"[Request interrupted by user for tool use]"` — a CC-synthesized interrupt marker, not a human turn. None carry extra prose (dropping them as boundaries loses zero user content). Match is **exact `==`** (a real message that merely *quotes* the phrase stays genuine).
 
 #### 4.2.2 `<local-command-stdout>…` (52)
-String content (NOT `isMeta`) starting with `<local-command-stdout>` — local-command OUTPUT (machine), not the user's prose. (Its sibling `<local-command-caveat>` carries `isMeta` and is already excluded.) Excluded via `starts_with`.
+String content (NOT `isMeta`) starting with `<local-command-stdout>` — local-command OUTPUT (machine), not the user's prose. (Its sibling `<local-command-caveat>` carries `isMeta` and classifies `harness.meta.hook`.) Does NOT open a turn (excluded via `starts_with`); classifies **`harness.command.stdout`** (§5).
 
 #### 4.2.3 `<command-name>…` slash-command wrapper (54)
-String content (NOT `isMeta`) starting with `<command-name>` — the machine-templated EXPANSION of a slash command. The templated wrapper does NOT open a turn; any genuine prose the user typed after the command lives in `<command-args>…</command-args>` and is recovered separately (`slash_command_args`) so it still surfaces under the `user` category.
+String content (NOT `isMeta`) starting with `<command-name>` — the machine-templated EXPANSION of a slash command. The templated wrapper does NOT open a turn and classifies **`harness.command.invocation`** (§5); any genuine prose the user typed after the command lives in `<command-args>…</command-args>` and is recovered separately (`slash_command_args`) so it ALSO classifies **`user.message`** (the wrapper carries both labels — the invocation marker plus the recovered user prose).
 
 #### 4.2.4 Tool-use rejection — `is_error:true` tool_result (31 with-message / 36 without)
 When the user REJECTS a tool use (ExitPlanMode plan kick-back, or a rejected AskUserQuestion / Edit / …), the result carrier is `is_error:true` with content beginning `"The user doesn't want to proceed with this tool use…"`. TWO sub-shapes:
-- **With a typed message** — ends `"To tell you how to proceed, the user said:\n<TEXT>"`. `<TEXT>` IS a genuine user message → **opens a turn** (`plan_rejection_message` extracts the tail codepoint-safely via `split_once`). For an ExitPlanMode rejection, the rejected `tool_use_id` resolves through a `PlanIndex` (`tool_use_id → planFilePath`) to append a `[plan: <path>]` pointer so a consuming LLM can Read the plan.
-- **Without a typed message** — ends `"STOP what you are doing and wait for the user to tell you how to proceed."`. The user clicked reject but typed nothing → **NOT a boundary**.
+- **With a typed message** — ends `"To tell you how to proceed, the user said:\n<TEXT>"`. `<TEXT>` IS a genuine user message → **opens a turn** (`plan_rejection_message` extracts the tail codepoint-safely via `split_once`) and classifies **`user.rejection`** (dual-labeled with `agent.tool.result` — it rides on the rejecting tool_result carrier; deduped to the richer `user.rejection`, §5). Both rejected tools share the marker (ExitPlanMode AND an AskUserQuestion-clarify reject). For an ExitPlanMode rejection, the rejected `tool_use_id` resolves through a `PlanIndex` (`tool_use_id → planFilePath`) to append a `[plan: <path>]` pointer so a consuming LLM can Read the plan (ExitPlanMode-only; an AUQ-clarify reject has no plan path).
+- **Without a typed message** — ends `"STOP what you are doing and wait for the user to tell you how to proceed."`. The user clicked reject but typed nothing → **NOT a boundary** (→ only `agent.tool.result`, no `user.rejection`).
 
 The plan **APPROVAL** carrier (`"User has approved your plan…"`, no `is_error`, no typed message) is the harness greenlight, NOT a user message → never a boundary.
 
 ### 4.3 `tool_use` (assistant calling a tool)
 
-Assistant `tool_use` blocks → category `tool`. `name` identifies the tool; `input` is an arbitrary per-tool JSON object. `AskUserQuestion` is a `tool_use` (§4.4). A `caller` field (`{type:"direct"}`) may be present.
+Assistant `tool_use` blocks → `agent.tool.use` (§5). `name` identifies the tool; `input` is an arbitrary per-tool JSON object. `AskUserQuestion` is a `tool_use` (§4.4). A `caller` field (`{type:"direct"}`) may be present. A `SendMessage` tool_use ALSO carries `agent.communication.{sent,signal}` and a `Task`/`Agent`/`Workflow` spawn ALSO carries `agent.communication.sent` (the dual is deduped to the comm view, §5).
 
 ### 4.4 AskUserQuestion
 
@@ -260,9 +261,9 @@ and the carrier's top-level `toolUseResult` echoes the full `questions[]` struct
 
 **The COMPLETE user message = QUESTION + OPTIONS + ANSWER as one unit.** The user does not click an option — she answers in prose (often a counter-question or a scope-expanding decision), so the answer is her selection *plus* her reasoning. `auq_exchange()` reconstructs the whole exchange as one genuine-user unit: `[AskUserQuestion · N questions]` then, per question, `Qn (header): question  options: a | b | …` and `An: <answer prose>`. It is built from the structured `toolUseResult.questions[]` zipped with `toolUseResult.answers{}` (clean), falling back to parsing the synthesized `"<q>"="<a>"` string only when `toolUseResult` is absent. Codepoint-safe (no byte-offset slice into a CJK question/answer).
 
-**The answer is a genuine-user TURN BOUNDARY** (`is_auq_answer_boundary` — true iff a non-errored `tool_result` carrier with a non-empty `toolUseResult.answers` OR the synthesized marker; a CANCELLED/rejected/validation-errored AUQ has `is_error:true` and no `answers` → NOT a boundary). An AUQ answer (e.g. one that expanded the session scope) is a genuine-user message, so it opens its own turn (§6.4) and is surfaced on every surface (turns/list/search/recover/budget/topology). The answer is also surfaced under the `user` category (§5).
+**The answer is a genuine-user TURN BOUNDARY** (`is_auq_answer_boundary` — true iff a non-errored `tool_result` carrier with a non-empty `toolUseResult.answers` OR the synthesized marker; a CANCELLED/rejected/validation-errored AUQ has `is_error:true` and no `answers` → NOT a boundary). An AUQ answer (e.g. one that expanded the session scope) is a genuine-user message, so it opens its own turn (§6.4) and is surfaced on every surface (turns/list/search/recover/budget/topology). The answer classifies **`user.answer`** (dual-labeled with `agent.tool.result`; deduped to the richer `user.answer`, §5).
 
-### 4.5 `tool_result` (tool's response) → category `tool-response`
+### 4.5 `tool_result` (tool's response) → `agent.tool.result`
 
 Lives **inside a `type:"user"` carrier record's** `message.content` array, never on assistant. Fields: `tool_use_id?`, `content` (string OR array of `{type:text,text}`/`{type:image}`/`{type:tool_reference,tool_name}`), `is_error?`. Linkage to the originating `tool_use` is `tool_result.tool_use_id == tool_use.id`; **some legacy carriers omit the block-level `tool_use_id`** — fall back to the carrier's top-level `toolUseResult`/`sourceToolAssistantUUID` to resolve linkage.
 
@@ -297,25 +298,74 @@ Preview (first 2KB):
 1. The **summary text** is a `type:"user"` record with `isCompactSummary:true` + `isVisibleInTranscriptOnly:true`, **string** content (commonly starting `"This session is being continued from a previous conversation…"`). → **excluded from genuine-user** (§4.1 rule 2).
 2. The **metrics** are the `type:"system"` `subtype:"compact_boundary"` record above.
 
-`system` records are not a default search category (they have no category in §5); they are skippable noise unless a future flag opts in. They still parse cleanly and must never crash time logic.
+Most `system` records carry no §5 label and are skippable noise; the one EXCEPTION is `compact_boundary`, which the classifier labels **`harness.compaction.boundary`** (`Record::classify`, engine-verified). **Caveat:** like every `system` record it is dropped by `search`'s §7 stage-1 transcript-candidate prefilter (which keeps only `"role":"user"`/`"role":"assistant"` lines for the 200 MB-file performance contract), so `search -t harness.compaction.boundary` does NOT surface it — the label is what `classify` attaches, and `turns` renders the boundary as its own banner. The compaction SUMMARY (item 1 above) is a `type:"user"` record, so it classifies **`harness.compaction.summary`** AND is surfaced by `search`. All other `system` subtypes still parse cleanly, carry no label, and must never crash time logic.
 
 ### 4.8 `attachment` & other event records — skippable noise
 
-`attachment` is the **dominant** record type (54% of all records in the largest file — mostly `{attachment:{type:"hook_success",…}}` SessionStart spam). ~21 attachment subtypes exist (`hook_success`, `hook_additional_context`, `task_reminder`, `date_change`, `plan_mode*`, `deferred_tools_delta`, `ultrathink_effort`, `compact_file_reference`, `edited_text_file`, `queued_command`, `skill_listing`, `nested_memory`, `selected_lines_in_ide`, `hook_cancelled`/`hook_blocking_error`, `file`, …). **None map to a search category** — they are dropped pre-JSON by the prefilter (§7) and absorbed by the tolerant model. `file-history-snapshot` nests its timestamp inside `snapshot` (not top-level). `queue-operation` has a top-level `timestamp` + `operation ∈ {enqueue,dequeue,remove,popAll}`. Metadata records (`last-prompt`/`ai-title`/`agent-name`/`mode`/`permission-mode`) have **no `timestamp`/`uuid`** — skip in time/turn logic.
+`attachment` is the **dominant** record type (54% of all records in the largest file — mostly `{attachment:{type:"hook_success",…}}` SessionStart spam). ~21 attachment subtypes exist (`hook_success`, `hook_additional_context`, `task_reminder`, `date_change`, `plan_mode*`, `deferred_tools_delta`, `ultrathink_effort`, `compact_file_reference`, `edited_text_file`, `queued_command`, `skill_listing`, `nested_memory`, `selected_lines_in_ide`, `hook_cancelled`/`hook_blocking_error`, `file`, …). **None carry a §5 label** — they are dropped pre-JSON by the prefilter (§7) and absorbed by the tolerant model (`classify` returns empty for them). `file-history-snapshot` nests its timestamp inside `snapshot` (not top-level). `queue-operation` has a top-level `timestamp` + `operation ∈ {enqueue,dequeue,remove,popAll}`. Metadata records (`last-prompt`/`ai-title`/`agent-name`/`mode`/`permission-mode`) have **no `timestamp`/`uuid`** — skip in time/turn logic.
 
 ---
 
-## 5. Category mapping (`search -t/--category`, repeatable)
+## 5. Label taxonomy — `role.class.sub` (`search -t/--category`, repeatable)
 
-| Category (CLI value) | Source | Rule |
-|---|---|---|
-| `thinking` | assistant `thinking` block | always |
-| `user` | genuine human turn **+** AUQ answers **+** plan-rejection messages | `reconstructed_user_text(record)`: `is_genuine_user` per §4.1 (string or text-only, non-meta, non-carrier, non-compaction, non-synthetic-marker), OR the reconstructed AUQ Q+options+answer unit (§4.4), OR a tool-use rejection's typed message + `[plan: …]` pointer (§4.2.4), OR recovered `<command-args>` prose (§4.2.3). The AUQ/rejection cases surface the CLEAN answer (from `toolUseResult.answers` / the `said:` tail), not the noisy synthesized string. |
-| `tool` | assistant `tool_use` block | includes `AskUserQuestion` |
-| `tool-response` | `tool_result` block (on user-carrier records) | excludes AUQ answers *as a category member*? **No** — an AUQ answer IS a `tool_result`, so it belongs to both `tool-response` (it is a tool_result) and `user` (the §4.1 exception). A category filter that names either will surface it; do not double-count within a single emitted exchange. |
-| `agent` | assistant visible `text` block | the agent's end-of-turn message ("agent includes AskUserQuestion" framing — an AUQ `tool_use` is reachable via both `tool` and the `agent` turn it sits in) |
+The `-t` axis is a 3-role, **25-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, drift-guard-tested at 25). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (an unmodeled record → empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path (so `-t agent` covers the whole role, `-t agent.tool` covers use+result), and the rendered/JSON label is always the full dotted leaf path.
 
-When no `--category` is given, **all five** categories are eligible (search everything except pure-noise records: `system`, `attachment`, `file-history-snapshot`, `queue-operation`, metadata records are never category matches).
+### 5.1 The tree (role → class → sub)
+```
+user                                       (the human)
+├─ user.message            genuine prose (string or text-only blocks; incl. slash-command <command-args>)
+├─ user.answer             AUQ answer (the Q+options+answer unit; INCLUDES the question)   ALSO agent.tool.result
+└─ user.rejection          plan/tool reject + typed instruction (render [plan:<path>] for ExitPlanMode)  ALSO agent.tool.result
+
+agent                                      (the assistant)
+├─ agent.message           visible end-of-turn text (assistant `text` block)
+├─ agent.thinking          thinking block (incl. `redacted_thinking` → here, renders `[redacted thinking]`)
+├─ agent.tool.use          tool_use block (incl. a pending elicitation sidecar marker — AUQ/ExitPlanMode/MCP)
+├─ agent.tool.result       tool_result block (incl. errored)
+└─ agent.communication                     (EVERY comm hit renders  from ⇨ to)
+   ├─ inbox                received prose (a peer/teammate message, a subagent spawn prompt, a subagent return)
+   ├─ sent                 sent prose (`SendMessage` type message; a Task/Agent/Workflow spawn)
+   └─ signal               control/status (idle_notification, shutdown_request/approved, teammate_terminated)
+
+harness                                    (Claude Code machinery — render glyph ⚙)
+├─ harness.notification.{workflow, monitor, subagent, background-command, task}   <task-notification> completion pulses
+├─ harness.compaction.{summary, boundary}        the isCompactSummary record + the system compact_boundary
+├─ harness.command.{invocation, stdout}          <command-name> slash wrapper + <local-command-stdout>
+├─ harness.interrupt.{user, tool}                [Request interrupted by user] / …for tool use]
+├─ harness.schedule.{wakeup, continuation}       fired ScheduleWakeup/autonomous-loop timer tick / "Continue from where you left off."
+└─ harness.meta.{hook, loop}                     hook feedback (stop-hook / <local-command-caveat> / edit-retry) + autonomous-loop driver tick
+```
+Notes: `harness.notification.subagent` = the `AutomationKind::Agent` pulse (renamed so it never collides with the `agent` role). An `isMeta` record matching no harness marker classifies **empty** (excluded), never `user.message`. `system` records other than `compact_boundary`, plus `attachment`/`file-history-snapshot`/`queue-operation`/metadata records, carry no label. `harness.compaction.boundary` IS a valid classify label, but a `compact_boundary` is a `system` record dropped by `search`'s §7 prefilter, so `search` does not surface it (see §4.7); its sibling `harness.compaction.summary` is a `type:"user"` record and IS searchable.
+
+### 5.2 Multi-label (one record → ≥1 leaf) + Q4 dedup
+A physical record can carry several labels; `search` emits it **ONCE** under the **richest** view when a query selects ≥2 of them (Q4 dedup), while JSON `labels[]` still lists the full set.
+
+| record (disk shape) | label A | label B | direction ⇨ | richest (dedup) |
+|---|---|---|---|---|
+| AUQ answer carrier (non-errored tool_result + answers) | `user.answer` | `agent.tool.result` | — | `user.answer` |
+| plan/tool reject w/ typed msg (is_error tool_result + marker) | `user.rejection` | `agent.tool.result` | — | `user.rejection` |
+| `SendMessage` tool_use, `input.type=="message"` | `agent.tool.use` | `agent.communication.sent` | self ⇨ to | `…sent` |
+| `SendMessage` tool_use, `input.type=="shutdown_request"` | `agent.tool.use` | `agent.communication.signal` | self ⇨ to | `…signal` |
+| `Task`/`Agent`/`Workflow` spawn tool_use | `agent.tool.use` | `agent.communication.sent` | self ⇨ child | `…sent` |
+| inbound `<teammate-message>`/`<agent-message>` prose | `agent.communication.inbox` | — | from ⇨ self | `…inbox` |
+| inbound peer control payload (`{"type":sig}`) | `agent.communication.signal` | — | from ⇨ self | `…signal` |
+| subagent transcript opener (the delivered spawn prompt) | `agent.communication.inbox` | — | parent ⇨ self | `…inbox` |
+| subagent return (one-shot Task tool_result) | `agent.tool.result` | `agent.communication.inbox` | child ⇨ self | `…inbox` |
+| `harness.notification.{subagent,task,workflow}` carrying a `<result>` (bg-agent report, G1) | `harness.notification.*` | `agent.communication.inbox` | child ⇨ self | (per-section: both emit) |
+
+A batched record (≥1 `<task-notification>` and/or ≥1 inbound peer section concatenated in ONE `type:"user"` record) classifies **PER SECTION** (the labels are the UNION), and `search` renders **one hit per section** (G4/G5); a peer tag merely QUOTED inside a notification span is masked by the notification (precedence). A spawn **launch-ack** (`teammate_spawned` / `Async agent launched successfully…`) is `agent.tool.result` ONLY — it is the launch confirmation, not the child's return.
+
+### 5.3 Direction (`from ⇨ to`) sources (GOLD §4)
+Every `agent.communication.*` hit renders a direction (`Record::direction`); the transcript owner's own id renders as the literal `self`.
+- `<teammate-message>`/`<agent-message>`: the `teammate_id`/`from` attribute = FROM; owner = TO (`from ⇨ self`).
+- `SendMessage`: FROM = self; `input.to`/`recipient` = TO (`self ⇨ to`).
+- spawn tool_use: FROM = self; TO = the spawned child (id-join on the spawn `tool_use_id`, else the name-join, else the raw spawn name / `?`).
+- subagent opener: `parent ⇨ self`. subagent return / `<result>` pulse: `child ⇨ self` (child via the embedded `<tool-use-id>`).
+
+### 5.4 Render markers + selector grammar
+- **Role glyph** leads every hit line: **`◂` user · `▸` agent · `⚙` harness** (gear = machinery). `agent.communication.*` is agent-side, so `▸`.
+- **`⇨`** (hollow arrow) = the comm direction `<from> ⇨ <to>`. **`▹`** = ONLY the `agent.tool.use ▹ agent.tool.result` pairing (joined by `tool_use_id`; an unreturned use → `agent.tool.use (no result — pending)`, an orphan result → `agent.tool.result (use not in scope)`).
+- **Selector grammar**: a dotted `role.class.sub` path, dot-segment-prefix matched; with no `-t`, EVERY label is eligible (search everything except no-label records). The **old flat values** `thinking`/`tool`/`tool-response` HARD-error (0 back-compat, like `--full`), the error LISTING the valid selectors (derived from `Class::ALL`); `user`/`agent` keep working as ROLE selectors.
 
 ---
 
@@ -374,14 +424,14 @@ csift list --format json .                              # machine-readable index
 |---|---|---|---|---|
 | `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
 | `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main` (calling **top-level** session, env-resolved) / `@trap:<marker>` (the calling **SUBAGENT**, found by a unique literal marker the caller embeds in this csift command — §6.3a) / `@<agent-hex>` (a SUBAGENT + its topological descendants — or the agent alone under `--no-subagents`) / `*.jsonl` (one transcript — a subagent transcript scopes to that agent's subtree) — the same positional surface every sibling uses |
-| `--category C` | `-t` | repeatable enum | all | one of `thinking\|user\|tool\|tool-response\|agent` (§5) |
+| `--category C` | `-t` | repeatable selector | all labels | a dotted `role.class.sub` selector (§5), dot-segment-prefix matched (`-t agent` = the role, `-t agent.tool` = use+result, `-t harness.notification` = all five pulse kinds). The old flat values `thinking`/`tool`/`tool-response` HARD-error (0 back-compat). |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
 | `--turn-range START..END` | — | string | none | inclusive 0-based turn index range; **mutually exclusive** with `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | — | string | none | time bounds (ISO8601 or relative `2h`/`3d`/…, system-local; bare date ⇒ local midnight) |
 | `--max-count N` | — | usize | none (**unlimited — no cap**) | cap emitted exchanges; **reports dropped count** |
 | `--count-only` | `-c` | bool | off | print ONLY the match total (one integer; ripgrep `-c` idiom); honors every filter. The total is ALSO in the normal footer, so `--count-only` just isolates it for a pipe. (For "which sessions matched", pipe `--format json` through `jq -r .session_id \| sort -u`.) |
-| `--siblings SPEC` | — | repeatable + comma | off | render each matched turn's NON-matched records (the surrounding back-and-forth), CAPPED per SPEC. Each token is a bare `N` (cap the total siblings of any not-typed category at N) or a `<category>:N` (cap THAT category at N, category ∈ thinking\|user\|tool\|tool-response\|agent, N ≥ 1). Mix them: a typed cap governs its category, a bare `N` caps "the rest"; a category with neither is not shown. Presence of any spec turns siblings ON |
+| `--siblings SPEC` | — | repeatable + comma | off | render each matched turn's NON-matched records (the surrounding back-and-forth), CAPPED per SPEC. Each token is a bare `N` (cap the total siblings whose label has no typed cap at N) or a `<selector>:N` (cap the labels UNDER that dotted `role.class.sub` selector — the same set as `-t` — at N, N ≥ 1). Mix them: a typed cap governs its labels, a bare `N` caps "the rest"; a label with neither is not shown. Presence of any spec turns siblings ON |
 | `--no-truncate` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (no `--full` alias — that spelling was removed as ambiguous). When NOT set and ≥1 excerpt is clipped, a trailing reader-caution prints (text) / `excerpts_truncated:true` (JSON): an excerpt is a match-centered FRAGMENT, not a summary, and can misrepresent the record's full intent — re-fetch via `--no-truncate` or `--line`/`--uuid` |
 | `--line SPEC` | — | repeatable + comma | none | ADDRESS by 1-based physical line(s)/ranges (`--line 87,495-500`) instead of/with pattern; needs a single-transcript scope; addressed records render FULL; an explicit miss is reported `unresolved`. To address a SUBAGENT transcript, prefix a token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`); all hex-bearing tokens must name the SAME transcript |
 | `--uuid U` | — | repeatable + comma | none | ADDRESS by record uuid(s) (globally unique); addressed records render FULL; a miss is `unresolved` |
@@ -395,39 +445,44 @@ csift list --format json .                              # machine-readable index
 
 **Regex dialect — linear-time (RE2-class).** The pattern is the Rust `regex` 1.12 crate (`regex::bytes`), which **guarantees linear-time matching** in the input length: **no catastrophic backtracking, ever**. *Supported:* literals; character classes `[...]` / `[^...]` / `\d \w \s` + Unicode classes `\p{...}`; alternation `|`; groups `(...)` / non-capturing `(?:...)`; quantifiers `* + ? {m,n}` (greedy + lazy `*?`); anchors `^ $ \b \B`; dot `.` (`--multiline` lets it cross newlines); inline flags `(?i)(?m)(?s)(?x)`; Unicode-aware by default. ***Deliberately NOT supported*** (they require a non-linear engine): backreferences `\1`; lookahead/lookbehind `(?=) (?!) (?<=) (?<!)`; atomic groups / possessive quantifiers `(?>...)` / `a*+`. A pattern using these **fails to compile** with a clear error — by design, not a bug. This boundary is documented identically in `--help` (`search`'s `after_help`) and `SKILL.md`.
 
-**Validation:** `--turn-range` together with `--since`/`--until` is an error (mutually exclusive). An empty `PATTERN` with no other filter is allowed (matches every category-eligible record) but should warn that it will emit a lot.
+**Validation:** `--turn-range` together with `--since`/`--until` is an error (mutually exclusive). An empty `PATTERN` with no other filter is allowed (matches every label-eligible record) but warns (`empty pattern with no category/time/turn/session filter …`) that it will emit a lot.
 
-**Filter application order per session:** target selection (positional PATH/`@<uuid>`/`*.jsonl`) → category eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
+**Filter application order per session:** target selection (positional PATH/`@<uuid>`/`*.jsonl`) → label eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
 
 **Time window:** `--since`/`--until` compare against each record's `timestamp` (UTC). Records with no timestamp (metadata/noise) are never time-matched. Relative forms (`2h`,`3d`,`90m`) are resolved against *now* in the system-local timezone then converted to UTC for comparison.
 
 **Output — complete round-trip:** see §6.4. Each emitted unit is one **Exchange** with a session header, turn index, and the matched hit(s) shown in context of their full round-trip.
 
-**Text output example.** Each distinct session is declared ONCE in a label table (`s1 = <uuid>`), then every exchange header is the cheap `s<N>·t<turn>` reference + a single compact local instant (the offset already pins it — no second UTC copy); hit lines are `  <glyph> <category>[ <tool>]  L<line>  <excerpt>` with `◂` = user, `▸` = everything else:
+**Text output example.** Each distinct session is declared ONCE in a label table (`s1 = <uuid>`), then every exchange header is the cheap `s<N>·t<turn>` reference + a single compact local instant (the offset already pins it — no second UTC copy); hit lines are `  <glyph> <label>[ <tool>]  L<line>  <excerpt>` where `<glyph>` is the ROLE glyph (`◂` user · `▸` agent · `⚙` harness) and `<label>` is the full dotted leaf path, DECORATED with `from ⇨ to` on a comm hit and the `▹` pairing on a tool hit:
 ```
 s1 = 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 
 s1·t47  2026-06-07 14:32:05.478+10:00
-  ◂ user  L990  why is the tail-read carry needed?
-  ▸ thinking  L994  The carry holds an incomplete line straddling a chunk boundary…
-  ▸ agent  L1003  The carry is the partial line at the low-offset edge of each chunk…
+  ◂ user.message  L990  why is the tail-read carry needed?
+  ▸ agent.thinking  L994  The carry holds an incomplete line straddling a chunk boundary…
+  ▸ agent.message  L1003  The carry is the partial line at the low-offset edge of each chunk…
+  ▸ agent.tool.use ▹ agent.tool.result  Bash  L1005  rg -n carry src/parse.rs…
+  ▸ agent.communication.inbox  VSMultiRegion ⇨ self  L1018  please double-check the chunk math
+  ⚙ harness.notification.background-command  L1020  [background-command wf12abc completed] echo done
 
 matched 1 exchange · 1 session · category=all
 ```
-(A subagent session's table row reads `s2 = <hex> (subagent · parent s1)`; a `tool-response` hit names its tool, `▸ tool-response Edit  L2128  …`.)
+(A subagent session's table row reads `s2 = <hex> (subagent · parent s1)`; an `agent.tool.result` hit names its tool, `▸ agent.tool.result Edit  L2128  …`. The footer keyword stays `category=<joined selectors or all>`.)
 
 **Example invocations:**
 ```bash
 csift search "carry"                                   # all projects, smart-case
-csift search -i "askuserquestion" -t tool             # tool_use blocks naming AUQ
+csift search -i "askuserquestion" -t agent.tool.use   # tool_use blocks naming AUQ
 csift search "" -t user --since 2h .                   # pure filter: genuine user turns, last 2h, this project
 csift search "tail.read" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
-csift search "panic" -t agent -t thinking --turn-range 10..20 --max-count 50
+csift search "panic" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50
+csift search "" -t agent.communication.inbox @<uuid>   # inbound peer/teammate messages (from ⇨ self)
+csift search "" -t harness.notification @<uuid>        # subagent/workflow/bg-command completion pulses
 csift search "" @0a1b2c3d-… --no-subagents --line 992,1374   # fetch records by line (FULL)
 csift search "" @0a1b2c3d-… --line 7f3c9e21:88,495-500       # …in a SUBAGENT transcript (hex-prefixed --line)
 csift search "" --uuid 7f3c9e21-…                      # fetch a record by uuid, anywhere in scope
 csift search "deadline" --format json | jq -r .session_id | sort -u  # WHICH sessions mention it
-csift search "let's chat" -t user --siblings agent:1   # the match WITH up to 1 agent-side sibling
+csift search "let's chat" -t user --siblings agent.message:1   # the match WITH up to 1 agent-message sibling
 csift search "persisted-output" --resolve-persisted --format json
 ```
 
@@ -478,8 +533,8 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
    - A matched **`tool_use`** is returned **with its `tool_result`** — pair by `tool_result.tool_use_id == tool_use.id` (fallback via `toolUseResult`/`sourceToolAssistantUUID`, §4.5). Both blocks appear in the emitted exchange even if only one matched.
    - A matched **genuine-user turn** is returned **with the agent response** — i.e. the assistant `text`/`thinking`/`tool_use` records chained under it in the same turn.
    - A matched **`tool_result`** is returned **with the `tool_use` that produced it** (reverse of the above pairing).
-   - A matched **`thinking`/`agent` text** is returned within its full turn (the opening genuine-user + sibling assistant records).
-4. The emitted Exchange carries: `session_id`, `is_subagent` + the always-re-feedable `parent_session_id` (the id-domain discriminators; `parent_session_id == session_id` for a top-level hit), `turn_index`, `started_utc` (the turn-opening timestamp = the exchange's chronological position; falls back to the earliest hit's ts, `None` only when neither exists), the list of `Hit`s (category + excerpt + UTC timestamp + `tool_name`), and `record_uuids` (every record stitched in — the §6.4 round-trip-completeness evidence) — matching `search::Exchange`.
+   - A matched **`agent.thinking`/`agent.message` text** is returned within its full turn (the opening genuine-user + sibling assistant records).
+4. The emitted Exchange carries: `session_id`, `is_subagent` + the always-re-feedable `parent_session_id` (the id-domain discriminators; `parent_session_id == session_id` for a top-level hit), `turn_index`, `started_utc` (the turn-opening timestamp = the exchange's chronological position; falls back to the earliest hit's ts, `None` only when neither exists), the list of `Hit`s (the matched leaf `label` + the full `labels[]` set + excerpt + UTC timestamp + `tool_name` + comm `from`/`to` + tool `pairing`/`tool_use_id`), and `record_uuids` (every record stitched in — the §6.4 round-trip-completeness evidence) — matching `search::Exchange`.
 5. **AUQ pairing:** an `AskUserQuestion` `tool_use` and its answering `tool_result` (§4.4) are one pair; the answer is surfaced under `user` AND — per the §4.4 boundary rule — **opens its own turn** (`opens_turn`). The reconstructed turn opener is the full Q+options+answer unit (`auq_exchange`).
 6. **Compaction continuity:** a `compact_boundary`'s `logicalParentUuid`/`preservedSegment` may be used (best-effort) to keep turn indices monotonic across a compaction, but turn delimiting still keys on genuine-user records; never crash if these fields are absent.
 7. **Combined stable chronological timeline.** Across the WHOLE scope, emitted Exchanges are sorted ASCENDING by `started_utc` (ISO-8601 UTC sorts lexicographically as text), so subagent exchanges INTERLEAVE with top-level ones by absolute time rather than grouping per file; timestamp-less exchanges sort LAST, with a deterministic tie-break (sorted file order → turn order, preserved by a stable sort — same shape as `files --by timeline`). The GLOBAL `--max-count` cap is applied AFTER the sort (keeping the earliest N and reporting the dropped remainder — never silent).
@@ -772,7 +827,7 @@ There is NO `pending` subcommand. Three elicitations BLOCK a session on a human 
 
 **Sidecar:** `<sidecar_dir>/elicitations.jsonl` (the `<uuid>/` dir beside `subagents/`, via `crate::subagent::sidecar_dir_for_session` / `crate::elicitation::sidecar_path`), written by the `csift-elicitation-marker` CC hook (SKILL.md recipe) on the `PreToolUse`/`PostToolUse` (AskUserQuestion|ExitPlanMode) and `Elicitation`/`ElicitationResult` events. NEVER the native transcript (no pollution). Append-only; every line carries `csift:"elicitation-marker-v1"` + `csiftPhase`∈{`pending`,`resolved`} + `csiftKind`∈{`AskUserQuestion`,`ExitPlanMode`,`mcp-elicitation`} + `csiftKey` (pair id) + `timestamp`. A `pending` line is shaped like the NATIVE record CC will eventually write (an AUQ/ExitPlanMode `tool_use` on a `type:"assistant"` record; an MCP `type:"system"` record), so it classifies naturally; a `resolved` line is a lightweight `type:"csift-elicitation-resolved"` close marker. **Keyed by the TOP-LEVEL session** — the hook's `session_id`/`transcript_path` is always the top-level/leader uuid (process-global, never per-subagent); AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind — the Elicitation hook carries no `agent_id`).
 
-**Merge semantics (`crate::elicitation::unresolved_pending`).** Group the sidecar by `csiftKey`; a key with a `pending` and NO `resolved` is UNRESOLVED → its pending record is emitted (exactly the one MISSING from the native transcript — once resolved CC wrote the real record, so the pending is paired off and DROPPED ⇒ no duplicates, the auto-dedup is the whole point). **search / turns / list** read the sidecar when they read a TOP-LEVEL session (subagent transcripts have none — the sidecar is keyed by the top-level uuid) and merge the unresolved-pending records as native: `search` matches them ALL under the `tool` category (an AUQ/ExitPlanMode `tool_use` via its block; the MCP `system` record — which has no `tool_use` block — via a guarded `collect_record_hits` arm that matches its top-level `content` string and tags it `Tool` named by `csiftKind`, so `search MCPPROBE` / `-t tool` find it; gated to a no-tool_use marker so AUQ/ExitPlanMode never double-emit), `turns` appends each as its own pending turn unit (ranked most-recent), `list` annotates the row + surfaces the pending kind. **files / recover** carry no file ops for these records (no output), so they deliberately do not read the sidecar. A merged record has NO physical line: it renders **`(elicitation sidecar)`** in place of `Lnnnn` (never a fabricated L) and carries JSON `source:"elicitation-sidecar"` + null `line`/`line_no`; every surface that merged ≥1 record emits the EXACT note **`with elicitation sidecar`** (JSON `with_elicitation_sidecar:true`). Malformed sidecar lines are skipped + COUNTED into that surface's `skipped_lines` (never silent); a missing sidecar dir/file ⇒ no merge (not an error); near-free when nothing is pending. **Targeting rejection:** `resolve_session_files` `bail!`s when a `*.jsonl` target `is_sidecar_path` (basename `elicitations.jsonl` OR a content-sniff where every line is a `csift`-marked record) — the sidecar is read automatically, never searched directly. Verified live on 2.1.191: the `pending` marker is written the instant the picker appears and persists through the entire wait while the native record stays buffered.
+**Merge semantics (`crate::elicitation::unresolved_pending`).** Group the sidecar by `csiftKey`; a key with a `pending` and NO `resolved` is UNRESOLVED → its pending record is emitted (exactly the one MISSING from the native transcript — once resolved CC wrote the real record, so the pending is paired off and DROPPED ⇒ no duplicates, the auto-dedup is the whole point). **search / turns / list** read the sidecar when they read a TOP-LEVEL session (subagent transcripts have none — the sidecar is keyed by the top-level uuid) and merge the unresolved-pending records as native: `classify` labels a pending marker **`agent.tool.use`**, so `search` matches all three kinds under `-t agent.tool.use` (an AUQ/ExitPlanMode `tool_use` via its block; the MCP `system` record — which has no `tool_use` block — via a guarded `collect_record_hits` arm that matches its top-level `content` string and tags it `agent.tool.use` named by `csiftKind`, so `search MCPPROBE` / `-t agent.tool.use` find it; gated to a no-tool_use marker so AUQ/ExitPlanMode never double-emit), `turns` appends each as its own pending turn unit (ranked most-recent), `list` annotates the row + surfaces the pending kind. **files / recover** carry no file ops for these records (no output), so they deliberately do not read the sidecar. A merged record has NO physical line: it renders **`(elicitation sidecar)`** in place of `Lnnnn` (never a fabricated L) and carries JSON `source:"elicitation-sidecar"` + null `line`/`line_no`; every surface that merged ≥1 record emits the EXACT note **`with elicitation sidecar`** (JSON `with_elicitation_sidecar:true`). Malformed sidecar lines are skipped + COUNTED into that surface's `skipped_lines` (never silent); a missing sidecar dir/file ⇒ no merge (not an error); near-free when nothing is pending. **Targeting rejection:** `resolve_session_files` `bail!`s when a `*.jsonl` target `is_sidecar_path` (basename `elicitations.jsonl` OR a content-sniff where every line is a `csift`-marked record) — the sidecar is read automatically, never searched directly. Verified live on 2.1.191: the `pending` marker is written the instant the picker appears and persists through the entire wait while the native record stays buffered.
 
 ---
 
@@ -813,7 +868,7 @@ Measured payoff (225 MB file): parse-every-line **1.39 s** vs prefilter-then-par
 
 ### 7d. Two-stage prefilter on raw line bytes (no UTF-8 validation, no JSON parse)
 
-1. **Category prefilter** (cheap `memchr::memmem::Finder`, built once per needle, reused across all lines): a line that could match a requested category must contain a marker substring — `"thinking"`, `"tool_use"`, `"tool_result"`, `"role":"assistant"`, etc. A line lacking **all** active markers is dropped pre-JSON. (Genuine-`user` is the exception: a `"type":"user"` line passing the substring gate still needs structural disambiguation from carriers, so it is parsed — but that's only ~8.8 K of 115 K lines, and only when the `user` category is active.)
+1. **Label prefilter** (cheap `memchr::memmem::Finder`, built once per needle, reused across all lines): a line that could match a requested `-t` selector must contain a marker substring — `"thinking"`, `"tool_use"`, `"tool_result"`, `"role":"assistant"`, etc. A line lacking **all** active markers is dropped pre-JSON. (Genuine-`user` is the exception: a `"type":"user"` line passing the substring gate still needs structural disambiguation from carriers, so it is parsed — but that's only ~8.8 K of 115 K lines, and only when the `user` role is active.) The marker→leaf wiring widened with the taxonomy but the mechanics are unchanged.
 2. **Keyword prefilter** (the user regex): if the regex has a required literal substring (extract via `regex-syntax` HIR literal analysis, or use the `regex` crate's own prefilter), `memmem` that literal first. Empty pattern ⇒ pure filter (skip stage 2). Non-anchorable regex ⇒ run `regex::bytes::Regex` directly on raw bytes (still far cheaper than JSON parse).
 
 Only lines passing **both** gates reach `serde_json::from_slice` → typed `Record` → exact field-level match + round-trip stitching. **`simd-json`/`sonic-rs` are NOT used** (and not a default dep): once the prefilter drops 98% of lines, total serde time is a few ms even on 225 MB; simd-json needs an owned, padded, mutable buffer (fights the zero-copy mmap `&[u8]`) and sonic-rs adds unsafe-heavy deps for a speedup on a tiny byte fraction. Capture most of the win instead with `serde_json::from_slice` + `#[serde(borrow)]` zero-copy fields. (Keep simd-json as a possible future `--feature`, not default.)
@@ -831,7 +886,7 @@ Only lines passing **both** gates reach `serde_json::from_slice` → typed `Reco
 
 ### 8.1 Text (default) — LLM/human-readable
 
-- Clear, scannable **session / turn / category / timestamp** headers (examples in §6.1, §6.2).
+- Clear, scannable **session / turn / label / timestamp** headers (examples in §6.1, §6.2).
 - Timestamps: `YYYY-MM-DD HH:MM:SS <TZ> (RAW_UTC_ISO8601)` — system-local timezone + raw UTC, via `jiff` (`TimeZone::system()`; `<TZ>` auto-tracks the detected zone).
 - Excerpts truncated only with an explicit `… (+N chars)` marker (never silent).
 - Footers state match counts and **dropped counts** (`N dropped` when `--max-count` capped).
@@ -841,7 +896,7 @@ Only lines passing **both** gates reach `serde_json::from_slice` → typed `Reco
 One JSON object per emitted unit, deterministic order. Shapes mirror the in-memory types:
 
 - **`list`** → one object per session: `{ session_id, path, cwd, version, git_branch, first_user:{ts_utc,ts_local,excerpt}|null, last_user:{…}|null, last_agent:{…}|null }` (mirrors `session::SessionSummary` + `MessagePreview`).
-- **`search`** → an optional leading `{kind:"session_header",…}` scope record (only when the scope spans ≥1 subagent), then one object per Exchange **in combined chronological order** (subagents interleaved by `ts_utc`): `{ session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, hits:[{category, excerpt, ts_utc, ts_local, tool_name}], record_uuids:[…] }` (mirrors `search::Exchange` + `Hit`; the envelope `ts_utc`/`ts_local` = the turn-opening `started_utc`, the key the timeline is sorted on — a per-hit `ts_utc` may be later for a deep tool_use match), followed by a trailing summary object `{ matched, dropped_by_cap, skipped_lines, with_elicitation_sidecar, excerpts_truncated }` (mirrors `search::SearchOutcome`; `excerpts_truncated` = ≥1 emitted excerpt was clipped to the cap — the machine echo of the text reader-caution, always false under `--no-truncate`/`--line`/`--uuid`).
+- **`search`** → an optional leading `{kind:"session_header",…}` scope record (only when the scope spans ≥1 subagent), then one object per Exchange **in combined chronological order** (subagents interleaved by `ts_utc`): `{ session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, hits:[{label, labels:[…], excerpt, ts_utc, ts_local, tool_name, from, to, pairing, tool_use_id, line, uuid, source, image_ids:[…]}], record_uuids:[…] }` (mirrors `search::Exchange` + `Hit`; the matched leaf is `label`, the record's full set is `labels[]`; `from`/`to` non-null only on an `agent.communication.*` hit, `pairing`/`tool_use_id` only on a tool hit, `source:"elicitation-sidecar"` only on a merged pending marker; the envelope `ts_utc`/`ts_local` = the turn-opening `started_utc`, the key the timeline is sorted on — a per-hit `ts_utc` may be later for a deep tool_use match), followed by a trailing summary object `{ matched, dropped_by_cap, skipped_lines, with_elicitation_sidecar, excerpts_truncated }` (mirrors `search::SearchOutcome`; `excerpts_truncated` = ≥1 emitted excerpt was clipped to the cap — the machine echo of the text reader-caution, always false under `--no-truncate`/`--line`/`--uuid`).
 - **`whoami`** → `{ session_id, path? }`.
 
 JSON must be valid UTF-8; non-UTF-8 bytes in excerpts are lossily replaced (`String::from_utf8_lossy`), never panicked on.
