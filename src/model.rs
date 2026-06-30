@@ -358,6 +358,14 @@ pub enum Block {
         #[serde(default)]
         signature: Option<String>,
     },
+    /// A `redacted_thinking` block — encrypted/opaque reasoning CC emits in place of a visible
+    /// `thinking` block (no readable text, only an opaque `data` payload). Classified
+    /// `agent.thinking` exactly like a normal thinking block (GOLD §2 / oracle B3); the opaque
+    /// `data` is captured for shape-completeness but never rendered.
+    RedactedThinking {
+        #[serde(default)]
+        data: String,
+    },
     ToolUse {
         #[serde(default)]
         id: Option<String>,
@@ -1671,10 +1679,10 @@ pub(crate) fn normalize_line(s: &str) -> String {
 //     universal marker; such an isMeta tick that matches no marker is EXCLUDED (P1c M2b: an
 //     isMeta record is never `user.message`), not mislabeled. The `ScheduleWakeup` *tool_use*
 //     (the agent ARMING a wakeup) is classified `agent.tool.use`, not the harness tick.
-//   - `agent.thinking` covers `Block::Thinking`; a `redacted_thinking` block (absent in the
-//     current corpus) parses as `Block::Unknown`, so it is NOT classified — adding a
-//     `Block::RedactedThinking` variant would touch the 8 `Block` match sites in OTHER
-//     modules, which P1's "model.rs-only, no consumer edits" scope forbids; deferred to P2.
+//   - `agent.thinking` covers BOTH [`Block::Thinking`] and [`Block::RedactedThinking`] (the
+//     encrypted/opaque thinking form). The latter is UNATTESTED in the current corpus (oracle
+//     B3/G7) so it is exercised by a SYNTHETIC fixture; it carries no readable text, so the
+//     render surfaces a `[redacted thinking]` placeholder while still classifying `agent.thinking`.
 // ============================================================================
 
 /// The top-level ROLE of a classified record (GOLD §2). The first dot-segment of every
@@ -2487,7 +2495,9 @@ impl Record {
                     push_unique(out, Class::AgentMessage);
                 }
                 Block::Text { .. } => {}
-                Block::Thinking { .. } => push_unique(out, Class::AgentThinking),
+                Block::Thinking { .. } | Block::RedactedThinking { .. } => {
+                    push_unique(out, Class::AgentThinking);
+                }
                 Block::ToolUse { name, input, .. } => {
                     push_unique(out, Class::AgentToolUse);
                     match name.as_deref() {
@@ -4592,6 +4602,20 @@ mod tests {
     fn classify_assistant_thinking_only() {
         let r = parse(
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm","signature":"s"}]}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentThinking]
+        );
+    }
+
+    #[test]
+    fn classify_assistant_redacted_thinking_only() {
+        // #12 / oracle B3: a `redacted_thinking` block (opaque encrypted reasoning, no readable
+        // text) classifies `agent.thinking` exactly like a normal thinking block. UNATTESTED in
+        // the corpus → exercised by this SYNTHETIC fixture.
+        let r = parse(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"EncryptedOpaqueBlob=="}]}}"#,
         );
         assert_eq!(
             r.classify(&ClassifyCtx::top_level()),

@@ -2096,6 +2096,51 @@ fn search_teammate_message_is_inbox_not_user_regression() {
 }
 
 #[test]
+fn search_redacted_thinking_is_agent_thinking() {
+    // #12 / oracle B3 (G7): a `redacted_thinking` block (opaque encrypted reasoning, no readable
+    // text) is UNATTESTED in the corpus, so this SYNTHETIC fixture exercises it. It must classify
+    // `agent.thinking` and surface under `-t agent.thinking` as a `[redacted thinking]` placeholder
+    // (never the opaque `data` blob). The search pattern `redacted` is present BOTH in the raw line
+    // (the `redacted_thinking` type) — so the literal prefilter keeps the line — AND in the rendered
+    // placeholder, so the regex locates a match on the emitted text.
+    let h = Home::new();
+    let sess = "abababab-cdcd-efef-0101-232323232323";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"abababab-cdcd-efef-0101-232323232323","cwd":"/Users/x/redact","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"think hard"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"EncryptedOpaqueBlob=="},{"type":"text","text":"done"}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-redact/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    let out = h.run(&[
+        "search",
+        "redacted",
+        "-t",
+        "agent.thinking",
+        at(sess).as_str(),
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("agent.thinking"),
+        "a redacted_thinking block must classify as agent.thinking; got: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("[redacted thinking]"),
+        "a redacted_thinking block must render the placeholder, not the opaque data; got: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("EncryptedOpaqueBlob"),
+        "the opaque `data` blob must NOT be surfaced; got: {}",
+        out.stdout
+    );
+}
+
+#[test]
 fn search_renders_tool_use_result_pairing() {
     // GOLD §7: a tool_use joined to its tool_result by tool_use_id renders `▹`; an unreturned
     // tool_use renders `(no result — pending)`.
