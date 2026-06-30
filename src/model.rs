@@ -127,6 +127,13 @@ pub const TEAMMATE_MESSAGE_OPEN: &str = "<teammate-message";
 #[allow(dead_code)]
 pub const PEER_MESSAGE_PREAMBLE: &str = "Another Claude session sent a message:";
 
+/// The opening tag of an inbound `<agent-message from="…">` peer form (P1c M1) — a DISTINCT
+/// inbound peer message from [`TEAMMATE_MESSAGE_OPEN`], seen `isMeta` in real data (e.g. an OMC
+/// agent replying to a peer, relayed into this session: `<agent-message
+/// from="oh-my-claudecode:architect">…`). Classifies `agent.communication.inbox` (the
+/// `from="…"` attribute ⇨ self), never `user.message`.
+pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
+
 /// The fixed harness-injected continuation marker (GOLD §5) — `harness.schedule.continuation`.
 /// A `type:"user"` (`isMeta`) record CC injects to resume a session from where it left off.
 /// Verified across real `~/.claude/projects` data (522 occurrences), exact content.
@@ -137,11 +144,26 @@ pub const SCHEDULE_CONTINUATION_MARKER: &str = "Continue from where you left off
 /// that injected prompt. This is the SCHEDULER timer firing — DISTINCT from the autonomous-loop
 /// DRIVER ticks (`# Autonomous loop tick` / `Run the autonomous check`), which are
 /// `harness.meta.loop` ([`AUTONOMOUS_LOOP_TICK_PREFIX`] / [`AUTONOMOUS_CHECK_MARKER`]); the two
-/// must not be conflated. NOTE: this is the ONLY reliably-fixed wakeup-tick marker — a
-/// cron/monitor tick's injected prompt is operator-authored free text with no universal marker
-/// (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action, classified
+/// must not be conflated. Together with [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] /
+/// [`SCHEDULE_WAKEUP_TIMER_MARKER`] these are the fixed wakeup-tick markers — a generic
+/// cron/monitor tick's injected prompt is still operator-authored free text with no universal
+/// marker (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action, classified
 /// `agent.tool.use`, not the fired tick). See the GOLD-gap note in the module docs.
 pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
+
+/// The header of the harness-injected FIRED autonomous-loop / `ScheduleWakeup` timer tick (P1c
+/// M2a / oracle D12) — `harness.schedule.wakeup`. When the timer FIRES, the harness injects an
+/// `isMeta` `type:"user"` record whose content opens `# Autonomous loop check\n\nYou're being
+/// invoked on a timer …`. DISTINCT from the `meta.loop` DRIVER ticks
+/// ([`AUTONOMOUS_LOOP_TICK_PREFIX`] = `# Autonomous loop tick` / [`AUTONOMOUS_CHECK_MARKER`]):
+/// `check` ≠ `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the
+/// meta.loop arm in [`Record::classify`], so the fired tick routes to `schedule.wakeup`.
+pub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = "# Autonomous loop check";
+
+/// See [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] — the fired-timer body sentence (matched anywhere,
+/// as it follows the `# Autonomous loop check` header after a blank line). Verified verbatim
+/// against real `~/.claude/projects` data (straight ASCII apostrophe).
+pub const SCHEDULE_WAKEUP_TIMER_MARKER: &str = "You're being invoked on a timer";
 
 /// `harness.meta.hook` markers (GOLD §2, edge-fixtures G2) — hook-injected feedback, NOT the
 /// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the
@@ -1650,16 +1672,17 @@ pub(crate) fn normalize_line(s: &str) -> String {
 // items carry a targeted `#[allow(dead_code)]` (the binary never calls them yet).
 //
 // GOLD GAPS surfaced during P1 (reported upstream, not silently absorbed):
-//   - `harness.schedule.wakeup`: a fired wakeup tick has NO universal fixed marker (its
-//     injected prompt is operator-authored); only the autonomous-loop sentinel
-//     [`SCHEDULE_WAKEUP_MARKER`] is reliable. The `ScheduleWakeup` *tool_use* (the agent
-//     ARMING a wakeup) is classified `agent.tool.use`, not the harness tick.
+//   - `harness.schedule.wakeup`: the FIRED autonomous-loop / `ScheduleWakeup` timer tick is
+//     detected via its fixed markers ([`SCHEDULE_WAKEUP_MARKER`] sentinel +
+//     [`SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX`] / [`SCHEDULE_WAKEUP_TIMER_MARKER`], P1c M2a). A
+//     GENERIC cron/monitor tick's injected prompt is still operator-authored free text with no
+//     universal marker; such an isMeta tick that matches no marker is EXCLUDED (P1c M2b: an
+//     isMeta record is never `user.message`), not mislabeled. The `ScheduleWakeup` *tool_use*
+//     (the agent ARMING a wakeup) is classified `agent.tool.use`, not the harness tick.
 //   - `agent.thinking` covers `Block::Thinking`; a `redacted_thinking` block (absent in the
 //     current corpus) parses as `Block::Unknown`, so it is NOT classified — adding a
 //     `Block::RedactedThinking` variant would touch the 8 `Block` match sites in OTHER
 //     modules, which P1's "model.rs-only, no consumer edits" scope forbids; deferred to P2.
-//   - An `<agent-message from="…">` peer form (distinct from `<teammate-message>`, seen
-//     isMeta in real data) is NOT covered by GOLD §5; left as `user`/harness for now.
 // ============================================================================
 
 /// The top-level ROLE of a classified record (GOLD §2). The first dot-segment of every
@@ -1917,22 +1940,80 @@ pub fn parse_teammate_message(content: &str) -> Option<TeammateMessage> {
 #[allow(dead_code)]
 #[must_use]
 pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
-    const CLOSE: &str = "</teammate-message>";
     let mut out = Vec::new();
-    let mut rest = content;
-    while let Some(at) = rest.find(TEAMMATE_MESSAGE_OPEN) {
-        let section = &rest[at..];
-        out.push(TeammateMessage {
-            teammate_id: extract_xml_attr(section, "teammate_id"),
-            signal_type: teammate_signal_type(section),
-        });
-        // Advance past this section's close tag; if absent (malformed), past the open tag so
-        // the scan still terminates.
-        rest = match section.find(CLOSE) {
-            Some(c) => &section[c + CLOSE.len()..],
-            None => &section[TEAMMATE_MESSAGE_OPEN.len()..],
-        };
+    scan_tag_sections(
+        content,
+        TEAMMATE_MESSAGE_OPEN,
+        "</teammate-message>",
+        |_, section| {
+            out.push(TeammateMessage {
+                teammate_id: extract_xml_attr(section, "teammate_id"),
+                signal_type: teammate_signal_type(section),
+            });
+        },
+    );
+    out
+}
+
+/// Invoke `emit(offset, section)` for each `<open …>…</close>` section in `content`, in file
+/// order. `offset` is the byte offset of the section's open tag; `section` is the slice from the
+/// open tag through (inclusive) its close tag — or to end-of-string if the close tag is absent
+/// (malformed). The scan advances past each section's close tag (or, if absent, to end so it
+/// always terminates). Shared by the teammate / agent-message / task-notification section scans
+/// so they never drift. CODEPOINT-SAFE: ASCII-offset slicing only (`str::find` on the tags).
+fn scan_tag_sections<F: FnMut(usize, &str)>(content: &str, open: &str, close: &str, mut emit: F) {
+    let mut idx = 0;
+    while let Some(rel) = content[idx..].find(open) {
+        let start = idx + rel;
+        let after = &content[start..];
+        let end_rel = after.find(close).map_or(after.len(), |c| c + close.len());
+        emit(start, &after[..end_rel]);
+        idx = start + end_rel;
     }
+}
+
+/// One inbound peer-message section located in a `type:"user"` record's text (GOLD §5 + P1c M1):
+/// a `<teammate-message …>` OR the distinct `<agent-message from="…">` peer form. Carries the
+/// SENDER id (the comm FROM), whether the body is a control SIGNAL (a teammate `{"type":…}`
+/// payload — an `<agent-message>` is always prose → inbox), and the byte OFFSET of its open tag
+/// (so a batched scan can MASK a peer tag quoted inside a `<task-notification>` span).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PeerSection {
+    from: Option<String>,
+    is_signal: bool,
+    offset: usize,
+}
+
+/// Scan ALL inbound peer-message sections (`<teammate-message>` AND `<agent-message>`) in
+/// `content`, returned in file (offset) order (P1c M1 + GOLD §5 batching). Empty when `content`
+/// has no peer tag. CODEPOINT-SAFE: ASCII-offset slicing only.
+fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
+    let mut out: Vec<PeerSection> = Vec::new();
+    scan_tag_sections(
+        content,
+        TEAMMATE_MESSAGE_OPEN,
+        "</teammate-message>",
+        |offset, section| {
+            out.push(PeerSection {
+                from: extract_xml_attr(section, "teammate_id"),
+                is_signal: teammate_signal_type(section).is_some(),
+                offset,
+            });
+        },
+    );
+    scan_tag_sections(
+        content,
+        AGENT_MESSAGE_OPEN,
+        "</agent-message>",
+        |offset, section| {
+            out.push(PeerSection {
+                from: extract_xml_attr(section, "from"),
+                is_signal: false,
+                offset,
+            });
+        },
+    );
+    out.sort_by_key(|p| p.offset);
     out
 }
 
@@ -2043,23 +2124,59 @@ fn notification_class(kind: AutomationKind) -> Class {
 /// (edge-fixtures G1): a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
 const NOTIFICATION_RESULT_TAG: &str = "<result>";
 
-/// Scan ALL `<task-notification>` sections in `s` (edge-fixtures G4/G5 batching): one record
-/// can carry several of mixed kind. Returns `(AutomationKind, has_result)` per section, in
-/// order. `has_result` (a `<result>` tag) drives the G1 `agent.communication.inbox` dual-label
-/// (the bg-agent's report = child ⇨ parent). Each section is scoped to its own close tag.
-fn all_notification_sections(s: &str) -> Vec<(AutomationKind, bool)> {
-    const CLOSE: &str = "</task-notification>";
-    let mut out = Vec::new();
-    let mut rest = s;
-    while let Some(at) = rest.find(TASK_NOTIFICATION_PREFIX) {
-        let after = &rest[at..];
-        let end = after.find(CLOSE).map_or(after.len(), |c| c + CLOSE.len());
-        let section = &after[..end];
-        let kind = AutomationKind::from_summary(extract_xml_tag(section, "summary").as_deref());
-        out.push((kind, section.contains(NOTIFICATION_RESULT_TAG)));
-        rest = &after[end..];
+/// Classify ALL batched sections of a `type:"user"` record's raw text (edge-fixtures G4/G5 +
+/// P1c M1/M3): scan for BOTH `<task-notification>` automation pulse(s) AND inbound peer
+/// message(s) (`<teammate-message>` / `<agent-message>`), unioning every section's labels
+/// (deduped, first-seen order). Each notification contributes its `harness.notification.<kind>`,
+/// plus `agent.communication.inbox` when it carries a `<result>` (the G1 child ⇨ parent
+/// dual-label); each peer section contributes `agent.communication.{inbox,signal}`.
+///
+/// PRECEDENCE (M3a): notification spans are matched FIRST and a peer tag whose open falls INSIDE
+/// any notification span (e.g. a `<result>` body that merely QUOTES "<teammate-message") is
+/// IGNORED — so a notification never leaks a spurious comm label. CROSS-FAMILY (M3b): a record
+/// carrying a real notification section AND a real peer section (outside any notification span)
+/// unions both families' labels.
+///
+/// Returns `true` iff ≥1 section matched (the caller's classification is then complete); `false`
+/// leaves the record to the plain marker/prose classifier.
+fn classify_batched_sections(raw: &str, out: &mut Vec<Class>) -> bool {
+    let mut matched = false;
+    // (a) <task-notification> sections — classify each, recording its byte span to mask the
+    //     peer scan against tags quoted inside it.
+    let mut notif_spans: Vec<(usize, usize)> = Vec::new();
+    scan_tag_sections(
+        raw,
+        TASK_NOTIFICATION_PREFIX,
+        "</task-notification>",
+        |offset, section| {
+            let kind = AutomationKind::from_summary(extract_xml_tag(section, "summary").as_deref());
+            push_unique(out, notification_class(kind));
+            if section.contains(NOTIFICATION_RESULT_TAG) {
+                push_unique(out, Class::CommInbox);
+            }
+            notif_spans.push((offset, offset + section.len()));
+            matched = true;
+        },
+    );
+    // (b) inbound peer sections OUTSIDE every notification span (precedence + cross-family).
+    for peer in parse_all_peer_sections(raw) {
+        if notif_spans
+            .iter()
+            .any(|&(s, e)| peer.offset >= s && peer.offset < e)
+        {
+            continue;
+        }
+        push_unique(
+            out,
+            if peer.is_signal {
+                Class::CommSignal
+            } else {
+                Class::CommInbox
+            },
+        );
+        matched = true;
     }
-    out
+    matched
 }
 
 /// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) — preserves
@@ -2310,28 +2427,21 @@ impl Record {
     }
 
     /// Classify a `user` record (GOLD §2/§3): compaction summary (by the `isCompactSummary`
-    /// FLAG, not text — G9); BATCHED teammate inbox/signal (the §1 fix + G4/G5 union); then
+    /// FLAG, not text — G9); BATCHED mixed-family sections — `<task-notification>` pulse(s) and/or
+    /// inbound peer message(s) `<teammate-message>` / `<agent-message>` (the §1 fix, the G4/G5
+    /// union, and P1c M1/M3 cross-family/precedence, via [`classify_batched_sections`]); then the
     /// string-content vs block-content sub-cases.
     fn classify_user(&self, ctx: &ClassifyCtx, out: &mut Vec<Class>) {
         if self.is_compact_summary.unwrap_or(false) {
             push_unique(out, Class::CompactionSummary);
             return;
         }
-        // Teammate/peer message(s): ONE record can BATCH several sections of MIXED kind
-        // (edge-fixtures G4/G5) — scan ALL and union their labels (e.g. a prose section + an
-        // idle_notification section → [inbox, signal]).
+        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an
+        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION
+        // their labels, with notification precedence over a peer tag quoted inside a
+        // notification span (P1c M3). When ≥1 section matches, that fully classifies the record.
         if let Some(raw) = self.raw_message_text() {
-            if is_teammate_message(&raw) {
-                for tm in parse_all_teammate_messages(&raw) {
-                    push_unique(
-                        out,
-                        if tm.is_signal() {
-                            Class::CommSignal
-                        } else {
-                            Class::CommInbox
-                        },
-                    );
-                }
+            if classify_batched_sections(&raw, out) {
                 return;
             }
         }
@@ -2343,24 +2453,12 @@ impl Record {
     }
 
     /// Classify the string body of a `user` record (also reused for the joined text of a
-    /// no-tool_result block record): the harness markers (`<task-notification>`, interrupts,
-    /// `<local-command-stdout>`, `<command-name>`, schedule ticks), else genuine prose — or
+    /// no-tool_result block record): the harness markers (interrupts, `<local-command-stdout>`,
+    /// `<command-name>`, schedule ticks, meta hook/loop), else genuine prose — or
     /// `agent.communication.inbox` when this is a subagent transcript opener (parent ⇨ self).
+    /// (Batched `<task-notification>` / peer-message sections are handled UPSTREAM by
+    /// [`classify_batched_sections`], so they never reach here.)
     fn classify_user_string(&self, ctx: &ClassifyCtx, s: &str, out: &mut Vec<Class>) {
-        // <task-notification> automation pulse(s) — possibly BATCHED (G4/G5). Scan ALL
-        // sections: each contributes its harness.notification.<kind>, and a section carrying
-        // the bg-agent's <result> report ALSO contributes agent.communication.inbox (the
-        // child ⇨ parent dual-label, G1). A launch-ack notification (no <result>) is
-        // notification-only.
-        if s.starts_with(TASK_NOTIFICATION_PREFIX) {
-            for (kind, has_result) in all_notification_sections(s) {
-                push_unique(out, notification_class(kind));
-                if has_result {
-                    push_unique(out, Class::CommInbox);
-                }
-            }
-            return;
-        }
         if s == INTERRUPT_MARKERS[0] {
             push_unique(out, Class::InterruptUser);
             return;
@@ -2385,7 +2483,14 @@ impl Record {
             push_unique(out, Class::ScheduleContinuation);
             return;
         }
-        if s.contains(SCHEDULE_WAKEUP_MARKER) {
+        // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three
+        // fixed markers (P1c M2a): the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous
+        // loop check` header, and the `You're being invoked on a timer` body sentence. Matched
+        // BEFORE the meta.loop arm — `check` ≠ `tick`, so the loop-DRIVER prefix never collides.
+        if s.contains(SCHEDULE_WAKEUP_MARKER)
+            || s.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)
+            || s.contains(SCHEDULE_WAKEUP_TIMER_MARKER)
+        {
             push_unique(out, Class::ScheduleWakeup);
             return;
         }
@@ -2399,7 +2504,8 @@ impl Record {
             push_unique(out, Class::MetaHook);
             return;
         }
-        // harness.meta.loop (G2): autonomous-loop driver ticks.
+        // harness.meta.loop (G2): autonomous-loop DRIVER ticks (`# Autonomous loop tick` /
+        // `Run the autonomous check`), distinct from the schedule.wakeup fired tick above.
         if s.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX) || s.contains(AUTONOMOUS_CHECK_MARKER) {
             push_unique(out, Class::MetaLoop);
             return;
@@ -2409,11 +2515,18 @@ impl Record {
         if s.starts_with(IMAGE_SOURCE_PREFIX) {
             return;
         }
-        // Otherwise genuine human prose — unless this is the spawn-prompt seed of a subagent
-        // transcript, which is an inbound comm (parent ⇨ self), not the operator (GOLD §3).
+        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent ⇨ self),
+        // not the operator (GOLD §3) — unchanged, regardless of isMeta.
         if ctx.is_subagent && ctx.is_transcript_opener {
             push_unique(out, Class::CommInbox);
-        } else {
+            return;
+        }
+        // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched
+        // no marker above is a harness-injected pseudo-turn (a generic cron/monitor tick, a
+        // novel hook wrapper), NOT the operator — emit NOTHING rather than mislabel it
+        // `user.message` (the role-level isMeta gate `is_genuine_user` already applies). Only
+        // genuine, non-isMeta unmarked prose is `user.message`.
+        if !self.is_meta.unwrap_or(false) {
             push_unique(out, Class::UserMessage);
         }
     }
@@ -2458,6 +2571,19 @@ impl Record {
         self.classify_user_string(ctx, &joined, out);
     }
 
+    /// The FROM id of the FIRST inbound peer section (a `<teammate-message>` or `<agent-message>`)
+    /// in this `type:"user"` record — the comm FROM for [`Record::direction`] (GOLD §4 + P1c M1).
+    /// `None` when this is not a peer record; a section with no sender attribute degrades to the
+    /// literal `"peer"`. Reads the raw (un-normalized) text so the relay preamble's `\n` survives.
+    fn first_peer_from(&self) -> Option<String> {
+        if !self.is_type("user") {
+            return None;
+        }
+        let text = self.raw_message_text()?;
+        let first = parse_all_peer_sections(&text).into_iter().next()?;
+        Some(first.from.unwrap_or_else(|| "peer".to_string()))
+    }
+
     /// The comm direction `(from, to)` for a communication record (GOLD §4), or `None` for a
     /// non-comm record. The `self` side is `ctx.owner_id` (falls back to the literal `"self"`
     /// so direction is testable without a real id); record-supplied ids (teammate_id, the
@@ -2468,24 +2594,28 @@ impl Record {
     pub fn direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {
         let owner = || ctx.owner_id.unwrap_or("self").to_string();
 
-        // Inbound teammate/peer message: teammate_id ⇨ self. (Batched record → the FIRST
-        // section's sender, per the FIRST-most-salient rule.)
-        if let Some(tm) = self.teammate_message() {
-            let from = tm.teammate_id.unwrap_or_else(|| "peer".to_string());
-            return Some((from, owner()));
+        // M3 precedence: a <task-notification> record is resolved FIRST — BEFORE the peer scan —
+        // so a notification whose <result> merely QUOTES a "<teammate-message" tag never takes
+        // the peer direction. A G1 <result>-bearing pulse is the bg-agent's report (child ⇨
+        // self), the child resolved via the embedded <tool-use-id> spawn id (degrading to "?"
+        // without a lookup); a bare launch-ack pulse (no <result>) carries no comm direction.
+        if let Some(Content::Text(s)) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
+            if s.starts_with(TASK_NOTIFICATION_PREFIX) {
+                if s.contains(NOTIFICATION_RESULT_TAG) {
+                    let child = extract_xml_tag(s, "tool-use-id")
+                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))
+                        .unwrap_or_else(|| "?".to_string());
+                    return Some((child, owner()));
+                }
+                return None;
+            }
         }
 
-        // G1: a <task-notification> carrying the bg-agent's <result> report is an inbound comm
-        // (child ⇨ parent/self). The child is resolved via the embedded <tool-use-id> spawn id
-        // (degrading to "?" without a lookup). A launch-ack notification (no <result>) is not a
-        // comm → no direction.
-        if let Some(Content::Text(s)) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
-            if s.starts_with(TASK_NOTIFICATION_PREFIX) && s.contains(NOTIFICATION_RESULT_TAG) {
-                let child = extract_xml_tag(s, "tool-use-id")
-                    .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))
-                    .unwrap_or_else(|| "?".to_string());
-                return Some((child, owner()));
-            }
+        // Inbound peer message (teammate-message / agent-message): from ⇨ self. The FIRST
+        // section's sender (most-salient), per the multi-section rule (P1c M1 folds the
+        // <agent-message> peer form in alongside <teammate-message>).
+        if let Some(from) = self.first_peer_from() {
+            return Some((from, owner()));
         }
 
         if let Some(blocks) = self.blocks() {
@@ -4858,6 +4988,220 @@ mod tests {
             vec![
                 Class::NotificationBackgroundCommand,
                 Class::NotificationWorkflow
+            ]
+        );
+    }
+
+    // ── P1c M1: <agent-message from="…"> peer form → agent.communication.inbox ──
+
+    #[test]
+    fn classify_agent_message_peer_form_is_inbox() {
+        // Real shape: an isMeta type:user string carrying an <agent-message from="…"> peer reply
+        // relayed into this session. Must classify agent.communication.inbox, NOT user.message —
+        // and the isMeta guard (M2b) must NOT suppress it (the peer marker is matched first).
+        let r = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<agent-message from=\"oh-my-claudecode:architect\">\n[Reply intended for the executor peer]\nuse the shared resolver.\n</agent-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommInbox]
+        );
+        // Direction: the from="" attribute ⇨ self.
+        let ctx = ClassifyCtx {
+            owner_id: Some("me"),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("oh-my-claudecode:architect".to_string(), "me".to_string()))
+        );
+    }
+
+    #[test]
+    fn classify_agent_message_no_from_degrades_to_peer_direction() {
+        let r = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<agent-message>no sender attr</agent-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommInbox]
+        );
+        assert_eq!(
+            r.direction(&ClassifyCtx::top_level()),
+            Some(("peer".to_string(), "self".to_string()))
+        );
+    }
+
+    // ── P1c M2a: fired autonomous-loop / ScheduleWakeup timer tick → harness.schedule.wakeup ──
+
+    #[test]
+    fn classify_schedule_wakeup_fired_timer_markers() {
+        // The real oracle-D12 record: isMeta, header "# Autonomous loop check", body "You're
+        // being invoked on a timer …". Used to fall through to user.message (the M2 mislabel).
+        let loop_check = parse(
+            r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop check\n\nYou're being invoked on a timer while the user is away."}}"##,
+        );
+        assert_eq!(
+            loop_check.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleWakeup]
+        );
+        // The body sentence alone (no header) also routes to schedule.wakeup.
+        let timer_only = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"You're being invoked on a timer to keep work moving."}}"#,
+        );
+        assert_eq!(
+            timer_only.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleWakeup]
+        );
+    }
+
+    #[test]
+    fn classify_wakeup_check_vs_loop_tick_no_collision() {
+        // "# Autonomous loop check" → schedule.wakeup; "# Autonomous loop tick" → meta.loop. The
+        // two share the "# Autonomous loop " prefix but diverge at check/tick — must NOT collide.
+        let check = parse(
+            r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop check\nproceed."}}"##,
+        );
+        assert_eq!(
+            check.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleWakeup]
+        );
+        let tick = parse(
+            r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop tick\nproceed."}}"##,
+        );
+        assert_eq!(
+            tick.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaLoop]
+        );
+        // The sentinel stays schedule.wakeup; "Run the autonomous check" stays meta.loop.
+        let sentinel = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<<autonomous-loop-dynamic>>"}}"#,
+        );
+        assert_eq!(
+            sentinel.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleWakeup]
+        );
+        let run_check = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"Run the autonomous check now."}}"#,
+        );
+        assert_eq!(
+            run_check.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaLoop]
+        );
+    }
+
+    // ── P1c M2b: an isMeta record matching no marker is EXCLUDED (never user.message) ──
+
+    #[test]
+    fn classify_ismeta_unmarked_record_is_excluded() {
+        // A genuine user.message is NEVER isMeta. An isMeta record matching no marker (a novel
+        // harness pseudo-turn / generic cron tick) must emit NOTHING, not fall to user.message.
+        let r = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"some unrecognized harness-injected pseudo prose"}}"#,
+        );
+        let labels = r.classify(&ClassifyCtx::top_level());
+        assert!(
+            labels.is_empty(),
+            "isMeta unmarked must be excluded: {labels:?}"
+        );
+        // The role-level gate agrees (it is not a genuine user either).
+        assert!(!r.is_genuine_user());
+    }
+
+    #[test]
+    fn classify_nonmeta_unmarked_prose_is_user_message() {
+        // The complement: non-isMeta unmarked prose is STILL user.message (M2b is isMeta-scoped).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"please refactor the parser"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserMessage]
+        );
+    }
+
+    #[test]
+    fn classify_ismeta_subagent_opener_still_inbox() {
+        // The subagent-opener inbox case is unchanged by M2b — even an isMeta seed → CommInbox
+        // (the opener check precedes the isMeta guard).
+        let r = parse(
+            r#"{"type":"user","isMeta":true,"isSidechain":true,"message":{"role":"user","content":"go map the bridge"}}"#,
+        );
+        let ctx = ClassifyCtx {
+            is_subagent: true,
+            is_transcript_opener: true,
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(r.classify(&ctx), vec![Class::CommInbox]);
+    }
+
+    // ── P1c M3: task-notification precedence over a quoted teammate tag + cross-family union ──
+
+    #[test]
+    fn classify_notification_quoting_teammate_tag_stays_notification() {
+        // M3a: a <task-notification> whose <result> body merely QUOTES "<teammate-message" must
+        // stay harness.notification.* — the quoted tag (inside the notification span) is masked,
+        // so no spurious teammate comm label/direction leaks. The CommInbox here is the G1
+        // <result> dual-label (child ⇨ self), NOT a teammate-derived label.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<tool-use-id>toolu_spawn</tool-use-id>\n<summary>Agent executor finished</summary>\n<result>I sent a <teammate-message teammate_id=\"peer\"> earlier</result>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::NotificationSubagent, Class::CommInbox]
+        );
+        // Direction is child ⇨ self (G1 via <tool-use-id>), NOT the quoted teammate "peer".
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("child-abc".to_string(), "parent".to_string()))
+        );
+    }
+
+    #[test]
+    fn classify_notification_no_result_quoting_teammate_has_no_comm() {
+        // M3a without G1: a launch-ack notification (no <result>) that quotes the tag →
+        // notification ONLY, NO comm label and NO direction (the quoted tag is masked).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<summary>Background command grep <teammate-message done</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::NotificationBackgroundCommand]
+        );
+        assert!(r.direction(&ClassifyCtx::top_level()).is_none());
+    }
+
+    #[test]
+    fn classify_cross_family_notification_and_teammate_union() {
+        // M3b: a record carrying a REAL <task-notification> section AND a REAL <teammate-message>
+        // section (outside the notification span) → UNION both families' labels.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>Background command build completed</summary>\n</task-notification>\nAnother Claude session sent a message:\n<teammate-message teammate_id=\"peer\">heads up, merged</teammate-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::NotificationBackgroundCommand, Class::CommInbox]
+        );
+    }
+
+    #[test]
+    fn classify_cross_family_notification_result_plus_teammate_signal() {
+        // M3b: notification-with-<result> (→ notification + G1 inbox) AND a teammate idle-signal
+        // section after it → [notification, inbox, signal] (inbox deduped to one).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>Dynamic workflow deploy completed</summary>\n<result>done</result>\n</task-notification>\n<teammate-message teammate_id=\"peer\">\n{\"type\":\"idle_notification\",\"from\":\"peer\"}\n</teammate-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![
+                Class::NotificationWorkflow,
+                Class::CommInbox,
+                Class::CommSignal
             ]
         );
     }
