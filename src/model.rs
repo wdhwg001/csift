@@ -47,10 +47,19 @@ pub const AUQ_ANSWER_MARKERS: &[&str] = &[
 ];
 
 /// True when `text` (a `tool_result`'s rendered content) is a synthesized
-/// AskUserQuestion answer — i.e. it contains any known AUQ-answer marker (§4.4).
+/// AskUserQuestion answer — i.e. it STARTS WITH a known AUQ-answer marker (§4.4).
+///
+/// START-anchored, not `contains`: a real AUQ answer is a CC-machine-synthesized
+/// string that always LEADS with its marker (`"User has answered your questions: …"`
+/// / `"Your questions have been answered: …"`). A `contains` check false-positives on
+/// any tool_result that merely QUOTES the marker mid-content — e.g. csift's own dev
+/// sessions Read/grep SPEC.md + fixtures that DOCUMENT these markers, which used to be
+/// mislabeled `user.answer` and dumped whole files. `trim_start` tolerates leading
+/// whitespace the renderer may prepend without admitting a mid-content quote.
 #[must_use]
 pub fn is_auq_answer_text(text: &str) -> bool {
-    AUQ_ANSWER_MARKERS.iter().any(|m| text.contains(m))
+    let head = text.trim_start();
+    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))
 }
 
 /// True when `content` (a user record's string or joined-text body) is a
@@ -3145,6 +3154,72 @@ mod tests {
             "Your questions have been answered: \"q\"=\"a\"."
         ));
         assert!(!is_auq_answer_text("a normal tool output"));
+    }
+
+    #[test]
+    fn is_auq_answer_text_is_start_anchored_not_contains() {
+        // The reported bug: a tool_result (e.g. a Read of SPEC.md / a fixture) that merely
+        // QUOTES the marker mid-content must NOT be taken for a synthesized AUQ answer. The
+        // real machine answer LEADS with the marker; a quote does not.
+        assert!(!is_auq_answer_text(
+            "# SPEC.md\nThe synthesized answer string is \"User has answered your questions:\" which leads the body."
+        ));
+        assert!(!is_auq_answer_text(
+            "see the marker \"Your questions have been answered\" documented above"
+        ));
+        // Leading whitespace the renderer may prepend is tolerated (still anchored).
+        assert!(is_auq_answer_text(
+            "  User has answered your questions: \"q\"=\"a\"."
+        ));
+    }
+
+    #[test]
+    fn auq_answer_no_false_positive_on_file_quoting_marker() {
+        // A Read/grep tool_result whose content QUOTES the marker mid-text (the csift
+        // dev-session failure): NOT an AUQ answer, NOT a boundary, and classify yields a
+        // plain `agent.tool.result` — never `user.answer` dumping the whole file.
+        // NB: `r##"…"##` delimiter — the JSON `"content":"# SPEC.md` has `"#`, which would
+        // close a plain `r#"…"#` raw string early.
+        let r = parse(
+            r##"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"# SPEC.md (10000 chars)\n...the marker is \"User has answered your questions:\" which CC emits to synthesize the answer record. Lots more file content follows here."}]}}"##,
+        );
+        assert!(!r.is_auq_answer());
+        assert!(!r.is_auq_answer_boundary());
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::AgentToolResult]
+        );
+    }
+
+    #[test]
+    fn auq_answer_genuine_marker_lead_still_classifies_as_user_answer() {
+        // A genuine synthesized answer (content STARTS with the marker, NO structured
+        // toolUseResult.answers) stays detected via the fallback arm: a boundary + the
+        // [user.answer, agent.tool.result] dual label.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Pick one\"=\"A\". You can now continue with the user's answers in mind."}]}}"#,
+        );
+        assert!(r.is_auq_answer());
+        assert!(r.is_auq_answer_boundary());
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserAnswer, Class::AgentToolResult]
+        );
+    }
+
+    #[test]
+    fn auq_answer_structured_path_independent_of_marker_text() {
+        // The PRIMARY (modern) path — a non-empty structured `toolUseResult.answers` —
+        // is start-anchor-independent: it classifies `user.answer` even when the carrier's
+        // content does NOT lead with the marker.
+        let r = parse(
+            r#"{"type":"user","toolUseResult":{"answers":{"Pick one":"A"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"(answer recorded)"}]}}"#,
+        );
+        assert!(r.is_auq_answer_boundary());
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserAnswer, Class::AgentToolResult]
+        );
     }
 
     #[test]
