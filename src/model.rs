@@ -132,13 +132,37 @@ pub const PEER_MESSAGE_PREAMBLE: &str = "Another Claude session sent a message:"
 /// Verified across real `~/.claude/projects` data (522 occurrences), exact content.
 pub const SCHEDULE_CONTINUATION_MARKER: &str = "Continue from where you left off.";
 
-/// The autonomous-loop wakeup sentinel (GOLD §5) — `harness.schedule.wakeup`. When a
-/// `ScheduleWakeup` tool fires, the harness injects its `prompt`; the autonomous-loop cadence
-/// uses this fixed sentinel as that prompt. NOTE: this is the ONLY reliably-fixed wakeup-tick
-/// marker — a cron/monitor tick's injected prompt is operator-authored free text with no
-/// universal marker (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action,
-/// classified `agent.tool.use`, not the fired tick). See the GOLD-gap note in the module docs.
+/// The `ScheduleWakeup` TIMER's fired-prompt sentinel (GOLD §5) — `harness.schedule.wakeup`.
+/// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is
+/// that injected prompt. This is the SCHEDULER timer firing — DISTINCT from the autonomous-loop
+/// DRIVER ticks (`# Autonomous loop tick` / `Run the autonomous check`), which are
+/// `harness.meta.loop` ([`AUTONOMOUS_LOOP_TICK_PREFIX`] / [`AUTONOMOUS_CHECK_MARKER`]); the two
+/// must not be conflated. NOTE: this is the ONLY reliably-fixed wakeup-tick marker — a
+/// cron/monitor tick's injected prompt is operator-authored free text with no universal marker
+/// (the `ScheduleWakeup` *tool_use* that ARMS a wakeup is the agent's action, classified
+/// `agent.tool.use`, not the fired tick). See the GOLD-gap note in the module docs.
 pub const SCHEDULE_WAKEUP_MARKER: &str = "<<autonomous-loop-dynamic>>";
+
+/// `harness.meta.hook` markers (GOLD §2, edge-fixtures G2) — hook-injected feedback, NOT the
+/// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the
+/// edit-failed-retry notice CC injects when an Edit's target changed under it. (These are
+/// `isMeta` user records that would otherwise fall through to `user.message`.)
+pub const STOP_HOOK_FEEDBACK_PREFIX: &str = "Stop hook feedback:";
+/// See [`STOP_HOOK_FEEDBACK_PREFIX`] — the `<local-command-caveat>…` hook wrapper.
+pub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = "<local-command-caveat>";
+/// See [`STOP_HOOK_FEEDBACK_PREFIX`] — the edit-failed-retry notice (matched anywhere, as it
+/// also rides inside a `Stop hook feedback:` body).
+pub const EDIT_RETRY_MARKER: &str = "The last Edit failed because the target file was modified";
+
+/// `harness.meta.loop` markers (GOLD §2, edge-fixtures G2) — autonomous-loop drivers (distinct
+/// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`).
+pub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = "# Autonomous loop tick";
+/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] — matched anywhere (it can sit mid-prompt).
+pub const AUTONOMOUS_CHECK_MARKER: &str = "Run the autonomous check";
+
+/// An `isMeta` `[Image: source:…]` pseudo-record (GOLD §2, edge-fixtures G2) — EXCLUDED from
+/// the taxonomy entirely (classify yields no label), so it is never mislabeled `user.message`.
+pub const IMAGE_SOURCE_PREFIX: &str = "[Image: source:";
 
 /// A single parsed jsonl line. Unknown top-level fields are ignored by serde.
 ///
@@ -1716,14 +1740,55 @@ pub enum Class {
     InterruptUser,
     /// `harness.interrupt.tool` — `[Request interrupted by user for tool use]`.
     InterruptTool,
-    /// `harness.schedule.wakeup` — a fired autonomous-loop wakeup tick (sentinel-marked).
+    /// `harness.schedule.wakeup` — a fired `ScheduleWakeup` TIMER tick (its injected
+    /// [`SCHEDULE_WAKEUP_MARKER`] prompt). Distinct from [`Class::MetaLoop`] (the
+    /// autonomous-loop driver prose); the timer is the harness scheduler firing.
     ScheduleWakeup,
     /// `harness.schedule.continuation` — a `Continue from where you left off.` resume tick.
     ScheduleContinuation,
+    /// `harness.meta.hook` — hook-injected feedback (stop-hook / `<local-command-caveat>` /
+    /// edit-failed-retry), not the operator.
+    MetaHook,
+    /// `harness.meta.loop` — an autonomous-loop driver tick (`# Autonomous loop tick` /
+    /// `Run the autonomous check`).
+    MetaLoop,
 }
 
 #[allow(dead_code)]
 impl Class {
+    /// Every leaf [`Class`] in taxonomy order (GOLD §2). The single source of truth for
+    /// enumerating the class space — P2 builds the `-t` selector table from it, and tests
+    /// assert `path()`/`role()` exhaustively over it (a new variant added to the enum but not
+    /// here is caught by the `all_classes_cover_the_enum` test). Order: user, agent (+comm),
+    /// harness (notification, compaction, command, interrupt, schedule, meta).
+    pub const ALL: &'static [Class] = &[
+        Class::UserMessage,
+        Class::UserAnswer,
+        Class::UserRejection,
+        Class::AgentMessage,
+        Class::AgentThinking,
+        Class::AgentToolUse,
+        Class::AgentToolResult,
+        Class::CommInbox,
+        Class::CommSent,
+        Class::CommSignal,
+        Class::NotificationWorkflow,
+        Class::NotificationMonitor,
+        Class::NotificationSubagent,
+        Class::NotificationBackgroundCommand,
+        Class::NotificationTask,
+        Class::CompactionSummary,
+        Class::CompactionBoundary,
+        Class::CommandInvocation,
+        Class::CommandStdout,
+        Class::InterruptUser,
+        Class::InterruptTool,
+        Class::ScheduleWakeup,
+        Class::ScheduleContinuation,
+        Class::MetaHook,
+        Class::MetaLoop,
+    ];
+
     /// The canonical dotted path (GOLD §2) — the `-t` selector form (P2) and render label.
     #[must_use]
     pub fn path(self) -> &'static str {
@@ -1751,6 +1816,8 @@ impl Class {
             Class::InterruptTool => "harness.interrupt.tool",
             Class::ScheduleWakeup => "harness.schedule.wakeup",
             Class::ScheduleContinuation => "harness.schedule.continuation",
+            Class::MetaHook => "harness.meta.hook",
+            Class::MetaLoop => "harness.meta.loop",
         }
     }
 
@@ -1779,7 +1846,9 @@ impl Class {
             | Class::InterruptUser
             | Class::InterruptTool
             | Class::ScheduleWakeup
-            | Class::ScheduleContinuation => Role::Harness,
+            | Class::ScheduleContinuation
+            | Class::MetaHook
+            | Class::MetaLoop => Role::Harness,
         }
     }
 }
@@ -1837,6 +1906,34 @@ pub fn parse_teammate_message(content: &str) -> Option<TeammateMessage> {
         teammate_id: extract_xml_attr(after_open, "teammate_id"),
         signal_type: teammate_signal_type(after_open),
     })
+}
+
+/// Parse ALL `<teammate-message …>` sections in `content` (edge-fixtures G4/G5 batching): one
+/// `type:"user"` record can carry SEVERAL sections of MIXED kind (prose + idle_notification +
+/// teammate_terminated + …). Returns one [`TeammateMessage`] per section, in file order — the
+/// caller unions their labels. Each section's body/signal is scoped to its own close tag (so a
+/// later section, the trailing security footer, and inter-section text never bleed in). Empty
+/// when `content` has no tag. CODEPOINT-SAFE: ASCII-offset slicing only.
+#[allow(dead_code)]
+#[must_use]
+pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
+    const CLOSE: &str = "</teammate-message>";
+    let mut out = Vec::new();
+    let mut rest = content;
+    while let Some(at) = rest.find(TEAMMATE_MESSAGE_OPEN) {
+        let section = &rest[at..];
+        out.push(TeammateMessage {
+            teammate_id: extract_xml_attr(section, "teammate_id"),
+            signal_type: teammate_signal_type(section),
+        });
+        // Advance past this section's close tag; if absent (malformed), past the open tag so
+        // the scan still terminates.
+        rest = match section.find(CLOSE) {
+            Some(c) => &section[c + CLOSE.len()..],
+            None => &section[TEAMMATE_MESSAGE_OPEN.len()..],
+        };
+    }
+    out
 }
 
 /// Extract a `name="value"` attribute's value from the start of an XML-ish tag, trimmed
@@ -1940,6 +2037,29 @@ fn notification_class(kind: AutomationKind) -> Class {
         AutomationKind::Monitor => Class::NotificationMonitor,
         AutomationKind::Task => Class::NotificationTask,
     }
+}
+
+/// The token a `<task-notification>` carrying the background agent's REAL report embeds
+/// (edge-fixtures G1): a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
+const NOTIFICATION_RESULT_TAG: &str = "<result>";
+
+/// Scan ALL `<task-notification>` sections in `s` (edge-fixtures G4/G5 batching): one record
+/// can carry several of mixed kind. Returns `(AutomationKind, has_result)` per section, in
+/// order. `has_result` (a `<result>` tag) drives the G1 `agent.communication.inbox` dual-label
+/// (the bg-agent's report = child ⇨ parent). Each section is scoped to its own close tag.
+fn all_notification_sections(s: &str) -> Vec<(AutomationKind, bool)> {
+    const CLOSE: &str = "</task-notification>";
+    let mut out = Vec::new();
+    let mut rest = s;
+    while let Some(at) = rest.find(TASK_NOTIFICATION_PREFIX) {
+        let after = &rest[at..];
+        let end = after.find(CLOSE).map_or(after.len(), |c| c + CLOSE.len());
+        let section = &after[..end];
+        let kind = AutomationKind::from_summary(extract_xml_tag(section, "summary").as_deref());
+        out.push((kind, section.contains(NOTIFICATION_RESULT_TAG)));
+        rest = &after[end..];
+    }
+    out
 }
 
 /// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) — preserves
@@ -2189,23 +2309,31 @@ impl Record {
         }
     }
 
-    /// Classify a `user` record (GOLD §2/§3): compaction summary; teammate inbox/signal (the
-    /// §1 fix); then string-content vs block-content sub-cases.
+    /// Classify a `user` record (GOLD §2/§3): compaction summary (by the `isCompactSummary`
+    /// FLAG, not text — G9); BATCHED teammate inbox/signal (the §1 fix + G4/G5 union); then
+    /// string-content vs block-content sub-cases.
     fn classify_user(&self, ctx: &ClassifyCtx, out: &mut Vec<Class>) {
         if self.is_compact_summary.unwrap_or(false) {
             push_unique(out, Class::CompactionSummary);
             return;
         }
-        if let Some(tm) = self.teammate_message() {
-            push_unique(
-                out,
-                if tm.is_signal() {
-                    Class::CommSignal
-                } else {
-                    Class::CommInbox
-                },
-            );
-            return;
+        // Teammate/peer message(s): ONE record can BATCH several sections of MIXED kind
+        // (edge-fixtures G4/G5) — scan ALL and union their labels (e.g. a prose section + an
+        // idle_notification section → [inbox, signal]).
+        if let Some(raw) = self.raw_message_text() {
+            if is_teammate_message(&raw) {
+                for tm in parse_all_teammate_messages(&raw) {
+                    push_unique(
+                        out,
+                        if tm.is_signal() {
+                            Class::CommSignal
+                        } else {
+                            Class::CommInbox
+                        },
+                    );
+                }
+                return;
+            }
         }
         match self.message.as_ref().and_then(|m| m.content.as_ref()) {
             Some(Content::Text(s)) => self.classify_user_string(ctx, s, out),
@@ -2219,8 +2347,18 @@ impl Record {
     /// `<local-command-stdout>`, `<command-name>`, schedule ticks), else genuine prose — or
     /// `agent.communication.inbox` when this is a subagent transcript opener (parent ⇨ self).
     fn classify_user_string(&self, ctx: &ClassifyCtx, s: &str, out: &mut Vec<Class>) {
-        if let Some(trig) = self.automation_trigger() {
-            push_unique(out, notification_class(trig.kind));
+        // <task-notification> automation pulse(s) — possibly BATCHED (G4/G5). Scan ALL
+        // sections: each contributes its harness.notification.<kind>, and a section carrying
+        // the bg-agent's <result> report ALSO contributes agent.communication.inbox (the
+        // child ⇨ parent dual-label, G1). A launch-ack notification (no <result>) is
+        // notification-only.
+        if s.starts_with(TASK_NOTIFICATION_PREFIX) {
+            for (kind, has_result) in all_notification_sections(s) {
+                push_unique(out, notification_class(kind));
+                if has_result {
+                    push_unique(out, Class::CommInbox);
+                }
+            }
             return;
         }
         if s == INTERRUPT_MARKERS[0] {
@@ -2249,6 +2387,26 @@ impl Record {
         }
         if s.contains(SCHEDULE_WAKEUP_MARKER) {
             push_unique(out, Class::ScheduleWakeup);
+            return;
+        }
+        // harness.meta.hook (G2): hook-injected feedback — stop-hook, <local-command-caveat>,
+        // or the edit-failed-retry notice. (These are isMeta records that would otherwise fall
+        // through to user.message.)
+        if s.starts_with(STOP_HOOK_FEEDBACK_PREFIX)
+            || s.starts_with(LOCAL_COMMAND_CAVEAT_PREFIX)
+            || s.contains(EDIT_RETRY_MARKER)
+        {
+            push_unique(out, Class::MetaHook);
+            return;
+        }
+        // harness.meta.loop (G2): autonomous-loop driver ticks.
+        if s.starts_with(AUTONOMOUS_LOOP_TICK_PREFIX) || s.contains(AUTONOMOUS_CHECK_MARKER) {
+            push_unique(out, Class::MetaLoop);
+            return;
+        }
+        // isMeta "[Image: source:…]" pseudo-record (G2): EXCLUDED — emit no label rather than
+        // mislabel it user.message.
+        if s.starts_with(IMAGE_SOURCE_PREFIX) {
             return;
         }
         // Otherwise genuine human prose — unless this is the spawn-prompt seed of a subagent
@@ -2310,10 +2468,24 @@ impl Record {
     pub fn direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {
         let owner = || ctx.owner_id.unwrap_or("self").to_string();
 
-        // Inbound teammate/peer message: teammate_id ⇨ self.
+        // Inbound teammate/peer message: teammate_id ⇨ self. (Batched record → the FIRST
+        // section's sender, per the FIRST-most-salient rule.)
         if let Some(tm) = self.teammate_message() {
             let from = tm.teammate_id.unwrap_or_else(|| "peer".to_string());
             return Some((from, owner()));
+        }
+
+        // G1: a <task-notification> carrying the bg-agent's <result> report is an inbound comm
+        // (child ⇨ parent/self). The child is resolved via the embedded <tool-use-id> spawn id
+        // (degrading to "?" without a lookup). A launch-ack notification (no <result>) is not a
+        // comm → no direction.
+        if let Some(Content::Text(s)) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
+            if s.starts_with(TASK_NOTIFICATION_PREFIX) && s.contains(NOTIFICATION_RESULT_TAG) {
+                let child = extract_xml_tag(s, "tool-use-id")
+                    .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))
+                    .unwrap_or_else(|| "?".to_string());
+                return Some((child, owner()));
+            }
         }
 
         if let Some(blocks) = self.blocks() {
@@ -3920,6 +4092,8 @@ mod tests {
             (Class::InterruptTool, "harness.interrupt.tool"),
             (Class::ScheduleWakeup, "harness.schedule.wakeup"),
             (Class::ScheduleContinuation, "harness.schedule.continuation"),
+            (Class::MetaHook, "harness.meta.hook"),
+            (Class::MetaLoop, "harness.meta.loop"),
         ];
         for (c, p) in table {
             assert_eq!(c.path(), p, "path mismatch for {c:?}");
@@ -3933,6 +4107,24 @@ mod tests {
         let n = paths.len();
         paths.dedup();
         assert_eq!(paths.len(), n, "duplicate Class path");
+    }
+
+    #[test]
+    fn all_classes_cover_the_enum() {
+        // Class::ALL must list EVERY variant (the local table here is the independent oracle);
+        // a variant added to the enum but missing from ALL is caught by the path/role coverage.
+        for &c in Class::ALL {
+            // path() is total + role()'s as_str() is the path head — exercised for every leaf.
+            let head = c.path().split('.').next().unwrap();
+            assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
+        }
+        // ALL has no duplicates and matches the verified table size (25 leaves).
+        let mut seen: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
+        seen.sort_unstable();
+        let n = seen.len();
+        seen.dedup();
+        assert_eq!(seen.len(), n, "duplicate in Class::ALL");
+        assert_eq!(n, 25, "Class::ALL leaf count drifted");
     }
 
     #[test]
@@ -4513,6 +4705,160 @@ mod tests {
         assert_eq!(
             wake.classify(&ClassifyCtx::top_level()),
             vec![Class::ScheduleWakeup]
+        );
+    }
+
+    // ── G2: harness.meta.{hook, loop} + isMeta image exclusion ──
+
+    #[test]
+    fn classify_meta_hook_variants() {
+        // Stop-hook feedback (the dominant shape: feedback + the edit-failed-retry body).
+        let stop = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"Stop hook feedback:\nThe last Edit failed because the target file was modified."}}"#,
+        );
+        assert_eq!(
+            stop.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaHook]
+        );
+        // <local-command-caveat> wrapper (isMeta) — previously fell through to user.message.
+        let caveat = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Caveat: the messages below were generated by a command.</local-command-caveat>"}}"#,
+        );
+        assert_eq!(
+            caveat.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaHook]
+        );
+        // The bare edit-failed-retry notice (matched anywhere).
+        let edit = parse(
+            r#"{"type":"user","message":{"role":"user","content":"The last Edit failed because the target file was modified since it was read."}}"#,
+        );
+        assert_eq!(
+            edit.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaHook]
+        );
+    }
+
+    #[test]
+    fn classify_meta_loop_variants() {
+        // NB: `r##"…"##` delimiter — the JSON content has `:"# ` whose `"#` would close a
+        // plain `r#"…"#` raw string early.
+        let tick = parse(
+            r##"{"type":"user","isMeta":true,"message":{"role":"user","content":"# Autonomous loop tick\nproceed with the next step."}}"##,
+        );
+        assert_eq!(
+            tick.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaLoop]
+        );
+        let check = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Run the autonomous check and continue."}}"#,
+        );
+        assert_eq!(
+            check.classify(&ClassifyCtx::top_level()),
+            vec![Class::MetaLoop]
+        );
+        // The schedule.wakeup sentinel stays its OWN class (not folded into meta.loop).
+        let wake = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<<autonomous-loop-dynamic>>"}}"#,
+        );
+        assert_eq!(
+            wake.classify(&ClassifyCtx::top_level()),
+            vec![Class::ScheduleWakeup]
+        );
+    }
+
+    #[test]
+    fn classify_ismeta_image_record_is_excluded() {
+        // G2: an isMeta "[Image: source:…]" pseudo-record is EXCLUDED (no label), never
+        // mislabeled user.message.
+        let r = parse(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"[Image: source: /Users/x/.claude/image-cache/abc.png]"}}"#,
+        );
+        assert!(r.classify(&ClassifyCtx::top_level()).is_empty());
+    }
+
+    // ── G1: a notification carrying a <result> is ALSO an inbound report (child ⇨ parent) ──
+
+    #[test]
+    fn classify_notification_with_result_dual_labels_inbox() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<tool-use-id>toolu_spawn</tool-use-id>\n<status>completed</status>\n<summary>Agent executor finished</summary>\n<result>the agent's real report body</result>\n</task-notification>"}}"#,
+        );
+        // notification.subagent (Agent kind) + the child⇨parent inbox dual-label.
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::NotificationSubagent, Class::CommInbox]
+        );
+        // Direction resolves the child via the embedded <tool-use-id> spawn id.
+        let ctx = ClassifyCtx {
+            owner_id: Some("parent"),
+            spawn: Some(&FakeSpawn),
+            ..ClassifyCtx::top_level()
+        };
+        assert_eq!(
+            r.direction(&ctx),
+            Some(("child-abc".to_string(), "parent".to_string()))
+        );
+    }
+
+    #[test]
+    fn classify_notification_without_result_is_notification_only() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>w1</task-id>\n<tool-use-id>toolu_spawn</tool-use-id>\n<status>completed</status>\n<summary>Agent executor finished</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::NotificationSubagent]
+        );
+        // A launch-ack notification (no <result>) is NOT a comm → no direction.
+        assert!(r.direction(&ClassifyCtx::top_level()).is_none());
+    }
+
+    // ── G4/G5: ONE record batches MANY sections of MIXED kind → UNION of labels ──
+
+    #[test]
+    fn classify_batched_teammate_sections_union() {
+        // A record with a prose section AND an idle_notification section → [inbox, signal].
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"peer\">a prose update</teammate-message>\n\n<footer>\n<teammate-message teammate_id=\"peer\">\n{\"type\":\"idle_notification\",\"from\":\"peer\"}\n</teammate-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommInbox, Class::CommSignal]
+        );
+    }
+
+    #[test]
+    fn classify_batched_teammate_all_signals_dedup_to_one() {
+        // Two signal sections → CommSignal once (push_unique dedup).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"system\">\n{\"type\":\"teammate_terminated\",\"message\":\"X shut down.\"}\n</teammate-message>\n<teammate-message teammate_id=\"y\">\n{\"type\":\"shutdown_approved\",\"from\":\"y\"}\n</teammate-message>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommSignal]
+        );
+        // parse_all returns BOTH sections (the union upstream deduped the label).
+        let all = parse_all_teammate_messages(
+            r#"<teammate-message teammate_id="system">{"type":"teammate_terminated"}</teammate-message><teammate-message teammate_id="y">{"type":"shutdown_approved"}</teammate-message>"#,
+        );
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].teammate_id.as_deref(), Some("system"));
+        assert_eq!(all[0].signal_type.as_deref(), Some("teammate_terminated"));
+        assert_eq!(all[1].signal_type.as_deref(), Some("shutdown_approved"));
+    }
+
+    #[test]
+    fn classify_batched_notification_sections_union() {
+        // Two task-notification sections of different kind → both notification classes.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<summary>Background command build completed</summary>\n</task-notification>\n<task-notification>\n<summary>Dynamic workflow deploy completed</summary>\n</task-notification>"}}"#,
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![
+                Class::NotificationBackgroundCommand,
+                Class::NotificationWorkflow
+            ]
         );
     }
 
