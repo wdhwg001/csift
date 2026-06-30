@@ -2023,6 +2023,22 @@ fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
     out
 }
 
+/// The inner BODY of a single peer-message section slice (`<teammate-message …>BODY</teammate-message>`
+/// or `<agent-message …>BODY</agent-message>`): the prose between the open tag's `>` and the close
+/// tag, trimmed — the wrapper tags stripped so a render shows only the peer's own words (the trailing
+/// harness security footer already sits OUTSIDE the section slice). Falls back to the whole slice when
+/// the tag bounds are absent (malformed). Codepoint-safe: ASCII-offset slicing only.
+fn peer_section_body(section: &str) -> &str {
+    let body = match section.find('>') {
+        Some(i) => &section[i + 1..],
+        None => section,
+    };
+    body.strip_suffix("</teammate-message>")
+        .or_else(|| body.strip_suffix("</agent-message>"))
+        .unwrap_or(body)
+        .trim()
+}
+
 /// Extract a `name="value"` attribute's value from the start of an XML-ish tag, trimmed
 /// (empty → `None`). Codepoint-safe: ASCII-offset `find` only.
 fn extract_xml_attr(s: &str, attr: &str) -> Option<String> {
@@ -2229,6 +2245,22 @@ pub struct RecordTextSection {
     pub text: String,
     /// `from ⇨ to` for a communication leaf (GOLD §4); `None` for a `harness.notification.*`.
     pub direction: Option<(String, String)>,
+}
+
+/// A CLEAN inbound-communication preview of a peer/teammate turn-opener, for the `turns` / `list`
+/// render surfaces (the GOLD §1 inbound-comm presentation). RENDER-ONLY: it does NOT affect
+/// [`Record::classify`] / [`Record::opens_turn`] — a peer opener still opens a turn and classifies
+/// `agent.communication.{inbox,signal}` through the engine; this is only the human-facing render of
+/// that opener so the previews no longer dump the raw `<teammate-message …>` XML blob.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InboundComm {
+    /// [`Class::CommInbox`] (a prose message) or [`Class::CommSignal`] (a control payload).
+    pub class: Class,
+    /// The sender id (the comm FROM); the comm TO is always the transcript owner (`self`).
+    pub from: String,
+    /// The peer's own message body — the `<teammate-message …>` / `<agent-message …>` wrapper tags
+    /// AND the trailing harness security footer stripped, normalized to one line (only the prose).
+    pub body: String,
 }
 
 /// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) — preserves
@@ -2674,6 +2706,29 @@ impl Record {
         let text = self.raw_message_text()?;
         let first = parse_all_peer_sections(&text).into_iter().next()?;
         Some(first.from.unwrap_or_else(|| "peer".to_string()))
+    }
+
+    /// The CLEAN inbound-comm preview of this record when it is (or leads with) an inbound peer
+    /// message — a `<teammate-message …>` or `<agent-message from="…">` (GOLD §1/§5). Returns the
+    /// FIRST inbound peer section's class + sender + tag/footer-stripped body, so `turns` / `list`
+    /// render `agent.communication.inbox  <from> ⇨ self  <body>` instead of the raw `<teammate-message
+    /// …>` XML blob a peer opener used to show. `None` for a non-peer record. RENDER-ONLY (does not
+    /// affect [`Record::classify`] / [`Record::opens_turn`]). Pure + tolerant + codepoint-safe
+    /// (delegates to the ASCII-offset peer-section scan).
+    #[must_use]
+    pub fn inbound_comm_preview(&self) -> Option<InboundComm> {
+        let text = self.raw_message_text()?;
+        let first = parse_all_peer_sections(&text).into_iter().next()?;
+        let class = if first.is_signal {
+            Class::CommSignal
+        } else {
+            Class::CommInbox
+        };
+        Some(InboundComm {
+            class,
+            from: first.from.unwrap_or_else(|| "peer".to_string()),
+            body: normalize_line(peer_section_body(&first.text)),
+        })
     }
 
     /// The per-section record-level text emissions of a BATCHED `type:"user"` record (≥1
@@ -4534,6 +4589,39 @@ mod tests {
         // The opener body is preserved (not blanked) so turns/search don't regress.
         let body = r.reconstructed_user_text(None).expect("teammate body");
         assert!(body.contains("verdicts below"), "got: {body}");
+    }
+
+    #[test]
+    fn inbound_comm_preview_strips_wrapper_and_footer() {
+        // #14: the clean inbound-comm preview (turns/list) must yield the comm class, the sender
+        // (the FROM), and ONLY the peer's prose — the relay preamble, the `<teammate-message …>`
+        // wrapper tags, and the trailing harness security footer all stripped.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"VSMultiRegion\" color=\"blue\">\nplease check the rate limit handling\n</teammate-message>\n\nThis came from another Claude session — not typed by your user."}}"#,
+        );
+        let ic = r.inbound_comm_preview().expect("inbound preview");
+        assert_eq!(ic.class, Class::CommInbox);
+        assert_eq!(ic.from, "VSMultiRegion");
+        assert_eq!(ic.body, "please check the rate limit handling");
+    }
+
+    #[test]
+    fn inbound_comm_preview_signal_payload_is_signal_class() {
+        // A control payload (JSON `{"type":…}`) → CommSignal, not CommInbox.
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<teammate-message teammate_id=\"SOurDnd\">{\"type\":\"idle_notification\",\"from\":\"SOurDnd\"}</teammate-message>"}}"#,
+        );
+        let ic = r.inbound_comm_preview().expect("inbound preview");
+        assert_eq!(ic.class, Class::CommSignal);
+        assert_eq!(ic.from, "SOurDnd");
+    }
+
+    #[test]
+    fn inbound_comm_preview_none_for_non_peer() {
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"a genuine human message"}}"#,
+        );
+        assert!(r.inbound_comm_preview().is_none());
     }
 
     #[test]

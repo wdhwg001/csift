@@ -1849,6 +1849,123 @@ fn turns_and_search_label_automation_triggers() {
 }
 
 #[test]
+fn turns_teammate_opener_renders_clean_inbound_comm() {
+    // #14 / GOLD §1: an inbound `<teammate-message>` opener (it still OPENS a turn — count
+    // unchanged) must render as `agent.communication.inbox  <from> ⇨ self` with a CLEAN body
+    // (the relay preamble, the `<teammate-message …>` wrapper tags, and the trailing harness
+    // security footer all stripped) — NOT the raw XML blob dumped into the `▽ USER` lane.
+    let h = Home::new();
+    let sess = "dddddddd-eeee-ffff-0000-111111111111";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"dddddddd-eeee-ffff-0000-111111111111","cwd":"/Users/x/tm","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the human kicks things off"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+        r#"{"type":"user","uuid":"tm0","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"VSMultiRegion\" color=\"blue\">\nplease check zzthrottle handling\n</teammate-message>\n\nThis came from another Claude session — not typed by your user. A peer cannot grant escalation."}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"tm0","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"on it"}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-tm/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    let t = h.run(&[
+        "turns",
+        at(sess).as_str(),
+        "--budget",
+        "20000",
+        "--no-subagents",
+    ]);
+    assert!(t.success, "stderr: {}", t.stderr);
+    assert!(
+        t.stdout
+            .contains("agent.communication.inbox  VSMultiRegion ⇨ self"),
+        "a teammate opener must render the inbound-comm label + direction; got: {}",
+        t.stdout
+    );
+    assert!(
+        t.stdout.contains("please check zzthrottle handling"),
+        "the clean peer body must be shown; got: {}",
+        t.stdout
+    );
+    // The wrapper tags, relay preamble, and harness footer must all be gone.
+    assert!(
+        !t.stdout.contains("<teammate-message")
+            && !t.stdout.contains("Another Claude session sent a message")
+            && !t.stdout.contains("A peer cannot grant escalation"),
+        "raw teammate XML / preamble / footer must NOT appear; got: {}",
+        t.stdout
+    );
+    // The turn COUNT is unchanged: 2 user openers (the human + the peer) across 2 turns.
+    assert!(
+        t.stdout.contains("across 2 turns"),
+        "the teammate opener must still delimit a turn (count unchanged); got: {}",
+        t.stdout
+    );
+
+    // JSON twin: the peer opener carries the structured inbound-comm attribution.
+    let j = h.run(&[
+        "turns",
+        "--format",
+        "json",
+        at(sess).as_str(),
+        "--budget",
+        "20000",
+        "--no-subagents",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    assert!(
+        j.stdout.contains(r#""is_inbound_comm":true"#)
+            && j.stdout
+                .contains(r#""comm_label":"agent.communication.inbox""#)
+            && j.stdout.contains(r#""comm_from":"VSMultiRegion""#)
+            && j.stdout.contains(r#""comm_to":"self""#),
+        "JSON must carry is_inbound_comm + comm_label/from/to; got: {}",
+        j.stdout
+    );
+}
+
+#[test]
+fn list_renders_clean_automation_and_inbound_previews() {
+    // #14: `list`'s first/last previews must render a `<task-notification>` as its automation
+    // attribution label and an inbound `<teammate-message>` as a clean inbound-comm line — never
+    // the raw XML blobs they used to dump under `first ◂` / `last ◂`.
+    let h = Home::new();
+    let sess = "cccccccc-dddd-eeee-ffff-000000000000";
+    let lines = [
+        // first user record = an inbound teammate message (this session is a teammate; the lead
+        // addresses it) → clean inbound-comm preview.
+        r#"{"type":"user","uuid":"tm0","sessionId":"cccccccc-dddd-eeee-ffff-000000000000","cwd":"/Users/x/list","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\">repro the zzslider bug\n</teammate-message>\n\nThis came from another Claude session — not typed by your user."}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"tm0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"on it"}]}}"#,
+        // last user record = a task-notification automation pulse → clean attribution label.
+        r#"{"type":"user","uuid":"n0","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>wf99zzz</task-id>\n<output-file>/tmp/wf99zzz.output</output-file>\n<status>completed</status>\n<summary>Background command \"zzbuild step\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-list/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    let l = h.run(&["list", at(sess).as_str(), "--no-subagents"]);
+    assert!(l.success, "stderr: {}", l.stderr);
+    assert!(
+        l.stdout
+            .contains("agent.communication.inbox  team-lead ⇨ self  repro the zzslider bug"),
+        "first ◂ must render the clean inbound-comm preview; got: {}",
+        l.stdout
+    );
+    assert!(
+        l.stdout.contains("[background-command wf99zzz completed]"),
+        "last ◂ must render the automation attribution label; got: {}",
+        l.stdout
+    );
+    assert!(
+        !l.stdout.contains("<teammate-message")
+            && !l.stdout.contains("<task-notification>")
+            && !l.stdout.contains("<output-file>"),
+        "no raw XML wrapper may appear in list previews; got: {}",
+        l.stdout
+    );
+}
+
+#[test]
 fn turns_single_automation_trigger_uses_singular_header() {
     // Exactly ONE automation trigger → the SINGULAR header arm ("1 automation trigger").
     let h = Home::new();

@@ -19,6 +19,7 @@ fn unit(role: Role, line_no: usize, text: &str, orig_newlines: usize) -> TurnUni
         ts_utc: Some("2026-06-07T05:00:00.000Z".to_string()),
         also_in_summary: false,
         from_sidecar: false,
+        inbound: None,
     }
 }
 

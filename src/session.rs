@@ -125,6 +125,36 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     Ok(())
 }
 
+/// The one-line PREVIEW body for a `list` first/last scan (the §1 / automation-label polish):
+/// - a `<task-notification>` automation pulse → its parsed `[<kind> …] <summary>` attribution
+///   label, never the raw `<task-notification>…<output-file>…` XML wrapper;
+/// - an inbound `<teammate-message>` peer message → a CLEAN `agent.communication.{inbox,signal}
+///   <from> ⇨ self  <body>` render (the wrapper tags + trailing harness footer stripped), never
+///   the raw `<teammate-message …>` XML blob;
+/// - otherwise the normal genuine-user / AUQ / rejection reconstruction.
+///
+/// Eligibility is UNCHANGED from the prior `reconstructed_user_text(None)` gate: a task-notification
+/// and a teammate-message were already captured as first/last (the former via genuine-user, the
+/// latter via the teammate fallback arm), so the head/tail scan stops on the SAME record and captures
+/// the SAME identity fields — only the rendered text is now clean. (An isMeta `<agent-message>` stays
+/// INELIGIBLE: it is gated behind `is_teammate_message_record`, so it never newly fronts a preview.)
+fn preview_text(rec: &Record) -> Option<String> {
+    if let Some(label) = rec.automation_label() {
+        return Some(label);
+    }
+    if rec.is_teammate_message_record() {
+        if let Some(ic) = rec.inbound_comm_preview() {
+            return Some(format!(
+                "{}  {} ⇨ self  {}",
+                ic.class.path(),
+                ic.from,
+                ic.body
+            ));
+        }
+    }
+    rec.reconstructed_user_text(None)
+}
+
 /// Build a [`SessionSummary`] for one session file via HEAD + TAIL reads only.
 pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // The session id is authoritatively the jsonl basename (== uuid; verified the
@@ -144,8 +174,10 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         // First user message = a genuine human turn, an answered AskUserQuestion, or a
         // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
         // single-record head scan, so a rejection surfaces its typed instruction without
-        // the `[plan: …]` pointer (the pointer is a turns/search affordance).
-        if let Some(text) = rec.reconstructed_user_text(None) {
+        // the `[plan: …]` pointer (the pointer is a turns/search affordance). A
+        // `<task-notification>` / inbound `<teammate-message>` renders its clean label /
+        // inbound-comm form via `preview_text` rather than the raw XML it used to show.
+        if let Some(text) = preview_text(rec) {
             // Capture identity off the first user record (it carries cwd / version /
             // gitBranch / sessionId in real data).
             cwd = rec.cwd.clone();
@@ -168,7 +200,7 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
             }
         }
         if last_user.is_none() {
-            if let Some(text) = rec.reconstructed_user_text(None) {
+            if let Some(text) = preview_text(rec) {
                 last_user = Some(MessagePreview::from(rec.timestamp.clone(), &text));
                 // Backfill identity from the tail if the head never found a genuine
                 // user (e.g. a session whose only user turns are near the end).

@@ -311,6 +311,12 @@ struct TurnUnit {
     /// Such a unit has no physical line (`line_no` 0); its header renders `(elicitation
     /// sidecar)` instead of `Lnnnn` and the JSON carries `source:"elicitation-sidecar"`.
     from_sidecar: bool,
+    /// Set when this opener is an inbound peer/teammate communication (GOLD §1): the comm class +
+    /// sender, so the header renders `<label>  <from> ⇨ self` IN PLACE OF the bare role word and the
+    /// JSON carries `is_inbound_comm` + `comm_*` fields. `unit.text` holds the tag/footer-stripped
+    /// body. `None` for an ordinary user/assistant unit. RENDER-ONLY — the turn count is unchanged
+    /// (a peer opener still opens a turn via `opens_turn`).
+    inbound: Option<crate::model::InboundComm>,
 }
 
 /// Position of an agent message within its turn's ordered agent-message run. A
@@ -770,6 +776,15 @@ fn build(records: &[(usize, Record)], sidecar: &[Record]) -> (Vec<TurnSlice>, Ve
                     is_automation = true;
                     automation = rec.automation_trigger();
                     user = Some(make_unit(line_no, Role::User, &label, rec));
+                } else if let Some(ic) = rec.inbound_comm_preview() {
+                    // An inbound `<teammate-message>` opener (GOLD §1): render the CLEAN body with
+                    // an `agent.communication.{inbox,signal}  <from> ⇨ self` header in place of the
+                    // raw XML it used to dump into the `▽ USER` lane. Only teammate-messages reach
+                    // here (the only peer form `opens_turn` admits — an isMeta `<agent-message>`
+                    // never opens a turn), so the turn count is unchanged.
+                    let mut u = make_unit(line_no, Role::User, &ic.body, rec);
+                    u.inbound = Some(ic);
+                    user = Some(u);
                 } else if let Some(text) = rec.reconstructed_user_text(Some(&plan_index)) {
                     user = Some(make_unit(line_no, Role::User, &text, rec));
                 }
@@ -872,6 +887,7 @@ fn make_unit(line_no: usize, role: Role, text: &str, rec: &Record) -> TurnUnit {
         ts_utc: rec.timestamp.clone(),
         also_in_summary: false,
         from_sidecar: rec.is_elicitation_marker(),
+        inbound: None,
     }
 }
 
@@ -1484,10 +1500,17 @@ fn unit_header_line(unit: &TurnUnit) -> String {
     } else {
         format!("L{}", unit.line_no)
     };
+    // An inbound peer/teammate communication opener (GOLD §1) renders its comm LABEL + the
+    // `<from> ⇨ self` direction in place of the bare role word, so a reader sees a peer message —
+    // not a human turn — at a glance (parity with `search`'s inbox render). The dotted class path
+    // stays lowercase (the canonical selector form); an ordinary unit keeps the UPPERCASE role.
+    let role_field = match &unit.inbound {
+        Some(ic) => format!("{}  {} ⇨ self", ic.class.path(), ic.from),
+        None => unit.role.label().to_uppercase(),
+    };
     format!(
-        "{} {locator}  {}  ({}){dup}",
+        "{} {locator}  {role_field}  ({}){dup}",
         unit_glyph(unit.role),
-        unit.role.label().to_uppercase(),
         format_timestamp(unit.ts_utc.as_deref())
     )
 }
@@ -2794,6 +2817,16 @@ fn emit_unit_json(
                 // verbatim rather than inferring `completed` from an absent status.
                 map.insert("event".into(), json!(t.event));
             }
+        }
+        // STRUCTURED inbound-comm attribution (GOLD §1): a `<teammate-message>` opener carries
+        // `is_inbound_comm:true` + the comm `label` / `from` / `to` (== `self`) so a JSON consumer
+        // distinguishes a peer message from a human turn WITHOUT regexing the header. An ordinary
+        // unit omits these fields (absence ⇒ not an inbound comm).
+        if let Some(ic) = unit.inbound.as_ref() {
+            map.insert("is_inbound_comm".into(), json!(true));
+            map.insert("comm_label".into(), json!(ic.class.path()));
+            map.insert("comm_from".into(), json!(ic.from));
+            map.insert("comm_to".into(), json!("self"));
         }
     }
     let s = serde_json::to_string(&obj)?;
