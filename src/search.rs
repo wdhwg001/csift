@@ -80,6 +80,13 @@ pub struct Hit {
     /// renders `(elicitation sidecar)` in place of `Lnnnn` and carries `source:"elicitation-
     /// sidecar"` in JSON. Backfilled with the address.
     pub from_sidecar: bool,
+    /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
+    /// window dropped surrounding content) — i.e. the reader is seeing a fragment, not the
+    /// whole record. ALWAYS false under `--full`/`--no-truncate` and in `--line`/`--uuid` fetch
+    /// mode (both lift the cap to `usize::MAX`), so it doubles as the "default truncation was in
+    /// effect AND bit" signal that drives the trailing reader-caution note (`render_text`) and
+    /// the JSON summary's `excerpts_truncated` flag.
+    pub truncated: bool,
 }
 
 /// A complete reconstructed request/response exchange (round-trip) containing the
@@ -634,6 +641,20 @@ fn merged_any_sidecar(exchanges: &[Exchange]) -> bool {
             .iter()
             .chain(ex.siblings.iter())
             .any(|h| h.from_sidecar)
+    })
+}
+
+/// True when ANY emitted hit/sibling excerpt was CLIPPED to the default cap — drives the
+/// trailing reader-caution note (text) / the `excerpts_truncated` JSON flag. Always false under
+/// `--full`/`--no-truncate` and in `--line`/`--uuid` fetch mode (the cap is lifted to
+/// `usize::MAX`, so no hit can be truncated), so a single check both detects truncation AND
+/// auto-suppresses the note exactly when the reader already asked for whole records.
+fn any_truncated_excerpt(exchanges: &[Exchange]) -> bool {
+    exchanges.iter().any(|ex| {
+        ex.hits
+            .iter()
+            .chain(ex.siblings.iter())
+            .any(|h| h.truncated)
     })
 }
 
@@ -1441,9 +1462,10 @@ fn make_hit(
     tool_name: Option<String>,
     excerpt_max: usize,
 ) -> Hit {
+    let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
     Hit {
         category,
-        excerpt: match_excerpt(text, span, excerpt_max),
+        excerpt,
         timestamp_utc: ts,
         tool_name,
         // line/uuid/image_ids are per-RECORD, not known here — the turn collector backfills
@@ -1452,6 +1474,7 @@ fn make_hit(
         uuid: None,
         image_ids: Vec::new(),
         from_sidecar: false,
+        truncated,
     }
 }
 
@@ -1473,18 +1496,28 @@ fn truncate_excerpt(s: &str) -> String {
 /// leading context), whitespace-normalized, with a leading `…` when content precedes
 /// the window and the shared `… (+N chars)` marker when content follows — so clipping
 /// on either side is explicit, never silent (SPEC §0).
-fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> String {
+///
+/// Returns `(excerpt, truncated)` — `truncated` is true iff content was CLIPPED to fit `max`
+/// (the head form when the normalized text exceeds `max`, or any match-centered window). Under
+/// `--full`'s `usize::MAX` budget nothing is ever clipped, so `truncated` is always false there.
+fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> (String, bool) {
     let total = text.chars().count();
     // Pure filter, or the whole message already fits (incl. `--full`'s `usize::MAX`): keep
-    // the head-anchored form, capped at `max` (uncapped under `--full`).
+    // the head-anchored form, capped at `max` (uncapped under `--full`). Truncated iff the
+    // normalized body still overruns `max`.
+    let head_form = |text: &str| -> (String, bool) {
+        let norm = normalize_line(text);
+        let truncated = norm.chars().count() > max;
+        (crate::text::truncate_excerpt(&norm, max), truncated)
+    };
     let start_byte = match span {
         Some((s, _)) if total > max => s,
-        _ => return crate::text::truncate_excerpt(&normalize_line(text), max),
+        _ => return head_form(text),
     };
     // Char index of the match start; a non-char-boundary byte offset (possible with a
     // raw-byte regex) falls back to the head rather than panicking.
     let Some(prefix) = text.get(..start_byte) else {
-        return crate::text::truncate_excerpt(&normalize_line(text), max);
+        return head_form(text);
     };
     let match_char = prefix.chars().count();
     let win_start = match_char.saturating_sub(max / 4);
@@ -1499,7 +1532,9 @@ fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> String
     if after > 0 {
         out.push_str(&format!("… (+{after} chars)"));
     }
-    out
+    // The window form is only reached when `total > max`, so a `max`-char window necessarily
+    // dropped surrounding content — this is always a truncated fragment.
+    (out, true)
 }
 
 /// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
@@ -1621,6 +1656,32 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
+    // ── Reader-caution (LAST, only when the default cap actually CLIPPED ≥1 excerpt) ──
+    // The excerpts above are match-centered FRAGMENTS, not summaries — a consumer that trusts the
+    // first sentences of a clipped fragment can badly misread the record's full intent. Tell it
+    // exactly how to get the whole text. Auto-suppressed under --full / --line / --uuid (those
+    // lift the cap, so nothing is truncated → `any_truncated_excerpt` is false).
+    if any_truncated_excerpt(&outcome.exchanges) {
+        emit_truncation_caution();
+    }
+}
+
+/// The trailing reader-caution printed when ≥1 excerpt was truncated: what the excerpts ARE
+/// (clipped fragments, not summaries), why that matters (a fragment can misrepresent the whole),
+/// and the exact flags to read the full text. Kept as its own fn so the wording lives in one
+/// place (text only — JSON callers read the `excerpts_truncated` summary flag instead).
+fn emit_truncation_caution() {
+    println!();
+    println!(
+        "note: matches above are TRUNCATED, match-centered FRAGMENTS — not summaries. A fragment \
+         can read very differently from the record's full intent, so do NOT draw conclusions from \
+         it alone."
+    );
+    println!("  whole records: re-run with --full (alias --no-truncate)");
+    println!(
+        "  one record in full: --line <N> (the L<n> shown on a row) or --uuid <U> (uuids via \
+         --format json)"
+    );
 }
 
 /// One hit/sibling line: `<marker> <label>[ <tool>]  L<line>  <excerpt>` (excerpt inline; its
@@ -1736,6 +1797,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) — the
         // machine echo of the `with elicitation sidecar` text note.
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
+        // True when ≥1 emitted excerpt was CLIPPED to the default cap — the machine echo of the
+        // trailing reader-caution. A consumer seeing this should re-fetch the record in full
+        // (per-hit `excerpt` is a match-centered fragment, not the whole text) via `--full`, or a
+        // single record via `--line`/`--uuid`. Always false under those (the cap is lifted).
+        "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
     });
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
@@ -2479,7 +2545,7 @@ mod tests {
         let text = format!("{}{needle}{}", "🔵".repeat(800), "🟥".repeat(800));
         let m = build_matcher(&args(needle)).unwrap();
         let span = m.locate(&text).expect("matches").expect("has a span");
-        let ex = match_excerpt(&text, Some(span), EXCERPT_MAX);
+        let (ex, truncated) = match_excerpt(&text, Some(span), EXCERPT_MAX);
         assert!(ex.contains(needle), "excerpt must show the match: {ex}");
         assert!(
             ex.starts_with('…'),
@@ -2489,6 +2555,7 @@ mod tests {
             ex.contains("chars)"),
             "content follows → trailing count: {ex}"
         );
+        assert!(truncated, "a clipped match-centered window is truncated");
     }
 
     #[test]
@@ -2496,7 +2563,9 @@ mod tests {
         let text = "a short hit here";
         let m = build_matcher(&args("hit")).unwrap();
         let span = m.locate(text).unwrap();
-        assert_eq!(match_excerpt(text, span, EXCERPT_MAX), "a short hit here");
+        let (ex, truncated) = match_excerpt(text, span, EXCERPT_MAX);
+        assert_eq!(ex, "a short hit here");
+        assert!(!truncated, "a message that fits the cap is not truncated");
     }
 
     #[test]
@@ -2504,9 +2573,10 @@ mod tests {
         let text = format!("needle {}", "z".repeat(EXCERPT_MAX));
         let m = build_matcher(&args("needle")).unwrap();
         let span = m.locate(&text).unwrap();
-        let ex = match_excerpt(&text, span, EXCERPT_MAX);
+        let (ex, truncated) = match_excerpt(&text, span, EXCERPT_MAX);
         assert!(!ex.starts_with('…'), "match at char 0 → no leading …: {ex}");
         assert!(ex.starts_with("needle"), "got: {ex}");
+        assert!(truncated, "the tail past the window was dropped");
     }
 
     #[test]
@@ -2515,9 +2585,10 @@ mod tests {
         let m = build_matcher(&args("")).unwrap(); // empty pattern = pure filter
         let span = m.locate(&text).expect("pure filter matches");
         assert_eq!(span, None, "pure filter has no locatable span");
-        let ex = match_excerpt(&text, span, EXCERPT_MAX);
+        let (ex, truncated) = match_excerpt(&text, span, EXCERPT_MAX);
         assert!(!ex.starts_with('…'), "head form has no leading …");
         assert!(ex.ends_with("… (+50 chars)"), "got: {ex}");
+        assert!(truncated, "the head form clipped 50 chars");
     }
 
     #[test]
@@ -2526,15 +2597,20 @@ mod tests {
         // emitted whole, with NO truncation marker — whereas the default budget truncates.
         let n = EXCERPT_MAX + 200;
         let text = "🤖".repeat(n);
-        let capped = match_excerpt(&text, None, EXCERPT_MAX);
+        let (capped, capped_truncated) = match_excerpt(&text, None, EXCERPT_MAX);
         assert!(
             capped.contains("… (+"),
             "default budget truncates: {capped}"
         );
-        let full = match_excerpt(&text, None, usize::MAX);
+        assert!(capped_truncated, "default budget reports truncation");
+        let (full, full_truncated) = match_excerpt(&text, None, usize::MAX);
         assert!(
             !full.contains("… (+"),
             "full budget has no truncation marker"
+        );
+        assert!(
+            !full_truncated,
+            "--full's usize::MAX budget never truncates — the signal the caution note keys on"
         );
         assert_eq!(full.chars().count(), n, "full text length preserved");
     }

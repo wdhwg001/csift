@@ -584,6 +584,105 @@ fn search_no_match_reports_zero() {
 }
 
 #[test]
+fn search_truncated_excerpt_emits_reader_caution() {
+    let h = Home::new();
+    let enc = "-Users-test-Projects-trunc";
+    let sess = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff";
+    // A long assistant message (well past the 400-char excerpt cap) whose OPENING contradicts
+    // the deep match — the exact "trusting the truncated head misreads the whole record" failure
+    // the caution guards against.
+    let long = format!(
+        "{}NEEDLEXYZ the real intent is the OPPOSITE of the opening {}",
+        "opening padding ".repeat(40),
+        "trailing padding ".repeat(40),
+    );
+    let body = format!(
+        concat!(
+            r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","sessionId":"{sess}","cwd":"/Users/test/Projects/trunc","message":{{"role":"user","content":"go"}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:05.000Z","sessionId":"{sess}","message":{{"role":"assistant","content":[{{"type":"text","text":"{long}"}}]}}}}"#,
+            "\n",
+        ),
+        sess = sess,
+        long = long,
+    );
+    h.write(&format!("{enc}/{sess}.jsonl"), &body);
+    let at = format!("@{sess}");
+
+    // Default (truncating): the caution appears with all three pieces (what it is + --full +
+    // --line/--uuid).
+    let out = h.run(&["search", "NEEDLEXYZ", &at]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("TRUNCATED"),
+        "no caution:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("--full"),
+        "no --full hint:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("--line") && out.stdout.contains("--uuid"),
+        "no per-record fetch hint:\n{}",
+        out.stdout
+    );
+
+    // --full lifts the cap → no truncation → NO caution, and the whole text is shown.
+    let full = h.run(&["search", "NEEDLEXYZ", &at, "--full"]);
+    assert!(full.success, "stderr: {}", full.stderr);
+    assert!(
+        !full.stdout.contains("TRUNCATED"),
+        "caution must be suppressed under --full:\n{}",
+        full.stdout
+    );
+    assert!(
+        full.stdout.contains("OPPOSITE of the opening"),
+        "full text not shown:\n{}",
+        full.stdout
+    );
+
+    // JSON summary carries the machine echo `excerpts_truncated`.
+    let json = h.run(&["search", "NEEDLEXYZ", &at, "--format", "json"]);
+    let last = json
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .next_back()
+        .unwrap();
+    let summary: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(summary["excerpts_truncated"], serde_json::Value::Bool(true));
+
+    // And under --full the flag flips false.
+    let json_full = h.run(&["search", "NEEDLEXYZ", &at, "--full", "--format", "json"]);
+    let last_full = json_full
+        .stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .next_back()
+        .unwrap();
+    let summary_full: serde_json::Value = serde_json::from_str(last_full).unwrap();
+    assert_eq!(
+        summary_full["excerpts_truncated"],
+        serde_json::Value::Bool(false)
+    );
+}
+
+#[test]
+fn search_short_match_has_no_truncation_caution() {
+    // Every "carry" match in the canonical fixture fits the cap → nothing clipped → no caution.
+    let h = populated_home();
+    let out = h.run(&["search", "carry"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("TRUNCATED"),
+        "no truncation expected for short matches:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
 fn search_category_filter_and_max_count() {
     let h = populated_home();
     // -t user restricts to user text; "carry" matches the user record in the top-level session
