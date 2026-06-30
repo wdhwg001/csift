@@ -11722,3 +11722,344 @@ fn mcp_pending_is_merged_into_turns() {
         out.stdout
     );
 }
+
+// ============================================================================
+// ORACLE §A–J ACCEPTANCE MATRIX (the role.class.sub redesign, .omc/research/acceptance-oracle.md)
+//
+// A single synthetic transcript carrying one record per disk-shape, probed via `search -t
+// <selector>` to assert the label + the GOLD §4 direction (`from ⇨ to`). This is the final
+// functional gate over the SEARCH surface: every leaf that rides on a user/assistant record is
+// search-reachable and renders its dotted label + decoration. Rows already covered elsewhere are
+// re-asserted here so the matrix is self-contained.
+//
+// Two rows are NOT search-surfaced, by design — documented here so a regression is caught:
+//   • D7 harness.compaction.boundary — a `type:"system"` record dropped by search's §7 stage-1
+//     transcript-candidate prefilter (`role:user`/`role:assistant` only). It IS a valid classify
+//     label (engine unit test `model::…::classify_compaction_summary_and_boundary`); search just
+//     never sees it. Its sibling D6 harness.compaction.summary is a `type:"user"` record → searchable.
+//   • E / J — excluded shapes (attachment; an isMeta record matching no harness marker) → no label.
+// ============================================================================
+
+const ACC_ENC: &str = "-Users-x-acc";
+const ACC_SESS: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const ACC_SUB: &str = "c0ffeec0ffeec0ff";
+
+/// A `$HOME` whose single top-level transcript carries one record per §A–J disk-shape (each with a
+/// unique `zz<name>` token so a search targets it precisely), plus one subagent transcript whose
+/// opener seed exercises C9 (parent ⇨ self).
+fn acceptance_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ACC_ENC}/{ACC_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cwd":"/Users/x/acc","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zzgenuine human prose here"}}"#, "\n",
+            r#"{"type":"user","uuid":"u0b","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"zzblocktext genuine prose in a text block"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0b","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"zzagentmsg the visible reply"},{"type":"thinking","thinking":"zzthink hidden reasoning"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"a0","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"spawn1","name":"Agent","input":{"subagent_type":"general-purpose","name":"audit-x","prompt":"zzspawn go audit the thing"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"a1","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sm1","name":"SendMessage","input":{"to":"GraftBoard","type":"message","message":"zzsent ship the fix"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","parentUuid":"a2","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sm2","name":"SendMessage","input":{"to":"GraftBoard","type":"shutdown_request","message":{"type":"shutdown_request","reason":"zzshutdownreq stop now"}}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"sig1","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"SOurDnd\" color=\"green\">\n{\"type\":\"idle_notification\",\"from\":\"SOurDnd\",\"idleReason\":\"zzidle available\"}\n</teammate-message>"}}"#, "\n",
+            r#"{"type":"user","uuid":"sig2","timestamp":"2026-06-07T05:00:07.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"system\">\n{\"type\":\"teammate_terminated\",\"message\":\"zzterminated B38 has shut down.\"}\n</teammate-message>"}}"#, "\n",
+            r#"{"type":"user","uuid":"sig3","timestamp":"2026-06-07T05:00:08.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"B38\">\n{\"type\":\"shutdown_approved\",\"from\":\"B38\",\"reason\":\"zzapproved ok done\"}\n</teammate-message>"}}"#, "\n",
+            r#"{"type":"user","uuid":"tm2","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"user","content":"<teammate-message teammate_id=\"team-lead\" color=\"blue\">\nzzbareinbox please check the rate limit\n</teammate-message>"}}"#, "\n",
+            r#"{"type":"user","uuid":"n1","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>mon1</task-id>\n<status>completed</status>\n<event>tick</event>\n<summary>Monitor \"zzmonitor liveness\" fired</summary>\n</task-notification>"}}"#, "\n",
+            r#"{"type":"user","uuid":"cmd1","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"user","content":"<command-name>/deploy</command-name>\n<command-message>deploy</command-message>\n<command-args>zzcmdargs to staging now</command-args>"}}"#, "\n",
+            r#"{"type":"user","uuid":"out1","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"user","content":"<local-command-stdout>zzstdout Login successful</local-command-stdout>"}}"#, "\n",
+            r#"{"type":"user","uuid":"int1","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"user","content":"[Request interrupted by user]"}}"#, "\n",
+            r#"{"type":"user","uuid":"int2","timestamp":"2026-06-07T05:00:14.000Z","message":{"role":"user","content":"[Request interrupted by user for tool use]"}}"#, "\n",
+            r##"{"type":"user","uuid":"wake1","isMeta":true,"timestamp":"2026-06-07T05:00:15.000Z","message":{"role":"user","content":"# Autonomous loop check\n\nYou're being invoked on a timer while the user is away. zzwakeup"}}"##, "\n",
+            r#"{"type":"user","uuid":"cont1","isMeta":true,"timestamp":"2026-06-07T05:00:16.000Z","message":{"role":"user","content":[{"type":"text","text":"Continue from where you left off."}]}}"#, "\n",
+            r#"{"type":"user","uuid":"hook1","isMeta":true,"timestamp":"2026-06-07T05:00:17.000Z","message":{"role":"user","content":"Stop hook feedback:\nThe last Edit failed. zzhook retry"}}"#, "\n",
+            r##"{"type":"user","uuid":"loop1","isMeta":true,"timestamp":"2026-06-07T05:00:18.000Z","message":{"role":"user","content":"# Autonomous loop tick (dynamic pacing)\nzzloop driver"}}"##, "\n",
+            r#"{"type":"user","uuid":"meta0","isMeta":true,"timestamp":"2026-06-07T05:00:19.000Z","message":{"role":"user","content":"zzunmarked novel hook wrapper text"}}"#, "\n",
+            r#"{"type":"user","uuid":"sum1","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"user","content":"This session is being continued. zzsummary prior context preserved"}}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"bnd1","timestamp":"2026-06-07T05:00:21.000Z","content":"Conversation compacted zzboundary","compactMetadata":{"trigger":"auto","preTokens":1000,"postTokens":200,"durationMs":50}}"#, "\n",
+            r#"{"type":"attachment","uuid":"att1","timestamp":"2026-06-07T05:00:22.000Z","attachment":{"type":"hook_success","note":"zzattach should not surface"}}"#, "\n",
+        ),
+    );
+    // C9: a subagent transcript whose opener seed is the delivered spawn prompt (parent ⇨ self).
+    h.write(
+        &format!("{ACC_ENC}/{ACC_SESS}/subagents/agent-{ACC_SUB}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"c0ffeec0ffeec0ff","uuid":"so0","timestamp":"2026-06-07T05:00:03.500Z","message":{"role":"user","content":"zzopener do the delegated work please"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"sa0","parentUuid":"so0","timestamp":"2026-06-07T05:00:03.700Z","message":{"role":"assistant","content":[{"type":"text","text":"zzsubreply on it"}]}}"#, "\n",
+        ),
+    );
+    h
+}
+
+/// `search <pattern> -t <selector>` over the top-level acceptance transcript only.
+fn acc(h: &Home, pattern: &str, selector: &str) -> Output {
+    h.run(&[
+        "search",
+        pattern,
+        "-t",
+        selector,
+        &at(ACC_SESS),
+        "--no-subagents",
+    ])
+}
+
+#[test]
+fn acceptance_user_role_message_shapes() {
+    // §A1 string · §A2 text-block array · §A3 recovered <command-args> prose — all `user.message`.
+    let h = acceptance_home();
+    for (oracle, token) in [
+        ("A1 string", "zzgenuine"),
+        ("A2 text-block", "zzblocktext"),
+        ("A3 command-args", "zzcmdargs"),
+    ] {
+        let out = acc(&h, token, "user.message");
+        assert!(out.success, "{oracle}: stderr {}", out.stderr);
+        assert!(
+            out.stdout.contains("user.message"),
+            "{oracle} must classify user.message:\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn acceptance_communication_signals_render_direction() {
+    // §C2 bare-lead inbox · §C3 idle_notification · §C4 teammate_terminated · §C5 shutdown_approved
+    // · §C7 SendMessage shutdown_request — each renders `from ⇨ to` (the owner side is `self`).
+    let h = acceptance_home();
+    let cases = [
+        (
+            "C2 inbox",
+            "zzbareinbox",
+            "agent.communication.inbox",
+            "team-lead ⇨ self",
+        ),
+        (
+            "C3 idle",
+            "zzidle",
+            "agent.communication.signal",
+            "SOurDnd ⇨ self",
+        ),
+        (
+            "C4 terminated",
+            "zzterminated",
+            "agent.communication.signal",
+            "system ⇨ self",
+        ),
+        (
+            "C5 approved",
+            "zzapproved",
+            "agent.communication.signal",
+            "B38 ⇨ self",
+        ),
+        (
+            "C7 shutdown_req",
+            "zzshutdownreq",
+            "agent.communication.signal",
+            "self ⇨ GraftBoard",
+        ),
+    ];
+    for (oracle, token, selector, dir) in cases {
+        let out = acc(&h, token, selector);
+        assert!(out.success, "{oracle}: stderr {}", out.stderr);
+        assert!(
+            out.stdout.contains(selector),
+            "{oracle} must classify {selector}:\n{}",
+            out.stdout
+        );
+        assert!(
+            out.stdout.contains(dir),
+            "{oracle} must render direction `{dir}`:\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn acceptance_communication_sent_spawn_and_subagent_opener() {
+    // §C8 a Task/Agent spawn tool_use → `agent.communication.sent` (self ⇨ child); §C6 SendMessage
+    // message → sent; §C9 the subagent transcript opener → `agent.communication.inbox` (parent ⇨ self).
+    let h = acceptance_home();
+
+    let spawn = acc(&h, "zzspawn", "agent.communication.sent");
+    assert!(spawn.success, "C8: stderr {}", spawn.stderr);
+    assert!(
+        spawn.stdout.contains("agent.communication.sent")
+            && spawn.stdout.contains("self ⇨ audit-x"),
+        "C8 spawn → comm.sent (self ⇨ audit-x):\n{}",
+        spawn.stdout
+    );
+
+    let sent = acc(&h, "zzsent", "agent.communication.sent");
+    assert!(
+        sent.stdout.contains("agent.communication.sent")
+            && sent.stdout.contains("self ⇨ GraftBoard"),
+        "C6 SendMessage message → comm.sent (self ⇨ GraftBoard):\n{}",
+        sent.stdout
+    );
+
+    // C9 needs subagent span (the opener lives in the subagent transcript).
+    let opener = h.run(&[
+        "search",
+        "zzopener",
+        "-t",
+        "agent.communication.inbox",
+        &at(ACC_SESS),
+    ]);
+    assert!(opener.success, "C9: stderr {}", opener.stderr);
+    assert!(
+        opener.stdout.contains("agent.communication.inbox") && opener.stdout.contains("⇨ self"),
+        "C9 subagent opener → comm.inbox (parent ⇨ self):\n{}",
+        opener.stdout
+    );
+}
+
+#[test]
+fn acceptance_harness_notification_monitor() {
+    // §D4 / §G6 — a Monitor `<task-notification>` pulse (UNATTESTED in the corpus → synthetic) →
+    // `harness.notification.monitor`, rendered as the `[monitor <id> <status>] <summary>` label.
+    let h = acceptance_home();
+    let out = acc(&h, "zzmonitor", "harness.notification.monitor");
+    assert!(out.success, "D4: stderr {}", out.stderr);
+    assert!(
+        out.stdout.contains("harness.notification.monitor"),
+        "D4/G6 monitor pulse → harness.notification.monitor:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("[monitor mon1"),
+        "D4/G6 must render the automation_label, not raw XML:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn acceptance_harness_command_and_interrupt() {
+    // §D8 <command-name> wrapper · §D9 <local-command-stdout> · §D10/§D11 the two interrupt markers.
+    let h = acceptance_home();
+    for (oracle, token, selector) in [
+        ("D8 invocation", "zzcmdargs", "harness.command.invocation"),
+        ("D9 stdout", "zzstdout", "harness.command.stdout"),
+        (
+            "D10 interrupt.user",
+            "interrupted by user",
+            "harness.interrupt.user",
+        ),
+        (
+            "D11 interrupt.tool",
+            "interrupted by user for tool",
+            "harness.interrupt.tool",
+        ),
+    ] {
+        let out = acc(&h, token, selector);
+        assert!(out.success, "{oracle}: stderr {}", out.stderr);
+        assert!(
+            out.stdout.contains(selector),
+            "{oracle} must classify {selector}:\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn acceptance_harness_schedule_and_meta() {
+    // §D12 fired wakeup tick · §D13 continuation · §G2 meta.hook (stop-hook feedback) · §G2 meta.loop
+    // (autonomous-loop driver). All ride on isMeta records that classify (not user.message).
+    let h = acceptance_home();
+    for (oracle, token, selector) in [
+        ("D12 wakeup", "zzwakeup", "harness.schedule.wakeup"),
+        (
+            "D13 continuation",
+            "Continue from where you left off",
+            "harness.schedule.continuation",
+        ),
+        ("G2 meta.hook", "zzhook", "harness.meta.hook"),
+        ("G2 meta.loop", "zzloop", "harness.meta.loop"),
+    ] {
+        let out = acc(&h, token, selector);
+        assert!(out.success, "{oracle}: stderr {}", out.stderr);
+        assert!(
+            out.stdout.contains(selector),
+            "{oracle} must classify {selector}:\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn acceptance_compaction_summary_searchable_boundary_classify_only() {
+    // §D6 the isCompactSummary record is a `type:"user"` record → searchable as
+    // `harness.compaction.summary`. §D7 the `compact_boundary` is a `type:"system"` record dropped by
+    // search's §7 transcript-candidate prefilter — a valid classify label (engine-tested) but NOT
+    // search-surfaced; assert the documented limitation so a future change is caught.
+    let h = acceptance_home();
+
+    let summary = acc(&h, "zzsummary", "harness.compaction.summary");
+    assert!(summary.success, "D6: stderr {}", summary.stderr);
+    assert!(
+        summary.stdout.contains("harness.compaction.summary"),
+        "D6 compaction summary → searchable:\n{}",
+        summary.stdout
+    );
+
+    let boundary = acc(&h, "zzboundary", "harness.compaction.boundary");
+    assert!(boundary.success, "D7: stderr {}", boundary.stderr);
+    assert!(
+        boundary.stdout.contains("no matching exchanges"),
+        "D7 compact_boundary (a system record) is dropped by the §7 prefilter, so search must NOT \
+         surface it (classify-only — see model::…::classify_compaction_summary_and_boundary):\n{}",
+        boundary.stdout
+    );
+}
+
+#[test]
+fn acceptance_excluded_and_unmarked_meta_carry_no_label() {
+    // §E an `attachment` carries no label; §J an isMeta record matching no harness marker is EXCLUDED
+    // (never `user.message`). Neither surfaces under ANY selector.
+    let h = acceptance_home();
+    for (oracle, token) in [
+        ("E attachment", "zzattach"),
+        ("J isMeta-unmarked", "zzunmarked"),
+    ] {
+        // No `-t` → every label eligible; still nothing, because classify returns empty.
+        let out = h.run(&["search", token, &at(ACC_SESS), "--no-subagents"]);
+        assert!(out.success, "{oracle}: stderr {}", out.stderr);
+        assert!(
+            out.stdout.contains("no matching exchanges"),
+            "{oracle} must carry no label (no hit):\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn acceptance_mcp_elicitation_searchable_under_tool_use() {
+    // §G8 — an MCP elicitation (UNATTESTED in the corpus → synthetic sidecar). The pending marker is a
+    // `type:"system"` record with no tool_use block; the guarded §3.10 arm classifies it
+    // `agent.tool.use` and matches its content, so `-t agent.tool.use` finds it, rendered
+    // `(elicitation sidecar)` (no fabricated L) with the `with elicitation sidecar` note.
+    let h = Home::new();
+    h.write(
+        &format!("{ACC_ENC}/{ACC_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cwd":"/Users/x/acc","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"kick off the mcp flow"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ACC_ENC}/{ACC_SESS}/elicitations.jsonl"),
+        concat!(
+            r#"{"type":"system","subtype":"mcp_elicitation","uuid":"m-mcp1","timestamp":"2026-06-07T06:00:00.000Z","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","isSidechain":false,"content":"MCP elicitation [github] (url): zzmcp confirm the action","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp-elicitation","csiftKey":"mcp1","csiftMcpServer":"github","hookInput":{}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["search", "zzmcp", "-t", "agent.tool.use", &at(ACC_SESS)]);
+    assert!(out.success, "G8: stderr {}", out.stderr);
+    assert!(
+        out.stdout.contains("agent.tool.use"),
+        "G8 MCP pending marker → agent.tool.use:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("(elicitation sidecar)")
+            && out.stdout.contains("with elicitation sidecar"),
+        "G8 must render the sidecar provenance:\n{}",
+        out.stdout
+    );
+}
