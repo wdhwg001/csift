@@ -27,6 +27,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
+use rayon::prelude::*;
 
 use crate::cli::{OutputFormat, PlanArgs};
 use crate::parse::mmap_bytes;
@@ -247,12 +248,18 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
         path::Caller::Other,
     )?;
 
-    let mut refs: Vec<PlanRef> = Vec::new();
-    for p in &session_files {
-        if let Some(r) = resolve_session_plan(p)? {
-            refs.push(r);
-        }
-    }
+    // Resolve each transcript's plan binding IN PARALLEL (rayon pool = CPU count) — mirrors
+    // recover/search/files. A big session's plan lives in its 300MB+ top-level transcript, and a
+    // `.`/multi-session target adds many more; scanning them serially (the old `for` loop) left one
+    // core idle on the dominant file. The explicit sort below makes the output order deterministic
+    // regardless of completion order, so this is byte-identical — pure execution strategy.
+    let mut refs: Vec<PlanRef> = session_files
+        .par_iter()
+        .map(|p| resolve_session_plan(p))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
     // Top-level first, then subagents; stable, id-sorted within each band.
     refs.sort_by(|a, b| {
         a.is_subagent
