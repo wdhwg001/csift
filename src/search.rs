@@ -28,6 +28,7 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
 use memchr::memmem;
@@ -566,6 +567,22 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // parallel scan just borrows the result.
     let sibling_caps = parse_sibling_specs(&args.siblings)?;
 
+    // ── Spawn-lookup hoist (GOLD §3): build each DISTINCT discovery-root's DiscoveredSpawns
+    //    ONCE, then share it across the whole par_iter. A subagent's discovery-root is its parent
+    //    top-level `.jsonl` (the SAME for all its siblings), so building the lookup per file made
+    //    `search .` O(subagent_count²) — 3290 files each re-running `discover_subagents` over the
+    //    parent's 3290-entry `subagents/` tree (~66s on a 1.4 GB corpus). Distinct roots number
+    //    only a handful (one per top-level session in scope), so `discover_subagents` now runs
+    //    ~7× total instead of once per file. The lookup values are IDENTICAL — only WHEN/how
+    //    often they are built changes — so output is byte-for-byte unchanged. Sequential build is
+    //    fine: distinct-root count is tiny. `None` ⇒ that root has no resolvable spawns. ──
+    let mut spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
+    for p in &session_files {
+        spawn_map
+            .entry(discovery_root_for(p))
+            .or_insert_with_key(|root| build_spawn_lookup(root).map(Arc::new));
+    }
+
     // ── Parallel scan across files; collect order-stable, then merge ──
     let per_file: Vec<FileResult> = session_files
         .par_iter()
@@ -578,6 +595,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 &time_window,
                 address_opt,
                 sibling_caps.as_ref(),
+                &spawn_map,
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -750,6 +768,7 @@ fn search_one_file(
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
     sibling_caps: Option<&SiblingCaps>,
+    spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -823,6 +842,7 @@ fn search_one_file(
         time_window,
         address,
         sibling_caps,
+        spawn_map,
     );
 
     Ok(FileResult {
@@ -863,6 +883,7 @@ fn reconstruct_and_match(
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
     sibling_caps: Option<&SiblingCaps>,
+    spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
 ) -> Vec<Exchange> {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -893,9 +914,13 @@ fn reconstruct_and_match(
     // records / parallel calls. A use with no result-id ⇒ pending; a result with no use-id ⇒ orphan.
     let (use_ids, result_ids) = tool_pair_ids(records);
     // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
-    // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup (built from the
-    // top-level session's discovered subagents — cheap dir+meta, no transcript rescan).
-    let spawn_lookup = build_spawn_lookup(path);
+    // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is HOISTED
+    // (GOLD §3): `run_search` built one `DiscoveredSpawns` per DISTINCT discovery-root up front, so
+    // here we just BORROW this file's root's entry from the shared map — never re-run the (formerly
+    // O(N²) per-file) `discover_subagents` dir+meta scan.
+    let spawn_lookup = spawn_map
+        .get(&discovery_root_for(path))
+        .and_then(|o| o.as_deref());
     let first_opener_line = records
         .iter()
         .find(|k| k.rec.opens_turn())
@@ -905,7 +930,7 @@ fn reconstruct_and_match(
         is_subagent,
         parent_id: &parent_session_id,
         first_opener_line,
-        spawn: spawn_lookup.as_ref().map(|s| s as &dyn SpawnLookup),
+        spawn: spawn_lookup.map(|s| s as &dyn SpawnLookup),
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -1139,19 +1164,29 @@ fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Build the [`DiscoveredSpawns`] lookup powering comm direction (`self ⇨ child`) + subagent-return
-/// detection. For a TOP-LEVEL session, discover from itself; for a SUBAGENT transcript, discover
-/// from its PARENT session (whose sidecar holds the flat set of ALL subagents under it) so an
-/// in-subagent spawn / Task-return resolves instead of degrading to a raw name / missing inbox.
-/// A failed / empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing +
-/// small `meta.json` reads, bounded by the subagent count — never a transcript content scan.
-fn build_spawn_lookup(path: &Path) -> Option<DiscoveredSpawns> {
-    let discovery_root = if is_subagent_path(path) {
-        parent_session_jsonl(path)?
+/// The DISCOVERY-ROOT for a session file — the transcript whose sidecar holds the FLAT set of
+/// subagents that `classify()`/`direction()` must resolve. For a SUBAGENT transcript that is its
+/// PARENT top-level `.jsonl` (ALL of a session's subagents share ONE root); for a TOP-LEVEL file
+/// it is the file itself. Because the spawn lookup is IDENTICAL for every file sharing a root,
+/// `run_search` builds it ONCE per distinct root and shares it — the O(N²)→O(N) hoist (GOLD §3).
+/// (The `parent_session_jsonl` fallback is unreachable: `is_subagent_path` true ⇒ a `subagents/`
+/// ancestor exists ⇒ `parent_session_jsonl` returns `Some`; the `unwrap_or_else` only satisfies
+/// the type and, even if hit, `discover_subagents` on a subagent path yields no spawns ⇒ `None`.)
+fn discovery_root_for(path: &Path) -> PathBuf {
+    if is_subagent_path(path) {
+        parent_session_jsonl(path).unwrap_or_else(|| path.to_path_buf())
     } else {
         path.to_path_buf()
-    };
-    let subs = discover_subagents(&discovery_root).ok()?;
+    }
+}
+
+/// Build the [`DiscoveredSpawns`] lookup powering comm direction (`self ⇨ child`) + subagent-return
+/// detection, from an already-resolved DISCOVERY-ROOT (see [`discovery_root_for`]). A failed /
+/// empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing + small
+/// `meta.json` reads, bounded by the subagent count — never a transcript content scan. Called ONCE
+/// per distinct root (not per file) — the GOLD §3 hoist.
+fn build_spawn_lookup(discovery_root: &Path) -> Option<DiscoveredSpawns> {
+    let subs = discover_subagents(discovery_root).ok()?;
     if subs.is_empty() {
         return None;
     }
@@ -2750,6 +2785,10 @@ mod tests {
             .unwrap();
         let tw = TimeWindow::from_args(a.since.as_deref(), a.until.as_deref()).unwrap();
         let sibling_caps = parse_sibling_specs(&a.siblings).unwrap();
+        // The fixture path is a non-existent top-level transcript, so its discovery-root resolves
+        // no subagents — an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
+        // former per-file `build_spawn_lookup` returned here.
+        let spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
         reconstruct_and_match(
             std::path::Path::new("/x/0a1b2c3d-0000-0000-0000-000000000000.jsonl"),
             &kept,
@@ -2759,6 +2798,7 @@ mod tests {
             &tw,
             None,
             sibling_caps.as_ref(),
+            &spawn_map,
         )
     }
 
