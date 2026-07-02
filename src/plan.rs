@@ -164,17 +164,25 @@ fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
-    let mut hits: Vec<PlanRef> = Vec::new();
-    for p in &session_files {
-        if let Some(r) = resolve_session_plan(p)? {
-            if path::absolutize(Path::new(&r.plan_file))
-                .map(|a| a == want)
-                .unwrap_or(false)
-            {
-                hits.push(r);
-            }
-        }
-    }
+    // Resolve every in-scope transcript's plan binding IN PARALLEL, then keep the ones bound to
+    // `want`. UNSCOPED `--reverse` scans every session in every project (many 300MB+ transcripts),
+    // so the old serial `for` loop read them one at a time on a single core (measured 12.7s on a
+    // multi-GB corpus). par_iter overlaps the reads+parses across cores; the explicit sort below is
+    // a total order, so output is BYTE-IDENTICAL regardless of completion order. Mirrors the forward
+    // path + recover/search/files. (`want` is borrowed read-only — Sync across the pool.)
+    let mut hits: Vec<PlanRef> = session_files
+        .par_iter()
+        .map(|p| -> Result<Option<PlanRef>> {
+            Ok(resolve_session_plan(p)?.filter(|r| {
+                path::absolutize(Path::new(&r.plan_file))
+                    .map(|a| a == want)
+                    .unwrap_or(false)
+            }))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
     hits.sort_by(|a, b| {
         a.is_subagent
             .cmp(&b.is_subagent)
