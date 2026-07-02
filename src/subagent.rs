@@ -39,10 +39,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use rayon::prelude::*;
 
 use crate::model::{tool_result_content_text, Block, Record};
 use crate::parse::{head_records, scan_lines_bytes, tail_records};
-use crate::parse::{mmap_bytes, parse_line};
+use crate::parse::{mmap_bytes, parse_candidates_parallel, parse_line};
 
 /// Strip the on-disk `agent-` filename prefix to the bare-hex canonical agent id (the
 /// value the transcript record's `agentId` field AND the workflow journal carry). The
@@ -142,8 +143,6 @@ pub struct Subagent {
     pub parent_session_id: String,
     /// The `wf_<id>` workflow id for a workflow subagent; `None` for built-in.
     pub workflow_id: Option<String>,
-    /// Companion `agent-<hex>.meta.json` path, if it exists alongside the transcript.
-    pub meta_path: Option<PathBuf>,
     /// The parent `Task`/`Agent` tool_use `id` that SPAWNED this subagent, read from the
     /// built-in `meta.json` `toolUseId` (on disk for every built-in subagent; `None` for
     /// workflow agents, whose meta carries only `agentType`). This is the join key into
@@ -158,6 +157,15 @@ pub struct Subagent {
     /// The `teamName` from meta.json — present only for a teammate (`taskKind:in_process_teammate`);
     /// `None` for built-in/workflow agents. Identifies the team a teammate belongs to.
     pub team_name: Option<String>,
+    /// `agentType` from meta.json (descriptive sub-label, e.g. `Explore`,
+    /// `oh-my-claudecode:executor`, `workflow-subagent`). Read ONCE here at discovery so
+    /// [`lifecycle`] takes it from the `Subagent` instead of re-reading the meta (FIX3 — kills
+    /// one redundant meta.json read + parse per subagent). Identical value either way.
+    pub agent_type: Option<String>,
+    /// `description` from a built-in / teammate meta.json (the Task tool's `description`). Read
+    /// ONCE at discovery alongside `agent_type`; `None` for a workflow agent (its meta carries
+    /// only `agentType`).
+    pub description: Option<String>,
 }
 
 /// Lifecycle facts derived from a subagent transcript (+ its workflow journal, when
@@ -469,6 +477,8 @@ fn make_subagent(
         .and_then(|s| s.to_str())
         .unwrap_or_default();
     let agent_id = bare_agent_id(stem).to_string();
+    // Read the companion `agent-<hex>.meta.json` ONCE here (its located path is used only for this
+    // read — `lifecycle` now takes agent_type/description off the struct, so the path isn't stored).
     let meta_path = path.with_extension("meta.json");
     let meta_path = meta_path.is_file().then_some(meta_path);
     let meta = read_meta(meta_path.as_deref());
@@ -489,10 +499,11 @@ fn make_subagent(
         path,
         parent_session_id: parent_session_id.to_string(),
         workflow_id,
-        meta_path,
         spawn_tool_use_id: meta.tool_use_id,
         name: meta.name,
         team_name: meta.team_name,
+        agent_type: meta.agent_type,
+        description: meta.description,
     }
 }
 
@@ -583,12 +594,11 @@ fn journal_reports_completion(subagent: &Subagent) -> bool {
 /// timestamp + TAIL for the completion timestamp & terminal-message signal, consult
 /// the workflow journal for an explicit `result`, then resolve a status.
 pub fn lifecycle(subagent: &Subagent) -> Result<SubagentLifecycle> {
-    let meta = read_meta(subagent.meta_path.as_deref());
-    let MetaFields {
-        agent_type,
-        description,
-        ..
-    } = meta;
+    // agent_type + description were read from meta.json ONCE at discovery ([`make_subagent`])
+    // and stored on the `Subagent` — no second meta read here (FIX3: kills one redundant
+    // meta.json read + parse per subagent). The values are identical to `read_meta`'s.
+    let agent_type = subagent.agent_type.clone();
+    let description = subagent.description.clone();
 
     // HEAD: first record's timestamp == start. We do not need genuine-user logic
     // here — the very first record (isSidechain user seed) IS the start instant.
@@ -872,6 +882,22 @@ impl ParentSpawnIndex {
         }
         cands.first().map(|(_, id)| id.clone())
     }
+
+    /// Fold `other` INTO `self` — used by [`build_global_spawn_index`] to merge the per-subagent
+    /// LOCAL indexes built in parallel back into the global one. The unique-keyed maps
+    /// (`spawns`/`tool_results`/`issuer`, all keyed by a globally-unique tool_use id) take
+    /// `other`'s value on any collision — LATER-wins, matching the old serial accumulation where a
+    /// later transcript's insert overwrote an earlier one. The `by_name` lists are APPENDED (self's
+    /// entries first), so — since callers merge locals in the deterministic `subs` order — the final
+    /// per-name order is byte-identical to the old serial scan (main, then each sub in order).
+    fn merge(&mut self, other: ParentSpawnIndex) {
+        self.spawns.extend(other.spawns);
+        self.tool_results.extend(other.tool_results);
+        self.issuer.extend(other.issuer);
+        for (name, mut vals) in other.by_name {
+            self.by_name.entry(name).or_default().append(&mut vals);
+        }
+    }
 }
 
 /// Build the [`ParentSpawnIndex`] for a session by a single forward scan of its parent
@@ -897,8 +923,21 @@ pub fn build_global_spawn_index(main_jsonl: &Path, subs: &[Subagent]) -> Result<
     // The main scan (issuer `None`) is exactly `index_parent_spawns`; then union each
     // subagent transcript tagged with its own agent id as the issuer.
     let mut idx = index_parent_spawns(main_jsonl)?;
-    for s in subs {
-        scan_spawns_into(&s.path, Some(s.agent_id.as_str()), &mut idx)?;
+    // Scan each subagent transcript into its OWN local index IN PARALLEL, then fold the locals in.
+    // Parallelizing ACROSS subs is what rescues the single-session target (`agents @<uuid>`), where
+    // the caller's across-sessions `par_iter` (agents.rs) degenerates to one thread and would
+    // otherwise leave all 3000+ subs to a single core. `rayon`'s ordered collect preserves the
+    // deterministic `subs` order, so the subsequent in-order merge yields a byte-identical index.
+    let locals: Vec<ParentSpawnIndex> = subs
+        .par_iter()
+        .map(|s| {
+            let mut local = ParentSpawnIndex::default();
+            scan_spawns_into(&s.path, Some(s.agent_id.as_str()), &mut local)?;
+            Ok(local)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    for local in locals {
+        idx.merge(local);
     }
     Ok(idx)
 }
@@ -911,59 +950,80 @@ fn scan_spawns_into(jsonl: &Path, issuer: Option<&str>, idx: &mut ParentSpawnInd
         return Ok(());
     };
     let bytes: &[u8] = &mmap;
-    scan_lines_bytes(bytes, |line| {
-        let Ok(Some(rec)) = parse_line(line) else {
-            return;
-        };
-        let Some(blocks) = rec.blocks() else {
-            return;
-        };
-        for b in blocks {
-            match b {
-                Block::ToolUse {
-                    id: Some(id),
-                    name: Some(name),
-                    input,
-                } if is_spawn_tool(name) => {
-                    let input = input.as_ref();
-                    let str_in = |k: &str| {
-                        input
-                            .and_then(|v| v.get(k))
-                            .and_then(serde_json::Value::as_str)
-                            .map(str::to_string)
-                    };
-                    idx.spawns.insert(
-                        id.clone(),
-                        SpawnMeta {
-                            name: Some(name.clone()),
-                            trigger_utc: rec.timestamp.clone(),
-                            description: str_in("description"),
-                            subagent_type: str_in("subagent_type"),
-                        },
-                    );
-                    idx.issuer.insert(id.clone(), issuer.map(str::to_string));
-                    // Index by the spawn's `input.name` (the `Agent` tool's `name` param) so a
-                    // teammate — whose meta has no `toolUseId` — can name-join to its launch.
-                    if let Some(spawn_name) = str_in("name") {
-                        idx.by_name
-                            .entry(spawn_name)
-                            .or_default()
-                            .push((rec.timestamp.clone(), id.clone()));
-                    }
-                }
-                Block::ToolResult {
-                    tool_use_id: Some(id),
-                    content: Some(c),
-                    ..
-                } => {
-                    idx.tool_results
-                        .insert(id.clone(), tool_result_content_text(c));
-                }
-                _ => {}
-            }
-        }
-    })?;
+    // Byte-prefilter + parallel parse (mirrors search's stage-1 / `files`' candidate gate): only a
+    // line carrying a `tool_use` (a spawn) or a paired `tool_result` (the sync returned-message
+    // source) can contribute to the index; every other line (thinking/text/genuine-user/summary/
+    // system) is skipped BEFORE the full serde parse. This also within-file-parallelizes the big
+    // 398 MB main scan. Malformed candidate lines are silently dropped (as the old scan did — the
+    // spawn index is best-effort), so the returned skip count is intentionally ignored.
+    let (records, _skipped) = parse_candidates_parallel(bytes, spawn_line_candidate);
+    for (_line_no, rec) in &records {
+        accumulate_spawns(rec, issuer, idx);
+    }
     Ok(())
+}
+
+/// Byte prefilter for [`scan_spawns_into`]: keep a raw line only when it can carry a spawn
+/// tool_use or a paired tool_result. A tool_result block always carries a `tool_use_id`
+/// (⊇ the `tool_use` literal), so `tool_use` alone is already a complete superset; the explicit
+/// `tool_result` disjunct documents intent and stays conservative. Cheap SIMD `memmem`, no parse.
+fn spawn_line_candidate(line: &[u8]) -> bool {
+    memchr::memmem::find(line, b"tool_use").is_some()
+        || memchr::memmem::find(line, b"tool_result").is_some()
+}
+
+/// Fold one candidate record's spawn tool_uses + paired tool_results into `idx`. `issuer` tags
+/// every spawn id with the agent that issued it (`None` = the main session). Split out of
+/// [`scan_spawns_into`] so the (prefiltered, parallel) parse and this serial accumulation are
+/// separate concerns; the body is identical to the old inline closure.
+fn accumulate_spawns(rec: &Record, issuer: Option<&str>, idx: &mut ParentSpawnIndex) {
+    let Some(blocks) = rec.blocks() else {
+        return;
+    };
+    for b in blocks {
+        match b {
+            Block::ToolUse {
+                id: Some(id),
+                name: Some(name),
+                input,
+            } if is_spawn_tool(name) => {
+                let input = input.as_ref();
+                let str_in = |k: &str| {
+                    input
+                        .and_then(|v| v.get(k))
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string)
+                };
+                idx.spawns.insert(
+                    id.clone(),
+                    SpawnMeta {
+                        name: Some(name.clone()),
+                        trigger_utc: rec.timestamp.clone(),
+                        description: str_in("description"),
+                        subagent_type: str_in("subagent_type"),
+                    },
+                );
+                idx.issuer.insert(id.clone(), issuer.map(str::to_string));
+                // Index by the spawn's `input.name` (the `Agent` tool's `name` param) so a
+                // teammate — whose meta has no `toolUseId` — can name-join to its launch.
+                if let Some(spawn_name) = str_in("name") {
+                    idx.by_name
+                        .entry(spawn_name)
+                        .or_default()
+                        .push((rec.timestamp.clone(), id.clone()));
+                }
+            }
+            Block::ToolResult {
+                tool_use_id: Some(id),
+                content: Some(c),
+                ..
+            } => {
+                idx.tool_results
+                    .insert(id.clone(), tool_result_content_text(c));
+            }
+            _ => {}
+        }
+    }
 }
 
 /// True for a tool name that SPAWNS a subagent. The real transcript spelling is `Agent`
@@ -1245,8 +1305,13 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
     // layout is flat, so `subs` already holds every agent at any depth; this recovers the
     // LOGICAL parent + the nested agent's spawn metadata the flat layout drops.
     let index = build_global_spawn_index(session_jsonl, &subs)?;
+    // Build each node IN PARALLEL: `node_for` is pure (reads only its own transcript + the shared
+    // `&index`), so this is a drop-in `par_iter`. `rayon`'s ordered collect preserves the `subs`
+    // order, so the resulting `nodes` vec is byte-identical to the old serial `.iter().map()`.
+    // Like the spawn-index parallelism, this is what rescues the single-session target where the
+    // caller's outer across-sessions `par_iter` runs on one thread.
     let mut nodes: Vec<SubagentNode> = subs
-        .iter()
+        .par_iter()
         .map(|s| node_for(s, &index, with_files))
         .collect::<Result<_>>()?;
     assign_depths(&mut nodes);
