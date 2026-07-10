@@ -29,7 +29,7 @@ s1 = 13d9645a-3a5b-4a92-b83d-e0f94c5a9b90
 s1·t42  2026-06-20 22:14:07.811+10:00
   ▸ agent.message  L8821  Added a sliding-window limiter (10 req/min/IP); the 429 path now
                   returns Retry-After and logs the offending IP — gateway/src/rate_limit.rs:88.
-matched 1 exchange · 1 session · category=agent
+matched 1 exchange · 1 session · label=agent
 ```
 
 One regex, the **complete round-trip**, token-efficient output — no embeddings, no database, no daemon.
@@ -118,23 +118,28 @@ csift --help
 | You want to… | Run |
 |---|---|
 | find what a session said about a topic | `csift search "TOPIC" @<uuid>` |
+| fetch the exact record a hit cited (full / raw bytes) | `csift show @<uuid> --line 46550 [--raw]` |
+| token / tool / turn aggregates | `csift stats @<uuid>` |
 | identify "which session is this" | `csift list .` |
-| see which files a session changed | `csift files @<uuid> --by-file` |
+| see which files a session changed | `csift files @<uuid> --by file` |
 | restore a file from the transcript | `csift recover @<uuid> --file /abs/x.rs --out /abs/x.rs` |
 | get back a deleted plan | `csift recover @<uuid> --file @plan --out plan.md` |
 | un-clip the turns a compaction dropped | `csift turns @<uuid> --budget 40000` |
-| inspect a session's subagents | `csift agents @<uuid> --tree` |
+| inspect a session's subagents | `csift agents @<uuid>` |
 | identify the current session | `csift whoami` |
 | pull a pasted image back out | `csift image @<uuid> --out ./imgs` |
+| run the NEXT command over exactly what matched | `csift search "X" -l \| csift stats --sessions-from -` |
 
 Run `csift <command> --help` for the full flag set and examples.
 
-## The nine subcommands
+## The eleven subcommands
 
 | | |
 |---|---|
 | **`list`** | fast "which session is this?" index — first/last user + last agent, per session |
-| **`search`** | regex over transcripts → the complete round-trip per hit (also fetches exact records by `--line`/`--uuid`) |
+| **`search`** | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `-l` matching sessions, `--raw` verbatim lines) |
+| **`show`** | fetch the exact record(s) you name — `--line N\|A..B` / `--uuid U` of one transcript, rendered full or `--raw` bytes |
+| **`stats`** | one-scan aggregates per session: tokens by model, tool calls, turns, span, compactions |
 | **`agents`** | a session's subagents: kind, lifecycle, status, and the parent→child topology |
 | **`whoami`** | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe |
 | **`files`** | which files/dirs a session changed, when — plus edits made outside the tool stream |

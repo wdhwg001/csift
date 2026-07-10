@@ -1,14 +1,14 @@
 # SPEC.md — csift
 
-> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All nine subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
+> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All eleven subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `turns` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
 
 ---
 
 ## 0. Mission & non-negotiables
 
-**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Nine subcommands: `list`, `search`, `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `turns` (turn-fidelity reconstruction across compaction, §6.8), `image` (list + extract the images a session carries, §6.9). `list`/`search`/`files`/`recover`/`plan`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `turns` is the exception (top-level thread only, `--include-subagents` opts in); `agents` lists subagents as its targets.
+**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Eleven subcommands: `list`, `search`, `show` (record FETCH by line/uuid, §6.11), `stats` (one-scan aggregates, §6.12), `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `turns` (turn-fidelity reconstruction across compaction, §6.8), `image` (list + extract the images a session carries, §6.9). `list`/`search`/`stats`/`files`/`recover`/`plan`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `turns` is the exception (top-level thread only, `--subagents` opts in, a target is REQUIRED); `agents` lists subagents as its targets (rejects both span flags).
 
-- **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--json` for machine use.
+- **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--format json` for machine use.
 - **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
 - **Quality gates (hard):** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` all green. No `unwrap`/`expect` in library/hot paths (only `main` maps error→exit code, tests may `unwrap`). **No silent truncation** anywhere.
 
@@ -397,6 +397,28 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >   starting `@` errors; a uuid-shaped PATTERN notes on stderr; `--turn-range` now
 >   INTERSECTS `--since`/`--until`.
 
+> **v0.3 CHANGE LEDGER (authoritative — supersedes any conflicting older text).**
+> - **ONE range-token grammar**: every range flag (`show --line`, `--turn-range`,
+>   `--file-lines`) takes bare `N` (≡ `N..N`) or `START..END`; the dash form `A-B` is
+>   REMOVED (hard error teaching the `..` spelling). `--turn-range` + `--since`/`--until`
+>   now INTERSECT on EVERY command (`files`/`turns` dropped their leftover
+>   mutual-exclusion bails).
+> - **`-T`/`--label-not`** (search): label EXCLUSION, same selector grammar as `-t` (the
+>   rg -t/-T duality); richest-SURVIVING-view dedup; statically-empty combos hard-error.
+> - **`--sessions-from <FILE|->`** on every multi-target command (list/search/stats/
+>   agents/files/recover/plan/turns/image): union an id list into the scope; empty list =
+>   empty scope. **`search -l`** emits the matching OWNING session ids (uncapped) to pipe
+>   into it. **`search --raw`** emits matched records' verbatim jsonl lines (stdout pure,
+>   notes on stderr).
+> - **`refetch`**: search JSON hits + turns `collapsed_agents` rows carry the ready-to-run
+>   `csift show` command addressed at the line-owning transcript.
+> - **`turns` REQUIRES a target** (budget × every-session flood guard). **`list`** gains
+>   `--since`/`--until` (activity-span intersection); **`stats`** gains `--turn-range`
+>   (and its positional accepts encoded `-Users-…` dirs — an `allow_hyphen_values`
+>   omission fixed).
+> - **Teammate ids with dashed NAMES round-trip** (`aP1-engine-9cf2…`): the
+>   `is_teammate_agent_id` head accepts `[A-Za-z0-9-]` with an explicit `!is_uuid` guard.
+
 
 > **Common conventions.** All timestamps display as **system-local timezone + raw UTC** side-by-side (e.g. `2026-06-07 15:43:00 AEST (2026-06-07T05:43:00.000Z)` on a machine in Sydney; the `<TZ>` abbrev and offset auto-track the detected local zone) via `jiff` (`TimeZone::system()`). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 
@@ -408,8 +430,10 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | a real cwd OR an encoded dir (§2.3); 0 args ⇒ every dir under projects root |
+| `--since WHEN` / `--until WHEN` | string | none | keep a session iff its [first-activity, last-activity] SPAN (the head/tail timestamps this index already reads — never a full scan) INTERSECTS the window, so a long-running session straddling the window still lists; a session with no readable timestamp never matches a bounded window |
+| `--sessions-from F` | path or `-` | none | union an id list into the scope (the shared §6.2 semantics) |
 | `--format text\|json` | enum | `text` | output format |
-| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only. Subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`) are listed by default; this is the only span flag. Workflow `journal.jsonl` is excluded (not a transcript). |
+| `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only. Subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`) are listed by default; the uniform `--subagents` twin affirms the default. Workflow `journal.jsonl` is excluded (not a transcript). |
 
 **Per-session fields emitted:** `session-id`, **first** genuine-user message (+ts), **last** genuine-user message (+ts), **last** agent message (+ts), the session `cwd` (decoded from data, §2.4), `version`, `gitBranch`. Each message is a one-line excerpt (truncated with an explicit `… (+N chars)` marker — never silent).
 
@@ -451,28 +475,30 @@ csift list --format json .                              # machine-readable index
 |---|---|---|---|---|
 | `[PATTERN]` | — | positional string | `""` (empty ⇒ pure filter) | regex, ripgrep-like, default **smart-case**. A bare uuid is a LITERAL pattern (no special routing); to scope to one session, pass `@<uuid>` as a PATH positional (`search PATTERN @<uuid>`). |
 | `[PATH]…` | — | repeatable positional | all projects | scope target(s): real cwd / encoded dir (§2.3) / `@<uuid>` (one top-level session) / `@<uuid-prefix>` (a 4–11-hex leading run like `@13d9645a` → the UNIQUE session it prefixes, else an ambiguity error listing the candidates) / `@main` (calling **top-level** session, env-resolved) / `@trap:<marker>` (the calling **SUBAGENT**, found by a unique literal marker the caller embeds in this csift command — §6.3a) / `@<agent-hex>` (a SUBAGENT + its topological descendants — or the agent alone under `--no-subagents`) / `*.jsonl` (one transcript — a subagent transcript scopes to that agent's subtree) — the same positional surface every sibling uses |
-| `--category C` | `-t` | repeatable selector | all labels | a dotted `role.class.sub` selector (§5), dot-segment-prefix matched (`-t agent` = the role, `-t agent.tool` = use+result, `-t harness.notification` = all five pulse kinds). The old flat values `thinking`/`tool`/`tool-response` HARD-error (0 back-compat). |
+| `--label SEL` | `-t` | repeatable selector | all labels | a dotted `role.class.sub` selector (§5), dot-segment-prefix matched (`-t agent` = the role, `-t agent.tool` = use+result, `-t harness.notification` = all five pulse kinds). The old flat values `thinking`/`tool`/`tool-response` HARD-error (0 back-compat). |
+| `--label-not SEL` | `-T` | repeatable selector | none | EXCLUDE labels matching the selector (same grammar/validation as `-t`; the rg `-t`/`-T` duality). Effective set = (`-t` selectors, or ALL) minus (`-T` selectors); a multi-label record renders under its richest SURVIVING label; a statically-empty combination hard-errors. Filters HITS only — `--siblings` rendering is unaffected. |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
-| `--turn-range START..END` | — | string | none | inclusive 0-based turn index range; **mutually exclusive** with `--since`/`--until` |
+| `--turn-range N\|START..END` | — | string | none | inclusive 0-based turn window (bare `N` ≡ `N..N` — the shared §6 range-token grammar); INTERSECTS (AND) `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | — | string | none | time bounds (ISO8601 or relative `2h`/`3d`/…, system-local; bare date ⇒ local midnight) |
 | `--max-count N` | — | usize | none (**unlimited — no cap**) | cap emitted exchanges; **reports dropped count** |
-| `--count-only` | `-c` | bool | off | print ONLY the match total (one integer; ripgrep `-c` idiom); honors every filter. The total is ALSO in the normal footer, so `--count-only` just isolates it for a pipe. (For "which sessions matched", pipe `--format json` through `jq -r .session_id \| sort -u`.) |
-| `--siblings SPEC` | — | repeatable + comma | off | render each matched turn's NON-matched records (the surrounding back-and-forth), CAPPED per SPEC. Each token is a bare `N` (cap the total siblings whose label has no typed cap at N) or a `<selector>:N` (cap the labels UNDER that dotted `role.class.sub` selector — the same set as `-t` — at N, N ≥ 1). Mix them: a typed cap governs its labels, a bare `N` caps "the rest"; a label with neither is not shown. Presence of any spec turns siblings ON |
-| `--no-truncate` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (no `--full` alias — that spelling was removed as ambiguous). When NOT set and ≥1 excerpt is clipped, a trailing reader-caution prints (text) / `excerpts_truncated:true` (JSON): an excerpt is a match-centered FRAGMENT, not a summary, and can misrepresent the record's full intent — re-fetch via `--no-truncate` or `--line`/`--uuid` |
-| `--line SPEC` | — | repeatable + comma | none | ADDRESS by 1-based physical line(s)/ranges (`--line 87,495-500`) instead of/with pattern; needs a single-transcript scope; addressed records render FULL; an explicit miss is reported `unresolved`. To address a SUBAGENT transcript, prefix a token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`); all hex-bearing tokens must name the SAME transcript |
-| `--uuid U` | — | repeatable + comma | none | ADDRESS by record uuid(s) (globally unique); addressed records render FULL; a miss is `unresolved` |
-| `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6) |
+| `--count-only` | `-c` | bool | off | print ONLY the match total — one integer counting EXCHANGES, not lines (ripgrep `-c` idiom); honors every filter. The total is ALSO in the normal footer, so `--count-only` just isolates it for a pipe. |
+| `--sessions-with-matches` | `-l` | bool | off | print ONLY the distinct matching OWNING sessions (`parent_session_id`), one per line, sorted, UNCAPPED (a `--max-count` drop notes on stderr). Pipes into `--sessions-from -`. (Per-transcript detail = the JSON summary's `session_ids`, ≤100 + `session_ids_truncated`.) |
+| `--raw` | — | bool | off | emit each matched record's VERBATIM jsonl line (deduped per record) instead of the rendered exchange — `show --raw`'s escape hatch on search's whole filter surface. stdout = pure jsonl; scope/drop/malformed notes → stderr; sidecar-merged records (no physical line) are omitted with a stderr note. Excludes `--format json`/`--siblings`/`-c`/`-l`/`--no-truncate`. |
+| `--siblings` | — | bool | off | render each matched turn's NON-matched records (the surrounding back-and-forth) under a FIXED zero-arg policy: message units always (user.*, agent.message, agent.communication.*); thinking≤2, tool.use≤3, tool.result≤3, harness≤2 per leaf; overflow surfaces an explicit `(+N more · csift show @<id> --line A..B)` pointer + JSON `siblings_hidden`/`turn_lines` |
+| `--no-truncate` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (no `--full` alias — that spelling was removed as ambiguous). When NOT set and ≥1 excerpt is clipped, a trailing reader-caution prints (text) / `excerpts_truncated:true` (JSON): an excerpt is a match-centered FRAGMENT, not a summary, and can misrepresent the record's full intent — re-fetch via `--no-truncate` or `csift show` (§6.11; every JSON hit's `refetch` is the ready-to-run command) |
+| `--sessions-from F` | — | path or `-` | none | UNION the scope with an id LIST (whitespace-separated uuid/prefix/agent-id tokens, bare or `@`-prefixed — what `-l` emits); per-id fail-loud; an explicit EMPTY list = an empty scope (honest empty), never all-projects. Available on every multi-target subcommand. |
+| `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6); under `--raw` it affects MATCHING only (the emitted line is the original) |
 | `--no-subagents` | — | bool | — | search only top-level `<uuid>.jsonl` sessions. Each in-scope session's subagent transcripts (built-in + workflow / OMC agents under `subagents/**`) are searched by default; this is the only span flag. Workflow `journal.jsonl` is never searched (not a transcript). |
 | `--format text\|json` | — | enum | `text` | output format |
 
-**Addressing (record fetch) — `--line` / `--uuid`.** Beyond regex matching, a record can be selected by **physical line** (`--line`, per-file, needs a single-transcript scope) or **uuid** (`--uuid`, global). Addressed records emit at FULL length (you asked for *this* message, not a teaser); a pattern, if also given, further narrows within the addressed set. This is the permission-friendly alternative to `Read`-ing the raw jsonl. An explicitly-requested address that resolves to nothing is reported in an `unresolved:` footer line — never silently dropped. `--line` addresses the top-level transcript by default; to address a **subagent** transcript, prefix the first token with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500`), fail-CLOSED — an unmatched hex errors, never widens scope. All hex-bearing tokens must name the same transcript (lines address ONE file).
+**Addressing (record fetch) moved to `show` (§6.11).** `search` FINDS (match-centered excerpts, round-trip exchanges); `csift show TARGET --line N|A..B / --uuid U` FETCHES the records you name, full or `--raw`. Every JSON hit carries `refetch` — the ready-to-run `show` command already addressed at the transcript that OWNS the hit's line number (its `session_id`; a parent uuid + a subagent line number would silently fetch the wrong record).
 
 **Smart-case rule:** pattern is case-insensitive iff it contains no uppercase letter; `-i` forces insensitive regardless; the two never conflict (`-i` wins). Compile via `regex::bytes::RegexBuilder` (match on raw line bytes pre-JSON in the prefilter, then on decoded text for excerpting). `--multiline` sets `.dot_matches_new_line(true)` + multiline mode.
 
 **Regex dialect — linear-time (RE2-class).** The pattern is the Rust `regex` 1.12 crate (`regex::bytes`), which **guarantees linear-time matching** in the input length: **no catastrophic backtracking, ever**. *Supported:* literals; character classes `[...]` / `[^...]` / `\d \w \s` + Unicode classes `\p{...}`; alternation `|`; groups `(...)` / non-capturing `(?:...)`; quantifiers `* + ? {m,n}` (greedy + lazy `*?`); anchors `^ $ \b \B`; dot `.` (`--multiline` lets it cross newlines); inline flags `(?i)(?m)(?s)(?x)`; Unicode-aware by default. ***Deliberately NOT supported*** (they require a non-linear engine): backreferences `\1`; lookahead/lookbehind `(?=) (?!) (?<=) (?<!)`; atomic groups / possessive quantifiers `(?>...)` / `a*+`. A pattern using these **fails to compile** with a clear error — by design, not a bug. This boundary is documented identically in `--help` (`search`'s `after_help`) and `SKILL.md`.
 
-**Validation:** `--turn-range` together with `--since`/`--until` is an error (mutually exclusive). An empty `PATTERN` with no other filter is allowed (matches every label-eligible record) but warns (`empty pattern with no category/time/turn/session filter …`) that it will emit a lot.
+**Validation:** `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule shared by every subcommand. A `-t`/`-T` combination whose effective label set is statically empty is a hard error. An empty `PATTERN` with no other filter is allowed (matches every label-eligible record) but warns (`empty pattern with no category/time/turn/session filter …`) that it will emit a lot.
 
 **Filter application order per session:** target selection (positional PATH/`@<uuid>`/`*.jsonl`) → label eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
 
@@ -492,9 +518,9 @@ s1·t47  2026-06-07 14:32:05.478+10:00
   ▸ agent.communication.inbox  VSMultiRegion ⇨ self  L1018  please double-check the chunk math
   ⚙ harness.notification.background-command  L1020  [background-command wf12abc completed] echo done
 
-matched 1 exchange · 1 session · category=all
+matched 1 exchange · 1 session · label=all
 ```
-(A subagent session's table row reads `s2 = <hex> (subagent · parent s1)`; an `agent.tool.result` hit names its tool, `▸ agent.tool.result Edit  L2128  …`. The footer keyword stays `category=<joined selectors or all>`.)
+(A subagent session's table row reads `s2 = <hex> (subagent · parent s1)`; an `agent.tool.result` hit names its tool, `▸ agent.tool.result Edit  L2128  …`. The footer keyword is `label=<joined selectors or all>` (+ `label-not=<…>` when `-T` is active).)
 
 **Example invocations:**
 ```bash
@@ -505,11 +531,11 @@ csift search "tail.read" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 csift search "panic" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50
 csift search "" -t agent.communication.inbox @<uuid>   # inbound peer/teammate messages (from ⇨ self)
 csift search "" -t harness.notification @<uuid>        # subagent/workflow/bg-command completion pulses
-csift search "" @0a1b2c3d-… --no-subagents --line 992,1374   # fetch records by line (FULL)
-csift search "" @0a1b2c3d-… --line 7f3c9e21:88,495-500       # …in a SUBAGENT transcript (hex-prefixed --line)
-csift search "" --uuid 7f3c9e21-…                      # fetch a record by uuid, anywhere in scope
-csift search "deadline" --format json | jq -r .session_id | sort -u  # WHICH sessions mention it
-csift search "let's chat" -t user --siblings agent.message:1   # the match WITH up to 1 agent-message sibling
+csift search "" @<uuid> -t agent -T agent.thinking     # the agent role MINUS thinking (-T excludes)
+csift search "deadline" -l                             # WHICH sessions mention it (one id per line)
+csift search "deadline" -l | csift stats --sessions-from -   # …then aggregate exactly those
+csift search "" @<uuid> -t agent.message --raw | jq -r '.message.model'  # raw lines: unrendered fields
+csift search "let's chat" -t user --siblings           # the match WITH the turn's other side (fixed policy)
 csift search "persisted-output" --resolve-persisted --format json
 ```
 
@@ -596,7 +622,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3) whose sessions' subagents to list; a `@<uuid>` positional restricts to one top-level parent session |
-| `--kind builtin-task\|workflow\|teammate` | repeatable enum | all | filter to a subagent kind (`teammate` = `in_process_teammate`/FleetView agents) |
+| `--shape builtin-task\|workflow\|teammate` | repeatable enum | all | filter to a subagent transcript SHAPE (`teammate` = `in_process_teammate`/FleetView agents) |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local), filters by the `--order-by` axis |
 | `--order-by trigger\|start\|completion` | enum | **`trigger`** | the ORDERING axis — which timestamp sorts the tree AND bounds `--since`/`--until`. `trigger` is the true spawn instant (the **default**), `start` the child's first-record ts, `completion` its last. (Named `--order-by`, not `--by`, because it names the sort axis; `files` uses `--by` for a PROJECTION — a different meaning on a different subcommand.) |
 | `--agent HEX` | string | none | grab ONE subagent by bare-hex id; prints its full node incl. the returned message (implies `--returned-message`) and, with `--with-files`, its files-changed. Renders just that node (a tree of one) — JSON emits the bare node, not the per-session envelope |
@@ -604,7 +630,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 | `--with-files` | bool | off | attach each node's files-changed list (reuses the `files` extractors over the subagent's own transcript) |
 | `--format text\|json` | enum | `text` | output format |
 
-**Per-subagent (node) fields emitted:** `agent_id` (bare hex), `kind`, `parent_session_id`, `parent_agent_id` (the spawning agent for a nested subagent; `null` ⇒ a direct child of the session, depth 0), `spawn_tool_use_id`, `spawn_tool` (`Agent`/`Task`/`Workflow`), `workflow_id` (workflow only), `agent_type` (meta `agentType`, fallback the spawn's `subagent_type`), `description` (built-in meta, fallback the spawn's), `trigger_utc`/`trigger_local` (the true spawn instant), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration` (trigger→completion), `status`, the FROZEN-LANE fields `pending_tool_use_id`/`pending_tool_name`/`pending_classification`/`pending_since_utc`(+`_local`) (all `null` on a normal lane), `depth`, `skipped_lines`; plus on demand `returned_message` + `returned_message_source`, `files_changed[]`, and `children[]`. **Frozen-lane detection:** when a subagent's NEWEST meaningful record is an UNRETURNED `tool_use` (no following `tool_result` for its id — a permission escalation leaves NO jsonl trace, the lane just freezes there), `status` is forced `running` (NEVER `completed` — overriding the end-of-turn-text walk-back, which would otherwise read the assistant text PRECEDING the frozen tool_use as a clean finish) and `pending_classification` ∈ {`escalation-blocked`, `awaiting-execution`}: `escalation-blocked` iff the pending Bash command is one CC's `dangerous-rm` classifier ([`bash_danger`], a 1:1 lexical port of the 2.1.x binary's `Ywa`/`egp`/`Zhp`) would HOIST for human approval even under bypass (≈ waiting for a Yes); else `awaiting-execution` (slow tool OR wedged — indistinguishable in jsonl; weigh elapsed-since-`pending_since_utc`). The JSON ALWAYS emits one object per session: `{session_id, workflow_runs:[{…manifest fields…, children:[node]}], agents:[node]}`. The ONE exception is a single `--agent <hex>` grab, which emits just the matched node as a bare object (no per-session envelope).
+**Per-subagent (node) fields emitted:** `agent_id` (bare hex, or a teammate `aName-<hex>` id — the name may itself carry dashes), `kind`, `parent_session_id`, `parent_agent_id` (the spawning agent for a nested subagent; `null` ⇒ a direct child of the session, depth 0), `spawn_tool_use_id`, `spawn_tool` (`Agent`/`Task`/`Workflow`), `workflow_id` (workflow only), `agent_type` (meta `agentType`, fallback the spawn's `subagent_type`), `description` (built-in meta, fallback the spawn's), `trigger_utc`/`trigger_local` (the true spawn instant), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration` (trigger→completion), `status`, the FROZEN-LANE fields `pending_tool_use_id`/`pending_tool_name`/`pending_classification`/`pending_since_utc`(+`_local`) (all `null` on a normal lane), `depth`, `skipped_lines`; plus on demand `returned_message` + `returned_message_source`, `files_changed[]`, and `children[]`. **Frozen-lane detection:** when a subagent's NEWEST meaningful record is an UNRETURNED `tool_use` (no following `tool_result` for its id — a permission escalation leaves NO jsonl trace, the lane just freezes there), `status` is forced `running` (NEVER `completed` — overriding the end-of-turn-text walk-back, which would otherwise read the assistant text PRECEDING the frozen tool_use as a clean finish) and `pending_classification` ∈ {`escalation-blocked`, `awaiting-execution`}: `escalation-blocked` iff the pending Bash command is one CC's `dangerous-rm` classifier ([`bash_danger`], a 1:1 lexical port of the 2.1.x binary's `Ywa`/`egp`/`Zhp`) would HOIST for human approval even under bypass (≈ waiting for a Yes); else `awaiting-execution` (slow tool OR wedged — indistinguishable in jsonl; weigh elapsed-since-`pending_since_utc`). The JSON ALWAYS emits one object per session: `{session_id, workflow_runs:[{…manifest fields…, children:[node]}], agents:[node]}`. The ONE exception is a single `--agent <hex>` grab, which emits just the matched node as a bare object (no per-session envelope).
 
 **Status resolution (honest — never over-claims "failed"):** `completed` when a workflow `journal.jsonl` carries a `result` event for the agent OR the transcript terminates with a visible assistant end-of-turn message; `running` when records exist with a start but no completion signal; `unknown` when no timestamps are determinable.
 
@@ -613,7 +639,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 **Example invocations:**
 ```bash
 csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d            # one session's subagent tree (always)
-csift agents . --kind workflow                                # only workflow agents
+csift agents . --shape workflow                               # only workflow agents
 csift agents @<uuid> --since 2h                               # subagents TRIGGERED in the last 2h
 csift agents @<uuid> --since 09:00 --order-by completion      # COMPLETED since a bound
 csift agents @<uuid> --order-by completion                    # order/window on the completion axis
@@ -643,11 +669,11 @@ Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level parent session |
-| `--no-subagents` | bool | spans subagents | subagent scope: by default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only. `files` matches every other default-on command (`want_subagents()` → `SubagentScope::from(bool)`); this is the only span flag (no `--include-subagents`, no `--subagents-only`). |
+| `--no-subagents` | bool | spans subagents | subagent scope: by default attributes SUBAGENT mutations under the session (OMC fan-out edits happen there); `--no-subagents` = top-level only. `files` matches every other default-on command (`want_subagents()` → `SubagentScope::from(bool)`); the uniform pair is `--subagents`/`--no-subagents` (no `--subagents-only` mode). |
 | `--by <summary\|dir\|file\|timeline>` | value-enum | `summary` | detail level (below) |
 | `--regex RE` | string | none | keep only mutated paths whose **full absolute path** matches the Rust `regex` pattern ANYWHERE (used as-is; invalid pattern = hard error) |
 | `--glob PAT` | string | none | keep only mutated paths whose **full absolute path** matches the glob (`**` crosses `/`, via `globset`; invalid pattern = hard error) |
-| `--turn-range START..END` | string | none | inclusive 0-based turn range; **mutually exclusive** with `--since`/`--until` |
+| `--turn-range N\|START..END` | string | none | inclusive 0-based turn window (shared range-token grammar); INTERSECTS (AND) `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local) |
 | `--format text\|json` | enum | `text` | output format |
 
@@ -704,7 +730,7 @@ csift files @<uuid> --format json | jq 'select(.type=="edit_before_read_boundary
 | `--file ABS_PATH` \| `@plan` | string | none | the file to reconstruct (exact raw-string match + basename-suffix fallback); **REQUIRED** for every mode. The magic value `@plan` resolves the session-bound plan file (§6.7.1) and reconstructs it like any other file |
 | `--no-subagents` | bool | spans subagents | restrict to the top-level session; subagent transcripts are spanned by default (OMC fan-out edits happen there). The only span flag. |
 | `--salvage` / `--patches` / `--at WHEN` / `--coverage` (alias `--dry-run`) | clap group `mode` | restore (none set) | the reconstruction mode (mutually exclusive; with NONE set, the default restore mode applies) |
-| `--turn-range START..END` | string | none | inclusive 0-based turn range; mutually exclusive with `--since`/`--until` |
+| `--turn-range N\|START..END` | string | none | inclusive 0-based turn window (shared range-token grammar); INTERSECTS (AND) `--since`/`--until` |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 / relative) |
 | `--line-range START..END` | string | none | 1-based inclusive file-line span to restrict the reconstructed line space |
 | `--out PATH` | path | none | write the reconstructed artifact (snapshot / plan / concatenated patches) verbatim; the summary still prints to stdout |
@@ -774,7 +800,7 @@ csift recover @<uuid> --file @plan          # DUMP the plan's content (this subc
 
 **Selection vs render order.** Selection walks **backward from EOF** (recency-first) so the budget is spent on what a resumed agent most needs; the emitted document is sorted **ascending** so it reads as a forward transcript. The backward walk is **transparent to `isCompactSummary` boundaries** (a summary is a turn MEMBER, never a delimiter — §6.4 / model.rs), so it reaches back across multiple compaction boundaries by default (verified on real transcripts: a 40K-char ellipsized budget spans 26 boundaries on a 35-summary session; `--max-compactions N` caps the crossing count).
 
-**Budget allocation (two-phase).** `--budget <N>` (default 40000) bounds the whole reconstruction in chars (or tokens via `--budget-unit tokens`, ≈4 chars/token). `--round-trip-fraction <F>` (default 0.5) is a **hard floor**: Phase 1 spends `budget·F` ONLY on round-trip-complete turns (user && assistant-EOT), walking recency-first; Phase 2 fills the rest with whichever single sides remain, user-first (the user wording is the scarcer, higher-signal loss). Without the floor an assistant-heavy tail recovers ZERO user turns (measured on a real pulse-shaped tail). The `[N tool calls]` marker cost is charged per turn (omitted when 0). Determinism: recency = descending line_no, ties by descending turn_index.
+**Budget allocation (two-phase).** `--budget <N>` (default 40000) bounds the whole reconstruction in chars, always (sizing rule ≈4 chars/token; the former `--budget-unit tokens` mode is removed). `--round-trip-fraction <F>` (default 0.5) is a **hard floor**: Phase 1 spends `budget·F` ONLY on round-trip-complete turns (user && assistant-EOT), walking recency-first; Phase 2 fills the rest with whichever single sides remain, user-first (the user wording is the scarcer, higher-signal loss). Without the floor an assistant-heavy tail recovers ZERO user turns (measured on a real pulse-shaped tail). The `[N tool calls]` marker cost is charged per turn (omitted when 0). Determinism: recency = descending line_no, ties by descending turn_index.
 
 **Multi-agent-message richness (`--agent-msgs`).** A single user turn can own a LONG run of agent messages (a debugging/build chain the model narrates step by step) that the summary clips to its single §9 quote. Each `TurnSlice` carries EVERY agent-text record (`agents: Vec<AgentMsg>`); a derived `assistant_eot()` (== `agents.last()`) keeps the EOT anchor for dedup/round-trip/render. `--agent-msgs` decides how much of the run to restore — four modes: **`longest`** (DEFAULT) keeps the LONGEST agent message (the best one-message proxy for "where the substance is" — the summary's single quote is the turn's LAST message, often a ~50-char throwaway wrap-up, while the real finding sits in a MIDDLE one) **+** the first-when-substantive **+** every rich middle, collapsing the rest (including a short non-rich last) into a placeholder; **`eot-only`** forces last-message-only — byte-identical to the pre-expansion single-EOT output (the escape hatch); **`rich`** keeps the last always + the first by position privilege + each non-droppable middle; **`all`** keeps every message. `longest` applies to every multi-message turn; `rich` only filters a LONG run (`agents.len() > --agent-run-threshold`, default 6). A message is **kept when "rich"** — a cheap single-pass OR of a length gate (`>= --agent-rich-min-chars`, default 280) and a signal test (a number-of-substance, a commit-hash-like hex, a `file.rs:NNN`/`src/…` ref, a backtick code span, or a finding/decision lexeme). **KEEP-ON-DOUBT** is the spine: only a short (`< --agent-declaration-max-chars`, default 200) signal-less intent-verb opener (`let me …`/`now i …`) is collapsed; anything uncertain is kept (a wrongly-kept declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A FUSED finding+declaration body trips a signal → kept WHOLE, its trailing declaration shed only by the char-ellipsis. A contiguous collapsed run renders as one `△ L{first}–L{last}  [X agent message(s), Y tool call(s)[, Z failed]]` placeholder carrying the fetchable line range + per-message attribution. `--keep-first` (default) keeps a turn's first message by position privilege **in `rich` mode** (`--no-keep-first` decides it as a middle); it has NO effect in `longest`, where the first is gated on length instead. `--profile heavy|light` bundles the thresholds (applied before the individual flags, explicit flag wins; the master `--agent-msgs` mode is unchanged, so `--profile heavy` alone still runs `longest`). Subagent transcripts get the SAME treatment via the shared selection path. The summed-cost == summed-emitted invariant holds with placeholders (the dropped bodies contribute zero cost; the placeholder line is charged like any emitted line).
 
@@ -786,7 +812,7 @@ csift recover @<uuid> --file @plan          # DUMP the plan's content (this subc
 
 **Chunked output for hook injection (`--slice <N>` / `--window <N>`).** A Claude Code `SessionStart` hook can inject at most **10,000 CHARACTERS** of `additionalContext` (over-cap output is replaced by a file-path + preview, so the body is lost), so a >10K reconstruction must be fanned across several hooks. `--slice <N>` prints ONLY the Nth (1-based) chunk of the verbatim DOCUMENT (the `--out` body — turn units + boundary banners, NO scope/header/footer chrome) after packing its lines greedily into `≤ --window`-CHARACTER chunks. `--window` defaults to 10000 and counts CHARACTERS (Unicode scalars — the unit the cap itself counts, so CJK prose is not 3× over-charged the way bytes would be), hard-splitting any single line longer than the window on a char boundary so no chunk ever exceeds it. Slicing is **deterministic** (same session + `--budget` ⇒ identical chunk boundaries; concatenating slices `1..K` reproduces the document byte-for-byte), so N independent `SessionStart(compact)` hooks each request their own slice and the lock/ordering lives in the hook shell. An out-of-range `N` prints nothing (exit 0); `--slice` is **text-only** and **mutually exclusive with `--out`** and with `--format json`; `--slice 0` or `--window 0` errors. **`--slices <N>` (FIXED-FLEET mode)** pins the chunk COUNT to match a fixed set of N registered `SessionStart` hooks: csift fills the N newest-first slices with WHOLE turns (the per-role 600/900 caps are dropped — a turn is ellipsized only if it ALONE exceeds one window) and DISCARDS the oldest overflow, so the count never drifts to 5/6/7 as the conversation grows (the hook count never needs re-tuning); the realized budget becomes `N × --window` and `--budget` is ignored, with `--slice i` still picking which chunk to print. Without `--slices`, `--slice` keeps its legacy budget-driven, variable-chunk-count behavior. Safe to fire on every compaction — the drop-and-re-inject cycle (the old injection is summarized away pre-boundary while `SessionStart('compact')` re-injects fresh) prevents context pile-up.
 
-**Windowing** matches §6.7: `--turn-range START..END` (inclusive, 0-based genuine-user order) is mutually exclusive with `--since`/`--until` (ISO8601 / relative).
+**Windowing** matches every sibling: `--turn-range N|START..END` (inclusive, 0-based genuine-user order) INTERSECTS (AND) `--since`/`--until` (ISO8601 / relative). **A target is REQUIRED** — `--budget` applies PER session, so a bare `csift turns` (0 targets ⇒ ALL projects everywhere else) would realize budget × every session of every project; it hard-errors with the valid target forms (`@<uuid>`/`@main`/`@<agent-id>`/project path/`--sessions-from`).
 
 **Example invocations:**
 ```bash
@@ -860,7 +886,7 @@ There is NO `pending` subcommand. Three elicitations BLOCK a session on a human 
 
 ### 6.11 `show` — fetch specific record(s) of ONE transcript
 
-`csift show TARGET (--line N|A-B,…)…|(--uuid U,…)… [--raw] [--format json]`
+`csift show TARGET (--line N|A..B,…)…|(--uuid U,…)… [--raw] [--format json]`
 
 The reader companion to `search` (search FINDS with match-centered excerpts; show
 FETCHES the records you NAME, full). TARGET resolves to exactly ONE transcript:
@@ -885,14 +911,16 @@ hard error naming the resolved path (csift never dumps a whole transcript).
 
 ### 6.12 `stats` — one-scan aggregates per session
 
-`csift stats [PATH|@…]… [--since W] [--until W] [--subagents|--no-subagents] [--format json]`
+`csift stats [PATH|@…]… [--since W] [--until W] [--turn-range N|A..B] [--sessions-from F] [--subagents|--no-subagents] [--format json]`
 
 Per session (spans subagents by default; each transcript is its own row): physical
 `lines`; `user_records`/`assistant_records`; `turns` (the shared §6.4 grouping);
 `compactions` (isCompactSummary count); first/last timestamps + duration; `tokens`
 per model (summed `message.usage` input/output/cache_read/cache_creation); `tools`
 call counts by tool_use name. `--since`/`--until` bound the COUNTED records (turn
-grouping runs over the windowed set). Text prints per-session blocks + a scope TOTAL
+grouping runs over the windowed set); `--turn-range` windows on the genuine-turn
+axis — indices computed over the FULL transcript (stable), then INTERSECTED (AND)
+with the time window. Text prints per-session blocks + a scope TOTAL
 block when >1 session; JSON is header + `kind:"session"` rows + a summary carrying
 scope totals (`sessions`, `turns`, merged `tools`/`tokens`, `skipped_lines`). One
 fixed shape — no view modes, no tuning flags.
@@ -943,7 +971,7 @@ Only lines passing **both** gates reach `serde_json::from_slice` → typed `Reco
 
 - **Across files/sessions:** `rayon` `par_iter` over the file list — the big win for `list` (2 437 files) and multi-target `search`. Each file is an independent mmap + scan; embarrassingly parallel; near-linear to core count. **This is the only parallelism csift needs by default.** rayon's default pool caps concurrency at core count, so at most N files are mmapped at once (virtual address space, not resident until touched).
 - **Within a single file:** ALSO parallelized (`parse::scan_lines_parallel` — newline-aligned chunks, exact 1-based line numbers, byte-identical results to the serial scan). This is what rescues the SINGLE-session target (`search`/`turns`/`files`/`recover` on one 200MB+ transcript), where the across-files fan-out degenerates to one core. Below 4 MiB it runs as a single chunk (split overhead isn't worth it).
-- **Determinism:** collect per-file results into a `Vec` indexed by input order; sort/merge after the parallel section so `text` and `--json` output are deterministic regardless of completion order.
+- **Determinism:** collect per-file results into a `Vec` indexed by input order; sort/merge after the parallel section so `text` and `--format json` output are deterministic regardless of completion order.
 - **`--max-count`:** cap per-file then globally, and **report the dropped count** — never silent truncation.
 
 ### 7f. Whole-file match gate (`search`)
@@ -1022,7 +1050,7 @@ Four prior tools were studied (ccdiag, claude-file-recovery, coding-agent-sessio
 | parameter | default | empirical basis |
 |---|---|---|
 | `--budget` | 40000 chars | a 1M-context session at 40–50% compaction comfortably recovers ~40K; a 200K context → ~10–15K |
-| `--budget-unit` | chars | tokens via ≈4 chars/token (a ~17K-char summary measured ≈ ~3.5–4.5K tokens) |
+| `--budget-unit` | REMOVED (v0.2) — `--budget` is chars, always | historical: tokens via ≈4 chars/token (a ~17K-char summary measured ≈ ~3.5–4.5K tokens) |
 | `--round-trip-fraction` | 0.5 | ~50% reservation guarantees the back-and-forth; without it an assistant-heavy tail recovers ZERO user turns (the 10K-verbatim case → `users=0`, below) |
 | `USER_CAP` | 600 | user text median 410 / p90 2,574 → 600 keeps the median whole, ellipsizes only the tail |
 | `ASST_CAP` | 900 | assistant-EOT natural-stop median 608–1,710 (1.45–2.16× the user side), more newlines → a larger cap |
