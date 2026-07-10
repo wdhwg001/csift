@@ -31,6 +31,11 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 webp = "0.3.1"
 color_quant = "1.1.0"
 aho-corasick = "1.1.4"
+# Global allocator swap (SPEC §7 performance contract): the scan paths allocate
+# per-record Strings across rayon workers, and macOS libmalloc contends hard under
+# multi-thread. mimalloc removes that bottleneck. No unsafe in THIS crate — the
+# `#[global_allocator]` registration in main.rs is a safe attribute.
+mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 # Installs a git pre-commit hook on first `cargo test`/build that runs the same

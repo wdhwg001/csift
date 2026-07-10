@@ -32,6 +32,14 @@ use anyhow::Result;
 
 use crate::cli::{parse_argv, Cli, Command};
 
+/// Global allocator: mimalloc. The scan paths (search/turns/files/recover) allocate
+/// per-record Strings from many rayon workers at once; macOS's default libmalloc
+/// serializes under that load (nanov2/tiny-malloc lock contention shows up directly
+/// in profiles). mimalloc's per-thread heaps remove the contention — a measured
+/// multi-subcommand win with zero behaviour change (SPEC §7 performance contract).
+#[global_allocator]
+static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() -> ExitCode {
     // `parse_argv` wraps clap with an argv-normalization pass so a `--format`/`--kind`
     // flag works in ANY position relative to a leading-`-` encoded project target
