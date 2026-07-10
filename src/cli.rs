@@ -385,6 +385,9 @@ pub enum Command {
     List(ListArgs),
     /// Regex-search sessions, returning complete request/response round-trip exchanges.
     Search(SearchArgs),
+    /// Fetch specific record(s) of ONE transcript by line number / record uuid — rendered
+    /// full, or verbatim raw jsonl with `--raw`.
+    Show(ShowArgs),
     /// Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID, falling back
     /// to CODEX_COMPANION_SESSION_ID).
     Whoami(WhoamiArgs),
@@ -621,7 +624,7 @@ impl ListArgs {
     }
 }
 
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, Args, Default)]
 #[command(
     long_about = "Regex-search transcripts, returning the COMPLETE round-trip exchange \
         containing each hit — never a bare fragment. A turn is delimited by a genuine \
@@ -670,8 +673,6 @@ impl ListArgs {
           csift search \"panic\" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c idiom)\n  \
-          csift search \"\" @<uuid> --no-subagents --line 88     # fetch a record by line (FULL)\n  \
-          csift search \"\" @<parent> --line 7f3c9e21:88,495-500 # …in a SUBAGENT transcript (hex-prefixed --line)\n  \
           csift search \"let's chat\" -t user --siblings 3        # the match WITH up to 3 sibling records\n  \
           csift search \"let's chat\" -t user --siblings agent.message:1  # …only the agent-message sibling (cap 1)\n  \
           csift search \"let's chat\" -t user --siblings agent.message:1 --no-truncate  # …and READ that reply end-to-end\n\n\
@@ -854,26 +855,6 @@ pub struct SearchArgs {
     #[arg(long)]
     pub no_truncate: bool,
 
-    /// ADDRESS by physical line(s): fetch the record(s) at these 1-based line numbers / ranges
-    /// instead of (or as well as) pattern-matching — the permission-friendly alternative to
-    /// `Read`-ing the raw jsonl, built for BATCH. Repeatable AND comma-delimited, each token
-    /// `N` or `A-B` (inclusive, ascending): `--line 87,495-500,992`. Addressed records render
-    /// FULL. Lines are per-file, so `--line` needs the scope to pin a SINGLE transcript
-    /// (`@<uuid>` [`--no-subagents`]); to address a SUBAGENT transcript, prefix the FIRST token
-    /// with its bare hex `<hex>:<spec>` (e.g. `--line 7f3c9e21:88,495-500` → subagent `7f3c9e21`,
-    /// lines 88,495-500). All hex-bearing tokens must name the SAME transcript (lines address
-    /// ONE file). A range CLAMPS to the file; an EXPLICIT line that resolves to nothing is
-    /// reported as `unresolved`.
-    #[arg(long, value_name = "SPEC", value_delimiter = ',')]
-    pub line: Vec<String>,
-
-    /// ADDRESS by record `uuid`(s) (globally unique) — fetch those exact records, FULL.
-    /// Repeatable AND comma-delimited (`--uuid a,b` or `--uuid a --uuid b`). Scope is optional
-    /// (uuid is global) but an `@<uuid>`/PATH scope makes the scan fast. A uuid that resolves
-    /// to nothing is reported as `unresolved`.
-    #[arg(long, value_name = "UUID", value_delimiter = ',')]
-    pub uuid: Vec<String>,
-
     /// Resolve `<persisted-output>` pointers to their `tool-results/<id>.txt` file.
     #[arg(long)]
     pub resolve_persisted: bool,
@@ -897,6 +878,64 @@ impl SearchArgs {
     pub fn targets(&self) -> Vec<PathBuf> {
         self.paths.clone()
     }
+}
+
+/// `csift show` — fetch specific record(s) of ONE transcript, rendered full (or raw).
+#[derive(Args, Debug)]
+#[command(
+    about = "Fetch record(s) of ONE transcript by line number / record uuid — the reader \
+             companion to `search` (search FINDS and shows match-centered excerpts; show \
+             FETCHES the records you name, full)",
+    long_about = "Fetch the record(s) at specific 1-based jsonl line number(s) (the `Lnnnn` \
+        every csift surface prints) and/or record uuid(s), from exactly ONE transcript. \
+        Default output renders each record FULL (label + timestamp + complete text — the \
+        permission-friendly alternative to `Read`-ing the raw jsonl). `--raw` emits the \
+        VERBATIM raw jsonl line(s) instead — the escape hatch for inspecting fields csift \
+        does not render (usage tokens, stop_reason, model, …).",
+    after_help = "EXAMPLES\n  \
+          csift show @<uuid> --line 46550                # the record at line 46550, full\n  \
+          csift show @<uuid> --line 87,495-500,992       # several lines + ranges\n  \
+          csift show @<agent-id> --line 88               # a SUBAGENT transcript (id from `csift agents`)\n  \
+          csift show @<uuid> --uuid <record-uuid>        # by record uuid\n  \
+          csift show @<uuid> --line 46550 --raw          # the verbatim raw jsonl line\n\n\
+        TARGET — exactly ONE transcript\n  \
+          `@<uuid>` / `@<uuid-prefix>` → that top-level transcript (never spans subagents); \
+        `@<agent-id>` (from `csift agents`) → that subagent transcript; a `*.jsonl` path → \
+        that file. A target resolving to more or fewer than one transcript is a hard error — \
+        line numbers address one file.\n\n\
+        ADDRESSING + EXIT\n  \
+          `--line` tokens are `N` or `A-B` (1-based, inclusive, ascending; repeatable / \
+        comma-joined). An explicitly named line/uuid that resolves to no record is a HARD \
+        ERROR (exit non-zero); a range CLAMPS to the file but erroring if it yields nothing. \
+        A pending-elicitation record merged from the sidecar has no physical line — address \
+        it by `--uuid` (it renders `(elicitation sidecar)` in place of `Lnnnn`).\n\n\
+        RAW MODE\n  \
+          `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
+        torn line — that is the point). It is mutually exclusive with `--format json` (raw \
+        IS the file's own JSON) and reads the transcript file only (no sidecar merge)."
+)]
+pub struct ShowArgs {
+    /// ONE transcript: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | a `*.jsonl` path.
+    #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true)]
+    pub target: std::path::PathBuf,
+
+    /// 1-based jsonl line number(s): `N` or `A-B` (inclusive), repeatable / comma-joined
+    /// (`--line 87,495-500,992`).
+    #[arg(long, value_name = "SPEC", value_delimiter = ',')]
+    pub line: Vec<String>,
+
+    /// Record uuid(s), repeatable / comma-joined.
+    #[arg(long, value_name = "UUID", value_delimiter = ',')]
+    pub uuid: Vec<String>,
+
+    /// Emit the VERBATIM raw jsonl line(s) instead of the rendered record view
+    /// (mutually exclusive with `--format json`).
+    #[arg(long)]
+    pub raw: bool,
+
+    /// Emit JSON instead of the rendered text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
 }
 
 /// Which subagent kinds to surface in `agents`. Mirrors the on-disk discriminator

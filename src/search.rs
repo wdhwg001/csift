@@ -43,8 +43,8 @@ use crate::model::{
     ClassifyCtx, Content, PlanIndex, Record, SpawnLookup,
 };
 use crate::parse::mmap_bytes;
-use crate::path::{self, Caller, SubagentScope};
-use crate::subagent::{discover_subagents, is_subagent_path, session_id_from_path};
+use crate::path::{self};
+use crate::subagent::{discover_subagents, is_subagent_path};
 use crate::time_window::TimeWindow;
 use crate::timez::{format_local_compact, local_iso};
 
@@ -170,10 +170,6 @@ pub struct SearchOutcome {
     /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).
     pub scope_top: usize,
     pub scope_sub: usize,
-    /// EXPLICITLY requested addresses (`--line N` singletons / `--uuid U`) that resolved to no
-    /// record — surfaced as an `unresolved:` line so an addressing batch is gap-aware. Empty
-    /// for a normal (non-addressing) search. Each entry is a render-ready token (`L999` / a uuid).
-    pub unresolved: Vec<String>,
 }
 
 /// A compiled pattern + flags, plus the optional literal prefilter needle.
@@ -245,6 +241,18 @@ impl Prefilter {
 }
 
 impl Matcher {
+    /// The PURE-FILTER matcher (no regex, no prefilter): every text matches. Used for
+    /// `--siblings` rendering and as `csift show`'s fetch matcher (an addressed record
+    /// always emits).
+    pub(crate) fn pure() -> Matcher {
+        Matcher {
+            regex: None,
+            prefilter: None,
+            synth_verifiable: Vec::new(),
+            synth_conservative: Vec::new(),
+        }
+    }
+
     /// True when the pattern is empty (pure filter — matches any text).
     fn is_pure_filter(&self) -> bool {
         self.regex.is_none()
@@ -562,16 +570,12 @@ fn json_escapes_in_string(c: char) -> bool {
 /// Record-address selectors (`--line` / `--uuid`) parsed into membership sets — the "fetch
 /// THESE records" filter that turns `search` into the in-permission message-getter. Active when
 /// either set is non-empty; a record is addressed when its physical line OR uuid is in range.
-struct AddressSet {
-    lines: BTreeSet<usize>,
-    uuids: BTreeSet<String>,
+pub(crate) struct AddressSet {
+    pub(crate) lines: BTreeSet<usize>,
+    pub(crate) uuids: BTreeSet<String>,
 }
 
 impl AddressSet {
-    fn is_active(&self) -> bool {
-        !self.lines.is_empty() || !self.uuids.is_empty()
-    }
-
     fn addresses(&self, kept: &Kept) -> bool {
         (!self.lines.is_empty() && self.lines.contains(&kept.line_no))
             || (!self.uuids.is_empty()
@@ -580,132 +584,6 @@ impl AddressSet {
                     .uuid
                     .as_deref()
                     .is_some_and(|u| self.uuids.contains(u)))
-    }
-}
-
-/// An optional single subagent hex (parsed from a `--line <hex>:<spec>` prefix) plus the
-/// ordered `(line, from_range)` addresses.
-type ParsedLineSpecs = (Option<String>, Vec<(usize, bool)>);
-
-/// Parse `--line` tokens (already comma-split by clap) into an OPTIONAL single subagent hex
-/// prefix + ordered `(line, from_range)` addresses. A token carrying a `:` pins a SUBAGENT
-/// transcript: the part before the colon MUST be a bare subagent hex (as `csift agents` prints),
-/// the part after is the usual `N` / `A-B` spec. Every hex-bearing token must name the SAME hex
-/// (lines address ONE transcript) — a second, different hex is a hard error. A bare token
-/// (no colon) is a top-level line spec. `N` → one EXPLICIT line; `A-B` → an ascending inclusive
-/// RANGE (range members are non-explicit, so a miss inside a range is silent, not `unresolved`).
-/// Duplicates collapse to their first occurrence.
-fn parse_line_specs(tokens: &[String]) -> Result<ParsedLineSpecs> {
-    let mut out: Vec<(usize, bool)> = Vec::new();
-    let mut seen: BTreeSet<usize> = BTreeSet::new();
-    let mut hex: Option<String> = None;
-    for tok in tokens {
-        let raw = tok.trim();
-        if raw.is_empty() {
-            continue;
-        }
-        // A `<id>:<spec>` token pins one subagent transcript; the id must be a subagent id (a
-        // bare hex OR a name-embedded teammate id) and all id-bearing tokens must agree on the
-        // SAME id. The split is on the FIRST `:` — safe because a subagent id never contains one.
-        let t = if let Some((prefix, rest)) = raw.split_once(':') {
-            let prefix = prefix.trim();
-            if !crate::path::is_subagent_id(prefix) {
-                bail!(
-                    "--line: '{raw}' — the part before ':' must be a subagent id from \
-                     `csift agents` (a bare hex, or a name-embedded teammate id like \
-                     `aVSRepro-68a2a1661c9390c1`)"
-                );
-            }
-            match &hex {
-                Some(prev) if prev != prefix => {
-                    bail!("--line: all addressed lines must be in ONE transcript")
-                }
-                _ => hex = Some(prefix.to_string()),
-            }
-            rest.trim()
-        } else {
-            raw
-        };
-        if t.is_empty() {
-            continue;
-        }
-        if let Some((a, b)) = t.split_once('-') {
-            let a: usize = a
-                .trim()
-                .parse()
-                .map_err(|_| anyhow!("--line: '{t}' is not a valid range (want A-B, 1-based)"))?;
-            let b: usize = b
-                .trim()
-                .parse()
-                .map_err(|_| anyhow!("--line: '{t}' is not a valid range (want A-B, 1-based)"))?;
-            if a == 0 || b == 0 {
-                bail!("--line: lines are 1-based; '{t}' includes line 0");
-            }
-            if a > b {
-                bail!("--line: range '{t}' is descending — write it ascending (A-B with A ≤ B)");
-            }
-            for n in a..=b {
-                if seen.insert(n) {
-                    out.push((n, true));
-                }
-            }
-        } else {
-            let n: usize = t
-                .parse()
-                .map_err(|_| anyhow!("--line: '{t}' is not a line number or A-B range"))?;
-            if n == 0 {
-                bail!("--line: lines are 1-based; line 0 does not exist");
-            }
-            if seen.insert(n) {
-                out.push((n, false));
-            }
-        }
-    }
-    if out.is_empty() {
-        bail!("--line: no line numbers given");
-    }
-    Ok((hex, out))
-}
-
-/// Resolve the scope to exactly ONE transcript for `--line` addressing (lines are per-file).
-/// A `Some(hex)` (parsed from a `--line <hex>:<spec>` prefix) pins that SUBAGENT transcript;
-/// `None` pins the top-level one. Fail-CLOSED: an unmatched hex or an ambiguous/empty scope is a
-/// pointed error, never a silent widen to the whole corpus.
-fn resolve_single_transcript(args: &SearchArgs, subagent_hex: Option<&str>) -> Result<PathBuf> {
-    let scope = if subagent_hex.is_some() {
-        SubagentScope::WithSubagents
-    } else {
-        SubagentScope::TopLevelOnly
-    };
-    let files = path::resolve_session_files(&args.targets(), scope, Caller::Other)?;
-    let target: Vec<PathBuf> = if let Some(hex) = subagent_hex {
-        files
-            .into_iter()
-            .filter(|p| is_subagent_path(p) && session_id_from_path(p) == hex)
-            .collect()
-    } else {
-        files.into_iter().filter(|p| !is_subagent_path(p)).collect()
-    };
-    match target.as_slice() {
-        [one] => Ok(one.clone()),
-        [] => {
-            if let Some(hex) = subagent_hex {
-                bail!(
-                    "--line: no subagent transcript `{hex}` found in scope — pass its parent \
-                     `@<uuid>` and check the hex with `csift agents`"
-                )
-            }
-            bail!(
-                "--line: the scope resolves to no single transcript — add `@<uuid>` \
-                 (lines of WHICH session?)"
-            )
-        }
-        many => bail!(
-            "--line is ambiguous: the scope resolves to {} transcripts. Narrow it with \
-             `@<uuid> --no-subagents` (or address a subagent via `--line <hex>:<spec>`) so the \
-             line numbers name one file.",
-            many.len()
-        ),
     }
 }
 
@@ -736,30 +614,12 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         .iter()
         .filter_map(|p| p.to_str())
         .any(path::pins_single_session);
-    // ── Address selectors (`--line` / `--uuid`): "fetch THESE records" (rendered full) ──
-    // `--line` may carry a `<hex>:<spec>` subagent prefix → an optional single subagent hex.
-    let (line_subagent_hex, line_specs) = if args.line.is_empty() {
-        (None, Vec::new())
-    } else {
-        parse_line_specs(&args.line)?
-    };
-    let address = AddressSet {
-        lines: line_specs.iter().map(|&(n, _)| n).collect(),
-        uuids: args
-            .uuid
-            .iter()
-            .map(|u| u.trim().to_string())
-            .filter(|u| !u.is_empty())
-            .collect(),
-    };
-
     let matcher = build_matcher(args)?;
     if matcher.is_pure_filter()
         && args.categories.is_empty()
         && turn_range.is_none()
         && time_window.is_unbounded()
         && !has_session_filter
-        && !address.is_active()
     {
         eprintln!(
             "csift: warning: empty pattern with no category/time/turn/session filter \
@@ -767,24 +627,13 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         );
     }
 
-    // ── Resolve targets → session files. `--line` addressing is PER-FILE and pins one
-    //    transcript (the top-level one by default, or a SUBAGENT when a `--line <hex>:<spec>`
-    //    prefix names one) ⇒ the single-transcript resolver (which fail-CLOSES: an unmatched hex
-    //    errors, never widens scope to the whole corpus). Everything else uses the shared
-    //    (optionally subagent-spanning) resolver. ──
-    let session_files = if !args.line.is_empty() {
-        vec![resolve_single_transcript(
-            args,
-            line_subagent_hex.as_deref(),
-        )?]
-    } else {
-        path::resolve_session_files(
-            &args.targets(),
-            args.want_subagents().into(),
-            path::Caller::Other,
-        )?
-    };
-    let address_opt = address.is_active().then_some(&address);
+    // ── Resolve targets → session files via the shared (optionally subagent-spanning)
+    //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.) ──
+    let session_files = path::resolve_session_files(
+        &args.targets(),
+        args.want_subagents().into(),
+        path::Caller::Other,
+    )?;
 
     // `--siblings <SPEC>`: parse the repeatable caps ONCE here (a malformed spec is a hard
     // error, surfaced before any scan). `None` ⇒ siblings off. Parsed up front so the per-file
@@ -817,7 +666,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 &matcher,
                 turn_range.as_ref(),
                 &time_window,
-                address_opt,
+                None,
                 sibling_caps.as_ref(),
                 &spawn_map,
             )
@@ -863,32 +712,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     }
     outcome.exchanges = all;
 
-    // ── Addressing gap-awareness: which EXPLICITLY-requested addresses produced no record? ──
-    if address.is_active() {
-        let mut hit_lines: BTreeSet<usize> = BTreeSet::new();
-        let mut hit_uuids: BTreeSet<&str> = BTreeSet::new();
-        for ex in &outcome.exchanges {
-            for h in ex.hits.iter().chain(ex.siblings.iter()) {
-                hit_lines.insert(h.line);
-                if let Some(u) = h.uuid.as_deref() {
-                    hit_uuids.insert(u);
-                }
-            }
-        }
-        // Explicit `--line N` singletons (range members are clamped, not reported) …
-        for &(n, from_range) in &line_specs {
-            if !from_range && !hit_lines.contains(&n) {
-                outcome.unresolved.push(format!("L{n}"));
-            }
-        }
-        // … and every requested `--uuid`.
-        for u in &address.uuids {
-            if !hit_uuids.contains(u.as_str()) {
-                outcome.unresolved.push(format!("uuid {u}"));
-            }
-        }
-    }
-
     // `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
     // `--max-count`), the ripgrep `-c` idiom — no per-exchange output.
     if args.count_only {
@@ -910,7 +733,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
 /// True when ANY emitted hit/sibling came from the elicitation sidecar (§3.10) — drives the
 /// `with elicitation sidecar` note so a consumer knows the output includes hook-backfilled
 /// records, not raw native jsonl.
-fn merged_any_sidecar(exchanges: &[Exchange]) -> bool {
+pub(crate) fn merged_any_sidecar(exchanges: &[Exchange]) -> bool {
     exchanges.iter().any(|ex| {
         ex.hits
             .iter()
@@ -980,6 +803,36 @@ struct Kept {
     /// the native jsonl. Such a record has no physical `line_no` (0); its hits render
     /// `(elicitation sidecar)` instead of `Lnnnn`.
     from_sidecar: bool,
+}
+
+/// `csift show`'s fetch engine: the ADDRESSED records of exactly ONE transcript, rendered
+/// FULL through the same per-record pipeline `search` uses (classify, plan pointers, tool
+/// pairing, elicitation-sidecar merge) with the pure matcher, so every addressed record
+/// emits regardless of any pattern. Returns the addressed exchanges + the malformed count.
+pub(crate) fn fetch_records(
+    path: &Path,
+    lines: BTreeSet<usize>,
+    uuids: BTreeSet<String>,
+) -> Result<(Vec<Exchange>, usize)> {
+    let args = SearchArgs::default();
+    let matcher = Matcher::pure();
+    let address = AddressSet { lines, uuids };
+    let time_window = TimeWindow::from_args(None, None)?;
+    let mut spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
+    spawn_map
+        .entry(discovery_root_for(path))
+        .or_insert_with_key(|root| build_spawn_lookup(root).map(Arc::new));
+    let fr = search_one_file(
+        path,
+        &args,
+        &matcher,
+        None,
+        &time_window,
+        Some(&address),
+        None,
+        &spawn_map,
+    )?;
+    Ok((fr.exchanges, fr.skipped_lines))
 }
 
 /// Scan a single session file: prefilter → parse → delimit turns → match → stitch.
@@ -1726,12 +1579,7 @@ fn collect_turn_siblings(
     if eligible.is_empty() && caps.bare.is_none() {
         return Vec::new();
     }
-    let pure = Matcher {
-        regex: None,
-        prefilter: None,
-        synth_verifiable: Vec::new(),
-        synth_conservative: Vec::new(),
-    };
+    let pure = Matcher::pure();
     let mut sibs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
         if hit_idxs.contains(&i) {
@@ -2348,7 +2196,7 @@ fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
 /// Glyph for the ROLE a hit sits on (GOLD §6): `◂` user, `▸` agent, `⚙` harness machinery.
 /// (`⚙`/gear is the chosen distinct harness marker — visually separate from the two
 /// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.)
-fn role_glyph(class: Class) -> char {
+pub(crate) fn role_glyph(class: Class) -> char {
     match class.role() {
         crate::model::Role::User => '◂',
         crate::model::Role::Agent => '▸',
@@ -2385,7 +2233,6 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     if outcome.exchanges.is_empty() {
         println!("no matching exchanges");
-        emit_unresolved(&outcome.unresolved);
         if outcome.skipped_lines > 0 {
             println!("({})", crate::text::malformed_note(outcome.skipped_lines));
         }
@@ -2462,7 +2309,6 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     if merged_any_sidecar(&outcome.exchanges) {
         println!("with elicitation sidecar");
     }
-    emit_unresolved(&outcome.unresolved);
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
@@ -2489,8 +2335,8 @@ fn emit_truncation_caution() {
     );
     println!("  whole records: re-run with --no-truncate");
     println!(
-        "  one record in full: --line <N> (the L<n> shown on a row) or --uuid <U> (uuids via \
-         --format json)"
+        "  one record in full: csift show <@session|@agent-id> --line <N> (the L<n> shown on \
+         a row) or --uuid <U>"
     );
 }
 
@@ -2498,7 +2344,7 @@ fn emit_truncation_caution() {
 /// newlines are already collapsed to single spaces). `marker` is the role glyph for a match or a
 /// dim `·` for a `--siblings` context record; `<label>` is the dotted path with the GOLD §4/§7
 /// `⇨`/`▹` decorations ([`render_label`]).
-fn print_record_line(marker: char, h: &Hit) {
+pub(crate) fn print_record_line(marker: char, h: &Hit) {
     let label = render_label(h);
     let name = h
         .tool_name
@@ -2529,11 +2375,13 @@ fn image_suffix(ids: &[String]) -> String {
     format!("  [{} {}: {}]", ids.len(), noun, ids.join(", "))
 }
 
-/// Print the `unresolved:` line when an EXPLICIT address (`--line N` / `--uuid U`) matched no
-/// record — so an addressing batch is gap-aware. No-op when nothing is unresolved.
-fn emit_unresolved(unresolved: &[String]) {
-    if !unresolved.is_empty() {
-        println!("unresolved: {}", unresolved.join(", "));
+/// The JSON rendering of a tool hit's `▹` pairing state (shared with `show`).
+pub(crate) fn pairing_json(p: Option<Pairing>) -> serde_json::Value {
+    match p {
+        Some(Pairing::Paired) => serde_json::json!("paired"),
+        Some(Pairing::PendingNoResult) => serde_json::json!("pending"),
+        Some(Pairing::OrphanResult) => serde_json::json!("orphan"),
+        None => serde_json::Value::Null,
     }
 }
 
@@ -2546,12 +2394,7 @@ fn hit_json(h: &Hit) -> serde_json::Value {
         None => (serde_json::Value::Null, serde_json::Value::Null),
     };
     // Tool pairing (GOLD §7): the `▹` join state of an agent.tool.use/result hit, else null.
-    let pairing = match h.pair {
-        Some(Pairing::Paired) => serde_json::json!("paired"),
-        Some(Pairing::PendingNoResult) => serde_json::json!("pending"),
-        Some(Pairing::OrphanResult) => serde_json::json!("orphan"),
-        None => serde_json::Value::Null,
-    };
+    let pairing = pairing_json(h.pair);
     serde_json::json!({
         // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
         "label": h.class.path(),
@@ -2618,14 +2461,12 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         println!("{}", serde_json::to_string(&obj)?);
     }
     // Trailing summary object (SPEC §8.2). `sessions` (distinct matching sessions) rides
-    // alongside `matched` — the same cheap always-on total the text footer carries; `unresolved`
-    // lists explicit addresses (`--line`/`--uuid`) that matched no record (empty in a normal run).
+    // alongside `matched` — the same cheap always-on total the text footer carries.
     let summary = json!({
         "matched": outcome.exchanges.len(),
         "sessions": distinct_session_count(&outcome.exchanges),
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
-        "unresolved": outcome.unresolved,
         // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) — the
         // machine echo of the `with elicitation sidecar` text note.
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
@@ -2658,8 +2499,6 @@ mod tests {
             count_only: false,
             siblings: Vec::new(),
             no_truncate: false,
-            line: Vec::new(),
-            uuid: Vec::new(),
             resolve_persisted: false,
             no_subagents: false,
             format: OutputFormat::Text,

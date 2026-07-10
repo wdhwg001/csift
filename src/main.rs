@@ -19,6 +19,7 @@ mod plan;
 mod recover;
 mod search;
 mod session;
+mod show;
 mod subagent;
 mod text;
 mod time_window;
@@ -65,6 +66,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::List(args) => session::run_list(&args),
         Command::Search(args) => search::run_search(&args),
+        Command::Show(args) => show::run_show(&args),
         Command::Whoami(args) => whoami::run_whoami(&args),
         Command::Agents(args) => agents::run_agents(&args),
         Command::Files(args) => files::run_files(&args),

@@ -1083,20 +1083,13 @@ fn search_footer_always_reports_match_and_session_totals() {
     assert!(footer["matched"].as_u64().unwrap() >= 1);
 }
 
-// ── search addressing (the folded-in `get`): --line / --uuid fetch specific records, full ──
+// ── show: fetch specific records of ONE transcript by --line / --uuid (rendered full / raw) ──
 
 #[test]
-fn search_line_address_fetches_the_record_in_full() {
+fn show_line_fetches_the_record_in_full() {
     let h = populated_home();
-    // Fixture L1 = the opening user record. Addressing it (no pattern) returns it FULL.
-    let out = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "1",
-    ]);
+    // Fixture L1 = the opening user record. Addressing it returns it FULL.
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("◂ user.message  L1  "),
@@ -1108,20 +1101,18 @@ fn search_line_address_fetches_the_record_in_full() {
         "the full body: {}",
         out.stdout
     );
+    assert!(
+        out.stdout.contains(&format!("SESSION {SESS}")),
+        "the transcript banner: {}",
+        out.stdout
+    );
 }
 
 #[test]
-fn search_line_address_renders_uncapped() {
+fn show_line_renders_uncapped() {
     let h = populated_home();
-    // L2 = the assistant thinking + agent-text record. Addressed → full (no excerpt cap).
-    let out = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "2",
-    ]);
+    // L2 = the assistant thinking + agent-text record. Fetched → full (no excerpt cap).
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "2"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout
@@ -1132,17 +1123,10 @@ fn search_line_address_renders_uncapped() {
 }
 
 #[test]
-fn search_multiple_lines_and_ranges_address_many_records() {
+fn show_multiple_lines_and_ranges() {
     let h = populated_home();
-    // L1 (turn 0) + L6 (turn 1) — distinct turns, both surfaced under the SAME session label.
-    let list = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "6,1",
-    ]);
+    // L1 (turn 0) + L6 (turn 1) — distinct turns, both fetched.
+    let list = h.run(&["show", at(SESS).as_str(), "--line", "6,1"]);
     assert!(list.success, "stderr: {}", list.stderr);
     assert!(
         list.stdout.contains("why is the carry needed?")
@@ -1151,14 +1135,7 @@ fn search_multiple_lines_and_ranges_address_many_records() {
         list.stdout
     );
     // A range expands to every record in span (L1-L7 are records; L8 malformed is skipped).
-    let range = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "1-7",
-    ]);
+    let range = h.run(&["show", at(SESS).as_str(), "--line", "1-7"]);
     assert!(range.success, "stderr: {}", range.stderr);
     assert!(
         range.stdout.contains("why is the carry needed?") && range.stdout.contains("No panic"),
@@ -1168,17 +1145,16 @@ fn search_multiple_lines_and_ranges_address_many_records() {
 }
 
 #[test]
-fn search_uuid_address_locates_records_anywhere() {
+fn show_uuid_addresses_records() {
     let h = populated_home();
-    // No scope → spans every project; the uuid selector pins exactly the requested record(s).
-    let one = h.run(&["search", "", "--uuid", "u0"]);
+    let one = h.run(&["show", at(SESS).as_str(), "--uuid", "u0"]);
     assert!(one.success, "stderr: {}", one.stderr);
     assert!(
         one.stdout.contains("why is the carry needed?"),
         "by uuid u0: {}",
         one.stdout
     );
-    let many = h.run(&["search", "", "--uuid", "u0,u1"]);
+    let many = h.run(&["show", at(SESS).as_str(), "--uuid", "u0,u1"]);
     assert!(many.success, "stderr: {}", many.stderr);
     assert!(
         many.stdout.contains("why is the carry needed?")
@@ -1189,102 +1165,115 @@ fn search_uuid_address_locates_records_anywhere() {
 }
 
 #[test]
-fn search_line_address_json_carries_full_address() {
+fn show_json_is_header_record_summary() {
     let h = populated_home();
-    let out = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "2",
-        "--format",
-        "json",
-    ]);
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "2", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The exchange object (the line carrying `hits`); each hit keeps its line + uuid address.
-    let ex: serde_json::Value = out
+    let rows: Vec<serde_json::Value> = out
         .stdout
         .lines()
         .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
-        .find(|v| v.get("hits").is_some())
-        .expect("an exchange object");
-    let hit0 = &ex["hits"][0];
-    assert_eq!(hit0["line"], 2);
-    assert_eq!(hit0["uuid"], "a0");
-}
-
-#[test]
-fn search_explicit_unresolved_line_is_reported() {
-    let h = populated_home();
-    // An EXPLICIT line past EOF resolves to nothing → an `unresolved:` line (text) and an
-    // `unresolved` array (json). `search` itself still exits 0 (a no-match is not an error).
-    let txt = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "999",
-    ]);
-    assert!(txt.success, "stderr: {}", txt.stderr);
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(rows.first().unwrap()["kind"], "header");
+    assert_eq!(rows.first().unwrap()["command"], "show");
+    assert_eq!(rows.last().unwrap()["kind"], "summary");
+    // One physical record yields one row PER rendered unit (thinking + message here).
+    let rec = rows
+        .iter()
+        .find(|v| v["kind"] == "record" && v["line"] == 2 && v["label"] == "agent.message")
+        .expect("the agent.message row for L2");
+    assert_eq!(rec["uuid"], "a0");
+    assert_eq!(rec["session_id"], SESS);
     assert!(
-        txt.stdout.contains("unresolved: L999"),
-        "the miss is reported: {}",
-        txt.stdout
+        rec["text"]
+            .as_str()
+            .unwrap()
+            .contains("The carry is the partial line at a chunk boundary."),
+        "full text on the row: {rec}"
     );
-    let js = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "1,999",
-        "--format",
-        "json",
-    ]);
-    let footer: serde_json::Value = serde_json::from_str(
-        js.stdout
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .next_back()
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(footer["unresolved"][0], "L999");
 }
 
 #[test]
-fn search_range_past_eof_is_clamped_not_reported() {
+fn show_explicit_miss_is_a_hard_error() {
     let h = populated_home();
-    // 6-1000: L6/L7 are records; L8 malformed; L9-1000 past EOF — all RANGE members, so the
-    // gaps are clamped silently (no `unresolved`), the present records returned.
-    let out = h.run(&[
-        "search",
-        "",
-        at(SESS).as_str(),
-        "--no-subagents",
-        "--line",
-        "6-1000",
-    ]);
+    // Address law: an explicitly named line that resolves to nothing is an ERROR.
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "999"]);
+    assert!(!out.success, "an explicit miss must fail: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no such record") && out.stderr.contains("L999"),
+        "the error names the miss: {}",
+        out.stderr
+    );
+    let uuid = h.run(&["show", at(SESS).as_str(), "--uuid", "no-such-uuid"]);
+    assert!(!uuid.success);
+    assert!(
+        uuid.stderr.contains("no-such-uuid"),
+        "the error names the uuid: {}",
+        uuid.stderr
+    );
+}
+
+#[test]
+fn show_range_clamps_but_errors_when_empty() {
+    let h = populated_home();
+    // 6-1000: L6/L7 are records; the rest of the range clamps silently.
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "6-1000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("now explain the panic path"),
         "{}",
         out.stdout
     );
+    // A range yielding ZERO records errors (addressing nothing is a miss, not an empty ok).
+    let empty = h.run(&["show", at(SESS).as_str(), "--line", "900-1000"]);
     assert!(
-        !out.stdout.contains("unresolved"),
-        "a range never reports its own gaps: {}",
-        out.stdout
+        !empty.success,
+        "a zero-yield range must fail: {}",
+        empty.stdout
+    );
+    assert!(empty.stderr.contains("no such record"), "{}", empty.stderr);
+}
+
+#[test]
+fn show_requires_an_address() {
+    let h = populated_home();
+    // No --line/--uuid → a pointed error naming the file (never a whole-transcript dump).
+    let out = h.run(&["show", at(SESS).as_str()]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("--line") && out.stderr.contains(".jsonl"),
+        "guidance + the resolved path: {}",
+        out.stderr
     );
 }
 
-// A self-contained fixture for `--line <hex>:<spec>` subagent addressing: a top-level session
-// that spawned ONE subagent whose bare hex is a realistic >=12-char id (a <12-char token would
-// not pass `is_bare_subagent_hex`, the gate the `<hex>:` prefix uses).
-fn line_hex_home() -> (Home, &'static str, &'static str) {
+#[test]
+fn show_raw_emits_the_verbatim_line() {
+    let h = populated_home();
+    // L8 is the fixture's MALFORMED line — raw emits its exact bytes (that is the point).
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "8", "--raw"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout, "{\"type\":\"user\",\"role\":\"user\" this is broken json after the marker}\n",
+        "verbatim bytes, trailing newline"
+    );
+    // raw + --format json is a pointed clash (raw IS the file's own JSON).
+    let clash = h.run(&[
+        "show",
+        at(SESS).as_str(),
+        "--line",
+        "8",
+        "--raw",
+        "--format",
+        "json",
+    ]);
+    assert!(!clash.success);
+    assert!(clash.stderr.contains("--raw"), "{}", clash.stderr);
+}
+
+// A fixture with ONE subagent whose bare hex is a realistic >=12-char id.
+fn show_subagent_home() -> (Home, &'static str, &'static str) {
     let enc = "-Users-testuser-Projects-linehex";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let hex = "aaa111bbb222ccc33"; // 17 hex, like real agent ids
@@ -1307,17 +1296,10 @@ fn line_hex_home() -> (Home, &'static str, &'static str) {
 }
 
 #[test]
-fn search_line_hex_addresses_the_subagent_transcript() {
-    // `--line <hex>:<spec>` pins ONE subagent transcript and addresses its lines (the
-    // `--subagent` flag was folded into `--line`). L1 of the subagent is its opening record.
-    let (h, sess, hex) = line_hex_home();
-    let out = h.run(&[
-        "search",
-        "",
-        at(sess).as_str(),
-        "--line",
-        &format!("{hex}:1"),
-    ]);
+fn show_subagent_target_addresses_its_transcript() {
+    // The TARGET names the transcript: `@<agent-id>` fetches from THAT subagent's file.
+    let (h, _sess, hex) = show_subagent_home();
+    let out = h.run(&["show", &format!("@{hex}"), "--line", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("sub: do the thing about carry"),
@@ -1325,52 +1307,38 @@ fn search_line_hex_addresses_the_subagent_transcript() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("subagent") && out.stdout.contains(hex),
-        "the label table marks it a subagent: {}",
+        out.stdout.contains(&format!("SUBAGENT {hex}")),
+        "the subagent banner: {}",
         out.stdout
     );
 }
 
 #[test]
-fn search_line_hex_unknown_fails_closed() {
-    // The fail-OPEN footgun: an unmatched `--line <hex>:<spec>` hex must ERROR (so the caller
-    // knows the scope is empty), never silently fall back to the top-level / whole corpus.
-    let (h, sess, _hex) = line_hex_home();
-    let out = h.run(&[
-        "search",
-        "",
-        at(sess).as_str(),
-        "--line",
-        "deadbeefdeadbeef0:1",
-    ]);
+fn show_unknown_agent_id_fails_closed() {
+    let (h, _sess, _hex) = show_subagent_home();
+    let out = h.run(&["show", "@deadbeefdeadbeef0", "--line", "1"]);
     assert!(
         !out.success,
-        "an unmatched --line hex must fail, not widen scope; stdout: {} stderr: {}",
-        out.stdout, out.stderr
-    );
-    assert!(
-        out.stderr.contains("--line") && out.stderr.contains("deadbeefdeadbeef0"),
-        "the error should name the flag + the unmatched hex: {}",
-        out.stderr
+        "an unmatched agent id must fail, never widen scope; stdout: {}",
+        out.stdout
     );
 }
 
 #[test]
-fn search_line_hex_must_name_one_transcript() {
-    // All hex-bearing `--line` tokens must agree on the SAME transcript: a second, different hex
-    // is a hard error.
-    let (h, sess, hex) = line_hex_home();
-    let out = h.run(&[
-        "search",
-        "",
-        at(sess).as_str(),
-        "--line",
-        &format!("{hex}:1,deadbeefdeadbeef0:2"),
-    ]);
-    assert!(!out.success, "two distinct hexes must error");
+fn show_multi_transcript_target_errors() {
+    // A project dir holding SEVERAL sessions is ambiguous — show needs exactly one.
+    // (A dir that unambiguously holds ONE top-level session is accepted, like the resolver
+    // everywhere else: unambiguous ⇒ resolved.)
+    let (h, _sess, _hex) = show_subagent_home();
+    h.write(
+        "-Users-testuser-Projects-linehex/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff.jsonl",
+        "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"second session\"}}\n",
+    );
+    let out = h.run(&["show", "-Users-testuser-Projects-linehex", "--line", "1"]);
+    assert!(!out.success);
     assert!(
         out.stderr.contains("ONE transcript"),
-        "the error should explain lines address one file: {}",
+        "the error explains the single-transcript law: {}",
         out.stderr
     );
 }
