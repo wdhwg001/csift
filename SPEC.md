@@ -371,6 +371,33 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.2 BREAKING-CHANGE LEDGER (authoritative — supersedes any conflicting older text
+> in this section).** The 0.2 ergonomics rework (0 backcompat, one-way-per-intent):
+> - **`show` (new, §6.11)** owns record FETCHING; `search --line/--uuid` (and the
+>   `<hex>:<spec>` pin) are REMOVED. `show --raw` emits verbatim jsonl line bytes.
+> - **`stats` (new, §6.12)**: one-scan per-session aggregates (tokens by model, tool
+>   counts, turns, span, compactions).
+> - **envelope v2 (§8.2)**: every `--format json` stream = ONE header line +
+>   kind-tagged rows + ONE summary line, no exceptions; the jsonl-line key is `line`
+>   everywhere; a boundary's classifier is `cause`; files' grouping key is always
+>   `path`; agents' bare-node `--agent` JSON special case is gone; whoami emits
+>   `identity` rows; turns' `skipped_lines` trailer folded into `summary`.
+> - **Flags**: `-t` long form is `--label` (category/selector vocabulary retired);
+>   `agents --kind` → `--shape` (+ node field `shape`); `recover --line-range` →
+>   `--file-lines`; span switches are the uniform pair `--subagents`/`--no-subagents`
+>   (turns' `--include-subagents` gone; agents rejects both); `turns --budget-unit` +
+>   the five tuning knobs (`--agent-run-threshold`, `--agent-rich-min-chars`,
+>   `--agent-declaration-max-chars`, `--keep-first`, `--no-keep-first`) are REMOVED
+>   (`--budget` is chars; `--profile heavy|light` is the whole tuning surface);
+>   `--siblings` is a zero-arg fixed policy (message units always; thinking≤2,
+>   tool.use≤3, tool.result≤3, harness≤2; overflow surfaces an explicit
+>   `(+N more · csift show …)` pointer + JSON `siblings_hidden`/`turn_lines`);
+>   `image --id` takes bare digits or `L<line>i<n>` (the `#N` input form errors).
+> - **Guardrails**: a bare id target errors "did you mean '@<id>'?"; a search PATTERN
+>   starting `@` errors; a uuid-shaped PATTERN notes on stderr; `--turn-range` now
+>   INTERSECTS `--since`/`--until`.
+
+
 > **Common conventions.** All timestamps display as **system-local timezone + raw UTC** side-by-side (e.g. `2026-06-07 15:43:00 AEST (2026-06-07T05:43:00.000Z)` on a machine in Sydney; the `<TZ>` abbrev and offset auto-track the detected local zone) via `jiff` (`TimeZone::system()`). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 
 ### 6.1 `list` — "which session is this?" fast index
@@ -790,7 +817,7 @@ csift turns . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 chu
 | flag / positional | type | default | meaning |
 |---|---|---|---|
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level session |
-| `--id ID` | repeatable + comma | none | address images by the `#N` handle (`--id #32,#33`; bare `32` == `#32`) or the exact `L<line>i<n>` locator (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Both forms are per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid> --no-subagents`). An ambiguous `#N` errors (above) |
+| `--id ID` | repeatable + comma | none | address images by the handle NUMBER as bare digits (`--id 32,33` — the `#N` the model saw; a `#`-prefixed input errors with "drop the #", because unquoted `#` is a shell comment) or the exact `L<line>i<n>` locator (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Both forms are per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid> --no-subagents`). An ambiguous handle errors (above) |
 | `--since` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`, system-local) — narrows the image set, a `#N` disambiguator |
 | `--turn-range A..B` | string | none | 0-based inclusive turn window — a per-transcript `#N` disambiguator (turn indices come from the shared §6.4 delimiter) |
 | `--uuid PREFIX` | string | none | restrict to the record whose uuid starts with this — a `#N` disambiguator (the uuid is shown in the ambiguity list / JSON) |
@@ -830,6 +857,45 @@ There is NO `pending` subcommand. Three elicitations BLOCK a session on a human 
 **Merge semantics (`crate::elicitation::unresolved_pending`).** Group the sidecar by `csiftKey`; a key with a `pending` and NO `resolved` is UNRESOLVED → its pending record is emitted (exactly the one MISSING from the native transcript — once resolved CC wrote the real record, so the pending is paired off and DROPPED ⇒ no duplicates, the auto-dedup is the whole point). **search / turns / list** read the sidecar when they read a TOP-LEVEL session (subagent transcripts have none — the sidecar is keyed by the top-level uuid) and merge the unresolved-pending records as native: `classify` labels a pending marker **`agent.tool.use`**, so `search` matches all three kinds under `-t agent.tool.use` (an AUQ/ExitPlanMode `tool_use` via its block; the MCP `system` record — which has no `tool_use` block — via a guarded `collect_record_hits` arm that matches its top-level `content` string and tags it `agent.tool.use` named by `csiftKind`, so `search MCPPROBE` / `-t agent.tool.use` find it; gated to a no-tool_use marker so AUQ/ExitPlanMode never double-emit), `turns` appends each as its own pending turn unit (ranked most-recent), `list` annotates the row + surfaces the pending kind. **files / recover** carry no file ops for these records (no output), so they deliberately do not read the sidecar. A merged record has NO physical line: it renders **`(elicitation sidecar)`** in place of `Lnnnn` (never a fabricated L) and carries JSON `source:"elicitation-sidecar"` + null `line`/`line_no`; every surface that merged ≥1 record emits the EXACT note **`with elicitation sidecar`** (JSON `with_elicitation_sidecar:true`). Malformed sidecar lines are skipped + COUNTED into that surface's `skipped_lines` (never silent); a missing sidecar dir/file ⇒ no merge (not an error); near-free when nothing is pending. **Targeting rejection:** `resolve_session_files` `bail!`s when a `*.jsonl` target `is_sidecar_path` (basename `elicitations.jsonl` OR a content-sniff where every line is a `csift`-marked record) — the sidecar is read automatically, never searched directly. Verified live on 2.1.191: the `pending` marker is written the instant the picker appears and persists through the entire wait while the native record stays buffered.
 
 ---
+
+### 6.11 `show` — fetch specific record(s) of ONE transcript
+
+`csift show TARGET (--line N|A-B,…)…|(--uuid U,…)… [--raw] [--format json]`
+
+The reader companion to `search` (search FINDS with match-centered excerpts; show
+FETCHES the records you NAME, full). TARGET resolves to exactly ONE transcript:
+`@<uuid>`/`@<uuid-prefix>` → that top-level file (never spans), `@<agent-id>` → that
+subagent's file, a `*.jsonl` path → itself; ≠1 file is a hard error. No selector is a
+hard error naming the resolved path (csift never dumps a whole transcript).
+
+- Rendered default: each addressed record FULL through search's per-record pipeline
+  (classify → labels, plan pointers, tool pairing, elicitation-sidecar merge; a record
+  yields one row per rendered unit). Only `role:user`/`role:assistant` message lines
+  are renderable — a metadata/attachment line misses with an error that points at
+  `--raw`.
+- `--raw`: the VERBATIM jsonl line bytes (malformed/torn lines included — that is the
+  point; the escape hatch for fields csift does not render). Mutually exclusive with
+  `--format json`; reads the transcript file only (no sidecar merge).
+- Exit law: an explicit `--line N`/`--uuid U` that resolves to nothing = hard error;
+  a range clamps to EOF but errors when it yields zero records.
+- JSON: header + `{"kind":"record", …trio…, turn_index, line(null for a sidecar
+  record), uuid, label, labels, tool_name, from, to, pairing, tool_use_id, source,
+  ts_utc/local, text, image_ids}` rows + summary
+  `{records, skipped_lines, with_elicitation_sidecar}`.
+
+### 6.12 `stats` — one-scan aggregates per session
+
+`csift stats [PATH|@…]… [--since W] [--until W] [--subagents|--no-subagents] [--format json]`
+
+Per session (spans subagents by default; each transcript is its own row): physical
+`lines`; `user_records`/`assistant_records`; `turns` (the shared §6.4 grouping);
+`compactions` (isCompactSummary count); first/last timestamps + duration; `tokens`
+per model (summed `message.usage` input/output/cache_read/cache_creation); `tools`
+call counts by tool_use name. `--since`/`--until` bound the COUNTED records (turn
+grouping runs over the windowed set). Text prints per-session blocks + a scope TOTAL
+block when >1 session; JSON is header + `kind:"session"` rows + a summary carrying
+scope totals (`sessions`, `turns`, merged `tools`/`tokens`, `skipped_lines`). One
+fixed shape — no view modes, no tuning flags.
 
 ## 7. Performance design (NON-FUNCTIONAL contract)
 
@@ -895,17 +961,27 @@ When stage-2 anchors a prefilter (7d) and the invocation is not an addressing fe
 - Excerpts truncated only with an explicit `… (+N chars)` marker (never silent).
 - Footers state match counts and **dropped counts** (`N dropped` when `--max-count` capped).
 
-### 8.2 `--json` — machine-readable
+### 8.2 `--format json` — envelope v2 (one shape for every command)
 
-One JSON object per emitted unit, deterministic order. Shapes mirror the in-memory types:
+Every JSON stream is EXACTLY three parts, no exceptions (S==0, `-c`, restore included):
 
-- **`list`** → one object per session: `{ session_id, path, cwd, version, git_branch, first_user:{ts_utc,ts_local,excerpt}|null, last_user:{…}|null, last_agent:{…}|null }` (mirrors `session::SessionSummary` + `MessagePreview`).
-- **`search`** → an optional leading `{kind:"session_header",…}` scope record (only when the scope spans ≥1 subagent), then one object per Exchange **in combined chronological order** (subagents interleaved by `ts_utc`): `{ session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, hits:[{label, labels:[…], excerpt, ts_utc, ts_local, tool_name, from, to, pairing, tool_use_id, line, uuid, source, image_ids:[…]}], record_uuids:[…] }` (mirrors `search::Exchange` + `Hit`; the matched leaf is `label`, the record's full set is `labels[]`; `from`/`to` non-null only on an `agent.communication.*` hit, `pairing`/`tool_use_id` only on a tool hit, `source:"elicitation-sidecar"` only on a merged pending marker; the envelope `ts_utc`/`ts_local` = the turn-opening `started_utc`, the key the timeline is sorted on — a per-hit `ts_utc` may be later for a deep tool_use match), followed by a trailing summary object `{ matched, dropped_by_cap, skipped_lines, with_elicitation_sidecar, excerpts_truncated }` (mirrors `search::SearchOutcome`; `excerpts_truncated` = ≥1 emitted excerpt was clipped to the cap — the machine echo of the text reader-caution, always false under `--no-truncate`/`--line`/`--uuid`).
-- **`whoami`** → `{ session_id, path? }`.
+1. `{"kind":"header","command":"<cmd>", …}` — the FIRST line, always. Span commands add
+   `sessions_in_scope`/`top_level_sessions`/`subagent_sessions`; `turns` adds its
+   budget/automation fields.
+2. Kind-tagged rows — list→`session`, search→`exchange`, show→`record`, stats→`session`,
+   files→`mutation|file|dir|bucket|boundary`, agents→`session`, turns→`turn|
+   compaction_boundary|collapsed_agents`, plan→`plan`, image→`image|extract`,
+   whoami→`identity`, recover→`coverage|segment|snapshot|restore|boundary`.
+3. `{"kind":"summary", …}` — the LAST line, always (even all-zero counts).
 
-JSON must be valid UTF-8; non-UTF-8 bytes in excerpts are lossily replaced (`String::from_utf8_lossy`), never panicked on.
+One reading idiom serves everything: `jq 'select(.kind=="<row>")'`; the summary is
+`tail -1 | jq`. Vocabulary: `kind` belongs to the envelope EXCLUSIVELY; the jsonl-line
+key is `line` (everywhere; `--file-lines` is the one FILE-line flag); a transcript's
+shape is `shape`; a boundary's what-changed classifier is `cause`; an automation
+pulse's class is its `trigger`. Every spanning row carries the id trio
+(`session_id`/`is_subagent`/`parent_session_id`) and timestamped rows carry
+`ts_utc`+`ts_local`. Whole-stream `json.load` fails by design — parse per line (NDJSON).
 
----
 
 ## 9. Non-functional gates & invariants (checklist)
 
