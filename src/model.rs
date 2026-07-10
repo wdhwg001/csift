@@ -289,18 +289,25 @@ pub struct Record {
     #[serde(default)]
     pub message: Option<Message>,
 
-    /// Structured echo on tool-result carriers (§4.6). Kept raw; we read
-    /// `persistedOutputPath`/`persistedOutputSize` from it for `--resolve-persisted`.
+    /// Structured echo on tool-result carriers (§4.6). Kept as UNPARSED raw JSON text
+    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries
+    /// the full file/output content a tool returned (≈20-25% of a candidate line's
+    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost
+    /// of every scanning subcommand. The hot paths consult only a handful of small
+    /// fields — read them via the [`Record::tur_probe`] typed probe (skips the huge
+    /// values without allocating); the one deep consumer (`recover`) parses the full
+    /// tree on demand via [`Record::tool_use_result_value`].
     #[serde(default, rename = "toolUseResult")]
-    pub tool_use_result: Option<serde_json::Value>,
+    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,
 
     /// Top-level `attachment` payload (a sibling of `message`, not a content block).
     /// Real records carry attachments for hook output, `edited_text_file` external
-    /// edits, `file` snapshots, etc. Kept RAW (like `tool_use_result`) and read only
-    /// by `recover` (file-reconstruction); additive + tolerant, so no other subcommand
-    /// changes behaviour.
+    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as
+    /// `tool_use_result` — attachments embed whole file snapshots) and read only by
+    /// `recover`/`plan` via [`Record::attachment_value`]; additive + tolerant, so no
+    /// other subcommand changes behaviour.
     #[serde(default)]
-    pub attachment: Option<serde_json::Value>,
+    pub attachment: Option<Box<serde_json::value::RawValue>>,
 
     /// `file-history-snapshot` payload (a top-level sibling). Carries
     /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.
@@ -349,6 +356,27 @@ pub struct Message {
     /// Either a bare string (genuine text) or an array of typed blocks.
     #[serde(default)]
     pub content: Option<Content>,
+}
+
+/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see
+/// [`Record::tur_probe`]). Every field is an `Option<Value>` — a tiny scalar/map tree
+/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe
+/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the
+/// former `.get(…)` chains did — byte-identical semantics). Crucially, the blob's HUGE
+/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by
+/// serde's ignore path without ever being allocated.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct TurProbe {
+    r#type: Option<serde_json::Value>,
+    #[serde(rename = "filePath")]
+    file_path: Option<serde_json::Value>,
+    #[serde(rename = "persistedOutputPath")]
+    persisted_output_path: Option<serde_json::Value>,
+    status: Option<serde_json::Value>,
+    #[serde(rename = "isAsync")]
+    is_async: Option<serde_json::Value>,
+    answers: Option<serde_json::Value>,
 }
 
 /// `message.content` is polymorphic: a plain string or a list of blocks.
@@ -666,39 +694,51 @@ impl Record {
             return false;
         }
         // Primary signal: structured, non-empty `toolUseResult.answers`.
-        if self.auq_answers_obj().is_some() {
+        if self.has_auq_answers() {
             return true;
         }
         // Fallback (older records without `toolUseResult`): the synthesized marker.
         self.is_auq_answer()
     }
 
-    /// The structured `toolUseResult.answers` object (§4.4) when present AND non-empty.
-    /// `None` for a cancelled/rejected AUQ (no answers) or a non-AUQ carrier.
-    fn auq_answers_obj(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
-        let answers = self.tool_use_result.as_ref()?.get("answers")?.as_object()?;
-        if answers.is_empty() {
-            None
-        } else {
-            Some(answers)
-        }
+    /// Parse the raw `toolUseResult` blob into a full `Value` tree ON DEMAND — for the
+    /// few DEEP consumers (`recover`'s event extraction, the AUQ exchange
+    /// reconstruction). Each call re-parses, so a caller needing several reads parses
+    /// once and shares the local value. `None` when absent or unparseable (the raw text
+    /// was validated as part of the line's JSON, so unparseable never happens in
+    /// practice — the guard is tolerance, not control flow).
+    #[must_use]
+    pub fn tool_use_result_value(&self) -> Option<serde_json::Value> {
+        let raw = self.tool_use_result.as_ref()?;
+        serde_json::from_str(raw.get()).ok()
     }
 
-    /// The `toolUseResult.annotations` map (§4.4) — per-question `{notes?, preview?}` the
-    /// user attached to a selection. `notes` is free-text the user typed alongside (or
-    /// instead of) a listed option; when the answer is the literal `"(notes only)"`
-    /// placeholder, the user's ENTIRE real message lives here. `None` when absent/empty.
-    fn auq_annotations_obj(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
-        let ann = self
-            .tool_use_result
-            .as_ref()?
-            .get("annotations")?
-            .as_object()?;
-        if ann.is_empty() {
-            None
-        } else {
-            Some(ann)
-        }
+    /// Parse the raw `attachment` blob into a full `Value` tree ON DEMAND (`recover`'s
+    /// external-edit/file-snapshot reader, `plan`'s `plan_mode` binding reader).
+    #[must_use]
+    pub fn attachment_value(&self) -> Option<serde_json::Value> {
+        let raw = self.attachment.as_ref()?;
+        serde_json::from_str(raw.get()).ok()
+    }
+
+    /// Cheap typed probe of the SMALL `toolUseResult` fields the hot paths consult —
+    /// deserializing it skips the huge content values (file bodies, stdout echoes)
+    /// without allocating them. `None` when there is no `toolUseResult` or it is not a
+    /// JSON object (e.g. a subagent's bare-string echo) — exactly the cases where every
+    /// former `.get(…)` probe answered `None` too.
+    fn tur_probe(&self) -> Option<TurProbe> {
+        let raw = self.tool_use_result.as_ref()?;
+        serde_json::from_str(raw.get()).ok()
+    }
+
+    /// The structured `toolUseResult.answers` object test (§4.4): present AND non-empty.
+    /// `false` for a cancelled/rejected AUQ (no answers) or a non-AUQ carrier.
+    fn has_auq_answers(&self) -> bool {
+        self.tur_probe()
+            .as_ref()
+            .and_then(|p| p.answers.as_ref())
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|m| !m.is_empty())
     }
 
     /// Reconstruct the COMPLETE AskUserQuestion exchange (§4.4) as one genuine-user unit:
@@ -719,13 +759,26 @@ impl Record {
             return None;
         }
         // Structured path: questions[] (ordered) zipped with answers{question -> answer}.
-        if let Some(answers) = self.auq_answers_obj() {
-            let questions = self
-                .tool_use_result
+        // Parse the raw blob ONCE here (this runs only on an actual answered-AUQ carrier)
+        // and read answers/annotations/questions from the shared local tree.
+        let tur = self.tool_use_result_value();
+        let answers = tur
+            .as_ref()
+            .and_then(|t| t.get("answers"))
+            .and_then(serde_json::Value::as_object)
+            .filter(|m| !m.is_empty());
+        if let Some(answers) = answers {
+            let questions = tur
                 .as_ref()
                 .and_then(|t| t.get("questions"))
                 .and_then(serde_json::Value::as_array);
-            let annotations = self.auq_annotations_obj();
+            // `annotations` map (§4.4) — per-question `{notes?, preview?}`; when the answer
+            // is the `"(notes only)"` placeholder the user's ENTIRE real message lives here.
+            let annotations = tur
+                .as_ref()
+                .and_then(|t| t.get("annotations"))
+                .and_then(serde_json::Value::as_object)
+                .filter(|m| !m.is_empty());
             let mut out = String::new();
             let n = questions.map_or(answers.len(), Vec::len);
             out.push_str(&format!("[AskUserQuestion · {n} question{}]", plural(n)));
@@ -995,9 +1048,10 @@ impl Record {
     #[must_use]
     pub fn persisted_output_path(&self) -> Option<String> {
         // Structured field first (SPEC §4.6 resolution rule).
-        if let Some(tur) = &self.tool_use_result {
-            if let Some(p) = tur
-                .get("persistedOutputPath")
+        if let Some(probe) = self.tur_probe() {
+            if let Some(p) = probe
+                .persisted_output_path
+                .as_ref()
                 .and_then(serde_json::Value::as_str)
             {
                 if !p.is_empty() {
@@ -1157,9 +1211,9 @@ impl Record {
         };
         // This record's own carrier `type` (usually absent on a tool_use record).
         let self_is_create = self
-            .tool_use_result
+            .tur_probe()
             .as_ref()
-            .and_then(|tur| tur.get("type"))
+            .and_then(|p| p.r#type.as_ref())
             .and_then(serde_json::Value::as_str)
             == Some("create");
 
@@ -1208,16 +1262,16 @@ impl Record {
     /// empty (defensive arms, each tested).
     #[must_use]
     pub fn carrier_create_paths(&self) -> Vec<(String, String, bool)> {
-        let Some(tur) = &self.tool_use_result else {
+        let Some(probe) = self.tur_probe() else {
             return Vec::new();
         };
-        let Some(file_path) = tur.get("filePath").and_then(serde_json::Value::as_str) else {
+        let Some(file_path) = probe.file_path.as_ref().and_then(serde_json::Value::as_str) else {
             return Vec::new();
         };
         if file_path.is_empty() {
             return Vec::new();
         }
-        let is_create = tur.get("type").and_then(serde_json::Value::as_str) == Some("create");
+        let is_create = probe.r#type.as_ref().and_then(serde_json::Value::as_str) == Some("create");
 
         // The carrier rides on a `tool_result` block whose `tool_use_id` joins it back
         // to the structured tool_use. Emit one tuple per tool_result block id found.
@@ -2512,9 +2566,9 @@ impl Record {
     /// work returns LATER as inbound `<teammate-message>`s, never via this tool_result. So an
     /// ACK is `agent.tool.result` ONLY, never `…inbox` (unlike a one-shot Task return).
     fn is_teammate_spawn_ack(&self) -> bool {
-        self.tool_use_result
+        self.tur_probe()
             .as_ref()
-            .and_then(|tur| tur.get("status"))
+            .and_then(|p| p.status.as_ref())
             .and_then(serde_json::Value::as_str)
             == Some("teammate_spawned")
     }
@@ -2531,9 +2585,9 @@ impl Record {
     /// `toolUseResult` shape first, then the content prefix ([`ASYNC_LAUNCH_ACK_PREFIX`]) for a
     /// record lacking the structured field.
     fn is_async_launch_ack(&self) -> bool {
-        if let Some(tur) = self.tool_use_result.as_ref() {
-            if tur.get("status").and_then(serde_json::Value::as_str) == Some("async_launched")
-                || tur.get("isAsync").and_then(serde_json::Value::as_bool) == Some(true)
+        if let Some(probe) = self.tur_probe() {
+            if probe.status.as_ref().and_then(serde_json::Value::as_str) == Some("async_launched")
+                || probe.is_async.as_ref().and_then(serde_json::Value::as_bool) == Some(true)
             {
                 return true;
             }

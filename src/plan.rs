@@ -82,7 +82,7 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
     // File order == line order; overwriting keeps the LATEST plan_mode binding.
     let mut latest: Option<PlanRef> = None;
     for (line_no, rec) in &records {
-        let Some(att) = rec.attachment.as_ref() else {
+        let Some(att) = rec.attachment_value() else {
             continue;
         };
         if att.get("type").and_then(serde_json::Value::as_str) != Some("plan_mode") {

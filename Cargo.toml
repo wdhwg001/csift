@@ -16,7 +16,7 @@ path = "src/main.rs"
 clap = { version = "4.6", features = ["derive"] }
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["raw_value"] }
 memchr = "2.8"
 memmap2 = "0.9"
 rayon = "1.12"

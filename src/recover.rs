@@ -991,13 +991,15 @@ fn extract_from_record(
     }
 
     // ── (7) attachment (edited_text_file external edit / file snapshot) ──
-    if let Some(att) = rec.attachment.as_ref() {
-        extract_from_attachment(line_no, turn_index, &ts, att, target_file, events);
+    // The raw blob is parsed to a full tree ON DEMAND (the model keeps it unparsed so
+    // the scanning subcommands never pay for it; recover is the deep consumer).
+    if let Some(att) = rec.attachment_value() {
+        extract_from_attachment(line_no, turn_index, &ts, &att, target_file, events);
     }
 
     // ── toolUseResult-bearing carriers: Read / Write / Edit results ──
-    if let Some(tur) = rec.tool_use_result.as_ref() {
-        extract_from_tool_use_result(line_no, turn_index, &ts, tur, target_file, events);
+    if let Some(tur) = rec.tool_use_result_value() {
+        extract_from_tool_use_result(line_no, turn_index, &ts, &tur, target_file, events);
     }
 
     // ── Per-block extraction over message.content[] ──
