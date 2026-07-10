@@ -26,7 +26,7 @@
 //! match phase skips regex work on records that provably lack the literal. Turn
 //! reconstruction then runs over the retained transcript records.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -600,6 +600,114 @@ impl AddressSet {
     }
 }
 
+/// Per-leaf record census of a matched exchange set (GOLD §5): each matched record (one
+/// [`Hit`] per record, richest view) contributes to EVERY leaf in its full label set, so a
+/// leaf's tally is exactly how many records `-t <leaf>` would surface. Returns the per-leaf
+/// counts and the distinct matched-record total. Shared by `--count-by-label` and the
+/// zero-hit label probe (so both report the SAME numbers).
+fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize) {
+    let mut counts: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut records = 0usize;
+    for ex in exchanges {
+        for h in &ex.hits {
+            records += 1;
+            for &leaf in &h.labels {
+                *counts.entry(leaf).or_insert(0) += 1;
+            }
+        }
+    }
+    (counts, records)
+}
+
+/// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare "no matching
+/// exchanges" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;
+/// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the
+/// filters that constrained it, and — when a `-t`/`-T` filter was active — names the label(s)
+/// the pattern DOES occur under (the exact L74681 trap: a tool-name searched under
+/// `-t user.message`). Emitted to stderr so stdout stays a pure stream.
+#[derive(Debug)]
+struct EmptyDiagnosis {
+    sessions_in_scope: usize,
+    active_filters: String,
+    label_filtered: bool,
+    /// `Some((per-leaf rows richest-first, total records))` when a `-t`/`-T` filter was active
+    /// AND the pattern matches under OTHER labels; `None` when no label filter, or the pattern
+    /// is genuinely absent even unfiltered.
+    excluded_by_label: Option<(Vec<(String, usize)>, usize)>,
+}
+
+/// Render the active `-t`/`-T`/time/turn filters as a compact echo (`none` when unfiltered) —
+/// so a zero-result diagnosis shows exactly what constrained the query.
+fn active_filters_str(args: &SearchArgs) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for l in &args.labels {
+        parts.push(format!("-t {l}"));
+    }
+    for l in &args.labels_not {
+        parts.push(format!("-T {l}"));
+    }
+    if let Some(s) = &args.since {
+        parts.push(format!("--since {s}"));
+    }
+    if let Some(u) = &args.until {
+        parts.push(format!("--until {u}"));
+    }
+    if let Some(t) = &args.turn_range {
+        parts.push(format!("--turn-range {t}"));
+    }
+    if parts.is_empty() {
+        "none".to_string()
+    } else {
+        parts.join(" ")
+    }
+}
+
+/// Emit the zero-match diagnosis to stderr (stdout stays pure for the caller's pipe).
+fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
+    eprintln!(
+        "csift: 0 matches — a DEFINITIVE absence (exit 0), NOT an error. \
+         Scope: {} session(s). Active filters: {}.",
+        diag.sessions_in_scope, diag.active_filters
+    );
+    let quoted = if pattern.is_empty() {
+        "the filter".to_string()
+    } else {
+        format!("\"{pattern}\"")
+    };
+    match &diag.excluded_by_label {
+        Some((rows, recs)) => {
+            let shown: Vec<String> = rows
+                .iter()
+                .take(6)
+                .map(|(l, n)| format!("{l} ×{n}"))
+                .collect();
+            let more = rows.len().saturating_sub(6);
+            let tail = if more > 0 {
+                format!(" (+{more} more label(s))")
+            } else {
+                String::new()
+            };
+            eprintln!(
+                "csift: ⚠ but {quoted} DOES occur — {recs} record(s) under: {}{tail}. \
+                 Your -t/-T excluded them; drop -t/-T or select one of those labels.",
+                shown.join(" · ")
+            );
+        }
+        None if diag.label_filtered => {
+            eprintln!(
+                "csift: (even without the -t/-T filter, {quoted} has 0 matches here — \
+                 genuinely absent in this scope, not a label mistake.)"
+            );
+        }
+        None => {
+            eprintln!(
+                "csift: to see what a scope holds before guessing a filter, run \
+                 `csift search \"\" <target> --count-by-label`."
+            );
+        }
+    }
+}
+
 pub fn run_search(args: &SearchArgs) -> Result<()> {
     // ── PATTERN-position traps (the ONE place csift's positional grammar differs:
     //    search's first positional is the PATTERN, not a target) ──
@@ -703,7 +811,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 p,
                 args,
                 &matcher,
-                turn_range.as_ref(),
+                turn_range,
                 &time_window,
                 None,
                 want_siblings,
@@ -778,12 +886,12 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // grep idiom, built to pipe into `--sessions-from -`). Ids are the OWNING sessions
     // (`parent_session_id`) — the scope-token domain: re-targeting is scope-level, so a
     // subagent hit lists its parent uuid (always re-feedable; a per-transcript detail id is
-    // the JSON summary's `session_ids` / a hit's `refetch`). A `--max-count` drop could hide
+    // the JSON summary's `transcript_ids` / a hit's `refetch`). A `--max-count` drop could hide
     // sessions, so it is disclosed on stderr (stdout stays a pure id stream) — no silent
     // truncation.
     if args.sessions_with_matches {
         if args.format == OutputFormat::Json {
-            bail!("-l prints a plain id stream; with --format json read the summary's `session_ids` instead");
+            bail!("-l prints a plain id stream; with --format json read the summary's `transcript_ids` instead");
         }
         let mut ids: Vec<&str> = outcome
             .exchanges
@@ -801,6 +909,58 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                  may be incomplete; raise --max-count",
                 outcome.dropped_by_cap
             );
+        }
+        return Ok(());
+    }
+
+    // `--count-by-label`: a per-LEAF census of the matched records — the exploration
+    // on-ramp so an empty `-t <leaf>` result is never mistaken for a typo. Record-level:
+    // each matched record contributes to EVERY leaf in its label set, so a leaf's number is
+    // exactly how many records `-t <leaf>` would surface. stdout = the census; the accounting
+    // note goes to stderr (text) so `<count> <label>` stays pipe-clean.
+    if args.count_by_label {
+        let (counts, records) = label_census(&outcome.exchanges);
+        let mut rows: Vec<(&&'static str, &usize)> = counts.iter().collect();
+        rows.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+        match args.format {
+            OutputFormat::Text => {
+                for (label, n) in &rows {
+                    println!("{n:>7}  {label}");
+                }
+                let drop = if outcome.dropped_by_cap > 0 {
+                    format!(
+                        " · {} exchange(s) dropped by --max-count (census incomplete; raise --max-count)",
+                        outcome.dropped_by_cap
+                    )
+                } else {
+                    String::new()
+                };
+                eprintln!(
+                    "csift: {records} matched record(s) across {} label(s){drop}",
+                    counts.len()
+                );
+            }
+            OutputFormat::Json => {
+                let header = crate::text::envelope_scope_header(
+                    "search",
+                    outcome.scope_top,
+                    outcome.scope_sub,
+                    serde_json::json!({}),
+                );
+                println!("{}", serde_json::to_string(&header)?);
+                for (label, n) in &rows {
+                    let obj =
+                        serde_json::json!({"kind": "label_count", "label": label, "count": n});
+                    println!("{}", serde_json::to_string(&obj)?);
+                }
+                let summary = crate::text::envelope_summary(serde_json::json!({
+                    "matched_records": records,
+                    "distinct_labels": counts.len(),
+                    "dropped_by_cap": outcome.dropped_by_cap,
+                    "skipped_lines": outcome.skipped_lines,
+                }));
+                println!("{}", serde_json::to_string(&summary)?);
+            }
         }
         return Ok(());
     }
@@ -849,9 +1009,65 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         return Ok(());
     }
 
+    // ── Empty-result self-diagnosis (anti-slippage keystone, §T0.1). A zero-match result is a
+    //    DEFINITIVE absence, not a syntax error — but a bare "no matching exchanges" reads as
+    //    failure and drives a model back to hand-parsing. On zero hits we emit (to stderr;
+    //    stdout stays pure) what was searched + that this is exit-0-honest, and — the killer —
+    //    when a `-t`/`-T` filter is active, a re-scan WITHOUT it that names the label(s) the
+    //    pattern DOES occur under. The re-scan is paid ONLY on a zero-hit + label-filtered
+    //    query, so the happy path is untouched. ──
+    let diagnosis = if outcome.exchanges.is_empty() {
+        let label_filtered = !args.labels.is_empty() || !args.labels_not.is_empty();
+        let excluded_by_label = if label_filtered {
+            let mut probe = args.clone();
+            probe.labels.clear();
+            probe.labels_not.clear();
+            let probe_files: Vec<FileResult> = session_files
+                .par_iter()
+                .map(|p| {
+                    search_one_file(
+                        p,
+                        &probe,
+                        &matcher,
+                        turn_range,
+                        &time_window,
+                        None,
+                        false,
+                        &spawn_map,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let mut probe_ex: Vec<Exchange> = Vec::new();
+            for fr in probe_files {
+                probe_ex.extend(fr.exchanges);
+            }
+            let (counts, recs) = label_census(&probe_ex);
+            (recs > 0).then(|| {
+                let mut rows: Vec<(String, usize)> = counts
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect();
+                rows.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+                (rows, recs)
+            })
+        } else {
+            None
+        };
+        let diag = EmptyDiagnosis {
+            sessions_in_scope: outcome.scope_top + outcome.scope_sub,
+            active_filters: active_filters_str(args),
+            label_filtered,
+            excluded_by_label,
+        };
+        emit_empty_diagnosis(&args.pattern, &diag);
+        Some(diag)
+    } else {
+        None
+    };
+
     match args.format {
         OutputFormat::Text => render_text(&outcome, args),
-        OutputFormat::Json => render_json(&outcome)?,
+        OutputFormat::Json => render_json(&outcome, diagnosis.as_ref())?,
     }
     Ok(())
 }
@@ -939,10 +1155,15 @@ pub(crate) fn fetch_records(
     path: &Path,
     lines: BTreeSet<usize>,
     uuids: BTreeSet<String>,
+    turn_range: Option<crate::text::RangeSpec>,
 ) -> Result<(Vec<Exchange>, usize)> {
     let args = SearchArgs::default();
     let matcher = Matcher::pure();
+    // A line/uuid ADDRESS restricts to named records; a `--turn` range (address empty) selects
+    // every record of the named turns — the SAME per-file grouping `search` numbers turns by, so
+    // `show --turn N` is byte-identical to the turn `search` cites as `s1·tN`.
     let address = AddressSet { lines, uuids };
+    let use_address = !(address.lines.is_empty() && address.uuids.is_empty());
     let time_window = TimeWindow::from_args(None, None)?;
     let mut spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
     spawn_map
@@ -952,9 +1173,9 @@ pub(crate) fn fetch_records(
         path,
         &args,
         &matcher,
-        None,
+        turn_range,
         &time_window,
-        Some(&address),
+        use_address.then_some(&address),
         false,
         &spawn_map,
     )?;
@@ -967,7 +1188,7 @@ fn search_one_file(
     path: &Path,
     args: &SearchArgs,
     matcher: &Matcher,
-    turn_range: Option<&(usize, usize)>,
+    turn_range: Option<crate::text::RangeSpec>,
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
     want_siblings: bool,
@@ -1199,7 +1420,7 @@ fn reconstruct_and_match(
     records: &[Kept],
     args: &SearchArgs,
     matcher: &Matcher,
-    turn_range: Option<&(usize, usize)>,
+    turn_range: Option<crate::text::RangeSpec>,
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
     want_siblings: bool,
@@ -1261,9 +1482,13 @@ fn reconstruct_and_match(
     };
     let mut out = Vec::new();
 
+    // Resolve the `--turn-range` spec against THIS transcript's turn count (0-based), so
+    // open/from-end forms (`N..`, `-3..` = the last 3) materialize per-file.
+    let turn_bounds = turn_range.map(|spec| spec.resolve(index_turns.len(), false));
+
     for (turn_index, idxs) in index_turns.iter().enumerate() {
         // Turn-range filter (inclusive, 0-based on genuine-user order).
-        if let Some(&(lo, hi)) = turn_range {
+        if let Some((lo, hi)) = turn_bounds {
             if turn_index < lo || turn_index > hi {
                 continue;
             }
@@ -2237,9 +2462,10 @@ fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> (Strin
     (out, true)
 }
 
-/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
-fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    crate::text::parse_range(s, "--turn-range", false)
+/// Parse a `--turn-range` token into a [`RangeSpec`] (the shared grammar: `N`/`A..B`/`N..`/
+/// `..N`/`-k`), resolved per-file against that transcript's turn count (0-based).
+fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
+    crate::text::parse_range_spec(s, "--turn-range", false)
 }
 
 // ── Rendering ──
@@ -2331,6 +2557,14 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         );
         for hit in &ex.hits {
             print_record_line(role_glyph(hit.class), hit);
+            // Close the text-mode ID-law hole for SUBAGENT hits: a line number is per-FILE, so
+            // it must be fetched with the SUBAGENT's own id (`session_id`), NEVER the parent
+            // uuid (that would silently fetch the WRONG record). Top-level hits are safe (the
+            // `s1 = <uuid>` header IS the fetch id), so only the hazard rows carry the explicit
+            // ready-to-run command — the same address JSON's per-hit `refetch` gives.
+            if ex.is_subagent && !hit.from_sidecar && hit.line > 0 {
+                println!("      ↳ csift show @{} --line {}", ex.session_id, hit.line);
+            }
         }
         // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
         // they read as surrounding back-and-forth, not as matches.
@@ -2505,7 +2739,7 @@ fn hit_json(session_id: &str, h: &Hit) -> serde_json::Value {
     })
 }
 
-fn render_json(outcome: &SearchOutcome) -> Result<()> {
+fn render_json(outcome: &SearchOutcome, diagnosis: Option<&EmptyDiagnosis>) -> Result<()> {
     use serde_json::json;
     // envelope v2: header (always) → kind-tagged exchange rows → summary (always).
     println!(
@@ -2567,11 +2801,15 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
     let ids_total = session_ids.len();
     let ids_truncated = ids_total > 100;
     session_ids.truncate(100);
-    let summary = crate::text::envelope_summary(json!({
+    let mut summary_fields = json!({
         "matched": outcome.exchanges.len(),
         "sessions": distinct_session_count(&outcome.exchanges),
-        "session_ids": session_ids,
-        "session_ids_truncated": ids_truncated,
+        // `transcript_ids` = the distinct MATCHING-TRANSCRIPT ids (a subagent hit contributes
+        // its bare agent-id, a top-level hit its uuid). DELIBERATELY named apart from `-l`,
+        // which emits the OWNING-session ids (`parent_session_id`) — the two answer different
+        // "which sessions?" questions, so the wire names them differently.
+        "transcript_ids": session_ids,
+        "transcript_ids_truncated": ids_truncated,
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
         // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) — the
@@ -2582,7 +2820,23 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         // (per-hit `excerpt` is a match-centered fragment, not the whole text) via
         // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
-    }));
+    });
+    // Zero-match self-diagnosis (§T0.1): make the empty result machine-legible as a definitive
+    // absence (never a syntax error), echo the active filters, and — when a `-t`/`-T` filter hid
+    // otherwise-matching records — carry the excluded labels so a consumer can self-correct.
+    if let Some(d) = diagnosis {
+        summary_fields["definitive_absence"] = json!(true);
+        summary_fields["active_filters"] = json!(d.active_filters);
+        summary_fields["excluded_by_label"] = match &d.excluded_by_label {
+            Some((rows, recs)) => {
+                let by: serde_json::Map<String, serde_json::Value> =
+                    rows.iter().map(|(l, n)| (l.clone(), json!(n))).collect();
+                json!({ "records": recs, "by_label": serde_json::Value::Object(by) })
+            }
+            None => serde_json::Value::Null,
+        };
+    }
+    let summary = crate::text::envelope_summary(summary_fields);
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
@@ -2609,6 +2863,7 @@ mod tests {
             max_count: None,
             count_only: false,
             sessions_with_matches: false,
+            count_by_label: false,
             siblings: false,
             no_truncate: false,
             resolve_persisted: false,
@@ -2793,8 +3048,14 @@ mod tests {
 
     #[test]
     fn turn_range_parsing() {
-        assert_eq!(parse_turn_range("10..20").unwrap(), (10, 20));
-        assert_eq!(parse_turn_range("0..0").unwrap(), (0, 0));
+        assert_eq!(
+            parse_turn_range("10..20").unwrap().resolve(100, false),
+            (10, 20)
+        );
+        assert_eq!(
+            parse_turn_range("0..0").unwrap().resolve(100, false),
+            (0, 0)
+        );
         assert!(parse_turn_range("20..10").is_err());
         assert!(parse_turn_range("notarange").is_err());
         assert!(parse_turn_range("a..b").is_err());
@@ -3112,7 +3373,7 @@ mod tests {
             &kept,
             a,
             &matcher,
-            tr.as_ref(),
+            tr,
             &tw,
             None,
             a.siblings,
@@ -3734,7 +3995,10 @@ mod tests {
     #[test]
     fn parse_turn_range_equal_bounds_ok() {
         // hi == lo is valid (single turn); only hi < lo errors.
-        assert_eq!(parse_turn_range("5..5").unwrap(), (5, 5));
+        assert_eq!(
+            parse_turn_range("5..5").unwrap().resolve(100, false),
+            (5, 5)
+        );
     }
 
     #[test]

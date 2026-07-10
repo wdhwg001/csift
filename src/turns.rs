@@ -73,7 +73,7 @@ use anyhow::{bail, Result};
 use memchr::memmem;
 use rayon::prelude::*;
 
-use crate::cli::{OutputFormat, TurnsArgs};
+use crate::cli::{OutputFormat, VerbatimArgs};
 use crate::model::{group_turn_indices_deduped, normalize_line, Block, Content, PlanIndex, Record};
 use crate::parse::mmap_bytes;
 use crate::path;
@@ -445,8 +445,8 @@ struct ScanResult {
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Entry point for `csift turns`.
-pub fn run_turns(args: &TurnsArgs) -> Result<()> {
+/// Entry point for `csift verbatim`.
+pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
     // `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
@@ -508,15 +508,15 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    // `turns` is single-conversation recovery and `--budget` applies PER session, so a bare
-    // `csift turns` (0 targets ⇒ ALL projects everywhere else) would realize budget × every
+    // `verbatim` is single-conversation recovery and `--budget` applies PER session, so a bare
+    // `csift verbatim` (0 targets ⇒ ALL projects everywhere else) would realize budget × every
     // session of every project — an output flood that is never what the caller wants. A
     // target is REQUIRED here (the `show` precedent: name what you mean).
     if args.paths.is_empty() && args.sessions_from.is_none() {
         bail!(
-            "turns reconstructs ONE conversation's recent turns — name a target: `@<uuid>` / \
+            "verbatim reconstructs ONE conversation's recent turns — name a target: `@<uuid>` / \
              `@main` / `@<agent-id>` / a project path / `--sessions-from <FILE|->`. (A bare \
-             `csift turns` would realize --budget chars × EVERY session of EVERY project.)"
+             `csift verbatim` would realize --budget chars × EVERY session of EVERY project.)"
         );
     }
 
@@ -545,13 +545,23 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
     // its user/assistant timestamp). The summary dedup set is computed from the FULL
     // (un-windowed) newest summary so a window never silently un-dedups.
     for sr in &mut sessions {
+        // Resolve `--turn-range` open/from-end forms against THIS session's own turn count.
+        let bounds = turn_range.map(|spec| {
+            let tc = sr
+                .turns
+                .iter()
+                .map(|t| t.turn_index)
+                .max()
+                .map_or(0, |m| m + 1);
+            spec.resolve(tc, false)
+        });
         sr.turns.retain(|t| {
             let ts = t
                 .user
                 .as_ref()
                 .and_then(|u| u.ts_utc.as_deref())
                 .or_else(|| t.assistant_eot().and_then(|a| a.ts_utc.as_deref()));
-            window_admits(t.turn_index, ts, turn_range, &time_window)
+            window_admits(t.turn_index, ts, bounds, &time_window)
         });
     }
 
@@ -1985,9 +1995,10 @@ fn spanned_boundary_count(turns: &[TurnSlice], selected: &[Selected]) -> usize {
 // Window-range parsing (shared parser in `crate::text`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
-fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    crate::text::parse_range(s, "--turn-range", false)
+/// Parse a `--turn-range` token into a [`RangeSpec`] (the shared grammar), resolved per-session
+/// against that transcript's own turn count (0-based).
+fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
+    crate::text::parse_range_spec(s, "--turn-range", false)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -88,6 +88,9 @@ struct FileResult {
     mutations: Vec<TaggedMutation>,
     boundaries: Vec<TaggedBoundary>,
     skipped_lines: usize,
+    /// This transcript's genuine-user turn count — so a `--turn-range` spec resolves its
+    /// open/from-end forms (`N..`, `-3..`) against THIS file's turns, not a global count.
+    turn_count: usize,
 }
 
 /// The compiled `--regex` / `--glob` path predicates. Both are OPTIONAL and ANDed: a path is
@@ -179,8 +182,11 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
     let mut skipped_lines = 0usize;
     for fr in per_file {
         skipped_lines += fr.skipped_lines;
+        // Resolve the `--turn-range` spec against THIS file's turn count (0-based), so
+        // open/from-end forms (`N..`, `-3..` = the last 3) window each transcript's own turns.
+        let turn_bounds = turn_range.map(|spec| spec.resolve(fr.turn_count, false));
         for tm in fr.mutations {
-            if let Some((lo, hi)) = turn_range {
+            if let Some((lo, hi)) = turn_bounds {
                 if tm.turn_index < lo || tm.turn_index > hi {
                     continue;
                 }
@@ -199,7 +205,7 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         }
         // Boundaries obey the SAME turn-range / time-window / path filters as mutations.
         for tb in fr.boundaries {
-            if let Some((lo, hi)) = turn_range {
+            if let Some((lo, hi)) = turn_bounds {
                 if tb.turn_index < lo || tb.turn_index > hi {
                     continue;
                 }
@@ -220,7 +226,7 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         mutations,
         boundaries,
         skipped_lines,
-        turn_range,
+        turn_range: args.turn_range.clone(),
         time_window_bounded: !time_window.is_unbounded(),
         scope_top,
         scope_sub,
@@ -240,6 +246,7 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
             mutations: Vec::new(),
             boundaries: Vec::new(),
             skipped_lines: 0,
+            turn_count: 0,
         });
     };
     let bytes: &[u8] = &mmap;
@@ -282,10 +289,14 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
             tb.parent_session_id = parent_session_id.clone();
         }
     }
+    // Per-file turn count for resolving `--turn-range` open/from-end forms (same grouping
+    // `extract_mutations`/`extract_boundaries` used to assign each `turn_index`).
+    let turn_count = group_turn_indices_deduped(&records, |r| r).len();
     Ok(FileResult {
         mutations,
         boundaries,
         skipped_lines: skipped,
+        turn_count,
     })
 }
 
@@ -588,7 +599,9 @@ struct Outcome {
     /// Edit-before-Read boundaries (file changed outside the tool stream), sorted by jsonl line.
     boundaries: Vec<TaggedBoundary>,
     skipped_lines: usize,
-    turn_range: Option<(usize, usize)>,
+    /// The raw `--turn-range` token, kept verbatim for the footer (the range resolves
+    /// per-file, so there is no single global `(lo, hi)` to display).
+    turn_range: Option<String>,
     time_window_bounded: bool,
     /// SCOPE-span counts of the RESOLVED transcript set (top-level + subagent files),
     /// computed from `resolve_session_files` BEFORE the mutation scan — so a subagent
@@ -932,8 +945,8 @@ fn print_footer(outcome: &Outcome) {
 
 /// A short description of the active turn/time filter for the footer.
 fn filter_context(outcome: &Outcome) -> String {
-    if let Some((lo, hi)) = outcome.turn_range {
-        format!("turn-range={lo}..{hi}")
+    if let Some(s) = &outcome.turn_range {
+        format!("turn-range={s}")
     } else if outcome.time_window_bounded {
         "time-window".to_string()
     } else {
@@ -968,7 +981,7 @@ fn render_json(outcome: &Outcome) -> Result<()> {
                     "session_id": m.session_id,
                     // Discriminate the id-domain: `is_subagent` + the always-re-feedable
                     // `parent_session_id` (= session_id for a top-level mutation) so a
-                    // consumer can `csift turns <parent_session_id>` even on a subagent row.
+                    // consumer can `csift verbatim <parent_session_id>` even on a subagent row.
                     "is_subagent": m.is_subagent,
                     "parent_session_id": m.parent_session_id,
                     "path": m.mutation.path,
@@ -1076,9 +1089,10 @@ fn json_grouped<F: Fn(&FileMutation) -> String>(
     Ok(())
 }
 
-/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
-fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    crate::text::parse_range(s, "--turn-range", false)
+/// Parse a `--turn-range` token into a [`RangeSpec`] (the shared grammar), resolved per-file
+/// against each transcript's own turn count (0-based).
+fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
+    crate::text::parse_range_spec(s, "--turn-range", false)
 }
 
 #[cfg(test)]
@@ -1524,8 +1538,14 @@ mod tests {
 
     #[test]
     fn turn_range_parsing() {
-        assert_eq!(parse_turn_range("0..1").unwrap(), (0, 1));
-        assert_eq!(parse_turn_range("5..5").unwrap(), (5, 5));
+        assert_eq!(
+            parse_turn_range("0..1").unwrap().resolve(100, false),
+            (0, 1)
+        );
+        assert_eq!(
+            parse_turn_range("5..5").unwrap().resolve(100, false),
+            (5, 5)
+        );
         assert!(parse_turn_range("3..1").is_err());
         assert!(parse_turn_range("notarange").is_err());
         assert!(parse_turn_range("a..b").is_err());
@@ -1661,7 +1681,7 @@ mod tests {
         let muts = extract(&fixture());
         // turn-range arm.
         let mut o = outcome(FilesDetail::Summary, muts.clone());
-        o.turn_range = Some((0, 1));
+        o.turn_range = Some("0..1".to_string());
         assert_eq!(filter_context(&o), "turn-range=0..1");
         // bounded time-window arm.
         let mut o2 = outcome(FilesDetail::Summary, muts.clone());

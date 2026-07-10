@@ -5,6 +5,30 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.4.0] - 2026-07-11
+
+Breaking rework, zero backcompat.
+
+- `turns` is renamed `verbatim` and reframed as the compaction-fidelity
+  specialist (restore the verbatim turns a compaction summary clipped);
+  tail-peek reading moves to `show --turn` — a third addressing mode that
+  fetches EVERY record of the named turn(s) (`-3..` = the last 3).
+- ONE range grammar everywhere: `N` · `A..B` · `N..` · `..N` · `-k` from the
+  end — all inclusive, resolved per target; the dash form `A-B` hard-errors
+  teaching the `..` spelling.
+- `search --count-by-label`: a per-leaf label census terminal mode (empty
+  pattern = whole-scope census; a leaf's count = what `-t <leaf>` would
+  surface); JSON `label_count` rows.
+- Empty-result self-diagnosis: a zero-match run prints a stderr diagnosis —
+  "a DEFINITIVE absence (exit 0), NOT an error", the active filters, and an
+  active probe naming the label(s) the pattern DOES occur under; JSON summary
+  gains `definitive_absence` / `active_filters` / `excluded_by_label`.
+- Flood guards: an unscoped all-projects `list` caps at the 50
+  most-recently-active rows (drop reported; `--max-count` overrides); `stats`
+  gains an opt-in `--max-count`.
+- JSON rename (search summary): `session_ids` → `transcript_ids`
+  (+ `transcript_ids_truncated`) — named apart from `-l`'s owning-session ids.
+
 ## [0.3.0] - 2026-07-11
 
 - `-T`/`--label-not` (search): label EXCLUSION with the same selector grammar

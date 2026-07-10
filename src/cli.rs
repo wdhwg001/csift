@@ -1,9 +1,9 @@
 //! Command-line surface (clap derive).
 //!
 //! Eleven subcommands: `list`, `search`, `show`, `stats`, `agents`, `whoami`, `files`,
-//! `recover`, `plan`, `turns`, `image`. Each carries example-rich help (`--help`) keyed off
+//! `recover`, `plan`, `verbatim`, `image`. Each carries example-rich help (`--help`) keyed off
 //! the SPEC §6 baseline invocations. `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`
-//! span each session's subagent transcripts by default (`--no-subagents` opts out); `turns`
+//! span each session's subagent transcripts by default (`--no-subagents` opts out); `verbatim`
 //! is the exception — a single-thread recovery tool whose per-session budget MULTIPLIES, so
 //! it defaults to the TOP-LEVEL thread only, opts INTO spanning via `--subagents`, and
 //! REQUIRES a target. `agents` reports a session's subagent lifecycle (it lists subagents as
@@ -13,7 +13,7 @@
 //! (its `plan_mode` attachment); `recover --file @plan` reconstructs that bound plan's
 //! content.
 //! The session-operating subcommands
-//! (`list`/`search`/`show`/`stats`/`agents`/`files`/`recover`/`plan`/`turns`/`image`)
+//! (`list`/`search`/`show`/`stats`/`agents`/`files`/`recover`/`plan`/`verbatim`/`image`)
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` that is a cwd / encoded
 //! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` session token, or a `*.jsonl` file.
@@ -308,8 +308,8 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         SUBCOMMANDS\n  \
           list     fast \"which session is this?\" index (first/last user + last agent)\n  \
           search   regex over transcripts, returning the complete round-trip exchange per hit\n  \
-          show     FETCH the record(s) you name — `--line N|A..B` / `--uuid U` of ONE transcript,\n           \
-                   rendered full, or `--raw` verbatim jsonl bytes\n  \
+          show     FETCH the record(s) you name — `--line` / `--turn` / `--uuid` of ONE transcript\n           \
+                   (`--turn -3..` = the last 3 turns, the live-tail peek), rendered full or `--raw` bytes\n  \
           stats    one-scan aggregates per session: tokens by model, tool calls, turns, span\n  \
           agents   list a session's subagents (kind, start/completion, status) + time-window filter\n  \
           whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
@@ -317,12 +317,12 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           recover  reconstruct a file's history from the transcript — segmented diff-patches,\n           \
                    point-in-time partial snapshot, or coverage scoping\n  \
           plan     locate the Plan-Mode plan file bound to a session (recover --file @plan dumps it)\n  \
-          turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
-                   back-and-forth a compaction summary clipped, within a char budget\n  \
+          verbatim RESTORE the verbatim user/assistant back-and-forth a compaction summary\n           \
+                   CLIPPED, within a char budget (live-tail peek is `show --turn`)\n  \
           image    list + extract the inline images a session carries (pastes/screenshots)\n\n\
         list/search/stats/files/recover/plan/image span each session's subagent transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
-        to restrict to top-level sessions. `turns` is the exception among the file-operating \
+        to restrict to top-level sessions. `verbatim` is the exception among the file-operating \
         commands — it defaults to the TOP-LEVEL thread only (single-thread recovery), \
         opts INTO spanning via `--subagents`, and REQUIRES a target. (`agents` LISTS \
         subagents as its targets rather than spanning them as inputs, so it rejects both \
@@ -363,7 +363,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift files @<uuid> --by file               # which files this session modified, when\n  \
           csift recover @<uuid> --file /abs/app.py    # segmented diff-patch history of a file\n  \
           csift recover . --file /abs/app.py --at @turn:42  # partial snapshot as the LLM saw it at turn 42\n  \
-          csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
+          csift verbatim . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
           csift plan @<uuid>                          # locate the plan file bound to a session\n  \
           csift image @<uuid> --out /tmp/imgs         # extract every pasted image to a dir\n  \
           csift show @<uuid> --line 46550             # fetch the exact record a hit cited, in full\n  \
@@ -393,7 +393,7 @@ pub enum Command {
     List(ListArgs),
     /// Regex-search sessions, returning complete request/response round-trip exchanges.
     Search(SearchArgs),
-    /// Fetch specific record(s) of ONE transcript by line number / record uuid — rendered
+    /// Fetch specific record(s) of ONE transcript by line / turn index / record uuid — rendered
     /// full, or verbatim raw jsonl with `--raw`.
     Show(ShowArgs),
     /// One-scan aggregates per session: records, turns, tool calls by name, tokens by
@@ -413,7 +413,7 @@ pub enum Command {
     Plan(PlanArgs),
     /// Turn-fidelity reconstruction — restore the verbatim user/assistant
     /// back-and-forth a compaction summary clipped, within a char budget.
-    Turns(TurnsArgs),
+    Verbatim(VerbatimArgs),
     /// List + extract the images a session carries (inline base64 blocks → files).
     Image(ImageArgs),
 }
@@ -621,7 +621,7 @@ impl ImageOutFormat {
         subagent row; `parent_session_id` is the re-feedable owning uuid (= session_id for a \
         top-level row) — never re-feed a subagent `session_id`. The \
         `first_user`/`last_user`/`last_agent` fields are {excerpt, ts_utc, ts_local} \
-        sub-objects (or null when absent). UNLIKE search/files/recover/turns, this stream has \
+        sub-objects (or null when absent). UNLIKE search/files/recover/verbatim, this stream has \
         NO trailing terminator object — it is pure JSONL, end-of-stream = EOF."
 )]
 pub struct ListArgs {
@@ -629,7 +629,7 @@ pub struct ListArgs {
     /// `~/.claude/projects/<encoded>` path / bare `<encoded>` dir, or an `@`-prefixed session
     /// token. Repeatable. Defaults to all projects. `@<uuid>` (8-4-4-4-12 hex) scopes to that
     /// one top-level session (searched across all projects when no project path is given), so
-    /// `csift list @<uuid>` identifies it — the SAME positional surface `files`/`recover`/`turns`
+    /// `csift list @<uuid>` identifies it — the SAME positional surface `files`/`recover`/`verbatim`
     /// use; `@main`/`@trap:<marker>` resolve the calling session from the environment; a `*.jsonl` file
     /// path scopes to that transcript. NOTE: the default still SPANS that session's subagents, so
     /// a fan-out session lists 1 + N rows; add `--no-subagents` for just the single top-level row.
@@ -652,12 +652,21 @@ pub struct ListArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
+
+    /// Cap the emitted session rows — the CONTEXT-SAFETY guard against an unscoped `csift
+    /// list` flooding the reader (a large corpus is thousands of sessions). Defaults to 50
+    /// when listing ALL projects (no target / `--sessions-from`), else UNLIMITED; an explicit
+    /// value overrides in either case. NEVER silent: the drop is reported with guidance and
+    /// the KEPT rows are the most recently active. Raise it, pass a target, or add `--since`
+    /// for more.
+    #[arg(long, value_name = "N")]
+    pub max_count: Option<usize>,
 
     /// Only sessions ACTIVE in this window: keep a session iff its [first-activity,
     /// last-activity] span — the timestamps this index already reads (head+tail, never a
@@ -734,10 +743,19 @@ impl ListArgs {
         summary). It renders as the parsed `[<kind> <task-id> <status>] <summary>` attribution \
         label — never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
         `search 'background-command' -t harness.notification.background-command`).\n\n\
-        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based on turn-boundary \
-        order) INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept \
-        ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
-        `3d`, `90m`, `45s`, `1w`) meaning \"that long ago\" in the system local timezone.\n\n\
+        WINDOWING: `--turn-range` takes the shared range grammar — `N` (one turn) · `A..B` \
+        (closed) · `N..` (turn N → the end) · `..N` (start → N) · `-k` = k-th FROM THE END \
+        (`-3..` = the last 3 turns), 0-based on turn-boundary order — and INTERSECTS with \
+        `--since`/`--until` (both filters AND). Time bounds accept ISO8601 (`2026-06-01`, \
+        `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, `45s`, `1w`) meaning \
+        \"that long ago\" in the system local timezone.\n\n\
+        ZERO MATCHES IS A DEFINITIVE ANSWER, NOT A FAILURE: a no-match search prints a stderr \
+        diagnosis — \"DEFINITIVE absence (exit 0), NOT an error\", the active filters, and (when a \
+        `-t`/`-T` filter was on) an active probe that NAMES the label(s) the pattern DOES occur \
+        under (e.g. it was excluded by your `-t user.message` but occurs under `agent.tool.use`). \
+        Read the diagnosis and adjust the filter; do NOT assume a syntax error. To SEE a scope's \
+        record-types before you filter, run `--count-by-label` (a per-leaf census; with an empty \
+        pattern it censuses the whole scope).\n\n\
         `--max-count` caps emitted exchanges but reports the dropped count (default: \
         unlimited — no cap) — there is NO silent truncation anywhere.",
     after_help = "EXAMPLES\n  \
@@ -792,16 +810,25 @@ impl ListArgs {
         monitor | task, read from the summary) — never the raw XML. Match it like any text, e.g. \
         `csift search 'background-command' -t harness.notification`. The `<kind>` prefix \
         distinguishes a machine opener from a genuine human message.\n\n\
-        LABEL DEFAULT\n  \
-          With NO `-t`/`--label`, EVERY label is searched (the whole user / agent / harness \
-        taxonomy) — a zero-hit result then means the pattern truly matched nothing, not that a \
-        label was excluded.\n\n\
+        EMPTY RESULTS ARE AN ANSWER, NOT A FAILURE\n  \
+          With NO `-t`/`--label`, EVERY label is searched. A ZERO-match result is a DEFINITIVE \
+        absence (exit 0), never an error — and it SELF-DIAGNOSES on stderr: it echoes the active \
+        filters and, when a `-t`/`-T` was on, an active probe NAMES the label(s) the pattern DOES \
+        occur under (so an empty `-t user.message` that hid tool-name hits under `agent.tool.use` \
+        tells you exactly that). Read the diagnosis and adjust the filter — do NOT assume a syntax \
+        error or fall back to hand-parsing jsonl. To SEE a scope's record-types BEFORE you guess a \
+        filter, run `--count-by-label` (a per-leaf census — empty pattern = whole-scope census; a \
+        leaf's count is exactly how many records `-t <leaf>` would surface; JSON `label_count` \
+        rows).\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
-        record_uuids:[…], hits:[{label, labels:[…], excerpt, tool_name, from, to, ts_utc, \
-        ts_local}, …]} — `label` is the matched dotted path, `labels` the record's full label \
-        set, `from`/`to` the comm direction when the hit is `agent.communication.*`. The \
+        record_uuids:[…], hits:[{label, labels:[…], line, uuid, excerpt, tool_name, from, to, \
+        ts_utc, ts_local, refetch}, …]} — `label` is the matched dotted path, `labels` the \
+        record's full label set, `from`/`to` the comm direction when the hit is \
+        `agent.communication.*`, and `refetch` is the ready-to-run `csift show` command addressed \
+        at the RIGHT id (run it verbatim). With `--count-by-label` the rows are `label_count` \
+        objects instead. The \
         per-hit objects carry no session_id; it lives on the envelope. With `--siblings`, the \
         envelope also carries a `siblings:[…]` array (same per-hit shape) for the turn's \
         non-matched records. Envelopes stream in \
@@ -812,15 +839,18 @@ impl ListArgs {
         SUBAGENT hex when `is_subagent` is true (that hex is NOT a re-feedable `@<uuid>` target — \
         re-feed `parent_session_id`, which is always the owning top-level uuid). \
         `record_uuids` lists every record stitched into the round-trip (§6.4 completeness \
-        evidence). A trailing footer object {matched, dropped_by_cap, skipped_lines} closes \
-        the stream. (Whole-document `json.load` fails — parse line-by-line as JSONL: N \
+        evidence). A trailing footer object {matched, sessions, transcript_ids, dropped_by_cap, \
+        skipped_lines, with_elicitation_sidecar, excerpts_truncated} closes the stream — plus \
+        {definitive_absence, active_filters, excluded_by_label} on a ZERO-match run. \
+        (`transcript_ids` is the per-TRANSCRIPT matching-id set, named apart from `-l`'s \
+        owning-session ids.) (Whole-document `json.load` fails — parse line-by-line as JSONL: N \
         envelopes then the footer.)"
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
     /// pure filter (use `--label` / time / turn filters alone).
     ///
-    /// search's FIRST positional is PATTERN (unlike files/turns/list/agents/recover, whose
+    /// search's FIRST positional is PATTERN (unlike files/verbatim/list/agents/recover, whose
     /// first positional is the PATH target), so a bare uuid here is a LITERAL pattern, searched
     /// verbatim. To SCOPE to a session, pass it as an `@<uuid>` POSITIONAL (a PATH target),
     /// exactly like every sibling: `csift search PATTERN @<uuid>`.
@@ -849,7 +879,7 @@ pub struct SearchArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -904,13 +934,13 @@ pub struct SearchArgs {
     #[arg(long)]
     pub multiline: bool,
 
-    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
+    /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|START..END")]
+    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -942,7 +972,7 @@ pub struct SearchArgs {
     /// Print ONLY the distinct matching OWNING sessions (`parent_session_id`), one per line
     /// — the grep/rg `-l` idiom for "WHICH sessions?". Scope-token domain: a subagent hit
     /// lists its parent uuid, so every line re-feeds (per-transcript detail lives in the
-    /// JSON summary's `session_ids` and each hit's `refetch`). Sorted, deduplicated,
+    /// JSON summary's `transcript_ids` and each hit's `refetch`). Sorted, deduplicated,
     /// UNCAPPED; when `--max-count` dropped exchanges a stderr note says the listing may be
     /// incomplete. Pipes straight into `--sessions-from -` to scope the NEXT command to
     /// what matched: `csift search P -l | csift stats --sessions-from -`.
@@ -952,6 +982,21 @@ pub struct SearchArgs {
         conflicts_with_all = ["count_only", "siblings"]
     )]
     pub sessions_with_matches: bool,
+
+    /// Print ONLY a per-LABEL census of the matched records — `<count> <role.class.sub>`,
+    /// one leaf per line, richest-count first. The exploration on-ramp: run it with an
+    /// EMPTY pattern to see WHAT record-types a scope actually holds (and how many) BEFORE
+    /// you guess a `-t` — so an empty `-t <leaf>` result is never mistaken for a typo. With
+    /// a real pattern it shows the label DISTRIBUTION of the matches. Counts are
+    /// record-level: each matched record contributes to every leaf in its label set (a
+    /// multi-label record counts under each), so a leaf's number is exactly how many records
+    /// `-t <leaf>` would surface. Honors `-t`/`-T`/time/turn/scope. JSON: `label_count` rows
+    /// + a summary.
+    #[arg(
+        long = "count-by-label",
+        conflicts_with_all = ["count_only", "sessions_with_matches", "siblings", "raw"]
+    )]
+    pub count_by_label: bool,
 
     /// Also render the SIBLING records of every matched turn — the rest of the
     /// back-and-forth, not only the matched line — so a matched USER question surfaces
@@ -1042,8 +1087,10 @@ impl SearchArgs {
         that file. A target resolving to more or fewer than one transcript is a hard error — \
         line numbers address one file.\n\n\
         ADDRESSING + EXIT\n  \
-          `--line` tokens are `N` or `A..B` (1-based, inclusive, ascending; repeatable / \
-        comma-joined). An explicitly named line/uuid that resolves to no record is a HARD \
+          `--line` / `--turn` tokens take the shared range grammar — `N` · `A..B` · `N..` (to \
+        the end) · `..N` · `-k` from the end (`--line -20..` = the last 20 lines, `--turn -3..` = \
+        the last 3 turns) — 1-based for lines, 0-based for turns, inclusive, repeatable / \
+        comma-joined. An explicitly named line/uuid that resolves to no record is a HARD \
         ERROR (exit non-zero); a range CLAMPS to the file but erroring if it yields nothing. \
         A pending-elicitation record merged from the sidecar has no physical line — address \
         it by `--uuid` (it renders `(elicitation sidecar)` in place of `Lnnnn`).\n\n\
@@ -1057,14 +1104,32 @@ pub struct ShowArgs {
     #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true)]
     pub target: std::path::PathBuf,
 
-    /// 1-based jsonl line number(s): `N` or `A..B` (inclusive), repeatable / comma-joined
+    /// 1-based jsonl line(s) in the shared range grammar: `N` · `A..B` · `N..` · `-k` from the end (`-20..` = last 20), repeatable / comma-joined
     /// (`--line 87,495..500,992`).
-    #[arg(long, value_name = "SPEC", value_delimiter = ',')]
+    #[arg(
+        long,
+        value_name = "SPEC",
+        value_delimiter = ',',
+        allow_hyphen_values = true
+    )]
     pub line: Vec<String>,
 
     /// Record uuid(s), repeatable / comma-joined.
     #[arg(long, value_name = "UUID", value_delimiter = ',')]
     pub uuid: Vec<String>,
+
+    /// 0-based TURN index/range — the `tN` `search` prints — in the SAME grammar as `--line`
+    /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end, so `-3..` = the last 3 turns,
+    /// `42..` = turn 42 → the end). Fetches EVERY record of the named turns (reads a turn's
+    /// whole back-and-forth), and the turn numbering matches `search`'s `s1·tN` exactly.
+    /// Mutually exclusive with `--line`/`--uuid` (pick ONE addressing mode).
+    #[arg(
+        long,
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true,
+        conflicts_with_all = ["line", "uuid"]
+    )]
+    pub turn: Option<String>,
 
     /// Emit the VERBATIM raw jsonl line(s) instead of the rendered record view
     /// (mutually exclusive with `--format json`).
@@ -1105,7 +1170,7 @@ pub struct StatsArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -1120,13 +1185,20 @@ pub struct StatsArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Count ONLY records in this inclusive turn-index window — bare `N` (just that turn)
-    /// or `START..END`, 0-based on the transcript's genuine-turn order (the same axis
-    /// `search`/`files` use; discover indices from their output). Intersects (AND) with
-    /// `--since`/`--until` — e.g. token burn of the last N turns: read the current turn
-    /// index from `csift search`, then `csift stats @main --turn-range <idx-N>..<idx>`.
-    #[arg(long, value_name = "N|START..END")]
+    /// Count ONLY records in this inclusive turn-index window — the shared range grammar
+    /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end), 0-based on the transcript's genuine-turn
+    /// order (the same axis `search`/`files` use; discover indices from their output). Intersects
+    /// (AND) with `--since`/`--until` — e.g. token burn of the last N turns is simply
+    /// `csift stats @main --turn-range -N..` (no need to look up the current turn index).
+    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
     pub turn_range: Option<String>,
+
+    /// Cap the emitted per-session rows (default: unlimited) — bound an unscoped run's output.
+    /// The kept rows are the most recently active; the drop is reported, never silent (the
+    /// scope TOTAL block then covers the shown subset). Pass a target / `--since` to choose
+    /// WHICH sessions instead.
+    #[arg(long, value_name = "N")]
+    pub max_count: Option<usize>,
 
     /// Exclude subagent transcripts — count only the top-level session(s).
     #[arg(long = "no-subagents")]
@@ -1213,7 +1285,7 @@ pub enum AgentKindFilter {
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
         `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
         axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
-        by `turns`/`search -t user` — they overlap only on the token `workflow`.\n\n\
+        by `verbatim`/`search -t user` — they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
           csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagent tree\n  \
           csift agents .                                                   # every session under this project\n  \
@@ -1249,7 +1321,7 @@ pub enum AgentKindFilter {
         status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, \
         started_utc, started_local, children}. Every `_utc` field carries a paired `_local` \
         (system-local ISO). The malformed-line count rides on each node's `skipped_lines`. \
-        UNLIKE search/files/recover/turns, this stream has NO trailing terminator object — it \
+        UNLIKE search/files/recover/verbatim, this stream has NO trailing terminator object — it \
         is pure JSONL, end-of-stream = EOF."
 )]
 pub struct AgentsArgs {
@@ -1266,7 +1338,7 @@ pub struct AgentsArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -1290,7 +1362,7 @@ pub struct AgentsArgs {
     /// Only show subagents of this kind (repeatable). Default: all kinds. This is the
     /// subagent TRANSCRIPT-SHAPE filter — its values are `builtin-task` | `workflow` |
     /// `teammate`. It is NOT the automation-TRIGGER taxonomy (`background-command`/`agent`/
-    /// `monitor`/`task`/`workflow`) that `turns`/`search -t harness.notification` surface;
+    /// `monitor`/`task`/`workflow`) that `verbatim`/`search -t harness.notification` surface;
     /// the two axes share only the literal token `workflow` (different meaning), so
     /// `--shape monitor` is an invalid-value error by design. Ignored when `--agent <hex>`
     /// is given (a direct grab).
@@ -1434,7 +1506,7 @@ pub enum FilesDetail {
         PATH/encoded-dir for every session under it; with neither, all projects are \
         scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
         in subagents): `--no-subagents` restricts to the TOP-LEVEL session only.\n\n\
-        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based on genuine-user order) \
+        WINDOWING: `--turn-range (N|A..B|N..|-k)` (inclusive, 0-based on genuine-user order) \
         INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept ISO8601 \
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
@@ -1504,7 +1576,7 @@ pub struct FilesArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -1546,13 +1618,13 @@ pub struct FilesArgs {
     #[arg(long = "glob", value_name = "PAT")]
     pub glob: Option<String>,
 
-    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
+    /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|START..END")]
+    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -1657,9 +1729,9 @@ pub enum RecoverMode {
         The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
-        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based genuine-user order) \
+        WINDOWING: `--turn-range (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
         INTERSECTS with `--since`/`--until` (ISO8601 / relative; both filters AND). \
-        `--file-lines N|START..END` further restricts to a 1-based FILE-line span. `--out <PATH>` writes \
+        `--file-lines (N|A..B|N..|-k)` further restricts to a 1-based FILE-line span. `--out <PATH>` writes \
         the reconstructed artifact (restored content / snapshot / concatenated patches) \
         verbatim to a file; in restore mode stdout then stays empty (just a stderr note), \
         in the other modes the summary still prints to stdout.\n\n\
@@ -1716,7 +1788,7 @@ pub struct RecoverArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -1776,13 +1848,13 @@ pub struct RecoverArgs {
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
 
-    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
+    /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|START..END")]
+    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -1796,12 +1868,16 @@ pub struct RecoverArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Restrict to a 1-based, inclusive FILE-line span of `--file` — bare `N` or
-    /// `START..END` (filters the reconstructed line space, independent of the turn/time
+    /// Restrict to a 1-based, inclusive FILE-line span of `--file` — the shared range grammar
+    /// (`N` · `A..B` · `N..` · `-k` = the last k lines) (filters the reconstructed line space, independent of the turn/time
     /// window). Applies in `--patches` / `--at` / `--coverage`. (Named `--file-lines`
     /// because `line`/`L` always means a TRANSCRIPT jsonl line in csift — this is the one
     /// flag that addresses the reconstructed FILE's lines.)
-    #[arg(long = "file-lines", value_name = "N|START..END")]
+    #[arg(
+        long = "file-lines",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub line_range: Option<String>,
 
     /// Write the reconstructed artifact (snapshot / concatenated patches)
@@ -1870,7 +1946,7 @@ impl RecoverArgs {
     long_about = "List and EXTRACT the images a session carries. A pasted/attached image (and a \
         tool-result screenshot) is stored INLINE on a record as a base64 image block, so `image` \
         decodes it straight back to a file — nothing was externalised.\n\n\
-        TWO ADDRESSES: `#N` — the session's own `[Image #N]` handle (`turns`/`search` show it \
+        TWO ADDRESSES: `#N` — the session's own `[Image #N]` handle (`verbatim`/`search` show it \
         inline; an ambiguous `#N` errors with the occurrence list, disambiguate via `--since`/\
         `--turn-range`/`--uuid`); and `L<line>i<n>` — the exact locator (carrying record's JSONL \
         line + ordinal within it).\n\n\
@@ -1899,7 +1975,7 @@ pub struct ImageArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -1925,9 +2001,9 @@ pub struct ImageArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Restrict to images in this turn range (`N` or `START..END`, 0-based inclusive). A per-transcript
+    /// Restrict to images in this turn range — the shared grammar (`N` · `A..B` · `N..` · `-k` from the end), 0-based inclusive. A per-transcript
     /// `#N` disambiguator — needs a single transcript in scope.
-    #[arg(long, value_name = "N|START..END")]
+    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
     pub turn_range: Option<String>,
 
     /// Restrict to images carried by the record whose uuid starts with this (a `#N`
@@ -2006,7 +2082,7 @@ pub struct PlanArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -2052,10 +2128,14 @@ impl PlanArgs {
         TASK STATE (the 9-section synthesis: intent, file ledger, errors+fixes, plan, next \
         step) in high fidelity but PROVABLY LOSES turn fidelity — its \"All user messages\" \
         section clips ~22 real prose turns to ~17 `...`-truncated bullets, and the assistant \
-        side collapses to a SINGLE verbatim quote. `turns` supplements (never replaces) the \
+        side collapses to a SINGLE verbatim quote. `verbatim` supplements (never replaces) the \
         summary: it re-emits the clipped user phrasings + discarded assistant end-of-turn \
         replies, IN ORIGINAL ORDER, each line carrying the jsonl LINE NUMBER so a consumer \
         can `Read` the raw transcript at the cited line.\n\n\
+        NOT the tail-peek tool: to read a session's RECENT turns straight from the live \
+        transcript (no compaction involved), use `show --turn N..` (e.g. `--turn -3..` = the \
+        last 3 turns). `verbatim` is specifically for RESTORING the turns a compaction summary \
+        already CLIPPED — its budget / round-trip / richness heuristics exist for that job.\n\n\
         SELECTION is recency-first (most-recent turns win the budget, what a resumed agent \
         most needs); the EMITTED document is sorted ascending so it reads as a forward \
         transcript. The backward walk is TRANSPARENT to compaction boundaries — a summary \
@@ -2064,7 +2144,7 @@ impl PlanArgs {
         another). `--max-compactions` only caps how far.\n\n\
         BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in CHARS \
         (sizing rule of thumb: ≈4 chars/token) — it is applied PER session \
-        in scope. `turns` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
+        in scope. `verbatim` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
         just `budget` chars; with `--subagents` a target that spans S subagents \
         realizes up to `budget × (1 + S)` chars total (a scope banner surfaces the \
         multiplier). `--round-trip-fraction` \
@@ -2096,34 +2176,34 @@ impl PlanArgs {
         user (M automation triggers) + …`). These pulses are EXCLUDED from the \
         `--round-trip-fraction` HARD FLOOR (that lane is reserved for human exchanges) but \
         can still be selected as Phase-2 fill.\n\n\
-        BUDGET FAN-OUT: `--budget` is applied PER session in scope. `turns` defaults to the \
+        BUDGET FAN-OUT: `--budget` is applied PER session in scope. `verbatim` defaults to the \
         top-level thread only, so a bare-uuid run is a single session at `budget` chars. With \
         `--subagents` the target also spans that session's subagents, so the realized \
         output is `budget × (sessions in scope)`; a top-of-output scope banner then names the \
         TRUE scope (all discovered top-level + subagent sessions), how many rendered within \
         budget, and the realized multiplier.\n\n\
-        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based genuine-user order) \
+        WINDOWING: `--turn-range (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
         intersects (AND) with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). NOTE \
-        `turns` TEXT prints `L<line>` per unit, NOT a turn marker — to pick a value for \
+        `verbatim` TEXT prints `L<line>` per unit, NOT a turn marker — to pick a value for \
         `--turn-range` read the index from `csift search` text (`s·t<n>` header) or this \
         command's own `--format json` (`turn_index`). \
         `--out <PATH>` captures the SAME rendered reconstruction that prints to stdout into a \
-        file (byte-identical — turns does NOT line-truncate stdout, so `--out` differs only in \
+        file (byte-identical — verbatim does NOT line-truncate stdout, so `--out` differs only in \
         going to a file rather than the terminal; over-cap units are middle-truncated with an \
         explicit `… [+K chars, L lines elided] …` marker in BOTH). For UN-truncated unit \
         bodies use `--format json`, which emits one VERBATIM object per unit (full `text`, no \
         per-unit cap) plus interleaved compaction-boundary records.",
     after_help = "EXAMPLES\n  \
-          csift turns .                                     # default 40K-char reconstruction, top-level thread\n  \
-          csift turns @<uuid> --budget 12000                # recover JUST my thread (~10-15K, no fan-out)\n  \
-          csift turns @<uuid> --subagents --format json     # ALSO span subagents (budget × N, line-numbered)\n  \
-          csift turns @<uuid> --round-trip-fraction 0.6     # weight harder toward complete round-trips\n  \
-          csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
-          csift turns . --budget 36000 --window 9000 --slice 1   # 1st ≤9000-char chunk for a SessionStart hook (fan slices 1..4)\n  \
-          csift turns @<uuid> --budget 8000 --max-compactions 1  # stay within one compaction boundary\n  \
-          csift turns @<uuid> --agent-msgs eot-only         # last-message-only per turn\n  \
-          csift turns @<uuid> --profile heavy               # lower thresholds (max fidelity)\n  \
-          csift turns @<uuid> --agent-msgs all              # every agent message, no filtering\n\n\
+          csift verbatim .                                     # default 40K-char reconstruction, top-level thread\n  \
+          csift verbatim @<uuid> --budget 12000                # recover JUST my thread (~10-15K, no fan-out)\n  \
+          csift verbatim @<uuid> --subagents --format json     # ALSO span subagents (budget × N, line-numbered)\n  \
+          csift verbatim @<uuid> --round-trip-fraction 0.6     # weight harder toward complete round-trips\n  \
+          csift verbatim . --budget 40000 --out /tmp/verbatim.md  # full reconstruction to a file\n  \
+          csift verbatim . --budget 36000 --window 9000 --slice 1   # 1st ≤9000-char chunk for a SessionStart hook (fan slices 1..4)\n  \
+          csift verbatim @<uuid> --budget 8000 --max-compactions 1  # stay within one compaction boundary\n  \
+          csift verbatim @<uuid> --agent-msgs eot-only         # last-message-only per turn\n  \
+          csift verbatim @<uuid> --profile heavy               # lower thresholds (max fidelity)\n  \
+          csift verbatim @<uuid> --agent-msgs all              # every agent message, no filtering\n\n\
         AUTOMATION TRIGGERS\n  \
           A machine `<task-notification>` (a background-command / workflow / spawned-agent /\n  \
           monitor-tick COMPLETION pulse Claude Code injects as a `type:\"user\"` record) OPENS\n  \
@@ -2141,7 +2221,7 @@ impl PlanArgs {
           genuine-user turn (not yet split into per-tick segments). In an automation-heavy\n  \
           monitor session this lumps the dominant tick-driven work onto one human turn.\n\n\
         BUDGET FAN-OUT\n  \
-          `--budget` is PER session in scope. `turns` defaults to the TOP-LEVEL thread only, so\n  \
+          `--budget` is PER session in scope. `verbatim` defaults to the TOP-LEVEL thread only, so\n  \
           a bare-uuid run is one session at `budget` chars. Add `--subagents` to also\n  \
           span that session's subagents — the realized output is then budget × (sessions in\n  \
           scope), and a top-of-output `scope` line names the TRUE scope (all top-level +\n  \
@@ -2172,22 +2252,22 @@ impl PlanArgs {
           {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
           {kind:\"skipped_lines\", skipped_lines:N} ALWAYS closes the stream (even when N=0),\n  \
           so a JSONL consumer can detect end-of-stream. NOTE the terminator SHAPE is NOT yet\n  \
-          uniform tool-wide: turns is the ONLY command whose terminator is `kind`-tagged.\n  \
+          uniform tool-wide: verbatim is the ONLY command whose terminator is `kind`-tagged.\n  \
           search closes with `{matched,dropped_by_cap,skipped_lines}`, files with\n  \
           `{total_mutations,distinct_files,skipped_lines,detail_level}`, recover with\n  \
           `{summary:{…}}` (nested) — all THREE untagged — and list/agents emit NO terminator\n  \
           (end-of-stream = EOF). Key any portable EOF check on the per-command shape, not on a\n  \
           shared `kind:\"skipped_lines\"` (a tool-wide `{kind:\"end\",…}` is a planned change)."
 )]
-pub struct TurnsArgs {
+pub struct VerbatimArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// turns from, OR an `@<uuid>` session token. Repeatable; with none, every project is
-    /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift turns @<uuid>` works
+    /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift verbatim @<uuid>` works
     /// as the EXAMPLES show; `@<agent-id>` reconstructs that ONE subagent's own thread (ids
     /// from `csift agents`); `@main`/`@trap:<marker>` resolve the calling session, and a
-    /// `*.jsonl` file scopes to that transcript. A target is REQUIRED (a bare `csift turns`
-    /// would realize `--budget` × every session of every project). NOTE: `turns` defaults to
-    /// the TOP-LEVEL thread only (the single-thread recovery use case), so `csift turns
+    /// `*.jsonl` file scopes to that transcript. A target is REQUIRED (a bare `csift verbatim`
+    /// would realize `--budget` × every session of every project). NOTE: `verbatim` defaults to
+    /// the TOP-LEVEL thread only (the single-thread recovery use case), so `csift verbatim
     /// @<uuid>` reconstructs just that conversation; add `--subagents` for the rare
     /// cross-fan-out reconstruction (`--budget` is then applied PER session in scope — see
     /// `--budget`).
@@ -2200,7 +2280,7 @@ pub struct TurnsArgs {
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
     /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
-    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
     /// widening to every project.
@@ -2208,7 +2288,7 @@ pub struct TurnsArgs {
     pub sessions_from: Option<std::path::PathBuf>,
 
     /// Character budget applied PER session in scope (chars, always — sizing rule ≈4
-    /// chars/token). Each session's reconstruction is bounded by this; `turns` defaults to
+    /// chars/token). Each session's reconstruction is bounded by this; `verbatim` defaults to
     /// the top-level thread only, so a bare-uuid run realizes just `budget` chars. With
     /// `--subagents` the realized total is `budget × (sessions in scope)` and a scope banner
     /// surfaces the multiplier. Default 40000.
@@ -2222,8 +2302,8 @@ pub struct TurnsArgs {
     pub round_trip_fraction: f64,
 
     /// Also span each in-scope session's SUBAGENT transcripts (built-in Task/Agent-tool,
-    /// OMC, and Workflow agents) under `subagents/**`. Default OFF for `turns` (UNLIKE
-    /// files/search): `turns` is a SINGLE-THREAD recovery tool and `--budget` MULTIPLIES per
+    /// OMC, and Workflow agents) under `subagents/**`. Default OFF for `verbatim` (UNLIKE
+    /// files/search): `verbatim` is a SINGLE-THREAD recovery tool and `--budget` MULTIPLIES per
     /// session in scope, so spanning hundreds of unrelated fan-out subagents by default would
     /// bury the thread you asked to restore under megabytes of noise. Opt in with
     /// `--subagents` only for the rare cross-fan-out reconstruction.
@@ -2235,7 +2315,7 @@ pub struct TurnsArgs {
     pub include_subagents: bool,
 
     /// Exclude subagent transcripts — reconstruct only from the top-level session. This is
-    /// already the `turns` DEFAULT; the flag is kept for symmetry with the other subcommands
+    /// already the `verbatim` DEFAULT; the flag is kept for symmetry with the other subcommands
     /// and to explicitly cancel an earlier `--subagents` (last flag wins).
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
@@ -2268,13 +2348,13 @@ pub struct TurnsArgs {
     #[arg(long = "profile", value_enum)]
     pub profile: Option<crate::turns::Profile>,
 
-    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
+    /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|START..END")]
+    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -2289,7 +2369,7 @@ pub struct TurnsArgs {
     pub until: Option<String>,
 
     /// Capture the SAME rendered reconstruction that prints to stdout into this file
-    /// (byte-identical — turns does NOT truncate stdout; over-cap units are middle-truncated
+    /// (byte-identical — verbatim does NOT truncate stdout; over-cap units are middle-truncated
     /// with a `… [+K chars, L lines elided] …` marker in BOTH). The summary still prints to
     /// stdout. For UN-truncated unit bodies use `--format json` (full verbatim `text`).
     #[arg(long, value_name = "PATH")]
@@ -2335,11 +2415,11 @@ pub struct TurnsArgs {
     pub slices: Option<usize>,
 }
 
-impl TurnsArgs {
+impl VerbatimArgs {
     /// Resolve the include/exclude flags into a single decision. UNLIKE the other
-    /// subcommands, `turns` defaults to TOP-LEVEL-ONLY (`include_subagents` defaults false):
+    /// subcommands, `verbatim` defaults to TOP-LEVEL-ONLY (`include_subagents` defaults false):
     /// spanning is opt-in via `--subagents`, and a trailing `--no-subagents` still
-    /// forces it off. So a `csift turns @<uuid>` reconstructs just that one thread.
+    /// forces it off. So a `csift verbatim @<uuid>` reconstructs just that one thread.
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         self.include_subagents && !self.no_subagents
@@ -2625,7 +2705,7 @@ mod tests {
         // positional is rejected so clap surfaces it, on EVERY scope-operating subcommand.
         for argv in [
             ["csift", "files", "--by-fil"].as_slice(),
-            ["csift", "turns", "--budgett"].as_slice(),
+            ["csift", "verbatim", "--budgett"].as_slice(),
             ["csift", "list", "--by-fil"].as_slice(),
             ["csift", "agents", "--bogus"].as_slice(),
         ] {
@@ -2963,21 +3043,21 @@ mod tests {
     fn span_switch_pair_is_uniform_across_commands() {
         // ONE mental axis, two switches everywhere: `--subagents` / `--no-subagents`.
         // `--include-subagents` is GONE (0 backcompat). Defaults differ per command
-        // (turns=off, the rest=on); passing the default-matching switch is a no-op.
+        // (verbatim=off, the rest=on); passing the default-matching switch is a no-op.
         for argv in [
             vec!["csift", "list", SESS_UUID, "--include-subagents"],
-            vec!["csift", "turns", SESS_UUID, "--include-subagents"],
+            vec!["csift", "verbatim", SESS_UUID, "--include-subagents"],
         ] {
             assert!(
                 parse(&argv).is_err(),
                 "{argv:?}: --include-subagents must be an unknown argument now"
             );
         }
-        // turns opts in with --subagents.
-        let cli = parse(&["csift", "turns", SESS_UUID, "--subagents"]).unwrap();
+        // verbatim opts in with --subagents.
+        let cli = parse(&["csift", "verbatim", SESS_UUID, "--subagents"]).unwrap();
         match cli.command {
-            Command::Turns(a) => assert!(a.want_subagents(), "turns --subagents opts in"),
-            _ => panic!("expected turns"),
+            Command::Verbatim(a) => assert!(a.want_subagents(), "verbatim --subagents opts in"),
+            _ => panic!("expected verbatim"),
         }
         // The default-on commands accept the explicit no-op --subagents…
         let cli = parse(&["csift", "list", SESS_UUID, "--subagents"]).unwrap();
@@ -3025,26 +3105,33 @@ mod tests {
 
     #[test]
     fn turns_include_then_no_subagents_cancels_the_opt_in() {
-        // `turns` defaults to top-level-only; `--subagents` opts in. A LATER
+        // `verbatim` defaults to top-level-only; `--subagents` opts in. A LATER
         // `--no-subagents` cancels it — the field's `overrides_with` makes the last flag win,
         // and `want_subagents()` ANDs `include && !no_subagents`. (Bare opt-in spans; the
         // trailing `--no-subagents` here suppresses it.)
-        let cli = parse(&["csift", "turns", SESS_UUID, "--subagents", "--no-subagents"]).unwrap();
+        let cli = parse(&[
+            "csift",
+            "verbatim",
+            SESS_UUID,
+            "--subagents",
+            "--no-subagents",
+        ])
+        .unwrap();
         match cli.command {
-            Command::Turns(a) => assert!(
+            Command::Verbatim(a) => assert!(
                 !a.want_subagents(),
-                "turns: a trailing --no-subagents must cancel --subagents"
+                "verbatim: a trailing --no-subagents must cancel --subagents"
             ),
-            _ => panic!("expected turns"),
+            _ => panic!("expected verbatim"),
         }
         // Default (no span flag) is top-level only.
-        let cli = parse(&["csift", "turns", SESS_UUID]).unwrap();
+        let cli = parse(&["csift", "verbatim", SESS_UUID]).unwrap();
         match cli.command {
-            Command::Turns(a) => assert!(
+            Command::Verbatim(a) => assert!(
                 !a.want_subagents(),
-                "turns defaults to top-level only (no opt-in)"
+                "verbatim defaults to top-level only (no opt-in)"
             ),
-            _ => panic!("expected turns"),
+            _ => panic!("expected verbatim"),
         }
     }
 

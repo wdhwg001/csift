@@ -53,7 +53,7 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     let turn_range = args
         .turn_range
         .as_deref()
-        .map(|s| crate::text::parse_range(s, "--turn-range", false))
+        .map(|s| crate::text::parse_range_spec(s, "--turn-range", false))
         .transpose()?;
     let files = path::resolve_targets_with_session_list(
         &args.paths,
@@ -63,15 +63,28 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     )?;
     let mut rows: Vec<SessionStats> = files
         .par_iter()
-        .map(|p| stats_one_file(p, &window, turn_range.as_ref()))
+        .map(|p| stats_one_file(p, &window, turn_range))
         .collect::<Result<Vec<_>>>()?;
     rows.sort_by(|a, b| a.session_id.cmp(&b.session_id));
+
+    // Context-safety cap (T2.1, opt-in): bound an unscoped run's per-session rows. NEVER
+    // silent — the drop is reported. Keep the MOST RECENTLY active, then restore the
+    // deterministic id order for display (the scope TOTAL then covers the shown subset).
+    let mut dropped = 0usize;
+    if let Some(n) = args.max_count {
+        if rows.len() > n {
+            rows.sort_by(|a, b| b.last_utc.cmp(&a.last_utc));
+            dropped = rows.len() - n;
+            rows.truncate(n);
+            rows.sort_by(|a, b| a.session_id.cmp(&b.session_id));
+        }
+    }
 
     let sub = rows.iter().filter(|r| r.is_subagent).count();
     let top = rows.len() - sub;
     match args.format {
-        OutputFormat::Text => render_text(&rows, top, sub),
-        OutputFormat::Json => render_json(&rows, top, sub)?,
+        OutputFormat::Text => render_text(&rows, top, sub, dropped),
+        OutputFormat::Json => render_json(&rows, top, sub, dropped)?,
     }
     Ok(())
 }
@@ -87,7 +100,7 @@ fn line_is_stats_candidate(line: &[u8]) -> bool {
 fn stats_one_file(
     path: &Path,
     window: &TimeWindow,
-    turn_range: Option<&(usize, usize)>,
+    turn_range: Option<crate::text::RangeSpec>,
 ) -> Result<SessionStats> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -123,10 +136,12 @@ fn stats_one_file(
     // `--turn-range`: per-record turn membership on the FULL transcript's genuine-turn
     // order (the SAME 0-based axis `search`/`files` window on), computed BEFORE the time
     // filter so indices stay stable, then intersected (AND) with the window below.
-    let in_turn_range: Option<Vec<bool>> = turn_range.map(|&(lo, hi)| {
+    let in_turn_range: Option<Vec<bool>> = turn_range.map(|spec| {
         let all: Vec<&Record> = records.iter().collect();
+        let groups = group_turn_indices_deduped(&all, |r| *r);
+        let (lo, hi) = spec.resolve(groups.len(), false);
         let mut keep = vec![false; records.len()];
-        for (ti, group) in group_turn_indices_deduped(&all, |r| *r).iter().enumerate() {
+        for (ti, group) in groups.iter().enumerate() {
             if ti >= lo && ti <= hi {
                 for &i in group {
                     keep[i] = true;
@@ -230,7 +245,7 @@ fn merged_tools(rows: &[SessionStats]) -> BTreeMap<String, usize> {
     total
 }
 
-fn render_text(rows: &[SessionStats], top: usize, sub: usize) {
+fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
     crate::text::emit_scope_banner(top, sub);
     for r in rows {
         if r.is_subagent {
@@ -316,6 +331,12 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize) {
     if skipped > 0 {
         println!("({})", crate::text::malformed_note(skipped));
     }
+    if dropped > 0 {
+        println!(
+            "… (+{dropped} more session(s) not shown — the most recently active are aggregated \
+             above; narrow with a target or --since, or raise --max-count)"
+        );
+    }
 }
 
 fn tokens_json(tokens: &BTreeMap<String, TokenSums>) -> serde_json::Value {
@@ -336,7 +357,7 @@ fn tokens_json(tokens: &BTreeMap<String, TokenSums>) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-fn render_json(rows: &[SessionStats], top: usize, sub: usize) -> Result<()> {
+fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) -> Result<()> {
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
@@ -373,6 +394,7 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize) -> Result<()> {
         "tools": merged_tools(rows),
         "tokens": tokens_json(&merged_tokens(rows)),
         "skipped_lines": rows.iter().map(|r| r.skipped_lines).sum::<usize>(),
+        "dropped_by_cap": dropped,
     }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())

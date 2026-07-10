@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::PathBuf;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 
 use crate::cli::{OutputFormat, ShowArgs};
 use crate::parse::{mmap_bytes, scan_lines_bytes};
@@ -34,10 +34,6 @@ struct LineSpecs {
 }
 
 impl LineSpecs {
-    fn is_empty(&self) -> bool {
-        self.explicit.is_empty() && self.ranges.is_empty()
-    }
-
     /// Every addressed line, expanded (ranges included).
     fn all(&self) -> BTreeSet<usize> {
         let mut out = self.explicit.clone();
@@ -48,36 +44,51 @@ impl LineSpecs {
     }
 }
 
-/// Parse `--line` tokens (already comma-split by clap): `N` or `A..B` (1-based,
-/// inclusive, ascending — the shared [`crate::text::parse_range`] grammar). A bare `N`
-/// is an EXPLICIT address (miss = hard error); an `A..B` token is a clamping range.
-/// No subagent prefix — the TARGET names the transcript.
-fn parse_line_specs(tokens: &[String]) -> Result<LineSpecs> {
-    let mut specs = LineSpecs::default();
+/// Parse `--line` tokens (already comma-split by clap) into `(is_explicit, RangeSpec)` pairs
+/// via the shared [`crate::text::parse_range_spec`] grammar (`N` · `A..B` · `N..` · `..N` ·
+/// `-k` from the end). A single token (no `..`) is an EXPLICIT address (miss = hard error); a
+/// `..` token is a clamping range. Open/from-end forms resolve against the file's line count in
+/// [`resolve_line_specs`]. No subagent prefix — the TARGET names the transcript.
+fn parse_line_specs(tokens: &[String]) -> Result<Vec<(bool, crate::text::RangeSpec)>> {
+    let mut out = Vec::new();
     for tok in tokens {
         let t = tok.trim();
         if t.is_empty() {
             continue;
         }
-        if t.contains("..") {
-            specs
-                .ranges
-                .push(crate::text::parse_range(t, "--line", true)?);
+        let is_explicit = !t.contains("..");
+        out.push((
+            is_explicit,
+            crate::text::parse_range_spec(t, "--line", true)?,
+        ));
+    }
+    Ok(out)
+}
+
+/// Resolve parsed `--line` specs against the transcript's line count (1-based), materializing
+/// open/from-end forms. A single-token spec becomes an explicit address; a range spec clamps.
+fn resolve_line_specs(parsed: &[(bool, crate::text::RangeSpec)], total_lines: usize) -> LineSpecs {
+    let mut specs = LineSpecs::default();
+    for (is_explicit, spec) in parsed {
+        let (lo, hi) = spec.resolve(total_lines, true);
+        if *is_explicit {
+            specs.explicit.insert(lo); // lo == hi for a single token
         } else {
-            let n: usize = t.parse().map_err(|_| {
-                if t.bytes().any(|b| b == b'-') {
-                    anyhow!("--line range is START..END (e.g. 495..500); got '{t}'")
-                } else {
-                    anyhow!("--line: '{t}' is not a line number or A..B range")
-                }
-            })?;
-            if n == 0 {
-                bail!("--line: lines are 1-based; line 0 does not exist");
-            }
-            specs.explicit.insert(n);
+            specs.ranges.push((lo, hi));
         }
     }
-    Ok(specs)
+    specs
+}
+
+/// Count a transcript's physical jsonl lines (newlines + a torn final fragment), the 1-based
+/// domain the `--line` from-end / open forms resolve against. An empty/missing file ⇒ 0.
+fn count_lines(file: &std::path::Path) -> Result<usize> {
+    let Some(mmap) = mmap_bytes(file)? else {
+        return Ok(0);
+    };
+    let bytes: &[u8] = &mmap;
+    Ok(memchr::memchr_iter(b'\n', bytes).count()
+        + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n")))
 }
 
 /// Resolve the TARGET to exactly ONE transcript file. `@<uuid>` → that top-level
@@ -106,33 +117,50 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
     if args.raw && args.format == OutputFormat::Json {
         bail!("--raw is mutually exclusive with --format json (raw IS the file's own JSON)");
     }
-    let specs = parse_line_specs(&args.line)?;
+    let parsed = parse_line_specs(&args.line)?;
     let uuids: BTreeSet<String> = args
         .uuid
         .iter()
         .map(|u| u.trim().to_string())
         .filter(|u| !u.is_empty())
         .collect();
+    // `--turn` addresses by turn index (0-based, the `s1·tN` search prints) rather than by
+    // jsonl line — the SAME shared range grammar (`N`/`A..B`/`N..`/`-k`). Clap forbids mixing
+    // it with `--line`/`--uuid`, so it is a self-contained addressing mode.
+    let turn_spec = args
+        .turn
+        .as_deref()
+        .map(|s| crate::text::parse_range_spec(s, "--turn", false))
+        .transpose()?;
 
     let file = resolve_single_transcript(&args.target)?;
-    if specs.is_empty() && uuids.is_empty() {
+    if parsed.is_empty() && uuids.is_empty() && turn_spec.is_none() {
         bail!(
-            "show needs an address: `--line <N|A..B>` (1-based jsonl lines, the `Lnnnn` other \
-             csift commands print) and/or `--uuid <U>`. The transcript is {} — csift never \
-             dumps a whole transcript into your context.",
+            "show needs an address: `--line <N|A..B|N..|-k>` (1-based jsonl lines, the `Lnnnn` \
+             other csift commands print), `--turn <N|A..B|-k>` (0-based turn index, the `tN` \
+             search prints), and/or `--uuid <U>`. The transcript is {} — csift never dumps a \
+             whole transcript into your context.",
             file.display()
         );
     }
+    // Resolve `--line` open/from-end forms (`N..`, `-20..` = the last 20) against this
+    // transcript's line count, materializing the concrete explicit/range addresses.
+    let specs = resolve_line_specs(&parsed, count_lines(&file)?);
 
     if args.raw {
-        return run_raw(&file, &specs, &uuids);
+        return run_raw(&file, &specs, &uuids, turn_spec);
     }
-    run_rendered(&file, &specs, &uuids, args.format)
+    run_rendered(&file, &specs, &uuids, turn_spec, args.format)
 }
 
 /// `--raw`: emit the verbatim bytes of each addressed jsonl line, ascending, exactly
 /// as stored (a blank or torn line included — that is the point).
-fn run_raw(file: &std::path::Path, specs: &LineSpecs, uuids: &BTreeSet<String>) -> Result<()> {
+fn run_raw(
+    file: &std::path::Path,
+    specs: &LineSpecs,
+    uuids: &BTreeSet<String>,
+    turn_range: Option<crate::text::RangeSpec>,
+) -> Result<()> {
     let Some(mmap) = mmap_bytes(file)? else {
         bail!("transcript {} is empty", file.display());
     };
@@ -142,7 +170,19 @@ fn run_raw(file: &std::path::Path, specs: &LineSpecs, uuids: &BTreeSet<String>) 
     // uuid (cheap memmem prefilter), then confirm against the parsed record's own uuid.
     let mut uuid_line: std::collections::BTreeMap<&String, Option<usize>> =
         uuids.iter().map(|u| (u, None)).collect();
-    let wanted_lines = specs.all();
+    let mut wanted_lines = specs.all();
+    // `--turn --raw`: resolve the turn range to its records' physical lines (via the shared
+    // grouping, so the turn numbering matches `search`), then emit those lines verbatim.
+    if let Some(spec) = turn_range {
+        let (exchanges, _) = fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec))?;
+        for ex in &exchanges {
+            for h in &ex.hits {
+                if h.line > 0 {
+                    wanted_lines.insert(h.line);
+                }
+            }
+        }
+    }
     let mut total_lines = 0usize;
     let mut keep: std::collections::BTreeMap<usize, Vec<u8>> = std::collections::BTreeMap::new();
 
@@ -205,9 +245,10 @@ fn run_rendered(
     file: &std::path::Path,
     specs: &LineSpecs,
     uuids: &BTreeSet<String>,
+    turn_range: Option<crate::text::RangeSpec>,
     format: OutputFormat,
 ) -> Result<()> {
-    let (exchanges, skipped) = fetch_records(file, specs.all(), uuids.clone())?;
+    let (exchanges, skipped) = fetch_records(file, specs.all(), uuids.clone(), turn_range)?;
 
     // Address-miss accounting (explicit lines + uuids must resolve; ranges must yield ≥1).
     let mut hit_lines: BTreeSet<usize> = BTreeSet::new();

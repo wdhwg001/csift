@@ -51,7 +51,7 @@ pub struct SessionSummary {
     pub is_subagent: bool,
     /// The re-feedable PARENT session uuid (the owning top-level session). Equals
     /// `session_id` for a top-level row; for a subagent row it is the uuid you re-feed
-    /// (`csift turns <parent_session_id>` works; the bare hex does not).
+    /// (`csift verbatim <parent_session_id>` works; the bare hex does not).
     pub parent_session_id: String,
     /// Absolute path to the session jsonl.
     pub path: PathBuf,
@@ -139,12 +139,47 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
         });
     }
 
+    // Context-safety cap (T2.1): an unscoped `csift list` over a large corpus floods the
+    // reader's context (the SPEC-noted many-thousand-line hazard). Bound the rows — NEVER
+    // silently: the drop is reported with guidance. `--max-count` overrides; with no explicit
+    // cap, ALL-projects listing defaults to 50 while a scoped query (a target / --sessions-from)
+    // stays unlimited. The kept rows are the MOST RECENTLY active (what an unscoped list wants),
+    // then restored to the deterministic path order for display.
+    let all_projects = args.paths.is_empty() && args.sessions_from.is_none();
+    let cap = args.max_count.or(if all_projects {
+        Some(DEFAULT_LIST_CAP)
+    } else {
+        None
+    });
+    let mut dropped = 0usize;
+    if let Some(n) = cap {
+        if summaries.len() > n {
+            summaries.sort_by(|a, b| last_activity(b).cmp(&last_activity(a)));
+            dropped = summaries.len() - n;
+            summaries.truncate(n);
+            summaries.sort_by(|a, b| a.path.cmp(&b.path));
+        }
+    }
+
     // 4. Render.
     match args.format {
-        OutputFormat::Text => render_text(&summaries),
-        OutputFormat::Json => render_json(&summaries)?,
+        OutputFormat::Text => render_text(&summaries, dropped),
+        OutputFormat::Json => render_json(&summaries, dropped)?,
     }
     Ok(())
+}
+
+/// Default `list` row cap for an UNSCOPED (all-projects) invocation — the flood guard.
+const DEFAULT_LIST_CAP: usize = 50;
+
+/// A session's most-recent activity timestamp (max over first/last user + last agent), for the
+/// recency-keep cap. `None` (no readable ts) sorts oldest.
+fn last_activity(s: &SessionSummary) -> Option<&str> {
+    [&s.first_user, &s.last_user, &s.last_agent]
+        .into_iter()
+        .flatten()
+        .filter_map(|p| p.timestamp_utc.as_deref())
+        .max()
 }
 
 /// The one-line PREVIEW body for a `list` first/last scan (the §1 / automation-label polish):
@@ -322,7 +357,7 @@ fn capture_identity_if_empty(
 
 // ── Text rendering ──
 
-fn render_text(summaries: &[SessionSummary]) {
+fn render_text(summaries: &[SessionSummary], dropped: usize) {
     if summaries.is_empty() {
         println!("no sessions found");
         return;
@@ -392,6 +427,14 @@ fn render_text(summaries: &[SessionSummary]) {
             );
         }
     }
+    // Context-safety cap (never silent): report the dropped rows + how to see more.
+    if dropped > 0 {
+        println!();
+        println!(
+            "… (+{dropped} more session(s) not shown — the most recently active are listed; \
+             narrow with a target or --since, or raise --max-count)"
+        );
+    }
 }
 
 fn print_preview(label: &str, preview: Option<&MessagePreview>) {
@@ -411,7 +454,7 @@ fn print_preview(label: &str, preview: Option<&MessagePreview>) {
 
 // ── JSON rendering (deterministic, one object per session) ──
 
-fn render_json(summaries: &[SessionSummary]) -> Result<()> {
+fn render_json(summaries: &[SessionSummary], dropped: usize) -> Result<()> {
     use serde_json::json;
     // envelope v2: header (always) → kind-tagged session rows → summary (always).
     let sub = summaries.iter().filter(|s| s.is_subagent).count();
@@ -455,6 +498,9 @@ fn render_json(summaries: &[SessionSummary]) -> Result<()> {
     let summary = crate::text::envelope_summary(json!({
         "sessions": summaries.len(),
         "skipped_lines": skipped_total,
+        // Context-safety cap: rows dropped to bound an unscoped flood (0 = nothing capped).
+        // The kept rows are the most recently active; raise --max-count / narrow scope for more.
+        "dropped_by_cap": dropped,
     }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())

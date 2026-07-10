@@ -241,13 +241,23 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     }
     sessions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
-    // ── Apply the turn / time window to events per session ──
+    // ── Apply the turn / time window to events per session. The `--turn-range` spec resolves
+    //    its open/from-end forms against THIS session's own turns (max event turn + 1). ──
     for sr in &mut sessions {
+        let bounds = turn_range.map(|spec| {
+            let tc = sr
+                .events
+                .iter()
+                .map(|e| e.turn_index)
+                .max()
+                .map_or(0, |m| m + 1);
+            spec.resolve(tc, false)
+        });
         sr.events.retain(|e| {
             window_admits(
                 e.turn_index,
                 e.timestamp_utc.as_deref(),
-                turn_range,
+                bounds,
                 &time_window,
             )
         });
@@ -390,11 +400,20 @@ fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
     for (ti, mut scans) in by_target.into_iter().enumerate() {
         let target = targets[ti].clone();
         for sr in &mut scans {
+            let bounds = turn_range.map(|spec| {
+                let tc = sr
+                    .events
+                    .iter()
+                    .map(|e| e.turn_index)
+                    .max()
+                    .map_or(0, |m| m + 1);
+                spec.resolve(tc, false)
+            });
             sr.events.retain(|e| {
                 window_admits(
                     e.turn_index,
                     e.timestamp_utc.as_deref(),
-                    turn_range,
+                    bounds,
                     &time_window,
                 )
             });
@@ -2205,14 +2224,15 @@ fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {
 }
 
 /// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
-fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
-    crate::text::parse_range(s, "--turn-range", false)
+fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
+    crate::text::parse_range_spec(s, "--turn-range", false)
 }
 
-/// Parse a `--file-lines START..END` into an inclusive 1-based `(lo, hi)` (shared parser;
-/// the 1-based variant rejects a 0 start — file lines are 1-based).
-fn parse_line_range(s: &str) -> Result<(usize, usize)> {
-    crate::text::parse_range(s, "--file-lines", true)
+/// Parse a `--file-lines` token into a [`RangeSpec`] (the shared grammar; 1-based, so a 0
+/// start is rejected), resolved against the reconstructed file's line count in
+/// [`apply_line_range`].
+fn parse_line_range(s: &str) -> Result<crate::text::RangeSpec> {
+    crate::text::parse_range_spec(s, "--file-lines", true)
 }
 
 /// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.
@@ -2276,7 +2296,7 @@ fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<usize>> {
 struct RenderCtx {
     mode: RecoverMode,
     file: Option<String>,
-    line_range: Option<(usize, usize)>,
+    line_range: Option<crate::text::RangeSpec>,
     at: Option<String>,
     skipped_lines: usize,
     /// SCOPE-span counts of the resolved transcript set, captured BEFORE the
@@ -2286,16 +2306,22 @@ struct RenderCtx {
     scope_sub: usize,
 }
 
-/// Restrict a `(line_no, text)` known-line vector to the `--line-range`, if any.
+/// Restrict a `(line_no, text)` known-line vector to the `--file-lines` range, if any. The
+/// spec's open/from-end forms (`N..`, `-20..` = the last 20) resolve against the highest known
+/// line number (the reconstructed file's length), 1-based.
 fn apply_line_range(
     lines: Vec<(usize, String)>,
-    line_range: Option<(usize, usize)>,
+    line_range: Option<crate::text::RangeSpec>,
 ) -> Vec<(usize, String)> {
     match line_range {
-        Some((lo, hi)) => lines
-            .into_iter()
-            .filter(|(n, _)| *n >= lo && *n <= hi)
-            .collect(),
+        Some(spec) => {
+            let len = lines.iter().map(|(n, _)| *n).max().unwrap_or(0);
+            let (lo, hi) = spec.resolve(len, true);
+            lines
+                .into_iter()
+                .filter(|(n, _)| *n >= lo && *n <= hi)
+                .collect()
+        }
         None => lines,
     }
 }
@@ -2971,8 +2997,8 @@ impl TimelineItem {
     }
 }
 
-/// Dense line vector of a buffer (gaps omitted) restricted to `--line-range`.
-fn filter_lines(buf: &SparseBuffer, line_range: Option<(usize, usize)>) -> Vec<String> {
+/// Dense line vector of a buffer (gaps omitted) restricted to `--file-lines`.
+fn filter_lines(buf: &SparseBuffer, line_range: Option<crate::text::RangeSpec>) -> Vec<String> {
     apply_line_range(buf.known_lines(), line_range)
         .into_iter()
         .map(|(_, t)| t)

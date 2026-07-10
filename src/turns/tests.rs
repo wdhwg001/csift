@@ -920,7 +920,10 @@ fn window_admits_turn_range_and_time() {
 
 #[test]
 fn parse_turn_range_parses_and_rejects() {
-    assert_eq!(parse_turn_range("2..5").unwrap(), (2, 5));
+    assert_eq!(
+        parse_turn_range("2..5").unwrap().resolve(100, false),
+        (2, 5)
+    );
     assert!(parse_turn_range("5..2").is_err());
     assert!(parse_turn_range("noformat").is_err());
     assert!(parse_turn_range("a..b").is_err());
@@ -1557,8 +1560,14 @@ fn unit_matches_summary_no_match_returns_false() {
 #[test]
 fn parse_turn_range_valid_range_hi_ge_lo() {
     // hi >= lo → the `hi < lo` FALSE arm (the success path, distinct from the reject).
-    assert_eq!(parse_turn_range("0..0").unwrap(), (0, 0));
-    assert_eq!(parse_turn_range("10..20").unwrap(), (10, 20));
+    assert_eq!(
+        parse_turn_range("0..0").unwrap().resolve(100, false),
+        (0, 0)
+    );
+    assert_eq!(
+        parse_turn_range("10..20").unwrap().resolve(100, false),
+        (10, 20)
+    );
 }
 
 #[test]

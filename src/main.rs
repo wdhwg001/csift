@@ -74,7 +74,7 @@ fn run(cli: Cli) -> Result<()> {
         Command::Files(args) => files::run_files(&args),
         Command::Recover(args) => recover::run_recover(&args),
         Command::Plan(args) => plan::run_plan(&args),
-        Command::Turns(args) => turns::run_turns(&args),
+        Command::Verbatim(args) => turns::run_verbatim(&args),
         Command::Image(args) => image::run_image(&args),
     }
 }

@@ -824,7 +824,7 @@ pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
 /// `paths` as an `@<id>` target token, so the shared resolver treats the list EXACTLY like
 /// positional `@` targets (same pin logic, same fail-loud misses). Tokens are whitespace /
 /// newline separated; each must be a session uuid, a 4-11-hex uuid prefix, or an agent id —
-/// the ids csift itself emits (`search -l`, the JSON summary's `session_ids`, any row's
+/// the ids csift itself emits (`search -l`, the JSON summary's `transcript_ids`, any row's
 /// `parent_session_id`). A leading `@` is tolerated: ids are DATA (csift's own outputs are
 /// bare, a hand-built list may quote them `@`-style), so both spellings of the same id work.
 /// Any other token is a hard error naming it. Empty input appends nothing.

@@ -504,7 +504,7 @@ fn unknown_flag_reports_clean_error_not_project_dir_error() {
     let at_sess = at(SESS);
     for args in [
         vec!["files", at_sess.as_str(), "--by-fil"],
-        vec!["turns", at_sess.as_str(), "--budgett", "5000"],
+        vec!["verbatim", at_sess.as_str(), "--budgett", "5000"],
         vec!["recover", "--bogus-flag"],
         vec!["agents", ENC, "--bogus"],
         vec!["list", "--by-fil"],
@@ -637,6 +637,301 @@ fn search_no_match_reports_zero() {
     );
     // Even with no matches, the skipped-line note still surfaces.
     assert!(out.stdout.contains("malformed line(s) skipped"));
+}
+
+#[test]
+fn search_count_by_label_censuses_the_scope() {
+    let h = populated_home();
+    // Empty pattern + --count-by-label = "what record-types are here?" — the exploration
+    // on-ramp so an empty `-t <leaf>` result is never mistaken for a typo.
+    let out = h.run(&["search", "", "--no-subagents", "--count-by-label"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    for leaf in [
+        "user.message",
+        "agent.thinking",
+        "agent.message",
+        "agent.tool.use",
+        "agent.tool.result",
+    ] {
+        assert!(
+            out.stdout.contains(leaf),
+            "census missing {leaf}:\n{}",
+            out.stdout
+        );
+    }
+    // JSON: label_count rows + a summary carrying the record + label totals.
+    let out = h.run(&[
+        "search",
+        "",
+        "--no-subagents",
+        "--count-by-label",
+        "--format",
+        "json",
+    ]);
+    let rows = json_rows(&out.stdout, "label_count");
+    assert!(!rows.is_empty(), "no label_count rows:\n{}", out.stdout);
+    let summary = json_summary(&out.stdout);
+    assert!(
+        summary["matched_records"].as_u64().unwrap() >= 5,
+        "summary: {summary}"
+    );
+    assert!(
+        summary["distinct_labels"].as_u64().unwrap() >= 5,
+        "summary: {summary}"
+    );
+}
+
+#[test]
+fn search_empty_diagnosis_names_the_excluding_label() {
+    let h = populated_home();
+    // "low-edge" occurs ONLY under agent.tool.result (record c0). Searching it under
+    // `-t user.message` yields zero — the exact L74681 trap. The zero-result diagnosis must
+    // NAME the excluding label so a model self-corrects instead of assuming a syntax error.
+    let out = h.run(&["search", "low-edge", "--no-subagents", "-t", "user.message"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("no matching exchanges"));
+    assert!(
+        out.stderr.contains("DEFINITIVE absence"),
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(out.stderr.contains("DOES occur"), "stderr: {}", out.stderr);
+    assert!(
+        out.stderr.contains("agent.tool.result"),
+        "stderr: {}",
+        out.stderr
+    );
+    // JSON summary carries the machine-legible diagnosis.
+    let out = h.run(&[
+        "search",
+        "low-edge",
+        "--no-subagents",
+        "-t",
+        "user.message",
+        "--format",
+        "json",
+    ]);
+    let summary = json_summary(&out.stdout);
+    assert_eq!(summary["definitive_absence"], serde_json::json!(true));
+    assert_eq!(
+        summary["active_filters"],
+        serde_json::json!("-t user.message")
+    );
+    assert_eq!(
+        summary["excluded_by_label"]["by_label"]["agent.tool.result"],
+        serde_json::json!(1)
+    );
+}
+
+#[test]
+fn search_empty_diagnosis_reports_genuine_absence() {
+    let h = populated_home();
+    // A token absent even WITHOUT the label filter → say so plainly (not a label mistake).
+    let out = h.run(&[
+        "search",
+        "zzz-absent-zzz",
+        "--no-subagents",
+        "-t",
+        "agent.message",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stderr.contains("DEFINITIVE absence"),
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("genuinely absent"),
+        "stderr: {}",
+        out.stderr
+    );
+    let out = h.run(&[
+        "search",
+        "zzz-absent-zzz",
+        "--no-subagents",
+        "-t",
+        "agent.message",
+        "--format",
+        "json",
+    ]);
+    let summary = json_summary(&out.stdout);
+    assert_eq!(summary["definitive_absence"], serde_json::json!(true));
+    assert_eq!(summary["excluded_by_label"], serde_json::Value::Null);
+}
+
+#[test]
+fn range_open_and_negative_forms() {
+    let h = populated_home();
+    let t = at(SESS);
+    // Count exchanges under a turn-range spec (empty pattern = pure filter).
+    let count = |spec: &str| -> String {
+        let out = h.run(&[
+            "search",
+            "",
+            t.as_str(),
+            "--no-subagents",
+            "--turn-range",
+            spec,
+            "-c",
+        ]);
+        assert!(out.success, "turn-range {spec:?} stderr: {}", out.stderr);
+        out.stdout.trim().to_string()
+    };
+    // The top-level fixture has 2 genuine-user turns (index 0 and 1).
+    assert_eq!(count("0..0"), "1", "turn 0 only");
+    assert_eq!(count("1.."), "1", "open end: turn 1 → last");
+    assert_eq!(count("..0"), "1", "open start: first → turn 0");
+    assert_eq!(count("-1.."), "1", "from-end: the last 1 turn");
+    assert_eq!(count("-2.."), "2", "from-end: the last 2 turns = both");
+    // The `-1..` value begins with `-`; allow_hyphen_values must let it through (not be
+    // mistaken for a flag). A closed reversal is still a hard error.
+    let rev = h.run(&["search", "", t.as_str(), "--turn-range", "9..3", "-c"]);
+    assert!(!rev.success, "a reversed closed range must error");
+    // Line axis: `--line -1..` = the last physical jsonl line (the fixture's malformed tail).
+    let raw = h.run(&["show", t.as_str(), "--line", "-1..", "--raw"]);
+    assert!(raw.success, "stderr: {}", raw.stderr);
+    assert!(
+        raw.stdout.contains("broken json"),
+        "last line via -1..: {}",
+        raw.stdout
+    );
+}
+
+#[test]
+fn show_by_turn_fetches_the_whole_turn() {
+    let h = populated_home();
+    let t = at(SESS);
+    // Turn 0 = the first genuine-user turn AND its whole back-and-forth (unified fetch — no
+    // "pick the command by what address you hold"; `show` addresses by line, uuid, OR turn).
+    let out = h.run(&["show", t.as_str(), "--turn", "0"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("why is the carry needed?"),
+        "turn 0 user message: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("partial line"),
+        "turn 0 agent reply: {}",
+        out.stdout
+    );
+    // Turn 1 is a DIFFERENT turn — the numbering matches what `search` prints as `s1·tN`.
+    let out1 = h.run(&["show", t.as_str(), "--turn", "1"]);
+    assert!(
+        out1.stdout.contains("now explain the panic path"),
+        "turn 1: {}",
+        out1.stdout
+    );
+    assert!(
+        !out1.stdout.contains("why is the carry needed?"),
+        "turn 1 must not bleed into turn 0: {}",
+        out1.stdout
+    );
+    // `-1..` = the last turn (the tail-peek / monitoring intent → `show`, not a special mode).
+    let last = h.run(&["show", t.as_str(), "--turn", "-1.."]);
+    assert!(
+        last.stdout.contains("now explain the panic path"),
+        "last turn via -1..: {}",
+        last.stdout
+    );
+    // Mutually exclusive with --line (one addressing mode at a time).
+    let conflict = h.run(&["show", t.as_str(), "--turn", "0", "--line", "5"]);
+    assert!(!conflict.success, "--turn + --line must conflict");
+    // --raw emits the turn's records verbatim.
+    let raw = h.run(&["show", t.as_str(), "--turn", "0", "--raw"]);
+    assert!(raw.success, "stderr: {}", raw.stderr);
+    assert!(
+        raw.stdout.contains("why is the carry needed?"),
+        "raw turn 0: {}",
+        raw.stdout
+    );
+    // JSON records all carry turn_index 0.
+    let j = h.run(&["show", t.as_str(), "--turn", "0", "--format", "json"]);
+    let recs = json_rows(&j.stdout, "record");
+    assert!(!recs.is_empty(), "json records: {}", j.stdout);
+    assert!(
+        recs.iter().all(|r| r["turn_index"] == serde_json::json!(0)),
+        "every fetched record is in turn 0: {}",
+        j.stdout
+    );
+}
+
+#[test]
+fn turns_command_renamed_to_verbatim() {
+    let h = populated_home();
+    let t = at(SESS);
+    // Zero-BC: the old `turns` verb is GONE — it hits the wall (unknown subcommand), which
+    // sends a stale model back to re-read SKILL rather than silently mis-running.
+    let old = h.run(&["turns", t.as_str()]);
+    assert!(!old.success, "the old `turns` command must be unknown now");
+    assert!(
+        old.stderr.contains("unrecognized subcommand"),
+        "error flags the removed verb: {}",
+        old.stderr
+    );
+    // The new `verbatim` verb is the compaction-fidelity reconstructor.
+    let new = h.run(&["verbatim", t.as_str()]);
+    assert!(new.success, "verbatim runs: {}", new.stderr);
+}
+
+#[test]
+fn search_text_subagent_hit_carries_exact_refetch() {
+    let h = populated_home();
+    // "carry" occurs in the SUBAGENT transcripts (agent-aaa111 / agent-bbb222). A subagent
+    // hit's line number is per-FILE, so the fetch MUST use the subagent's own id, never the
+    // parent uuid. Text mode now prints the ready-to-run command so a model never derives it.
+    let out = h.run(&["search", "carry"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("↳ csift show @aaa111 --line")
+            || out.stdout.contains("↳ csift show @bbb222 --line"),
+        "a subagent hit must print its exact refetch with the AGENT id:\n{}",
+        out.stdout
+    );
+    // The refetch NEVER addresses a subagent line at the parent uuid (the silent-wrong-record
+    // hazard the pointer closes).
+    assert!(
+        !out.stdout.contains(&format!("csift show @{SESS} --line")),
+        "a subagent refetch must not use the parent uuid:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn list_and_stats_max_count_cap_and_report() {
+    let h = populated_home(); // 1 top-level + 2 subagent = 3 rows
+                              // list: cap to 2, drop 1 — reported in the JSON summary AND the text footer (never silent).
+    let lj = h.run(&["list", "--max-count", "2", "--format", "json"]);
+    assert!(lj.success, "stderr: {}", lj.stderr);
+    assert_eq!(
+        json_rows(&lj.stdout, "session").len(),
+        2,
+        "list capped to 2"
+    );
+    assert_eq!(
+        json_summary(&lj.stdout)["dropped_by_cap"],
+        serde_json::json!(1),
+        "list drop reported"
+    );
+    let lt = h.run(&["list", "--max-count", "1"]);
+    assert!(
+        lt.stdout.contains("more session(s) not shown"),
+        "list drop footer: {}",
+        lt.stdout
+    );
+    assert!(
+        lt.stdout.contains("--max-count"),
+        "the guidance names the override"
+    );
+    // stats: cap to 2, drop 1.
+    let sj = h.run(&["stats", "--max-count", "2", "--format", "json"]);
+    assert!(sj.success, "stderr: {}", sj.stderr);
+    assert_eq!(
+        json_summary(&sj.stdout)["dropped_by_cap"],
+        serde_json::json!(1),
+        "stats drop reported: {}",
+        sj.stdout
+    );
 }
 
 #[test]
@@ -1522,11 +1817,39 @@ fn sessions_from_scopes_like_at_positionals() {
 }
 
 #[test]
+fn pinned_id_matching_nothing_bails_never_silent_empty() {
+    // AGENTS §4 fail-closed wall (T0.3): a PINNED id that resolves to no file must BAIL loud —
+    // never a silent empty, never a widening to every project (the L56255 `--subagent` →
+    // whole-corpus class). Both the full-uuid and the prefix forms are locked here so a future
+    // resolver change cannot quietly reintroduce scope-widening.
+    let h = populated_home();
+    // A nonexistent FULL uuid pinned as a target (search's pattern is the 1st positional).
+    let a = h.run(&["search", "carry", "@99999999-8888-4777-8666-555555555555"]);
+    assert!(
+        !a.success,
+        "a nonexistent @uuid must error, not widen: {}",
+        a.stdout
+    );
+    // A PREFIX that matches no session must bail, naming the prefix.
+    let b = h.run(&["list", "@deadbeef"]);
+    assert!(
+        !b.success,
+        "a no-match @prefix must error, not widen: {}",
+        b.stdout
+    );
+    assert!(
+        b.stderr.contains("deadbeef"),
+        "the error names the unresolved prefix: {}",
+        b.stderr
+    );
+}
+
+#[test]
 fn turns_requires_a_target() {
     // `--budget` multiplies per session, so bare `csift turns` (= every project) is an
     // output flood by construction — a target is REQUIRED (the `show` precedent).
     let h = populated_home();
-    let bare = h.run(&["turns"]);
+    let bare = h.run(&["verbatim"]);
     assert!(!bare.success, "bare turns must error: {}", bare.stdout);
     assert!(
         bare.stderr.contains("name a target"),
@@ -1536,7 +1859,7 @@ fn turns_requires_a_target() {
     // `--sessions-from` satisfies the requirement.
     let ids = h.root.join("ids.txt");
     std::fs::write(&ids, format!("{SESS}\n")).unwrap();
-    let ok = h.run(&["turns", "--sessions-from", ids.to_str().unwrap()]);
+    let ok = h.run(&["verbatim", "--sessions-from", ids.to_str().unwrap()]);
     assert!(ok.success, "stderr: {}", ok.stderr);
 }
 
@@ -1630,7 +1953,7 @@ fn sessions_with_matches_pipes_into_sessions_from_and_refetch_round_trips() {
         "piped scope reached stats: {}",
         piped.stdout
     );
-    // `-l --format json` is a pointed error (JSON readers use the summary's session_ids).
+    // `-l --format json` is a pointed error (JSON readers use the summary's transcript_ids).
     let j = h.run(&["search", "", "-l", "--format", "json"]);
     assert!(!j.success);
     // Every JSON hit carries `refetch` — a ready-to-run `csift show` addressed at the hit's
@@ -1919,7 +2242,7 @@ fn files_bare_uuid_positional_routes_to_session() {
 fn turns_bare_uuid_positional_routes_to_session() {
     let h = populated_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--budget",
         "2000",
@@ -2078,7 +2401,7 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
     // turns now defaults to top-level-only, so opt INTO spanning subagents to exercise the
     // cross-surface id-form check on the turns surface too.
     let turns = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--subagents",
         "--budget",
@@ -2088,7 +2411,7 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
     ]);
     // The bare-hex subagent id (no `agent-` prefix) must appear in each surface's JSON,
     // and the `agent-` prefixed form must NOT.
-    for (name, out) in [("files", &files), ("search", &search), ("turns", &turns)] {
+    for (name, out) in [("files", &files), ("search", &search), ("verbatim", &turns)] {
         assert!(out.success, "{name} stderr: {}", out.stderr);
         assert!(
             !out.stdout.contains("\"agent-aaa111\"") && !out.stdout.contains("agent-aaa111"),
@@ -2239,7 +2562,7 @@ fn turns_and_search_label_automation_triggers() {
     // turns: the header reports the automation count; the body shows the attribution label
     // and never the raw XML.
     let t = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--budget",
         "20000",
@@ -2322,7 +2645,7 @@ fn turns_teammate_opener_renders_clean_inbound_comm() {
     );
 
     let t = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--budget",
         "20000",
@@ -2357,7 +2680,7 @@ fn turns_teammate_opener_renders_clean_inbound_comm() {
 
     // JSON twin: the peer opener carries the structured inbound-comm attribution.
     let j = h.run(&[
-        "turns",
+        "verbatim",
         "--format",
         "json",
         at(sess).as_str(),
@@ -2435,7 +2758,7 @@ fn turns_single_automation_trigger_uses_singular_header() {
         &(lines.join("\n") + "\n"),
     );
     let t = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--budget",
         "20000",
@@ -2475,7 +2798,7 @@ fn turns_json_emits_session_header_and_structured_automation() {
         &(lines.join("\n") + "\n"),
     );
     let t = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--budget",
         "20000",
@@ -2537,7 +2860,7 @@ fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
     // A budget small enough that, if the floor were spent on pulses, the human turn would be
     // crowded out — but large enough to fit the human round-trip in its protected lane.
     let t = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--budget",
         "1200",
@@ -5639,7 +5962,7 @@ fn turns_json_units_carry_id_domain_discriminators() {
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"a substantive reply"}]}}"#, "\n",
         ),
     );
-    let out = h.run(&["turns", at(SESS).as_str(), "--format", "json"]);
+    let out = h.run(&["verbatim", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let objs = json_lines(&out.stdout);
     let unit = objs
@@ -8165,7 +8488,7 @@ fn turns_slice_reassembles_out_document_within_window() {
 
     let out_path = h.root.join("turns_doc.md");
     let r = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--budget",
         "20000",
@@ -8188,7 +8511,7 @@ fn turns_slice_reassembles_out_document_within_window() {
     loop {
         let ns = n.to_string();
         let s = h.run(&[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--budget",
             "20000",
@@ -8229,7 +8552,7 @@ fn turns_slice_rejects_out_json_and_zero() {
     let h = turns_home();
 
     let bad_out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--slice",
@@ -8245,7 +8568,7 @@ fn turns_slice_rejects_out_json_and_zero() {
     );
 
     let bad_json = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--slice",
@@ -8260,7 +8583,13 @@ fn turns_slice_rejects_out_json_and_zero() {
         bad_json.stderr
     );
 
-    let bad_zero = h.run(&["turns", at(SESS).as_str(), "--no-subagents", "--slice", "0"]);
+    let bad_zero = h.run(&[
+        "verbatim",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--slice",
+        "0",
+    ]);
     assert!(!bad_zero.success);
     assert!(
         bad_zero.stderr.contains("1-based"),
@@ -8315,7 +8644,7 @@ fn turns_budget_respected_real_emitted_chars() {
         let bs = budget.to_string();
         // Default text form (stdout is the document + operational chrome).
         let text = h.run(&[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--budget",
@@ -8332,7 +8661,7 @@ fn turns_budget_respected_real_emitted_chars() {
 
         // The `--out` file: the verbatim reconstruction document (no operational chrome).
         let outrun = h.run(&[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--budget",
@@ -8376,7 +8705,7 @@ fn turns_budget_respected_real_emitted_chars() {
     // The skipped malformed line is still surfaced, never hidden (it just is not counted
     // against the reconstruction budget — it is operational chrome).
     let any = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8396,7 +8725,7 @@ fn turns_smaller_budget_emits_strictly_less() {
     let h = turns_home();
     let doc_len = |budget: &str| -> usize {
         let t = h.run(&[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--budget",
@@ -8417,7 +8746,7 @@ fn turns_smaller_budget_emits_strictly_less() {
 fn turns_smaller_budget_selects_fewer() {
     let h = turns_home();
     let big = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8426,7 +8755,7 @@ fn turns_smaller_budget_selects_fewer() {
         "json",
     ]);
     let small = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8453,7 +8782,7 @@ fn turns_round_trip_floor_recovers_a_user_turn() {
     // regression. Without the floor a naive recency walk would recover zero users.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8480,7 +8809,7 @@ fn turns_spans_at_least_two_compaction_boundaries() {
     // committed data.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8517,7 +8846,7 @@ fn turns_spans_at_least_two_compaction_boundaries() {
 fn turns_max_compactions_caps_the_reach() {
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8553,7 +8882,7 @@ fn turns_ellipsis_role_asymmetry_and_counts() {
     // the head + the elision marker + the tail; JSON carries the exact elided counts.
     let h = turns_home();
     let text = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8580,7 +8909,7 @@ fn turns_ellipsis_role_asymmetry_and_counts() {
     );
 
     let json = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8632,7 +8961,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
     let win = 1500usize;
     for i in 1..=2 {
         let o = h.run(&[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--slices",
@@ -8650,7 +8979,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
         );
     }
     let s1 = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--slices",
@@ -8665,7 +8994,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
         "slice 1 of a filled 2-fleet is non-empty"
     );
     let s3 = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--slices",
@@ -8692,7 +9021,7 @@ fn turns_slices_keeps_newest_discards_oldest() {
     for i in 1..=2 {
         doc.push_str(
             &h.run(&[
-                "turns",
+                "verbatim",
                 at(SESS).as_str(),
                 "--no-subagents",
                 "--slices",
@@ -8729,7 +9058,7 @@ fn turns_slices_keeps_user_turns_whole_no_role_cap() {
     for i in 1..=8 {
         doc.push_str(
             &h.run(&[
-                "turns",
+                "verbatim",
                 at(SESS).as_str(),
                 "--no-subagents",
                 "--slices",
@@ -8750,7 +9079,7 @@ fn turns_slices_keeps_user_turns_whole_no_role_cap() {
     // Contrast: the SAME fixture under budget mode STILL applies the 600 user cap (legacy behavior
     // is untouched) — so the verbatim user body is NOT present and the elision marker IS.
     let budgeted = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8776,7 +9105,7 @@ fn turns_slices_ellipsizes_only_a_turn_bigger_than_one_window() {
     for i in 1..=8 {
         doc.push_str(
             &h.run(&[
-                "turns",
+                "verbatim",
                 at(SESS).as_str(),
                 "--no-subagents",
                 "--slices",
@@ -8805,7 +9134,7 @@ fn turns_slices_requires_a_slice_index() {
     // error, not a silent full-document dump.
     let h = turns_home();
     let o = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--slices",
@@ -8824,7 +9153,7 @@ fn turns_tool_call_markers_present_with_correct_counts() {
     // The fixture's huge live round-trip has 5 tool calls; turn "fifth ask" has 3.
     let h = turns_home();
     let text = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8847,7 +9176,7 @@ fn turns_tool_call_markers_present_with_correct_counts() {
     );
     // JSON carries the exact tool_calls count.
     let json = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8867,7 +9196,7 @@ fn turns_tool_call_markers_present_with_correct_counts() {
 fn turns_line_numbers_present_in_text_and_json() {
     let h = turns_home();
     let text = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8884,7 +9213,7 @@ fn turns_line_numbers_present_in_text_and_json() {
         "assistant lines carry L-numbers"
     );
     let json = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8918,7 +9247,7 @@ fn turns_dedup_demotes_summary_match_never_drops() {
     // header only when it fires, and always assert nothing is dropped.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8952,7 +9281,7 @@ fn turns_fidelity_beats_summary_verbatim_count() {
     // summary's single verbatim assistant quote.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -8977,14 +9306,14 @@ fn turns_fidelity_beats_summary_verbatim_count() {
 fn turns_deterministic_byte_identical() {
     let h = turns_home();
     let a = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
         "10000",
     ]);
     let b = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9001,7 +9330,7 @@ fn turns_out_file_holds_full_reconstruction() {
     let h = turns_home();
     let out_path = h.root.join("turns-out.md");
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9029,7 +9358,7 @@ fn turns_token_budget_unit_scales_by_four() {
     // select more than a 3000-char budget (4x the room).
     let h = turns_home();
     let tok = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9040,7 +9369,7 @@ fn turns_token_budget_unit_scales_by_four() {
         "json",
     ]);
     let chr = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9067,7 +9396,7 @@ fn turns_turn_range_and_since_intersect() {
     // Same rule as every sibling: the windows AND (the former bail was a leftover).
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--turn-range",
@@ -9087,7 +9416,7 @@ fn turns_invalid_round_trip_fraction_errors() {
     let h = turns_home();
     for f in ["0", "1", "1.5", "-0.1"] {
         let out = h.run(&[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--round-trip-fraction",
@@ -9101,7 +9430,7 @@ fn turns_invalid_round_trip_fraction_errors() {
 fn turns_zero_budget_errors() {
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9120,11 +9449,11 @@ fn turns_help_lists_the_subcommand_and_flags() {
     let h = turns_home();
     let top = h.run(&["--help"]);
     assert!(
-        top.stdout.contains("turns"),
-        "top help lists turns: {}",
+        top.stdout.contains("verbatim"),
+        "top help lists the verbatim command: {}",
         top.stdout
     );
-    let sub = h.run(&["turns", "--help"]);
+    let sub = h.run(&["verbatim", "--help"]);
     assert!(sub.stdout.contains("--budget"), "{}", sub.stdout);
     assert!(
         sub.stdout.contains("--round-trip-fraction"),
@@ -9171,7 +9500,7 @@ fn turns_live_region_dedup_demotes_and_flags() {
     let h = turns_dedup_home();
     // Text: the dedup header line + the (also in summary) flag must appear.
     let text = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9191,7 +9520,7 @@ fn turns_live_region_dedup_demotes_and_flags() {
     // JSON: exactly the live duplicate unit carries also_in_summary:true, and it is still
     // PRESENT (demoted, never dropped).
     let json = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9222,7 +9551,7 @@ fn turns_json_out_file_is_verbatim() {
     let h = turns_home();
     let out_path = h.root.join("turns.json");
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9261,7 +9590,7 @@ fn turns_no_genuine_turns_emits_honest_empty_message() {
     s.push('\n');
     h.write(&format!("{ENC}/{SESS}.jsonl"), &s);
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9281,7 +9610,7 @@ fn turns_project_path_target_scans_the_project() {
     // `csift turns` with NO target at all is a hard error — budget × everything; see
     // `turns_requires_a_target`.)
     let h = turns_home();
-    let out = h.run(&["turns", ENC, "--no-subagents", "--budget", "40000"]);
+    let out = h.run(&["verbatim", ENC, "--no-subagents", "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
 }
@@ -9292,7 +9621,7 @@ fn turns_json_single_side_units_present_under_tight_budget() {
     // the JSON output — exercise the single-side JSON emit path.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9319,7 +9648,7 @@ fn turns_since_window_filters_turns() {
     // selection. Exercises the time-window path in run_turns.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9353,7 +9682,7 @@ fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
     // A project-dir target → both sessions in the project are rendered, separated by a
     // blank line (the `if !first { println!() }` arm). Sessions are sorted by id.
     let h = turns_two_sessions_home();
-    let out = h.run(&["turns", ENC, "--no-subagents", "--budget", "40000"]);
+    let out = h.run(&["verbatim", ENC, "--no-subagents", "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let session_headers = out
         .stdout
@@ -9375,7 +9704,7 @@ fn turns_defaults_to_top_level_only_no_subagent_span() {
     // it must NOT span the session's subagents (unlike files/search). So a bare run prints no
     // `(subagent transcript)` blocks and no scope banner (one session in scope, rendered).
     let h = populated_home();
-    let out = h.run(&["turns", at(SESS).as_str(), "--budget", "40000"]);
+    let out = h.run(&["verbatim", at(SESS).as_str(), "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains(&format!("SESSION {SESS}")),
@@ -9401,7 +9730,7 @@ fn turns_include_subagents_opts_into_span_with_scope_banner() {
     // split (never `0 top-level`, even though the budget applies per session).
     let h = populated_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--subagents",
         "--budget",
@@ -9426,7 +9755,13 @@ fn turns_targeted_top_level_skipped_at_tiny_budget_is_reported_not_silent() {
     // the session must be reported with an explicit skip note (never silently absent), and the
     // scope banner must still count it as `1 top-level` in scope — not `0`.
     let h = populated_home();
-    let out = h.run(&["turns", at(SESS).as_str(), "--subagents", "--budget", "120"]);
+    let out = h.run(&[
+        "verbatim",
+        at(SESS).as_str(),
+        "--subagents",
+        "--budget",
+        "120",
+    ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains(&format!("SESSION {SESS}  skipped")),
@@ -9451,7 +9786,7 @@ fn turns_json_header_carries_true_scope_and_rendered_and_by_kind() {
     // (sessions_rendered), and carries the per-class automation_by_kind breakdown.
     let h = populated_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--subagents",
         "--budget",
@@ -9496,7 +9831,7 @@ fn turns_clean_session_reports_no_skipped_lines() {
     s.push('\n');
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--no-subagents",
         "--budget",
@@ -9525,7 +9860,7 @@ fn turns_json_clean_session_emits_zero_skipped_terminator() {
     s.push('\n');
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--no-subagents",
         "--budget",
@@ -9549,7 +9884,7 @@ fn turns_main_fixture_text_reports_skipped_line() {
     // `skipped_lines > 0` TRUE arm in both text + an explicit count).
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9567,7 +9902,7 @@ fn turns_main_fixture_text_reports_skipped_line() {
 fn turns_json_main_fixture_has_skipped_record() {
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9600,7 +9935,7 @@ fn turns_assistant_only_orphan_lead_renders() {
     s.push('\n');
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--no-subagents",
         "--budget",
@@ -9616,7 +9951,7 @@ fn turns_turn_range_alone_is_not_a_conflict() {
     // but since/until both None). Restrict to turns 0..2.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9648,7 +9983,7 @@ fn turns_empty_session_file_is_safe() {
     let sess = "00000000-0000-4000-8000-000000000006";
     h.write(&format!("{ENC}/{sess}.jsonl"), "");
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--no-subagents",
         "--budget",
@@ -9663,7 +9998,7 @@ fn turns_valid_round_trip_fraction_accepted() {
     // A fraction strictly inside (0,1) is accepted (the L189 false arm — valid input).
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9684,7 +10019,7 @@ fn turns_nonzero_budget_accepted() {
     // A positive budget passes the L195 check (false arm).
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9700,7 +10035,7 @@ fn turns_since_and_until_both_bound_the_window() {
     // window contains() both arms). A wide window admits the fixture's turns.
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9720,7 +10055,7 @@ fn turns_budget_is_chars_only() {
     // are gone; ≈4 chars/token is a documented sizing rule of thumb, not a flag).
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9736,7 +10071,7 @@ fn turns_turn_range_excludes_out_of_window_turns() {
     // the HIGH turns (`turn_index > hi` true arm).
     let h = turns_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9759,7 +10094,7 @@ fn turns_multi_session_json_runs_both() {
     // JSON over two sessions (a project-dir target) → both sessions' units emitted.
     let h = turns_two_sessions_home();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         ENC,
         "--no-subagents",
         "--budget",
@@ -9799,7 +10134,7 @@ fn turns_scan_skips_non_candidate_lines() {
     s.push('\n');
     h.write(&format!("{ENC}/{sess}.jsonl"), &s);
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(sess).as_str(),
         "--no-subagents",
         "--budget",
@@ -9826,7 +10161,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     // the EOT — proving the flag changes behavior.
     let h = turns_home();
     let rich = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9864,7 +10199,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     );
     // The `eot-only` ESCAPE keeps only the EOT — the intermediate rich members are absent.
     let eot = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9897,7 +10232,7 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
     // the deliberate dropping of the throwaway last.
     let h = turns_home();
     let dflt = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9946,7 +10281,7 @@ fn turns_agent_msgs_rich_placeholder_range_is_fetchable_and_attributed() {
     // consumer can Read the raw range; Y is non-zero (each collapsed msg had a tool_use).
     let h = turns_home();
     let json = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -9977,7 +10312,7 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
     // `--agent-msgs all` emits every agent message of the long run, no placeholder.
     let h = turns_home();
     let all = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
@@ -10024,7 +10359,7 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     let tz_utc = [("TZ", "UTC")];
     let eot_only = h.run_with_env(
         &[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--budget",
@@ -10046,7 +10381,7 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     // single-EOT default dropped (proving the default changed, not just a flag alias).
     let implicit = h.run_with_env(
         &[
-            "turns",
+            "verbatim",
             at(SESS).as_str(),
             "--no-subagents",
             "--budget",
@@ -10070,7 +10405,7 @@ fn turns_profile_heavy_keeps_at_least_as_many_as_light() {
     let at_sess = at(SESS);
     let kept_agents = |args: &[&str]| -> usize {
         let mut full = vec![
-            "turns",
+            "verbatim",
             at_sess.as_str(),
             "--no-subagents",
             "--budget",
@@ -10104,7 +10439,7 @@ fn turns_budget_respected_under_rich_and_all_modes() {
         for budget in [40000usize, 15000, 8000] {
             let bs = budget.to_string();
             let out = h.run(&[
-                "turns",
+                "verbatim",
                 at(SESS).as_str(),
                 "--no-subagents",
                 "--budget",
@@ -10159,7 +10494,7 @@ fn turns_rich_filters_subagent_runs_too() {
     h.write(&format!("{ENC}/{SESS}/subagents/agent-subrun.jsonl"), &sub);
 
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--subagents",
         "--budget",
@@ -10186,7 +10521,7 @@ fn turns_agent_msg_surface_is_two_flags() {
     // The per-knob tuning flags are GONE (surface diet): `--agent-msgs` + `--profile`
     // are the whole agent-message policy surface.
     let h = turns_home();
-    let help = h.run(&["turns", "--help"]);
+    let help = h.run(&["verbatim", "--help"]);
     assert!(help.success);
     for flag in ["--agent-msgs", "--profile"] {
         assert!(
@@ -10208,13 +10543,13 @@ fn turns_agent_msg_surface_is_two_flags() {
             "{gone} must be gone from help: {}",
             help.stdout
         );
-        let run = h.run(&["turns", at(SESS).as_str(), gone]);
+        let run = h.run(&["verbatim", at(SESS).as_str(), gone]);
         assert!(!run.success, "{gone} must be an unknown argument now");
     }
     // Invalid enum values exit nonzero with a clap error.
-    let bad_mode = h.run(&["turns", at(SESS).as_str(), "--agent-msgs", "bogus"]);
+    let bad_mode = h.run(&["verbatim", at(SESS).as_str(), "--agent-msgs", "bogus"]);
     assert!(!bad_mode.success, "invalid --agent-msgs must fail");
-    let bad_profile = h.run(&["turns", at(SESS).as_str(), "--profile", "bogus"]);
+    let bad_profile = h.run(&["verbatim", at(SESS).as_str(), "--profile", "bogus"]);
     assert!(!bad_profile.success, "invalid --profile must fail");
 }
 
@@ -10281,7 +10616,7 @@ fn auq_answer_opens_a_turn_and_surfaces_clean_answer() {
 #[test]
 fn turns_reconstructs_auq_exchange_and_plan_rejection_with_pointer() {
     let h = holes_home();
-    let out = h.run(&["turns", at(SESS).as_str()]);
+    let out = h.run(&["verbatim", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The AUQ exchange is reconstructed as a complete unit: marker + question + options
     // + the answer prose.
@@ -10544,7 +10879,7 @@ fn no_subagents_restricts_span_end_to_end() {
 #[test]
 fn subagents_only_is_an_unknown_argument_everywhere() {
     let h = populated_home();
-    for sub in ["turns", "recover", "list"] {
+    for sub in ["verbatim", "recover", "list"] {
         let out = h.run(&[sub, at(SESS).as_str(), "--subagents-only"]);
         assert!(!out.success, "{sub} --subagents-only should fail");
         assert!(
@@ -10645,7 +10980,7 @@ fn empty_out_never_clobbers_or_lies() {
     // turns with an impossibly small budget → nothing rendered → untouched + no false write.
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--budget",
         "5",
@@ -10667,7 +11002,7 @@ fn empty_out_never_clobbers_or_lies() {
     // CONTROL: a NON-empty reconstruction DOES write (guard is not over-eager).
     std::fs::write(&scratch, seed).unwrap();
     let out = h.run(&[
-        "turns",
+        "verbatim",
         at(SESS).as_str(),
         "--out",
         scratch.to_str().unwrap(),
@@ -10691,7 +11026,7 @@ fn empty_out_never_clobbers_or_lies() {
 #[test]
 fn turns_text_brands_subagent_uniformly() {
     let h = populated_home();
-    let out = h.run(&["turns", at(SESS).as_str(), "--subagents"]);
+    let out = h.run(&["verbatim", at(SESS).as_str(), "--subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The subagent block carries the SUBAGENT token + the re-feedable parent uuid.
     assert!(
@@ -11793,7 +12128,7 @@ fn turns_surfaces_image_ids_under_the_user_turn() {
     // The image marker shows the SAME `L<line>i<n>` id that `image --id` consumes, so a
     // turns reader can pull the bytes back without re-scanning.
     let h = image_home();
-    let out = h.run(&["turns", at(SESS).as_str()]);
+    let out = h.run(&["verbatim", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("L1i1"),
@@ -11994,7 +12329,7 @@ fn turns_includes_pending_askuserquestion() {
             )
         ),
     );
-    let out = h.run(&["turns", &at(SESS)]);
+    let out = h.run(&["verbatim", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout
@@ -12014,7 +12349,7 @@ fn turns_includes_pending_askuserquestion() {
     );
 
     // JSON header flags it; the unit carries source + null line_no.
-    let j = h.run(&["turns", &at(SESS), "--format", "json"]);
+    let j = h.run(&["verbatim", &at(SESS), "--format", "json"]);
     let header: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
     assert_eq!(header["with_elicitation_sidecar"], true);
     let unit = j
@@ -12194,7 +12529,7 @@ fn mcp_pending_is_merged_into_turns() {
             )
         ),
     );
-    let out = h.run(&["turns", &at(SESS)]);
+    let out = h.run(&["verbatim", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("mcp-elicitation: [gdrive]"),

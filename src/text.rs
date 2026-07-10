@@ -133,45 +133,138 @@ fn merge_into(mut base: serde_json::Value, extra: serde_json::Value) -> serde_js
     base
 }
 
-/// Parse an inclusive index-range token: bare `N` (shorthand for `N..N`) or `START..END`.
-/// This is THE range grammar, shared by every range flag (`--turn-range` / `--file-lines` /
-/// `show --line` tokens). Both bounds parse as `usize`; `END < START` is an error. When
-/// `one_based` is true the start must be ≥ 1 (file LINE ranges are 1-based); when false a 0
-/// start is allowed (TURN ranges are 0-based). `label` names the flag in the error messages.
-/// A dash-form range (`A-B`) is a HARD error that teaches the `..` form — one grammar, no
-/// second separator.
-pub fn parse_range(s: &str, label: &str, one_based: bool) -> anyhow::Result<(usize, usize)> {
-    use anyhow::{bail, Context};
-    let int_kind = if one_based {
-        "positive"
-    } else {
-        "non-negative"
-    };
+/// One endpoint of an index range, parsed but NOT yet resolved against a concrete domain
+/// length (open / from-the-end endpoints need the length to materialize).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Endpoint {
+    /// An explicit index exactly as written (0- or 1-based per the flag's domain).
+    At(usize),
+    /// `k`-th index counting from the END, 1-based: `FromEnd(1)` = the last element,
+    /// `FromEnd(3)` = third-from-last. Written `-k` (`-1`, `-3`).
+    FromEnd(usize),
+    /// Open — the natural extreme: a START endpoint resolves to the first index, an END
+    /// endpoint to the last. Written by omitting the side (`N..`, `..N`, `..`).
+    Open,
+}
+
+/// A parsed inclusive index range with possibly-open / from-the-end endpoints. THE range
+/// grammar, shared by every range flag (`show --line`/`--turn` · `--turn-range` ·
+/// `--file-lines`): `N` (single) · `A..B` (closed) · `N..` (to the end) · `..N` (from the
+/// start) · `..` (all) · negative `-k` = `k`-th from the end, so `-3..` = the last 3 and `-1`
+/// = the last. Resolve against a concrete domain length with [`RangeSpec::resolve`]. Both
+/// sides trimmed; the dash-form `A-B` is a HARD error that teaches the `..` spelling; `END <
+/// START` after resolution is an error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RangeSpec {
+    pub start: Endpoint,
+    pub end: Endpoint,
+}
+
+/// Parse one `..`-split, trimmed endpoint token. Empty ⇒ [`Endpoint::Open`]; `-k` ⇒
+/// [`Endpoint::FromEnd`]; digits ⇒ [`Endpoint::At`]. A dash inside a number-bearing token
+/// (`495-500`) is the removed `A-B` spelling → a teaching error.
+fn parse_endpoint(tok: &str, label: &str) -> anyhow::Result<Endpoint> {
+    use anyhow::bail;
+    if tok.is_empty() {
+        return Ok(Endpoint::Open);
+    }
+    if let Some(rest) = tok.strip_prefix('-') {
+        if !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()) {
+            let k: usize = rest
+                .parse()
+                .map_err(|_| anyhow::anyhow!("{label}: {tok:?} is not a valid from-end index"))?;
+            if k == 0 {
+                bail!("{label}: -0 is not a from-end index (use -1 for the last element)");
+            }
+            return Ok(Endpoint::FromEnd(k));
+        }
+    }
+    if !tok.is_empty() && tok.bytes().all(|b| b.is_ascii_digit()) {
+        return Ok(Endpoint::At(tok.parse().map_err(|_| {
+            anyhow::anyhow!("{label} index {tok:?} is out of range")
+        })?));
+    }
+    if tok.contains('-') && tok.bytes().any(|b| b.is_ascii_digit()) {
+        bail!(
+            "{label} range is START..END (e.g. 495..500); a leading -N counts from the end \
+             (-3.. = the last 3). got {tok:?}"
+        );
+    }
+    bail!("{label} endpoint must be N, -N (from the end), or empty (open); got {tok:?}")
+}
+
+/// Parse an index-range token into a [`RangeSpec`] (unresolved). `one_based` only affects a
+/// literal `At(0)` (rejected for a 1-based LINE domain, allowed for a 0-based TURN domain);
+/// open/negative forms resolve against the domain length in [`RangeSpec::resolve`].
+pub fn parse_range_spec(s: &str, label: &str, one_based: bool) -> anyhow::Result<RangeSpec> {
     let t = s.trim();
-    let (lo, hi) = if let Some((a, b)) = t.split_once("..") {
-        let lo: usize = a
-            .trim()
-            .parse()
-            .with_context(|| format!("{label} start is not a {int_kind} integer: {a:?}"))?;
-        let hi: usize = b
-            .trim()
-            .parse()
-            .with_context(|| format!("{label} end is not a {int_kind} integer: {b:?}"))?;
-        (lo, hi)
-    } else if let Ok(n) = t.parse::<usize>() {
-        (n, n)
-    } else if t.contains('-') && t.bytes().any(|b| b.is_ascii_digit()) {
-        bail!("{label} range is START..END (e.g. 495..500); got {t:?}");
+    let spec = if let Some((a, b)) = t.split_once("..") {
+        RangeSpec {
+            start: parse_endpoint(a.trim(), label)?,
+            end: parse_endpoint(b.trim(), label)?,
+        }
     } else {
-        bail!("{label} must be N or START..END, got {t:?}");
+        let ep = parse_endpoint(t, label)?;
+        if ep == Endpoint::Open {
+            anyhow::bail!("{label} must be N, A..B, N.., ..N, or -N (from the end); got {s:?}");
+        }
+        RangeSpec { start: ep, end: ep }
     };
-    if one_based && lo == 0 {
-        bail!("{label} start must be ≥ 1 (file lines are 1-based)");
+    if one_based {
+        if let Endpoint::At(0) = spec.start {
+            anyhow::bail!("{label} start must be ≥ 1 (this domain is 1-based)");
+        }
+        if let Endpoint::At(0) = spec.end {
+            anyhow::bail!("{label} end must be ≥ 1 (this domain is 1-based)");
+        }
     }
-    if hi < lo {
-        bail!("{label} end ({hi}) is before start ({lo})");
+    // Statically-detectable reversal (both endpoints explicit) errors up front — the common
+    // `9..3` mistake. A len-dependent reversal (from-end / open) can only be judged after
+    // resolution, where it resolves to an empty range that simply matches nothing.
+    if let (Endpoint::At(lo), Endpoint::At(hi)) = (spec.start, spec.end) {
+        if hi < lo {
+            anyhow::bail!("{label} end ({hi}) is before start ({lo})");
+        }
     }
-    Ok((lo, hi))
+    Ok(spec)
+}
+
+impl RangeSpec {
+    /// Resolve to a concrete inclusive `(lo, hi)` in a domain of `len` elements — `one_based`
+    /// ⇒ indices 1..=len, else 0..=len-1. Open/from-end endpoints materialize against `len`
+    /// (a from-end index past the start clamps to the first index, so `-100..` of 5 = all 5);
+    /// an explicit `At` is returned as-written (the caller clamps/validates a bare
+    /// out-of-range index, matching each flag's existing behavior). Infallible: a
+    /// len-dependent reversal (`hi < lo`) is returned as-is — an empty range that matches
+    /// nothing — since the statically-detectable reversal is already caught at parse time.
+    #[must_use]
+    pub fn resolve(&self, len: usize, one_based: bool) -> (usize, usize) {
+        let first = usize::from(one_based);
+        let last = if len == 0 {
+            first
+        } else if one_based {
+            len
+        } else {
+            len - 1
+        };
+        let from_end = |k: usize| -> usize {
+            if one_based {
+                (len + 1).saturating_sub(k).max(first)
+            } else {
+                len.saturating_sub(k).max(first)
+            }
+        };
+        let resolve_ep = |ep: Endpoint, open_to: usize| -> usize {
+            match ep {
+                Endpoint::At(n) => n,
+                Endpoint::FromEnd(k) => from_end(k),
+                Endpoint::Open => open_to,
+            }
+        };
+        let lo = resolve_ep(self.start, first);
+        let hi = resolve_ep(self.end, last);
+        (lo, hi)
+    }
 }
 
 #[cfg(test)]
@@ -236,58 +329,73 @@ mod tests {
         assert!(!malformed_note(1).contains("note"));
     }
 
-    #[test]
-    fn parse_range_zero_based_turn() {
-        assert_eq!(parse_range("0..5", "--turn-range", false).unwrap(), (0, 5));
-        assert_eq!(
-            parse_range(" 3 .. 9 ", "--turn-range", false).unwrap(),
-            (3, 9)
-        );
-        // Equal bounds are a valid single-index range.
-        assert_eq!(parse_range("7..7", "--turn-range", false).unwrap(), (7, 7));
+    fn rng(s: &str, one_based: bool, len: usize) -> (usize, usize) {
+        parse_range_spec(s, "--r", one_based)
+            .unwrap()
+            .resolve(len, one_based)
     }
 
     #[test]
-    fn parse_range_bare_n_is_a_single_index() {
-        // Bare N ≡ N..N — the shorthand every range flag shares.
-        assert_eq!(
-            parse_range("270", "--turn-range", false).unwrap(),
-            (270, 270)
-        );
-        assert_eq!(parse_range(" 42 ", "--line", true).unwrap(), (42, 42));
-        assert_eq!(parse_range("0", "--turn-range", false).unwrap(), (0, 0));
-        // one_based still rejects a bare 0.
-        assert!(parse_range("0", "--line", true).is_err());
+    fn range_closed_bare_and_open() {
+        // Closed A..B and bare N are explicit (len-independent).
+        assert_eq!(rng("0..5", false, 100), (0, 5));
+        assert_eq!(rng(" 3 .. 9 ", false, 100), (3, 9));
+        assert_eq!(rng("7..7", false, 100), (7, 7));
+        assert_eq!(rng("270", false, 100), (270, 270));
+        assert_eq!(rng(" 42 ", true, 100), (42, 42));
+        assert_eq!(rng("0", false, 10), (0, 0));
+        // Open ends materialize against len. 0-based turn domain of 10 → 0..=9.
+        assert_eq!(rng("3..", false, 10), (3, 9)); // to the end
+        assert_eq!(rng("..4", false, 10), (0, 4)); // from the start
+        assert_eq!(rng("..", false, 10), (0, 9)); // all
+                                                  // 1-based line domain of 200 → 1..=200.
+        assert_eq!(rng("5..", true, 200), (5, 200));
+        assert_eq!(rng("..50", true, 200), (1, 50));
     }
 
     #[test]
-    fn parse_range_dash_form_teaches_the_dotdot_grammar() {
-        // `A-B` is the ONE removed spelling — the error hands back the correct form.
-        let err = parse_range("495-500", "--line", true).unwrap_err();
+    fn range_from_end_negative() {
+        // -k = k-th from the end. Tail-peek: last 3 turns of a 10-turn (0-based) session.
+        assert_eq!(rng("-3..", false, 10), (7, 9));
+        assert_eq!(rng("-1", false, 10), (9, 9)); // the last element
+        assert_eq!(rng("-1..", false, 10), (9, 9)); // last 1
+        assert_eq!(rng("3..-1", false, 10), (3, 9)); // turn 3 → the last
+                                                     // 1-based lines: last 20 of a 200-line file.
+        assert_eq!(rng("-20..", true, 200), (181, 200));
+        assert_eq!(rng("-1", true, 200), (200, 200));
+        // A from-end index past the start clamps to the first (last 100 of 5 = all 5).
+        assert_eq!(rng("-100..", false, 5), (0, 4));
+        assert_eq!(rng("-100..", true, 5), (1, 5));
+    }
+
+    #[test]
+    fn range_dash_form_teaches_the_dotdot_grammar() {
+        // `A-B` is the removed spelling — the error hands back both correct forms.
+        let err = parse_range_spec("495-500", "--line", true).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("START..END"), "got: {msg}");
         assert!(msg.contains("495-500"), "got: {msg}");
     }
 
     #[test]
-    fn parse_range_one_based_line_rejects_zero_start() {
-        assert_eq!(
-            parse_range("1..200", "--line-range", true).unwrap(),
-            (1, 200)
-        );
-        let err = parse_range("0..5", "--line-range", true).unwrap_err();
+    fn range_one_based_rejects_zero() {
+        assert!(parse_range_spec("0..5", "--line", true).is_err());
+        assert!(parse_range_spec("0", "--line", true).is_err());
+        let err = parse_range_spec("0..5", "--line", true).unwrap_err();
         assert!(err.to_string().contains("≥ 1"), "got: {err}");
     }
 
     #[test]
-    fn parse_range_errors() {
+    fn range_errors() {
         // Non-integer bound.
-        assert!(parse_range("a..5", "--turn-range", false).is_err());
-        // end < start.
-        let err = parse_range("9..3", "--turn-range", false).unwrap_err();
+        assert!(parse_range_spec("a..5", "--turn-range", false).is_err());
+        // A statically-detectable reversal (both explicit) errors AT PARSE.
+        let err = parse_range_spec("9..3", "--turn-range", false).unwrap_err();
         assert!(err.to_string().contains("before start"), "got: {err}");
-        // The label appears in the message.
-        let err2 = parse_range("x", "--my-range", false).unwrap_err();
+        // The label appears in a parse error.
+        let err2 = parse_range_spec("x", "--my-range", false).unwrap_err();
         assert!(err2.to_string().contains("--my-range"));
+        // -0 is not a valid from-end index.
+        assert!(parse_range_spec("-0..", "--r", false).is_err());
     }
 }

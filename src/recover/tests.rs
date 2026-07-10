@@ -909,7 +909,10 @@ fn at_snapshot_marks_gaps_never_fabricates() {
 
 #[test]
 fn parse_line_range_is_one_based_and_validated() {
-    assert_eq!(parse_line_range("100..200").unwrap(), (100, 200));
+    assert_eq!(
+        parse_line_range("100..200").unwrap().resolve(1000, true),
+        (100, 200)
+    );
     assert!(
         parse_line_range("0..5").is_err(),
         "0 start rejected (1-based)"
@@ -920,7 +923,10 @@ fn parse_line_range_is_one_based_and_validated() {
 
 #[test]
 fn parse_turn_range_matches_files_contract() {
-    assert_eq!(parse_turn_range("0..1").unwrap(), (0, 1));
+    assert_eq!(
+        parse_turn_range("0..1").unwrap().resolve(100, false),
+        (0, 1)
+    );
     assert!(parse_turn_range("3..1").is_err());
 }
 
@@ -1276,7 +1282,10 @@ fn apply_line_range_filters_known_lines() {
         (5, "b".to_string()),
         (10, "c".to_string()),
     ];
-    let got = apply_line_range(lines.clone(), Some((5, 10)));
+    let got = apply_line_range(
+        lines.clone(),
+        Some(crate::text::parse_range_spec("5..10", "--file-lines", true).unwrap()),
+    );
     assert_eq!(got, vec![(5, "b".to_string()), (10, "c".to_string())]);
     // None → unchanged.
     assert_eq!(apply_line_range(lines.clone(), None), lines);

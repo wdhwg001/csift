@@ -658,8 +658,8 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     let mut distinct_transcripts = count_distinct_transcripts(&images);
 
     // `--turn-range` is per-transcript (turn indices are), so it needs a single transcript.
-    if let Some(spec) = args.turn_range.as_deref() {
-        let (lo, hi) = crate::text::parse_range(spec, "--turn-range", false)?;
+    if let Some(spec_str) = args.turn_range.as_deref() {
+        let spec = crate::text::parse_range_spec(spec_str, "--turn-range", false)?;
         if distinct_transcripts > 1 {
             bail!(
                 "--turn-range is per-transcript (turn indices are), but the scope resolves to \
@@ -668,6 +668,9 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         }
         if let Some(path) = pinned_path(&session_files, &images) {
             let turn_of = transcript_line_info(path)?.turn_of;
+            // Resolve open/from-end forms against this transcript's turn count.
+            let turn_count = turn_of.values().copied().max().map_or(0, |m| m + 1);
+            let (lo, hi) = spec.resolve(turn_count, false);
             images.retain(|i| {
                 turn_of
                     .get(&i.line_no)

@@ -55,11 +55,11 @@ context compaction clipped.
 
 - 🔎 **Round-trips, not lines.** A hit returns the whole exchange — the matched tool call with its result, the user turn with the agent's reply — rebuilt from the `uuid`/`parentUuid` graph.
 - ⏪ **Recover files & deleted plans.** Replay the Read/Write/Edit stream to restore a file's exact final bytes — or, when the session saw only part of it, fail honestly and salvage what survived with gaps marked.
-- 🧵 **Un-clip a compaction.** A summary keeps task *state* but drops *turn* fidelity (~239 assistant turns → one quote). `turns` restores the verbatim back-and-forth within a `--budget`.
+- 🧵 **Un-clip a compaction.** A summary keeps task *state* but drops *turn* fidelity (~239 assistant turns → one quote). `verbatim` restores the verbatim back-and-forth within a `--budget`.
 - 🌳 **Subagent topology.** Every built-in Task and workflow/OMC agent — kind, trigger/start/finish, status, and the parent→child tree (reconstructed even though they sit flat on disk).
 - 🗂 **File forensics.** What each session changed and when, with edits made *outside* the tool stream flagged — the risky-to-reconstruct signal.
 - ⚡ **Fast on huge logs.** mmap + SIMD newline scan + a regex prefilter, full JSON only on candidate lines; 200 MB transcripts without a full read.
-- 🤖 **The user is a model.** Terse, parseable output, re-feedable `Lnnnn`/`@<uuid>` handles, errors instead of silent guesses — and `@trap:<marker>`, so a subagent can identify *itself*.
+- 🤖 **The user is a model.** Terse, parseable output, re-feedable `Lnnnn`/`@<uuid>` handles, errors instead of silent guesses — a zero-match `search` even *self-diagnoses* (a definitive absence, not a syntax slip, naming the label that hid your hits) so a model never bails to hand-parsing — and `@trap:<marker>`, so a subagent can identify *itself*.
 - 🧩 **No magic, no index.** Pure regex — no embeddings, no BM25, no semantic search, no database, no daemon. It reads the files that are already there.
 
 ## Built for an AI consumer
@@ -78,7 +78,7 @@ compactions of history. It's a *good* selection: it keeps the key findings (what
 file:line) and often your standing directives verbatim. But it is a selection, re-abstracted every
 time, and the axis it optimizes is **task continuation** — not the conversation.
 
-`csift turns` keeps the other axis: the verbatim **User↔Agent exchange** — what you actually said,
+`csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange** — what you actually said,
 and what the agent actually reported back when it finished — with the hundreds of tool calls in
 between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue the
 summary compressed to a line or two: not just your directive, but the agent's *"validated against
@@ -119,12 +119,13 @@ csift --help
 |---|---|
 | find what a session said about a topic | `csift search "TOPIC" @<uuid>` |
 | fetch the exact record a hit cited (full / raw bytes) | `csift show @<uuid> --line 46550 [--raw]` |
+| peek a live session's last few turns | `csift show @<uuid> --turn -3..` |
 | token / tool / turn aggregates | `csift stats @<uuid>` |
 | identify "which session is this" | `csift list .` |
 | see which files a session changed | `csift files @<uuid> --by file` |
 | restore a file from the transcript | `csift recover @<uuid> --file /abs/x.rs --out /abs/x.rs` |
 | get back a deleted plan | `csift recover @<uuid> --file @plan --out plan.md` |
-| un-clip the turns a compaction dropped | `csift turns @<uuid> --budget 40000` |
+| un-clip the turns a compaction dropped | `csift verbatim @<uuid> --budget 40000` |
 | inspect a session's subagents | `csift agents @<uuid>` |
 | identify the current session | `csift whoami` |
 | pull a pasted image back out | `csift image @<uuid> --out ./imgs` |
@@ -138,14 +139,14 @@ Run `csift <command> --help` for the full flag set and examples.
 |---|---|
 | **`list`** | fast "which session is this?" index — first/last user + last agent, per session |
 | **`search`** | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `-l` matching sessions, `--raw` verbatim lines) |
-| **`show`** | fetch the exact record(s) you name — `--line N\|A..B` / `--uuid U` of one transcript, rendered full or `--raw` bytes |
+| **`show`** | fetch the exact record(s) you name — `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `s1·tN` turn index) of one transcript, rendered full or `--raw` bytes |
 | **`stats`** | one-scan aggregates per session: tokens by model, tool calls, turns, span, compactions |
 | **`agents`** | a session's subagents: kind, lifecycle, status, and the parent→child topology |
 | **`whoami`** | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe |
 | **`files`** | which files/dirs a session changed, when — plus edits made outside the tool stream |
 | **`recover`** | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream — byte-exact or honest gaps |
 | **`plan`** | locate the Plan-Mode plan file bound to a session (and reverse: which session owns a plan) |
-| **`turns`** | restore the verbatim turns a compaction summary clipped, within a budget |
+| **`verbatim`** | restore the verbatim turns a compaction summary clipped, within a budget (the live-tail peek is `show --turn`) |
 | **`image`** | list + extract images pasted into a transcript (handle/locator addressing, format transcode) |
 
 ## How it works
