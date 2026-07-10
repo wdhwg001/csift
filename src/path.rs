@@ -820,6 +820,59 @@ pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
     ))
 }
 
+/// Read a `--sessions-from` id list (a file path, or `-` for stdin) and append each id onto
+/// `paths` as an `@<id>` target token, so the shared resolver treats the list EXACTLY like
+/// positional `@` targets (same pin logic, same fail-loud misses). Tokens are whitespace /
+/// newline separated; each must be a session uuid, a 4-11-hex uuid prefix, or an agent id —
+/// the ids csift itself emits (`search -l`, the JSON summary's `session_ids`, any row's
+/// `parent_session_id`). A leading `@` is tolerated: ids are DATA (csift's own outputs are
+/// bare, a hand-built list may quote them `@`-style), so both spellings of the same id work.
+/// Any other token is a hard error naming it. Empty input appends nothing.
+pub fn extend_with_session_list(paths: &mut Vec<PathBuf>, src: &Path) -> Result<()> {
+    let data = if src.as_os_str() == "-" {
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut s)
+            .context("--sessions-from: reading stdin")?;
+        s
+    } else {
+        std::fs::read_to_string(src)
+            .with_context(|| format!("--sessions-from: reading {}", src.display()))?
+    };
+    for tok in data.split_whitespace() {
+        let id = tok.strip_prefix('@').unwrap_or(tok);
+        if is_uuid(id) || is_uuid_prefix(id) || is_subagent_id(id) {
+            paths.push(PathBuf::from(format!("@{id}")));
+        } else {
+            bail!(
+                "--sessions-from: {tok:?} is not a session id (want a uuid, a 4-11-hex uuid \
+                 prefix, or an agent id — the ids csift emits)"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Shared target assembly for the multi-target commands: positional `paths` ∪ the
+/// `--sessions-from` id list, resolved through [`resolve_session_files`]. An EXPLICITLY
+/// given but EMPTY id list with no positional targets resolves to an EMPTY scope — the
+/// honest-empty a pipeline stage that found nothing should propagate — never a silent
+/// widening to every project (0 targets ⇒ ALL is the rule for a BARE invocation only).
+pub fn resolve_targets_with_session_list(
+    positionals: &[PathBuf],
+    sessions_from: Option<&Path>,
+    scope: SubagentScope,
+    caller: Caller,
+) -> Result<Vec<PathBuf>> {
+    let mut paths = positionals.to_vec();
+    if let Some(src) = sessions_from {
+        extend_with_session_list(&mut paths, src)?;
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+    }
+    resolve_session_files(&paths, scope, caller)
+}
+
 /// Resolve positional targets into the concrete, sorted, de-duplicated list of session
 /// `*.jsonl` files to operate on, with the subagent span governed by `scope`.
 ///
@@ -1163,8 +1216,8 @@ fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// True when a TARGET token pins a SINGLE transcript/session (so `search --line` has one file
-/// to address, and the empty-pattern warning knows a session filter is present): `@main`, a
+/// True when a TARGET token pins a SINGLE transcript/session (so `search`'s empty-pattern
+/// warning knows a session filter is present, and `show` can resolve one file): `@main`, a
 /// `@trap:<marker>` self-token, an `@<uuid>`/`@<agent-hex>`/`@<uuid-prefix>` id, or a `*.jsonl`
 /// file. A plain path or encoded-dir token can span many sessions, so it does NOT pin.
 #[must_use]
@@ -1206,35 +1259,41 @@ pub(crate) fn is_uuid(s: &str) -> bool {
 /// True for a bare-hex SUBAGENT id: a dash-less run of hex digits long enough to be an
 /// agent id (≥12), never a short word. (`agents` prints these; `bare_agent_id` produces
 /// them.) Used to GUIDE the error (subagent transcripts are not top-level jsonl basenames)
-/// and, in `search`, to recognise a `--line <hex>:<spec>` subagent-pinning prefix.
+/// and, via [`is_subagent_id`], to route `@<agent-id>` targets.
 pub fn is_bare_subagent_hex(s: &str) -> bool {
     s.len() >= 12 && !s.contains('-') && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// True for the NEW "teammate" subagent id shape (`taskKind:"in_process_teammate"`): the
 /// canonical agent id EMBEDS the teammate name, e.g. `aVSRepro-68a2a1661c9390c1` — a leading
-/// `a`, an alphanumeric name, then `-<hex≥12>`. Unlike a built-in/workflow agent (a bare hex
-/// run) it carries a dash + uppercase, so [`is_bare_subagent_hex`] rejects it. Recognised here
-/// so the id `csift agents` prints round-trips back as an `@<agent-id>` target. An encoded
-/// project dir can never collide (those start with `-`, the leading-slash sanitisation), and a
-/// uuid is already matched earlier in the grammar; the strict `a`-led, all-alphanumeric head +
-/// hex tail keeps the false-positive surface empty.
+/// `a`, the name, then `-<hex≥12>`. Unlike a built-in/workflow agent (a bare hex run) it
+/// carries a dash + uppercase, so [`is_bare_subagent_hex`] rejects it. The NAME itself may
+/// carry dashes (a real `aP1-engine-9cf2f06d6235ca64` was minted from the teammate name
+/// `P1-engine`), so the head accepts `[A-Za-z0-9-]`; the explicit `!is_uuid` guard keeps an
+/// `a`-led session uuid out — its final segment is exactly 12 hex, which the dash-tolerant
+/// head would otherwise admit. An encoded project dir can never collide (those start with
+/// `-`, the leading-slash sanitisation). Recognised here so the id `csift agents` prints
+/// round-trips back as an `@<agent-id>` target.
 fn is_teammate_agent_id(s: &str) -> bool {
+    if is_uuid(s) {
+        return false;
+    }
     let Some((head, tail)) = s.rsplit_once('-') else {
         return false;
     };
     head.len() >= 2
         && head.starts_with('a')
-        && head.bytes().all(|b| b.is_ascii_alphanumeric())
+        && head.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
         && tail.len() >= 12
         && tail.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// True for ANY canonical subagent id `csift agents` emits — a bare hex run
 /// ([`is_bare_subagent_hex`], built-in/workflow) OR a name-embedded teammate id
-/// ([`is_teammate_agent_id`]). This is the single gate the `@<agent-id>` grammar branch and the
-/// `search --line <id>:<spec>` subagent-pin prefix key on, so EVERY emitted agent_id round-trips
-/// regardless of shape (downstream resolution already matches a subagent by exact id).
+/// ([`is_teammate_agent_id`]). This is the single gate the `@<agent-id>` grammar branch
+/// (`resolve_session_files`), the pinned-target existence guard, and `pins_single_session`
+/// key on, so EVERY emitted agent_id round-trips regardless of shape (downstream resolution
+/// already matches a subagent by exact id).
 pub fn is_subagent_id(s: &str) -> bool {
     is_bare_subagent_hex(s) || is_teammate_agent_id(s)
 }
@@ -1550,13 +1609,19 @@ mod tests {
         assert!(is_teammate_agent_id("aVSRepro-68a2a1661c9390c1"));
         assert!(is_teammate_agent_id("aVSSpeedField-d5dab904cc98a239"));
         assert!(is_teammate_agent_id("aVSMultiRegion-06fb13dd400b53a5"));
+        // A teammate NAME may itself carry dashes (real data: teammate "P1-engine") — the
+        // head is dash-tolerant so the id `csift agents` prints still round-trips.
+        assert!(is_teammate_agent_id("aP1-engine-9cf2f06d6235ca64"));
         // A bare hex (built-in/workflow) has no dash → NOT teammate-shaped (it routes via
         // is_bare_subagent_hex instead).
         assert!(!is_teammate_agent_id("ae24045bd6d4bdaff"));
-        // A uuid: the head after the last dash is hex but the head segment carries dashes →
-        // rejected (and is_uuid catches it earlier in the grammar regardless).
+        // A uuid is rejected: the explicit is_uuid guard (an `a`-led uuid would otherwise
+        // pass the dash-tolerant head with its exactly-12-hex final segment).
         assert!(!is_teammate_agent_id(
             "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        ));
+        assert!(!is_teammate_agent_id(
+            "a93b39f8-1681-4535-88eb-5b8ecce0abcd"
         ));
         // An encoded project dir starts with `-` (leading-slash sanitisation) → head not `a`.
         assert!(!is_teammate_agent_id("-Users-testuser-Projects-foo"));
@@ -1567,10 +1632,12 @@ mod tests {
 
     #[test]
     fn is_subagent_id_accepts_both_bare_hex_and_teammate() {
-        // The unified gate the @-grammar + `--line <id>:` prefix key on.
+        // The unified gate the @-grammar routes through.
         assert!(is_subagent_id("ae24045bd6d4bdaff")); // built-in/workflow bare hex
         assert!(is_subagent_id("aVSRepro-68a2a1661c9390c1")); // teammate
+        assert!(is_subagent_id("aP1-engine-9cf2f06d6235ca64")); // teammate with dashed name
         assert!(!is_subagent_id("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")); // uuid
+        assert!(!is_subagent_id("a93b39f8-1681-4535-88eb-5b8ecce0abcd")); // a-led uuid
         assert!(!is_subagent_id("-Users-testuser-Projects-foo")); // encoded dir
         assert!(!is_subagent_id("abc123")); // too short
     }
@@ -1582,6 +1649,7 @@ mod tests {
         assert!(pins_single_session("@0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"));
         assert!(pins_single_session("@ae24045bd6d4bdaff"));
         assert!(pins_single_session("@aVSRepro-68a2a1661c9390c1")); // teammate id pins one
+        assert!(pins_single_session("@aP1-engine-9cf2f06d6235ca64")); // dashed-name teammate
         assert!(pins_single_session("@13d9645a")); // uuid-prefix
         assert!(pins_single_session("/a/b/0a1b2c3d.jsonl"));
         // A bare uuid (no `@`), an encoded token, a plain path, `.` → NOT a session pin.
