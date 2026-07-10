@@ -48,8 +48,10 @@ impl LineSpecs {
     }
 }
 
-/// Parse `--line` tokens (already comma-split by clap): `N` or `A-B` (1-based,
-/// inclusive, ascending). No subagent prefix — the TARGET names the transcript.
+/// Parse `--line` tokens (already comma-split by clap): `N` or `A..B` (1-based,
+/// inclusive, ascending — the shared [`crate::text::parse_range`] grammar). A bare `N`
+/// is an EXPLICIT address (miss = hard error); an `A..B` token is a clamping range.
+/// No subagent prefix — the TARGET names the transcript.
 fn parse_line_specs(tokens: &[String]) -> Result<LineSpecs> {
     let mut specs = LineSpecs::default();
     for tok in tokens {
@@ -57,26 +59,18 @@ fn parse_line_specs(tokens: &[String]) -> Result<LineSpecs> {
         if t.is_empty() {
             continue;
         }
-        if let Some((a, b)) = t.split_once('-') {
-            let a: usize = a
-                .trim()
-                .parse()
-                .map_err(|_| anyhow!("--line: '{t}' is not a valid range (want A-B, 1-based)"))?;
-            let b: usize = b
-                .trim()
-                .parse()
-                .map_err(|_| anyhow!("--line: '{t}' is not a valid range (want A-B, 1-based)"))?;
-            if a == 0 || b == 0 {
-                bail!("--line: lines are 1-based; '{t}' includes line 0");
-            }
-            if a > b {
-                bail!("--line: range '{t}' is descending — write it ascending (A-B with A ≤ B)");
-            }
-            specs.ranges.push((a, b));
+        if t.contains("..") {
+            specs
+                .ranges
+                .push(crate::text::parse_range(t, "--line", true)?);
         } else {
-            let n: usize = t
-                .parse()
-                .map_err(|_| anyhow!("--line: '{t}' is not a line number or A-B range"))?;
+            let n: usize = t.parse().map_err(|_| {
+                if t.bytes().any(|b| b == b'-') {
+                    anyhow!("--line range is START..END (e.g. 495..500); got '{t}'")
+                } else {
+                    anyhow!("--line: '{t}' is not a line number or A..B range")
+                }
+            })?;
             if n == 0 {
                 bail!("--line: lines are 1-based; line 0 does not exist");
             }
@@ -123,7 +117,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
     let file = resolve_single_transcript(&args.target)?;
     if specs.is_empty() && uuids.is_empty() {
         bail!(
-            "show needs an address: `--line <N|A-B>` (1-based jsonl lines, the `Lnnnn` other \
+            "show needs an address: `--line <N|A..B>` (1-based jsonl lines, the `Lnnnn` other \
              csift commands print) and/or `--uuid <U>`. The transcript is {} — csift never \
              dumps a whole transcript into your context.",
             file.display()

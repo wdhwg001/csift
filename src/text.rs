@@ -133,12 +133,13 @@ fn merge_into(mut base: serde_json::Value, extra: serde_json::Value) -> serde_js
     base
 }
 
-/// Parse an inclusive `START..END` index range. Both bounds parse as `usize`; `END < START`
-/// is an error. When `one_based` is true the start must be ≥ 1 (file LINE ranges are
-/// 1-based); when false a 0 start is allowed (TURN ranges are 0-based). `label` names the
-/// flag in the error messages (e.g. `--turn-range` / `--line-range`). This is the single
-/// implementation behind the four byte-identical `parse_turn_range` copies + the
-/// `parse_line_range` near-clone.
+/// Parse an inclusive index-range token: bare `N` (shorthand for `N..N`) or `START..END`.
+/// This is THE range grammar, shared by every range flag (`--turn-range` / `--file-lines` /
+/// `show --line` tokens). Both bounds parse as `usize`; `END < START` is an error. When
+/// `one_based` is true the start must be ≥ 1 (file LINE ranges are 1-based); when false a 0
+/// start is allowed (TURN ranges are 0-based). `label` names the flag in the error messages.
+/// A dash-form range (`A-B`) is a HARD error that teaches the `..` form — one grammar, no
+/// second separator.
 pub fn parse_range(s: &str, label: &str, one_based: bool) -> anyhow::Result<(usize, usize)> {
     use anyhow::{bail, Context};
     let int_kind = if one_based {
@@ -146,17 +147,24 @@ pub fn parse_range(s: &str, label: &str, one_based: bool) -> anyhow::Result<(usi
     } else {
         "non-negative"
     };
-    let (a, b) = s
-        .split_once("..")
-        .with_context(|| format!("{label} must be START..END, got {s:?}"))?;
-    let lo: usize = a
-        .trim()
-        .parse()
-        .with_context(|| format!("{label} start is not a {int_kind} integer: {a:?}"))?;
-    let hi: usize = b
-        .trim()
-        .parse()
-        .with_context(|| format!("{label} end is not a {int_kind} integer: {b:?}"))?;
+    let t = s.trim();
+    let (lo, hi) = if let Some((a, b)) = t.split_once("..") {
+        let lo: usize = a
+            .trim()
+            .parse()
+            .with_context(|| format!("{label} start is not a {int_kind} integer: {a:?}"))?;
+        let hi: usize = b
+            .trim()
+            .parse()
+            .with_context(|| format!("{label} end is not a {int_kind} integer: {b:?}"))?;
+        (lo, hi)
+    } else if let Ok(n) = t.parse::<usize>() {
+        (n, n)
+    } else if t.contains('-') && t.bytes().any(|b| b.is_ascii_digit()) {
+        bail!("{label} range is START..END (e.g. 495..500); got {t:?}");
+    } else {
+        bail!("{label} must be N or START..END, got {t:?}");
+    };
     if one_based && lo == 0 {
         bail!("{label} start must be ≥ 1 (file lines are 1-based)");
     }
@@ -240,6 +248,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_range_bare_n_is_a_single_index() {
+        // Bare N ≡ N..N — the shorthand every range flag shares.
+        assert_eq!(
+            parse_range("270", "--turn-range", false).unwrap(),
+            (270, 270)
+        );
+        assert_eq!(parse_range(" 42 ", "--line", true).unwrap(), (42, 42));
+        assert_eq!(parse_range("0", "--turn-range", false).unwrap(), (0, 0));
+        // one_based still rejects a bare 0.
+        assert!(parse_range("0", "--line", true).is_err());
+    }
+
+    #[test]
+    fn parse_range_dash_form_teaches_the_dotdot_grammar() {
+        // `A-B` is the ONE removed spelling — the error hands back the correct form.
+        let err = parse_range("495-500", "--line", true).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("START..END"), "got: {msg}");
+        assert!(msg.contains("495-500"), "got: {msg}");
+    }
+
+    #[test]
     fn parse_range_one_based_line_rejects_zero_start() {
         assert_eq!(
             parse_range("1..200", "--line-range", true).unwrap(),
@@ -251,8 +281,6 @@ mod tests {
 
     #[test]
     fn parse_range_errors() {
-        // Missing `..`.
-        assert!(parse_range("5", "--turn-range", false).is_err());
         // Non-integer bound.
         assert!(parse_range("a..5", "--turn-range", false).is_err());
         // end < start.
