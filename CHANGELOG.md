@@ -5,6 +5,21 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.3.0] - 2026-07-11
+
+- `-T`/`--label-not` (search): label EXCLUSION with the same selector grammar
+  as `-t`; richest-SURVIVING-view dedup; statically-empty combos hard-error.
+- `--sessions-from <FILE|->` on every multi-target command (union an id list
+  into the scope; an explicit empty list = an empty scope); `search -l` emits
+  the matching owning-session ids to pipe into it; `search --raw` emits
+  matched records' verbatim jsonl lines (stdout pure, notes on stderr).
+- Search JSON hits + verbatim collapsed-agent rows carry `refetch` — the
+  ready-to-run `csift show` command addressed at the line-owning transcript.
+- The turn window and `--since`/`--until` INTERSECT on every command;
+  `verbatim` REQUIRES a target (budget × every-session flood guard); `list`
+  gains `--since`/`--until`.
+- Teammate ids with dashed NAMES round-trip as `@<agent-id>` targets.
+
 ## [0.2.0] - 2026-07-10
 
 Breaking ergonomics rework, zero backcompat — one way per intent.
