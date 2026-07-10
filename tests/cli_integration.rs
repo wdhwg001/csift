@@ -59,6 +59,34 @@ impl Home {
         self.run_full(args, extra_env, None)
     }
 
+    /// Like `run`, but feeding `input` on stdin (`--sessions-from -`).
+    fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+        use std::io::Write as _;
+        let exe = env!("CARGO_BIN_EXE_csift");
+        let mut child = Command::new(exe)
+            .args(args)
+            .env("HOME", &self.root)
+            .env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("CODEX_COMPANION_SESSION_ID")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn csift");
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        let out = child.wait_with_output().expect("wait csift");
+        Output {
+            success: out.status.success(),
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }
+    }
+
     fn run_full(&self, args: &[&str], extra_env: &[(&str, &str)], cwd: Option<&Path>) -> Output {
         let exe = env!("CARGO_BIN_EXE_csift");
         let mut cmd = Command::new(exe);
@@ -1163,7 +1191,7 @@ fn show_multiple_lines_and_ranges() {
         list.stdout
     );
     // A range expands to every record in span (L1-L7 are records; L8 malformed is skipped).
-    let range = h.run(&["show", at(SESS).as_str(), "--line", "1-7"]);
+    let range = h.run(&["show", at(SESS).as_str(), "--line", "1..7"]);
     assert!(range.success, "stderr: {}", range.stderr);
     assert!(
         range.stdout.contains("why is the carry needed?") && range.stdout.contains("No panic"),
@@ -1246,7 +1274,7 @@ fn show_explicit_miss_is_a_hard_error() {
 fn show_range_clamps_but_errors_when_empty() {
     let h = populated_home();
     // 6-1000: L6/L7 are records; the rest of the range clamps silently.
-    let out = h.run(&["show", at(SESS).as_str(), "--line", "6-1000"]);
+    let out = h.run(&["show", at(SESS).as_str(), "--line", "6..1000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("now explain the panic path"),
@@ -1254,7 +1282,7 @@ fn show_range_clamps_but_errors_when_empty() {
         out.stdout
     );
     // A range yielding ZERO records errors (addressing nothing is a miss, not an empty ok).
-    let empty = h.run(&["show", at(SESS).as_str(), "--line", "900-1000"]);
+    let empty = h.run(&["show", at(SESS).as_str(), "--line", "900..1000"]);
     assert!(
         !empty.success,
         "a zero-yield range must fail: {}",
@@ -1403,6 +1431,371 @@ fn show_unknown_agent_id_fails_closed() {
         "an unmatched agent id must fail, never widen scope; stdout: {}",
         out.stdout
     );
+}
+
+#[test]
+fn dashed_teammate_name_id_round_trips_as_target() {
+    // A teammate NAME may carry dashes (real data: teammate "P1-engine" → agent id
+    // `aP1-engine-9cf2f06d6235ca64`). The id `csift agents` prints must round-trip as an
+    // `@<agent-id>` target — it used to fall through to the project-dir branch and fail.
+    let enc = "-Users-testuser-Projects-dashmate";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let id = "aP1-engine-9cf2f06d6235ca64";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call0","name":"Agent","input":{"name":"P1-engine","subagent_type":"executor","description":"do it"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{id}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aP1-engine-9cf2f06d6235ca64","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"teammate: probe the dashy widget"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"probed"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{id}.meta.json"),
+        r#"{"agentType":"P1-engine","name":"P1-engine","taskKind":"in_process_teammate"}"#,
+    );
+    let l = h.run(&["list", &format!("@{id}")]);
+    assert!(l.success, "list @dashed-teammate-id: {}", l.stderr);
+    assert!(
+        l.stdout.contains("SUBAGENT") && l.stdout.contains(id),
+        "the subagent banner names the teammate id: {}",
+        l.stdout
+    );
+    let s = h.run(&["show", &format!("@{id}"), "--line", "1"]);
+    assert!(s.success, "show @dashed-teammate-id: {}", s.stderr);
+    assert!(
+        s.stdout.contains("teammate: probe the dashy widget"),
+        "show fetches from the teammate transcript: {}",
+        s.stdout
+    );
+}
+
+#[test]
+fn sessions_from_scopes_like_at_positionals() {
+    let h = populated_home();
+    // A bare id in a FILE scopes exactly like an `@` positional.
+    let ids = h.root.join("ids.txt");
+    std::fs::write(&ids, format!("{SESS}\n")).unwrap();
+    let out = h.run(&["list", "--sessions-from", ids.to_str().unwrap()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(SESS),
+        "scoped to the listed id: {}",
+        out.stdout
+    );
+    // stdin (`-`) + the tolerated `@`-prefixed spelling.
+    let out2 = h.run_with_stdin(&["list", "--sessions-from", "-"], &format!("@{SESS}\n"));
+    assert!(out2.success, "stderr: {}", out2.stderr);
+    assert!(
+        out2.stdout.contains(SESS),
+        "stdin form works: {}",
+        out2.stdout
+    );
+    // A non-id token is a hard error NAMING it.
+    std::fs::write(&ids, "not-an-id\n").unwrap();
+    let bad = h.run(&["list", "--sessions-from", ids.to_str().unwrap()]);
+    assert!(!bad.success);
+    assert!(
+        bad.stderr.contains("not-an-id"),
+        "the error names the bad token: {}",
+        bad.stderr
+    );
+    // An EMPTY list = an empty scope (honest empty, exit 0) — NEVER a widening to every
+    // project (a pipeline stage that found nothing propagates nothing).
+    std::fs::write(&ids, "\n").unwrap();
+    let empty = h.run(&["list", "--sessions-from", ids.to_str().unwrap()]);
+    assert!(empty.success, "stderr: {}", empty.stderr);
+    assert!(
+        !empty.stdout.contains(SESS),
+        "an explicit empty list must not scan every project: {}",
+        empty.stdout
+    );
+    // A MISSING file is a hard error (you named a list; it must exist).
+    let missing = h.run(&["list", "--sessions-from", "/no/such/csift-ids.txt"]);
+    assert!(!missing.success);
+}
+
+#[test]
+fn turns_requires_a_target() {
+    // `--budget` multiplies per session, so bare `csift turns` (= every project) is an
+    // output flood by construction — a target is REQUIRED (the `show` precedent).
+    let h = populated_home();
+    let bare = h.run(&["turns"]);
+    assert!(!bare.success, "bare turns must error: {}", bare.stdout);
+    assert!(
+        bare.stderr.contains("name a target"),
+        "the error teaches the target forms: {}",
+        bare.stderr
+    );
+    // `--sessions-from` satisfies the requirement.
+    let ids = h.root.join("ids.txt");
+    std::fs::write(&ids, format!("{SESS}\n")).unwrap();
+    let ok = h.run(&["turns", "--sessions-from", ids.to_str().unwrap()]);
+    assert!(ok.success, "stderr: {}", ok.stderr);
+}
+
+#[test]
+fn list_window_admits_by_span_intersection() {
+    // A session whose [first, last] span STRADDLES the window is still active in it — the
+    // span-intersect rule, not a point rule (no single record needs to fall inside).
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-windowy";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-01-01T00:00:00.000Z","message":{"role":"user","content":"early bird"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-12-31T00:00:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"late reply"}]}}"#, "\n",
+        ),
+    );
+    let straddle = h.run(&[
+        "list",
+        enc,
+        "--since",
+        "2026-06-01",
+        "--until",
+        "2026-06-02",
+    ]);
+    assert!(straddle.success, "stderr: {}", straddle.stderr);
+    assert!(
+        straddle.stdout.contains(sess),
+        "a straddling session intersects the window: {}",
+        straddle.stdout
+    );
+    // A window entirely OUTSIDE the span excludes the session.
+    let outside = h.run(&["list", enc, "--since", "2027-01-01"]);
+    assert!(outside.success, "stderr: {}", outside.stderr);
+    assert!(
+        !outside.stdout.contains(sess),
+        "a disjoint window excludes: {}",
+        outside.stdout
+    );
+}
+
+#[test]
+fn stats_turn_range_windows_the_aggregates() {
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-statturn";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            // Turn 0: one Read tool call.
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t0","name":"Read","input":{}}]}}"#, "\n",
+            // Turn 1: one Edit tool call.
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"second ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{}}]}}"#, "\n",
+        ),
+    );
+    // Bare-N shorthand: turn 1 only — Edit counted, Read not, turns == 1.
+    let out = h.run(&["stats", enc, "--turn-range", "1", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows = json_rows(&out.stdout, "session");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["turns"], 1, "one turn in window: {}", out.stdout);
+    assert!(
+        rows[0]["tools"].get("Edit").is_some() && rows[0]["tools"].get("Read").is_none(),
+        "only turn 1's tool calls count: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn sessions_with_matches_pipes_into_sessions_from_and_refetch_round_trips() {
+    let h = populated_home();
+    // `-l`: bare ids, one per line — WHICH sessions matched.
+    let l = h.run(&["search", "", "-l"]);
+    assert!(l.success, "stderr: {}", l.stderr);
+    assert!(
+        l.stdout.lines().any(|s| s.trim() == SESS),
+        "lists the matching session: {}",
+        l.stdout
+    );
+    // The id stream pipes STRAIGHT into `--sessions-from -` (the composition loop closes
+    // inside csift — no jq/sed re-quoting).
+    let piped = h.run_with_stdin(
+        &["stats", "--sessions-from", "-", "--format", "json"],
+        &l.stdout,
+    );
+    assert!(piped.success, "stderr: {}", piped.stderr);
+    assert!(
+        piped.stdout.contains(SESS),
+        "piped scope reached stats: {}",
+        piped.stdout
+    );
+    // `-l --format json` is a pointed error (JSON readers use the summary's session_ids).
+    let j = h.run(&["search", "", "-l", "--format", "json"]);
+    assert!(!j.success);
+    // Every JSON hit carries `refetch` — a ready-to-run `csift show` addressed at the hit's
+    // OWN transcript — and the command actually round-trips.
+    let js = h.run(&["search", "", &format!("@{SESS}"), "--format", "json"]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    let ex_rows = json_rows(&js.stdout, "exchange");
+    let refetch = ex_rows[0]["hits"][0]["refetch"]
+        .as_str()
+        .expect("refetch is a string");
+    assert!(refetch.starts_with("csift show @"), "got: {refetch}");
+    let parts: Vec<&str> = refetch.split_whitespace().skip(1).collect();
+    let rf = h.run(&parts);
+    assert!(rf.success, "the refetch command round-trips: {}", rf.stderr);
+}
+
+#[test]
+fn search_raw_emits_verbatim_lines_on_a_pure_stdout() {
+    // `--raw` = show's escape hatch on search's filter surface: the matched records'
+    // VERBATIM jsonl lines, byte-identical to the file, stdout pure (notes → stderr).
+    let (h, sess, _hex) = show_subagent_home();
+    let out = h.run(&[
+        "search",
+        "go",
+        &format!("@{sess}"),
+        "--no-subagents",
+        "--raw",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // Every stdout line parses as JSON AND is byte-identical to a line of the transcript.
+    let disk = std::fs::read_to_string(
+        h.projects()
+            .join("-Users-testuser-Projects-linehex")
+            .join(format!("{sess}.jsonl")),
+    )
+    .unwrap();
+    let disk_lines: Vec<&str> = disk.lines().collect();
+    let mut n = 0;
+    for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
+        assert!(
+            serde_json::from_str::<serde_json::Value>(line).is_ok(),
+            "stdout is a pure jsonl stream: {line}"
+        );
+        assert!(
+            disk_lines.contains(&line),
+            "verbatim (byte-identical to the file): {line}"
+        );
+        n += 1;
+    }
+    assert!(n >= 1, "at least the matching record emits: {}", out.stdout);
+    // The filter surface still applies: an excluding -T yields an empty (exit 0) stream.
+    let none = h.run(&[
+        "search",
+        "go",
+        &format!("@{sess}"),
+        "--no-subagents",
+        "--raw",
+        "-T",
+        "user",
+    ]);
+    assert!(none.success, "stderr: {}", none.stderr);
+    assert!(
+        none.stdout.trim().is_empty(),
+        "user-record hit excluded: {}",
+        none.stdout
+    );
+    // Conflicts: --raw excludes the rendered-surface modes.
+    for extra in [["--siblings"], ["-c"], ["-l"]] {
+        let mut args = vec!["search", "go", "--raw"];
+        args.extend_from_slice(&extra);
+        let bad = h.run(&args);
+        assert!(!bad.success, "--raw + {extra:?} must conflict");
+    }
+    let badjson = h.run(&["search", "go", "--raw", "--format", "json"]);
+    assert!(!badjson.success, "--raw + --format json must error");
+}
+
+#[test]
+fn label_not_flag_surface_and_empty_set_guard() {
+    // `-T` mirrors `-t` (rg's -t/-T duality): same selector grammar, exclusion semantics.
+    let (h, sess, _hex) = show_subagent_home();
+    // The main transcript's L2 is an Agent tool_use — `-T agent.tool` must drop it while a
+    // plain filter still finds it.
+    let plain = h.run(&[
+        "search",
+        "",
+        &format!("@{sess}"),
+        "--no-subagents",
+        "-t",
+        "agent.tool.use",
+    ]);
+    assert!(plain.success, "stderr: {}", plain.stderr);
+    assert!(
+        plain.stdout.contains("Agent"),
+        "premise: the tool_use hits: {}",
+        plain.stdout
+    );
+    let excl = h.run(&[
+        "search",
+        "",
+        &format!("@{sess}"),
+        "--no-subagents",
+        "-T",
+        "agent.tool",
+    ]);
+    assert!(excl.success, "stderr: {}", excl.stderr);
+    assert!(
+        !excl.stdout.contains("agent.tool.use"),
+        "-T agent.tool drops the tool_use hit: {}",
+        excl.stdout
+    );
+    // An invalid -T selector gets the same teaching error as -t.
+    let bad = h.run(&["search", "x", "-T", "thinking"]);
+    assert!(!bad.success);
+    // A statically-empty include-minus-exclude combination is a hard error, never an
+    // honest-looking empty result.
+    let contradictory = h.run(&[
+        "search",
+        "x",
+        "-t",
+        "agent.thinking",
+        "-T",
+        "agent.thinking",
+    ]);
+    assert!(!contradictory.success);
+    assert!(
+        contradictory.stderr.contains("can never match"),
+        "the error names the contradiction: {}",
+        contradictory.stderr
+    );
+}
+
+#[test]
+fn range_grammar_is_n_or_dotdot_everywhere() {
+    // ONE range-token grammar across every range flag: bare `N` (≡ N..N) or `START..END`;
+    // the removed dash spelling is a HARD error that hands back the correct form.
+    let (h, sess, _hex) = show_subagent_home();
+    // `show --line A..B` fetches the span.
+    let ok = h.run(&["show", &format!("@{sess}"), "--line", "1..2"]);
+    assert!(ok.success, "stderr: {}", ok.stderr);
+    assert!(ok.stdout.contains("go"), "record in span: {}", ok.stdout);
+    // The dash form errors and teaches the `..` grammar (no silent compat).
+    let dash = h.run(&["show", &format!("@{sess}"), "--line", "1-2"]);
+    assert!(
+        !dash.success,
+        "dash ranges must hard-error: {}",
+        dash.stdout
+    );
+    assert!(
+        dash.stderr.contains("START..END"),
+        "the error teaches the ..-form: {}",
+        dash.stderr
+    );
+    // `--turn-range` accepts bare N (≡ N..N).
+    let bare = h.run(&["search", "go", &format!("@{sess}"), "--turn-range", "0"]);
+    assert!(bare.success, "stderr: {}", bare.stderr);
+    assert!(
+        bare.stdout.contains("go"),
+        "turn 0 matched via the bare-N shorthand: {}",
+        bare.stdout
+    );
+    // ...and still rejects the dash form with the same teaching error.
+    let tdash = h.run(&["search", "go", &format!("@{sess}"), "--turn-range", "0-1"]);
+    assert!(!tdash.success);
+    assert!(tdash.stderr.contains("START..END"), "got: {}", tdash.stderr);
 }
 
 #[test]
@@ -4691,7 +5084,9 @@ fn files_turn_range_excludes_later_bash() {
 }
 
 #[test]
-fn files_turn_range_with_since_is_mutually_exclusive() {
+fn files_turn_range_and_since_intersect() {
+    // The ONE windowing rule: `--turn-range` and `--since`/`--until` AND together (the
+    // former mutual-exclusion bail was a leftover — search/recover/stats always intersected).
     let h = files_scenario_home();
     let out = h.run(&[
         "files",
@@ -4701,11 +5096,17 @@ fn files_turn_range_with_since_is_mutually_exclusive() {
         "--since",
         "2h",
     ]);
-    assert!(!out.success, "mutually-exclusive flags must error");
     assert!(
-        out.stderr.contains("mutually exclusive"),
-        "stderr: {}",
+        out.success,
+        "combined windows intersect, never error: {}",
         out.stderr
+    );
+    // The fixture's mutations are from 2026 — a `--since 2h` window admits nothing, and the
+    // intersection propagates that honestly (exit 0).
+    assert!(
+        out.stdout.contains("no file mutations found") || !out.stdout.contains("L0"),
+        "the intersected window filters: {}",
+        out.stdout
     );
 }
 
@@ -8662,7 +9063,8 @@ fn turns_token_budget_unit_scales_by_four() {
 }
 
 #[test]
-fn turns_turn_range_and_since_mutually_exclusive() {
+fn turns_turn_range_and_since_intersect() {
+    // Same rule as every sibling: the windows AND (the former bail was a leftover).
     let h = turns_home();
     let out = h.run(&[
         "turns",
@@ -8673,10 +9075,9 @@ fn turns_turn_range_and_since_mutually_exclusive() {
         "--since",
         "2h",
     ]);
-    assert!(!out.success, "the conflicting window flags must error");
     assert!(
-        out.stderr.contains("mutually exclusive"),
-        "stderr: {}",
+        out.success,
+        "combined windows intersect, never error: {}",
         out.stderr
     );
 }
@@ -8875,11 +9276,12 @@ fn turns_no_genuine_turns_emits_honest_empty_message() {
 }
 
 #[test]
-fn turns_default_all_projects_scan_runs() {
-    // No target + no --session → scan every project under the scratch $HOME. The fixture
-    // is the only project, so it is found. Exercises the all-projects resolve path.
+fn turns_project_path_target_scans_the_project() {
+    // A project-dir target (the encoded token) resolves every session under it. (A bare
+    // `csift turns` with NO target at all is a hard error — budget × everything; see
+    // `turns_requires_a_target`.)
     let h = turns_home();
-    let out = h.run(&["turns", "--no-subagents", "--budget", "40000"]);
+    let out = h.run(&["turns", ENC, "--no-subagents", "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("SESSION"), "{}", out.stdout);
 }
@@ -8948,10 +9350,10 @@ fn turns_two_sessions_home() -> Home {
 
 #[test]
 fn turns_multi_session_text_has_blank_separator_and_both_sessions() {
-    // No --session → both sessions in the project are rendered, separated by a blank
-    // line (the `if !first { println!() }` arm). Sessions are sorted by id.
+    // A project-dir target → both sessions in the project are rendered, separated by a
+    // blank line (the `if !first { println!() }` arm). Sessions are sorted by id.
     let h = turns_two_sessions_home();
-    let out = h.run(&["turns", "--no-subagents", "--budget", "40000"]);
+    let out = h.run(&["turns", ENC, "--no-subagents", "--budget", "40000"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let session_headers = out
         .stdout
@@ -9354,10 +9756,11 @@ fn turns_turn_range_excludes_out_of_window_turns() {
 
 #[test]
 fn turns_multi_session_json_runs_both() {
-    // JSON over two sessions (no --session) → both sessions' units emitted.
+    // JSON over two sessions (a project-dir target) → both sessions' units emitted.
     let h = turns_two_sessions_home();
     let out = h.run(&[
         "turns",
+        ENC,
         "--no-subagents",
         "--budget",
         "40000",
