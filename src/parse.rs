@@ -399,8 +399,21 @@ impl Iterator for RevLines<'_> {
 /// successfully-parsed record. `keep` returns `false` to stop early (e.g. once the
 /// first genuine-user is found). Malformed lines are skipped and counted; the skip
 /// count is returned. Never parses past the caller's early-stop point.
-pub fn head_records<F>(path: &Path, mut keep: F) -> Result<usize>
+pub fn head_records<F>(path: &Path, keep: F) -> Result<usize>
 where
+    F: FnMut(&Record) -> bool,
+{
+    head_records_prefiltered(path, |_| true, keep)
+}
+
+/// [`head_records`] with a RAW-byte prefilter run BEFORE the parse: a line failing
+/// `pre` is neither parsed nor counted (the same candidates-only malformed-count
+/// discipline `search`/`turns`/`files` already use). Lets `list` skip the routinely
+/// huge non-message lines (attachment / file-history-snapshot / queue-operation)
+/// without paying `serde_json` for them.
+pub fn head_records_prefiltered<P, F>(path: &Path, pre: P, mut keep: F) -> Result<usize>
+where
+    P: Fn(&[u8]) -> bool,
     F: FnMut(&Record) -> bool,
 {
     let Some(mmap) = mmap_file(path)? else {
@@ -410,14 +423,19 @@ where
     let mut skipped = 0usize;
     let mut start = 0usize;
     let mut stop = false;
-    let mut handle = |line: &[u8], skipped: &mut usize, stop: &mut bool| match parse_line(line) {
-        Ok(Some(rec)) => {
-            if !keep(&rec) {
-                *stop = true;
-            }
+    let mut handle = |line: &[u8], skipped: &mut usize, stop: &mut bool| {
+        if !pre(line) {
+            return;
         }
-        Ok(None) => {}
-        Err(_) => *skipped += 1,
+        match parse_line(line) {
+            Ok(Some(rec)) => {
+                if !keep(&rec) {
+                    *stop = true;
+                }
+            }
+            Ok(None) => {}
+            Err(_) => *skipped += 1,
+        }
     };
     for nl in memchr_iter(b'\n', bytes) {
         handle(&bytes[start..nl], &mut skipped, &mut stop);
@@ -442,6 +460,36 @@ where
     F: FnMut(&Record) -> bool,
 {
     tail_records_chunked(path, TAIL_CHUNK, keep)
+}
+
+/// [`tail_records`] with a RAW-byte prefilter (the backward mirror of
+/// [`head_records_prefiltered`]): a line failing `pre` is neither parsed nor
+/// counted, so a tail dominated by huge metadata lines costs only the newline scan.
+pub fn tail_records_prefiltered<P, F>(path: &Path, pre: P, mut keep: F) -> Result<usize>
+where
+    P: Fn(&[u8]) -> bool,
+    F: FnMut(&Record) -> bool,
+{
+    let Some(mmap) = mmap_file(path)? else {
+        return Ok(0);
+    };
+    let bytes: &[u8] = &mmap;
+    let mut skipped = 0usize;
+    for raw in RevLines::with_chunk(bytes, TAIL_CHUNK) {
+        if !pre(&raw) {
+            continue;
+        }
+        match parse_line(&raw) {
+            Ok(Some(rec)) => {
+                if !keep(&rec) {
+                    break;
+                }
+            }
+            Ok(None) => {}
+            Err(_) => skipped += 1,
+        }
+    }
+    Ok(skipped)
 }
 
 /// [`tail_records`] with an explicit chunk size (tests force the carry path).

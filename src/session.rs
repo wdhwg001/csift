@@ -26,7 +26,7 @@ use rayon::prelude::*;
 
 use crate::cli::{ListArgs, OutputFormat};
 use crate::model::Record;
-use crate::parse::{head_records, tail_records};
+use crate::parse::{head_records_prefiltered, tail_records_prefiltered};
 use crate::path::{self, SubagentScope};
 use crate::timez::{format_timestamp, local_iso};
 
@@ -155,6 +155,19 @@ fn preview_text(rec: &Record) -> Option<String> {
     rec.reconstructed_user_text(None)
 }
 
+/// Pre-JSON byte prefilter for the head/tail scans: every record `preview_text` /
+/// `agent_text` can anchor on is a `role:user`/`role:assistant` MESSAGE record
+/// (genuine users, AUQ answers, rejections, task-notifications, teammate messages,
+/// assistant text all carry one of the two markers — the same needles `search`'s
+/// stage-1 candidate filter trusts). Any other line — attachment,
+/// file-history-snapshot, queue-operation, metadata — is skipped UNPARSED; those
+/// are routinely the LARGEST lines in a transcript, so this is the difference
+/// between a head/tail read and paying `serde_json` for megabyte noise lines.
+fn line_is_list_candidate(line: &[u8]) -> bool {
+    memchr::memmem::find(line, br#""role":"user""#).is_some()
+        || memchr::memmem::find(line, br#""role":"assistant""#).is_some()
+}
+
 /// Build a [`SessionSummary`] for one session file via HEAD + TAIL reads only.
 pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // The session id is authoritatively the jsonl basename (== uuid; verified the
@@ -170,7 +183,7 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let mut git_branch: Option<String> = None;
     let mut data_session_id: Option<String> = None;
 
-    let head_skipped = head_records(path, |rec| {
+    let head_skipped = head_records_prefiltered(path, line_is_list_candidate, |rec| {
         // First user message = a genuine human turn, an answered AskUserQuestion, or a
         // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
         // single-record head scan, so a rejection surfaces its typed instruction without
@@ -193,7 +206,7 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // ── TAIL read: last genuine-user + last agent message (newest-first) ──
     let mut last_user: Option<MessagePreview> = None;
     let mut last_agent: Option<MessagePreview> = None;
-    let tail_skipped = tail_records(path, |rec| {
+    let tail_skipped = tail_records_prefiltered(path, line_is_list_candidate, |rec| {
         if last_agent.is_none() {
             if let Some(text) = rec.agent_text() {
                 last_agent = Some(MessagePreview::from(rec.timestamp.clone(), &text));
