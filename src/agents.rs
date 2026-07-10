@@ -613,7 +613,9 @@ fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
     use serde_json::json;
     let mut obj = json!({
         "agent_id": n.agent_id,
-        "kind": n.kind.label(),
+        // The TRANSCRIPT-SHAPE discriminator (builtin-task | workflow | teammate) —
+        // named `shape` so `kind` stays the envelope discriminator exclusively.
+        "shape": n.kind.label(),
         "parent_session_id": n.parent_session_id,
         "parent_agent_id": n.parent_agent_id,
         "spawn_tool_use_id": n.spawn_tool_use_id,

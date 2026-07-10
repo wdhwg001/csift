@@ -938,8 +938,20 @@ pub fn resolve_session_files(
             }
             continue;
         }
+        // A BARE session/agent id (no `@`) can never be a project path in practice, and
+        // the old fall-through error ("no project dir named …") described the WRONG
+        // mental model back to the caller. Catch the id SHAPE (unless a real path of
+        // that name exists) and say the exact fix.
+        if let Some(tok) = p.to_str() {
+            if (is_uuid(tok) || is_uuid_prefix(tok) || is_subagent_id(tok)) && !p.exists() {
+                bail!(
+                    "'{tok}' looks like a session/agent id, not a project path — did you \
+                     mean '@{tok}'? (ids are targeted with an `@` prefix: `@<uuid>` | \
+                     `@<uuid-prefix>` | `@<agent-id>`)"
+                );
+            }
+        }
         // Everything else is a PATH (real cwd / encoded-dir token / `~/.claude/projects/<enc>`).
-        // A bare uuid lands here on purpose → resolve_target fails as "no project dir named …".
         project_paths.push(p);
         session_target = true;
     }
@@ -1179,7 +1191,7 @@ pub fn is_session_uuid(s: &str) -> bool {
 }
 
 /// True for a canonical `8-4-4-4-12` hex UUID (the top-level session jsonl basename).
-fn is_uuid(s: &str) -> bool {
+pub(crate) fn is_uuid(s: &str) -> bool {
     let groups = [8usize, 4, 4, 4, 12];
     let parts: Vec<&str> = s.split('-').collect();
     if parts.len() != groups.len() {

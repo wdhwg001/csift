@@ -919,7 +919,7 @@ fn search_siblings_surface_the_rest_of_the_turn() {
         base.stdout
     );
 
-    // `--siblings 9` = a bare-N cap covering every category (well above the turn's sibling count).
+    // `--siblings` (zero-arg): the fixed policy renders the turn's other side.
     let out = h.run(&[
         "search",
         "needed",
@@ -927,7 +927,6 @@ fn search_siblings_surface_the_rest_of_the_turn() {
         "user",
         "--no-subagents",
         "--siblings",
-        "9",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -950,9 +949,10 @@ fn search_siblings_surface_the_rest_of_the_turn() {
 }
 
 #[test]
-fn search_sibling_category_narrows_and_implies_siblings() {
-    // `--siblings agent.message:1` turns siblings ON and restricts them to ONE agent reply — the
-    // thinking / tool_use / tool_result siblings (no typed cap, no bare-N) are excluded entirely.
+fn search_siblings_fixed_policy_renders_turn_and_json_carries_array() {
+    // `--siblings` (zero-arg, FIXED policy): message units always render; the fixture
+    // turn's few tool units fall inside the per-leaf caps, so the whole back-and-forth
+    // surfaces. JSON carries the `siblings` array; absent without the flag.
     let h = populated_home();
     let out = h.run(&[
         "search",
@@ -961,7 +961,6 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "user",
         "--no-subagents",
         "--siblings",
-        "agent.message:1",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -970,13 +969,11 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         out.stdout
     );
     assert!(
-        !out.stdout.contains("· agent.tool"),
-        "non-agent.message siblings must be excluded: {}",
+        out.stdout.contains("· agent.tool.use"),
+        "tool siblings render under the fixed caps: {}",
         out.stdout
     );
 
-    // JSON: the envelope carries a `siblings` array with the agent excerpt; absent without
-    // the flag.
     let j = h.run(&[
         "search",
         "needed",
@@ -984,14 +981,19 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "user",
         "--no-subagents",
         "--siblings",
-        "agent.message:1",
         "--format",
         "json",
     ]);
     let env = json_rows(&j.stdout, "exchange").remove(0);
     let sibs = env["siblings"].as_array().expect("siblings array present");
-    assert_eq!(sibs.len(), 1);
-    assert_eq!(sibs[0]["label"], "agent.message");
+    assert!(
+        sibs.iter().any(|s| s["label"] == "agent.message"),
+        "{sibs:?}"
+    );
+    assert_eq!(
+        env["siblings_hidden"], 0,
+        "nothing capped on this small turn"
+    );
 
     let plain = h.run(&[
         "search",
@@ -1002,12 +1004,10 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "--format",
         "json",
     ]);
-    let env2: serde_json::Value =
-        serde_json::from_str(plain.stdout.lines().next().unwrap()).unwrap();
+    let env2 = json_rows(&plain.stdout, "exchange").remove(0);
     assert!(
         env2.get("siblings").is_none(),
-        "no siblings key without the flag: {}",
-        plain.stdout
+        "no siblings key without the flag: {env2}"
     );
 }
 
@@ -1634,7 +1634,7 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
     let turns = h.run(&[
         "turns",
         at(SESS).as_str(),
-        "--include-subagents",
+        "--subagents",
         "--budget",
         "8000",
         "--format",
@@ -1682,28 +1682,40 @@ fn search_session_filter_and_turn_range() {
 }
 
 #[test]
-fn search_turn_range_with_since_is_mutually_exclusive() {
+fn search_turn_range_intersects_with_time_window() {
+    // --turn-range ∧ --since/--until INTERSECT (both filters AND) — the old
+    // mutual-exclusion interface law is gone. An impossible intersection (turns exist,
+    // but none inside the window) is an honest empty result, exit 0.
     let h = populated_home();
-    let out = h.run(&["search", "", "--turn-range", "0..1", "--since", "2h"]);
-    assert!(!out.success, "mutually-exclusive flags must error");
+    let ok = h.run(&[
+        "search",
+        "carry",
+        &at(SESS),
+        "--turn-range",
+        "0..1",
+        "--until",
+        "2027-01-01",
+    ]);
+    assert!(ok.success, "stderr: {}", ok.stderr);
     assert!(
-        out.stderr.contains("mutually exclusive"),
-        "stderr: {}",
-        out.stderr
+        ok.stdout.contains("carry"),
+        "in-range ∧ in-window matches: {}",
+        ok.stdout
     );
-}
-
-#[test]
-fn search_turn_range_with_until_is_mutually_exclusive() {
-    // The mutual-exclusion check ORs `since` and `until`; this exercises the `until`
-    // operand of `args.since.is_some() || args.until.is_some()`.
-    let h = populated_home();
-    let out = h.run(&["search", "", "--turn-range", "0..1", "--until", "2h"]);
-    assert!(!out.success, "turn-range + until must error");
+    let none = h.run(&[
+        "search",
+        "carry",
+        &at(SESS),
+        "--turn-range",
+        "0..1",
+        "--until",
+        "2020-01-01",
+    ]);
+    assert!(none.success, "an empty intersection is not an error");
     assert!(
-        out.stderr.contains("mutually exclusive"),
-        "stderr: {}",
-        out.stderr
+        none.stdout.contains("no matching exchanges"),
+        "window excludes everything: {}",
+        none.stdout
     );
 }
 
@@ -3090,7 +3102,7 @@ fn agents_classifies_teammate_and_id_round_trips() {
                 .cloned()
                 .unwrap_or_default()
         })
-        .find(|n| n.get("kind").and_then(|k| k.as_str()) == Some("teammate"))
+        .find(|n| n.get("shape").and_then(|k| k.as_str()) == Some("teammate"))
         .expect("a teammate node in agents JSON");
     assert_eq!(node["agent_id"], tid);
     assert_eq!(node["agent_type"], "oh-my-claudecode:qa-tester"); // real type, not the handle
@@ -3107,7 +3119,7 @@ fn agents_classifies_teammate_and_id_round_trips() {
     );
 
     // `--kind teammate` filters to it; text shows the team line.
-    let kind = h.run(&["agents", &format!("@{sess}"), "--kind", "teammate"]);
+    let kind = h.run(&["agents", &format!("@{sess}"), "--shape", "teammate"]);
     assert!(kind.success, "stderr: {}", kind.stderr);
     assert!(
         kind.stdout.contains(tid),
@@ -3130,7 +3142,7 @@ fn agents_classifies_teammate_and_id_round_trips() {
         kind.stdout
     );
     // A scope with NO teammate (filter to builtin-task; the fixture has none) → no hint noise.
-    let bt = h.run(&["agents", &format!("@{sess}"), "--kind", "builtin-task"]);
+    let bt = h.run(&["agents", &format!("@{sess}"), "--shape", "builtin-task"]);
     assert!(
         !bt.stdout.contains("shutdown_request"),
         "control hint must not appear without a teammate in scope: {}",
@@ -3410,7 +3422,7 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
     let bt = h.run(&[
         "agents",
         at(SESS).as_str(),
-        "--kind",
+        "--shape",
         "builtin-task",
         "--format",
         "json",
@@ -3524,7 +3536,7 @@ fn agents_agent_grab_bypasses_time_and_kind_filters() {
         "aaa111",
         "--since",
         "2026-06-08T00:00:00Z",
-        "--kind",
+        "--shape",
         "workflow",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -3592,7 +3604,7 @@ fn agents_json_rows() {
     // `agents[]` plus each workflow run's nested `children[]`.
     let mut kinds = Vec::new();
     let mut push_kind = |v: &serde_json::Value| {
-        if let Some(k) = v.get("kind").and_then(|k| k.as_str()) {
+        if let Some(k) = v.get("shape").and_then(|k| k.as_str()) {
             kinds.push(k.to_string());
         }
     };
@@ -3614,7 +3626,7 @@ fn agents_json_rows() {
 #[test]
 fn agents_kind_filter_workflow_only() {
     let h = populated_home();
-    let out = h.run(&["agents", at(SESS).as_str(), "--kind", "workflow"]);
+    let out = h.run(&["agents", at(SESS).as_str(), "--shape", "workflow"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains("workflow"));
     assert!(!out.stdout.contains("builtin-task"));
@@ -4166,7 +4178,7 @@ fn agents_default_axis_is_trigger_not_start() {
         at(SESS).as_str(),
         "--since",
         "2026-06-07T04:59:59Z",
-        "--kind",
+        "--shape",
         "builtin-task",
         "--format",
         "json",
@@ -4185,7 +4197,7 @@ fn agents_default_axis_is_trigger_not_start() {
         "2026-06-07T04:59:59Z",
         "--order-by",
         "start",
-        "--kind",
+        "--shape",
         "builtin-task",
         "--format",
         "json",
@@ -5824,7 +5836,9 @@ fn recover_two_modes_conflict() {
 }
 
 #[test]
-fn recover_turn_range_and_since_mutually_exclusive() {
+fn recover_turn_range_intersects_with_time_window() {
+    // --turn-range ∧ --since/--until intersect (both filters AND); a window that
+    // excludes everything still succeeds with an honest empty reconstruction.
     let h = recover_scenario_home();
     let out = h.run(&[
         "recover",
@@ -5833,15 +5847,15 @@ fn recover_turn_range_and_since_mutually_exclusive() {
         RFILE,
         "--coverage",
         "--turn-range",
-        "0..1",
-        "--since",
-        "2h",
+        "0..99",
+        "--until",
+        "2027-01-01",
     ]);
-    assert!(!out.success);
+    assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stderr.contains("mutually exclusive"),
-        "expected the mutual-exclusion bail: {}",
-        out.stderr
+        out.stdout.contains("recoverable"),
+        "coverage renders under the intersection: {}",
+        out.stdout
     );
 }
 
@@ -5887,7 +5901,7 @@ fn recover_line_range_restricts_output() {
         RFILE,
         "--at",
         "@line:9999",
-        "--line-range",
+        "--file-lines",
         "1..2",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -7161,30 +7175,6 @@ fn recover_coverage_zero_seen_total_reports_zero_percent() {
 }
 
 #[test]
-fn recover_turn_range_and_until_mutually_exclusive() {
-    // The mutual-exclusion guard's `until.is_some()` operand: --turn-range with --until (no
-    // --since) → the second operand of the inner `||` is the one that trips the bail.
-    let h = recover_scenario_home();
-    let out = h.run(&[
-        "recover",
-        at(SESS).as_str(),
-        "--file",
-        RFILE,
-        "--coverage",
-        "--turn-range",
-        "0..1",
-        "--until",
-        "2026-06-08",
-    ]);
-    assert!(!out.success);
-    assert!(
-        out.stderr.contains("mutually exclusive"),
-        "--turn-range + --until is the mutual-exclusion bail: {}",
-        out.stderr
-    );
-}
-
-#[test]
 fn recover_json_coverage_skips_empty_event_session() {
     // JSON coverage mode: one session touches the target, another touches a different file.
     // The non-touching session is skipped (`s.events.is_empty()` true in the JSON branch),
@@ -7435,7 +7425,7 @@ fn recover_at_line_range_outside_known_keeps_seen_total() {
         "/p/lr.rs",
         "--at",
         "@line:9999",
-        "--line-range",
+        "--file-lines",
         "1..2",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -7468,7 +7458,7 @@ fn recover_at_json_line_range_outside_known_keeps_seen_total() {
         "/p/lrj.rs",
         "--at",
         "@line:9999",
-        "--line-range",
+        "--file-lines",
         "1..2",
         "--format",
         "json",
@@ -8688,7 +8678,11 @@ fn turns_help_lists_the_subcommand_and_flags() {
         sub.stdout
     );
     assert!(sub.stdout.contains("--max-compactions"), "{}", sub.stdout);
-    assert!(sub.stdout.contains("--budget-unit"), "{}", sub.stdout);
+    assert!(
+        !sub.stdout.contains("--budget-unit"),
+        "budget is chars-only now: {}",
+        sub.stdout
+    );
 }
 
 /// A fixture whose NEWEST summary quotes a LIVE-region turn verbatim → exercises the
@@ -8954,7 +8948,7 @@ fn turns_include_subagents_opts_into_span_with_scope_banner() {
     let out = h.run(&[
         "turns",
         at(SESS).as_str(),
-        "--include-subagents",
+        "--subagents",
         "--budget",
         "40000",
     ]);
@@ -8977,13 +8971,7 @@ fn turns_targeted_top_level_skipped_at_tiny_budget_is_reported_not_silent() {
     // the session must be reported with an explicit skip note (never silently absent), and the
     // scope banner must still count it as `1 top-level` in scope — not `0`.
     let h = populated_home();
-    let out = h.run(&[
-        "turns",
-        at(SESS).as_str(),
-        "--include-subagents",
-        "--budget",
-        "120",
-    ]);
+    let out = h.run(&["turns", at(SESS).as_str(), "--subagents", "--budget", "120"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains(&format!("SESSION {SESS}  skipped")),
@@ -9010,7 +8998,7 @@ fn turns_json_header_carries_true_scope_and_rendered_and_by_kind() {
     let out = h.run(&[
         "turns",
         at(SESS).as_str(),
-        "--include-subagents",
+        "--subagents",
         "--budget",
         "40000",
         "--format",
@@ -9272,21 +9260,18 @@ fn turns_since_and_until_both_bound_the_window() {
 }
 
 #[test]
-fn turns_token_budget_text_output_runs() {
-    // --budget-unit tokens through the TEXT renderer (the BudgetUnit::Tokens conversion
-    // arm in run_turns, distinct from the json tests).
+fn turns_budget_is_chars_only() {
+    // `--budget` is CHARS, period (the token-unit mode and its silent-4x default trap
+    // are gone; ≈4 chars/token is a documented sizing rule of thumb, not a flag).
     let h = turns_home();
     let out = h.run(&[
         "turns",
         at(SESS).as_str(),
         "--no-subagents",
         "--budget",
-        "2000",
-        "--budget-unit",
-        "tokens",
+        "8000",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // 2000 tokens ≈ 8000 chars budget in the header.
     assert!(out.stdout.contains("budget 8000 chars"), "{}", out.stdout);
 }
 
@@ -9720,7 +9705,7 @@ fn turns_rich_filters_subagent_runs_too() {
     let out = h.run(&[
         "turns",
         at(SESS).as_str(),
-        "--include-subagents",
+        "--subagents",
         "--budget",
         "40000",
         "--agent-msgs",
@@ -9741,24 +9726,34 @@ fn turns_rich_filters_subagent_runs_too() {
 }
 
 #[test]
-fn turns_help_lists_the_new_agent_msg_flags() {
+fn turns_agent_msg_surface_is_two_flags() {
+    // The per-knob tuning flags are GONE (surface diet): `--agent-msgs` + `--profile`
+    // are the whole agent-message policy surface.
     let h = turns_home();
     let help = h.run(&["turns", "--help"]);
     assert!(help.success);
-    for flag in [
-        "--agent-msgs",
-        "--agent-run-threshold",
-        "--agent-rich-min-chars",
-        "--agent-declaration-max-chars",
-        "--keep-first",
-        "--no-keep-first",
-        "--profile",
-    ] {
+    for flag in ["--agent-msgs", "--profile"] {
         assert!(
             help.stdout.contains(flag),
             "help must list {flag}: {}",
             help.stdout
         );
+    }
+    for gone in [
+        "--agent-run-threshold",
+        "--agent-rich-min-chars",
+        "--agent-declaration-max-chars",
+        "--keep-first",
+        "--no-keep-first",
+        "--budget-unit",
+    ] {
+        assert!(
+            !help.stdout.contains(gone),
+            "{gone} must be gone from help: {}",
+            help.stdout
+        );
+        let run = h.run(&["turns", at(SESS).as_str(), gone]);
+        assert!(!run.success, "{gone} must be an unknown argument now");
     }
     // Invalid enum values exit nonzero with a clap error.
     let bad_mode = h.run(&["turns", at(SESS).as_str(), "--agent-msgs", "bogus"]);
@@ -10240,7 +10235,7 @@ fn empty_out_never_clobbers_or_lies() {
 #[test]
 fn turns_text_brands_subagent_uniformly() {
     let h = populated_home();
-    let out = h.run(&["turns", at(SESS).as_str(), "--include-subagents"]);
+    let out = h.run(&["turns", at(SESS).as_str(), "--subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The subagent block carries the SUBAGENT token + the re-feedable parent uuid.
     assert!(
@@ -11002,10 +10997,10 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
         list.stdout
     );
 
-    // `--id #1` is AMBIGUOUS → it must ERROR (not silently pick one) and list every occurrence
+    // `--id 1` is AMBIGUOUS → it must ERROR (not silently pick one) and list every occurrence
     // with its turn / locator / uuid / time / excerpt so the consumer can disambiguate.
-    let err = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "#1"]);
-    assert!(!err.success, "ambiguous #1 must fail, got:\n{}", err.stdout);
+    let err = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "1"]);
+    assert!(!err.success, "ambiguous 1 must fail, got:\n{}", err.stdout);
     assert!(err.stderr.contains("ambiguous"), "stderr: {}", err.stderr);
     assert!(
         err.stderr.contains("L1i1") && err.stderr.contains("L3i1"),
@@ -11024,8 +11019,8 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
         err.stderr
     );
 
-    // `--id #2` is UNIQUE (only the line-1 red) → resolves fine.
-    let two = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "#2"]);
+    // `--id 2` is UNIQUE (only the line-1 red) → resolves fine.
+    let two = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "2"]);
     assert!(two.success, "stderr: {}", two.stderr);
     assert!(two.stdout.contains("L1i2"), "{}", two.stdout);
 }
@@ -11041,7 +11036,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
         "--turn-range",
         "1..1",
         "--id",
-        "#1",
+        "1",
         "--format",
         "json",
     ]);
@@ -11060,7 +11055,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
         "--since",
         "2026-06-07T05:30:00Z",
         "--id",
-        "#1",
+        "1",
     ]);
     assert!(by_time.success, "stderr: {}", by_time.stderr);
     assert!(by_time.stdout.contains("L3i1"), "{}", by_time.stdout);
@@ -11073,7 +11068,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
         "--uuid",
         "u1deadbe",
         "--id",
-        "#1",
+        "1",
     ]);
     assert!(by_uuid.success, "stderr: {}", by_uuid.stderr);
     assert!(by_uuid.stdout.contains("L3i1"), "{}", by_uuid.stdout);
@@ -11185,7 +11180,7 @@ fn image_animated_gif_to_still_takes_first_frame() {
         at(SESS).as_str(),
         "--no-subagents",
         "--id",
-        "#1",
+        "1",
         "--out",
         f.to_str().unwrap(),
     ]);
@@ -11208,7 +11203,7 @@ fn image_animated_gif_to_still_takes_first_frame() {
         at(SESS).as_str(),
         "--no-subagents",
         "--id",
-        "#1",
+        "1",
         "--out",
         g.to_str().unwrap(),
     ]);

@@ -73,17 +73,12 @@ use anyhow::{bail, Result};
 use memchr::memmem;
 use rayon::prelude::*;
 
-use crate::cli::{BudgetUnit, OutputFormat, TurnsArgs};
+use crate::cli::{OutputFormat, TurnsArgs};
 use crate::model::{group_turn_indices_deduped, normalize_line, Block, Content, PlanIndex, Record};
 use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
-
-/// Characters-per-token heuristic for `--budget-unit tokens`. CC compaction summaries
-/// measure ~17K chars ≈ ~3.5–4.5K tokens, i.e. ~4 chars/token (documented estimate;
-/// `turns` never tokenizes — it converts a token budget to a char budget by this ratio).
-pub const TOKEN_CHARS: f64 = 4.0;
 
 /// Pre-ellipsis full-keep ceiling for a USER unit (chars). Sized from the measured
 /// user-message length distribution (median ~410, p90 ~2,574): a 600 cap keeps the
@@ -190,7 +185,7 @@ pub enum AgentMsgMode {
     /// (byte-identical to the pre-expansion output). The "force last-only" escape.
     #[value(name = "eot-only")]
     EotOnly,
-    /// Keep the last always + the first by position privilege (under `--keep-first`) +
+    /// Keep the last always + the first by position privilege +
     /// each rich middle; collapse the proven pure declarations. Gated by the run
     /// threshold (short runs keep all).
     Rich,
@@ -501,11 +496,10 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
     let budget_chars = if let Some(n) = args.slices {
         n.saturating_mul(args.window)
     } else {
-        match args.budget_unit {
-            BudgetUnit::Chars => args.budget,
-            // round-half-up; saturate so a giant token budget never overflows usize.
-            BudgetUnit::Tokens => ((args.budget as f64) * TOKEN_CHARS).round() as usize,
-        }
+        // `--budget` is CHARS, always (the former `--budget-unit tokens` mode — which
+        // silently reinterpreted the unchanged default as 4× the output — is gone;
+        // ≈4 chars/token is the documented rule of thumb for sizing a token budget).
+        args.budget
     };
 
     let turn_range = args

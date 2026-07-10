@@ -24,7 +24,7 @@
 //! ## argv normalization (flag-ordering fix)
 //!
 //! The real entrypoint is [`parse_argv`], NOT `Cli::parse` — it runs [`normalize_argv`]
-//! first so a `--format`/`--kind`/… flag works in ANY position relative to a
+//! first so a `--format`/`--shape`/… flag works in ANY position relative to a
 //! leading-`-` encoded project target (clap's `allow_hyphen_values` otherwise lets a
 //! `Vec` positional greedily swallow the trailing flag). See [`normalize_argv`].
 
@@ -314,7 +314,7 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
                    point-in-time partial snapshot, or coverage scoping\n  \
           plan     locate the Plan-Mode plan file bound to a session (recover --file @plan dumps it)\n  \
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
-                   back-and-forth a compaction summary clipped, within a char/token budget\n  \
+                   back-and-forth a compaction summary clipped, within a char budget\n  \
           image    list + extract the inline images a session carries (pastes/screenshots)\n\n\
         (`search` also FETCHES: `--line`/`--uuid` address specific records, rendered full — \
         the in-permission alternative to `Read`-ing the raw jsonl.)\n\n\
@@ -401,21 +401,10 @@ pub enum Command {
     /// Locate the Plan-Mode plan file BOUND to a session (via its `plan_mode` attachment).
     Plan(PlanArgs),
     /// Turn-fidelity reconstruction — restore the verbatim user/assistant
-    /// back-and-forth a compaction summary clipped, within a char/token budget.
+    /// back-and-forth a compaction summary clipped, within a char budget.
     Turns(TurnsArgs),
     /// List + extract the images a session carries (inline base64 blocks → files).
     Image(ImageArgs),
-}
-
-/// How to interpret `--budget`: as raw characters (default) or as tokens (estimated
-/// at [`crate::turns::TOKEN_CHARS`] characters/token, a documented heuristic).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
-pub enum BudgetUnit {
-    /// Interpret `--budget` as a character count (default).
-    #[default]
-    Chars,
-    /// Interpret `--budget` as a token count (≈4 chars/token heuristic).
-    Tokens,
 }
 
 /// True iff `selector` (a dotted `role.class.sub` path) is a dot-SEGMENT prefix of `path` —
@@ -435,7 +424,7 @@ pub fn selector_is_segment_prefix(selector: &str, path: &str) -> bool {
 /// truth for the `-t` value space — the clap value_parser validates against it and the `--help`
 /// / error text lists it (so a new [`Class`] leaf automatically widens the selector space).
 #[must_use]
-pub fn category_selectors() -> Vec<String> {
+pub fn label_selectors() -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for class in Class::ALL {
         let segs: Vec<&str> = class.path().split('.').collect();
@@ -468,19 +457,19 @@ pub fn label_selected(selectors: &[String], path: &str) -> bool {
             .any(|s| selector_is_segment_prefix(s, path))
 }
 
-/// clap value_parser for one `-t`/`--category` selector: accept a dotted `role.class.sub` path
+/// clap value_parser for one `-t`/`--label` selector: accept a dotted `role.class.sub` path
 /// that is a segment-prefix of some [`Class`] path; reject anything else with a HARD error that
 /// LISTS the valid selectors (0 back-compat — the old flat `thinking`/`tool`/`tool-response`
 /// therefore error; bare `user`/`agent`/`harness` are now valid ROLE selectors — GOLD §6).
-fn parse_category_selector(s: &str) -> Result<String, String> {
+fn parse_label_selector(s: &str) -> Result<String, String> {
     let s = s.trim();
     if selector_is_valid(s) {
         Ok(s.to_string())
     } else {
         Err(format!(
-            "unknown category selector '{s}'. A selector is a dotted role.class.sub path or any \
+            "unknown label selector '{s}'. A selector is a dotted role.class.sub path or any \
              prefix of one. Valid: {}",
-            category_selectors().join(", ")
+            label_selectors().join(", ")
         ))
     }
 }
@@ -610,6 +599,11 @@ pub struct ListArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
@@ -620,7 +614,7 @@ impl ListArgs {
     /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.subagents || !self.no_subagents
     }
 }
 
@@ -635,8 +629,8 @@ impl ListArgs {
         The PATTERN is ripgrep-like and defaults to SMART-CASE: case-insensitive \
         unless it contains an uppercase letter; `-i` forces case-insensitive and \
         always wins. `--multiline` lets `.` cross newlines. An EMPTY pattern is a \
-        pure filter — it matches every category-eligible record, so combine it with \
-        `--category` / `--since` / `--turn-range` (a bare empty pattern with no other \
+        pure filter — it matches every label-eligible record, so combine it with \
+        `--label` / `--since` / `--turn-range` (a bare empty pattern with no other \
         filter warns that it will emit a lot).\n\n\
         CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
         record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
@@ -659,7 +653,7 @@ impl ListArgs {
         label — never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
         `search 'background-command' -t harness.notification.background-command`).\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on turn-boundary \
-        order) is mutually exclusive with `--since`/`--until`. Time bounds accept \
+        order) INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept \
         ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
         `3d`, `90m`, `45s`, `1w`) meaning \"that long ago\" in the system local timezone.\n\n\
         `--max-count` caps emitted exchanges but reports the dropped count (default: \
@@ -673,19 +667,16 @@ impl ListArgs {
           csift search \"panic\" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c idiom)\n  \
-          csift search \"let's chat\" -t user --siblings 3        # the match WITH up to 3 sibling records\n  \
-          csift search \"let's chat\" -t user --siblings agent.message:1  # …only the agent-message sibling (cap 1)\n  \
-          csift search \"let's chat\" -t user --siblings agent.message:1 --no-truncate  # …and READ that reply end-to-end\n\n\
-        SIBLINGS (`--siblings <SPEC>`)\n  \
-          A match renders only the records that MATCHED. `--siblings <SPEC>` additionally renders \
+          csift search \"let's chat\" -t user --siblings              # the match WITH the turn's other side\n  \
+          csift search \"let's chat\" -t user --siblings --no-truncate # …and READ the reply end-to-end\n\n\
+        SIBLINGS (`--siblings`)\n  \
+          A match renders only the records that MATCHED. `--siblings` additionally renders \
         the OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \
-        so a matched user question surfaces WITH the agent's reply — no need to drop to the raw \
-        jsonl. Each SPEC token (repeatable / comma-joined) is a CAP: a bare `N` caps the TOTAL \
-        siblings (any category) at N; a `<selector>:N` (selector = a dotted `role.class.sub` path, \
-        the same value set as `-t`, ≥1) caps the labels under THAT selector at N. When both forms \
-        are given, each typed cap governs its own selector and the bare `N` caps every OTHER \
-        label; a label with no typed spec and no bare-`N` fallback is not shown. A record that \
-        itself matched is never duplicated as a sibling.\n\n\
+        so a matched user question surfaces WITH the agent's reply. Fixed policy: message units \
+        always render (user.*, agent.message, agent.communication.*); chattier machinery is \
+        capped per leaf (thinking ≤2, tool.use ≤3, tool.result ≤3, harness ≤2); the capped-away \
+        remainder surfaces as an explicit `(+N more · csift show @<id> --line A-B)` pointer. A \
+        record that itself matched is never duplicated as a sibling.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
           `-c`/`--count-only` prints just the integer match total (ripgrep `-c`), honoring every \
         filter. That total is ALSO always in the normal output's footer (alongside the \
@@ -715,8 +706,8 @@ impl ListArgs {
         monitor | task, read from the summary) — never the raw XML. Match it like any text, e.g. \
         `csift search 'background-command' -t harness.notification`. The `<kind>` prefix \
         distinguishes a machine opener from a genuine human message.\n\n\
-        CATEGORY DEFAULT\n  \
-          With NO `-t`/`--category`, EVERY label is searched (the whole user / agent / harness \
+        LABEL DEFAULT\n  \
+          With NO `-t`/`--label`, EVERY label is searched (the whole user / agent / harness \
         taxonomy) — a zero-hit result then means the pattern truly matched nothing, not that a \
         label was excluded.\n\n\
         JSON SCHEMA (per --format json)\n  \
@@ -741,7 +732,7 @@ impl ListArgs {
 )]
 pub struct SearchArgs {
     /// Regex pattern (ripgrep-like, default smart-case). MAY be empty for a
-    /// pure filter (use `--category` / time / turn filters alone).
+    /// pure filter (use `--label` / time / turn filters alone).
     ///
     /// search's FIRST positional is PATTERN (unlike files/turns/list/agents/recover, whose
     /// first positional is the PATH target), so a bare uuid here is a LITERAL pattern, searched
@@ -775,7 +766,12 @@ pub struct SearchArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
-    /// Filter to one or more `-t`/`--category` SELECTORS (dotted `role.class.sub`, repeatable). A
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
+    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
     /// selector matches a record label iff it is a dot-SEGMENT prefix of the label's path:
     /// `-t user` (the whole user role), `-t agent.message`, `-t agent.thinking`, `-t agent.tool`
     /// (use+result), `-t agent.communication` (inbox/sent/signal), `-t harness.notification`. An
@@ -783,11 +779,11 @@ pub struct SearchArgs {
     /// eligible. (0 back-compat: the old flat `thinking`/`tool`/`tool-response` now error.)
     #[arg(
         short = 't',
-        long = "category",
+        long = "label",
         value_name = "SELECTOR",
-        value_parser = parse_category_selector
+        value_parser = parse_label_selector
     )]
-    pub categories: Vec<String>,
+    pub labels: Vec<String>,
 
     /// Case-insensitive match (overrides smart-case).
     #[arg(short = 'i', long)]
@@ -834,18 +830,15 @@ pub struct SearchArgs {
 
     /// Also render the SIBLING records of every matched turn — the rest of the
     /// back-and-forth, not only the matched line — so a matched USER question surfaces
-    /// WITH the agent's reply (answers "I said X, what did you say back?"). Repeatable /
-    /// comma-joined SPEC tokens turn sibling rendering ON and CAP how many show:
-    /// a bare `N` caps the TOTAL siblings (any label) at N; a `<selector>:N`
-    /// (selector = a dotted `role.class.sub` path, the same set as `-t`) caps the labels
-    /// under THAT selector at N (must be ≥1). Mix them — e.g. `--siblings agent.tool.use:1
-    /// --siblings agent.thinking:2` or `--siblings 3`. When both a bare `N` and typed
-    /// `<selector>:N` specs are given, each typed cap governs its own selector and the bare
-    /// `N` caps every OTHER label (the rest); a label with no typed spec and no bare-`N`
-    /// fallback is NOT shown. A record that itself matched is never repeated as a sibling. No
-    /// effect under `--count-only`.
-    #[arg(long, value_name = "SPEC", value_delimiter = ',')]
-    pub siblings: Vec<String>,
+    /// WITH the agent's reply (answers "I said X, what did you say back?"). FIXED policy,
+    /// zero arguments: message units always render (user.*, agent.message,
+    /// agent.communication.*); chattier machinery is capped per leaf (agent.thinking ≤ 2,
+    /// agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2); anything capped away is
+    /// counted and surfaced as an explicit `(+N more · csift show @<id> --line A-B)`
+    /// pointer. A record that itself matched is never repeated as a sibling. No effect
+    /// under `--count-only`.
+    #[arg(long)]
+    pub siblings: bool,
 
     /// Emit each matched (and `--siblings`) record's FULL text instead of the ~400-char
     /// excerpt — so you can READ a found message end-to-end (e.g. the question at the tail
@@ -869,7 +862,7 @@ impl SearchArgs {
     /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.subagents || !self.no_subagents
     }
 
     /// The project targets to scope to: the positional `[PATH]...`. Empty ⇒ the shared
@@ -999,13 +992,13 @@ pub enum AgentKindFilter {
         message); it is a DIRECT lookup that IGNORES --since/--until/--order-by/--kind and \
         renders just that node (a tree of one), and \
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
-        `--kind` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
+        `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
         axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
         by `turns`/`search -t user` — they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
           csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagent tree\n  \
           csift agents .                                                   # every session under this project\n  \
-          csift agents . --kind workflow                                   # only workflow-shape agents (NOT the automation kind)\n  \
+          csift agents . --shape workflow                                   # only workflow-shape agents (NOT the automation kind)\n  \
           csift agents @<uuid> --since 2h                                  # subagents TRIGGERED in the last 2h\n  \
           csift agents @<uuid> --since 6h --order-by completion            # COMPLETED in the last 6h\n  \
           csift agents @<uuid> --order-by completion                       # order/window on the completion axis\n  \
@@ -1024,7 +1017,7 @@ pub enum AgentKindFilter {
         skipped_lines}. `agent_type` is the semantic agent ROLE / subagent-type string (e.g. \
         `Explore`, `general-purpose`, `oh-my-claudecode:critic`, `workflow-subagent`) — \
         DISTINCT from `kind`, which is the on-disk transcript SHAPE (builtin-task | workflow). \
-        There is no role filter today (only `--kind` for shape). ID-DOMAIN: `agent_id` IS this \
+        There is no role filter today (only `--shape` for shape). ID-DOMAIN: `agent_id` IS this \
         record's transcript-own id — the SAME concept other commands call `session_id` (a bare \
         SUBAGENT hex here, since `agents` only lists subagents, so an `is_subagent` flag is \
         implied-true and omitted); re-feed `parent_session_id`, never the bare `agent_id`. \
@@ -1061,13 +1054,18 @@ pub struct AgentsArgs {
     #[arg(long = "no-subagents", hide = true)]
     pub no_subagents: bool,
 
+    /// Hidden no-op twin (see `no_subagents`): `agents` has no span control at all, so BOTH
+    /// span switches are accepted-then-rejected with the pointed error.
+    #[arg(long = "subagents", hide = true)]
+    pub subagents: bool,
+
     /// Only show subagents of this kind (repeatable). Default: all kinds. This is the
     /// subagent TRANSCRIPT-SHAPE filter — its values are `builtin-task` | `workflow`. It is
     /// NOT the automation-TRIGGER `kind` taxonomy (`background-command`/`agent`/`monitor`/
     /// `task`/`workflow`) that `turns`/`search -t user` use; the two axes share only the
     /// literal token `workflow` (different meaning). `csift agents --kind monitor` is a
     /// parse error for this reason. Ignored when `--agent <hex>` is given (a direct grab).
-    #[arg(long = "kind", value_enum)]
+    #[arg(long = "shape", value_enum)]
     pub kinds: Vec<AgentKindFilter>,
 
     /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -1092,7 +1090,7 @@ pub struct AgentsArgs {
 
     /// Grab ONE subagent by its bare-hex id: prints its full node incl. the returned
     /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
-    /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--order-by` and `--kind`
+    /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--order-by` and `--shape`
     /// (a known id resolves regardless of when it ran or its shape), and just the matched
     /// node is rendered (a tree of one — not the whole workflow tree). If the hex matches
     /// nothing in scope, it is a hard ERROR with discovery guidance — not the ambiguous
@@ -1123,10 +1121,10 @@ impl AgentsArgs {
     /// message instead of the misleading `allow_hyphen_values` PATH-swallow error.
     #[must_use]
     pub fn span_flag_error(&self) -> Option<&'static str> {
-        if self.no_subagents {
+        if self.no_subagents || self.subagents {
             Some(
                 "`agents` has no subagent-span flag: it DISCOVERS a session's subagents as its \
-                 primary output (there is nothing to span over). Drop `--no-subagents`. To list \
+                 primary output (there is nothing to span over). Drop the span flag. To list \
                  a session's subagents run `csift agents @<uuid>`; to scope another subcommand's \
                  subagent span use that subcommand's flag (e.g. `csift files --no-subagents \
                  @<uuid>`).",
@@ -1208,7 +1206,7 @@ pub enum FilesDetail {
         scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
         in subagents): `--no-subagents` restricts to the TOP-LEVEL session only.\n\n\
         WINDOWING: `--turn-range START..END` (inclusive, 0-based on genuine-user order) \
-        is mutually exclusive with `--since`/`--until`. Time bounds accept ISO8601 \
+        INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept ISO8601 \
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
         with no timestamp never falls inside a bounded window.\n\n\
@@ -1282,6 +1280,11 @@ pub struct FilesArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
     /// Detail level — `--by <summary|dir|file|timeline>` (DEFAULT `summary`, strictly
     /// coarsening): `summary` = coarse top-level-prefix op rollup (smallest output);
     /// `dir` = one row per distinct directory (full parent path) with per-op +
@@ -1336,7 +1339,7 @@ impl FilesArgs {
     /// otherwise subagents are spanned. Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.subagents || !self.no_subagents
     }
 
     /// The active [`FilesDetail`], selected directly by `--by` (clap validates the value
@@ -1416,9 +1419,9 @@ pub enum RecoverMode {
         The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
-        WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
-        mutually exclusive with `--since`/`--until` (ISO8601 / relative). `--line-range \
-        START..END` further restricts to a 1-based file-line span. `--out <PATH>` writes \
+        WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) \
+        INTERSECTS with `--since`/`--until` (ISO8601 / relative; both filters AND). \
+        `--file-lines START..END` further restricts to a 1-based FILE-line span. `--out <PATH>` writes \
         the reconstructed artifact (restored content / snapshot / concatenated patches) \
         verbatim to a file; in restore mode stdout then stays empty (just a stderr note), \
         in the other modes the summary still prints to stdout.\n\n\
@@ -1442,7 +1445,7 @@ pub enum RecoverMode {
           csift recover @<uuid> --file /abs/app.py --at @latest     # partial-tolerant final snapshot (holes shown)\n  \
           csift recover @<uuid> --file /abs/app.py --at @turn:42    # partial snapshot as the LLM saw it at turn 42\n  \
           csift recover @<uuid> --file @plan --out /tmp/plan.md     # reconstruct the session's bound plan (even if deleted)\n  \
-          csift recover @<uuid> --file /abs/x.rs --line-range 100..200 --patches   # only patches touching lines 100-200\n\n\
+          csift recover @<uuid> --file /abs/x.rs --file-lines 100..200 --patches   # only patches touching FILE lines 100-200\n\n\
         JSON SCHEMA (per --format json)\n  \
           The default RESTORE mode emits a SINGLE object and no trailer — \
         `{file, complete:true, lines, content}` on success (or, with `--out`, \
@@ -1486,6 +1489,11 @@ pub struct RecoverArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
     /// Best-effort line-numbered FINAL-state fragment — restore's never-fails sibling. Where
     /// the default restore REFUSES a partial file, `--salvage` dumps whatever survived (known
     /// lines numbered, unrecoverable lines left as explicit `??? lines A..B unknown` gaps). For
@@ -1508,7 +1516,7 @@ pub struct RecoverArgs {
     /// of the first line after genuine-user turn N — discover N from the `s·t<n>` header in
     /// `csift search` text, or `turn_index` in any `--format json` record) and `@line:<N>`
     /// (snapshot as of JSONL TRANSCRIPT line N — the `line_no` shown in this tool's output,
-    /// NOT a file line of `--file`; for a 1-based FILE-line span of `--file` use `--line-range`
+    /// NOT a file line of `--file`; for a 1-based FILE-line span of `--file` use `--file-lines`
     /// instead), and `@latest` (the file's FINAL reconstructed state — no cutoff; the clean way
     /// to ask for "its last form" without guessing a timestamp past the last write). A datetime
     /// bound is INCLUSIVE of events AT that instant.
@@ -1540,10 +1548,11 @@ pub struct RecoverArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Restrict to a 1-based, inclusive file-line span of `--file` (filters the reconstructed
+    /// Restrict to a 1-based, inclusive FILE-line span of `--file` (filters the reconstructed
     /// line space, independent of the turn/time window). Applies in `--patches` / `--at` /
-    /// `--coverage`.
-    #[arg(long, value_name = "START..END")]
+    /// `--coverage`. (Named `--file-lines` because `line`/`L` always means a TRANSCRIPT jsonl
+    /// line in csift — this is the one flag that addresses the reconstructed FILE's lines.)
+    #[arg(long = "file-lines", value_name = "START..END")]
     pub line_range: Option<String>,
 
     /// Write the reconstructed artifact (snapshot / concatenated patches)
@@ -1585,7 +1594,7 @@ impl RecoverArgs {
     /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.subagents || !self.no_subagents
     }
 
     /// Resolve the mode flags into the active [`RecoverMode`]. clap's `group = "mode"`
@@ -1684,6 +1693,11 @@ pub struct ImageArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
     /// Emit JSON (one object per image + a trailing summary) instead of the text listing.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
@@ -1694,7 +1708,7 @@ impl ImageArgs {
     /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.subagents || !self.no_subagents
     }
 }
 
@@ -1746,6 +1760,11 @@ pub struct PlanArgs {
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
     /// Emit NDJSON (one object per resolved plan) instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
@@ -1755,7 +1774,7 @@ impl PlanArgs {
     /// Subagent span is ON by default; `--no-subagents` restricts to the top-level session.
     #[must_use]
     pub fn want_subagents(&self) -> bool {
-        !self.no_subagents
+        self.subagents || !self.no_subagents
     }
 }
 
@@ -1776,10 +1795,10 @@ impl PlanArgs {
         record is a turn MEMBER, never a delimiter — so a 40K-char budget reaches back \
         across multiple boundaries by default (verified: 3 on one real sample, 2 on \
         another). `--max-compactions` only caps how far.\n\n\
-        BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in chars \
-        (or tokens via `--budget-unit tokens`, ≈4 chars/token) — it is applied PER session \
+        BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in CHARS \
+        (sizing rule of thumb: ≈4 chars/token) — it is applied PER session \
         in scope. `turns` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
-        just `budget` chars; with `--include-subagents` a target that spans S subagents \
+        just `budget` chars; with `--subagents` a target that spans S subagents \
         realizes up to `budget × (1 + S)` chars total (a scope banner surfaces the \
         multiplier). `--round-trip-fraction` \
         (default 0.5) is a HARD FLOOR: that fraction of the budget can ONLY be spent on \
@@ -1796,9 +1815,9 @@ impl PlanArgs {
         that carry important info — a count, a commit hash, a `file.rs:NNN` ref, backtick \
         code, or a finding/decision lexeme, or that are clearly long — collapsing pure \
         \"let me look into this\" declarations into a `△ L… [X agent messages, Y tool \
-        calls, Z failed]` placeholder (only on runs longer than `--agent-run-threshold`, \
-        default 6). `all` keeps every agent message. `--profile heavy|light` bundles the \
-        thresholds; explicit threshold flags override the profile.\n\n\
+        calls, Z failed]` placeholder (only on runs longer than the mode's threshold — \
+        default 6; `--profile heavy` 4 / `light` 8). `all` keeps every agent message. \
+        `--profile heavy|light` is the WHOLE tuning surface (per-knob flags are gone).\n\n\
         DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
         summary)` and DEMOTED (selected only after non-dup turns) — never silently dropped \
         (a false positive must not lose a real turn).\n\n\
@@ -1835,8 +1854,7 @@ impl PlanArgs {
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
           csift turns . --budget 36000 --window 9000 --slice 1   # 1st ≤9000-char chunk for a SessionStart hook (fan slices 1..4)\n  \
           csift turns @<uuid> --budget 8000 --max-compactions 1  # stay within one compaction boundary\n  \
-          csift turns @<uuid> --agent-msgs eot-only         # force the old single-EOT (last-message-only) output\n  \
-          csift turns @<uuid> --agent-rich-min-chars 200    # default mode, lower bar → keep more first/middle messages\n  \
+          csift turns @<uuid> --agent-msgs eot-only         # last-message-only per turn\n  \
           csift turns @<uuid> --profile heavy               # lower thresholds (max fidelity)\n  \
           csift turns @<uuid> --agent-msgs all              # every agent message, no filtering\n\n\
         AUTOMATION TRIGGERS\n  \
@@ -1870,8 +1888,7 @@ impl PlanArgs {
           automation_in_scope_by_kind}` object —\n  \
           `sessions_in_scope` is the TRUE scope (every discovered session), `sessions_rendered`\n  \
           is how many fit the budget, the top_level/subagent split is over ALL in scope,\n  \
-          `budget_chars`/`max_total_chars` are ALWAYS in CHARS (a `--budget-unit tokens` budget\n  \
-          is pre-multiplied ×4, so they read 4× `--budget` under tokens mode),\n  \
+          `budget_chars`/`max_total_chars` are ALWAYS in CHARS,\n  \
           `automation_by_kind` breaks the SELECTED `automation_triggers` total down per class\n  \
           ({background-command,agent,workflow,monitor,task}), and `automation_in_scope_by_kind`\n  \
           is the SAME breakdown over EVERY in-scope automation pulse REGARDLESS of budget\n  \
@@ -1920,15 +1937,6 @@ pub struct TurnsArgs {
     #[arg(long, value_name = "N", default_value_t = 40000)]
     pub budget: usize,
 
-    /// Interpret `--budget` as chars (default) or tokens (≈4 chars/token heuristic).
-    /// NOTE: the DEFAULT `--budget 40000` is read as 40000 TOKENS ≈ 160000 CHARS the moment
-    /// you pass `--budget-unit tokens` WITHOUT also lowering `--budget` — a 4× larger output.
-    /// Pass an explicit `--budget` when flipping to tokens (e.g. `--budget 10000 --budget-unit
-    /// tokens` ≈ 40000 chars). The JSON `budget_chars`/`max_total_chars` are ALWAYS in CHARS
-    /// (a token budget is pre-multiplied ×4), so under tokens mode they read 4× the `--budget`.
-    #[arg(long = "budget-unit", value_enum, default_value_t = BudgetUnit::Chars)]
-    pub budget_unit: BudgetUnit,
-
     /// Fraction of the budget RESERVED to guarantee complete round-trips (user →
     /// [N tool calls] → assistant EOT), not user messages alone. A hard floor.
     /// Default 0.5; must be in the open interval (0.0, 1.0).
@@ -1940,9 +1948,9 @@ pub struct TurnsArgs {
     /// files/search): `turns` is a SINGLE-THREAD recovery tool and `--budget` MULTIPLIES per
     /// session in scope, so spanning hundreds of unrelated fan-out subagents by default would
     /// bury the thread you asked to restore under megabytes of noise. Opt in with
-    /// `--include-subagents` only for the rare cross-fan-out reconstruction.
+    /// `--subagents` only for the rare cross-fan-out reconstruction.
     #[arg(
-        long = "include-subagents",
+        long = "subagents",
         overrides_with = "no_subagents",
         default_value_t = false
     )]
@@ -1950,7 +1958,7 @@ pub struct TurnsArgs {
 
     /// Exclude subagent transcripts — reconstruct only from the top-level session. This is
     /// already the `turns` DEFAULT; the flag is kept for symmetry with the other subcommands
-    /// and to explicitly cancel an earlier `--include-subagents` (last flag wins).
+    /// and to explicitly cancel an earlier `--subagents` (last flag wins).
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
@@ -1963,56 +1971,15 @@ pub struct TurnsArgs {
     /// `longest` (DEFAULT) keeps the LONGEST agent message — the substantive Rich Response,
     /// which is frequently a MIDDLE message, not the last ~50-char throwaway wrap-up that
     /// the old `agents.last()` default silently kept — PLUS the first message when it is
-    /// substantive (`>= --agent-rich-min-chars`) PLUS each rich middle (a number, commit
+    /// substantive (>= the mode's rich-min threshold) PLUS each rich middle (a number, commit
     /// hash, file:line, backtick code, or finding/decision lexeme, or clearly long),
     /// collapsing the rest into a placeholder. `eot-only` forces the old single-EOT
     /// behavior (only each turn's last agent message — byte-identical to the pre-feature
     /// output). `rich` keeps the last always + the first by position privilege + each
-    /// non-droppable middle, only on a long run (`> --agent-run-threshold` agent messages).
+    /// non-droppable middle, only on a long run (over the mode's run threshold).
     /// `all` keeps every agent message.
     #[arg(long = "agent-msgs", value_enum, default_value_t = crate::turns::AgentMsgMode::Longest)]
     pub agent_msgs: crate::turns::AgentMsgMode,
-
-    /// Only richness-filter a turn whose agent-message count EXCEEDS this (default 6;
-    /// short runs keep every message verbatim). Only consulted in `--agent-msgs rich`.
-    #[arg(long = "agent-run-threshold", value_name = "N", default_value_t = 6)]
-    pub agent_run_threshold: usize,
-
-    /// An agent message at least this many chars is kept on length alone (default 280 ≈
-    /// 1.5× the measured 184-char median middle). Consulted in `--agent-msgs longest`
-    /// (gates the "keep the first if substantive" + the rich middles) AND `rich`.
-    #[arg(long = "agent-rich-min-chars", value_name = "N", default_value_t = 280)]
-    pub agent_rich_min_chars: usize,
-
-    /// A signal-less intent-verb-opening agent message SHORTER than this is droppable;
-    /// at/above it is kept (default 200 — the pure-declaration band). Only consulted in
-    /// `--agent-msgs rich`.
-    #[arg(
-        long = "agent-declaration-max-chars",
-        value_name = "N",
-        default_value_t = 200
-    )]
-    pub agent_declaration_max_chars: usize,
-
-    /// Keep a turn's FIRST agent message by position privilege (first-matters — the
-    /// opening message often states the plan or an early finding). `--no-keep-first` drops
-    /// the privilege and decides the first as a MIDDLE (kept unless it is a proven pure
-    /// declaration; a rich first still survives). ONLY TAKES EFFECT in `--agent-msgs rich`.
-    /// In the DEFAULT `longest` mode, first-message retention is governed by
-    /// `--agent-rich-min-chars` (keep-the-first-if-substantive), NOT this flag — so
-    /// `--keep-first`/`--no-keep-first` are no-ops there. (The `default_value_t = true`
-    /// only sets the privilege value consulted by `rich`; it does not make the flag active
-    /// in `longest`.)
-    #[arg(
-        long = "keep-first",
-        overrides_with = "no_keep_first",
-        default_value_t = true
-    )]
-    pub keep_first: bool,
-
-    /// Drop the first-message position privilege (see `--keep-first`). Overrides it.
-    #[arg(long = "no-keep-first")]
-    pub no_keep_first: bool,
 
     /// Convenience threshold bundle, applied BEFORE the individual flags (so an explicit
     /// flag overrides the profile). `heavy` = maximal fidelity (threshold 4, rich-min 200,
@@ -2093,70 +2060,31 @@ pub struct TurnsArgs {
 impl TurnsArgs {
     /// Resolve the include/exclude flags into a single decision. UNLIKE the other
     /// subcommands, `turns` defaults to TOP-LEVEL-ONLY (`include_subagents` defaults false):
-    /// spanning is opt-in via `--include-subagents`, and a trailing `--no-subagents` still
+    /// spanning is opt-in via `--subagents`, and a trailing `--no-subagents` still
     /// forces it off. So a `csift turns @<uuid>` reconstructs just that one thread.
     #[must_use]
     pub fn want_subagents(&self) -> bool {
         self.include_subagents && !self.no_subagents
     }
 
-    /// Resolve the agent-message policy into a [`crate::turns::RichnessCfg`]. A `--profile`
-    /// (if given) seeds the threshold baseline FIRST; then every EXPLICITLY-passed flag
-    /// overrides the profile (clap exposes whether a flag was user-set via its default
-    /// matching, so we apply the explicit value unconditionally — a flag left at its
-    /// documented default coincides with no-override, the intended behavior). The master
-    /// `--agent-msgs` mode is honored as-is; the default `eot-only` reproduces today's
-    /// single-EOT output regardless of the thresholds.
+    /// Resolve the agent-message policy into a [`crate::turns::RichnessCfg`]. The
+    /// per-knob tuning flags are GONE (0-backcompat surface diet): `--profile` bundles are
+    /// the only tuning — `heavy` (4/200/140) / `light` (8/360/240) / none (6/280/200).
     #[must_use]
     pub fn richness_cfg(&self) -> crate::turns::RichnessCfg {
         use crate::turns::{Profile, RichnessCfg};
-        // Profile baseline (or the plain defaults when no profile is given).
-        let mut cfg = match self.profile {
-            Some(Profile::Heavy) => RichnessCfg {
-                mode: self.agent_msgs,
-                run_threshold: 4,
-                rich_min_chars: 200,
-                declaration_max_chars: 140,
-                keep_first: self.keep_first(),
-            },
-            Some(Profile::Light) => RichnessCfg {
-                mode: self.agent_msgs,
-                run_threshold: 8,
-                rich_min_chars: 360,
-                declaration_max_chars: 240,
-                keep_first: self.keep_first(),
-            },
-            None => RichnessCfg {
-                mode: self.agent_msgs,
-                run_threshold: self.agent_run_threshold,
-                rich_min_chars: self.agent_rich_min_chars,
-                declaration_max_chars: self.agent_declaration_max_chars,
-                keep_first: self.keep_first(),
-            },
+        let (run_threshold, rich_min_chars, declaration_max_chars) = match self.profile {
+            Some(Profile::Heavy) => (4, 200, 140),
+            Some(Profile::Light) => (8, 360, 240),
+            None => (6, 280, 200),
         };
-        // Explicit flags WIN over the profile. clap fills these with their declared
-        // defaults when the user omits them; we treat a value that differs from the
-        // documented default as an explicit override (a user who passes the default value
-        // gets the same result, which is correct). This keeps "profile sets baseline,
-        // flag wins" without needing clap's raw ArgMatches.
-        if self.profile.is_some() {
-            if self.agent_run_threshold != 6 {
-                cfg.run_threshold = self.agent_run_threshold;
-            }
-            if self.agent_rich_min_chars != 280 {
-                cfg.rich_min_chars = self.agent_rich_min_chars;
-            }
-            if self.agent_declaration_max_chars != 200 {
-                cfg.declaration_max_chars = self.agent_declaration_max_chars;
-            }
+        RichnessCfg {
+            mode: self.agent_msgs,
+            run_threshold,
+            rich_min_chars,
+            declaration_max_chars,
+            keep_first: true,
         }
-        cfg
-    }
-
-    /// Resolve the `--keep-first` / `--no-keep-first` pair (default keep-first).
-    #[must_use]
-    fn keep_first(&self) -> bool {
-        !self.no_keep_first
     }
 }
 
@@ -2648,7 +2576,7 @@ mod tests {
             parse(&["csift", "search", "spec", ".", "-t", "user"]).expect("short flag after path");
         match cli.command {
             Command::Search(a) => {
-                assert_eq!(a.categories, vec!["user".to_string()]);
+                assert_eq!(a.labels, vec!["user".to_string()]);
                 assert_eq!(a.paths.len(), 1);
                 assert_eq!(a.pattern, "spec");
             }
@@ -2683,7 +2611,7 @@ mod tests {
         assert!(!selector_is_segment_prefix("agent.too", "agent.tool.use"));
         assert!(!selector_is_segment_prefix("user", "agent.message"));
         // Validity is derived from Class::ALL: every emitted selector is valid; junk is not.
-        for s in category_selectors() {
+        for s in label_selectors() {
             assert!(selector_is_valid(&s), "{s} must be valid");
         }
         assert!(selector_is_valid("user"));
@@ -2754,28 +2682,36 @@ mod tests {
     }
 
     #[test]
-    fn include_subagents_is_gone_from_the_default_on_commands() {
-        // `--include-subagents` was a no-op on the default-ON spanning commands (the mode it
-        // requested was already the default) and is REMOVED there. Only `turns` — which
-        // defaults to top-level-only — keeps it as a meaningful opt-in.
+    fn span_switch_pair_is_uniform_across_commands() {
+        // ONE mental axis, two switches everywhere: `--subagents` / `--no-subagents`.
+        // `--include-subagents` is GONE (0 backcompat). Defaults differ per command
+        // (turns=off, the rest=on); passing the default-matching switch is a no-op.
         for argv in [
             vec!["csift", "list", SESS_UUID, "--include-subagents"],
-            vec!["csift", "search", "x", SESS_UUID, "--include-subagents"],
-            vec!["csift", "files", SESS_UUID, "--include-subagents"],
-            vec!["csift", "recover", SESS_UUID, "--include-subagents"],
-            vec!["csift", "image", SESS_UUID, "--include-subagents"],
+            vec!["csift", "turns", SESS_UUID, "--include-subagents"],
         ] {
             assert!(
                 parse(&argv).is_err(),
                 "{argv:?}: --include-subagents must be an unknown argument now"
             );
         }
-        // turns KEEPS it (the opt-in).
-        let cli = parse(&["csift", "turns", SESS_UUID, "--include-subagents"]).unwrap();
+        // turns opts in with --subagents.
+        let cli = parse(&["csift", "turns", SESS_UUID, "--subagents"]).unwrap();
         match cli.command {
-            Command::Turns(a) => assert!(a.want_subagents(), "turns --include-subagents opts in"),
+            Command::Turns(a) => assert!(a.want_subagents(), "turns --subagents opts in"),
             _ => panic!("expected turns"),
         }
+        // The default-on commands accept the explicit no-op --subagents…
+        let cli = parse(&["csift", "list", SESS_UUID, "--subagents"]).unwrap();
+        match cli.command {
+            Command::List(a) => assert!(a.want_subagents()),
+            _ => panic!("expected list"),
+        }
+        // …and the PAIR conflicts (contradictory flags are a parse error, not last-wins).
+        assert!(
+            parse(&["csift", "list", SESS_UUID, "--subagents", "--no-subagents"]).is_err(),
+            "contradictory span switches must clash"
+        );
     }
 
     #[test]
@@ -2815,18 +2751,11 @@ mod tests {
         // `--no-subagents` cancels it — the field's `overrides_with` makes the last flag win,
         // and `want_subagents()` ANDs `include && !no_subagents`. (Bare opt-in spans; the
         // trailing `--no-subagents` here suppresses it.)
-        let cli = parse(&[
-            "csift",
-            "turns",
-            SESS_UUID,
-            "--include-subagents",
-            "--no-subagents",
-        ])
-        .unwrap();
+        let cli = parse(&["csift", "turns", SESS_UUID, "--subagents", "--no-subagents"]).unwrap();
         match cli.command {
             Command::Turns(a) => assert!(
                 !a.want_subagents(),
-                "turns: a trailing --no-subagents must cancel --include-subagents"
+                "turns: a trailing --no-subagents must cancel --subagents"
             ),
             _ => panic!("expected turns"),
         }
@@ -2880,7 +2809,7 @@ mod tests {
 
     #[test]
     fn agents_kind_filter_and_default_axis() {
-        let cli = parse(&["csift", "agents", ".", "--kind", "workflow"]).unwrap();
+        let cli = parse(&["csift", "agents", ".", "--shape", "workflow"]).unwrap();
         match cli.command {
             Command::Agents(a) => {
                 assert_eq!(a.kinds, vec![AgentKindFilter::Workflow]);

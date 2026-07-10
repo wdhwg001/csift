@@ -30,14 +30,12 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use memchr::memmem;
 use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
 
-use crate::cli::{
-    label_selected, selector_is_segment_prefix, selector_is_valid, OutputFormat, SearchArgs,
-};
+use crate::cli::{label_selected, OutputFormat, SearchArgs};
 use crate::model::{
     group_turn_indices_deduped, normalize_line, tool_result_content_text, Block, Class,
     ClassifyCtx, Content, PlanIndex, Record, SpawnLookup,
@@ -153,6 +151,12 @@ pub struct Exchange {
     /// rendered head-anchored (no match span) and filtered to the effective sibling
     /// categories; a record that produced a hit is never repeated here. Empty otherwise.
     pub siblings: Vec<Hit>,
+    /// How many sibling units the FIXED `--siblings` policy capped away (0 when
+    /// `--siblings` is off or nothing was capped) — surfaced, never silent.
+    pub siblings_hidden: usize,
+    /// The turn's physical jsonl line span `[first, last]` (0,0 when unknown) — the
+    /// `csift show --line A-B` pointer the hidden-siblings note renders.
+    pub turn_lines: (usize, usize),
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
 }
@@ -175,7 +179,7 @@ pub struct SearchOutcome {
 /// A compiled pattern + flags, plus the optional literal prefilter needle.
 #[derive(Debug)]
 pub struct Matcher {
-    /// `None` ⇒ empty pattern (pure filter: every category-eligible record matches).
+    /// `None` ⇒ empty pattern (pure filter: every label-eligible record matches).
     regex: Option<BytesRegex>,
     /// A required-literal prefilter derived from the pattern, run against RAW line/file
     /// bytes (§7d stage 2 + the §7f whole-file gate). `None` ⇒ no anchorable literal.
@@ -542,7 +546,7 @@ fn synth_marker_finders(
         b"User has answered your questions",
         b"Your questions have been answered",
     ];
-    if label_selected(&args.categories, Class::CompactionBoundary.path()) {
+    if label_selected(&args.labels, Class::CompactionBoundary.path()) {
         verifiable.push(b"compact_boundary");
     }
     // CONSERVATIVE (needs cross-record / external data — force the full scan).
@@ -588,9 +592,14 @@ impl AddressSet {
 }
 
 pub fn run_search(args: &SearchArgs) -> Result<()> {
-    // ── Validate flag combinations up front (SPEC §6.2 validation) ──
-    if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
-        bail!("--turn-range is mutually exclusive with --since/--until");
+    // ── PATTERN-position traps (the ONE place csift's positional grammar differs:
+    //    search's first positional is the PATTERN, not a target) ──
+    if args.pattern.starts_with('@') {
+        bail!(
+            "search's FIRST positional is the regex PATTERN — targets come AFTER it: \
+             `csift search <PATTERN> {0}`. To literally match '{0}', escape the @: '\\{0}'.",
+            args.pattern
+        );
     }
 
     // Unlike files/turns/list/agents/recover (whose first positional is the PATH/`@<uuid>`
@@ -614,9 +623,16 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         .iter()
         .filter_map(|p| p.to_str())
         .any(path::pins_single_session);
+    if path::is_uuid(&args.pattern) && !has_session_filter {
+        eprintln!(
+            "csift: note: searching for this uuid as TEXT across the scope; to scope the \
+             search TO that session, pass it as a target: `csift search <PATTERN> @{}`",
+            args.pattern
+        );
+    }
     let matcher = build_matcher(args)?;
     if matcher.is_pure_filter()
-        && args.categories.is_empty()
+        && args.labels.is_empty()
         && turn_range.is_none()
         && time_window.is_unbounded()
         && !has_session_filter
@@ -638,7 +654,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // `--siblings <SPEC>`: parse the repeatable caps ONCE here (a malformed spec is a hard
     // error, surfaced before any scan). `None` ⇒ siblings off. Parsed up front so the per-file
     // parallel scan just borrows the result.
-    let sibling_caps = parse_sibling_specs(&args.siblings)?;
+    let want_siblings = args.siblings;
 
     // ── Spawn-lookup hoist (GOLD §3): build each DISTINCT discovery-root's DiscoveredSpawns
     //    ONCE, then share it across the whole par_iter. A subagent's discovery-root is its parent
@@ -667,7 +683,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 turn_range.as_ref(),
                 &time_window,
                 None,
-                sibling_caps.as_ref(),
+                want_siblings,
                 &spawn_map,
             )
         })
@@ -841,7 +857,7 @@ pub(crate) fn fetch_records(
         None,
         &time_window,
         Some(&address),
-        None,
+        false,
         &spawn_map,
     )?;
     Ok((fr.exchanges, fr.skipped_lines))
@@ -856,7 +872,7 @@ fn search_one_file(
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
-    sibling_caps: Option<&SiblingCaps>,
+    want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
@@ -869,7 +885,7 @@ fn search_one_file(
 
     // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector —
     // computed up front because BOTH the whole-file gate below and the candidate scan key on it.
-    let needs_compact_boundary = label_selected(&args.categories, Class::CompactionBoundary.path());
+    let needs_compact_boundary = label_selected(&args.labels, Class::CompactionBoundary.path());
 
     // ── §7f whole-file gate ──
     // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
@@ -1016,7 +1032,7 @@ fn search_one_file(
         turn_range,
         time_window,
         address,
-        sibling_caps,
+        want_siblings,
         spawn_map,
     );
 
@@ -1057,7 +1073,7 @@ fn reconstruct_and_match(
     turn_range: Option<&(usize, usize)>,
     time_window: &TimeWindow,
     address: Option<&AddressSet>,
-    sibling_caps: Option<&SiblingCaps>,
+    want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
 ) -> Vec<Exchange> {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
@@ -1080,7 +1096,7 @@ fn reconstruct_and_match(
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
-    let selectors = &args.categories;
+    let selectors = &args.labels;
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
     let tool_names = build_tool_name_index(records);
@@ -1147,21 +1163,21 @@ fn reconstruct_and_match(
             continue;
         }
 
-        // `--siblings <SPEC>`: render the turn's NON-matched records (the rest of the
-        // back-and-forth) so a matched user question surfaces with the agent's reply, capped
-        // per the parsed SPEC.
-        let mut siblings = match sibling_caps {
-            Some(caps) => collect_turn_siblings(
+        // `--siblings`: render the turn's NON-matched records (the rest of the
+        // back-and-forth) so a matched user question surfaces with the agent's reply —
+        // fixed policy (see [`sibling_cap`]), the capped-away remainder counted.
+        let (mut siblings, siblings_hidden) = if want_siblings {
+            collect_turn_siblings(
                 &turn,
-                caps,
                 &hit_idxs,
                 args.resolve_persisted,
                 excerpt_max,
                 &plan_index,
                 &tool_names,
                 &env,
-            ),
-            None => Vec::new(),
+            )
+        } else {
+            (Vec::new(), 0)
         };
 
         // Resolve the `▹` tool-pairing state of every tool hit/sibling against the file-level id
@@ -1185,6 +1201,16 @@ fn reconstruct_and_match(
             .and_then(|k| k.rec.timestamp.clone())
             .or_else(|| hits.iter().find_map(|h| h.timestamp_utc.clone()));
 
+        let turn_line_nos: Vec<usize> = turn
+            .records
+            .iter()
+            .map(|k| k.line_no)
+            .filter(|&n| n > 0)
+            .collect();
+        let turn_lines = match (turn_line_nos.iter().min(), turn_line_nos.iter().max()) {
+            (Some(&a), Some(&b)) => (a, b),
+            _ => (0, 0),
+        };
         out.push(Exchange {
             session_id: session_id.clone(),
             is_subagent,
@@ -1193,6 +1219,8 @@ fn reconstruct_and_match(
             started_utc,
             hits,
             siblings,
+            siblings_hidden,
+            turn_lines,
             record_uuids,
         });
     }
@@ -1200,101 +1228,24 @@ fn reconstruct_and_match(
     out
 }
 
-/// Parsed `--siblings <SPEC>` caps. `per_sel` holds the explicit `<selector>:N` caps (cap of up
-/// to N siblings whose label is UNDER that dotted selector); `bare` is the bare-`N` cap (cap of
-/// up to N siblings across every label with NO typed cap — "the rest"). Sibling rendering is ON
-/// iff at least one spec token was given (so an empty `--siblings` vec → no `SiblingCaps`).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct SiblingCaps {
-    per_sel: Vec<(String, usize)>,
-    bare: Option<usize>,
-}
-
-impl SiblingCaps {
-    /// The cap governing a hit's leaf [`Class`]: the FIRST typed `<selector>:N` whose selector is
-    /// a segment-prefix of the class path (so `agent.tool:2` governs both use+result), else the
-    /// bare-`N` fallback ("the rest"). `None` ⇒ this label is not shown at all. (Test-only: the
-    /// production retain pools by [`Self::matched_selector`]; this is the per-class convenience the
-    /// `parse_sibling_specs` unit tests assert.)
-    #[cfg(test)]
-    fn cap_for(&self, class: Class) -> Option<usize> {
-        self.matched_selector(class).map(|(_, n)| n).or(self.bare)
+/// The FIXED `--siblings` policy (the former per-selector cap DSL is gone — one
+/// zero-argument flag, one predictable behavior): within a matched turn's non-matched
+/// records, MESSAGE-class units always render (user.*, agent.message,
+/// agent.communication.*); the chattier machinery is capped per LEAF —
+/// agent.thinking ≤ 2, agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2.
+/// Anything capped away is counted and surfaced as an explicit
+/// `(+N more · csift show …)` pointer — self-healing, never silent.
+fn sibling_cap(class: Class) -> Option<usize> {
+    let path = class.path();
+    if path.starts_with("agent.thinking") {
+        Some(2)
+    } else if path.starts_with("agent.tool.") {
+        Some(3)
+    } else if path.starts_with("harness") {
+        Some(2)
+    } else {
+        None // user.* / agent.message / agent.communication.* — always rendered
     }
-
-    /// The first typed `(selector, cap)` whose selector is a segment-prefix of `class`'s path —
-    /// the cap-pooling KEY (so two leaves under one selector share its counter). `None` ⇒ no
-    /// typed cap governs this class (it falls to the bare-`N` pool).
-    fn matched_selector(&self, class: Class) -> Option<(&str, usize)> {
-        self.per_sel
-            .iter()
-            .find(|(sel, _)| selector_is_segment_prefix(sel, class.path()))
-            .map(|(sel, n)| (sel.as_str(), *n))
-    }
-
-    /// True when ONLY a bare-`N` was given (no typed caps), so the `N` is a TOTAL cap across all
-    /// labels rather than a per-selector one.
-    fn bare_is_total(&self) -> bool {
-        self.per_sel.is_empty()
-    }
-}
-
-/// Validate a `--siblings` SPEC selector token (the same dotted value set as `-t`): returns the
-/// trimmed selector when valid, else `None` (the caller frames the error).
-fn parse_sibling_category(token: &str) -> Option<String> {
-    let t = token.trim();
-    selector_is_valid(t).then(|| t.to_string())
-}
-
-/// Parse the repeatable / comma-joined `--siblings <SPEC>` tokens into [`SiblingCaps`]. A bare
-/// `N` (positive integer) caps the total siblings (the categories with no typed cap); a
-/// `<category>:N` caps THAT category. `N` must be ≥1. An empty token list ⇒ `None` (siblings
-/// off). A malformed token (unknown category, non-numeric / zero cap) is a hard error.
-fn parse_sibling_specs(tokens: &[String]) -> Result<Option<SiblingCaps>> {
-    if tokens.is_empty() {
-        return Ok(None);
-    }
-    let mut caps = SiblingCaps::default();
-    for tok in tokens {
-        let t = tok.trim();
-        if t.is_empty() {
-            continue;
-        }
-        if let Some((cat_tok, n_tok)) = t.split_once(':') {
-            let sel = parse_sibling_category(cat_tok.trim()).ok_or_else(|| {
-                anyhow!(
-                    "--siblings: '{t}' — unknown selector '{}' (want a dotted role.class.sub path, \
-                     the same set as -t, or a bare N)",
-                    cat_tok.trim()
-                )
-            })?;
-            let n: usize = n_tok.trim().parse().map_err(|_| {
-                anyhow!("--siblings: '{t}' — the cap after ':' must be a positive integer")
-            })?;
-            if n == 0 {
-                bail!("--siblings: '{t}' — the cap must be ≥1 (0 means 'do not show', so omit it)");
-            }
-            if let Some(slot) = caps.per_sel.iter_mut().find(|(s, _)| *s == sel) {
-                slot.1 = n; // last write wins for a repeated selector
-            } else {
-                caps.per_sel.push((sel, n));
-            }
-        } else {
-            let n: usize = t.parse().map_err(|_| {
-                anyhow!(
-                    "--siblings: '{t}' — want a bare N or a <selector>:N \
-                     (selector = a dotted role.class.sub path, the same set as -t)"
-                )
-            })?;
-            if n == 0 {
-                bail!("--siblings: '{t}' — the cap must be ≥1 (0 means 'do not show', so omit it)");
-            }
-            caps.bare = Some(n);
-        }
-    }
-    if caps.per_sel.is_empty() && caps.bare.is_none() {
-        return Ok(None);
-    }
-    Ok(Some(caps))
 }
 
 /// One reconstructed turn (the opening genuine-user record + every record chained
@@ -1410,7 +1361,7 @@ impl ClassifyEnv<'_> {
     }
 }
 
-/// Gather the category-eligible, time-windowed, regex-matching hits inside a turn, plus the
+/// Gather the label-eligible, time-windowed, regex-matching hits inside a turn, plus the
 /// indices (into `turn.records`) of the records that produced at least one hit — so
 /// `--siblings` can exclude an already-matched record from the sibling rendering.
 /// Build the `tool_use_id → tool name` index for a file's records: every `tool_use` block's
@@ -1573,25 +1524,15 @@ fn backfill_address(hits: &mut [Hit], kept: &Kept) {
 #[allow(clippy::too_many_arguments)]
 fn collect_turn_siblings(
     turn: &Turn<'_>,
-    caps: &SiblingCaps,
     hit_idxs: &[usize],
     resolve_persisted: bool,
     excerpt_max: usize,
     plan_index: &PlanIndex,
     tool_names: &HashMap<String, String>,
     env: &ClassifyEnv<'_>,
-) -> Vec<Hit> {
-    // Eligible selectors fed to the collector: when a bare-`N` is present it covers "the rest", so
-    // EVERY label is eligible (empty selectors ⇒ all); otherwise only the typed selectors are.
-    let eligible: Vec<String> = if caps.bare.is_some() {
-        Vec::new()
-    } else {
-        caps.per_sel.iter().map(|(s, _)| s.clone()).collect()
-    };
-    if eligible.is_empty() && caps.bare.is_none() {
-        return Vec::new();
-    }
+) -> (Vec<Hit>, usize) {
     let pure = Matcher::pure();
+    let all: Vec<String> = Vec::new(); // empty selectors ⇒ every label is eligible
     let mut sibs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
         if hit_idxs.contains(&i) {
@@ -1600,7 +1541,7 @@ fn collect_turn_siblings(
         let before = sibs.len();
         collect_record_hits(
             &kept.rec,
-            &eligible,
+            &all,
             &pure,
             resolve_persisted,
             excerpt_max,
@@ -1611,54 +1552,25 @@ fn collect_turn_siblings(
         );
         backfill_address(&mut sibs[before..], kept);
     }
-    // Apply the caps in document order, keeping each selector's first N (a bare-only spec is a
-    // single TOTAL cap; otherwise the bare-N caps the labels lacking a typed cap, pooled). The
-    // typed-cap counter pools by the MATCHED selector string (so `agent.tool:2` caps use+result
-    // together).
-    let bare_total = caps.bare_is_total();
-    let mut total_kept = 0usize;
-    let mut per_sel_kept: Vec<(String, usize)> = Vec::new();
-    let mut bare_pool_kept = 0usize;
-    sibs.retain(|hit| {
-        if bare_total {
-            let cap = caps.bare.unwrap_or(0);
-            if total_kept < cap {
-                total_kept += 1;
-                return true;
-            }
-            return false;
-        }
-        match caps.matched_selector(hit.class) {
-            Some((sel, cap)) => {
-                let kept = per_sel_kept
-                    .iter_mut()
-                    .find(|(s, _)| s == sel)
-                    .map(|(_, n)| n);
-                match kept {
-                    Some(n) if *n < cap => {
-                        *n += 1;
-                        true
-                    }
-                    Some(_) => false,
-                    None => {
-                        per_sel_kept.push((sel.to_string(), 1));
-                        cap >= 1
-                    }
-                }
-            }
-            None => {
-                // No typed cap → governed by the bare-N "rest" pool (if any).
-                match caps.bare {
-                    Some(cap) if bare_pool_kept < cap => {
-                        bare_pool_kept += 1;
-                        true
-                    }
-                    _ => false,
-                }
+    // FIXED policy (see [`sibling_cap`]): message classes always render; chattier
+    // machinery keeps the FIRST N per leaf. The remainder is COUNTED (never silent) —
+    // the caller renders an explicit `(+N more · csift show …)` pointer.
+    let mut kept_per_leaf: HashMap<&'static str, usize> = HashMap::new();
+    let mut hidden = 0usize;
+    sibs.retain(|hit| match sibling_cap(hit.class) {
+        None => true,
+        Some(cap) => {
+            let n = kept_per_leaf.entry(hit.class.path()).or_insert(0);
+            if *n < cap {
+                *n += 1;
+                true
+            } else {
+                hidden += 1;
+                false
             }
         }
     });
-    sibs
+    (sibs, hidden)
 }
 
 /// Emit hits for every label-eligible UNIT of `rec` that matches the regex (the P2 cutover —
@@ -2295,14 +2207,23 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         for sib in &ex.siblings {
             print_record_line('·', sib);
         }
+        // The FIXED policy's capped-away remainder — explicit, with the exact fetch
+        // command (self-healing escape hatch; `@<session_id>` round-trips for both a
+        // top-level uuid and a subagent id).
+        if ex.siblings_hidden > 0 && ex.turn_lines.0 > 0 {
+            println!(
+                "  · (+{} more · csift show @{} --line {}-{})",
+                ex.siblings_hidden, ex.session_id, ex.turn_lines.0, ex.turn_lines.1
+            );
+        }
     }
 
     // ── Compact lowercase footer: match + distinct-session totals (both always present — each is
     //    one cheap number, isolated by `-c`/`-l` only for piping), drop accounting, unresolved. ──
-    let cat = if args.categories.is_empty() {
+    let cat = if args.labels.is_empty() {
         "all".to_string()
     } else {
-        args.categories.join(",")
+        args.labels.join(",")
     };
     println!();
     let n = outcome.exchanges.len();
@@ -2313,7 +2234,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     } else {
         "sessions"
     };
-    print!("matched {n} {ex_word} · {n_sessions} {sess_word} · category={cat}");
+    print!("matched {n} {ex_word} · {n_sessions} {sess_word} · label={cat}");
     if outcome.dropped_by_cap > 0 {
         print!(" · {} dropped by --max-count", outcome.dropped_by_cap);
     }
@@ -2466,9 +2387,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         });
         // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
         // Present only when there are siblings — absent ⇒ none (keeps the common envelope lean).
-        if !ex.siblings.is_empty() {
+        if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
             let sibs: Vec<_> = ex.siblings.iter().map(hit_json).collect();
             obj["siblings"] = json!(sibs);
+            obj["siblings_hidden"] = json!(ex.siblings_hidden);
+            obj["turn_lines"] = json!([ex.turn_lines.0, ex.turn_lines.1]);
         }
         println!("{}", serde_json::to_string(&obj)?);
     }
@@ -2513,8 +2436,9 @@ mod tests {
     fn args(pattern: &str) -> SearchArgs {
         SearchArgs {
             pattern: pattern.to_string(),
+            subagents: false,
             paths: Vec::new(),
-            categories: Vec::new(),
+            labels: Vec::new(),
             ignore_case: false,
             multiline: false,
             turn_range: None,
@@ -2522,7 +2446,7 @@ mod tests {
             until: None,
             max_count: None,
             count_only: false,
-            siblings: Vec::new(),
+            siblings: false,
             no_truncate: false,
             resolve_persisted: false,
             no_subagents: false,
@@ -3016,7 +2940,6 @@ mod tests {
             .transpose()
             .unwrap();
         let tw = TimeWindow::from_args(a.since.as_deref(), a.until.as_deref()).unwrap();
-        let sibling_caps = parse_sibling_specs(&a.siblings).unwrap();
         // The fixture path is a non-existent top-level transcript, so its discovery-root resolves
         // no subagents — an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
         // former per-file `build_spawn_lookup` returned here.
@@ -3029,7 +2952,7 @@ mod tests {
             tr.as_ref(),
             &tw,
             None,
-            sibling_caps.as_ref(),
+            a.siblings,
             &spawn_map,
         )
     }
@@ -3059,7 +2982,7 @@ mod tests {
             r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply carry"}]}}"#,
         ];
         let mut a = args("carry");
-        a.categories = vec!["agent.message".to_string()];
+        a.labels = vec!["agent.message".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(ex.len(), 1);
         assert_eq!(
@@ -3098,7 +3021,7 @@ mod tests {
         // include the WHOLE turn 0 chain (user, thinking, tool_use, carrier, agent),
         // proving the complete round-trip is stitched, not just the matched record.
         let mut a = args("straddling");
-        a.categories = vec!["agent.thinking".to_string()];
+        a.labels = vec!["agent.thinking".to_string()];
         let ex = search(&fixture(), &a);
         assert_eq!(ex.len(), 1);
         assert_eq!(ex[0].turn_index, 0);
@@ -3121,7 +3044,7 @@ mod tests {
         // `-t agent` over a pattern present in both an agent text and a thinking
         // block must only surface the agent hit.
         let mut a = args("carry");
-        a.categories = vec!["agent.message".to_string()];
+        a.labels = vec!["agent.message".to_string()];
         let ex = search(&fixture(), &a);
         // "carry" appears in turn 0's thinking AND agent text; with -t agent only
         // the agent hit is emitted (one exchange, one agent hit).
@@ -3163,7 +3086,7 @@ mod tests {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"the bold option\". You can now continue."}]}}"#,
         ];
         let mut a = args("bold option");
-        a.categories = vec!["user".to_string()];
+        a.labels = vec!["user".to_string()];
         let ex = search(&lines, &a);
         // The AUQ answer is surfaced under `user` (it rides on a carrier) AND — the
         // sanctioned behavior change (§6.4) — it now OPENS a new turn (the answer is a
@@ -3188,7 +3111,7 @@ mod tests {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which?\"=\"the teal option\". You can now continue with these answers in mind."}]}}"#,
         ];
         let mut a = args("teal option");
-        a.categories = vec!["user".to_string()];
+        a.labels = vec!["user".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(
             ex.len(),
@@ -3447,73 +3370,16 @@ mod tests {
         assert_eq!(full.chars().count(), n, "full text length preserved");
     }
 
-    fn specs(toks: &[&str]) -> Vec<String> {
-        toks.iter().map(|s| (*s).to_string()).collect()
-    }
-
     #[test]
-    fn parse_sibling_specs_empty_is_off() {
-        // No `--siblings` → None (sibling rendering off).
-        assert_eq!(parse_sibling_specs(&[]).unwrap(), None);
-        // A whitespace-only token is ignored and also yields None.
-        assert_eq!(parse_sibling_specs(&specs(&["  "])).unwrap(), None);
-    }
-
-    #[test]
-    fn parse_sibling_specs_bare_n_caps_total() {
-        // A bare `N` → a single TOTAL cap across all labels, no per-selector entries.
-        let caps = parse_sibling_specs(&specs(&["3"])).unwrap().unwrap();
-        assert_eq!(caps.bare, Some(3));
-        assert!(caps.per_sel.is_empty());
-        assert!(caps.bare_is_total());
-        // Every label resolves to the bare-N cap.
-        assert_eq!(caps.cap_for(Class::AgentMessage), Some(3));
-        assert_eq!(caps.cap_for(Class::AgentToolUse), Some(3));
-    }
-
-    #[test]
-    fn parse_sibling_specs_cat_n_caps_that_category_only() {
-        // A `<selector>:N` → caps labels under THAT selector; others are not shown.
-        let caps = parse_sibling_specs(&specs(&["agent.message:1"]))
-            .unwrap()
-            .unwrap();
-        assert_eq!(caps.per_sel, vec![("agent.message".to_string(), 1)]);
-        assert_eq!(caps.bare, None);
-        assert_eq!(caps.cap_for(Class::AgentMessage), Some(1));
-        assert_eq!(caps.cap_for(Class::AgentToolUse), None); // not shown
-        assert!(!caps.bare_is_total());
-        // A ROLE/intermediate selector pools its whole subtree: `agent.tool:2` governs use+result.
-        let pooled = parse_sibling_specs(&specs(&["agent.tool:2"]))
-            .unwrap()
-            .unwrap();
-        assert_eq!(pooled.cap_for(Class::AgentToolUse), Some(2));
-        assert_eq!(pooled.cap_for(Class::AgentToolResult), Some(2));
-    }
-
-    #[test]
-    fn parse_sibling_specs_mixed_typed_and_bare() {
-        // `agent.tool.use:1`, `agent.thinking:2`, bare `3` → typed caps govern their labels; the
-        // bare caps the rest (the labels with no typed cap).
-        let caps = parse_sibling_specs(&specs(&["agent.tool.use:1", "agent.thinking:2", "3"]))
-            .unwrap()
-            .unwrap();
-        assert_eq!(caps.cap_for(Class::AgentToolUse), Some(1));
-        assert_eq!(caps.cap_for(Class::AgentThinking), Some(2));
-        assert_eq!(caps.cap_for(Class::AgentMessage), Some(3)); // "the rest" via bare-N
-        assert_eq!(caps.cap_for(Class::UserMessage), Some(3));
-        assert!(!caps.bare_is_total());
-    }
-
-    #[test]
-    fn parse_sibling_specs_invalid_tokens_error() {
-        // Unknown selector, non-numeric bare, bad typed cap, a zero cap, AND the old flat values
-        // (`tool`, `thinking`) all error (0 back-compat).
-        assert!(parse_sibling_specs(&specs(&["foo"])).is_err());
-        assert!(parse_sibling_specs(&specs(&["bad:2"])).is_err());
-        assert!(parse_sibling_specs(&specs(&["tool:x"])).is_err()); // old flat selector
-        assert!(parse_sibling_specs(&specs(&["agent.tool.use:x"])).is_err());
-        assert!(parse_sibling_specs(&specs(&["agent.tool.use:0"])).is_err());
-        assert!(parse_sibling_specs(&specs(&["0"])).is_err());
+    fn sibling_cap_policy_is_fixed_and_message_classes_uncapped() {
+        // Message classes always render (None = uncapped); chattier machinery is capped.
+        assert_eq!(sibling_cap(Class::UserMessage), None);
+        assert_eq!(sibling_cap(Class::AgentMessage), None);
+        assert_eq!(sibling_cap(Class::CommInbox), None);
+        assert_eq!(sibling_cap(Class::AgentThinking), Some(2));
+        assert_eq!(sibling_cap(Class::AgentToolUse), Some(3));
+        assert_eq!(sibling_cap(Class::AgentToolResult), Some(3));
+        assert_eq!(sibling_cap(Class::CommandStdout), Some(2));
     }
 
     #[test]
@@ -3633,7 +3499,7 @@ mod tests {
         ];
         // Search tool-response category so the orphan carriers can produce a hit.
         let mut a = args("carry");
-        a.categories = vec!["agent.tool.result".to_string()];
+        a.labels = vec!["agent.tool.result".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(ex.len(), 1);
         assert_eq!(ex[0].turn_index, 0);
@@ -3721,7 +3587,7 @@ mod tests {
             r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"zzqq choice\". You can now continue."}]}}"#,
         ];
         let mut a = args("zzqq");
-        a.categories = vec!["agent.tool.result".to_string()];
+        a.labels = vec!["agent.tool.result".to_string()];
         let ex = search(&lines, &a);
         assert_eq!(ex.len(), 1);
         assert!(ex[0].hits.iter().all(|h| h.class == Class::AgentToolResult));

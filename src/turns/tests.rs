@@ -1345,12 +1345,6 @@ fn build_summary_with_block_body_is_not_captured() {
 }
 
 #[test]
-fn budget_unit_token_conversion_via_run_is_four_x() {
-    // The TOKEN_CHARS constant is 4.0 — the documented heuristic.
-    assert_eq!(TOKEN_CHARS, 4.0);
-}
-
-#[test]
 fn dedup_demoted_turn_sorts_after_non_dup_in_phase1() {
     // Two complete live turns, one dedup-flagged: at a budget that fits only ONE, the
     // NON-dup turn must win Phase 1 (dedup_pass false before true).

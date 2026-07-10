@@ -168,9 +168,6 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
         return run_recover_batch(args);
     }
     // ── Validate window mutual-exclusion (same rule + wording as `files`/`search`) ──
-    if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
-        bail!("--turn-range is mutually exclusive with --since/--until");
-    }
     let mode = args.mode();
 
     // ── `--out` is a no-op in `--coverage` mode (coverage is a scoping summary, not an
@@ -330,9 +327,6 @@ fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
     };
     if args.file.is_some() {
         bail!("--files-from (batch) is mutually exclusive with --file (single-file mode)");
-    }
-    if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
-        bail!("--turn-range is mutually exclusive with --since/--until");
     }
 
     // ── Manifest: one absolute path per line; blank lines and `#` comments ignored; deduped. ──
@@ -2213,10 +2207,10 @@ fn parse_turn_range(s: &str) -> Result<(usize, usize)> {
     crate::text::parse_range(s, "--turn-range", false)
 }
 
-/// Parse a `--line-range START..END` into an inclusive 1-based `(lo, hi)` (shared parser;
+/// Parse a `--file-lines START..END` into an inclusive 1-based `(lo, hi)` (shared parser;
 /// the 1-based variant rejects a 0 start — file lines are 1-based).
 fn parse_line_range(s: &str) -> Result<(usize, usize)> {
-    crate::text::parse_range(s, "--line-range", true)
+    crate::text::parse_range(s, "--file-lines", true)
 }
 
 /// Truncate to [`EXCERPT_MAX`] chars with the shared explicit `… (+N chars)` marker.

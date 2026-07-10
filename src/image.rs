@@ -365,10 +365,13 @@ fn parse_id_selection(ids: &[String]) -> Result<Vec<Sel>> {
                 continue;
             }
             if let Some(n) = tok.strip_prefix('#') {
-                let n = n
-                    .parse()
-                    .with_context(|| format!("--id `{tok}`: bad image number `{n}`"))?;
-                out.push(Sel::Seq(n));
+                // A '#'-form would need shell quoting (`--id #32` unquoted becomes a shell
+                // comment and silently drops the argument) — bare digits are the ONE input
+                // form; the DISPLAY stays `#N` (what the model sees in `[Image #N]`).
+                bail!(
+                    "--id: drop the '#' — pass the bare number (`--id {n}`); the listing \
+                     displays `#{n}` but input takes digits (or the `L<line>i<n>` locator)"
+                );
             } else if let Some((line, idx)) = tok
                 .strip_prefix(['L', 'l'])
                 .unwrap_or(tok)
@@ -1118,8 +1121,12 @@ mod tests {
             parse_id_selection(&["L6812i2,L99i1".into(), "L1i1".into()]).unwrap(),
             vec![Sel::Loc(6812, 2), Sel::Loc(99, 1), Sel::Loc(1, 1)]
         );
+        // The '#'-form is REJECTED with a pointed fix (unquoted `--id #32` becomes a
+        // shell comment — bare digits are the one input form; display stays `#N`).
+        let err = parse_id_selection(&["#32".into()]).unwrap_err();
+        assert!(err.to_string().contains("drop the '#'"), "{err}");
         assert_eq!(
-            parse_id_selection(&["#32,#33".into(), "34".into()]).unwrap(),
+            parse_id_selection(&["32,33".into(), "34".into()]).unwrap(),
             vec![Sel::Seq(32), Sel::Seq(33), Sel::Seq(34)]
         );
         // A bare number is a `#N` handle, not a locator (no `i`).
