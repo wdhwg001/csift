@@ -718,7 +718,19 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         let total = outcome.exchanges.len() + outcome.dropped_by_cap;
         match args.format {
             OutputFormat::Text => println!("{total}"),
-            OutputFormat::Json => println!("{{\"matched\":{total}}}"),
+            OutputFormat::Json => {
+                // envelope v2 even here: header + summary (no rows) — one reading idiom.
+                let header = crate::text::envelope_scope_header(
+                    "search",
+                    outcome.scope_top,
+                    outcome.scope_sub,
+                    serde_json::json!({}),
+                );
+                println!("{}", serde_json::to_string(&header)?);
+                let summary =
+                    crate::text::envelope_summary(serde_json::json!({ "matched": total }));
+                println!("{}", serde_json::to_string(&summary)?);
+            }
         }
         return Ok(());
     }
@@ -2423,20 +2435,20 @@ fn hit_json(h: &Hit) -> serde_json::Value {
 
 fn render_json(outcome: &SearchOutcome) -> Result<()> {
     use serde_json::json;
-    // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
-    // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
-    if outcome.scope_sub > 0 {
-        println!(
-            "{}",
-            serde_json::to_string(&crate::text::scope_header_json(
-                outcome.scope_top,
-                outcome.scope_sub
-            ))?
-        );
-    }
+    // envelope v2: header (always) → kind-tagged exchange rows → summary (always).
+    println!(
+        "{}",
+        serde_json::to_string(&crate::text::envelope_scope_header(
+            "search",
+            outcome.scope_top,
+            outcome.scope_sub,
+            json!({})
+        ))?
+    );
     for ex in &outcome.exchanges {
         let hits: Vec<_> = ex.hits.iter().map(hit_json).collect();
         let mut obj = json!({
+            "kind": "exchange",
             "session_id": ex.session_id,
             // Discriminate the id-domain so a consumer can tell a re-feedable parent UUID
             // from a non-re-feedable subagent transcript hex: `is_subagent` + the always-
@@ -2460,11 +2472,24 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         }
         println!("{}", serde_json::to_string(&obj)?);
     }
-    // Trailing summary object (SPEC §8.2). `sessions` (distinct matching sessions) rides
-    // alongside `matched` — the same cheap always-on total the text footer carries.
-    let summary = json!({
+    // envelope v2 summary. `session_ids` = the distinct matching transcript ids (sorted,
+    // first-100 capped with an EXPLICIT truncation flag — never silent) so "WHICH sessions
+    // matched" is one `tail -1 | jq .session_ids` away, no per-row jq pipeline.
+    let mut session_ids: Vec<&str> = outcome
+        .exchanges
+        .iter()
+        .map(|ex| ex.session_id.as_str())
+        .collect();
+    session_ids.sort_unstable();
+    session_ids.dedup();
+    let ids_total = session_ids.len();
+    let ids_truncated = ids_total > 100;
+    session_ids.truncate(100);
+    let summary = crate::text::envelope_summary(json!({
         "matched": outcome.exchanges.len(),
         "sessions": distinct_session_count(&outcome.exchanges),
+        "session_ids": session_ids,
+        "session_ids_truncated": ids_truncated,
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
         // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) — the
@@ -2472,10 +2497,10 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
         // True when ≥1 emitted excerpt was CLIPPED to the default cap — the machine echo of the
         // trailing reader-caution. A consumer seeing this should re-fetch the record in full
-        // (per-hit `excerpt` is a match-centered fragment, not the whole text) via `--no-truncate`, or a
-        // single record via `--line`/`--uuid`. Always false under those (the cap is lifted).
+        // (per-hit `excerpt` is a match-centered fragment, not the whole text) via
+        // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
-    });
+    }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }

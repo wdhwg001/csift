@@ -2439,6 +2439,19 @@ fn render_restore(
         boundaries: Vec<Boundary>,
     }
     let file = ctx.file.as_deref().unwrap_or("(none)");
+    if json {
+        // envelope v2: restore too opens with the header (then one kind:"restore" row
+        // + the summary — the single stream shape every command shares).
+        println!(
+            "{}",
+            crate::text::envelope_scope_header(
+                "recover",
+                ctx.scope_top,
+                ctx.scope_sub,
+                serde_json::json!({})
+            )
+        );
+    }
     let mut best: Option<RestoreCandidate> = None;
     for s in sessions {
         if s.events.is_empty() {
@@ -2506,7 +2519,13 @@ fn render_restore(
         if json {
             println!(
                 "{}",
-                serde_json::json!({"file": file, "complete": true, "lines": known.len(), "path": p.to_string_lossy(), "wrote": wrote})
+                serde_json::json!({"kind": "restore", "file": file, "complete": true, "lines": known.len(), "path": p.to_string_lossy(), "wrote": wrote})
+            );
+            println!(
+                "{}",
+                crate::text::envelope_summary(
+                    serde_json::json!({"sessions": 1, "file": file, "mode": "restore"})
+                )
             );
         } else if wrote {
             eprintln!(
@@ -2518,7 +2537,13 @@ fn render_restore(
     } else if json {
         println!(
             "{}",
-            serde_json::json!({"file": file, "complete": true, "lines": known.len(), "content": content})
+            serde_json::json!({"kind": "restore", "file": file, "complete": true, "lines": known.len(), "content": content})
+        );
+        println!(
+            "{}",
+            crate::text::envelope_summary(
+                serde_json::json!({"sessions": 1, "file": file, "mode": "restore"})
+            )
         );
     } else {
         print!("{content}");
@@ -3055,15 +3080,16 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
     }
     let mut session_count = 0usize;
 
-    // Leading `{kind:"session_header", …}` scope record (same three span fields as turns),
-    // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
-    let (scope_top, scope_sub) = (ctx.scope_top, ctx.scope_sub);
-    if scope_sub > 0 {
-        println!(
-            "{}",
-            serde_json::to_string(&crate::text::scope_header_json(scope_top, scope_sub))?
-        );
-    }
+    // envelope v2: header (always) → kind-tagged rows → summary (always).
+    println!(
+        "{}",
+        serde_json::to_string(&crate::text::envelope_scope_header(
+            "recover",
+            ctx.scope_top,
+            ctx.scope_sub,
+            json!({})
+        ))?
+    );
 
     match ctx.mode {
         RecoverMode::Restore => unreachable!("Restore handled above in render_json"),
@@ -3077,6 +3103,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                 let known = apply_line_range(rep.final_buffer.known_lines(), ctx.line_range);
                 let spans = covered_spans(&known);
                 let obj = json!({
+                    "kind": "coverage",
                     "session_id": s.session_id,
                     "is_subagent": s.is_subagent,
                     "parent_session_id": s.parent_session_id,
@@ -3118,14 +3145,14 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                             let diff = unified_diff(&old, &new, usize::MAX);
                             out_blob.push_str(&diff);
                             let obj = json!({
+                                "kind": "segment",
                                 "session_id": s.session_id,
                                 "is_subagent": s.is_subagent,
                                 "parent_session_id": s.parent_session_id,
-                                "type": "segment",
                                 "segment_index": seg.index,
-                                "line_no": seg.line_no_start,
-                                "line_no_start": seg.line_no_start,
-                                "line_no_end": seg.line_no_end,
+                                "line": seg.line_no_start,
+                                "line_start": seg.line_no_start,
+                                "line_end": seg.line_no_end,
                                 "turn_start": seg.turn_start,
                                 "turn_end": seg.turn_end,
                                 "ts_utc": seg.ts_start,
@@ -3138,7 +3165,7 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                         }
                         TimelineItem::Bound(b) => {
                             let mut obj = boundary_json(b);
-                            obj["type"] = json!("boundary");
+                            obj["kind"] = json!("boundary");
                             obj["session_id"] = json!(s.session_id);
                             obj["is_subagent"] = json!(s.is_subagent);
                             obj["parent_session_id"] = json!(s.parent_session_id);
@@ -3176,13 +3203,13 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
                     .map(|(n, _, set_at)| (n, set_at))
                     .collect();
                 let obj = json!({
+                    "kind": "snapshot",
                     "session_id": s.session_id,
                     "is_subagent": s.is_subagent,
                     "parent_session_id": s.parent_session_id,
-                    "type": "snapshot",
                     "file": ctx.file,
-                    "line_no": cutoff,
-                    "line_no_cutoff": cutoff,
+                    // The jsonl-line CUTOFF this snapshot reflects (`--at` resolved).
+                    "line": cutoff,
                     "lines": known.iter().map(|(n,t)| json!({
                         "n": n,
                         "text": t,
@@ -3201,21 +3228,19 @@ fn render_json(ctx: &RenderCtx, sessions: &[ScanResult], out_path: Option<&Path>
         }
     }
 
-    // Trailing summary line.
-    let summary = json!({
-        "summary": {
-            "sessions": session_count,
-            "file": ctx.file,
-            "mode": match ctx.mode {
-                RecoverMode::Patches => "patches",
-                RecoverMode::At => "at",
-                RecoverMode::Salvage => "salvage",
-                RecoverMode::Coverage => "coverage",
-                RecoverMode::Restore => "restore",
-            },
-            "skipped_lines": ctx.skipped_lines,
-        }
-    });
+    // envelope v2 summary (flat — the old nested {"summary":{…}} wrapper is gone).
+    let summary = crate::text::envelope_summary(json!({
+        "sessions": session_count,
+        "file": ctx.file,
+        "mode": match ctx.mode {
+            RecoverMode::Patches => "patches",
+            RecoverMode::At => "at",
+            RecoverMode::Salvage => "salvage",
+            RecoverMode::Coverage => "coverage",
+            RecoverMode::Restore => "restore",
+        },
+        "skipped_lines": ctx.skipped_lines,
+    }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
@@ -3236,11 +3261,13 @@ fn counts_json(c: &EventCounts) -> serde_json::Value {
 
 fn boundary_json(b: &Boundary) -> serde_json::Value {
     serde_json::json!({
-        "line_no": b.line_no,
+        "line": b.line_no,
         "turn_index": b.turn_index,
         "ts_utc": b.timestamp_utc,
         "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
-        "kind": b.kind,
+        // WHAT invalidated the buffer (modified-since-read / external edit / bash / …) —
+        // named `cause` so `kind` stays the envelope discriminator exclusively.
+        "cause": b.kind,
         "confidence": b.confidence.json(),
         "detail": b.detail,
     })

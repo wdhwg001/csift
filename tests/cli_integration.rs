@@ -97,6 +97,30 @@ struct Output {
 const ENC: &str = "-Users-testuser-Projects-foo";
 const SESS: &str = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
+/// envelope v2: parse a JSON stream and keep the rows of one `kind`.
+fn json_rows(stdout: &str, kind: &str) -> Vec<serde_json::Value> {
+    stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).expect("valid json line"))
+        .filter(|v| v["kind"] == kind)
+        .collect()
+}
+
+/// envelope v2: the closing `{"kind":"summary",…}` line (always the last line).
+fn json_summary(stdout: &str) -> serde_json::Value {
+    let v: serde_json::Value = serde_json::from_str(
+        stdout
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .next_back()
+            .expect("a summary line"),
+    )
+    .expect("valid json line");
+    assert_eq!(v["kind"], "summary", "last line must be the summary: {v}");
+    v
+}
+
 /// A full session jsonl with identity fields, a genuine-user turn, an assistant
 /// reply, a tool round-trip, an isMeta pseudo-turn, and a malformed line (to drive
 /// the skipped-line accounting). Returns the home with the tree populated.
@@ -185,20 +209,24 @@ fn list_json_is_one_object_per_session() {
     let h = populated_home();
     let out = h.run(&["list", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // A leading {kind:"session_header", …} scope record precedes the per-session objects
+    // A leading {kind:"header", …} scope record precedes the per-session objects
     // whenever the set spans ≥1 subagent (uniform JSON scope disclosure, same as turns).
     // Every OTHER non-empty line must be a JSON object with a session_id.
     let mut count = 0;
     let mut saw_header = false;
     for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
         let v: serde_json::Value = serde_json::from_str(line).expect("valid json line");
-        if v.get("kind").and_then(|k| k.as_str()) == Some("session_header") {
-            saw_header = true;
-            // The header discloses the span with turns' field names.
-            assert!(v.get("sessions_in_scope").is_some(), "header span: {line}");
-            assert!(v.get("top_level_sessions").is_some(), "header span: {line}");
-            assert!(v.get("subagent_sessions").is_some(), "header span: {line}");
-            continue;
+        match v.get("kind").and_then(|k| k.as_str()) {
+            Some("header") => {
+                saw_header = true;
+                // The header discloses the span with the shared scope field names.
+                assert!(v.get("sessions_in_scope").is_some(), "header span: {line}");
+                assert!(v.get("top_level_sessions").is_some(), "header span: {line}");
+                assert!(v.get("subagent_sessions").is_some(), "header span: {line}");
+                continue;
+            }
+            Some("summary") => continue,
+            _ => {}
         }
         assert!(v.get("session_id").is_some(), "missing session_id: {line}");
         count += 1;
@@ -856,7 +884,7 @@ fn search_count_prints_only_the_match_total() {
         "--format",
         "json",
     ]);
-    let v: serde_json::Value = serde_json::from_str(j.stdout.trim()).unwrap();
+    let v = json_summary(&j.stdout);
     assert_eq!(v["matched"].as_u64().unwrap(), expected);
 }
 
@@ -960,7 +988,7 @@ fn search_sibling_category_narrows_and_implies_siblings() {
         "--format",
         "json",
     ]);
-    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "exchange").remove(0);
     let sibs = env["siblings"].as_array().expect("siblings array present");
     assert_eq!(sibs.len(), 1);
     assert_eq!(sibs[0]["label"], "agent.message");
@@ -1054,7 +1082,7 @@ fn search_hit_carries_line_and_uuid_address() {
         "--format",
         "json",
     ]);
-    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "exchange").remove(0);
     assert_eq!(env["hits"][0]["line"], 1);
     assert_eq!(env["hits"][0]["uuid"], "u0");
 }
@@ -1972,7 +2000,7 @@ fn turns_single_automation_trigger_uses_singular_header() {
 
 #[test]
 fn turns_json_emits_session_header_and_structured_automation() {
-    // JSON consumers get (a) a leading {kind:"session_header",…} object carrying the
+    // JSON consumers get (a) a leading {kind:"header",…} object carrying the
     // human/automation split + budget fan-out, and (b) STRUCTURED automation attribution on
     // the user-segment object (is_automation + trigger_kind + task_id + status) — not just a
     // text prefix to regex. A monitor-tick pulse renders trigger_kind "monitor".
@@ -2000,7 +2028,7 @@ fn turns_json_emits_session_header_and_structured_automation() {
     assert!(t.success, "stderr: {}", t.stderr);
     let first = t.stdout.lines().next().unwrap_or("");
     assert!(
-        first.contains("\"kind\":\"session_header\"")
+        first.contains("\"kind\":\"header\"")
             && first.contains("\"budget_is_per_session\":true")
             && first.contains("\"automation_triggers\":1"),
         "first JSON line must be the session_header with the automation split; got: {first}"
@@ -2300,7 +2328,7 @@ fn search_sendmessage_dedups_to_comm_sent_with_direction() {
         "json",
     ]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "exchange").remove(0);
     let hits = env["hits"].as_array().expect("hits");
     assert_eq!(
         hits.len(),
@@ -2344,7 +2372,7 @@ fn search_auq_answer_dedups_to_user_answer() {
         "json",
     ]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "exchange").remove(0);
     let hits = env["hits"].as_array().expect("hits");
     assert_eq!(hits.len(), 1, "the AUQ answer emits ONCE: {}", j.stdout);
     assert_eq!(hits[0]["label"], "user.answer");
@@ -2391,7 +2419,7 @@ fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
         "json",
     ]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "exchange").remove(0);
     let hits = env["hits"].as_array().expect("hits");
     assert_eq!(
         hits.len(),
@@ -2461,7 +2489,7 @@ fn search_batched_cross_family_sections_render_per_section() {
         "json",
     ]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let env: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "exchange").remove(0);
     let hits = env["hits"].as_array().expect("hits");
     assert_eq!(
         hits.len(),
@@ -2829,9 +2857,10 @@ fn whoami_json_format() {
         &[("CLAUDE_CODE_SESSION_ID", SESS)],
     );
     assert!(out.success, "stderr: {}", out.stderr);
-    let v: serde_json::Value = serde_json::from_str(out.stdout.trim()).expect("valid json");
+    let v = json_rows(&out.stdout, "identity").remove(0);
     assert_eq!(v.get("session_id").and_then(|s| s.as_str()), Some(SESS));
     assert!(v.get("path").and_then(|p| p.as_str()).is_some());
+    json_summary(&out.stdout);
 }
 
 #[test]
@@ -3251,8 +3280,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     // trigger/description from the PARENT transcript's spawn (not main).
     let j = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let env: serde_json::Value =
-        serde_json::from_str(j.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let env = json_rows(&j.stdout, "session").remove(0);
     let top_agents = env["agents"].as_array().expect("agents array");
     let parent = top_agents
         .iter()
@@ -3287,7 +3315,7 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
     // Tree JSON (always on): child nests UNDER parent in the agents[].children array.
     let tj = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
     assert!(tj.success, "stderr: {}", tj.stderr);
-    let tree: serde_json::Value = serde_json::from_str(tj.stdout.lines().next().unwrap()).unwrap();
+    let tree = json_rows(&tj.stdout, "session").remove(0);
     let agents = tree["agents"].as_array().expect("agents array");
     let proot = agents
         .iter()
@@ -4113,8 +4141,7 @@ fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // The per-session tree envelope: the built-in topo11 is a top-level `agents[]` node.
-    let env: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let env = json_rows(&out.stdout, "session").remove(0);
     let builtin = env["agents"]
         .as_array()
         .expect("agents array")
@@ -4187,8 +4214,7 @@ fn agents_returned_message_three_way_resolution() {
     assert!(out.success, "stderr: {}", out.stderr);
     // The per-session tree envelope: the built-in topo11 is a top-level `agents[]` node; the
     // workflow topo22 nests under its run's `children[]`.
-    let env: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let env = json_rows(&out.stdout, "session").remove(0);
     let builtin = env["agents"]
         .as_array()
         .expect("agents array")
@@ -4220,8 +4246,7 @@ fn agents_returned_message_omitted_by_default() {
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let env: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let env = json_rows(&out.stdout, "session").remove(0);
     let node = env["agents"]
         .as_array()
         .expect("agents array")
@@ -4252,8 +4277,13 @@ fn agents_single_agent_grab_includes_returned_and_files() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .collect();
-    assert_eq!(lines.len(), 1, "exactly the one selected node: {:?}", lines);
-    let v: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    // envelope v2: header + ONE session row (its agents[] holds the one node) + summary —
+    // the bare-node special case is gone (one consumer code path).
+    assert_eq!(lines.len(), 3, "header + session + summary: {:?}", lines);
+    let sess_row = json_rows(&out.stdout, "session").remove(0);
+    let agents = sess_row["agents"].as_array().expect("agents array");
+    assert_eq!(agents.len(), 1, "exactly the one selected node");
+    let v = &agents[0];
     assert_eq!(v["agent_id"], "topo11");
     assert_eq!(
         v["returned_message"],
@@ -4271,8 +4301,7 @@ fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     // One object per session: workflow_runs[] (each with children[]) + agents[].
-    let v: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let v = json_rows(&out.stdout, "session").remove(0);
     let runs = v["workflow_runs"].as_array().expect("workflow_runs");
     assert_eq!(runs.len(), 1, "one workflow run");
     let run = &runs[0];
@@ -4340,8 +4369,7 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     // run-level fields are null (no manifest) but whose children carry the agent.
     let tree = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(tree.success, "stderr: {}", tree.stderr);
-    let v: serde_json::Value =
-        serde_json::from_str(tree.stdout.lines().find(|l| !l.trim().is_empty()).unwrap()).unwrap();
+    let v = json_rows(&tree.stdout, "session").remove(0);
     let runs = v["workflow_runs"].as_array().expect("workflow_runs");
     let orphan_run = runs
         .iter()
@@ -4509,14 +4537,17 @@ fn files_by_file_distinct_counts_via_json() {
     );
     assert_eq!(
         summary.get("detail_level").and_then(|v| v.as_str()),
-        Some("by-file")
+        Some("file")
     );
     // Count distinct gap docs (acid test #1): rows whose `file` ends in `/gaps/*.md`.
     let mut gap_docs = 0;
     let mut tmp_creates = 0;
     for l in &lines {
         let v: serde_json::Value = serde_json::from_str(l).unwrap();
-        if let Some(f) = v.get("file").and_then(|f| f.as_str()) {
+        if v["kind"] != "file" {
+            continue;
+        }
+        if let Some(f) = v.get("path").and_then(|f| f.as_str()) {
             if f.starts_with("/p/spec/gaps/") {
                 gap_docs += 1;
             }
@@ -4569,7 +4600,7 @@ fn files_by_dir_groups_and_counts() {
     let mut saw_gaps_dir = false;
     for l in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
         let v: serde_json::Value = serde_json::from_str(l).unwrap();
-        if v.get("dir").and_then(|d| d.as_str()) == Some("/p/spec/gaps") {
+        if v["kind"] == "dir" && v.get("path").and_then(|d| d.as_str()) == Some("/p/spec/gaps") {
             // Three edits, three distinct files in that dir.
             assert_eq!(v.get("edit").and_then(|e| e.as_u64()), Some(3));
             assert_eq!(v.get("distinct_files").and_then(|d| d.as_u64()), Some(3));
@@ -4711,12 +4742,12 @@ fn files_detects_edit_before_read_boundaries() {
         .collect();
     let b = objs
         .iter()
-        .find(|o| o.get("type").and_then(|t| t.as_str()) == Some("edit_before_read_boundary"))
+        .find(|o| o.get("kind").and_then(|t| t.as_str()) == Some("boundary"))
         .expect("a boundary object");
     assert_eq!(b["path"], "/p/app.rs");
-    assert_eq!(b["kind"], "modified_since_read");
+    assert_eq!(b["cause"], "modified_since_read");
     assert!(
-        b["line_no"].as_u64().unwrap_or(0) >= 1,
+        b["line"].as_u64().unwrap_or(0) >= 1,
         "boundary carries its jsonl line: {b}"
     );
     let summary = objs
@@ -5013,14 +5044,14 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
     let objs = json_lines(&j.stdout);
     let sub = objs
         .iter()
-        .find(|o| o["file"] == "/sub/s.md")
+        .find(|o| o["kind"] == "file" && o["path"] == "/sub/s.md")
         .expect("subagent grouped row present");
     assert_eq!(sub["is_subagent"], serde_json::json!(true));
     assert_eq!(sub["session_id"], serde_json::json!("sub111"));
     assert_eq!(sub["parent_session_id"], serde_json::json!(SESS));
     let parent = objs
         .iter()
-        .find(|o| o["file"] == "/parent/p.md")
+        .find(|o| o["kind"] == "file" && o["path"] == "/parent/p.md")
         .expect("parent grouped row present");
     assert_eq!(parent["is_subagent"], serde_json::json!(false));
     assert_eq!(parent["parent_session_id"], serde_json::json!(SESS));
@@ -5724,7 +5755,7 @@ fn recover_json_every_object_has_line_no_and_local_ts() {
         .collect();
     // First object is the coverage object; it carries covered_ranges + boundaries (each
     // boundary has line_no + ts_utc + ts_local).
-    let cov: serde_json::Value = serde_json::from_str(lines[0]).expect("ndjson parses");
+    let cov: serde_json::Value = serde_json::from_str(lines[1]).expect("ndjson parses");
     assert!(cov.get("covered_ranges").is_some(), "{cov}");
     let bounds = cov
         .get("boundaries")
@@ -5733,23 +5764,20 @@ fn recover_json_every_object_has_line_no_and_local_ts() {
     assert!(!bounds.is_empty(), "≥1 boundary");
     let b0 = &bounds[0];
     assert!(
-        b0.get("line_no").and_then(|v| v.as_u64()).is_some(),
-        "boundary line_no: {b0}"
+        b0.get("line").and_then(|v| v.as_u64()).is_some(),
+        "boundary line: {b0}"
     );
     assert!(
         b0.get("ts_utc").is_some() && b0.get("ts_local").is_some(),
         "boundary ts: {b0}"
     );
     assert_eq!(
-        b0.get("kind").and_then(|v| v.as_str()),
+        b0.get("cause").and_then(|v| v.as_str()),
         Some("modified_since_read")
     );
     // Trailing summary line.
     let summary: serde_json::Value = serde_json::from_str(lines.last().unwrap()).unwrap();
-    assert!(
-        summary.get("summary").is_some(),
-        "trailing summary: {summary}"
-    );
+    assert_eq!(summary["kind"], "summary", "trailing summary: {summary}");
 }
 
 #[test]
@@ -5766,9 +5794,7 @@ fn recover_at_json_lines_carry_provenance_and_gaps() {
         "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let first = out.stdout.lines().find(|l| !l.trim().is_empty()).unwrap();
-    let snap: serde_json::Value = serde_json::from_str(first).unwrap();
-    assert_eq!(snap.get("type").and_then(|v| v.as_str()), Some("snapshot"));
+    let snap = json_rows(&out.stdout, "snapshot").remove(0);
     let lines = snap
         .get("lines")
         .and_then(|v| v.as_array())
@@ -6042,13 +6068,9 @@ fn recover_restore_json_emits_single_complete_object_no_trailer() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .collect();
-    assert_eq!(
-        lines.len(),
-        1,
-        "restore emits exactly one object: {}",
-        out.stdout
-    );
-    let v: serde_json::Value = serde_json::from_str(lines[0]).expect("one json object");
+    // envelope v2: header + the single kind:"restore" row + summary.
+    assert_eq!(lines.len(), 3, "header + restore + summary: {}", out.stdout);
+    let v = json_rows(&out.stdout, "restore").remove(0);
     assert_eq!(v["file"], RFILE);
     assert_eq!(v["complete"], serde_json::Value::Bool(true));
     assert_eq!(v["lines"], serde_json::json!(6));
@@ -6060,11 +6082,7 @@ fn recover_restore_json_emits_single_complete_object_no_trailer() {
         "content carries the edited line: {}",
         out.stdout
     );
-    assert!(
-        !out.stdout.contains("summary"),
-        "no trailer: {}",
-        out.stdout
-    );
+    json_summary(&out.stdout);
 }
 
 #[test]
@@ -6244,36 +6262,33 @@ fn recover_patches_json_segments_and_boundary_objects() {
     // anchor_source) and one boundary object (carrying line_no + kind + confidence).
     let seg = objs
         .iter()
-        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("segment"))
+        .find(|o| o.get("kind").and_then(|v| v.as_str()) == Some("segment"))
         .expect("a segment object");
     assert!(
         seg.get("unified_diff").and_then(|v| v.as_str()).is_some(),
         "{seg}"
     );
     assert!(
-        seg.get("line_no").and_then(|v| v.as_u64()).is_some(),
-        "segment line_no: {seg}"
+        seg.get("line").and_then(|v| v.as_u64()).is_some(),
+        "segment line: {seg}"
     );
     assert!(seg.get("pre_state_known").is_some(), "{seg}");
     assert!(seg.get("anchor_source").is_some(), "{seg}");
     let bnd = objs
         .iter()
-        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("boundary"))
+        .find(|o| o.get("kind").and_then(|v| v.as_str()) == Some("boundary"))
         .expect("a boundary object");
     assert_eq!(
-        bnd.get("kind").and_then(|v| v.as_str()),
+        bnd.get("cause").and_then(|v| v.as_str()),
         Some("modified_since_read")
     );
     assert_eq!(
         bnd.get("confidence").and_then(|v| v.as_str()),
         Some("authoritative")
     );
-    assert!(
-        bnd.get("line_no").and_then(|v| v.as_u64()).is_some(),
-        "{bnd}"
-    );
+    assert!(bnd.get("line").and_then(|v| v.as_u64()).is_some(), "{bnd}");
     // Trailing summary.
-    assert!(objs.last().unwrap().get("summary").is_some());
+    assert_eq!(objs.last().unwrap()["kind"], "summary");
 }
 
 #[test]
@@ -6530,7 +6545,7 @@ fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
         "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // A leading {kind:"session_header"} scope record may precede the snapshot when the scope
+    // A leading {kind:"header"} scope record may precede the snapshot when the scope
     // spans subagents — find the first snapshot object (the one carrying `lines`), not just
     // the first non-empty line.
     let snap: serde_json::Value = out
@@ -6715,9 +6730,9 @@ fn recover_history_snapshot_only_session_emits_no_segment_or_boundary() {
         "no segment/boundary objects, only the summary: {}",
         js.stdout
     );
-    assert!(objs.last().unwrap().get("summary").is_some());
+    assert_eq!(objs.last().unwrap()["kind"], "summary");
     assert_eq!(
-        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        objs.last().unwrap()["sessions"].as_u64(),
         Some(0),
         "the snapshot-only session contributed no patch output"
     );
@@ -6831,7 +6846,7 @@ fn recover_at_merges_interleaved_cross_session_edits() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
-        .filter(|v| v.get("type").and_then(|t| t.as_str()) == Some("snapshot"))
+        .filter(|v| v.get("kind").and_then(|t| t.as_str()) == Some("snapshot"))
         .collect();
     assert_eq!(
         snaps.len(),
@@ -6915,7 +6930,7 @@ fn recover_at_datetime_time_travels_across_edits() {
             .lines()
             .filter(|l| !l.trim().is_empty())
             .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
-            .find(|v| v.get("type").and_then(|t| t.as_str()) == Some("snapshot"))
+            .find(|v| v.get("kind").and_then(|t| t.as_str()) == Some("snapshot"))
             .unwrap_or_else(|| panic!("--at {when:?} produced no snapshot: {}", out.stdout));
         let mut recon: std::collections::BTreeMap<usize, String> =
             std::collections::BTreeMap::new();
@@ -7105,14 +7120,11 @@ fn recover_at_json_skips_session_with_events_but_no_known_content() {
         .collect();
     assert!(
         objs.iter()
-            .all(|o| o.get("type").and_then(|v| v.as_str()) != Some("snapshot")),
+            .all(|o| o.get("kind").and_then(|v| v.as_str()) != Some("snapshot")),
         "no snapshot emitted for an empty reconstruction: {}",
         out.stdout
     );
-    assert_eq!(
-        objs.last().unwrap()["summary"]["sessions"].as_u64(),
-        Some(0)
-    );
+    assert_eq!(objs.last().unwrap()["sessions"].as_u64(), Some(0));
 }
 
 #[test]
@@ -7219,7 +7231,7 @@ fn recover_json_coverage_skips_empty_event_session() {
         "only the touching session yields a coverage object"
     );
     assert_eq!(
-        objs.last().unwrap()["summary"]["sessions"].as_u64(),
+        objs.last().unwrap()["sessions"].as_u64(),
         Some(1),
         "the non-touching session was skipped, not emitted"
     );
@@ -7251,10 +7263,7 @@ fn recover_json_patches_skips_empty_event_session() {
         "no segment/boundary objects for a no-event target: {}",
         out.stdout
     );
-    assert_eq!(
-        objs.last().unwrap()["summary"]["sessions"].as_u64(),
-        Some(0)
-    );
+    assert_eq!(objs.last().unwrap()["sessions"].as_u64(), Some(0));
 }
 
 #[test]
@@ -7297,16 +7306,13 @@ fn recover_json_at_skips_session_with_no_seen_total() {
         .collect();
     let snaps = objs
         .iter()
-        .filter(|o| o.get("type").and_then(|v| v.as_str()) == Some("snapshot"))
+        .filter(|o| o.get("kind").and_then(|v| v.as_str()) == Some("snapshot"))
         .count();
     assert_eq!(
         snaps, 1,
         "only the session that saw /p/here.rs emits a snapshot"
     );
-    assert_eq!(
-        objs.last().unwrap()["summary"]["sessions"].as_u64(),
-        Some(1)
-    );
+    assert_eq!(objs.last().unwrap()["sessions"].as_u64(), Some(1));
 }
 
 #[test]
@@ -7386,7 +7392,7 @@ fn recover_patches_boundary_only_session_still_renders() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .any(|o| o.get("type").and_then(|v| v.as_str()) == Some("boundary"));
+        .any(|o| o.get("kind").and_then(|v| v.as_str()) == Some("boundary"));
     assert!(has_boundary, "a boundary object is emitted: {}", js.stdout);
 }
 
@@ -7473,7 +7479,7 @@ fn recover_at_json_line_range_outside_known_keeps_seen_total() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .find(|o| o.get("type").and_then(|v| v.as_str()) == Some("snapshot"))
+        .find(|o| o.get("kind").and_then(|v| v.as_str()) == Some("snapshot"))
         .expect("a snapshot object is still emitted");
     // No known lines survive the range filter, but the seen total + gaps are reported.
     assert_eq!(
@@ -8058,7 +8064,7 @@ fn turns_spans_at_least_two_compaction_boundaries() {
     );
     // Each boundary record carries a line_no + summary_chars.
     for o in objs.iter().filter(|o| o["kind"] == "compaction_boundary") {
-        assert!(o["line_no"].as_u64().unwrap() > 0);
+        assert!(o["line"].as_u64().unwrap() > 0);
         assert!(o["summary_chars"].as_u64().unwrap() > 0);
     }
 }
@@ -8447,7 +8453,7 @@ fn turns_line_numbers_present_in_text_and_json() {
         .filter(|o| o.get("role").is_some())
     {
         assert!(
-            o["line_no"].as_u64().unwrap() > 0,
+            o["line"].as_u64().unwrap() > 0,
             "every unit carries a positive line_no"
         );
         // full_chars == text.chars().count().
@@ -9013,7 +9019,7 @@ fn turns_json_header_carries_true_scope_and_rendered_and_by_kind() {
     assert!(out.success, "stderr: {}", out.stderr);
     let first = out.stdout.lines().next().unwrap_or("");
     let v: serde_json::Value = serde_json::from_str(first).expect("header json");
-    assert_eq!(v["kind"], "session_header");
+    assert_eq!(v["kind"], "header");
     assert!(
         v.get("sessions_in_scope").is_some(),
         "missing sessions_in_scope: {first}"
@@ -9088,7 +9094,7 @@ fn turns_json_clean_session_emits_zero_skipped_terminator() {
     let objs = json_lines(&out.stdout);
     let term = objs
         .iter()
-        .find(|o| o["kind"] == "skipped_lines")
+        .find(|o| o["kind"] == "summary")
         .expect("clean session still emits the skipped_lines terminator");
     assert_eq!(term["skipped_lines"].as_u64().unwrap(), 0);
     assert!(objs.iter().any(|o| o["role"] == "user"));
@@ -9130,7 +9136,7 @@ fn turns_json_main_fixture_has_skipped_record() {
     let objs = json_lines(&out.stdout);
     assert!(
         objs.iter()
-            .any(|o| o["kind"] == "skipped_lines" && o["skipped_lines"].as_u64().unwrap() >= 1),
+            .any(|o| o["kind"] == "summary" && o["skipped_lines"].as_u64().unwrap() >= 1),
         "the malformed line is surfaced in JSON under the `skipped_lines` key"
     );
 }
@@ -9988,7 +9994,7 @@ fn scope_banner_uniform_across_spanning_subcommands() {
     );
 }
 
-/// The leading `{kind:"session_header", …}` JSON scope record is emitted by every spanning
+/// The leading `{kind:"header", …}` JSON scope record is emitted by every spanning
 /// subcommand's JSON, reusing turns' three span field names.
 #[test]
 fn scope_json_header_uniform_across_spanning_subcommands() {
@@ -10023,7 +10029,7 @@ fn scope_json_header_uniform_across_spanning_subcommands() {
         let v: serde_json::Value = serde_json::from_str(first).unwrap();
         assert_eq!(
             v.get("kind").and_then(|k| k.as_str()),
-            Some("session_header"),
+            Some("header"),
             "{:?} first JSON line is not a session_header:\n{}",
             args,
             out.stdout
@@ -10259,7 +10265,7 @@ fn recon_lines_from_at_json(stdout: &str) -> Vec<String> {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
-        .find(|v| v.get("type").and_then(|t| t.as_str()) == Some("snapshot"))
+        .find(|v| v.get("kind").and_then(|t| t.as_str()) == Some("snapshot"))
         .unwrap_or_else(|| panic!("no snapshot object in:\n{stdout}"));
     let mut recon: std::collections::BTreeMap<usize, String> = std::collections::BTreeMap::new();
     for l in snap.get("lines").and_then(|v| v.as_array()).unwrap() {
@@ -10482,8 +10488,7 @@ fn plan_resolves_bound_plan_not_an_edited_other_plan() {
 
     let out = h.run(&["plan", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let v: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().next().unwrap_or("")).unwrap();
+    let v = json_rows(&out.stdout, "plan").remove(0);
     assert_eq!(
         v["plan_file"].as_str(),
         Some(bound_abs.as_str()),
@@ -10517,8 +10522,7 @@ fn plan_reverse_finds_the_session_bound_to_a_plan_file() {
     // Reverse → the bound session, scanning all projects (no target given).
     let out = h.run(&["plan", "--reverse", &bound_abs, "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let v: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().next().expect("a hit")).unwrap();
+    let v = json_rows(&out.stdout, "plan").remove(0);
     assert_eq!(
         v["session_id"].as_str(),
         Some(SESS),
@@ -10724,8 +10728,7 @@ fn plan_no_target_resolves_calling_session_from_env() {
         &[("CLAUDE_CODE_SESSION_ID", SESS)],
     );
     assert!(out.success, "stderr: {}", out.stderr);
-    let v: serde_json::Value =
-        serde_json::from_str(out.stdout.lines().next().unwrap_or("")).unwrap();
+    let v = json_rows(&out.stdout, "plan").remove(0);
     assert_eq!(v["plan_file"].as_str(), Some(bound_abs.as_str()));
     assert_eq!(v["session_id"].as_str(), Some(SESS));
 
@@ -11515,7 +11518,7 @@ fn search_finds_unresolved_askuserquestion_via_sidecar() {
     ]);
     assert!(j.success, "stderr: {}", j.stderr);
     let lines: Vec<&str> = j.stdout.lines().filter(|l| !l.trim().is_empty()).collect();
-    let ex: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    let ex = json_rows(&j.stdout, "exchange").remove(0);
     let hit = &ex["hits"][0];
     assert_eq!(hit["source"], "elicitation-sidecar");
     assert!(
@@ -11570,7 +11573,7 @@ fn turns_includes_pending_askuserquestion() {
         .find(|v| v["source"] == "elicitation-sidecar")
         .expect("a sidecar unit object");
     assert!(
-        unit["line_no"].is_null(),
+        unit["line"].is_null(),
         "sidecar unit has null line_no: {unit}"
     );
 }
@@ -11604,7 +11607,7 @@ fn list_shows_with_elicitation_sidecar() {
     );
 
     let j = h.run(&["list", &at(SESS), "--format", "json"]);
-    let row: serde_json::Value = serde_json::from_str(j.stdout.lines().next().unwrap()).unwrap();
+    let row = json_rows(&j.stdout, "session").remove(0);
     assert_eq!(row["with_elicitation_sidecar"], true);
     assert!(row["pending_elicitations"].as_array().unwrap().len() == 1);
 }

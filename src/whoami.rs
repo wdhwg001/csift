@@ -134,19 +134,25 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
             }
         }
         OutputFormat::Json => {
-            let nodes: Vec<_> = chain
-                .iter()
-                .map(|n| {
-                    json!({
-                        "session_id": n.session_id,
-                        "is_subagent": n.is_subagent,
-                        "parent_session_id": n.parent_session_id,
-                        "depth": n.depth,
-                        "path": n.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
-                    })
-                })
-                .collect();
-            println!("{}", serde_json::to_string(&json!({ "chain": nodes }))?);
+            // envelope v2: one kind:"identity" row per ancestry node, self first (depth 0)
+            // → top-level root last. The former single `{chain:[…]}` wrapper is gone —
+            // the SAME stream shape as the env form, just more rows.
+            println!("{}", crate::text::envelope_header("whoami", json!({})));
+            for n in &chain {
+                let obj = json!({
+                    "kind": "identity",
+                    "session_id": n.session_id,
+                    "is_subagent": n.is_subagent,
+                    "parent_session_id": n.parent_session_id,
+                    "depth": n.depth,
+                    "path": n.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
+                });
+                println!("{}", serde_json::to_string(&obj)?);
+            }
+            println!(
+                "{}",
+                crate::text::envelope_summary(json!({"identities": chain.len()}))
+            );
         }
     }
     Ok(())
@@ -193,11 +199,20 @@ fn render_text(me: &WhoAmI) {
 
 fn render_json(me: &WhoAmI) -> Result<()> {
     use serde_json::json;
+    println!("{}", crate::text::envelope_header("whoami", json!({})));
     let obj = json!({
+        "kind": "identity",
         "session_id": me.session_id,
+        "is_subagent": false,
+        "parent_session_id": me.session_id,
+        "depth": 0,
         "path": me.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
     });
     println!("{}", serde_json::to_string(&obj)?);
+    println!(
+        "{}",
+        crate::text::envelope_summary(json!({"identities": 1}))
+    );
     Ok(())
 }
 

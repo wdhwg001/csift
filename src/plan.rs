@@ -215,16 +215,25 @@ fn render_reverse_text(plan_file: &Path, hits: &[PlanRef]) {
 /// Reverse JSON: one object per bound session (the id-domain discriminators + provenance).
 fn render_reverse_json(plan_file: &Path, hits: &[PlanRef]) -> Result<()> {
     let _ = plan_file; // the per-hit `plan_file` (the binding's stored path) is the faithful value
+    println!(
+        "{}",
+        crate::text::envelope_header("plan", serde_json::json!({}))
+    );
     for r in hits {
         let obj = serde_json::json!({
+            "kind": "plan",
             "plan_file": r.plan_file,
             "session_id": r.session_id,
             "is_subagent": r.is_subagent,
             "parent_session_id": r.parent_session_id,
-            "line_no": r.line_no,
+            "line": r.line_no,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
+    println!(
+        "{}",
+        crate::text::envelope_summary(serde_json::json!({"plans": hits.len()}))
+    );
     Ok(())
 }
 
@@ -305,17 +314,23 @@ fn render_text(refs: &[PlanRef]) {
 
 fn render_json(refs: &[PlanRef]) -> Result<()> {
     use serde_json::json;
+    println!("{}", crate::text::envelope_header("plan", json!({})));
     for r in refs {
         let obj = json!({
+            "kind": "plan",
             "session_id": r.session_id,
             "is_subagent": r.is_subagent,
             "parent_session_id": r.parent_session_id,
             "plan_file": r.plan_file,
             "plan_exists": r.plan_exists,
-            "line_no": r.line_no,
+            "line": r.line_no,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
+    println!(
+        "{}",
+        crate::text::envelope_summary(json!({"plans": refs.len()}))
+    );
     Ok(())
 }
 

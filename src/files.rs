@@ -943,17 +943,16 @@ fn filter_context(outcome: &Outcome) -> String {
 
 fn render_json(outcome: &Outcome) -> Result<()> {
     use serde_json::json;
-    // Leading `{kind:"session_header", …}` scope record (same three span fields as `turns`),
-    // emitted only when the scope spans ≥1 subagent — uniform JSON scope disclosure.
-    if outcome.scope_sub > 0 {
-        println!(
-            "{}",
-            serde_json::to_string(&crate::text::scope_header_json(
-                outcome.scope_top,
-                outcome.scope_sub
-            ))?
-        );
-    }
+    // envelope v2: header (always) → kind-tagged rows → summary (always).
+    println!(
+        "{}",
+        serde_json::to_string(&crate::text::envelope_scope_header(
+            "files",
+            outcome.scope_top,
+            outcome.scope_sub,
+            json!({})
+        ))?
+    );
     match outcome.detail {
         FilesDetail::Summary => json_grouped(outcome, |m| bucket_key(&m.path), "bucket")?,
         FilesDetail::ByDir => json_grouped(
@@ -965,6 +964,7 @@ fn render_json(outcome: &Outcome) -> Result<()> {
         FilesDetail::Timeline => {
             for m in &outcome.mutations {
                 let obj = json!({
+                    "kind": "mutation",
                     "session_id": m.session_id,
                     // Discriminate the id-domain: `is_subagent` + the always-re-feedable
                     // `parent_session_id` (= session_id for a top-level mutation) so a
@@ -979,7 +979,7 @@ fn render_json(outcome: &Outcome) -> Result<()> {
                     "ts_utc": m.mutation.timestamp_utc,
                     "ts_local": m.mutation.timestamp_utc.as_deref().and_then(local_iso),
                     "turn_index": m.turn_index,
-                    "line_no": m.line_no,
+                    "line": m.line_no,
                     "is_create": m.mutation.is_create,
                     "heuristic": m.mutation.op.is_heuristic(),
                 });
@@ -994,32 +994,34 @@ fn render_json(outcome: &Outcome) -> Result<()> {
     // `recover --file <path> --coverage` for the precise per-boundary breakdown.
     for b in &outcome.boundaries {
         let obj = json!({
-            "type": "edit_before_read_boundary",
+            "kind": "boundary",
             "session_id": b.session_id,
             "is_subagent": b.is_subagent,
             "parent_session_id": b.parent_session_id,
             "path": b.path,
-            "line_no": b.line_no,
+            "line": b.line_no,
             "turn_index": b.turn_index,
-            "kind": b.kind,
+            // WHAT changed the file out of band (formatter/git/external-editor/…) —
+            // named `cause` so `kind` stays the envelope discriminator exclusively.
+            "cause": b.kind,
             "ts_utc": b.timestamp_utc,
             "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
-    // Trailing summary object (mirrors search's trailing-summary convention).
-    let summary = json!({
+    // envelope v2 summary. `detail_level` values equal the `--by` flag values verbatim.
+    let summary = crate::text::envelope_summary(json!({
         "distinct_files": outcome.distinct_files(),
         "total_mutations": outcome.mutations.len(),
         "edit_before_read_boundaries": outcome.boundaries.len(),
         "skipped_lines": outcome.skipped_lines,
         "detail_level": match outcome.detail {
             FilesDetail::Summary => "summary",
-            FilesDetail::ByDir => "by-dir",
-            FilesDetail::ByFile => "by-file",
+            FilesDetail::ByDir => "dir",
+            FilesDetail::ByFile => "file",
             FilesDetail::Timeline => "timeline",
         },
-    });
+    }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
@@ -1028,7 +1030,7 @@ fn render_json(outcome: &Outcome) -> Result<()> {
 fn json_grouped<F: Fn(&FileMutation) -> String>(
     outcome: &Outcome,
     key: F,
-    key_name: &str,
+    row_kind: &str,
 ) -> Result<()> {
     use serde_json::json;
     // session_id → key → counts (deterministic order via BTreeMap).
@@ -1049,10 +1051,13 @@ fn json_grouped<F: Fn(&FileMutation) -> String>(
         let groups = group_by(&owned, &key);
         for (k, counts) in &groups {
             let obj = json!({
+                "kind": row_kind,
                 "session_id": sid,
                 "is_subagent": is_subagent,
                 "parent_session_id": parent_session_id,
-                key_name: k,
+                // The grouping key is ALWAYS `path` (a bucket prefix / a dir / a file) —
+                // one on-wire key across every `--by` mode, discriminated by `kind`.
+                "path": k,
                 "write": counts.write,
                 "edit": counts.edit,
                 "notebook_edit": counts.notebook_edit,

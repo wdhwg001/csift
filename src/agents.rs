@@ -505,18 +505,17 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
 fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &View) -> Result<()> {
     use std::collections::BTreeSet;
 
-    if view.single_node {
-        // A single `--agent <hex>` grab: one flat node object per line (just the matched
-        // node), NOT the per-session tree envelope — so a consumer reads the node directly.
-        for n in nodes {
-            println!("{}", serde_json::to_string(&node_json(n, view))?);
-        }
-        return Ok(());
-    }
-
-    // Tree JSON (ALWAYS, except a single-node grab above): one object per session with its
-    // workflow runs (each carrying its agents nested under `children`) plus the built-in
-    // agents at the top level.
+    // envelope v2: header (always) → one kind:"session" row per session (its workflow runs
+    // + built-in agents nested) → summary (always). A single `--agent <hex>` grab emits the
+    // SAME session-wrapped shape (its `agents` array simply holds the one node) — one
+    // consumer code path, no bare-node special case.
+    println!(
+        "{}",
+        serde_json::to_string(&crate::text::envelope_header(
+            "agents",
+            serde_json::json!({})
+        ))?
+    );
     use std::collections::BTreeMap;
     let mut by_session: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
     for n in nodes {
@@ -553,12 +552,18 @@ fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &Vie
             .collect();
         let builtins = nested_builtin_json(&builtin_nodes, view);
         let obj = serde_json::json!({
+            "kind": "session",
             "session_id": session,
             "workflow_runs": runs_json,
             "agents": builtins,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
+    let summary = crate::text::envelope_summary(serde_json::json!({
+        "sessions": by_session.len(),
+        "agents": nodes.len(),
+    }));
+    println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
 

@@ -78,19 +78,59 @@ pub fn emit_scope_banner(top: usize, sub: usize) {
     }
 }
 
-/// The canonical leading `{kind:"session_header", …}` JSON record disclosing the SCOPE span,
-/// reusing `turns`' field names so a JSON consumer detects the span identically on every
-/// spanning subcommand. Emitted as the FIRST line of `list`/`files`/`search`/`recover` JSON
-/// when the scope spans ≥1 subagent (`sub > 0`); `turns` builds a RICHER `session_header`
-/// inline (it adds budget/automation fields) but the three span fields match exactly.
+/// envelope v2 (SPEC §8) — EVERY `--format json` stream is exactly three parts:
+///   `{"kind":"header","command":"<cmd>", …}`   the FIRST line, ALWAYS emitted;
+///   `{"kind":"<row-kind>", …}` × N             command-specific kind-tagged rows;
+///   `{"kind":"summary", …}`                    the LAST line, ALWAYS emitted (even all-zero).
+/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="…")'` — no
+/// per-command envelope knowledge, no conditional first line, no shape-varied trailer.
+/// These two builders are the ONLY way a module makes its header/summary line, so the
+/// invariant cannot drift per command.
 #[must_use]
-pub fn scope_header_json(top: usize, sub: usize) -> serde_json::Value {
-    serde_json::json!({
-        "kind": "session_header",
-        "sessions_in_scope": top + sub,
-        "top_level_sessions": top,
-        "subagent_sessions": sub,
-    })
+pub fn envelope_header(command: &str, extra: serde_json::Value) -> serde_json::Value {
+    merge_into(
+        serde_json::json!({"kind": "header", "command": command}),
+        extra,
+    )
+}
+
+/// [`envelope_header`] for a SPAN command: adds the scope fields
+/// (`sessions_in_scope`/`top_level_sessions`/`subagent_sessions`) every spanning
+/// surface discloses identically.
+#[must_use]
+pub fn envelope_scope_header(
+    command: &str,
+    top: usize,
+    sub: usize,
+    extra: serde_json::Value,
+) -> serde_json::Value {
+    merge_into(
+        serde_json::json!({
+            "kind": "header",
+            "command": command,
+            "sessions_in_scope": top + sub,
+            "top_level_sessions": top,
+            "subagent_sessions": sub,
+        }),
+        extra,
+    )
+}
+
+/// The closing `{"kind":"summary", …}` line (see [`envelope_header`]).
+#[must_use]
+pub fn envelope_summary(extra: serde_json::Value) -> serde_json::Value {
+    merge_into(serde_json::json!({"kind": "summary"}), extra)
+}
+
+/// Merge `extra`'s object fields into `base` (base keys win are-not — extra never
+/// overrides the `kind`/`command` discriminators by construction of the callers).
+fn merge_into(mut base: serde_json::Value, extra: serde_json::Value) -> serde_json::Value {
+    if let (Some(b), serde_json::Value::Object(e)) = (base.as_object_mut(), extra) {
+        for (k, v) in e {
+            b.entry(k).or_insert(v);
+        }
+    }
+    base
 }
 
 /// Parse an inclusive `START..END` index range. Both bounds parse as `usize`; `END < START`

@@ -2684,7 +2684,8 @@ fn render_json(
     // how many fit the budget. Keeping them distinct stops a `--budget` knob from silently
     // rewriting "scope" and keeps a targeted top-level uuid from reading as `0 top-level`.
     let header = json!({
-        "kind": "session_header",
+        "kind": "header",
+        "command": "turns",
         "sessions_in_scope": sc.in_scope,
         "sessions_rendered": sc.rendered,
         "top_level_sessions": sc.in_scope_top,
@@ -2724,7 +2725,7 @@ fn render_json(
                 &mut |line_no, summary_chars| {
                     let obj = json!({
                         "kind": "compaction_boundary",
-                        "line_no": line_no,
+                        "line": line_no,
                         "summary_chars": summary_chars,
                     });
                     let s = serde_json::to_string(&obj).expect("serialize boundary");
@@ -2756,7 +2757,7 @@ fn render_json(
     // always close with a trailing summary. The key is `skipped_lines` (was a one-off `count`
     // alias, emitted only when > 0; both divergences are now removed for cross-subcommand
     // consistency).
-    let term = json!({"kind":"skipped_lines","skipped_lines": ctx.skipped_lines});
+    let term = crate::text::envelope_summary(json!({"skipped_lines": ctx.skipped_lines}));
     println!("{}", serde_json::to_string(&term)?);
     if let Some(p) = out_path {
         crate::recover::write_out_guarded(p, &out_blob)?;
@@ -2776,6 +2777,7 @@ fn emit_unit_json(
     use serde_json::json;
     let r = render_unit_body(unit, None);
     let mut obj = json!({
+        "kind": "turn",
         "session_id": sr.session_id,
         // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex subagent
         // unit; `parent_session_id` is the always-re-feedable owning uuid (= session_id for
@@ -2783,9 +2785,9 @@ fn emit_unit_json(
         "is_subagent": sr.is_subagent,
         "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,
-        // A merged elicitation-sidecar unit (§3.10) has NO physical line — `line_no` is null
+        // A merged elicitation-sidecar unit (§3.10) has NO physical line — `line` is null
         // and `source:"elicitation-sidecar"` marks the provenance; a native unit omits `source`.
-        "line_no": if unit.from_sidecar { serde_json::Value::Null } else { json!(unit.line_no) },
+        "line": if unit.from_sidecar { serde_json::Value::Null } else { json!(unit.line_no) },
         "source": if unit.from_sidecar { json!("elicitation-sidecar") } else { serde_json::Value::Null },
         "role": unit.role.label(),
         "ts_utc": unit.ts_utc,

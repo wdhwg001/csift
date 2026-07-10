@@ -849,6 +849,9 @@ fn extract(
             .with_context(|| format!("cannot create output dir {}", out_path.display()))?;
     }
 
+    if matches!(args.format, OutputFormat::Json) {
+        println!("{}", crate::text::envelope_header("image", json!({})));
+    }
     let mut written = 0usize;
     let mut skipped_url = 0usize;
     for img in selected {
@@ -912,6 +915,7 @@ fn extract(
                 println!(
                     "{}",
                     json!({
+                        "kind": "extract",
                         "handle": img.handle(), "seq": img.seq, "id": img.id(),
                         "path": path.to_string_lossy(),
                         "bytes": out_bytes.len(),
@@ -946,6 +950,16 @@ fn extract(
             }
         }
         written += 1;
+    }
+    if matches!(args.format, OutputFormat::Json) {
+        println!(
+            "{}",
+            crate::text::envelope_summary(json!({
+                "extracted": written,
+                "url_skipped": skipped_url,
+                "skipped_lines": skipped_lines,
+            }))
+        );
     }
     if matches!(args.format, OutputFormat::Text) {
         let dest = if file_target.is_some() {
@@ -1020,14 +1034,16 @@ fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize)
 
 /// JSON listing: one object per image, then a trailing summary object.
 fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize) {
+    println!("{}", crate::text::envelope_header("image", json!({})));
     for img in selected {
         println!(
             "{}",
             json!({
+                "kind": "image",
                 "handle": img.handle(),
                 "seq": img.seq,
                 "id": img.id(),
-                "line_no": img.line_no,
+                "line": img.line_no,
                 "img_index": img.img_index,
                 "session_id": img.session_id,
                 "is_subagent": img.is_subagent,
@@ -1045,7 +1061,9 @@ fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize)
     }
     println!(
         "{}",
-        json!({ "images": selected.len(), "transcripts": transcripts, "skipped_lines": skipped_lines })
+        crate::text::envelope_summary(
+            json!({ "images": selected.len(), "transcripts": transcripts, "skipped_lines": skipped_lines })
+        )
     );
 }
 

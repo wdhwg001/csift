@@ -391,20 +391,23 @@ fn print_preview(label: &str, preview: Option<&MessagePreview>) {
 
 fn render_json(summaries: &[SessionSummary]) -> Result<()> {
     use serde_json::json;
-    // Leading `{kind:"session_header", sessions_in_scope, top_level_sessions,
-    // subagent_sessions}` record so a JSON consumer learns the fan-out span WITHOUT counting
-    // is_subagent itself — same shape `turns` emits, now on every spanning surface. Emitted
-    // only when the set spans ≥1 subagent (matching the text SCOPE banner's suppression).
+    // envelope v2: header (always) → kind-tagged session rows → summary (always).
     let sub = summaries.iter().filter(|s| s.is_subagent).count();
     let top = summaries.len() - sub;
-    if sub > 0 {
-        println!(
-            "{}",
-            serde_json::to_string(&crate::text::scope_header_json(top, sub))?
-        );
-    }
+    println!(
+        "{}",
+        serde_json::to_string(&crate::text::envelope_scope_header(
+            "list",
+            top,
+            sub,
+            json!({})
+        ))?
+    );
+    let mut skipped_total = 0usize;
     for s in summaries {
+        skipped_total += s.skipped_lines;
         let obj = json!({
+            "kind": "session",
             "session_id": s.session_id,
             // Id-domain discriminator (the r5 shape): `is_subagent` flags a bare-hex
             // subagent row; `parent_session_id` is the always-re-feedable owning uuid
@@ -427,6 +430,11 @@ fn render_json(summaries: &[SessionSummary]) -> Result<()> {
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
+    let summary = crate::text::envelope_summary(json!({
+        "sessions": summaries.len(),
+        "skipped_lines": skipped_total,
+    }));
+    println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
 
