@@ -36,6 +36,7 @@
 //! record's `sessionId` field (verified 600/0 mismatches). We use the directory name
 //! as the parent-session id (it is the on-disk truth and needs no record parse).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -559,41 +560,95 @@ fn read_meta(meta_path: Option<&Path>) -> MetaFields {
 /// True iff the workflow journal alongside a workflow subagent carries a `result`
 /// event for `agent_id` (the completion signal, §C). For a built-in subagent (no
 /// journal) this is always `false` — completion is inferred from the transcript.
-fn journal_reports_completion(subagent: &Subagent) -> bool {
-    let Some(wf_id) = &subagent.workflow_id else {
-        return false;
-    };
-    // journal.jsonl sits beside the agent transcript inside `wf_<id>/`.
-    let Some(wf_dir) = subagent.path.parent() else {
-        return false;
-    };
-    let journal = wf_dir.join("journal.jsonl");
-    let _ = wf_id; // wf_id already implied by wf_dir; kept for clarity/debugging.
-    let Ok(bytes) = std::fs::read(&journal) else {
-        return false;
-    };
-    // Each line is a small event object; scan for a `result` event matching agentId.
-    for line in bytes.split(|&b| b == b'\n') {
-        if line.is_empty() {
-            continue;
+fn journal_reports_completion(subagent: &Subagent, journals: &JournalCache) -> bool {
+    journals
+        .events_for(subagent)
+        .is_some_and(|data| data.results.contains_key(&subagent.agent_id))
+}
+
+/// Per-topology-build cache of every distinct `wf_<id>/journal.jsonl`, read + parsed
+/// ONCE and shared across the whole node/lifecycle fan-out. Without it each of a
+/// workflow run's N agents re-read and re-parsed the SAME journal (an O(N × journal)
+/// blowup — a 104-agent run re-parsed its 236 KB journal 104 times, and a 3.5k-agent
+/// session re-parsed ~600 MB of journal JSON in aggregate). The cached view is exactly
+/// what the two former per-agent scans extracted — first `result` event per agentId —
+/// so behaviour is byte-identical, only WHEN the journal is read changes.
+#[derive(Debug, Default)]
+pub struct JournalCache {
+    /// journal path → its parsed per-agent result events. An unreadable/absent journal
+    /// has no entry (the same "no journal ⇒ no completion signal" the direct reads had).
+    by_path: HashMap<PathBuf, JournalData>,
+}
+
+/// The per-agent `result`-event facts one journal carries.
+#[derive(Debug, Default)]
+struct JournalData {
+    /// agentId → the FIRST `result` event's payload for that agent: `Some(text)` when the
+    /// event carries a `result` field (string kept as-is, non-string JSON-rendered so it
+    /// is never lost), `None` when it does not (a completion signal with no payload).
+    /// Key PRESENCE == "the journal reports this agent completed".
+    results: HashMap<String, Option<String>>,
+}
+
+impl JournalCache {
+    /// Read + parse each DISTINCT journal among these subagents once. Malformed journal
+    /// lines are skipped exactly as the former per-agent scans skipped them.
+    pub fn build(subs: &[Subagent]) -> Self {
+        let mut by_path: HashMap<PathBuf, JournalData> = HashMap::new();
+        for sub in subs {
+            let Some(journal) = Self::journal_path(sub) else {
+                continue;
+            };
+            if by_path.contains_key(&journal) {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(&journal) else {
+                continue; // unreadable/absent → no entry (matches the old per-read failure arm)
+            };
+            let mut data = JournalData::default();
+            for line in bytes.split(|&b| b == b'\n') {
+                if line.is_empty() {
+                    continue;
+                }
+                let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
+                    continue;
+                };
+                if v.get("type").and_then(serde_json::Value::as_str) != Some("result") {
+                    continue;
+                }
+                let Some(agent) = v.get("agentId").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                let payload = match v.get("result") {
+                    Some(serde_json::Value::String(s)) => Some(s.clone()),
+                    Some(other) => Some(other.to_string()),
+                    None => None,
+                };
+                // FIRST event per agent wins — the former scans returned on first match.
+                data.results.entry(agent.to_string()).or_insert(payload);
+            }
+            by_path.insert(journal, data);
         }
-        let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
-            continue;
-        };
-        let is_result = v.get("type").and_then(serde_json::Value::as_str) == Some("result");
-        let same_agent =
-            v.get("agentId").and_then(serde_json::Value::as_str) == Some(&subagent.agent_id);
-        if is_result && same_agent {
-            return true;
-        }
+        Self { by_path }
     }
-    false
+
+    /// The journal path a workflow subagent's events live in (`None` for a built-in /
+    /// teammate — no `workflow_id` ⇒ no journal, the same guard the direct reads had).
+    fn journal_path(subagent: &Subagent) -> Option<PathBuf> {
+        subagent.workflow_id.as_ref()?;
+        Some(subagent.path.parent()?.join("journal.jsonl"))
+    }
+
+    /// This subagent's parsed journal, when it has one that was readable.
+    fn events_for(&self, subagent: &Subagent) -> Option<&JournalData> {
+        self.by_path.get(&Self::journal_path(subagent)?)
+    }
 }
 
 /// Compute the lifecycle of one subagent: read its transcript HEAD for the start
 /// timestamp + TAIL for the completion timestamp & terminal-message signal, consult
 /// the workflow journal for an explicit `result`, then resolve a status.
-pub fn lifecycle(subagent: &Subagent) -> Result<SubagentLifecycle> {
+pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<SubagentLifecycle> {
     // agent_type + description were read from meta.json ONCE at discovery ([`make_subagent`])
     // and stored on the `Subagent` — no second meta read here (FIX3: kills one redundant
     // meta.json read + parse per subagent). The values are identical to `read_meta`'s.
@@ -647,7 +702,7 @@ pub fn lifecycle(subagent: &Subagent) -> Result<SubagentLifecycle> {
         completed_utc.is_none() || !terminal_agent_msg
     })?;
 
-    let journal_done = journal_reports_completion(subagent);
+    let journal_done = journal_reports_completion(subagent, journals);
     // Clear the frozen signal when it would be meaningless: a journal-completed (workflow) agent is
     // trusted done regardless of a tail tool_use; and a transcript with NO timestamps has
     // undetermined timing (status Unknown), so we cannot claim "frozen" vs merely unreadable.
@@ -1070,30 +1125,12 @@ impl ReturnedMsgSource {
 /// matching `result` event. The payload is usually a string (the agent's final message);
 /// a non-string payload is JSON-rendered so it is never lost.
 #[must_use]
-pub fn journal_result(subagent: &Subagent) -> Option<String> {
-    subagent.workflow_id.as_ref()?;
-    let wf_dir = subagent.path.parent()?;
-    let journal = wf_dir.join("journal.jsonl");
-    let bytes = std::fs::read(&journal).ok()?;
-    for line in bytes.split(|&b| b == b'\n') {
-        if line.is_empty() {
-            continue;
-        }
-        let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
-            continue;
-        };
-        let is_result = v.get("type").and_then(serde_json::Value::as_str) == Some("result");
-        let same_agent =
-            v.get("agentId").and_then(serde_json::Value::as_str) == Some(&subagent.agent_id);
-        if is_result && same_agent {
-            return match v.get("result") {
-                Some(serde_json::Value::String(s)) => Some(s.clone()),
-                Some(other) => Some(other.to_string()),
-                None => None,
-            };
-        }
-    }
-    None
+pub fn journal_result(subagent: &Subagent, journals: &JournalCache) -> Option<String> {
+    journals
+        .events_for(subagent)?
+        .results
+        .get(&subagent.agent_id)?
+        .clone()
 }
 
 /// One fully-linked subagent node in the topology (§new-model). Carries the flat
@@ -1160,11 +1197,12 @@ pub struct SubagentNode {
 fn resolve_returned_message(
     subagent: &Subagent,
     index: &ParentSpawnIndex,
+    journals: &JournalCache,
 ) -> (Option<String>, Option<ReturnedMsgSource>) {
     // Workflow agents always resolve through the journal (their parent tool_result is the
     // Workflow-tool launch echo, not the per-agent message).
     if subagent.kind == SubagentKind::Workflow {
-        if let Some(msg) = journal_result(subagent) {
+        if let Some(msg) = journal_result(subagent, journals) {
             return (Some(msg), Some(ReturnedMsgSource::WorkflowJournal));
         }
         return (None, None);
@@ -1305,6 +1343,8 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
     // layout is flat, so `subs` already holds every agent at any depth; this recovers the
     // LOGICAL parent + the nested agent's spawn metadata the flat layout drops.
     let index = build_global_spawn_index(session_jsonl, &subs)?;
+    // Every distinct workflow journal read+parsed ONCE for the whole build (see JournalCache).
+    let journals = JournalCache::build(&subs);
     // Build each node IN PARALLEL: `node_for` is pure (reads only its own transcript + the shared
     // `&index`), so this is a drop-in `par_iter`. `rayon`'s ordered collect preserves the `subs`
     // order, so the resulting `nodes` vec is byte-identical to the old serial `.iter().map()`.
@@ -1312,7 +1352,7 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
     // caller's outer across-sessions `par_iter` runs on one thread.
     let mut nodes: Vec<SubagentNode> = subs
         .par_iter()
-        .map(|s| node_for(s, &index, with_files))
+        .map(|s| node_for(s, &index, &journals, with_files))
         .collect::<Result<_>>()?;
     assign_depths(&mut nodes);
     Ok(nodes)
@@ -1347,9 +1387,10 @@ fn assign_depths(nodes: &mut [SubagentNode]) {
 fn node_for(
     subagent: &Subagent,
     index: &ParentSpawnIndex,
+    journals: &JournalCache,
     with_files: bool,
 ) -> Result<SubagentNode> {
-    let lc = lifecycle(subagent)?;
+    let lc = lifecycle(subagent, journals)?;
     // Effective spawn id: the meta `toolUseId` for a built-in/workflow agent, OR — for a
     // TEAMMATE, whose meta carries none — the NAME-join to its spawning `Agent` tool_use. This
     // single resolution lights up the whole spawn linkage below (trigger, parent, tool, type).
@@ -1387,7 +1428,8 @@ fn node_for(
             .or_else(|| spawn.and_then(|s| s.subagent_type.clone()))
     };
     let spawn_tool = spawn.and_then(|s| s.name.clone());
-    let (returned_message, returned_message_source) = resolve_returned_message(subagent, index);
+    let (returned_message, returned_message_source) =
+        resolve_returned_message(subagent, index, journals);
     // Classify a frozen lane (if any): a pending Bash whose command CC would hoist (dangerous rm)
     // is escalation-blocked (waiting for a human); anything else pending is awaiting-execution.
     let (pending_tool_use_id, pending_tool_name, pending_classification, pending_since_utc) =
@@ -1695,7 +1737,7 @@ mod tests {
             .iter()
             .find(|s| s.kind == SubagentKind::BuiltinTask)
             .unwrap();
-        let lc = lifecycle(builtin).unwrap();
+        let lc = lifecycle(builtin, &JournalCache::build(std::slice::from_ref(builtin))).unwrap();
         assert_eq!(lc.started_utc.as_deref(), Some("2026-06-07T05:00:00.000Z"));
         assert_eq!(
             lc.completed_utc.as_deref(),
@@ -1716,7 +1758,7 @@ mod tests {
             .iter()
             .find(|s| s.kind == SubagentKind::Workflow)
             .unwrap();
-        let lc = lifecycle(wf).unwrap();
+        let lc = lifecycle(wf, &JournalCache::build(std::slice::from_ref(wf))).unwrap();
         // The workflow transcript ends on a tool_use (no terminal text), but the
         // journal carries a `result` event ⇒ completed.
         assert_eq!(lc.status, SubagentStatus::Completed);
@@ -1726,6 +1768,46 @@ mod tests {
             lc.completed_utc.as_deref(),
             Some("2026-06-07T06:01:00.000Z")
         );
+    }
+
+    #[test]
+    fn journal_cache_first_result_event_wins_and_renders_nonstring() {
+        let fx = Fixture::new();
+        let enc = "-Users-testuser-Projects-jc";
+        let session = fx.write(
+            &format!("{enc}/{SESS}.jsonl"),
+            "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
+        );
+        let wf_dir = format!("{enc}/{SESS}/subagents/workflows/wf_jc1");
+        for agent in ["aaa111", "bbb222"] {
+            fx.write(
+                &format!("{wf_dir}/agent-{agent}.jsonl"),
+                &format!("{{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"{agent}\",\"timestamp\":\"2026-06-07T07:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"s\"}}}}\n"),
+            );
+        }
+        fx.write(
+            &format!("{wf_dir}/journal.jsonl"),
+            concat!(
+                // FIRST result event for aaa111 carries NO payload — and first wins
+                // (the former per-agent scan returned on its first match), so the
+                // later "late" payload must never surface.
+                "{\"type\":\"result\",\"agentId\":\"aaa111\"}\n",
+                "{\"type\":\"result\",\"agentId\":\"aaa111\",\"result\":\"late\"}\n",
+                "not json - skipped exactly as the direct scans skipped it\n",
+                // A non-string payload is JSON-rendered so it is never lost.
+                "{\"type\":\"result\",\"agentId\":\"bbb222\",\"result\":{\"k\":1}}\n",
+            ),
+        );
+        let subs = discover_subagents(&session).unwrap();
+        let cache = JournalCache::build(&subs);
+        let a = subs.iter().find(|s| s.agent_id == "aaa111").unwrap();
+        let b = subs.iter().find(|s| s.agent_id == "bbb222").unwrap();
+        // Both report completion (a result event exists, payload or not)...
+        assert!(journal_reports_completion(a, &cache));
+        assert!(journal_reports_completion(b, &cache));
+        // ...first-event-wins keeps aaa111's payload None; bbb222's renders compactly.
+        assert_eq!(journal_result(a, &cache), None);
+        assert_eq!(journal_result(b, &cache).as_deref(), Some("{\"k\":1}"));
     }
 
     #[test]
@@ -1745,7 +1827,11 @@ mod tests {
             ),
         );
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         assert_eq!(lc.status, SubagentStatus::Running);
     }
 
@@ -1957,7 +2043,11 @@ mod tests {
             "{}",
         );
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         assert!(lc.agent_type.is_none());
         assert!(lc.description.is_none());
     }
@@ -1981,7 +2071,11 @@ mod tests {
             ),
         );
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         assert_eq!(lc.status, SubagentStatus::Running);
     }
 
@@ -2016,7 +2110,11 @@ mod tests {
             ),
         );
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         assert_eq!(
             lc.status,
             SubagentStatus::Running,
@@ -2044,7 +2142,11 @@ mod tests {
         );
         // intentionally NO journal.jsonl
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         // Completed via the transcript terminal message, not the (absent) journal.
         assert_eq!(lc.status, SubagentStatus::Completed);
     }
@@ -2069,7 +2171,11 @@ mod tests {
             ),
         );
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         assert!(lc.started_utc.is_none());
         assert_eq!(lc.status, SubagentStatus::Unknown);
     }
@@ -2098,7 +2204,11 @@ mod tests {
             ),
         );
         let subs = discover_subagents(&session).unwrap();
-        let lc = lifecycle(&subs[0]).unwrap();
+        let lc = lifecycle(
+            &subs[0],
+            &JournalCache::build(std::slice::from_ref(&subs[0])),
+        )
+        .unwrap();
         assert_eq!(lc.status, SubagentStatus::Completed);
         // completed_utc comes from the older timestamped record (newest had none).
         assert_eq!(
@@ -2244,7 +2354,7 @@ mod tests {
             .find(|s| s.kind == SubagentKind::Workflow)
             .unwrap();
         assert_eq!(
-            journal_result(wf).as_deref(),
+            journal_result(wf, &JournalCache::build(std::slice::from_ref(wf))).as_deref(),
             Some("WF RETURN: workflow journal payload")
         );
         // A built-in has no journal → None.
@@ -2252,7 +2362,9 @@ mod tests {
             .iter()
             .find(|s| s.kind == SubagentKind::BuiltinTask)
             .unwrap();
-        assert!(journal_result(builtin).is_none());
+        assert!(
+            journal_result(builtin, &JournalCache::build(std::slice::from_ref(builtin))).is_none()
+        );
     }
 
     #[test]
