@@ -198,8 +198,9 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
     // ── Resolve targets → session files (spanning subagents by default) ──
-    let session_files = path::resolve_session_files(
+    let session_files = path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -359,8 +360,9 @@ fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    let session_files = path::resolve_session_files(
+    let session_files = path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;

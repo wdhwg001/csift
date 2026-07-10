@@ -159,8 +159,9 @@ pub fn resolve_plan_target(session_files: &[PathBuf]) -> Result<PlanRef> {
 fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
     let want = path::absolutize(plan_file)?;
     // No session pin (the whole point is we don't know the session); paths narrow scope.
-    let session_files = path::resolve_session_files(
+    let session_files = path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -243,12 +244,12 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
     if let Some(plan_file) = &args.reverse {
         return run_plan_reverse(args, plan_file);
     }
-    // With NO target at all, resolve the CALLING session (like `whoami`) — `csift plan`
-    // inside a Claude Code session answers "what is MY plan file". Never scan every
-    // project (ambiguous + expensive); error with guidance when the env signal is absent. A
-    // positional target (`@<uuid>` / `*.jsonl` / a project path) flows through the shared
-    // resolver's grammar instead.
-    let session_paths: Vec<PathBuf> = if args.paths.is_empty() {
+    // With NO target at all (no positional, no --sessions-from), resolve the CALLING session
+    // (like `whoami`) — `csift plan` inside a Claude Code session answers "what is MY plan
+    // file". Never scan every project (ambiguous + expensive); error with guidance when the
+    // env signal is absent. A positional target (`@<uuid>` / `*.jsonl` / a project path) or a
+    // `--sessions-from` list flows through the shared resolver's grammar instead.
+    let session_paths: Vec<PathBuf> = if args.paths.is_empty() && args.sessions_from.is_none() {
         match crate::whoami::detect_session_id() {
             // The env id becomes an `@<uuid>` positional — the same path every other
             // session is reached by now that `--session` is gone.
@@ -259,8 +260,9 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
         args.paths.clone()
     };
 
-    let session_files = path::resolve_session_files(
+    let session_files = path::resolve_targets_with_session_list(
         &session_paths,
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;

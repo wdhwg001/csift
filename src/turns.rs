@@ -447,10 +447,9 @@ struct ScanResult {
 
 /// Entry point for `csift turns`.
 pub fn run_turns(args: &TurnsArgs) -> Result<()> {
-    // ── Validate window mutual-exclusion (same rule + wording as recover/files) ──
-    if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
-        bail!("--turn-range is mutually exclusive with --since/--until");
-    }
+    // `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
+    // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
+    // already intersected).
     if !(args.round_trip_fraction > 0.0 && args.round_trip_fraction < 1.0) {
         bail!(
             "--round-trip-fraction must be in the open interval (0.0, 1.0), got {}",
@@ -509,8 +508,21 @@ pub fn run_turns(args: &TurnsArgs) -> Result<()> {
         .transpose()?;
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
-    let session_files = path::resolve_session_files(
+    // `turns` is single-conversation recovery and `--budget` applies PER session, so a bare
+    // `csift turns` (0 targets ⇒ ALL projects everywhere else) would realize budget × every
+    // session of every project — an output flood that is never what the caller wants. A
+    // target is REQUIRED here (the `show` precedent: name what you mean).
+    if args.paths.is_empty() && args.sessions_from.is_none() {
+        bail!(
+            "turns reconstructs ONE conversation's recent turns — name a target: `@<uuid>` / \
+             `@main` / `@<agent-id>` / a project path / `--sessions-from <FILE|->`. (A bare \
+             `csift turns` would realize --budget chars × EVERY session of EVERY project.)"
+        );
+    }
+
+    let session_files = path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -2462,7 +2474,7 @@ fn plan_has_sidecar(plan: &SessionPlan) -> bool {
 }
 
 /// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a
-/// `--include-subagents` query that spans S subagents realizes up to `budget × (1 + S)`
+/// `--subagents` query that spans S subagents realizes up to `budget × (1 + S)`
 /// chars. The banner must report the TRUE scope (every discovered session) — NOT only what
 /// fit in the budget — so a rendering knob (`--budget`) can never silently rewrite "scope"
 /// and a targeted top-level uuid can never read as `0 top-level`. Returns the full
@@ -2856,6 +2868,12 @@ fn emit_placeholder_json(
         "first_line": span.first_line,
         "last_line": span.last_line,
         "compactions_before": turn.compactions_before,
+        // Ready-to-run fetch of the collapsed span, addressed at the OWNING transcript.
+        "refetch": if span.first_line == span.last_line {
+            format!("csift show @{} --line {}", sr.session_id, span.first_line)
+        } else {
+            format!("csift show @{} --line {}..{}", sr.session_id, span.first_line, span.last_line)
+        },
     });
     let s = serde_json::to_string(&obj)?;
     println!("{s}");

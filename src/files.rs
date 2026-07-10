@@ -33,7 +33,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use globset::{Glob, GlobMatcher};
 use memchr::memmem;
 use rayon::prelude::*;
@@ -136,10 +136,9 @@ impl PathFilter {
 
 /// Entry point for `csift files`.
 pub fn run_files(args: &FilesArgs) -> Result<()> {
-    // ── Validate flag combinations (same rule + wording as `search`) ──
-    if args.turn_range.is_some() && (args.since.is_some() || args.until.is_some()) {
-        bail!("--turn-range is mutually exclusive with --since/--until");
-    }
+    // `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
+    // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
+    // already intersected).
     let turn_range = args
         .turn_range
         .as_deref()
@@ -153,8 +152,9 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
 
     // ── Resolve targets → session files (subagent span per --no-subagents; default spans
     //    subagents, matching every other default-on command) ──
-    let session_files = path::resolve_session_files(
+    let session_files = path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         path::SubagentScope::from(args.want_subagents()),
         path::Caller::Files,
     )?;

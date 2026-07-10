@@ -41,6 +41,36 @@ impl TimeWindow {
         self.since.is_none() && self.until.is_none()
     }
 
+    /// True if the inclusive activity span `[first, last]` (raw UTC ISO timestamps)
+    /// INTERSECTS the window — the `list` rule: a session is admitted when ANY part of its
+    /// [first-activity, last-activity] span falls inside `[since, until]` (a long-running
+    /// session that straddles the whole window still matches). One missing/unparseable
+    /// endpoint degrades the span to a point; both missing ⇒ a bounded window never admits
+    /// (the SPEC §6.2 timestamp-less rule).
+    #[must_use]
+    pub fn intersects_span(&self, first: Option<&str>, last: Option<&str>) -> bool {
+        if self.is_unbounded() {
+            return true;
+        }
+        let parse = |raw: Option<&str>| raw.and_then(|r| r.parse::<Timestamp>().ok());
+        let (a, b) = match (parse(first), parse(last)) {
+            (Some(a), Some(b)) => (a.min(b), a.max(b)),
+            (Some(a), None) | (None, Some(a)) => (a, a),
+            (None, None) => return false,
+        };
+        if let Some(s) = self.since {
+            if b < s {
+                return false;
+            }
+        }
+        if let Some(u) = self.until {
+            if a > u {
+                return false;
+            }
+        }
+        true
+    }
+
     /// True if a record's raw timestamp falls inside the window. An unbounded
     /// window always returns true (even for `None`). A bounded window NEVER admits
     /// a record with no/unparseable timestamp (SPEC §6.2).

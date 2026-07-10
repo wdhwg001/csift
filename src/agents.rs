@@ -46,8 +46,12 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     // project is scanned — the same target model as list/search. `agents` discovers each
     // session's subagents itself, so it never spans subagent TRANSCRIPT files here — pass
     // `false` (⇒ `SubagentScope::TopLevelOnly`).
-    let session_files =
-        path::resolve_session_files(&args.paths, false.into(), path::Caller::Other)?;
+    let session_files = path::resolve_targets_with_session_list(
+        &args.paths,
+        args.sessions_from.as_deref(),
+        false.into(),
+        path::Caller::Other,
+    )?;
 
     let time_window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
 
@@ -71,7 +75,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     }
 
     // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--order-by time
-    // window AND the --kind filter (a known id should resolve regardless of when it ran or
+    // window AND the --shape filter (a known id should resolve regardless of when it ran or
     // its shape), and a no-match is a hard error with discovery guidance — never the
     // ambiguous `no subagents found` (which a zero-subagent session also prints). The grab
     // renders a single node (a tree of one), not the whole workflow tree.
@@ -184,7 +188,7 @@ fn topology_for_session(session_jsonl: &Path, with_files: bool) -> Result<Sessio
     })
 }
 
-/// True when `kind` passes the `--kind` filter (empty filter ⇒ all kinds).
+/// True when `kind` passes the `--shape` filter (empty filter ⇒ all kinds).
 fn kind_allowed(kind: SubagentKind, want: &[AgentKindFilter]) -> bool {
     if want.is_empty() {
         return true;

@@ -28,6 +28,7 @@ use crate::cli::{ListArgs, OutputFormat};
 use crate::model::Record;
 use crate::parse::{head_records_prefiltered, tail_records_prefiltered};
 use crate::path::{self, SubagentScope};
+use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
 
 /// Max characters of a message excerpt shown inline before truncation. Truncation
@@ -105,7 +106,12 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     //       set. Workflow `journal.jsonl` event logs are never transcripts and are excluded by the
     //       resolver.
     let scope = SubagentScope::from(args.want_subagents());
-    let mut session_files = path::resolve_session_files(&args.paths, scope, path::Caller::Other)?;
+    let mut session_files = path::resolve_targets_with_session_list(
+        &args.paths,
+        args.sessions_from.as_deref(),
+        scope,
+        path::Caller::Other,
+    )?;
     session_files.sort();
     session_files.dedup();
 
@@ -116,6 +122,22 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
     // Deterministic order regardless of rayon completion order: by path.
     summaries.sort_by(|a, b| a.path.cmp(&b.path));
+
+    // `--since`/`--until`: keep a session iff its [first-activity, last-activity] span
+    // intersects the window. The span endpoints are the timestamps this index ALREADY reads
+    // (head+tail) — no full-file scan, the `list` performance contract holds; ISO-UTC sorts
+    // lexicographically, so min/max over the raw strings is chronological.
+    let window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
+    if !window.is_unbounded() {
+        summaries.retain(|s| {
+            let ts: Vec<&str> = [&s.first_user, &s.last_user, &s.last_agent]
+                .into_iter()
+                .flatten()
+                .filter_map(|p| p.timestamp_utc.as_deref())
+                .collect();
+            window.intersects_span(ts.iter().min().copied(), ts.iter().max().copied())
+        });
+    }
 
     // 4. Render.
     match args.format {
@@ -307,7 +329,7 @@ fn render_text(summaries: &[SessionSummary]) {
     }
     // SCOPE banner: `list` spans subagents by DEFAULT, so a bare `csift list <uuid>` can
     // return 1 top-level + N subagent rows — surface that split up front (mirroring
-    // `turns --include-subagents` + now `files`/`search`/`recover`) so the default-span
+    // `turns --subagents` + now `files`/`search`/`recover`) so the default-span
     // surprise is announced, not buried. Printed only when the resolved set actually spans
     // ≥1 subagent. ONE shared emitter / wording across every spanning surface.
     let sub = summaries.iter().filter(|s| s.is_subagent).count();

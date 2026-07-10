@@ -50,14 +50,20 @@ struct SessionStats {
 /// Entry point for `csift stats`.
 pub fn run_stats(args: &StatsArgs) -> Result<()> {
     let window = TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
-    let files = path::resolve_session_files(
+    let turn_range = args
+        .turn_range
+        .as_deref()
+        .map(|s| crate::text::parse_range(s, "--turn-range", false))
+        .transpose()?;
+    let files = path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         SubagentScope::from(args.want_subagents()),
         path::Caller::Other,
     )?;
     let mut rows: Vec<SessionStats> = files
         .par_iter()
-        .map(|p| stats_one_file(p, &window))
+        .map(|p| stats_one_file(p, &window, turn_range.as_ref()))
         .collect::<Result<Vec<_>>>()?;
     rows.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
@@ -78,7 +84,11 @@ fn line_is_stats_candidate(line: &[u8]) -> bool {
         || memchr::memmem::find(line, br#""role":"assistant""#).is_some()
 }
 
-fn stats_one_file(path: &Path, window: &TimeWindow) -> Result<SessionStats> {
+fn stats_one_file(
+    path: &Path,
+    window: &TimeWindow,
+    turn_range: Option<&(usize, usize)>,
+) -> Result<SessionStats> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
@@ -110,11 +120,31 @@ fn stats_one_file(path: &Path, window: &TimeWindow) -> Result<SessionStats> {
     });
     out.skipped_lines = skipped;
 
+    // `--turn-range`: per-record turn membership on the FULL transcript's genuine-turn
+    // order (the SAME 0-based axis `search`/`files` window on), computed BEFORE the time
+    // filter so indices stay stable, then intersected (AND) with the window below.
+    let in_turn_range: Option<Vec<bool>> = turn_range.map(|&(lo, hi)| {
+        let all: Vec<&Record> = records.iter().collect();
+        let mut keep = vec![false; records.len()];
+        for (ti, group) in group_turn_indices_deduped(&all, |r| *r).iter().enumerate() {
+            if ti >= lo && ti <= hi {
+                for &i in group {
+                    keep[i] = true;
+                }
+            }
+        }
+        keep
+    });
+
     // Windowed view for the counts; turn grouping runs over the SAME windowed set so
     // `turns` reflects what the window admits.
     let admitted: Vec<&Record> = records
         .iter()
-        .filter(|r| window.contains(r.timestamp.as_deref()))
+        .enumerate()
+        .filter(|(i, r)| {
+            window.contains(r.timestamp.as_deref()) && in_turn_range.as_ref().is_none_or(|k| k[*i])
+        })
+        .map(|(_, r)| r)
         .collect();
 
     for rec in &admitted {

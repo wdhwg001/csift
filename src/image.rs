@@ -611,8 +611,9 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     let extracting = args.out.is_some();
     let selection = parse_id_selection(&args.id)?;
 
-    let session_files = crate::path::resolve_session_files(
+    let session_files = crate::path::resolve_targets_with_session_list(
         &args.paths,
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         crate::path::Caller::Other,
     )?;
@@ -679,7 +680,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     }
 
     // Apply the `--id` selection (if any). `#N` and `L<line>i<n>` are both per-transcript, so
-    // a multi-transcript scope is ambiguous → require a single transcript (like `search --line`).
+    // a multi-transcript scope is ambiguous → require a single transcript (like `show`).
     let selected: Vec<&ImageRef> = if selection.is_empty() {
         // List/extract ALL → dedup the SAME image re-injected across context windows (by
         // content fingerprint). Two DISTINCT-content images that share a `#N` both survive, so
