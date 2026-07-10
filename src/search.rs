@@ -181,9 +181,67 @@ pub struct SearchOutcome {
 pub struct Matcher {
     /// `None` ⇒ empty pattern (pure filter: every category-eligible record matches).
     regex: Option<BytesRegex>,
-    /// A required literal substring extracted from the regex, for the cheap
-    /// `memmem` line prefilter (§7d stage 2). `None` ⇒ no anchorable literal.
-    prefilter: Option<memmem::Finder<'static>>,
+    /// A required-literal prefilter derived from the pattern, run against RAW line/file
+    /// bytes (§7d stage 2 + the §7f whole-file gate). `None` ⇒ no anchorable literal.
+    prefilter: Option<Prefilter>,
+    /// SYNTHESIZED-text markers (built only when `prefilter` is `Some`): a record whose
+    /// raw line carries one of these can render matchable text that is NOT a verbatim
+    /// substring of its raw bytes (an automation label's fabricated kind slug / status,
+    /// the AUQ Q+options+answer scaffold, a rejection's `[plan: …]` pointer resolved from
+    /// ANOTHER record, the compact-boundary `trigger=…` excerpt, `--resolve-persisted`
+    /// external file content). The literal prefilter can only prove absence for
+    /// VERBATIM-derived text, so a marker-bearing line/file always passes to the parse +
+    /// regex stage. This also FIXES a latent pre-existing gap: the old case-sensitive
+    /// `memmem` prefilter silently skipped regex work on exactly these records.
+    ///
+    /// One `memmem::Finder` per needle — deliberately NOT one Aho-Corasick automaton:
+    /// the `"answers"` needle starts with a quote, and in JSON lines a quote is one of
+    /// the DENSEST bytes, so AC's start-byte prefilter degenerated into a verification
+    /// attempt at nearly every string boundary (`try_find_fwd` became the #1 profile
+    /// entry). `memmem` picks a rare byte INSIDE each needle as its SIMD skip anchor,
+    /// so per-needle scans stay at memory speed regardless of the leading byte.
+    ///
+    /// Two tiers, split by whether a marker-bearing line's synthesized text can be
+    /// re-rendered SELF-CONTAINED for the §7f stage-2 verification:
+    /// - `synth_verifiable` — notification / AUQ-answer / compact-boundary markers: the
+    ///   line's every synthesized text derives from the line alone, so the gate can
+    ///   parse JUST the marker lines, render via the SHARED engines
+    ///   (`record_text_sections` / `auq_exchange` / `record_raw_text`) and regex-check
+    ///   them — a big marker-heavy main session no longer forces a whole-file parse.
+    /// - `synth_conservative` — a rejection's `[plan: …]` pointer resolves through
+    ///   ANOTHER record (`PlanIndex`) and `--resolve-persisted` content lives in an
+    ///   external file, so those lines force the full scan (rare).
+    synth_verifiable: Vec<memmem::Finder<'static>>,
+    synth_conservative: Vec<memmem::Finder<'static>>,
+}
+
+/// Raw-byte prefilter for a pattern that IS a plain literal (no regex metachars, no
+/// JSON-escaped chars — see [`required_literal`]). Both variants are CONSERVATIVE:
+/// they can only prove a haystack CANNOT match (false positives fine, false negatives
+/// impossible), so gating on them never drops a genuine hit.
+#[derive(Debug)]
+enum Prefilter {
+    /// Case-sensitive literal: SIMD `memmem` substring search.
+    Literal(memmem::Finder<'static>),
+    /// Smart-case / `-i` insensitive literal: a `(?i)`-wrapped escaped literal as a
+    /// bytes regex — `memmem` has no caseless mode, but the regex engine compiles a
+    /// caseless literal to an accelerated (Teddy-class) multi-substring scan, so the
+    /// dominant lowercase-smart-case search gets the SAME prefilter power the
+    /// case-sensitive path always had.
+    CaselessLiteral(BytesRegex),
+}
+
+impl Prefilter {
+    /// True when `haystack` (a raw jsonl line OR a whole mmapped file) could contain a
+    /// match. The JSON-escape safety argument is [`required_literal`]'s: the literal
+    /// contains no char that serde/JS JSON-encodes, so it survives verbatim (module
+    /// case) in the raw bytes whenever the DECODED text matches.
+    fn may_match(&self, haystack: &[u8]) -> bool {
+        match self {
+            Prefilter::Literal(finder) => finder.find(haystack).is_some(),
+            Prefilter::CaselessLiteral(re) => re.is_match(haystack),
+        }
+    }
 }
 
 impl Matcher {
@@ -221,9 +279,88 @@ impl Matcher {
     /// pure filter) we cannot prove absence, so the line passes to the parse stage.
     fn line_may_match(&self, line: &[u8]) -> bool {
         match &self.prefilter {
-            Some(finder) => finder.find(line).is_some(),
+            Some(pf) => pf.may_match(line) || self.synth_may_match(line),
             None => true,
         }
+    }
+
+    /// The literal-prefilter check ALONE (no synth-marker OR) — the §7f pre-scan needs
+    /// the two signals separately (a literal hit forces the full scan; a marker hit
+    /// routes to its tier). `false` is only possible when a prefilter is anchored.
+    fn line_prefilter_hits(&self, line: &[u8]) -> bool {
+        match &self.prefilter {
+            Some(pf) => pf.may_match(line),
+            None => true,
+        }
+    }
+
+    /// True when a prefilter is anchored — the precondition for the §7f whole-file gate
+    /// (without one nothing is provably a miss, so the gate pre-scan would be waste).
+    fn has_prefilter(&self) -> bool {
+        self.prefilter.is_some()
+    }
+
+    /// Whole-slice version of [`Matcher::line_may_match`] — test-only: production gates
+    /// per LINE inside the parallel pre-scan (a serial whole-mmap pass would bottleneck
+    /// the single-giant-file case); tests use this to pin the miss/hit semantics.
+    #[cfg(test)]
+    fn file_may_match(&self, bytes: &[u8]) -> bool {
+        match &self.prefilter {
+            Some(pf) => pf.may_match(bytes) || self.synth_may_match(bytes),
+            None => true,
+        }
+    }
+
+    /// True when the haystack carries ANY synthesized-text marker (either tier).
+    fn synth_may_match(&self, haystack: &[u8]) -> bool {
+        self.synth_verifiable
+            .iter()
+            .chain(self.synth_conservative.iter())
+            .any(|f| f.find(haystack).is_some())
+    }
+
+    /// True when the haystack carries a CONSERVATIVE marker (must full-scan).
+    fn synth_conservative_hits(&self, haystack: &[u8]) -> bool {
+        self.synth_conservative
+            .iter()
+            .any(|f| f.find(haystack).is_some())
+    }
+
+    /// True when the haystack carries a VERIFIABLE marker (stage-2 re-render + check).
+    fn synth_verifiable_hits(&self, haystack: &[u8]) -> bool {
+        self.synth_verifiable
+            .iter()
+            .any(|f| f.find(haystack).is_some())
+    }
+
+    /// §7f stage-2: could this parsed marker-line record's SYNTHESIZED texts match?
+    /// Renders through the same shared engines the hit collector uses (no drift):
+    /// notification section labels + normalized `<result>` bodies
+    /// (`record_text_sections` — direction/owner do not affect the TEXT, so the neutral
+    /// ctx is exact), the answered-AUQ reconstruction (`auq_exchange`), and the
+    /// compact-boundary content + metadata excerpt (`record_raw_text`). Any VERBATIM
+    /// text these return is already covered by the literal scan, so a miss here plus a
+    /// literal miss proves the record cannot hit.
+    fn synth_texts_match(&self, rec: &Record) -> bool {
+        let ctx = crate::model::ClassifyCtx::top_level();
+        if rec
+            .record_text_sections(&ctx)
+            .iter()
+            .any(|sec| self.locate(&sec.text).is_some())
+        {
+            return true;
+        }
+        if let Some(t) = rec.auq_exchange() {
+            if self.locate(&t).is_some() {
+                return true;
+            }
+        }
+        if let Some(t) = record_raw_text(rec) {
+            if self.locate(&t).is_some() {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -238,6 +375,8 @@ pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
         return Ok(Matcher {
             regex: None,
             prefilter: None,
+            synth_verifiable: Vec::new(),
+            synth_conservative: Vec::new(),
         });
     }
 
@@ -251,21 +390,37 @@ pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
     )?)
     .with_context(|| format!("invalid regex pattern: {:?}", args.pattern))?;
 
-    // Extract a required literal for the cheap line prefilter. We only do this for
-    // a case-SENSITIVE pattern: a case-insensitive needle can't be matched by a
-    // single byte-exact `memmem` without casefolding the haystack (too costly), so
-    // we skip the literal prefilter there and rely on the regex (still pre-JSON, on
-    // raw bytes — far cheaper than parsing). For case-sensitive patterns, a leading
-    // required literal (when the regex starts with plain bytes) is a big win.
-    let prefilter = if case_insensitive {
-        None
+    // Extract a required literal for the cheap raw-byte prefilter (line + whole-file).
+    // Case-sensitive → byte-exact `memmem`. Case-insensitive (the smart-case DEFAULT
+    // for a lowercase pattern) → a `(?i)`-wrapped ESCAPED literal compiled as its own
+    // bytes regex: `memmem` has no caseless mode, but the regex engine lowers a
+    // caseless literal to an accelerated multi-substring scan, so the dominant
+    // lowercase search is no longer forced to parse every candidate line.
+    let prefilter = match required_literal(&args.pattern) {
+        None => None,
+        Some(_) if case_insensitive => {
+            // `lit` == the whole pattern (no metachars by construction); escape anyway
+            // so this stays correct if `required_literal` ever loosens.
+            let src = format!("(?i){}", regex::escape(&args.pattern));
+            let re = BytesRegex::new(&src)
+                .with_context(|| format!("invalid caseless prefilter for {:?}", args.pattern))?;
+            Some(Prefilter::CaselessLiteral(re))
+        }
+        Some(lit) => Some(Prefilter::Literal(memmem::Finder::new(&lit).into_owned())),
+    };
+
+    // The synthesized-text escape hatch is only needed when a prefilter can prune.
+    let (synth_verifiable, synth_conservative) = if prefilter.is_some() {
+        synth_marker_finders(args)
     } else {
-        required_literal(&args.pattern).map(|lit| memmem::Finder::new(&lit).into_owned())
+        (Vec::new(), Vec::new())
     };
 
     Ok(Matcher {
         regex: Some(regex),
         prefilter,
+        synth_verifiable,
+        synth_conservative,
     })
 }
 
@@ -324,7 +479,76 @@ fn required_literal(pattern: &str) -> Option<Vec<u8>> {
     if pattern.chars().any(json_escapes_in_string) {
         return None;
     }
+    // WHITESPACE-safety (the render-normalization mirror of the JSON-escape rule):
+    // several render paths rewrite whitespace before matching — `normalize_line`
+    // collapses runs to a single space (genuine-user text via `flatten_content_text`,
+    // peer bodies, notification reports) and multi-part texts are joined with `' '` /
+    // `'\n'` seams. A literal CONTAINING whitespace can therefore match rendered text
+    // (`hello world`) whose raw bytes hold `hello\nworld` — a `memmem` for it would
+    // falsely prove absence. A whitespace-FREE literal always sits inside one
+    // unrewritten non-whitespace run, which survives verbatim in the raw bytes, so
+    // only those stay prefilter-eligible. (This also closes a latent gap the old
+    // case-sensitive prefilter had for space-carrying patterns.)
+    if pattern.chars().any(char::is_whitespace) {
+        return None;
+    }
     Some(pattern.as_bytes().to_vec())
+}
+
+/// Build the SYNTHESIZED-text marker finders for [`Matcher::synth`] (one SIMD
+/// `memmem` scan per needle, per line — see the field doc for why not Aho-Corasick).
+///
+/// Rationale: the literal prefilter proves absence only for matchable text that is a
+/// VERBATIM substring of the record's raw line bytes. A small, closed set of render
+/// paths synthesizes text from other sources; each is detectable by a raw marker its
+/// carrier record ALWAYS contains:
+/// - `<task-notification>` — `automation_label` fabricates the kind slug
+///   (`subagent`/`background-command`/…), a `completed` status fallback, and `[…]`
+///   scaffolding; the G1 inbox view normalizes the `<result>` body.
+/// - `"answers"` + the two synthesized answer markers — the ANSWER carrier's
+///   `auq_exchange` render fabricates the `[AskUserQuestion · N question(s)]` scaffold,
+///   `Q1/A1` labels and option lists that appear verbatim nowhere in the raw line.
+///   (The QUESTION-side `tool_use` needs no needle: its matchable text is
+///   `render_tool_use` = the verbatim `name` + the re-serialized `input`, and the name
+///   bytes sit in the raw line — a bare `AskUserQuestion` needle would disable the gate
+///   for the ~29% of files whose injected context merely MENTIONS the tool.)
+/// - `To tell you how to proceed` — the rejection reconstruction appends a
+///   `[plan: <path>]` pointer whose path lives on a DIFFERENT record.
+/// - `compact_boundary` (only when the `-t` selection can reach
+///   `harness.compaction.boundary` — otherwise the boundary line is not even a scan
+///   candidate, so its synthesized excerpt is unreachable) — `trigger=…`/`preTokens=…`
+///   key=value text is fabricated from `compactMetadata`.
+/// - Under `--resolve-persisted`: `persistedOutputPath` / `Full output saved to:` —
+///   the matched text is EXTERNAL file content, absent from the transcript bytes by
+///   definition.
+///
+/// False positives only cost speed (the line/file falls back to the full parse +
+/// regex pipeline); false negatives are what the set is built to make impossible.
+fn synth_marker_finders(
+    args: &SearchArgs,
+) -> (Vec<memmem::Finder<'static>>, Vec<memmem::Finder<'static>>) {
+    // VERIFIABLE (stage-2 re-renderable from the line alone; see `Matcher::synth_*`).
+    let mut verifiable: Vec<&[u8]> = vec![
+        b"<task-notification>",
+        br#""answers""#,
+        b"User has answered your questions",
+        b"Your questions have been answered",
+    ];
+    if label_selected(&args.categories, Class::CompactionBoundary.path()) {
+        verifiable.push(b"compact_boundary");
+    }
+    // CONSERVATIVE (needs cross-record / external data — force the full scan).
+    let mut conservative: Vec<&[u8]> = vec![b"To tell you how to proceed"];
+    if args.resolve_persisted {
+        conservative.push(b"persistedOutputPath");
+        conservative.push(b"Full output saved to:");
+    }
+    let mk = |ns: Vec<&[u8]>| {
+        ns.into_iter()
+            .map(|n| memmem::Finder::new(n).into_owned())
+            .collect()
+    };
+    (mk(verifiable), mk(conservative))
 }
 
 /// True when `c` is escaped inside a JSON string literal (so it never appears
@@ -778,6 +1002,93 @@ fn search_one_file(
     };
     let bytes: &[u8] = &mmap;
 
+    // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector —
+    // computed up front because BOTH the whole-file gate below and the candidate scan key on it.
+    let needs_compact_boundary = label_selected(&args.categories, Class::CompactionBoundary.path());
+
+    // ── §7f whole-file gate ──
+    // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
+    // this is NOT an addressing fetch (`--line`/`--uuid` emit records regardless of the
+    // pattern), a cheap PARALLEL pre-scan can prove that no candidate line matches: no
+    // per-line literal occurrence AND no synthesized-text marker (see [`Matcher::synth`]).
+    // Every emitted exchange requires >=1 regex hit (`hits.is_empty() -> continue`), so such
+    // a file provably yields nothing — skip building records for it entirely. Mechanics:
+    // - the pre-scan runs on the SAME newline-aligned rayon chunking as the full scan (never
+    //   a serial whole-mmap pass — that would bottleneck the single-giant-file case);
+    // - a relaxed AtomicBool short-circuits it the moment ANY line may match: the remaining
+    //   lines skim (one load + return), the partial malformed count is discarded, and the
+    //   full scan below recounts exactly — a file WITH matches pays only the skim;
+    // - the malformed-line count is a TESTED contract (no silent skip): a gated file's
+    //   candidate lines were each syntax-validated (`validate_line_syntax` — no Record
+    //   build, no allocation) before the verdict, so real corruption (torn writes) counts
+    //   exactly as the full scan would;
+    // - the elicitation-sidecar merges live OUTSIDE these bytes (a separate tiny file,
+    //   top-level sessions only): when any are pending they could still match, so fall
+    //   through to the normal scan (rare); their malformed count is reported either way.
+    if address.is_none() && matcher.has_prefilter() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let force_full = AtomicBool::new(false);
+        // Pre-scan verdict per candidate line: a literal or CONSERVATIVE-marker hit
+        // forces the full scan (flag + short-circuit); a VERIFIABLE-marker line is
+        // COLLECTED for stage-2 (parsed there, so its malformed accounting happens
+        // there too); anything else is syntax-validated for the malformed count.
+        let (marker_lines, mut gate_skipped): (Vec<Vec<u8>>, usize) =
+            crate::parse::scan_lines_parallel(bytes, |line, _| {
+                if force_full.load(Ordering::Relaxed) {
+                    return crate::parse::LineVerdict::Ignore; // verdict already "full scan"
+                }
+                if !line_is_transcript_candidate(line, needs_compact_boundary) {
+                    return crate::parse::LineVerdict::Ignore;
+                }
+                if matcher.line_prefilter_hits(line) || matcher.synth_conservative_hits(line) {
+                    force_full.store(true, Ordering::Relaxed);
+                    return crate::parse::LineVerdict::Ignore;
+                }
+                if matcher.synth_verifiable_hits(line) {
+                    return crate::parse::LineVerdict::Keep(line.to_vec());
+                }
+                match crate::parse::validate_line_syntax(line) {
+                    Ok(()) => crate::parse::LineVerdict::Ignore,
+                    Err(_) => crate::parse::LineVerdict::Skip,
+                }
+            });
+        // Stage-2: re-render each collected marker line's SYNTHESIZED texts through the
+        // shared engines and regex-check them. A malformed marker line is counted here
+        // (it was deliberately NOT validated in the pre-scan — no double count).
+        let mut synth_matched = force_full.load(Ordering::Relaxed);
+        if !synth_matched {
+            for raw in &marker_lines {
+                match crate::parse::parse_line(raw) {
+                    Ok(Some(rec)) => {
+                        if matcher.synth_texts_match(&rec) {
+                            synth_matched = true;
+                            break;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(_) => gate_skipped += 1,
+                }
+            }
+        }
+        if !synth_matched {
+            // No candidate line can hit => no exchange can emit; `gate_skipped` is the
+            // exact malformed count (every candidate line was validated or parsed once).
+            if crate::subagent::is_subagent_path(path) {
+                return Ok(FileResult {
+                    exchanges: Vec::new(),
+                    skipped_lines: gate_skipped,
+                });
+            }
+            let (pending, pending_skipped) = crate::elicitation::unresolved_pending(path)?;
+            if pending.is_empty() {
+                return Ok(FileResult {
+                    exchanges: Vec::new(),
+                    skipped_lines: gate_skipped + pending_skipped,
+                });
+            }
+        }
+    }
+
     // Retain every TRANSCRIPT record in file order (genuine users delimit turns;
     // the rest are turn members). Two-stage prefilter (§7d):
     //   1. CATEGORY prefilter — drop pure-noise lines (attachment/system/metadata)
@@ -794,8 +1105,7 @@ fn search_one_file(
     // for the rare `type:"system"` boundary line when a selector can actually reach
     // `harness.compaction.boundary` (or no `-t` = match-all). A `-t user` / `-t agent.*` search can
     // never match a boundary, so it pays ZERO for the extra check — the hard `-t` filter PRUNES the
-    // byte-scan instead of taxing it (computed once here, captured by the parallel closure).
-    let needs_compact_boundary = label_selected(&args.categories, Class::CompactionBoundary.path());
+    // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_transcript_candidate(line, needs_compact_boundary) {
             return crate::parse::LineVerdict::Ignore;
@@ -1419,6 +1729,8 @@ fn collect_turn_siblings(
     let pure = Matcher {
         regex: None,
         prefilter: None,
+        synth_verifiable: Vec::new(),
+        synth_conservative: Vec::new(),
     };
     let mut sibs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
@@ -2462,14 +2774,70 @@ mod tests {
 
     #[test]
     fn prefilter_drops_lines_without_literal() {
+        // Smart-case lowercased → case-insensitive → the CASELESS literal prefilter:
+        // still a raw-byte gate, but folding case (any-case occurrences pass).
         let m = build_matcher(&args("carry")).unwrap();
-        // smart-case lowercased → case-insensitive → no byte prefilter (see build).
-        assert!(m.prefilter.is_none());
-        // A case-sensitive plain literal DOES get a prefilter.
+        assert!(matches!(m.prefilter, Some(Prefilter::CaselessLiteral(_))));
+        assert!(m.line_may_match(b"...the CARRY logic..."));
+        assert!(m.line_may_match(b"...the carry logic..."));
+        assert!(!m.line_may_match(b"...nothing relevant..."));
+        assert!(!m.file_may_match(b"a whole file without the needle"));
+        assert!(m.file_may_match(b"prefix bytes then Carry appears"));
+        // A case-sensitive plain literal gets the byte-exact memmem prefilter.
         let m2 = build_matcher(&args("Carry")).unwrap();
-        assert!(m2.prefilter.is_some());
+        assert!(matches!(m2.prefilter, Some(Prefilter::Literal(_))));
         assert!(m2.line_may_match(b"...the Carry logic..."));
+        assert!(!m2.line_may_match(b"...the CARRY logic..."));
         assert!(!m2.line_may_match(b"...nothing relevant..."));
+    }
+
+    #[test]
+    fn prefilter_whitespace_literal_is_ineligible() {
+        // `normalize_line` collapses whitespace in several render paths (genuine-user
+        // text, peer bodies, notification reports), so a rendered "hello world" can be
+        // raw "hello\nworld" — a space-carrying literal must NOT anchor a byte
+        // prefilter in EITHER case mode.
+        let m = build_matcher(&args("hello world")).unwrap();
+        assert!(m.prefilter.is_none());
+        let m2 = build_matcher(&args("Hello World")).unwrap();
+        assert!(m2.prefilter.is_none(), "case-sensitive too");
+        // No prefilter ⇒ nothing is provably a miss.
+        assert!(m.line_may_match(b"unrelated bytes"));
+        assert!(m.file_may_match(b"unrelated bytes"));
+    }
+
+    #[test]
+    fn synth_marker_keeps_line_and_file_matchable_without_literal() {
+        // A `<task-notification>` record renders a FABRICATED kind slug ("subagent") +
+        // status that appear nowhere in its raw bytes; the marker must keep the
+        // line/file in the match pipeline even though the literal prefilter misses.
+        let m = build_matcher(&args("subagent")).unwrap();
+        assert!(m.prefilter.is_some());
+        let line = br#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#;
+        assert!(m.line_may_match(line));
+        assert!(m.file_may_match(line));
+        // The rejection reconstruction appends a `[plan: …]` pointer resolved from a
+        // DIFFERENT record — its marker keeps the carrier matchable too.
+        let rej = br#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"To tell you how to proceed, the user said:\ngo"}]}}"#;
+        let m_plan = build_matcher(&args("plan")).unwrap();
+        assert!(m_plan.line_may_match(rej));
+        // A line with neither literal nor marker is still provably a miss.
+        assert!(!m.line_may_match(b"{\"type\":\"user\"} nothing relevant"));
+        assert!(!m.file_may_match(b"a whole file with nothing relevant"));
+    }
+
+    #[test]
+    fn resolve_persisted_flag_adds_pointer_markers() {
+        let mut a = args("zzguarded");
+        a.resolve_persisted = true;
+        let m = build_matcher(&a).unwrap();
+        // A persisted-output pointer line can match EXTERNAL file content, so under
+        // `--resolve-persisted` it must stay matchable despite lacking the literal.
+        let line = br#"{"toolUseResult":{"persistedOutputPath":"/tmp/x.txt"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"Full output saved to: /tmp/x.txt"}]}}"#;
+        assert!(m.line_may_match(line));
+        // Without the flag the same line is provably a miss.
+        let m2 = build_matcher(&args("zzguarded")).unwrap();
+        assert!(!m2.line_may_match(line));
     }
 
     #[test]

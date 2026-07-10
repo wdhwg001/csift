@@ -95,6 +95,24 @@ pub fn parse_line(line: &[u8]) -> Result<Option<Record>> {
     Ok(Some(rec))
 }
 
+/// Validate one raw jsonl line's JSON syntax WITHOUT building a [`Record`] (no
+/// allocation, no field processing — `IgnoredAny` drives the full lexer and nothing
+/// else). `Ok(())` for a blank line. Used by `search`'s whole-file gate to keep the
+/// malformed-line count EXACT for a file it proved cannot match: real-world
+/// corruption (a torn tail write, garbage bytes) fails here exactly as it fails
+/// [`parse_line`]. The one divergence is deliberate and documented: a line that is
+/// VALID JSON but violates the `Record` schema (e.g. a non-string/blocks
+/// `message.content`) passes this check while `parse_line` would count it — a shape
+/// never observed in real transcripts (the model is tolerant-by-construction:
+/// every field is optional, unknown fields/blocks are ignored).
+pub fn validate_line_syntax(line: &[u8]) -> Result<()> {
+    let Some(payload) = line_payload(line) else {
+        return Ok(());
+    };
+    serde_json::from_slice::<serde::de::IgnoredAny>(payload)?;
+    Ok(())
+}
+
 /// Scan every line of an already-mapped byte slice front-to-back, calling `visit`
 /// with each line's raw bytes (excluding the trailing `\n`). Unlike [`scan_lines`]
 /// this takes the slice directly (the caller owns the [`Mmap`] so it can retain
@@ -709,6 +727,27 @@ mod tests {
         // Must have stopped at the genuine user (line 4 of valid records: the
         // metadata + attachment + isMeta were visited but not matched).
         assert_eq!(count, 4, "stopped at the first genuine user, not later");
+    }
+
+    #[test]
+    fn validate_line_syntax_counts_corruption_like_parse_line() {
+        // Blank lines are fine for both (never counted).
+        assert!(validate_line_syntax(b"").is_ok());
+        assert!(validate_line_syntax(b"   \r").is_ok());
+        // Valid JSON passes both.
+        let ok = br#"{"type":"user","message":{"role":"user","content":"x"}}"#;
+        assert!(validate_line_syntax(ok).is_ok());
+        assert!(parse_line(ok).unwrap().is_some());
+        // Real-world corruption (a torn tail write) fails BOTH the same way — the
+        // parity `search`'s whole-file gate relies on for its malformed count.
+        for torn in [
+            br#"{"type":"user","message":{"role":"user","content":"tor"#.as_slice(),
+            b"{ garbage not json".as_slice(),
+            br#"{"role":"user""#.as_slice(),
+        ] {
+            assert!(validate_line_syntax(torn).is_err(), "{torn:?}");
+            assert!(parse_line(torn).is_err(), "{torn:?}");
+        }
     }
 
     #[test]
