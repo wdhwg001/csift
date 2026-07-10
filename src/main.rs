@@ -20,6 +20,7 @@ mod recover;
 mod search;
 mod session;
 mod show;
+mod stats;
 mod subagent;
 mod text;
 mod time_window;
@@ -67,6 +68,7 @@ fn run(cli: Cli) -> Result<()> {
         Command::List(args) => session::run_list(&args),
         Command::Search(args) => search::run_search(&args),
         Command::Show(args) => show::run_show(&args),
+        Command::Stats(args) => stats::run_stats(&args),
         Command::Whoami(args) => whoami::run_whoami(&args),
         Command::Agents(args) => agents::run_agents(&args),
         Command::Files(args) => files::run_files(&args),

@@ -388,6 +388,9 @@ pub enum Command {
     /// Fetch specific record(s) of ONE transcript by line number / record uuid — rendered
     /// full, or verbatim raw jsonl with `--raw`.
     Show(ShowArgs),
+    /// One-scan aggregates per session: records, turns, tool calls by name, tokens by
+    /// model, time span, compactions.
+    Stats(StatsArgs),
     /// Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID, falling back
     /// to CODEX_COMPANION_SESSION_ID).
     Whoami(WhoamiArgs),
@@ -929,6 +932,59 @@ pub struct ShowArgs {
     /// Emit JSON instead of the rendered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+}
+
+/// `csift stats` — one-scan aggregates per session (and a scope total).
+#[derive(Args, Debug)]
+#[command(
+    about = "Aggregate a session (or scope): records, turns, tool calls by name, tokens \
+             by model, time span, compactions",
+    long_about = "One scan, one fixed rich shape — the aggregation questions that \
+        otherwise force hand-rolled jsonl parsing: token burn per model \
+        (message.usage sums), tool-call counts by name, turn count, first/last \
+        timestamps + duration, compaction count, malformed-line count. Spans subagents \
+        by default (each transcript is its own row; the scope TOTAL block sums them). \
+        `--since`/`--until` bound the counted records by timestamp.",
+    after_help = "EXAMPLES\n  \
+          csift stats @<uuid>                    # one session + its subagents\n  \
+          csift stats @<uuid> --no-subagents     # just the top-level thread\n  \
+          csift stats . --since 1d               # this project, last 24h\n  \
+          csift stats @<uuid> --format json | tail -1 | jq .tokens   # scope token totals"
+)]
+pub struct StatsArgs {
+    /// Project path(s) / `@<uuid>` / `@<agent-id>` / `*.jsonl` — same targeting grammar as
+    /// every subcommand. Empty ⇒ every project.
+    #[arg(value_name = "PATH", value_parser = parse_project_target)]
+    pub paths: Vec<std::path::PathBuf>,
+
+    /// Lower time bound (ISO8601 / relative `2h`/`3d`/…): records outside are not counted.
+    #[arg(long, value_name = "WHEN")]
+    pub since: Option<String>,
+
+    /// Upper time bound (same WHEN grammar as --since).
+    #[arg(long, value_name = "WHEN")]
+    pub until: Option<String>,
+
+    /// Exclude subagent transcripts — count only the top-level session(s).
+    #[arg(long = "no-subagents")]
+    pub no_subagents: bool,
+
+    /// Span subagent transcripts — the DEFAULT here; the explicit flag exists so every
+    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    pub subagents: bool,
+
+    /// Emit JSON instead of the text blocks.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+}
+
+impl StatsArgs {
+    /// Whether subagent transcripts are spanned (the default).
+    #[must_use]
+    pub fn want_subagents(&self) -> bool {
+        self.subagents || !self.no_subagents
+    }
 }
 
 /// Which subagent kinds to surface in `agents`. Mirrors the on-disk discriminator

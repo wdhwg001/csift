@@ -356,6 +356,44 @@ pub struct Message {
     /// Either a bare string (genuine text) or an array of typed blocks.
     #[serde(default)]
     pub content: Option<Content>,
+
+    /// The model id on assistant records (`claude-…`). Kept as a raw `Value` so an
+    /// unexpected shape can never fail the whole record (tolerance discipline); read
+    /// via `as_str`. Consumed by `stats`.
+    #[serde(default)]
+    pub model: Option<serde_json::Value>,
+
+    /// The token-usage echo on assistant records. Kept UNPARSED (same rationale as
+    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].
+    #[serde(default)]
+    pub usage: Option<Box<serde_json::value::RawValue>>,
+}
+
+/// The token-usage fields `stats` sums (each optional + tolerant — a missing/odd
+/// field reads as absent, never an error).
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(default)]
+pub struct TokenUsage {
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_read_input_tokens: Option<u64>,
+    pub cache_creation_input_tokens: Option<u64>,
+}
+
+impl Message {
+    /// Parse the raw `usage` blob into the typed probe on demand (`None` when absent
+    /// or shaped unexpectedly — tolerant, never an error).
+    #[must_use]
+    pub fn token_usage(&self) -> Option<TokenUsage> {
+        let raw = self.usage.as_ref()?;
+        serde_json::from_str(raw.get()).ok()
+    }
+
+    /// The model id string, when present and a string.
+    #[must_use]
+    pub fn model_id(&self) -> Option<&str> {
+        self.model.as_ref().and_then(serde_json::Value::as_str)
+    }
 }
 
 /// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see

@@ -1300,6 +1300,59 @@ fn show_raw_emits_the_verbatim_line() {
     assert!(clash.stderr.contains("--raw"), "{}", clash.stderr);
 }
 
+// ── stats: one-scan aggregates (records, turns, tools, tokens, span, compactions) ──
+
+#[test]
+fn stats_aggregates_records_turns_tools_and_tokens() {
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-statsy";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":5},"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"second ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T06:00:09.000Z","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":1,"output_tokens":2},"content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &format!("@{sess}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("turns 2"), "{}", out.stdout);
+    assert!(out.stdout.contains("Bash×1"), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains("claude-opus-4-8: in 11 · out 22 · cache-read 100 · cache-write 5"),
+        "token sums: {}",
+        out.stdout
+    );
+
+    let j = h.run(&["stats", &format!("@{sess}"), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let row = json_rows(&j.stdout, "session").remove(0);
+    assert_eq!(row["turns"], 2);
+    assert_eq!(row["user_records"], 3); // 2 genuine + 1 tool_result carrier
+    assert_eq!(row["assistant_records"], 2);
+    assert_eq!(row["tools"]["Bash"], 1);
+    assert_eq!(row["tokens"]["claude-opus-4-8"]["output"], 22);
+    let sum = json_summary(&j.stdout);
+    assert_eq!(sum["turns"], 2);
+
+    // --since bounds the counted records (only the second turn's records remain).
+    let win = h.run(&[
+        "stats",
+        &format!("@{sess}"),
+        "--since",
+        "2026-06-07T05:30:00Z",
+        "--format",
+        "json",
+    ]);
+    let row = json_rows(&win.stdout, "session").remove(0);
+    assert_eq!(row["turns"], 1, "window admits only the later turn");
+    assert_eq!(row["tokens"]["claude-opus-4-8"]["output"], 2);
+}
+
 // A fixture with ONE subagent whose bare hex is a realistic >=12-char id.
 fn show_subagent_home() -> (Home, &'static str, &'static str) {
     let enc = "-Users-testuser-Projects-linehex";
