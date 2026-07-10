@@ -35,7 +35,7 @@ use memchr::memmem;
 use rayon::prelude::*;
 use regex::bytes::Regex as BytesRegex;
 
-use crate::cli::{label_selected, OutputFormat, SearchArgs};
+use crate::cli::{LabelFilter, OutputFormat, SearchArgs};
 use crate::model::{
     group_turn_indices_deduped, normalize_line, tool_result_content_text, Block, Class,
     ClassifyCtx, Content, PlanIndex, Record, SpawnLookup,
@@ -95,12 +95,16 @@ pub struct Hit {
     /// non-tool hit or before the pass runs.
     pub pair: Option<Pairing>,
     /// 1-based PHYSICAL line number of the source record in its session jsonl — the stable
-    /// address `csift search --line N` re-fetches. Backfilled by the turn collector (make_hit
+    /// address `csift show --line N` re-fetches. Backfilled by the turn collector (make_hit
     /// leaves it 0); 0 means "not located" (never happens for a real scanned hit).
     pub line: usize,
     /// The source record's `uuid` (jsonl's own globally-unique id), when present — the
-    /// alternative `csift search --uuid U` address. `None` for records that carry no uuid.
+    /// alternative `csift show --uuid U` address. `None` for records that carry no uuid.
     pub uuid: Option<String>,
+    /// The record's VERBATIM source jsonl line — backfilled from the file mmap ONLY under
+    /// `search --raw` (the bytes-out mode); `None` otherwise and for sidecar-merged records
+    /// (no physical line).
+    pub raw: Option<String>,
     /// Stable image ids the SOURCE RECORD carries (`#N` session handle, else `L<line>i<n>`) —
     /// the `[N image(s): …]` suffix, so a `search` hit on an image-bearing message exposes the
     /// SAME extractable id as `turns`/`image` (feed it to `csift image <session> --id <ID>`).
@@ -125,16 +129,18 @@ pub struct Hit {
 /// hit(s).
 #[derive(Debug, Clone)]
 pub struct Exchange {
-    /// The transcript's own id: a top-level session uuid, OR a bare SUBAGENT hex when the
-    /// hit came from a subagent transcript. A subagent hex is NOT a re-feedable `@<uuid>`
-    /// target — use `parent_session_id` to re-feed (`csift turns @<parent>`). `is_subagent`
-    /// discriminates.
+    /// The transcript's own id: a top-level session uuid, OR a subagent agent-id when the
+    /// hit came from a subagent transcript (both round-trip as `@<id>` targets). THE
+    /// LINE-DOMAIN RULE: line numbers are per-FILE, so a line-addressed fetch (`show
+    /// --line`) MUST use THIS id (the transcript owning the line — a parent uuid + a
+    /// subagent line silently fetches the wrong record); scope-level re-targeting uses
+    /// `parent_session_id`. `is_subagent` discriminates.
     pub session_id: String,
-    /// True when this exchange came from a subagent transcript (so `session_id` is a
-    /// non-re-feedable bare hex). When true, `parent_session_id` carries the re-feedable uuid.
+    /// True when this exchange came from a subagent transcript (so `session_id` is an
+    /// agent id, not a top-level uuid).
     pub is_subagent: bool,
-    /// The re-feedable PARENT session uuid (the owning top-level session). Equal to
-    /// `session_id` for a top-level hit; the subagent's parent uuid for a subagent hit.
+    /// The OWNING top-level session uuid — the scope-token for re-targeting OTHER commands
+    /// at the whole session. Equal to `session_id` for a top-level hit.
     pub parent_session_id: String,
     /// 0-based turn index (turns delimited by genuine-user messages).
     pub turn_index: usize,
@@ -155,7 +161,7 @@ pub struct Exchange {
     /// `--siblings` is off or nothing was capped) — surfaced, never silent.
     pub siblings_hidden: usize,
     /// The turn's physical jsonl line span `[first, last]` (0,0 when unknown) — the
-    /// `csift show --line A-B` pointer the hidden-siblings note renders.
+    /// `csift show --line A..B` pointer the hidden-siblings note renders.
     pub turn_lines: (usize, usize),
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
@@ -546,7 +552,10 @@ fn synth_marker_finders(
         b"User has answered your questions",
         b"Your questions have been answered",
     ];
-    if label_selected(&args.labels, Class::CompactionBoundary.path()) {
+    if args
+        .label_filter()
+        .selected(Class::CompactionBoundary.path())
+    {
         verifiable.push(b"compact_boundary");
     }
     // CONSERVATIVE (needs cross-record / external data — force the full scan).
@@ -618,11 +627,12 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // POSITIONAL pins a single session (via resolve_session_files), so it counts as a session
     // filter here too — otherwise the warning would falsely claim "no session filter" on a run
     // that is in fact scoped to one session.
-    let has_session_filter = args
-        .targets()
-        .iter()
-        .filter_map(|p| p.to_str())
-        .any(path::pins_single_session);
+    let has_session_filter = args.sessions_from.is_some()
+        || args
+            .targets()
+            .iter()
+            .filter_map(|p| p.to_str())
+            .any(path::pins_single_session);
     if path::is_uuid(&args.pattern) && !has_session_filter {
         eprintln!(
             "csift: note: searching for this uuid as TEXT across the scope; to scope the \
@@ -630,9 +640,21 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             args.pattern
         );
     }
+    // A `-t`/`-T` combination that excludes everything it includes can never match — a
+    // statically-detectable mistake, so fail loud (never an honest-looking empty result).
+    if args.label_filter().is_statically_empty() {
+        bail!(
+            "-T excludes every label the -t selection includes (-t {:?} -T {:?}) — this \
+             filter can never match anything. Loosen -T or widen -t.",
+            args.labels,
+            args.labels_not
+        );
+    }
+
     let matcher = build_matcher(args)?;
     if matcher.is_pure_filter()
         && args.labels.is_empty()
+        && args.labels_not.is_empty()
         && turn_range.is_none()
         && time_window.is_unbounded()
         && !has_session_filter
@@ -645,8 +667,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
 
     // ── Resolve targets → session files via the shared (optionally subagent-spanning)
     //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.) ──
-    let session_files = path::resolve_session_files(
+    let session_files = path::resolve_targets_with_session_list(
         &args.targets(),
+        args.sessions_from.as_deref(),
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
@@ -751,6 +774,81 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         return Ok(());
     }
 
+    // `-l`: only WHICH sessions matched, one id per line — sorted, deduped, UNCAPPED (the
+    // grep idiom, built to pipe into `--sessions-from -`). Ids are the OWNING sessions
+    // (`parent_session_id`) — the scope-token domain: re-targeting is scope-level, so a
+    // subagent hit lists its parent uuid (always re-feedable; a per-transcript detail id is
+    // the JSON summary's `session_ids` / a hit's `refetch`). A `--max-count` drop could hide
+    // sessions, so it is disclosed on stderr (stdout stays a pure id stream) — no silent
+    // truncation.
+    if args.sessions_with_matches {
+        if args.format == OutputFormat::Json {
+            bail!("-l prints a plain id stream; with --format json read the summary's `session_ids` instead");
+        }
+        let mut ids: Vec<&str> = outcome
+            .exchanges
+            .iter()
+            .map(|e| e.parent_session_id.as_str())
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        for id in &ids {
+            println!("{id}");
+        }
+        if outcome.dropped_by_cap > 0 {
+            eprintln!(
+                "csift: note: {} exchange(s) dropped by --max-count — this session listing \
+                 may be incomplete; raise --max-count",
+                outcome.dropped_by_cap
+            );
+        }
+        return Ok(());
+    }
+
+    // `--raw`: the found records' VERBATIM jsonl lines — stdout is a pure jsonl stream (for
+    // `jq`); scope/accounting notes go to stderr. One line per matched RECORD (a record hit
+    // under several labels emits once); a sidecar-merged record has no physical line and is
+    // omitted WITH a stderr note (disclosed, never silent).
+    if args.raw {
+        if args.format == OutputFormat::Json {
+            bail!("--raw IS the machine output (verbatim jsonl lines) — drop --format json");
+        }
+        let mut skipped_sidecar = 0usize;
+        let mut seen: std::collections::BTreeSet<(&str, usize)> = std::collections::BTreeSet::new();
+        for ex in &outcome.exchanges {
+            for h in &ex.hits {
+                if h.from_sidecar {
+                    skipped_sidecar += 1;
+                    continue;
+                }
+                if let Some(raw) = &h.raw {
+                    if seen.insert((ex.session_id.as_str(), h.line)) {
+                        println!("{raw}");
+                    }
+                }
+            }
+        }
+        if skipped_sidecar > 0 {
+            eprintln!(
+                "csift: note: {skipped_sidecar} sidecar-merged record(s) have no physical \
+                 transcript line — omitted under --raw"
+            );
+        }
+        if outcome.dropped_by_cap > 0 {
+            eprintln!(
+                "csift: note: {} exchange(s) dropped by --max-count",
+                outcome.dropped_by_cap
+            );
+        }
+        if outcome.skipped_lines > 0 {
+            eprintln!(
+                "csift: note: {}",
+                crate::text::malformed_note(outcome.skipped_lines)
+            );
+        }
+        return Ok(());
+    }
+
     match args.format {
         OutputFormat::Text => render_text(&outcome, args),
         OutputFormat::Json => render_json(&outcome)?,
@@ -823,7 +921,7 @@ struct Kept {
     rec: Record,
     can_hit: bool,
     /// 1-based PHYSICAL line number of this record in its source jsonl (from the scanner) —
-    /// a stable address (jsonl is append-only), surfaced per hit so `csift search --line N` (and
+    /// a stable address (jsonl is append-only), surfaced per hit so `csift show --line N` (and
     /// raw `sed -n 'Np'`) can re-fetch the exact record. `0` for a merged elicitation-sidecar
     /// record (it has no physical transcript line — see `from_sidecar`).
     line_no: usize,
@@ -885,7 +983,9 @@ fn search_one_file(
 
     // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector —
     // computed up front because BOTH the whole-file gate below and the candidate scan key on it.
-    let needs_compact_boundary = label_selected(&args.labels, Class::CompactionBoundary.path());
+    let needs_compact_boundary = args
+        .label_filter()
+        .selected(Class::CompactionBoundary.path());
 
     // ── §7f whole-file gate ──
     // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
@@ -1024,7 +1124,7 @@ fn search_one_file(
         }
     }
 
-    let exchanges = reconstruct_and_match(
+    let mut exchanges = reconstruct_and_match(
         path,
         &records,
         args,
@@ -1035,6 +1135,35 @@ fn search_one_file(
         want_siblings,
         spawn_map,
     );
+
+    // `--raw`: backfill each hit's VERBATIM source line from this file's mmap — one pass
+    // over the wanted line numbers only; the render layer then emits bytes, never a
+    // re-render (a re-serialization would not be verbatim).
+    if args.raw {
+        let wanted: std::collections::BTreeSet<usize> = exchanges
+            .iter()
+            .flat_map(|e| e.hits.iter())
+            .filter(|h| !h.from_sidecar && h.line > 0)
+            .map(|h| h.line)
+            .collect();
+        if !wanted.is_empty() {
+            let mut raw_by_line: HashMap<usize, String> = HashMap::new();
+            let mut ln = 0usize;
+            let _ = crate::parse::scan_lines_bytes(bytes, |line| {
+                ln += 1;
+                if wanted.contains(&ln) {
+                    raw_by_line.insert(ln, String::from_utf8_lossy(line).into_owned());
+                }
+            });
+            for ex in &mut exchanges {
+                for h in &mut ex.hits {
+                    if let Some(r) = raw_by_line.get(&h.line) {
+                        h.raw = Some(r.clone());
+                    }
+                }
+            }
+        }
+    }
 
     Ok(FileResult {
         exchanges,
@@ -1081,9 +1210,9 @@ fn reconstruct_and_match(
     // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
     // unaffected). See [`crate::subagent::session_id_from_path`].
     let session_id = crate::subagent::session_id_from_path(path);
-    // A subagent transcript's `session_id` is a non-re-feedable bare hex; its re-feedable
-    // owner is the parent uuid (the dir before `subagents/`). For a top-level file there is
-    // no parent, so the parent IS the session id.
+    // A subagent transcript's owner is the parent uuid (the dir before `subagents/`) — the
+    // scope-token for re-targeting the whole session. For a top-level file there is no
+    // parent, so the parent IS the session id.
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
@@ -1096,7 +1225,7 @@ fn reconstruct_and_match(
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
-    let selectors = &args.labels;
+    let filter = args.label_filter();
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
     let tool_names = build_tool_name_index(records);
@@ -1149,7 +1278,7 @@ fn reconstruct_and_match(
         // turn-record indices that produced them (so siblings can exclude matched records).
         let (mut hits, hit_idxs) = collect_turn_hits(
             &turn,
-            selectors,
+            filter,
             matcher,
             time_window,
             args.resolve_persisted,
@@ -1442,7 +1571,7 @@ fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &HashSet<Stri
 #[allow(clippy::too_many_arguments)]
 fn collect_turn_hits(
     turn: &Turn<'_>,
-    selectors: &[String],
+    filter: LabelFilter<'_>,
     matcher: &Matcher,
     time_window: &TimeWindow,
     resolve_persisted: bool,
@@ -1479,7 +1608,7 @@ fn collect_turn_hits(
         let before = hits.len();
         collect_record_hits(
             rec,
-            selectors,
+            filter,
             matcher,
             resolve_persisted,
             excerpt_max,
@@ -1498,7 +1627,7 @@ fn collect_turn_hits(
 }
 
 /// Stamp the source record's line number + uuid onto each hit just appended for it — the
-/// `csift search --line/--uuid` address. Done by the turn collector (not `make_hit`) because the line number
+/// `csift show --line/--uuid` address. Done by the turn collector (not `make_hit`) because the line number
 /// lives on the `Kept`, not the `Record`. Also attaches the record's image ids to its FIRST
 /// hit (so an image-bearing message exposes the extractable `#N`/`L<line>i<n>` id once, not
 /// repeated per matched block).
@@ -1532,7 +1661,7 @@ fn collect_turn_siblings(
     env: &ClassifyEnv<'_>,
 ) -> (Vec<Hit>, usize) {
     let pure = Matcher::pure();
-    let all: Vec<String> = Vec::new(); // empty selectors ⇒ every label is eligible
+    let all = LabelFilter::all(); // every label is eligible — siblings ignore -t/-T
     let mut sibs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
         if hit_idxs.contains(&i) {
@@ -1541,7 +1670,7 @@ fn collect_turn_siblings(
         let before = sibs.len();
         collect_record_hits(
             &kept.rec,
-            &all,
+            all,
             &pure,
             resolve_persisted,
             excerpt_max,
@@ -1586,7 +1715,7 @@ fn collect_turn_siblings(
 #[allow(clippy::too_many_arguments)]
 fn collect_record_hits(
     rec: &Record,
-    selectors: &[String],
+    filter: LabelFilter<'_>,
     matcher: &Matcher,
     resolve_persisted: bool,
     excerpt_max: usize,
@@ -1601,7 +1730,7 @@ fn collect_record_hits(
     }
     let ts = rec.timestamp.clone();
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
-    let sel = |c: Class| label_selected(selectors, c.path());
+    let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);
     // Direction is per-record (the first comm direction); computed only when a comm label is
     // present (it parses peer sections / scans blocks), and attached to comm hits only. The
@@ -1632,6 +1761,7 @@ fn collect_record_hits(
                 pair: None,
                 line: 0,
                 uuid: None,
+                raw: None,
                 image_ids: Vec::new(),
                 from_sidecar: false,
                 truncated,
@@ -1648,7 +1778,7 @@ fn collect_record_hits(
     //    → harness.notification reparent flow straight from `classify`. ──
     let sections = rec.record_text_sections(ctx);
     if sections.is_empty() {
-        if let Some((class, text)) = record_text_emission(rec, &labels, selectors, plan_index) {
+        if let Some((class, text)) = record_text_emission(rec, &labels, filter, plan_index) {
             let dir = if is_comm_class(class) {
                 direction.clone()
             } else {
@@ -1663,7 +1793,7 @@ fn collect_record_hits(
             direction: dir,
         } in sections
         {
-            if !label_selected(selectors, class.path()) {
+            if !filter.selected(class.path()) {
                 continue;
             }
             let dir = if is_comm_class(class) {
@@ -1865,11 +1995,11 @@ fn is_record_text_class(c: Class) -> bool {
 fn record_text_emission(
     rec: &Record,
     labels: &[Class],
-    selectors: &[String],
+    filter: LabelFilter<'_>,
     plan_index: &PlanIndex,
 ) -> Option<(Class, String)> {
     for &c in labels {
-        if !is_record_text_class(c) || !label_selected(selectors, c.path()) {
+        if !is_record_text_class(c) || !filter.selected(c.path()) {
             continue;
         }
         let text = match c {
@@ -2002,7 +2132,7 @@ fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {
 }
 
 /// Render a `tool_use` block to searchable text: `name {json-input}`. The name is
-/// matched first so `csift search AskUserQuestion -t tool` works; the input JSON is
+/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is
 /// included so a regex can match arguments too.
 fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {
     let mut s = String::new();
@@ -2212,7 +2342,7 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // top-level uuid and a subagent id).
         if ex.siblings_hidden > 0 && ex.turn_lines.0 > 0 {
             println!(
-                "  · (+{} more · csift show @{} --line {}-{})",
+                "  · (+{} more · csift show @{} --line {}..{})",
                 ex.siblings_hidden, ex.session_id, ex.turn_lines.0, ex.turn_lines.1
             );
         }
@@ -2235,6 +2365,9 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         "sessions"
     };
     print!("matched {n} {ex_word} · {n_sessions} {sess_word} · label={cat}");
+    if !args.labels_not.is_empty() {
+        print!(" · label-not={}", args.labels_not.join(","));
+    }
     if outcome.dropped_by_cap > 0 {
         print!(" · {} dropped by --max-count", outcome.dropped_by_cap);
     }
@@ -2320,7 +2453,21 @@ pub(crate) fn pairing_json(p: Option<Pairing>) -> serde_json::Value {
 
 /// Render one `Hit` (a match OR a `--siblings` context record) to its JSON object — the
 /// shared per-hit shape used by both the `hits` and `siblings` envelope arrays.
-fn hit_json(h: &Hit) -> serde_json::Value {
+/// The ready-to-run fetch command for a hit — `csift show` addressed at the transcript that
+/// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are
+/// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG
+/// record). A sidecar hit has no physical line → address by uuid; neither → null.
+fn refetch_json(session_id: &str, h: &Hit) -> serde_json::Value {
+    if !h.from_sidecar && h.line > 0 {
+        serde_json::json!(format!("csift show @{session_id} --line {}", h.line))
+    } else if let Some(u) = &h.uuid {
+        serde_json::json!(format!("csift show @{session_id} --uuid {u}"))
+    } else {
+        serde_json::Value::Null
+    }
+}
+
+fn hit_json(session_id: &str, h: &Hit) -> serde_json::Value {
     // Comm direction (GOLD §4): `from`/`to` only for an `agent.communication.*` hit, else null.
     let (from, to) = match &h.direction {
         Some((f, t)) => (serde_json::json!(f), serde_json::json!(t)),
@@ -2343,7 +2490,7 @@ fn hit_json(h: &Hit) -> serde_json::Value {
         // non-tool hit.
         "pairing": pairing,
         "tool_use_id": h.tool_use_id,
-        // The `csift search --line/--uuid` address: 1-based source line + the record uuid (when
+        // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.
         "line": if h.from_sidecar { serde_json::Value::Null } else { serde_json::json!(h.line) },
@@ -2351,6 +2498,10 @@ fn hit_json(h: &Hit) -> serde_json::Value {
         "source": if h.from_sidecar { serde_json::json!("elicitation-sidecar") } else { serde_json::Value::Null },
         // Extractable image ids (`#N`/`L<line>i<n>`) the record carries; empty array when none.
         "image_ids": h.image_ids,
+        // The ready-to-run `csift show` command for this record — already addressed at the
+        // RIGHT transcript (this row's session_id; a parent uuid + a subagent line number
+        // fetches the wrong record).
+        "refetch": refetch_json(session_id, h),
     })
 }
 
@@ -2367,7 +2518,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         ))?
     );
     for ex in &outcome.exchanges {
-        let hits: Vec<_> = ex.hits.iter().map(hit_json).collect();
+        let hits: Vec<_> = ex
+            .hits
+            .iter()
+            .map(|h| hit_json(&ex.session_id, h))
+            .collect();
         let mut obj = json!({
             "kind": "exchange",
             "session_id": ex.session_id,
@@ -2388,7 +2543,11 @@ fn render_json(outcome: &SearchOutcome) -> Result<()> {
         // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
         // Present only when there are siblings — absent ⇒ none (keeps the common envelope lean).
         if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
-            let sibs: Vec<_> = ex.siblings.iter().map(hit_json).collect();
+            let sibs: Vec<_> = ex
+                .siblings
+                .iter()
+                .map(|h| hit_json(&ex.session_id, h))
+                .collect();
             obj["siblings"] = json!(sibs);
             obj["siblings_hidden"] = json!(ex.siblings_hidden);
             obj["turn_lines"] = json!([ex.turn_lines.0, ex.turn_lines.1]);
@@ -2438,7 +2597,10 @@ mod tests {
             pattern: pattern.to_string(),
             subagents: false,
             paths: Vec::new(),
+            sessions_from: None,
             labels: Vec::new(),
+            labels_not: Vec::new(),
+            raw: false,
             ignore_case: false,
             multiline: false,
             turn_range: None,
@@ -2446,6 +2608,7 @@ mod tests {
             until: None,
             max_count: None,
             count_only: false,
+            sessions_with_matches: false,
             siblings: false,
             no_truncate: false,
             resolve_persisted: false,
@@ -2676,7 +2839,7 @@ mod tests {
         let mut no_resolve = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.result".to_string()],
+            LabelFilter::new(&["agent.tool.result".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2691,7 +2854,7 @@ mod tests {
         let mut with_resolve = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.result".to_string()],
+            LabelFilter::new(&["agent.tool.result".to_string()], &[]),
             &m,
             true,
             EXCERPT_MAX,
@@ -2715,7 +2878,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.thinking".to_string()],
+            LabelFilter::new(&["agent.thinking".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2738,7 +2901,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.message".to_string()],
+            LabelFilter::new(&["agent.message".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2760,7 +2923,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.use".to_string()],
+            LabelFilter::new(&["agent.tool.use".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2785,7 +2948,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.use".to_string()],
+            LabelFilter::new(&["agent.tool.use".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2816,7 +2979,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.use".to_string()],
+            LabelFilter::new(&["agent.tool.use".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2842,7 +3005,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["user".to_string()],
+            LabelFilter::new(&["user".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2865,7 +3028,7 @@ mod tests {
         // User category must NOT surface a plain tool_result carrier.
         collect_record_hits(
             &r,
-            &["user".to_string()],
+            LabelFilter::new(&["user".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -2879,7 +3042,7 @@ mod tests {
         let mut hits2 = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.result".to_string()],
+            LabelFilter::new(&["agent.tool.result".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -3001,6 +3164,68 @@ mod tests {
         assert!(early < late, "earlier ts sorts first");
         assert!(late < none, "any timestamp sorts before None");
         assert!(early < none);
+    }
+
+    #[test]
+    fn label_not_excludes_and_composes_with_include() {
+        // Premise: without -T the pattern DOES hit a thinking block.
+        let mut plain = args("straddling");
+        plain.labels = Vec::new();
+        let ex0 = search(&fixture(), &plain);
+        assert!(
+            ex0.iter()
+                .flat_map(|e| &e.hits)
+                .any(|h| h.class == Class::AgentThinking),
+            "fixture premise: 'straddling' hits agent.thinking"
+        );
+        // -T agent.thinking (no -t): ALL minus thinking — the thinking hit is gone.
+        let mut a = args("straddling");
+        a.labels_not = vec!["agent.thinking".to_string()];
+        let ex = search(&fixture(), &a);
+        assert!(
+            ex.iter()
+                .flat_map(|e| &e.hits)
+                .all(|h| h.class != Class::AgentThinking),
+            "-T agent.thinking must drop thinking hits"
+        );
+        // -t agent -T agent.thinking: the agent role minus its thinking leaf.
+        let mut b = args("the");
+        b.labels = vec!["agent".to_string()];
+        b.labels_not = vec!["agent.thinking".to_string()];
+        let exb = search(&fixture(), &b);
+        for h in exb.iter().flat_map(|e| &e.hits) {
+            assert!(
+                h.class.path().starts_with("agent") && h.class != Class::AgentThinking,
+                "surviving hits stay within -t minus -T; got {}",
+                h.class.path()
+            );
+        }
+    }
+
+    #[test]
+    fn label_not_renders_the_richest_surviving_view() {
+        // A SendMessage tool_use is dual-labeled (comm.sent > tool.use) and normally renders
+        // the richer comm view; excluding the comm branch re-renders it under the SURVIVING
+        // agent.tool.use label instead of vanishing.
+        let lines = vec![
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"SendMessage","input":{"to":"Peer","message":"zzpayload"}}]}}"#,
+        ];
+        let plain = args("zzpayload");
+        let ex = search(&lines, &plain);
+        assert_eq!(
+            ex.iter().flat_map(|e| &e.hits).next().map(|h| h.class),
+            Some(Class::CommSent),
+            "the unfiltered view is the richer comm label"
+        );
+        let mut b = args("zzpayload");
+        b.labels_not = vec!["agent.communication".to_string()];
+        let exb = search(&lines, &b);
+        assert_eq!(
+            exb.iter().flat_map(|e| &e.hits).next().map(|h| h.class),
+            Some(Class::AgentToolUse),
+            "with the comm branch excluded the record renders as the surviving tool.use"
+        );
     }
 
     #[test]
@@ -3180,6 +3405,7 @@ mod tests {
             pair: Some(Pairing::Paired),
             line: 0,
             uuid: None,
+            raw: None,
             image_ids: Vec::new(),
             from_sidecar: false,
             truncated: false,
@@ -3267,7 +3493,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["user".to_string()],
+            LabelFilter::new(&["user".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -3403,7 +3629,7 @@ mod tests {
         let tw = TimeWindow::default();
         let (hits, hit_idxs) = collect_turn_hits(
             &turn,
-            &[],
+            LabelFilter::all(),
             &m,
             &tw,
             false,
@@ -3437,7 +3663,7 @@ mod tests {
         let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
         assert!(collect_turn_hits(
             &turn,
-            &[],
+            LabelFilter::all(),
             &m,
             &tw,
             false,
@@ -3453,7 +3679,7 @@ mod tests {
         let tw2 = TimeWindow::default();
         assert!(!collect_turn_hits(
             &turn,
-            &[],
+            LabelFilter::all(),
             &m,
             &tw2,
             false,
@@ -3537,7 +3763,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.tool.result".to_string()],
+            LabelFilter::new(&["agent.tool.result".to_string()], &[]),
             &m,
             true,
             EXCERPT_MAX,
@@ -3565,7 +3791,7 @@ mod tests {
         let mut hits = Vec::new();
         collect_record_hits(
             &r,
-            &["agent.message".to_string()],
+            LabelFilter::new(&["agent.message".to_string()], &[]),
             &m,
             false,
             EXCERPT_MAX,
@@ -3579,7 +3805,7 @@ mod tests {
 
     #[test]
     fn auq_answer_still_surfaces_under_tool_response_alone() {
-        // The de-dup must NOT hide the AUQ answer from a `-t tool-response` filter
+        // The de-dup must NOT hide the AUQ answer from a `-t agent.tool.result` filter
         // that does not also name `user` — it is genuinely a tool_result.
         let lines = vec![
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,

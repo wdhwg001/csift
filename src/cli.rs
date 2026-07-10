@@ -1,18 +1,19 @@
 //! Command-line surface (clap derive).
 //!
-//! Nine subcommands: `list`, `search`, `agents`, `whoami`, `files`, `recover`, `plan`,
-//! `turns`, `image`. Each carries example-rich help (`--help`) keyed off the SPEC §6.1–§6.9
-//! baseline invocations. `list`/`search`/`files`/`recover`/`plan`/`image` span each session's
-//! subagent transcripts by default (`--no-subagents` opts out); `turns` is the exception — a
-//! single-thread recovery tool whose per-session budget MULTIPLIES, so it defaults to the
-//! TOP-LEVEL thread only and opts INTO spanning via `--include-subagents`. `agents` reports a
-//! session's subagent lifecycle (it lists subagents as targets, so it has no subagent-span
-//! flag). `plan` resolves the plan file BOUND to a session (its `plan_mode` attachment);
-//! `recover --file @plan` reconstructs that bound plan's content. `search` doubles as the
-//! message-fetcher: `--line`/`--uuid` address specific records (rendered full) — the
-//! in-permission alternative to `Read`-ing the raw jsonl.
+//! Eleven subcommands: `list`, `search`, `show`, `stats`, `agents`, `whoami`, `files`,
+//! `recover`, `plan`, `turns`, `image`. Each carries example-rich help (`--help`) keyed off
+//! the SPEC §6 baseline invocations. `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`
+//! span each session's subagent transcripts by default (`--no-subagents` opts out); `turns`
+//! is the exception — a single-thread recovery tool whose per-session budget MULTIPLIES, so
+//! it defaults to the TOP-LEVEL thread only, opts INTO spanning via `--subagents`, and
+//! REQUIRES a target. `agents` reports a session's subagent lifecycle (it lists subagents as
+//! targets, so it rejects both span flags). `show` FETCHES the records of exactly ONE
+//! transcript by `--line`/`--uuid` (rendered full, or `--raw` verbatim bytes); `stats` is
+//! the one-scan per-session aggregate view. `plan` resolves the plan file BOUND to a session
+//! (its `plan_mode` attachment); `recover --file @plan` reconstructs that bound plan's
+//! content.
 //! The session-operating subcommands
-//! (`list`/`search`/`agents`/`files`/`recover`/`plan`/`turns`/`image`)
+//! (`list`/`search`/`show`/`stats`/`agents`/`files`/`recover`/`plan`/`turns`/`image`)
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` that is a cwd / encoded
 //! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` session token, or a `*.jsonl` file.
@@ -307,6 +308,9 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         SUBCOMMANDS\n  \
           list     fast \"which session is this?\" index (first/last user + last agent)\n  \
           search   regex over transcripts, returning the complete round-trip exchange per hit\n  \
+          show     FETCH the record(s) you name — `--line N|A..B` / `--uuid U` of ONE transcript,\n           \
+                   rendered full, or `--raw` verbatim jsonl bytes\n  \
+          stats    one-scan aggregates per session: tokens by model, tool calls, turns, span\n  \
           agents   list a session's subagents (kind, start/completion, status) + time-window filter\n  \
           whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
           files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n  \
@@ -316,22 +320,23 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           turns    turn-fidelity reconstruction — restore the verbatim user/assistant\n           \
                    back-and-forth a compaction summary clipped, within a char budget\n  \
           image    list + extract the inline images a session carries (pastes/screenshots)\n\n\
-        (`search` also FETCHES: `--line`/`--uuid` address specific records, rendered full — \
-        the in-permission alternative to `Read`-ing the raw jsonl.)\n\n\
-        list/search/files/recover/plan/image span each session's subagent transcripts by \
+        list/search/stats/files/recover/plan/image span each session's subagent transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
         to restrict to top-level sessions. `turns` is the exception among the file-operating \
-        commands — it defaults to the TOP-LEVEL thread only (single-thread recovery) and \
-        opts INTO spanning via `--include-subagents`. (`agents` LISTS subagents as its \
-        targets rather than spanning them as inputs, so it has no subagent flag.)\n\n\
+        commands — it defaults to the TOP-LEVEL thread only (single-thread recovery), \
+        opts INTO spanning via `--subagents`, and REQUIRES a target. (`agents` LISTS \
+        subagents as its targets rather than spanning them as inputs, so it rejects both \
+        span flags.)\n\n\
         A target is EITHER a real filesystem cwd (it gets path-encoded) OR an \
         already-encoded `-Users-...` projects-dir token; with no target, every \
         project under ~/.claude/projects is scanned.\n\n\
         TARGETING a session/agent (always positional): `@<uuid>` (or its \
-        leading-hex prefix, e.g. `@13d9645a`) scopes to one session; `@<agent-hex>` to one \
-        subagent + its subtree; `@main` is the CALLING top-level session (read from \
+        leading-hex prefix, e.g. `@13d9645a`) scopes to one session; `@<agent-id>` to one \
+        subagent + its subtree (a bare hex ≥12 OR a teammate `aName-<hex>` id — exactly what \
+        `csift agents` prints); `@main` is the CALLING top-level session (read from \
         $CLAUDE_CODE_SESSION_ID); a `*.jsonl` path scopes to that one transcript. A BARE uuid \
-        (no `@`) is NOT special.\n\n\
+        (no `@`) is NOT special. `--sessions-from <FILE|->` scopes to a LIST of ids (one per \
+        line, e.g. piped from `search -l`) on every multi-target subcommand.\n\n\
         @trap:<marker> — \"which subagent am I?\", on EVERY subcommand (including `whoami`, which \
         reports your bare hex + parent uuid). CC withholds a subagent's OWN id from its Bash \
         environment, so a running subagent cannot name itself via env. Instead you INVENT a marker \
@@ -361,8 +366,11 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift turns . --budget 40000                # restore the verbatim back-and-forth a summary clipped\n  \
           csift plan @<uuid>                          # locate the plan file bound to a session\n  \
           csift image @<uuid> --out /tmp/imgs         # extract every pasted image to a dir\n  \
-          csift search \"\" @<uuid> --no-subagents --line 46550   # fetch the exact message a hit reported, in full\n  \
-          csift search \"\" @<uuid> --no-subagents --line 100-140 # fetch a contiguous span of records\n\n\
+          csift show @<uuid> --line 46550             # fetch the exact record a hit cited, in full\n  \
+          csift show @<uuid> --line 46550 --raw       # …or its verbatim raw jsonl bytes\n  \
+          csift stats @main --no-subagents            # this session's token/tool/turn aggregates\n  \
+          csift search \"panic\" -l | csift stats --sessions-from -   # aggregate exactly the sessions that matched\n  \
+          csift search \"\" @<uuid> -t agent -T agent.thinking       # the agent role minus its thinking\n\n\
         Run `csift <subcommand> --help` for per-subcommand flags + examples."
 )]
 pub struct Cli {
@@ -458,6 +466,51 @@ pub fn label_selected(selectors: &[String], path: &str) -> bool {
         || selectors
             .iter()
             .any(|s| selector_is_segment_prefix(s, path))
+}
+
+/// The active `-t`/`-T` label filter — the include selectors (empty ⇒ every label) MINUS the
+/// exclude selectors, both matched by the same segment-prefix rule. The ONE membership
+/// predicate every hit-selection surface keys on (the rg `-t`/`-T` duality). Exclusion only
+/// ever SHRINKS the include set, so the §7 stage-1 role prefilter (a conservative superset)
+/// stays valid unchanged.
+#[derive(Debug, Clone, Copy)]
+pub struct LabelFilter<'a> {
+    include: &'a [String],
+    exclude: &'a [String],
+}
+
+impl<'a> LabelFilter<'a> {
+    #[must_use]
+    pub fn new(include: &'a [String], exclude: &'a [String]) -> Self {
+        Self { include, exclude }
+    }
+
+    /// Every label is eligible — the no-filter view (`--siblings` rendering ignores `-t`/`-T`;
+    /// selectors filter HITS, never a turn's other records).
+    #[must_use]
+    pub fn all() -> LabelFilter<'static> {
+        LabelFilter {
+            include: &[],
+            exclude: &[],
+        }
+    }
+
+    /// Does a record-label `path` survive include-minus-exclude?
+    #[must_use]
+    pub fn selected(&self, path: &str) -> bool {
+        label_selected(self.include, path)
+            && !self
+                .exclude
+                .iter()
+                .any(|s| selector_is_segment_prefix(s, path))
+    }
+
+    /// True when NO leaf of [`Class::ALL`] survives — a statically-contradictory `-t`/`-T`
+    /// combination that could never match anything (hard error at the caller, fail-loud).
+    #[must_use]
+    pub fn is_statically_empty(&self) -> bool {
+        Class::ALL.iter().all(|c| !self.selected(c.path()))
+    }
 }
 
 /// clap value_parser for one `-t`/`--label` selector: accept a dotted `role.class.sub` path
@@ -580,8 +633,9 @@ pub struct ListArgs {
     /// use; `@main`/`@trap:<marker>` resolve the calling session from the environment; a `*.jsonl` file
     /// path scopes to that transcript. NOTE: the default still SPANS that session's subagents, so
     /// a fan-out session lists 1 + N rows; add `--no-subagents` for just the single top-level row.
-    /// A bare uuid WITHOUT `@` is NOT a session here — prefix it (`@<uuid>`). To inspect one
-    /// subagent use `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>`.
+    /// A bare uuid WITHOUT `@` is NOT a session here — prefix it (`@<uuid>`). One subagent is
+    /// targeted directly: `@<agent-id>` (a bare hex ≥12 or a teammate `aName-<hex>` id, exactly
+    /// as `csift agents` prints them) lists that transcript's row (+ its subtree).
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`
     /// (an absolute cwd's leading `/` encodes to `-`), e.g.
@@ -595,6 +649,28 @@ pub struct ListArgs {
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
+
+    /// Only sessions ACTIVE in this window: keep a session iff its [first-activity,
+    /// last-activity] span — the timestamps this index already reads (head+tail, never a
+    /// full scan) — INTERSECTS `[--since, --until]`, so a long-running session that
+    /// straddles the window still lists. WHEN = ISO8601 (bare date ⇒ local midnight) or
+    /// relative `45s 90m 2h 3d 1w` (that long ago). A session with no readable timestamp
+    /// never matches a bounded window.
+    #[arg(long, value_name = "WHEN")]
+    pub since: Option<String>,
+
+    /// Upper bound (same WHEN grammar as --since).
+    #[arg(long, value_name = "WHEN")]
+    pub until: Option<String>,
 
     /// Exclude subagent transcripts — list only the top-level `<uuid>.jsonl` sessions (the
     /// pre-subagent behavior). Subagent transcripts are spanned by default; this is the only
@@ -643,7 +719,10 @@ impl ListArgs {
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
         harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
-        harness.meta.{hook,loop}. With none given, EVERY label is eligible. The human turn is \
+        harness.meta.{hook,loop}. With none given, EVERY label is eligible. `-T`/`--label-not` \
+        EXCLUDES with the same selector grammar (the rg -t/-T duality): the effective set is \
+        (-t selectors, or ALL) minus (-T selectors); a combination that excludes everything it \
+        includes is a hard error. The human turn is \
         `user.message`; an AskUserQuestion answer is `user.answer` (the full Q+options+answer \
         unit); a plan-rejection-with-message is `user.rejection` (+ a [plan: …] pointer). An \
         inbound peer/teammate message is `agent.communication.inbox` (NOT `user`); a \
@@ -655,7 +734,7 @@ impl ListArgs {
         summary). It renders as the parsed `[<kind> <task-id> <status>] <summary>` attribution \
         label — never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
         `search 'background-command' -t harness.notification.background-command`).\n\n\
-        WINDOWING: `--turn-range START..END` (inclusive, 0-based on turn-boundary \
+        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based on turn-boundary \
         order) INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept \
         ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, \
         `3d`, `90m`, `45s`, `1w`) meaning \"that long ago\" in the system local timezone.\n\n\
@@ -670,6 +749,10 @@ impl ListArgs {
           csift search \"panic\" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c idiom)\n  \
+          csift search \"refactor\" -l                            # WHICH sessions matched, one id per line (rg -l idiom)\n  \
+          csift search \"refactor\" -l | csift files --sessions-from -  # …then scope the NEXT command to them\n  \
+          csift search \"\" @<uuid> -t agent -T agent.thinking    # the agent role MINUS its thinking (-T excludes)\n  \
+          csift search \"\" @<uuid> -t agent.message --raw | jq -r '.message.model'  # raw lines: any unrendered field\n  \
           csift search \"let's chat\" -t user --siblings              # the match WITH the turn's other side\n  \
           csift search \"let's chat\" -t user --siblings --no-truncate # …and READ the reply end-to-end\n\n\
         SIBLINGS (`--siblings`)\n  \
@@ -678,7 +761,7 @@ impl ListArgs {
         so a matched user question surfaces WITH the agent's reply. Fixed policy: message units \
         always render (user.*, agent.message, agent.communication.*); chattier machinery is \
         capped per leaf (thinking ≤2, tool.use ≤3, tool.result ≤3, harness ≤2); the capped-away \
-        remainder surfaces as an explicit `(+N more · csift show @<id> --line A-B)` pointer. A \
+        remainder surfaces as an explicit `(+N more · csift show @<id> --line A..B)` pointer. A \
         record that itself matched is never duplicated as a sibling.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
           `-c`/`--count-only` prints just the integer match total (ripgrep `-c`), honoring every \
@@ -748,9 +831,10 @@ pub struct SearchArgs {
     /// sibling subcommand uses (`csift search PATTERN .` now works, matching
     /// `csift files .`). An actual cwd or an encoded `-Users-…` dir token; repeatable.
     /// With none, every project is scanned. A target may ALSO be an `@<uuid>` (8-4-4-4-12 hex)
-    /// session token (so `csift search PATTERN @<uuid>` scopes to that one session),
-    /// `@main`/`@trap:<marker>` (the calling session), or a `*.jsonl` file. A bare SUBAGENT hex is NOT
-    /// accepted here — inspect one subagent with `csift agents --agent <hex>`.
+    /// session token (so `csift search PATTERN @<uuid>` scopes to that one session), an
+    /// `@<agent-id>` (one subagent + its subtree; bare hex ≥12 or teammate `aName-<hex>`, the
+    /// ids `csift agents` prints), `@main`/`@trap:<marker>` (the calling session), or a
+    /// `*.jsonl` file.
     ///
     /// `allow_hyphen_values` is REQUIRED: every encoded dir starts with `-`; the
     /// `normalize_argv` pre-pass routes declared flags — LONG and the short `-t`/`-i` —
@@ -762,6 +846,15 @@ pub struct SearchArgs {
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
 
     /// Exclude subagent transcripts — search only the top-level `<uuid>.jsonl` sessions.
     /// Subagent transcripts are searched by default; this is the only span flag. Workflow
@@ -788,6 +881,21 @@ pub struct SearchArgs {
     )]
     pub labels: Vec<String>,
 
+    /// EXCLUDE labels matching this selector (same grammar + validation as `-t`; repeatable) —
+    /// the rg `-t`/`-T` duality. Effective set = (`-t` selectors, or ALL with none) MINUS
+    /// `-T` selectors: `-T agent.thinking` = everything except thinking; `-t agent -T
+    /// agent.tool` = the agent role minus its tool traffic. A multi-label record renders under
+    /// its richest SURVIVING label. A combination that excludes everything it includes is a
+    /// HARD error (it could never match). Filters HITS only — `--siblings` still renders a
+    /// turn's other records.
+    #[arg(
+        short = 'T',
+        long = "label-not",
+        value_name = "SELECTOR",
+        value_parser = parse_label_selector
+    )]
+    pub labels_not: Vec<String>,
+
     /// Case-insensitive match (overrides smart-case).
     #[arg(short = 'i', long)]
     pub ignore_case: bool,
@@ -796,13 +904,13 @@ pub struct SearchArgs {
     #[arg(long)]
     pub multiline: bool,
 
-    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
-    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "START..END")]
+    #[arg(long, value_name = "N|START..END")]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -831,17 +939,45 @@ pub struct SearchArgs {
     #[arg(long = "count-only", short = 'c')]
     pub count_only: bool,
 
+    /// Print ONLY the distinct matching OWNING sessions (`parent_session_id`), one per line
+    /// — the grep/rg `-l` idiom for "WHICH sessions?". Scope-token domain: a subagent hit
+    /// lists its parent uuid, so every line re-feeds (per-transcript detail lives in the
+    /// JSON summary's `session_ids` and each hit's `refetch`). Sorted, deduplicated,
+    /// UNCAPPED; when `--max-count` dropped exchanges a stderr note says the listing may be
+    /// incomplete. Pipes straight into `--sessions-from -` to scope the NEXT command to
+    /// what matched: `csift search P -l | csift stats --sessions-from -`.
+    #[arg(
+        short = 'l',
+        long = "sessions-with-matches",
+        conflicts_with_all = ["count_only", "siblings"]
+    )]
+    pub sessions_with_matches: bool,
+
     /// Also render the SIBLING records of every matched turn — the rest of the
     /// back-and-forth, not only the matched line — so a matched USER question surfaces
     /// WITH the agent's reply (answers "I said X, what did you say back?"). FIXED policy,
     /// zero arguments: message units always render (user.*, agent.message,
     /// agent.communication.*); chattier machinery is capped per leaf (agent.thinking ≤ 2,
     /// agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2); anything capped away is
-    /// counted and surfaced as an explicit `(+N more · csift show @<id> --line A-B)`
+    /// counted and surfaced as an explicit `(+N more · csift show @<id> --line A..B)`
     /// pointer. A record that itself matched is never repeated as a sibling. No effect
     /// under `--count-only`.
     #[arg(long)]
     pub siblings: bool,
+
+    /// Emit each matched record's VERBATIM raw jsonl line instead of the rendered exchange
+    /// — the same escape hatch as `show --raw` (fields csift does not render: usage,
+    /// stop_reason, model, any new field), but FILTERED by the full search surface
+    /// (PATTERN, `-t`/`-T`, time, turn-range, scope). stdout is a pure jsonl stream (pipe
+    /// into `jq`); scope/drop/malformed notes go to stderr. One line per matched RECORD (a
+    /// record hit under several labels emits once); a sidecar-merged record has no physical
+    /// line and is omitted with a stderr note. `--resolve-persisted` still affects MATCHING
+    /// only — the emitted line is always the original.
+    #[arg(
+        long,
+        conflicts_with_all = ["siblings", "count_only", "sessions_with_matches", "no_truncate"]
+    )]
+    pub raw: bool,
 
     /// Emit each matched (and `--siblings`) record's FULL text instead of the ~400-char
     /// excerpt — so you can READ a found message end-to-end (e.g. the question at the tail
@@ -874,6 +1010,12 @@ impl SearchArgs {
     pub fn targets(&self) -> Vec<PathBuf> {
         self.paths.clone()
     }
+
+    /// The effective `-t`/`-T` filter (include minus exclude).
+    #[must_use]
+    pub fn label_filter(&self) -> LabelFilter<'_> {
+        LabelFilter::new(&self.labels, &self.labels_not)
+    }
 }
 
 /// `csift show` — fetch specific record(s) of ONE transcript, rendered full (or raw).
@@ -890,7 +1032,7 @@ impl SearchArgs {
         does not render (usage tokens, stop_reason, model, …).",
     after_help = "EXAMPLES\n  \
           csift show @<uuid> --line 46550                # the record at line 46550, full\n  \
-          csift show @<uuid> --line 87,495-500,992       # several lines + ranges\n  \
+          csift show @<uuid> --line 87,495..500,992      # several lines + ranges\n  \
           csift show @<agent-id> --line 88               # a SUBAGENT transcript (id from `csift agents`)\n  \
           csift show @<uuid> --uuid <record-uuid>        # by record uuid\n  \
           csift show @<uuid> --line 46550 --raw          # the verbatim raw jsonl line\n\n\
@@ -900,7 +1042,7 @@ impl SearchArgs {
         that file. A target resolving to more or fewer than one transcript is a hard error — \
         line numbers address one file.\n\n\
         ADDRESSING + EXIT\n  \
-          `--line` tokens are `N` or `A-B` (1-based, inclusive, ascending; repeatable / \
+          `--line` tokens are `N` or `A..B` (1-based, inclusive, ascending; repeatable / \
         comma-joined). An explicitly named line/uuid that resolves to no record is a HARD \
         ERROR (exit non-zero); a range CLAMPS to the file but erroring if it yields nothing. \
         A pending-elicitation record merged from the sidecar has no physical line — address \
@@ -915,8 +1057,8 @@ pub struct ShowArgs {
     #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true)]
     pub target: std::path::PathBuf,
 
-    /// 1-based jsonl line number(s): `N` or `A-B` (inclusive), repeatable / comma-joined
-    /// (`--line 87,495-500,992`).
+    /// 1-based jsonl line number(s): `N` or `A..B` (inclusive), repeatable / comma-joined
+    /// (`--line 87,495..500,992`).
     #[arg(long, value_name = "SPEC", value_delimiter = ',')]
     pub line: Vec<String>,
 
@@ -954,8 +1096,21 @@ pub struct ShowArgs {
 pub struct StatsArgs {
     /// Project path(s) / `@<uuid>` / `@<agent-id>` / `*.jsonl` — same targeting grammar as
     /// every subcommand. Empty ⇒ every project.
-    #[arg(value_name = "PATH", value_parser = parse_project_target)]
+    #[arg(
+        value_name = "PATH",
+        value_parser = parse_project_target,
+        allow_hyphen_values = true
+    )]
     pub paths: Vec<std::path::PathBuf>,
+
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
 
     /// Lower time bound (ISO8601 / relative `2h`/`3d`/…): records outside are not counted.
     #[arg(long, value_name = "WHEN")]
@@ -964,6 +1119,14 @@ pub struct StatsArgs {
     /// Upper time bound (same WHEN grammar as --since).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
+
+    /// Count ONLY records in this inclusive turn-index window — bare `N` (just that turn)
+    /// or `START..END`, 0-based on the transcript's genuine-turn order (the same axis
+    /// `search`/`files` use; discover indices from their output). Intersects (AND) with
+    /// `--since`/`--until` — e.g. token burn of the last N turns: read the current turn
+    /// index from `csift search`, then `csift stats @main --turn-range <idx-N>..<idx>`.
+    #[arg(long, value_name = "N|START..END")]
+    pub turn_range: Option<String>,
 
     /// Exclude subagent transcripts — count only the top-level session(s).
     #[arg(long = "no-subagents")]
@@ -1045,7 +1208,7 @@ pub enum AgentKindFilter {
         their agents; a nested sub-subagent under its spawning agent) — there is no flat \
         mode; count by traversing the tree / nested JSON. `--agent <hex>` grabs ONE subagent \
         by its bare-hex id (full node + returned \
-        message); it is a DIRECT lookup that IGNORES --since/--until/--order-by/--kind and \
+        message); it is a DIRECT lookup that IGNORES --since/--until/--order-by/--shape and \
         renders just that node (a tree of one), and \
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
         `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
@@ -1101,6 +1264,15 @@ pub struct AgentsArgs {
     )]
     pub paths: Vec<PathBuf>,
 
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
+
     /// HIDDEN no-op subagent-span flag. `agents` has NO subagent-span control: it DISCOVERS
     /// subagents as its primary output, so `--no-subagents` is meaningless here (unlike
     /// list/search/files/recover, which span their session's subagent transcripts). It is
@@ -1116,11 +1288,12 @@ pub struct AgentsArgs {
     pub subagents: bool,
 
     /// Only show subagents of this kind (repeatable). Default: all kinds. This is the
-    /// subagent TRANSCRIPT-SHAPE filter — its values are `builtin-task` | `workflow`. It is
-    /// NOT the automation-TRIGGER `kind` taxonomy (`background-command`/`agent`/`monitor`/
-    /// `task`/`workflow`) that `turns`/`search -t user` use; the two axes share only the
-    /// literal token `workflow` (different meaning). `csift agents --kind monitor` is a
-    /// parse error for this reason. Ignored when `--agent <hex>` is given (a direct grab).
+    /// subagent TRANSCRIPT-SHAPE filter — its values are `builtin-task` | `workflow` |
+    /// `teammate`. It is NOT the automation-TRIGGER taxonomy (`background-command`/`agent`/
+    /// `monitor`/`task`/`workflow`) that `turns`/`search -t harness.notification` surface;
+    /// the two axes share only the literal token `workflow` (different meaning), so
+    /// `--shape monitor` is an invalid-value error by design. Ignored when `--agent <hex>`
+    /// is given (a direct grab).
     #[arg(long = "shape", value_enum)]
     pub kinds: Vec<AgentKindFilter>,
 
@@ -1261,7 +1434,7 @@ pub enum FilesDetail {
         PATH/encoded-dir for every session under it; with neither, all projects are \
         scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
         in subagents): `--no-subagents` restricts to the TOP-LEVEL session only.\n\n\
-        WINDOWING: `--turn-range START..END` (inclusive, 0-based on genuine-user order) \
+        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based on genuine-user order) \
         INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept ISO8601 \
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
@@ -1318,16 +1491,25 @@ pub struct FilesArgs {
     /// report, OR an `@<uuid>` session token. Repeatable; with none, every project is
     /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session (searched across all projects
     /// when no project path is given), so `csift files @<uuid>` works as the EXAMPLES show;
+    /// `@<agent-id>` scopes to one subagent + its subtree (ids from `csift agents`);
     /// `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to that
-    /// transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent with
-    /// `csift agents --agent <hex>`, or pass the PARENT session uuid as `@<uuid>` (its
-    /// subagents are spanned by default).
+    /// transcript. (The parent uuid also reaches a subagent's mutations — its subagents are
+    /// spanned by default.)
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
 
     /// Exclude subagent transcripts — report only the top-level `<uuid>.jsonl` session's
     /// mutations. Subagent mutations are attributed by default (built-in Task/Agent-tool, OMC,
@@ -1364,13 +1546,13 @@ pub struct FilesArgs {
     #[arg(long = "glob", value_name = "PAT")]
     pub glob: Option<String>,
 
-    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
-    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "START..END")]
+    #[arg(long, value_name = "N|START..END")]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -1475,9 +1657,9 @@ pub enum RecoverMode {
         The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
-        WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) \
+        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based genuine-user order) \
         INTERSECTS with `--since`/`--until` (ISO8601 / relative; both filters AND). \
-        `--file-lines START..END` further restricts to a 1-based FILE-line span. `--out <PATH>` writes \
+        `--file-lines N|START..END` further restricts to a 1-based FILE-line span. `--out <PATH>` writes \
         the reconstructed artifact (restored content / snapshot / concatenated patches) \
         verbatim to a file; in restore mode stdout then stays empty (just a stderr note), \
         in the other modes the summary still prints to stdout.\n\n\
@@ -1521,15 +1703,25 @@ pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// from, OR an `@<uuid>` session token. Repeatable; with none, every project is
     /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift recover @<uuid>
-    /// --file …` works as the EXAMPLES show; `@main`/`@trap:<marker>` resolve the calling session, and a
-    /// `*.jsonl` file scopes to that transcript. A bare SUBAGENT hex is NOT accepted here —
-    /// inspect one subagent with `csift agents --agent <hex>`.
+    /// --file …` works as the EXAMPLES show; `@<agent-id>` scopes to one subagent + its
+    /// subtree (ids from `csift agents` — a subagent's WRITE gap closes from tool_use input);
+    /// `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to
+    /// that transcript.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
 
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
     /// exactly as written in the transcript (with a basename-suffix fallback). REQUIRED
@@ -1584,13 +1776,13 @@ pub struct RecoverArgs {
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
 
-    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
-    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "START..END")]
+    #[arg(long, value_name = "N|START..END")]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -1604,11 +1796,12 @@ pub struct RecoverArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Restrict to a 1-based, inclusive FILE-line span of `--file` (filters the reconstructed
-    /// line space, independent of the turn/time window). Applies in `--patches` / `--at` /
-    /// `--coverage`. (Named `--file-lines` because `line`/`L` always means a TRANSCRIPT jsonl
-    /// line in csift — this is the one flag that addresses the reconstructed FILE's lines.)
-    #[arg(long = "file-lines", value_name = "START..END")]
+    /// Restrict to a 1-based, inclusive FILE-line span of `--file` — bare `N` or
+    /// `START..END` (filters the reconstructed line space, independent of the turn/time
+    /// window). Applies in `--patches` / `--at` / `--coverage`. (Named `--file-lines`
+    /// because `line`/`L` always means a TRANSCRIPT jsonl line in csift — this is the one
+    /// flag that addresses the reconstructed FILE's lines.)
+    #[arg(long = "file-lines", value_name = "N|START..END")]
     pub line_range: Option<String>,
 
     /// Write the reconstructed artifact (snapshot / concatenated patches)
@@ -1704,6 +1897,15 @@ pub struct ImageArgs {
     )]
     pub paths: Vec<PathBuf>,
 
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
+
     /// ADDRESS specific images by the `#N` session handle (`--id #32,#33`) or the exact
     /// `L<line>i<n>` locator (`--id L6812i1`). Repeatable + comma-delimited. Without `--out`,
     /// filters the LISTING to these; with `--out`, extracts only these. Both forms are
@@ -1723,9 +1925,9 @@ pub struct ImageArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Restrict to images in this turn range (`START..END`, 0-based inclusive). A per-transcript
+    /// Restrict to images in this turn range (`N` or `START..END`, 0-based inclusive). A per-transcript
     /// `#N` disambiguator — needs a single transcript in scope.
-    #[arg(long, value_name = "START..END")]
+    #[arg(long, value_name = "N|START..END")]
     pub turn_range: Option<String>,
 
     /// Restrict to images carried by the record whose uuid starts with this (a `#N`
@@ -1801,6 +2003,15 @@ pub struct PlanArgs {
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
+
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
 
     /// REVERSE lookup: given a PLAN FILE, find the session(s) BOUND to it (the inverse of the
     /// default session→plan direction). Scans the resolved scope — default every project, or
@@ -1887,12 +2098,12 @@ impl PlanArgs {
         can still be selected as Phase-2 fill.\n\n\
         BUDGET FAN-OUT: `--budget` is applied PER session in scope. `turns` defaults to the \
         top-level thread only, so a bare-uuid run is a single session at `budget` chars. With \
-        `--include-subagents` the target also spans that session's subagents, so the realized \
+        `--subagents` the target also spans that session's subagents, so the realized \
         output is `budget × (sessions in scope)`; a top-of-output scope banner then names the \
         TRUE scope (all discovered top-level + subagent sessions), how many rendered within \
         budget, and the realized multiplier.\n\n\
-        WINDOWING: `--turn-range START..END` (inclusive, 0-based genuine-user order) is \
-        mutually exclusive with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). NOTE \
+        WINDOWING: `--turn-range N|START..END` (inclusive, 0-based genuine-user order) \
+        intersects (AND) with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). NOTE \
         `turns` TEXT prints `L<line>` per unit, NOT a turn marker — to pick a value for \
         `--turn-range` read the index from `csift search` text (`s·t<n>` header) or this \
         command's own `--format json` (`turn_index`). \
@@ -1905,7 +2116,7 @@ impl PlanArgs {
     after_help = "EXAMPLES\n  \
           csift turns .                                     # default 40K-char reconstruction, top-level thread\n  \
           csift turns @<uuid> --budget 12000                # recover JUST my thread (~10-15K, no fan-out)\n  \
-          csift turns @<uuid> --include-subagents --format json  # ALSO span subagents (budget × N, line-numbered)\n  \
+          csift turns @<uuid> --subagents --format json     # ALSO span subagents (budget × N, line-numbered)\n  \
           csift turns @<uuid> --round-trip-fraction 0.6     # weight harder toward complete round-trips\n  \
           csift turns . --budget 40000 --out /tmp/turns.md  # full reconstruction to a file\n  \
           csift turns . --budget 36000 --window 9000 --slice 1   # 1st ≤9000-char chunk for a SessionStart hook (fan slices 1..4)\n  \
@@ -1931,7 +2142,7 @@ impl PlanArgs {
           monitor session this lumps the dominant tick-driven work onto one human turn.\n\n\
         BUDGET FAN-OUT\n  \
           `--budget` is PER session in scope. `turns` defaults to the TOP-LEVEL thread only, so\n  \
-          a bare-uuid run is one session at `budget` chars. Add `--include-subagents` to also\n  \
+          a bare-uuid run is one session at `budget` chars. Add `--subagents` to also\n  \
           span that session's subagents — the realized output is then budget × (sessions in\n  \
           scope), and a top-of-output `scope` line names the TRUE scope (all top-level +\n  \
           subagent sessions discovered), how many rendered within budget, and the multiplier.\n  \
@@ -1972,12 +2183,14 @@ pub struct TurnsArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
     /// turns from, OR an `@<uuid>` session token. Repeatable; with none, every project is
     /// scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so `csift turns @<uuid>` works
-    /// as the EXAMPLES show; `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file
-    /// scopes to that transcript. A bare SUBAGENT hex is NOT accepted here — inspect one subagent
-    /// with `csift agents --agent <hex>`. NOTE: `turns` defaults to the TOP-LEVEL thread only (the
-    /// single-thread recovery use case), so a bare `csift turns @<uuid>` reconstructs just that
-    /// conversation; add `--include-subagents` for the rare cross-fan-out reconstruction
-    /// (`--budget` is then applied PER session in scope — see `--budget`).
+    /// as the EXAMPLES show; `@<agent-id>` reconstructs that ONE subagent's own thread (ids
+    /// from `csift agents`); `@main`/`@trap:<marker>` resolve the calling session, and a
+    /// `*.jsonl` file scopes to that transcript. A target is REQUIRED (a bare `csift turns`
+    /// would realize `--budget` × every session of every project). NOTE: `turns` defaults to
+    /// the TOP-LEVEL thread only (the single-thread recovery use case), so `csift turns
+    /// @<uuid>` reconstructs just that conversation; add `--subagents` for the rare
+    /// cross-fan-out reconstruction (`--budget` is then applied PER session in scope — see
+    /// `--budget`).
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -1985,11 +2198,20 @@ pub struct TurnsArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Character (default) or token budget applied PER session in scope. Each session's
-    /// reconstruction is bounded by this; `turns` defaults to the top-level thread only, so a
-    /// bare-uuid run realizes just `budget` chars. With `--include-subagents` the realized
-    /// total is `budget × (sessions in scope)` and a scope banner surfaces the multiplier.
-    /// Default 40000.
+    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// emits (`search -l`, JSON `session_ids` / `parent_session_id`). UNION with positional
+    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
+    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// widening to every project.
+    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    pub sessions_from: Option<std::path::PathBuf>,
+
+    /// Character budget applied PER session in scope (chars, always — sizing rule ≈4
+    /// chars/token). Each session's reconstruction is bounded by this; `turns` defaults to
+    /// the top-level thread only, so a bare-uuid run realizes just `budget` chars. With
+    /// `--subagents` the realized total is `budget × (sessions in scope)` and a scope banner
+    /// surfaces the multiplier. Default 40000.
     #[arg(long, value_name = "N", default_value_t = 40000)]
     pub budget: usize,
 
@@ -2046,13 +2268,13 @@ pub struct TurnsArgs {
     #[arg(long = "profile", value_enum)]
     pub profile: Option<crate::turns::Profile>,
 
-    /// Inclusive turn-index range `START..END`, 0-BASED — turn 0 is the pre-first-user
+    /// Inclusive turn-index range — bare `N` (just that turn) or `START..END` — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
-    /// `turn_index` field in any `--format json` record. Mutually exclusive with `--since` /
+    /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "START..END")]
+    #[arg(long, value_name = "N|START..END")]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
@@ -2803,7 +3025,7 @@ mod tests {
 
     #[test]
     fn turns_include_then_no_subagents_cancels_the_opt_in() {
-        // `turns` defaults to top-level-only; `--include-subagents` opts in. A LATER
+        // `turns` defaults to top-level-only; `--subagents` opts in. A LATER
         // `--no-subagents` cancels it — the field's `overrides_with` makes the last flag win,
         // and `want_subagents()` ANDs `include && !no_subagents`. (Bare opt-in spans; the
         // trailing `--no-subagents` here suppresses it.)
@@ -3009,6 +3231,158 @@ mod tests {
                 assert_eq!(a.paths[0].to_string_lossy(), "-Users-foo");
             }
             _ => panic!("expected files"),
+        }
+    }
+
+    // ── Drift guards: the help text and the repo docs must never resurrect a removed
+    //    surface (the v0.2→v0.3 cleanup found `--help` teaching flags that hard-error;
+    //    these pins make that class of drift a compile-time-adjacent failure). ──
+
+    /// Every `--long-flag` token any rendered help page mentions must be a DECLARED long
+    /// flag of some command (clap introspection — zero-drift), or sit on the tiny
+    /// allowlist of spellings the help deliberately names as REMOVED.
+    #[test]
+    fn help_mentions_only_declared_flags() {
+        use clap::CommandFactory;
+        // clap built-ins + documented-as-removed spellings the help may NAME.
+        let allow: &[&str] = &["help", "version", "full"];
+        let mut cmd = Cli::command();
+        let mut declared: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut helps: Vec<(String, String)> = Vec::new();
+        helps.push(("csift".into(), cmd.render_long_help().to_string()));
+        for a in Cli::command().get_arguments() {
+            if let Some(longs) = a.get_long_and_visible_aliases() {
+                declared.extend(longs.into_iter().map(str::to_string));
+            }
+        }
+        for sub in cmd.get_subcommands_mut() {
+            let name = sub.get_name().to_string();
+            for a in sub.get_arguments() {
+                if let Some(longs) = a.get_long_and_visible_aliases() {
+                    declared.extend(longs.into_iter().map(str::to_string));
+                }
+            }
+            helps.push((name, sub.render_long_help().to_string()));
+        }
+        let flag_re = regex::Regex::new(r"--([a-z][a-z0-9-]*)").unwrap();
+        for (page, help) in &helps {
+            for cap in flag_re.captures_iter(help) {
+                let flag = cap[1].to_string();
+                assert!(
+                    declared.contains(&flag) || allow.contains(&flag.as_str()),
+                    "`csift {page} --help` mentions `--{flag}`, which no command declares — \
+                     a resurrected/renamed flag in help text"
+                );
+            }
+        }
+    }
+
+    /// Every `csift <sub> …` EXAMPLE line in any help page must use only flags that
+    /// SUB actually declares (+ the global --claude-home) — the exact drift that left
+    /// dead `search --line` examples in the v0.1 help.
+    #[test]
+    fn help_examples_use_the_named_subcommands_own_flags() {
+        use clap::CommandFactory;
+        let mut cmd = Cli::command();
+        let mut flags_by_sub: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeSet<String>,
+        > = std::collections::BTreeMap::new();
+        let mut helps: Vec<String> = vec![cmd.render_long_help().to_string()];
+        let global: std::collections::BTreeSet<String> = Cli::command()
+            .get_arguments()
+            .filter_map(|a| a.get_long().map(str::to_string))
+            .collect();
+        for sub in cmd.get_subcommands_mut() {
+            let mut set: std::collections::BTreeSet<String> = sub
+                .get_arguments()
+                .flat_map(|a| {
+                    a.get_long_and_visible_aliases()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            set.extend(global.iter().cloned());
+            flags_by_sub.insert(sub.get_name().to_string(), set);
+            helps.push(sub.render_long_help().to_string());
+        }
+        for help in &helps {
+            for line in help.lines() {
+                // A line may chain several invocations through pipes or nest them in
+                // `$( … )` command substitutions — check each segment independently.
+                for seg in line.split('|').flat_map(|s| s.split("$(")) {
+                    let Some(rest) = seg.trim_start().strip_prefix("csift ") else {
+                        continue;
+                    };
+                    let mut parts = rest.split_whitespace();
+                    let Some(sub) = parts.next() else { continue };
+                    let Some(flags) = flags_by_sub.get(sub) else {
+                        continue; // `csift --help` etc — not a subcommand example
+                    };
+                    for tok in parts {
+                        if let Some(f) = tok.strip_prefix("--") {
+                            let f: String = f
+                                .chars()
+                                .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
+                                .collect();
+                            if f.is_empty() {
+                                continue;
+                            }
+                            assert!(
+                                flags.contains(&f),
+                                "help example `csift {sub} …` uses `--{f}`, which `{sub}` \
+                                 does not declare: {line}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// SKILL.md's surface stamp must match the crate version — forces the LLM-facing
+    /// skill to be (at least) OPENED on every release, so the "re-read this file on an
+    /// unexpected error" recovery path always lands on current truth.
+    #[test]
+    fn skill_stamp_matches_crate_version() {
+        let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
+            .expect("SKILL.md at the repo root");
+        let want = format!("v{}", env!("CARGO_PKG_VERSION"));
+        assert!(
+            skill.contains(&want),
+            "SKILL.md must carry the surface stamp `{want}` (found none) — update the \
+             stamp (and the surface docs) with every version bump"
+        );
+    }
+
+    /// The four repo docs must never resurrect a token this cleanup removed. SPEC's
+    /// `>`-quoted change LEDGER lines are exempt (they record the renames themselves).
+    #[test]
+    fn docs_do_not_resurrect_removed_tokens() {
+        let deny: &[&str] = &[
+            "--include-subagents",
+            "agents --kind",
+            "--by-file",
+            "--line A-B",
+            "category=",
+        ];
+        for doc in ["SKILL.md", "AGENTS.md", "SPEC.md", "README.md"] {
+            let path = format!("{}/{doc}", env!("CARGO_MANIFEST_DIR"));
+            let body = std::fs::read_to_string(&path).expect("repo doc");
+            for (i, line) in body.lines().enumerate() {
+                if line.starts_with('>') {
+                    continue; // SPEC change-ledger lines legitimately name old spellings
+                }
+                for tok in deny {
+                    assert!(
+                        !line.contains(tok),
+                        "{doc}:{} resurrects the removed token `{tok}`: {line}",
+                        i + 1
+                    );
+                }
+            }
         }
     }
 }
