@@ -75,7 +75,7 @@ use rayon::prelude::*;
 
 use crate::cli::{BudgetUnit, OutputFormat, TurnsArgs};
 use crate::model::{group_turn_indices_deduped, normalize_line, Block, Content, PlanIndex, Record};
-use crate::parse::{mmap_bytes, scan_lines_bytes};
+use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -637,20 +637,22 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
     };
     let bytes: &[u8] = &mmap;
 
-    let mut records: Vec<(usize, Record)> = Vec::new();
-    let mut skipped = 0usize;
-    let mut line_no = 0usize;
-    scan_lines_bytes(bytes, |line| {
-        line_no += 1;
+    // Parse all turn-candidate lines IN PARALLEL (newline-aligned chunks on the rayon
+    // pool). `scan_lines_parallel` visits every line — blanks included — with its exact
+    // 1-based number, so the `(line_no, Record)` stream and the malformed count are
+    // byte-for-byte identical to the serial `scan_lines_bytes` pass this replaces; the
+    // win is that a single giant transcript (the default `turns @main` case is ONE file)
+    // is no longer bottlenecked on one core.
+    let (records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_turn_candidate(line) {
-            return;
+            return crate::parse::LineVerdict::Ignore;
         }
         match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => records.push((line_no, rec)),
-            Ok(None) => {}          // blank — counted above
-            Err(_) => skipped += 1, // malformed — counted above
+            Ok(Some(rec)) => crate::parse::LineVerdict::Keep((line_no, rec)),
+            Ok(None) => crate::parse::LineVerdict::Ignore, // blank — counted in numbering
+            Err(_) => crate::parse::LineVerdict::Skip,     // malformed — counted
         }
-    })?;
+    });
 
     // ── Transparent elicitation-sidecar merge (§3.10) ──
     // A TOP-LEVEL session's unresolved-pending elicitations (AskUserQuestion/ExitPlanMode/MCP)
