@@ -448,7 +448,58 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           csift stats @main --no-subagents            # this session's token/tool/turn aggregates\n  \
           csift search \"panic\" -l | csift stats --sessions-from -   # aggregate exactly the sessions that matched\n  \
           csift search \"\" @<uuid> -t agent -T agent.thinking       # the agent role minus its thinking\n\n\
-        Run `csift <subcommand> --help` for per-subcommand flags + examples."
+        THE RULES EVERY COMMAND FOLLOWS\n  \
+          Exit codes   An address you NAMED that doesn't resolve — a line, a turn, a uuid, a\n               \
+        pinned id, a file — is a hard error (exit != 0). A filter that matches nothing is an\n               \
+        honest empty (exit 0); a zero-match search additionally prints a diagnosis on stderr\n               \
+        explaining what was searched and, under a label filter, where the pattern DOES occur.\n  \
+          Ranges       Every range flag shares one grammar: N | A..B | N.. | ..N | .. | -k,\n               \
+        endpoints inclusive; `-k` counts from the end, so `-3..` means \"the last 3\". Turns\n               \
+        are 0-based logical indices (the `tN` search prints); lines are 1-based physical\n               \
+        jsonl lines (the `Lnnnn`). Different axes — read both from output, don't compute.\n  \
+          Subagents    Most commands include a session's subagent transcripts automatically;\n               \
+        `--no-subagents` restricts. `verbatim` is the one opt-in (`--subagents`, because its\n               \
+        budget multiplies per session), and `agents` lists subagents rather than spanning.\n  \
+          Caps         No silent truncation, ever: every cap prints what was dropped and how\n               \
+        to get the rest. `list` caps an unscoped run at 50 rows; `show` caps at 200 record\n               \
+        units and prints the exact continuation command; `--max-count 0` = uncapped, always.\n  \
+          Time         Every timestamp prints in YOUR local timezone with the offset inline —\n               \
+        `2026-07-11 15:33:37 AEST(UTC+10)` — derived per instant (DST-correct; fractional\n               \
+        zones render like `IST(UTC+05:30)`). Raw UTC lives in JSON `ts_utc`, never in text.\n\n\
+        JSON OUTPUT (--format json)\n  \
+          Every command emits the same envelope: one `{\"kind\":\"header\",…}` line, then\n  \
+        kind-tagged rows, then one `{\"kind\":\"summary\",…}` line — even for zero matches.\n  \
+        Select rows with `jq 'select(.kind==\"…\")'`; the summary is always `tail -1`. Rows\n  \
+        carry the id trio (`session_id` / `is_subagent` / `parent_session_id`); search hits\n  \
+        carry `refetch` — a ready-to-run `csift show` command for that exact record. Full\n  \
+        row schemas live in each subcommand's --help.\n\n\
+        PITFALLS WORTH KNOWING UP FRONT\n  \
+          - An empty pattern (\"\") matches EVERYTHING: it is the base for -t/time/turn\n    \
+        filters and the census on-ramp (`csift search \"\" <target> --count-by label`).\n  \
+          - `search -c` counts round-trip EXCHANGES, not records or lines; per-record\n    \
+        counts are `--count-by <axis>`.\n  \
+          - `search -l` prints owning SESSION uuids (what `--sessions-from -` consumes);\n    \
+        the JSON summary's `transcript_ids` is the finer per-transcript list. Two\n    \
+        different questions, two different answers.\n  \
+          - Line numbers are per FILE: fetch a subagent's line at the subagent's own id,\n    \
+        never at the parent uuid. The printed `refetch` command already has this right.\n  \
+          - Reading recent turns is `show <target> --turn -3..`; `verbatim` is only for\n    \
+        turns a compaction summary already clipped (it tells you when nothing was).\n  \
+          - A pending AskUserQuestion / ExitPlanMode / MCP prompt is invisible in the\n    \
+        transcript until answered. csift merges pending ones from a hook-written sidecar\n    \
+        when present, and `list` reports `sidecar_present` — so you can tell \"nothing\n    \
+        pending\" apart from \"no hook installed\".\n\n\
+        WHAT csift WILL NOT DO\n  \
+          Semantic/BM25 search (regex is the tool — broaden the pattern, or census first);\n  \
+        ad-hoc aggregation languages (the closed `--count-by` axes, `stats`, and\n  \
+        `files --by` are the built-ins; anything else: `--raw | jq`); diffs (fetch both\n  \
+        sides with `show` / `recover --at`, diff outside); writing or terminating anything\n  \
+        — csift only reads.\n\n\
+        RETENTION\n  \
+          Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\n  \
+        Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\n  \
+        it — csift can only read what survives.\n\n\
+        Run `csift <subcommand> --help` for per-subcommand flags, JSON schemas + examples."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -734,7 +785,10 @@ pub struct ListArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -899,6 +953,26 @@ impl ListArgs {
         filter, run `--count-by label` (a per-leaf census — empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix) — 3 roles, 25 leaves\n  \
+          user     .message                genuine human prose (a slash command with typed\n                                   \
+        prose renders as `/name args`)\n           \
+        .answer                 an answered AskUserQuestion — question, options and\n                                   \
+        the picked answer as one unit\n           \
+        .rejection              a plan/tool rejection carrying the user's typed\n                                   \
+        instruction (+ a `[plan: …]` pointer when resolvable)\n  \
+          agent    .message · .thinking    assistant prose · reasoning (a redacted block\n                                   \
+        renders \"[redacted thinking]\")\n           \
+        .tool.use · .tool.result  tool traffic, paired by tool_use_id (the `▹` join)\n           \
+        .communication.{inbox,sent,signal}  peer messages, rendered `from ⇨ to`\n  \
+          harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
+        .compaction.{summary,boundary} · .command.{invocation,stdout}\n           \
+        .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop}\n  \
+          `-t agent` selects the whole role, `-t agent.tool` both tool leaves, a full path\n  \
+        just that leaf; `-T` excludes with the same grammar (a combination that excludes\n  \
+        everything it includes is a parse error, as is a selector typo — with suggestions).\n  \
+        A record carrying several labels prints ONCE, under its richest view (an AUQ answer\n  \
+        is `user.answer`, not `agent.tool.result`). Glyphs: ◂ user · ▸ agent · ⚙ harness ·\n  \
+        ▹ tool use↔result pairing · ⇨ message direction · · sibling.\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
@@ -961,7 +1035,10 @@ pub struct SearchArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -1185,7 +1262,17 @@ impl SearchArgs {
         RAW MODE\n  \
           `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
         torn line — that is the point). It is mutually exclusive with `--format json` (raw \
-        IS the file's own JSON) and reads the transcript file only (no sidecar merge)."
+        IS the file's own JSON) and reads the transcript file only (no sidecar merge).\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          Envelope: {kind:\"header\", command:\"show\", session_id, is_subagent, \
+        parent_session_id, path} → one {kind:\"record\", …} row per fetched record → \
+        {kind:\"summary\", …}. Record rows carry {session_id, is_subagent, parent_session_id, \
+        turn_index, line (null for a sidecar-merged record), uuid, label, labels:[…], \
+        tool_name, from, to, pairing (paired | pending | orphan | null), tool_use_id, \
+        source (\"elicitation-sidecar\" | null), ts_utc, ts_local, text (FULL — never \
+        clipped), image_ids:[…]}. The summary is {records, dropped_by_cap, refetch_remainder \
+        (the ready-to-run continuation command when the cap dropped units, else null), \
+        non_record_lines, skipped_lines, with_elicitation_sidecar}."
 )]
 pub struct ShowArgs {
     /// ONE transcript: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | a `*.jsonl` path.
@@ -1251,7 +1338,15 @@ pub struct ShowArgs {
           csift stats @<uuid>                    # one session + its subagents\n  \
           csift stats @<uuid> --no-subagents     # just the top-level thread\n  \
           csift stats . --since 1d               # this project, last 24h\n  \
-          csift stats @<uuid> --format json | tail -1 | jq .tokens   # scope token totals"
+          csift stats @<uuid> --format json | tail -1 | jq .tokens   # scope token totals\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          Envelope: header → one {kind:\"session\", …} row per session → summary. Session \
+        rows carry {session_id, is_subagent, parent_session_id, lines, user_records, \
+        assistant_records, turns, compactions, first_utc, first_local, last_utc, last_local, \
+        tokens:{<model>:{input, output, cache_read, cache_creation}}, tools:{<name>:count}, \
+        skipped_lines}. The summary adds the scope totals ({sessions, tokens, tools, turns, \
+        dropped_by_cap, skipped_lines}) — `tail -1 | jq .tokens` is the one-liner for total \
+        burn."
 )]
 pub struct StatsArgs {
     /// Project path(s) / `@<uuid>` / `@<agent-id>` / `*.jsonl` — same targeting grammar as
@@ -1268,7 +1363,10 @@ pub struct StatsArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -1443,7 +1541,10 @@ pub struct AgentsArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -1715,7 +1816,10 @@ pub struct FilesArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -1931,7 +2035,10 @@ pub struct RecoverArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -2103,7 +2210,14 @@ impl RecoverArgs {
           csift image . --format json                     # machine-readable listing\n  \
           csift image @<uuid> --no-subagents --id '32,33,34,36' --out /tmp/imgs  # re-share by handle\n  \
           csift image @<uuid> --no-subagents --id '1' --since 1h --out /tmp/imgs    # disambiguate a reused #1\n  \
-          csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg        # one image -> a file, convert"
+          csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg        # one image -> a file, convert\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          Envelope: header → listing rows → summary. Listing rows: {kind:\"image\", handle \
+        (the display `#N` / locator), seq, id, line, img_index, session_id, is_subagent, \
+        parent_session_id, source_kind, media_type, b64_len, est_bytes, url, record_uuid, \
+        ts_utc, ts_local}. With `--out`, each written file adds {kind:\"extract\", handle, \
+        seq, id, session_id, is_subagent, parent_session_id, path, bytes, media_type, \
+        source_media_type, converted, notes}."
 )]
 pub struct ImageArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to scan for images,
@@ -2122,7 +2236,10 @@ pub struct ImageArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -2214,7 +2331,12 @@ impl ImageArgs {
           csift plan                                  # the calling session's bound plan file\n  \
           csift plan @<uuid>                          # a specific session's plan file\n  \
           csift plan . --format json                  # every session under this project (NDJSON)\n  \
-          csift recover @<uuid> --file @plan          # DUMP the bound plan's reconstructed content"
+          csift recover @<uuid> --file @plan          # DUMP the bound plan's reconstructed content\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          Envelope: header → {kind:\"plan\", plan_file, session_id, is_subagent, \
+        parent_session_id, plan_exists, line} rows → summary. `plan_exists` says whether the \
+        bound file is still on disk — a DELETED plan is still locatable here, and \
+        `csift recover <target> --file @plan` rebuilds its content from the transcript."
 )]
 pub struct PlanArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to resolve the bound
@@ -2233,7 +2355,10 @@ pub struct PlanArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -2427,7 +2552,10 @@ pub struct VerbatimArgs {
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
     /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
-    /// widening to every project.
+    /// widening to every project. The resolved ids then follow this command's normal
+    /// span rules, exactly as if they were `@` positionals: on the span-by-default
+    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
+    /// to pin to exactly the listed ids).
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
@@ -2653,9 +2781,14 @@ impl VerbatimArgs {
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
           csift whoami @trap:<invent-a-fresh-3word-4digit-marker>   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root); the marker is YOURS to invent, never a copied literal\n  \
           # FALLBACK (no @trap) — map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
-          csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json\n  \
+          csift agents --agent \"$(csift whoami --format json | jq -r 'select(.kind==\"identity\").session_id')\" --format json\n  \
           # …then scope the whole conversation with that parent uuid:\n  \
-          csift search \"<pattern>\" \"@$(csift agents --agent \"$(csift whoami --format json | jq -r .session_id)\" --format json | jq -r .parent_session_id)\""
+          csift search \"<pattern>\" \"@$(csift whoami --format json | jq -r 'select(.kind==\"identity\").parent_session_id')\"\n\n\
+        JSON SCHEMA (per --format json)\n  \
+          Envelope: header → {kind:\"identity\", session_id, is_subagent, parent_session_id, \
+        depth, path} rows → a {kind:\"summary\", identities} terminator. One identity row for \
+        a plain run; `@trap:<marker>` emits the full upstream chain, depth 0 (yourself) up \
+        to the top-level root. Select with `jq 'select(.kind==\"identity\")'`."
 )]
 pub struct WhoamiArgs {
     /// Optional SELF target — `@trap:<marker>` or `@main` (nothing else). With NO target, identify

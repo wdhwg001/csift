@@ -527,6 +527,28 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    project target" error. "Flag order is free" and "`--claude-home` any position" now hold in
 >    combination.
 
+> **v0.5.1 CHANGE LEDGER (non-breaking; help-text surface only — `csift 0.5.1`).** The
+> `--help` parity release: the FIVE-DOCUMENT CONTRACT is now `SKILL.md` = the LLM manual ·
+> `--help` = the human (CLI-proficient) manual, INFORMATION-PARITY with SKILL but written in
+> plain prose with stronger structure/layout · `README.md` = promotion · `SPEC.md` = design
+> intent · `AGENTS.md` = maintenance guide. Behavior is unchanged; only help text moved:
+> 1. Root `csift --help` gains five human-toned sections: THE RULES EVERY COMMAND FOLLOWS
+>    (exit codes / ranges / subagents / caps / time — the SKILL "five laws" in prose), JSON
+>    OUTPUT (the envelope contract + jq idiom + id trio + `refetch`), PITFALLS WORTH KNOWING
+>    UP FRONT (the SKILL wrong-assumptions table in prose), WHAT csift WILL NOT DO, and
+>    RETENTION (`cleanupPeriodDays`).
+> 2. `search --help` gains THE LABEL TAXONOMY — the full 3-role / 25-leaf tree with per-leaf
+>    one-liners, selector grammar, richest-view rule and the glyph legend (it previously
+>    existed only in SKILL/SPEC).
+> 3. `show`/`stats`/`plan`/`whoami`/`image` `--help` gain JSON SCHEMA sections (fixture-
+>    verified row/summary fields), completing per-command schema coverage (list/search/
+>    agents/files/recover/verbatim already had one).
+> 4. Every `--sessions-from` help (×9) now states that resolved ids follow the command's
+>    normal SPAN rules (span-by-default commands expand each session to its subagents; add
+>    `--no-subagents` to pin).
+> 5. `whoami --help`'s composition example is fixed for the v0.5.0 flat envelopes (it
+>    consumed `agents` JSON with bare `jq -r .field`; now `select(.kind=="identity")`).
+
 
 > **Common conventions.** Every TEXT timestamp is a SINGLE canonical local form — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` (e.g. `2026-07-11 15:33:37 AEST(UTC+10)` on a machine in Sydney; January Sydney = `AEDT(UTC+11)`; India = `IST(UTC+05:30)`), via `jiff` (`TimeZone::system()`). The marker is a FORMAT not a value: the abbreviation + offset are derived from the system zone at that instant (DST-correct), so the only mental step is "shift by the given offset"; a whole-hour offset renders compact (`UTC+10`), a fractional one zero-padded (`UTC+05:30`), and a zone with no abbreviation renders `(UTC±offset)` alone. **There is NO raw-UTC parenthetical in text** (the former `… AEST (…Z)` dual form and the bare-offset `…+10:00` form are GONE — the UTC copy invited LLM timezone-conversion errors); machine UTC lives ONLY in JSON (`ts_utc`, §8.2). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 

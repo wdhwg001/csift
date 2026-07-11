@@ -5,6 +5,20 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.5.1] - 2026-07-11
+
+Help-parity release; behavior unchanged.
+
+- The five-document contract: `SKILL.md` = the LLM manual · `--help` = the
+  human (CLI-proficient) manual, information-parity with SKILL · `README.md` =
+  promotion · `SPEC.md` = design intent · `AGENTS.md` = maintenance.
+- Root `--help` gains the human-toned sections (the rules every command
+  follows, JSON output, pitfalls, non-goals, retention); `search --help`
+  gains the full 3-role / 25-leaf label taxonomy; `show`/`stats`/`plan`/
+  `whoami`/`image` gain JSON SCHEMA sections; every `--sessions-from` help
+  states the span rules; `whoami`'s composition example matches the flat
+  envelopes.
+
 ## [0.5.0] - 2026-07-11
 
 Breaking rework, zero backcompat.
