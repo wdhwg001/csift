@@ -915,11 +915,12 @@ impl ListArgs {
         remainder surfaces as an explicit `(+N more · csift show @<id> --line A..B)` pointer. A \
         record that itself matched is never duplicated as a sibling.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
-          `-c`/`--count-only` prints just the integer match total (ripgrep `-c`), honoring every \
-        filter. That total is ALSO always in the normal output's footer (alongside the \
+          `-c`/`--count-only` prints just the integer EXCHANGE total — matched round-trips, \
+        the ripgrep `-c` idiom — honoring every filter (per-RECORD counts are `--count-by`). \
+        That total is ALSO always in the normal output's footer (alongside the \
         distinct-session total); `--count-only` just isolates that ONE integer for a pipe. To \
-        list WHICH sessions matched, pipe `--format json` through \
-        `jq -r .session_id | sort -u`.\n\n\
+        list WHICH sessions matched, use `-l` (one owning uuid per line — it pipes straight \
+        into `--sessions-from -`).\n\n\
         REGEX DIALECT — linear-time (RE2-class)\n  \
           The pattern is the Rust `regex` crate (regex::bytes), which GUARANTEES \
         linear-time matching in the input length: NO catastrophic backtracking, ever.\n  \

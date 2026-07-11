@@ -5,6 +5,11 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.5.2] - 2026-07-11
+
+- `search --help`'s COUNT section says the `-c` integer is the EXCHANGE total
+  and routes session listing to `-l`.
+
 ## [0.5.1] - 2026-07-11
 
 Help-parity release; behavior unchanged.
