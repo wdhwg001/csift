@@ -148,7 +148,7 @@ pub enum Endpoint {
 }
 
 /// A parsed inclusive index range with possibly-open / from-the-end endpoints. THE range
-/// grammar, shared by every range flag (`show --line`/`--turn` · `--turn-range` ·
+/// grammar, shared by every range flag (`show --line`/`--turn` · `--turn` ·
 /// `--file-lines`): `N` (single) · `A..B` (closed) · `N..` (to the end) · `..N` (from the
 /// start) · `..` (all) · negative `-k` = `k`-th from the end, so `-3..` = the last 3 and `-1`
 /// = the last. Resolve against a concrete domain length with [`RangeSpec::resolve`]. Both
@@ -388,9 +388,9 @@ mod tests {
     #[test]
     fn range_errors() {
         // Non-integer bound.
-        assert!(parse_range_spec("a..5", "--turn-range", false).is_err());
+        assert!(parse_range_spec("a..5", "--turn", false).is_err());
         // A statically-detectable reversal (both explicit) errors AT PARSE.
-        let err = parse_range_spec("9..3", "--turn-range", false).unwrap_err();
+        let err = parse_range_spec("9..3", "--turn", false).unwrap_err();
         assert!(err.to_string().contains("before start"), "got: {err}");
         // The label appears in a parse error.
         let err2 = parse_range_spec("x", "--my-range", false).unwrap_err();

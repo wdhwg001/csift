@@ -1,14 +1,21 @@
-//! Shared timestamp rendering in the system-local timezone alongside raw UTC.
+//! Shared timestamp rendering in the system-local timezone — ONE canonical text form.
 //!
 //! csift auto-detects the machine's local timezone via [`jiff::tz::TimeZone::system`]
 //! (powered by jiff's default `tz-system` feature: it reads `$TZ`, then
-//! `/etc/localtime` on Unix, the registry on Windows, etc.) and renders every
-//! timestamp as `YYYY-MM-DD HH:MM:SS <TZ> (RAW_UTC_ISO8601)`. The `<TZ>` abbrev is
-//! whatever the detected zone yields (e.g. `PST`, `CET`, `AEST`), so output
-//! auto-labels for the user's actual locale with no hardcoded zone.
+//! `/etc/localtime` on Unix, the registry on Windows, etc.) and renders EVERY text
+//! timestamp as `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` — e.g.
+//! `2026-07-11 15:33:37 AEST(UTC+10)`. The marker is a FORMAT, not a value: both the
+//! abbreviation and the offset derive from the system zone AT THAT INSTANT
+//! (DST-correct — a January instant in Sydney renders `AEDT(UTC+11)`, a July one
+//! `AEST(UTC+10)`; an Indian machine renders `IST(UTC+05:30)`), never hardcoded.
 //!
-//! `list` and `search` both render timestamps; this module is the single place the
-//! local-timezone choice lives, so the system-tz behaviour is defined once.
+//! Design intent (v0.5): an LLM reader gets the zone name AND its offset together, so
+//! the only mental step left is "shift by the given offset" — never "recall what
+//! offset this zone name maps to". The former dual form (`… AEST (2026-…Z)`) invited
+//! exactly the UTC-conversion arithmetic LLMs get wrong; the raw UTC lives in JSON
+//! (`ts_utc`) and in `--raw` bytes, never in text.
+//!
+//! This module is the single place the local-timezone choice lives.
 
 use jiff::tz::TimeZone;
 
@@ -20,42 +27,65 @@ pub fn local_tz() -> TimeZone {
     TimeZone::system()
 }
 
-/// Render a raw ISO8601 UTC timestamp as `YYYY-MM-DD HH:MM:SS <TZ> (RAW_UTC)` in the
-/// system-local timezone. If the timestamp is absent, `—` is shown; if it is present
-/// but unparseable, the raw bytes are surfaced rather than dropped (never a panic,
-/// never a fabricated time).
+/// The canonical timezone marker for one zoned instant — `<TZAB>(UTC±offset)`.
+/// Whole-hour offsets render compact (`UTC+10`, `UTC-7`); fractional offsets carry
+/// zero-padded minutes (`UTC+05:30`, `UTC+09:30`). A zone with no usable abbreviation
+/// (jiff yields a bare numeric like `+10:00`) degrades to `(UTC±offset)` alone.
 #[must_use]
-pub fn format_timestamp(raw: Option<&str>) -> String {
+pub(crate) fn tz_marker(zoned: &jiff::Zoned) -> String {
+    let secs = zoned.offset().seconds();
+    let sign = if secs < 0 { '-' } else { '+' };
+    let abs = secs.unsigned_abs();
+    let (h, m) = (abs / 3600, (abs % 3600) / 60);
+    let off = if m == 0 {
+        format!("UTC{sign}{h}")
+    } else {
+        format!("UTC{sign}{h:02}:{m:02}")
+    };
+    let ab = zoned.strftime("%Z").to_string();
+    if ab.is_empty() || ab.starts_with('+') || ab.starts_with('-') {
+        format!("({off})")
+    } else {
+        format!("{ab}({off})")
+    }
+}
+
+/// The shared canonical renderer: `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`.
+/// Absent → `—`; present but unparseable → the raw bytes surfaced with `(unparsed)`
+/// (never a panic, never a fabricated time, never a silent drop).
+fn render_local(raw: Option<&str>, millis: bool) -> String {
     let Some(raw) = raw else {
         return "—".to_string();
     };
     match raw.parse::<jiff::Timestamp>() {
         Ok(ts) => {
-            let local = ts.to_zoned(local_tz()).strftime("%Y-%m-%d %H:%M:%S %Z");
-            format!("{local} ({raw})")
+            let z = ts.to_zoned(local_tz());
+            let base = if millis {
+                z.strftime("%Y-%m-%d %H:%M:%S.%3f").to_string()
+            } else {
+                z.strftime("%Y-%m-%d %H:%M:%S").to_string()
+            };
+            format!("{base} {}", tz_marker(&z))
         }
-        // Unparseable timestamp: surface the raw bytes rather than drop them.
         Err(_) => format!("{raw} (unparsed)"),
     }
 }
 
-/// Render a raw ISO8601 UTC timestamp as a SINGLE compact local instant —
-/// `YYYY-MM-DD HH:MM:SS.mmm±HH:MM` (local time, milliseconds, numeric offset). Unlike
-/// [`format_timestamp`] there is NO trailing `(<raw UTC>)` copy: the offset already pins the
-/// instant, so the UTC half is pure token waste in text output. Absent → `—`; unparseable →
-/// the raw bytes (never a panic, never a fabricated time).
+/// Render a raw ISO8601 UTC timestamp in the canonical local form, second precision:
+/// `2026-07-11 15:33:37 AEST(UTC+10)`. (The pre-v0.5 `… <TZ> (<raw UTC>)` dual form is
+/// gone — the UTC copy invited LLM conversion errors; machine consumers read JSON
+/// `ts_utc`.)
+#[must_use]
+pub fn format_timestamp(raw: Option<&str>) -> String {
+    render_local(raw, false)
+}
+
+/// Render a raw ISO8601 UTC timestamp in the canonical local form with milliseconds:
+/// `2026-07-11 15:33:37.442 AEST(UTC+10)` — the ordering-precision variant `search`/
+/// `show` headers use. Same marker, same rules.
 #[must_use]
 pub fn format_local_compact(raw: Option<&str>) -> String {
-    let Some(raw) = raw else {
-        return "—".to_string();
-    };
-    match raw.parse::<jiff::Timestamp>() {
-        Ok(ts) => ts
-            .to_zoned(local_tz())
-            .strftime("%Y-%m-%d %H:%M:%S.%3f%:z")
-            .to_string(),
-        Err(_) => format!("{raw} (unparsed)"),
-    }
+    render_local(raw, true)
 }
 
 /// System-local time as an ISO8601-with-offset string (for JSON `ts_local`), or
@@ -81,17 +111,20 @@ mod tests {
         ts.to_zoned(local_tz()).strftime(fmt).to_string()
     }
 
+    fn expected_marker(raw: &str) -> String {
+        let ts: jiff::Timestamp = raw.parse().expect("parseable test instant");
+        tz_marker(&ts.to_zoned(local_tz()))
+    }
+
     #[test]
-    fn format_timestamp_preserves_raw_and_uses_system_local() {
+    fn format_timestamp_is_canonical_local_with_marker_and_no_utc_copy() {
         let raw = "2026-06-07T05:48:22.880Z";
         let out = format_timestamp(Some(raw));
-        // The raw UTC is always preserved verbatim.
-        assert!(out.contains(raw), "raw missing: {out}");
-        // The local portion equals what the system tz itself yields for this instant.
-        let local = expected_local(raw, "%Y-%m-%d %H:%M:%S %Z");
-        assert!(out.contains(&local), "expected local {local:?} in {out:?}");
-        // Output parses into "<local> (<raw>)".
-        assert_eq!(out, format!("{local} ({raw})"));
+        let local = expected_local(raw, "%Y-%m-%d %H:%M:%S");
+        assert_eq!(out, format!("{local} {}", expected_marker(raw)));
+        // The marker carries the offset inline; the raw UTC copy is GONE.
+        assert!(out.contains("(UTC"), "marker missing: {out}");
+        assert!(!out.contains(raw), "must not echo the raw UTC: {out}");
     }
 
     #[test]
@@ -100,21 +133,31 @@ mod tests {
     }
 
     #[test]
-    fn format_local_compact_is_single_local_with_ms_and_offset() {
+    fn format_local_compact_adds_millis_same_marker() {
         let raw = "2026-06-07T05:48:22.880Z";
         let out = format_local_compact(Some(raw));
-        // Exactly the system-local rendering with millisecond + numeric offset — no UTC copy.
-        let expected = expected_local(raw, "%Y-%m-%d %H:%M:%S.%3f%:z");
-        assert_eq!(out, expected, "compact local form");
-        // Carries milliseconds (a `.` before the offset) and a numeric offset, and does NOT
-        // carry the parenthesised raw-UTC second copy.
-        assert!(out.contains('.'), "milliseconds missing: {out}");
-        assert!(
-            out.contains('+') || out.contains('-'),
-            "offset missing: {out}"
-        );
-        assert!(!out.contains('('), "must not carry a UTC copy: {out}");
+        let local = expected_local(raw, "%Y-%m-%d %H:%M:%S.%3f");
+        assert_eq!(out, format!("{local} {}", expected_marker(raw)));
+        assert!(out.contains(".880") || out.contains('.'), "millis: {out}");
         assert!(!out.contains(raw), "must not echo the raw UTC: {out}");
+    }
+
+    #[test]
+    fn tz_marker_offset_forms() {
+        use jiff::tz::TimeZone;
+        let ts: jiff::Timestamp = "2026-07-11T00:00:00Z".parse().unwrap();
+        // Whole-hour offset: compact form, name(offset).
+        let syd = TimeZone::get("Australia/Sydney").unwrap();
+        assert_eq!(tz_marker(&ts.to_zoned(syd.clone())), "AEST(UTC+10)");
+        // DST flips BOTH halves by instant (January in Sydney = AEDT, UTC+11).
+        let jan: jiff::Timestamp = "2026-01-11T00:00:00Z".parse().unwrap();
+        assert_eq!(tz_marker(&jan.to_zoned(syd)), "AEDT(UTC+11)");
+        // Fractional offset: zero-padded minutes.
+        let ist = TimeZone::get("Asia/Kolkata").unwrap();
+        assert_eq!(tz_marker(&ts.to_zoned(ist)), "IST(UTC+05:30)");
+        // Negative whole-hour.
+        let den = TimeZone::get("America/Denver").unwrap();
+        assert_eq!(tz_marker(&ts.to_zoned(den)), "MDT(UTC-6)");
     }
 
     #[test]

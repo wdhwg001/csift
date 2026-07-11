@@ -241,7 +241,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     }
     sessions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
-    // ── Apply the turn / time window to events per session. The `--turn-range` spec resolves
+    // ── Apply the turn / time window to events per session. The `--turn` spec resolves
     //    its open/from-end forms against THIS session's own turns (max event turn + 1). ──
     for sr in &mut sessions {
         let bounds = turn_range.map(|spec| {
@@ -2223,9 +2223,9 @@ fn strip_gutter(snippet: &str) -> Vec<(usize, String)> {
     out
 }
 
-/// Parse a `--turn-range START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
+/// Parse a `--turn START..END` into an inclusive 0-based `(lo, hi)` (shared parser).
 fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
-    crate::text::parse_range_spec(s, "--turn-range", false)
+    crate::text::parse_range_spec(s, "--turn", false)
 }
 
 /// Parse a `--file-lines` token into a [`RangeSpec`] (the shared grammar; 1-based, so a 0

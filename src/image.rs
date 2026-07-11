@@ -43,7 +43,7 @@ struct ImageRef {
     /// `None` when the marker count doesn't match (then only `L<line>i<n>` addresses it).
     /// NOT globally unique — CC reuses low numbers across prompts, so a `#N` that names >1
     /// DISTINCT image is AMBIGUOUS: `--id #N` then ERRORS with the occurrence list rather than
-    /// silently guessing (disambiguate with the locator or `--since`/`--turn-range`/`--uuid`).
+    /// silently guessing (disambiguate with the locator or `--since`/`--turn`/`--uuid`).
     seq: Option<usize>,
     /// A cheap content fingerprint (`<len>:<head>:<tail>` of the base64) — dedups the SAME
     /// image re-injected across context windows so the listing shows it once.
@@ -417,7 +417,7 @@ fn dedup_latest(images: &[ImageRef]) -> Vec<&ImageRef> {
 }
 
 /// Number of distinct transcripts (session ids) the image set spans — the per-transcript guard
-/// for `--id` / `--turn-range` (line numbers + `#N` + turn indices are all per-transcript).
+/// for `--id` / `--turn` (line numbers + `#N` + turn indices are all per-transcript).
 fn count_distinct_transcripts(images: &[ImageRef]) -> usize {
     let mut ids: Vec<&str> = images.iter().map(|i| i.session_id.as_str()).collect();
     ids.sort_unstable();
@@ -426,7 +426,7 @@ fn count_distinct_transcripts(images: &[ImageRef]) -> usize {
 }
 
 /// The transcript file backing a single-transcript image set (by matching session id) — used to
-/// re-parse it for turn indices / excerpts on the `--turn-range` and ambiguity paths.
+/// re-parse it for turn indices / excerpts on the `--turn` and ambiguity paths.
 fn pinned_path<'a>(session_files: &'a [PathBuf], images: &[ImageRef]) -> Option<&'a Path> {
     let sid = images.first().map(|i| i.session_id.as_str())?;
     session_files
@@ -494,7 +494,7 @@ fn resolve_selection<'a>(
 }
 
 /// Per-line turn index + concatenated text for one transcript — a full parse (the `--id`/
-/// `--turn-range` paths already pin a single transcript, so this is one file) used to attach
+/// `--turn` paths already pin a single transcript, so this is one file) used to attach
 /// `t<turn>` + an excerpt to each occurrence in an ambiguity error.
 struct LineInfo {
     turn_of: HashMap<usize, usize>,
@@ -567,7 +567,7 @@ fn excerpt_around(text: &str, needle: &str, radius: usize) -> String {
 
 /// Build the `#N is ambiguous` error: for each reused `#N`, list every distinct occurrence with
 /// its turn, `L<line>i<n>` locator, uuid, time, and an excerpt around the `[Image #N]` marker —
-/// everything the consumer needs to disambiguate (by locator, or `--since`/`--turn-range`/`--uuid`).
+/// everything the consumer needs to disambiguate (by locator, or `--since`/`--turn`/`--uuid`).
 fn ambiguity_error(ambiguous: &[(usize, Vec<&ImageRef>)], path: Option<&Path>) -> anyhow::Error {
     let info = path.and_then(|p| transcript_line_info(p).ok());
     let mut msg = String::new();
@@ -578,7 +578,7 @@ fn ambiguity_error(ambiguous: &[(usize, Vec<&ImageRef>)], path: Option<&Path>) -
         msg.push_str(&format!(
             "--id #{n} is ambiguous: it names {} different images in this transcript (Claude Code \
              reuses `#N` across prompts). Pick one by its exact `--id L<line>i<n>`, or narrow the \
-             scope with --since/--until (a time window) / --turn-range / --uuid:",
+             scope with --since/--until (a time window) / --turn / --uuid:",
             occs.len()
         ));
         for o in occs {
@@ -657,12 +657,12 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     }
     let mut distinct_transcripts = count_distinct_transcripts(&images);
 
-    // `--turn-range` is per-transcript (turn indices are), so it needs a single transcript.
+    // `--turn` is per-transcript (turn indices are), so it needs a single transcript.
     if let Some(spec_str) = args.turn_range.as_deref() {
-        let spec = crate::text::parse_range_spec(spec_str, "--turn-range", false)?;
+        let spec = crate::text::parse_range_spec(spec_str, "--turn", false)?;
         if distinct_transcripts > 1 {
             bail!(
-                "--turn-range is per-transcript (turn indices are), but the scope resolves to \
+                "--turn is per-transcript (turn indices are), but the scope resolves to \
                  {distinct_transcripts} transcripts — pin it with `@<uuid> --no-subagents`"
             );
         }

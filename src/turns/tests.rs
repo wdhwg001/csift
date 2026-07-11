@@ -913,7 +913,7 @@ fn window_admits_turn_range_and_time() {
         &unbounded
     ));
     assert!(!window_admits(6, None, tr, &unbounded));
-    // No turn-range, bounded time excludes timestamp-less.
+    // No turn, bounded time excludes timestamp-less.
     let bounded = TimeWindow::from_args(Some("2026-06-01"), None).unwrap();
     assert!(!window_admits(0, None, None, &bounded));
 }

@@ -53,7 +53,7 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     let turn_range = args
         .turn_range
         .as_deref()
-        .map(|s| crate::text::parse_range_spec(s, "--turn-range", false))
+        .map(|s| crate::text::parse_range_spec(s, "--turn", false))
         .transpose()?;
     let files = path::resolve_targets_with_session_list(
         &args.paths,
@@ -71,7 +71,8 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     // silent — the drop is reported. Keep the MOST RECENTLY active, then restore the
     // deterministic id order for display (the scope TOTAL then covers the shown subset).
     let mut dropped = 0usize;
-    if let Some(n) = args.max_count {
+    // `--max-count 0` = uncapped (the crate-wide convention).
+    if let Some(n) = args.max_count.filter(|&n| n > 0) {
         if rows.len() > n {
             rows.sort_by(|a, b| b.last_utc.cmp(&a.last_utc));
             dropped = rows.len() - n;
@@ -133,7 +134,7 @@ fn stats_one_file(
     });
     out.skipped_lines = skipped;
 
-    // `--turn-range`: per-record turn membership on the FULL transcript's genuine-turn
+    // `--turn`: per-record turn membership on the FULL transcript's genuine-turn
     // order (the SAME 0-based axis `search`/`files` window on), computed BEFORE the time
     // filter so indices stay stable, then intersected (AND) with the window below.
     let in_turn_range: Option<Vec<bool>> = turn_range.map(|spec| {

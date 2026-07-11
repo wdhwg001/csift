@@ -4,7 +4,7 @@
 //! Behavior (SPEC.md §6.2, §6.4):
 //! - Pattern is ripgrep-like, default smart-case (`-i` forces insensitive,
 //!   `--multiline` lets `.` cross newlines). Empty pattern == pure filter.
-//! - Filters: `--category/-t` (repeatable), `--turn-range` XOR (`--since`/`--until`),
+//! - Filters: `--category/-t` (repeatable), `--turn` XOR (`--since`/`--until`),
 //!   a positional `[PATH]...` target (cwd / encoded dir / `@<uuid>` / `*.jsonl`, repeatable,
 //!   multi-target).
 //! - A **turn** is delimited by GENUINE user messages; a `tool_result`-carrier, an
@@ -85,6 +85,9 @@ pub struct Hit {
     pub timestamp_utc: Option<String>,
     /// Tool name when the hit is a tool-use/tool-result block, for the header.
     pub tool_name: Option<String>,
+    /// The source record's `message.model` (assistant records; string models only) — the
+    /// `--count-by model` axis key. `None` when the record carries no model.
+    pub model: Option<String>,
     /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`
     /// (GOLD §4); `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
     pub direction: Option<(String, String)>,
@@ -603,7 +606,7 @@ impl AddressSet {
 /// Per-leaf record census of a matched exchange set (GOLD §5): each matched record (one
 /// [`Hit`] per record, richest view) contributes to EVERY leaf in its full label set, so a
 /// leaf's tally is exactly how many records `-t <leaf>` would surface. Returns the per-leaf
-/// counts and the distinct matched-record total. Shared by `--count-by-label` and the
+/// counts and the distinct matched-record total. Shared by `--count-by label` and the
 /// zero-hit label probe (so both report the SAME numbers).
 fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize) {
     let mut counts: BTreeMap<&'static str, usize> = BTreeMap::new();
@@ -617,6 +620,83 @@ fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize
         }
     }
     (counts, records)
+}
+
+/// Per-AXIS record census of a matched exchange set — the `--count-by <axis>` engine.
+/// `label` multi-counts (every leaf a record carries; exactly [`label_census`]'s numbers);
+/// every other axis counts each matched record ONCE under its single key, and records
+/// OUTSIDE the axis's domain (no tool name / no pairing / no model) are excluded AND
+/// tallied so the caller can report them (no silent drop). Returns the rows already in
+/// output order — `turn` ascending on (transcript, turn index) so it reads as a histogram,
+/// every other axis richest-count first — plus the matched-record total and the excluded
+/// count.
+fn axis_census(
+    exchanges: &[Exchange],
+    axis: crate::cli::CountAxis,
+) -> (Vec<(String, usize)>, usize, usize) {
+    use crate::cli::CountAxis as A;
+    let multi_transcript = distinct_session_count(exchanges) > 1;
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut turn_counts: BTreeMap<(String, usize), usize> = BTreeMap::new();
+    let mut records = 0usize;
+    let mut excluded = 0usize;
+    for ex in exchanges {
+        for h in &ex.hits {
+            records += 1;
+            match axis {
+                A::Label => {
+                    for &leaf in &h.labels {
+                        *counts.entry(leaf.to_string()).or_insert(0) += 1;
+                    }
+                }
+                A::Tool => match &h.tool_name {
+                    Some(t) => *counts.entry(t.clone()).or_insert(0) += 1,
+                    None => excluded += 1,
+                },
+                A::Turn => {
+                    *turn_counts
+                        .entry((ex.session_id.clone(), ex.turn_index))
+                        .or_insert(0) += 1;
+                }
+                A::Session => *counts.entry(ex.session_id.clone()).or_insert(0) += 1,
+                A::Pairing => match h.pair {
+                    Some(Pairing::Paired) => *counts.entry("paired".to_string()).or_insert(0) += 1,
+                    Some(Pairing::PendingNoResult) => {
+                        *counts.entry("pending".to_string()).or_insert(0) += 1;
+                    }
+                    Some(Pairing::OrphanResult) => {
+                        *counts.entry("orphan".to_string()).or_insert(0) += 1;
+                    }
+                    None => excluded += 1,
+                },
+                A::Model => match &h.model {
+                    Some(m) => *counts.entry(m.clone()).or_insert(0) += 1,
+                    None => excluded += 1,
+                },
+            }
+        }
+    }
+    let rows: Vec<(String, usize)> = if matches!(axis, A::Turn) {
+        // The turn axis reads as a HISTOGRAM: ascending (transcript, turn) order; the key
+        // carries the transcript id only when >1 transcript is in scope (kept FULL — a
+        // truncated id would not round-trip as an `@` target).
+        turn_counts
+            .into_iter()
+            .map(|((sid, t), n)| {
+                let key = if multi_transcript {
+                    format!("{sid}\u{b7}t{t}")
+                } else {
+                    format!("t{t}")
+                };
+                (key, n)
+            })
+            .collect()
+    } else {
+        let mut v: Vec<(String, usize)> = counts.into_iter().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        v
+    };
+    (rows, records, excluded)
 }
 
 /// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare "no matching
@@ -653,7 +733,7 @@ fn active_filters_str(args: &SearchArgs) -> String {
         parts.push(format!("--until {u}"));
     }
     if let Some(t) = &args.turn_range {
-        parts.push(format!("--turn-range {t}"));
+        parts.push(format!("--turn {t}"));
     }
     if parts.is_empty() {
         "none".to_string()
@@ -702,7 +782,7 @@ fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
         None => {
             eprintln!(
                 "csift: to see what a scope holds before guessing a filter, run \
-                 `csift search \"\" <target> --count-by-label`."
+                 `csift search \"\" <target> --count-by label`."
             );
         }
     }
@@ -851,7 +931,8 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             .cmp(&timestamp_sort_key(b.started_utc.as_deref()))
     });
 
-    if let Some(cap) = args.max_count {
+    // `--max-count 0` = uncapped (the crate-wide convention).
+    if let Some(cap) = args.max_count.filter(|&n| n > 0) {
         if all.len() > cap {
             outcome.dropped_by_cap = all.len() - cap;
             all.truncate(cap);
@@ -913,20 +994,25 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         return Ok(());
     }
 
-    // `--count-by-label`: a per-LEAF census of the matched records — the exploration
-    // on-ramp so an empty `-t <leaf>` result is never mistaken for a typo. Record-level:
-    // each matched record contributes to EVERY leaf in its label set, so a leaf's number is
-    // exactly how many records `-t <leaf>` would surface. stdout = the census; the accounting
-    // note goes to stderr (text) so `<count> <label>` stays pipe-clean.
-    if args.count_by_label {
-        let (counts, records) = label_census(&outcome.exchanges);
-        let mut rows: Vec<(&&'static str, &usize)> = counts.iter().collect();
-        rows.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    // `--count-by <axis>`: a per-KEY census of the matched records along ONE closed axis
+    // (label/tool/turn/session/pairing/model) — the exploration on-ramp so an empty
+    // `-t <leaf>` result is never mistaken for a typo, and the 1-command answer to
+    // "any pending tools?" / "which model?" / "hits per turn?". stdout = the census; the
+    // accounting note goes to stderr (text) so `<count> <key>` stays pipe-clean. Records
+    // outside the axis's domain are excluded AND reported (never silent).
+    if let Some(axis) = args.count_by {
+        let (rows, records, excluded) = axis_census(&outcome.exchanges, axis);
+        let slug = axis.slug();
         match args.format {
             OutputFormat::Text => {
-                for (label, n) in &rows {
-                    println!("{n:>7}  {label}");
+                for (key, n) in &rows {
+                    println!("{n:>7}  {key}");
                 }
+                let excl = if excluded > 0 {
+                    format!(" · {excluded} record(s) have no {slug} (outside this axis)")
+                } else {
+                    String::new()
+                };
                 let drop = if outcome.dropped_by_cap > 0 {
                     format!(
                         " · {} exchange(s) dropped by --max-count (census incomplete; raise --max-count)",
@@ -936,8 +1022,8 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                     String::new()
                 };
                 eprintln!(
-                    "csift: {records} matched record(s) across {} label(s){drop}",
-                    counts.len()
+                    "csift: {records} matched record(s) across {} {slug} key(s){excl}{drop}",
+                    rows.len()
                 );
             }
             OutputFormat::Json => {
@@ -948,14 +1034,20 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                     serde_json::json!({}),
                 );
                 println!("{}", serde_json::to_string(&header)?);
-                for (label, n) in &rows {
-                    let obj =
-                        serde_json::json!({"kind": "label_count", "label": label, "count": n});
+                for (key, n) in &rows {
+                    let obj = serde_json::json!({
+                        "kind": "census",
+                        "axis": slug,
+                        "key": key,
+                        "records": n,
+                    });
                     println!("{}", serde_json::to_string(&obj)?);
                 }
                 let summary = crate::text::envelope_summary(serde_json::json!({
+                    "axis": slug,
                     "matched_records": records,
-                    "distinct_labels": counts.len(),
+                    "distinct_keys": rows.len(),
+                    "excluded_records": excluded,
                     "dropped_by_cap": outcome.dropped_by_cap,
                     "skipped_lines": outcome.skipped_lines,
                 }));
@@ -1124,6 +1216,10 @@ fn timestamp_sort_key(ts: Option<&str>) -> (bool, &str) {
 struct FileResult {
     exchanges: Vec<Exchange>,
     skipped_lines: usize,
+    /// This transcript's genuine-turn count — the domain a `--turn` spec resolves
+    /// against. Consumed by `show`'s turn address-miss reporting (`no such turn: t99 —
+    /// the transcript has N turn(s)`); 0 on the early-return paths (empty / gated file).
+    turn_count: usize,
 }
 
 /// A retained record. `can_hit` is the §7d keyword-prefilter verdict on the raw
@@ -1156,7 +1252,7 @@ pub(crate) fn fetch_records(
     lines: BTreeSet<usize>,
     uuids: BTreeSet<String>,
     turn_range: Option<crate::text::RangeSpec>,
-) -> Result<(Vec<Exchange>, usize)> {
+) -> Result<(Vec<Exchange>, usize, usize)> {
     let args = SearchArgs::default();
     let matcher = Matcher::pure();
     // A line/uuid ADDRESS restricts to named records; a `--turn` range (address empty) selects
@@ -1179,7 +1275,7 @@ pub(crate) fn fetch_records(
         false,
         &spawn_map,
     )?;
-    Ok((fr.exchanges, fr.skipped_lines))
+    Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
 }
 
 /// Scan a single session file: prefilter → parse → delimit turns → match → stitch.
@@ -1198,6 +1294,7 @@ fn search_one_file(
         return Ok(FileResult {
             exchanges: Vec::new(),
             skipped_lines: 0,
+            turn_count: 0,
         });
     };
     let bytes: &[u8] = &mmap;
@@ -1279,6 +1376,7 @@ fn search_one_file(
                 return Ok(FileResult {
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped,
+                    turn_count: 0,
                 });
             }
             let (pending, pending_skipped) = crate::elicitation::unresolved_pending(path)?;
@@ -1286,6 +1384,7 @@ fn search_one_file(
                 return Ok(FileResult {
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped + pending_skipped,
+                    turn_count: 0,
                 });
             }
         }
@@ -1345,7 +1444,7 @@ fn search_one_file(
         }
     }
 
-    let mut exchanges = reconstruct_and_match(
+    let (mut exchanges, turn_count) = reconstruct_and_match(
         path,
         &records,
         args,
@@ -1389,6 +1488,7 @@ fn search_one_file(
     Ok(FileResult {
         exchanges,
         skipped_lines: skipped,
+        turn_count,
     })
 }
 
@@ -1425,7 +1525,7 @@ fn reconstruct_and_match(
     address: Option<&AddressSet>,
     want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
-) -> Vec<Exchange> {
+) -> (Vec<Exchange>, usize) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
     // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
@@ -1482,7 +1582,7 @@ fn reconstruct_and_match(
     };
     let mut out = Vec::new();
 
-    // Resolve the `--turn-range` spec against THIS transcript's turn count (0-based), so
+    // Resolve the `--turn` spec against THIS transcript's turn count (0-based), so
     // open/from-end forms (`N..`, `-3..` = the last 3) materialize per-file.
     let turn_bounds = turn_range.map(|spec| spec.resolve(index_turns.len(), false));
 
@@ -1579,7 +1679,8 @@ fn reconstruct_and_match(
         });
     }
 
-    out
+    // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
+    (out, index_turns.len())
 }
 
 /// The FIXED `--siblings` policy (the former per-selector cap DSL is gone — one
@@ -1954,6 +2055,12 @@ fn collect_record_hits(
         return; // unmodeled / excluded record — carries no role.class.sub label
     }
     let ts = rec.timestamp.clone();
+    let model = rec
+        .message
+        .as_ref()
+        .and_then(|m| m.model.as_ref())
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);
@@ -1981,6 +2088,7 @@ fn collect_record_hits(
                 excerpt,
                 timestamp_utc: ts.clone(),
                 tool_name,
+                model: model.clone(),
                 direction: dir,
                 tool_use_id: tuid,
                 pair: None,
@@ -2462,10 +2570,10 @@ fn match_excerpt(text: &str, span: Option<(usize, usize)>, max: usize) -> (Strin
     (out, true)
 }
 
-/// Parse a `--turn-range` token into a [`RangeSpec`] (the shared grammar: `N`/`A..B`/`N..`/
+/// Parse a `--turn` token into a [`RangeSpec`] (the shared grammar: `N`/`A..B`/`N..`/
 /// `..N`/`-k`), resolved per-file against that transcript's turn count (0-based).
 fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
-    crate::text::parse_range_spec(s, "--turn-range", false)
+    crate::text::parse_range_spec(s, "--turn", false)
 }
 
 // ── Rendering ──
@@ -2863,7 +2971,7 @@ mod tests {
             max_count: None,
             count_only: false,
             sessions_with_matches: false,
-            count_by_label: false,
+            count_by: None,
             siblings: false,
             no_truncate: false,
             resolve_persisted: false,
@@ -3368,7 +3476,7 @@ mod tests {
         // no subagents — an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
         // former per-file `build_spawn_lookup` returned here.
         let spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
-        reconstruct_and_match(
+        let (exchanges, _turn_count) = reconstruct_and_match(
             std::path::Path::new("/x/0a1b2c3d-0000-0000-0000-000000000000.jsonl"),
             &kept,
             a,
@@ -3378,7 +3486,8 @@ mod tests {
             None,
             a.siblings,
             &spawn_map,
-        )
+        );
+        exchanges
     }
 
     #[test]
@@ -3661,6 +3770,7 @@ mod tests {
             excerpt: String::new(),
             timestamp_utc: None,
             tool_name: None,
+            model: None,
             direction: None,
             tool_use_id: Some("t1".into()),
             pair: Some(Pairing::Paired),

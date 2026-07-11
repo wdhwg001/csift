@@ -70,6 +70,12 @@ pub struct SessionSummary {
     /// with no sidecar / no pending, and ALWAYS empty for a subagent row (the sidecar is keyed
     /// by the top-level session). Drives the `with elicitation sidecar` annotation.
     pub pending_elicitations: Vec<String>,
+    /// True when the session's elicitation SIDECAR FILE exists at all (= the csift hook
+    /// is installed for this session — resolved pairs stay in the file). The tri-state a
+    /// consumer needs: present+pending / present+none (safe to conclude "not blocked on
+    /// an elicitation") / absent (hook unknown — CANNOT conclude anything). Always false
+    /// for a subagent row (the sidecar is keyed by the top-level session).
+    pub sidecar_present: bool,
 }
 
 /// A short, timestamped preview of one message for the `list` view.
@@ -146,11 +152,12 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     // stays unlimited. The kept rows are the MOST RECENTLY active (what an unscoped list wants),
     // then restored to the deterministic path order for display.
     let all_projects = args.paths.is_empty() && args.sessions_from.is_none();
-    let cap = args.max_count.or(if all_projects {
-        Some(DEFAULT_LIST_CAP)
-    } else {
-        None
-    });
+    // `--max-count 0` = uncapped (the crate-wide convention) — it beats the default cap.
+    let cap = match args.max_count {
+        Some(0) => None,
+        Some(n) => Some(n),
+        None => all_projects.then_some(DEFAULT_LIST_CAP),
+    };
     let mut dropped = 0usize;
     if let Some(n) = cap {
         if summaries.len() > n {
@@ -317,6 +324,10 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
             .filter_map(crate::elicitation::pending_text)
             .collect()
     };
+    // File-existence = hook-installed evidence (resolved pairs stay in the file), the
+    // machine-legible third state beside "pending" and "none pending".
+    let sidecar_present =
+        !is_subagent && crate::elicitation::sidecar_path(path).is_some_and(|p| p.is_file());
 
     Ok(SessionSummary {
         session_id,
@@ -331,6 +342,7 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         last_agent,
         skipped_lines: head_skipped + tail_skipped + sidecar_skipped,
         pending_elicitations,
+        sidecar_present,
     })
 }
 
@@ -487,6 +499,10 @@ fn render_json(summaries: &[SessionSummary], dropped: usize) -> Result<()> {
             "last_user": preview_json(s.last_user.as_ref()),
             "last_agent": preview_json(s.last_agent.as_ref()),
             "skipped_lines": s.skipped_lines,
+            // The tri-state: `sidecar_present` = the sidecar FILE exists (hook installed —
+            // resolved pairs stay in the file), so present+no-pending genuinely means "not
+            // blocked on an elicitation", while absent means "hook unknown — cannot conclude".
+            "sidecar_present": s.sidecar_present,
             // Unresolved-pending elicitations merged from the sidecar (§3.10): the one-line
             // renders + a `with_elicitation_sidecar` flag (the machine echo of the text note).
             // Empty / false for a session with no pending and for every subagent row.
@@ -548,19 +564,21 @@ mod tests {
     }
 
     #[test]
-    fn format_timestamp_uses_system_local_and_preserves_raw() {
+    fn format_timestamp_uses_system_local_canonical_marker() {
         // tz-agnostic: the local portion must equal what the system tz itself yields
-        // for this instant (derived in-test, not a hardcoded zone), and the raw UTC
-        // is always preserved verbatim. Renders correctly on any machine / CI.
+        // for this instant (derived in-test, not a hardcoded zone). v0.5: the marker
+        // is `<TZAB>(UTC±offset)` and the raw-UTC copy is GONE (it invited LLM
+        // conversion arithmetic; machine consumers read JSON ts_utc).
         let raw = "2026-06-07T05:48:22.880Z";
         let out = format_timestamp(Some(raw));
         let ts: jiff::Timestamp = raw.parse().expect("parseable instant");
         let local = ts
             .to_zoned(crate::timez::local_tz())
-            .strftime("%Y-%m-%d %H:%M:%S %Z")
+            .strftime("%Y-%m-%d %H:%M:%S")
             .to_string();
         assert!(out.contains(&local), "expected local {local:?} in {out:?}");
-        assert!(out.contains(raw), "raw missing: {out}");
+        assert!(out.contains("(UTC"), "marker missing: {out}");
+        assert!(!out.contains(raw), "the raw-UTC copy must be gone: {out}");
     }
 
     #[test]

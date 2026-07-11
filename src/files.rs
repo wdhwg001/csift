@@ -88,7 +88,7 @@ struct FileResult {
     mutations: Vec<TaggedMutation>,
     boundaries: Vec<TaggedBoundary>,
     skipped_lines: usize,
-    /// This transcript's genuine-user turn count — so a `--turn-range` spec resolves its
+    /// This transcript's genuine-user turn count — so a `--turn` spec resolves its
     /// open/from-end forms (`N..`, `-3..`) against THIS file's turns, not a global count.
     turn_count: usize,
 }
@@ -139,7 +139,7 @@ impl PathFilter {
 
 /// Entry point for `csift files`.
 pub fn run_files(args: &FilesArgs) -> Result<()> {
-    // `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
+    // `--turn` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
     let turn_range = args
@@ -176,13 +176,13 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
         .map(|p| scan_one_file(p))
         .collect::<Result<Vec<_>>>()?;
 
-    // ── Merge + filter by turn-range / time-window per mutation + boundary ──
+    // ── Merge + filter by turn / time-window per mutation + boundary ──
     let mut mutations: Vec<TaggedMutation> = Vec::new();
     let mut boundaries: Vec<TaggedBoundary> = Vec::new();
     let mut skipped_lines = 0usize;
     for fr in per_file {
         skipped_lines += fr.skipped_lines;
-        // Resolve the `--turn-range` spec against THIS file's turn count (0-based), so
+        // Resolve the `--turn` spec against THIS file's turn count (0-based), so
         // open/from-end forms (`N..`, `-3..` = the last 3) window each transcript's own turns.
         let turn_bounds = turn_range.map(|spec| spec.resolve(fr.turn_count, false));
         for tm in fr.mutations {
@@ -203,7 +203,7 @@ pub fn run_files(args: &FilesArgs) -> Result<()> {
             }
             mutations.push(tm);
         }
-        // Boundaries obey the SAME turn-range / time-window / path filters as mutations.
+        // Boundaries obey the SAME turn / time-window / path filters as mutations.
         for tb in fr.boundaries {
             if let Some((lo, hi)) = turn_bounds {
                 if tb.turn_index < lo || tb.turn_index > hi {
@@ -289,7 +289,7 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
             tb.parent_session_id = parent_session_id.clone();
         }
     }
-    // Per-file turn count for resolving `--turn-range` open/from-end forms (same grouping
+    // Per-file turn count for resolving `--turn` open/from-end forms (same grouping
     // `extract_mutations`/`extract_boundaries` used to assign each `turn_index`).
     let turn_count = group_turn_indices_deduped(&records, |r| r).len();
     Ok(FileResult {
@@ -599,7 +599,7 @@ struct Outcome {
     /// Edit-before-Read boundaries (file changed outside the tool stream), sorted by jsonl line.
     boundaries: Vec<TaggedBoundary>,
     skipped_lines: usize,
-    /// The raw `--turn-range` token, kept verbatim for the footer (the range resolves
+    /// The raw `--turn` token, kept verbatim for the footer (the range resolves
     /// per-file, so there is no single global `(lo, hi)` to display).
     turn_range: Option<String>,
     time_window_bounded: bool,
@@ -946,7 +946,7 @@ fn print_footer(outcome: &Outcome) {
 /// A short description of the active turn/time filter for the footer.
 fn filter_context(outcome: &Outcome) -> String {
     if let Some(s) = &outcome.turn_range {
-        format!("turn-range={s}")
+        format!("turn={s}")
     } else if outcome.time_window_bounded {
         "time-window".to_string()
     } else {
@@ -1023,7 +1023,23 @@ fn render_json(outcome: &Outcome) -> Result<()> {
         println!("{}", serde_json::to_string(&obj)?);
     }
     // envelope v2 summary. `detail_level` values equal the `--by` flag values verbatim.
+    // `sessions` = distinct OWNING sessions among the emitted mutations/boundaries —
+    // the summary core trio (`sessions`/`skipped_lines`[/`dropped_by_cap`]) every other
+    // spanning command carries; files has no cap, so `dropped_by_cap` is deliberately
+    // absent rather than a constant 0 implying one exists.
+    let sessions: std::collections::BTreeSet<&str> = outcome
+        .mutations
+        .iter()
+        .map(|m| m.parent_session_id.as_str())
+        .chain(
+            outcome
+                .boundaries
+                .iter()
+                .map(|b| b.parent_session_id.as_str()),
+        )
+        .collect();
     let summary = crate::text::envelope_summary(json!({
+        "sessions": sessions.len(),
         "distinct_files": outcome.distinct_files(),
         "total_mutations": outcome.mutations.len(),
         "edit_before_read_boundaries": outcome.boundaries.len(),
@@ -1089,10 +1105,10 @@ fn json_grouped<F: Fn(&FileMutation) -> String>(
     Ok(())
 }
 
-/// Parse a `--turn-range` token into a [`RangeSpec`] (the shared grammar), resolved per-file
+/// Parse a `--turn` token into a [`RangeSpec`] (the shared grammar), resolved per-file
 /// against each transcript's own turn count (0-based).
 fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
-    crate::text::parse_range_spec(s, "--turn-range", false)
+    crate::text::parse_range_spec(s, "--turn", false)
 }
 
 #[cfg(test)]
@@ -1679,10 +1695,10 @@ mod tests {
     #[test]
     fn footer_filter_context_all_arms() {
         let muts = extract(&fixture());
-        // turn-range arm.
+        // turn arm.
         let mut o = outcome(FilesDetail::Summary, muts.clone());
         o.turn_range = Some("0..1".to_string());
-        assert_eq!(filter_context(&o), "turn-range=0..1");
+        assert_eq!(filter_context(&o), "turn=0..1");
         // bounded time-window arm.
         let mut o2 = outcome(FilesDetail::Summary, muts.clone());
         o2.time_window_bounded = true;

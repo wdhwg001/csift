@@ -72,7 +72,7 @@ pub fn is_auq_answer_text(text: &str) -> bool {
 pub fn is_synthetic_user_marker(content: &str) -> bool {
     INTERRUPT_MARKERS.contains(&content)
         || content.starts_with(LOCAL_COMMAND_STDOUT_PREFIX)
-        || content.starts_with(COMMAND_NAME_PREFIX)
+        || is_slash_command_wrapper(content)
 }
 
 /// The two exact-content synthesized strings Claude Code writes when the user
@@ -98,6 +98,21 @@ pub const LOCAL_COMMAND_STDOUT_PREFIX: &str = "<local-command-stdout>";
 /// command lives in the `<command-args>…</command-args>` body and is recovered
 /// separately (see [`Record::slash_command_args`]).
 pub const COMMAND_NAME_PREFIX: &str = "<command-name>";
+
+/// The SAME slash-command wrapper in the NEWER tag order: current CC emits
+/// `<command-message>…</command-message>\n<command-name>/x</command-name>\n<command-args>…`
+/// — the message tag FIRST (verified live 2026-07: 14 sessions new-order vs 35 old-order
+/// in one real corpus; both orders coexist). Detection must accept EITHER leading tag:
+/// anchoring on `<command-name>` alone silently reclassified every new-order record as
+/// GENUINE user prose — raw wrapper XML surfaced as `user.message`, and a no-args
+/// wrapper opened a turn.
+pub const COMMAND_MESSAGE_PREFIX: &str = "<command-message>";
+
+/// True when `content` is a slash-command wrapper (§4.2.3) in EITHER tag order.
+#[must_use]
+pub fn is_slash_command_wrapper(content: &str) -> bool {
+    content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)
+}
 
 /// Prefix of a `<task-notification>…</task-notification>` user record — a MACHINE-INJECTED
 /// automation trigger (a background-command / workflow / spawned-task completion notice CC
@@ -579,7 +594,7 @@ impl Record {
         let Content::Text(s) = content else {
             return None;
         };
-        if !s.starts_with(COMMAND_NAME_PREFIX) {
+        if !is_slash_command_wrapper(s) {
             return None;
         }
         const OPEN: &str = "<command-args>";
@@ -592,6 +607,27 @@ impl Record {
         } else {
             Some(normalize_line(args))
         }
+    }
+
+    /// The invoked slash command's name (e.g. `/csift`) from the wrapper's
+    /// `<command-name>…</command-name>` tag — EITHER tag order. `None` when the record
+    /// is not a slash-command wrapper or the tag is absent/empty. Same codepoint-safety
+    /// as [`Record::slash_command_args`] (slices only on ASCII tag offsets).
+    #[must_use]
+    pub fn slash_command_name(&self) -> Option<String> {
+        let content = self.message.as_ref()?.content.as_ref()?;
+        let Content::Text(s) = content else {
+            return None;
+        };
+        if !is_slash_command_wrapper(s) {
+            return None;
+        }
+        const OPEN: &str = "<command-name>";
+        const CLOSE: &str = "</command-name>";
+        let start = s.find(OPEN)? + OPEN.len();
+        let end = s[start..].find(CLOSE).map_or(s.len(), |rel| start + rel);
+        let name = s[start..end].trim();
+        (!name.is_empty()).then(|| name.to_string())
     }
 
     /// Classify this record as a MACHINE-INJECTED automation trigger, if it is one.
@@ -1026,9 +1062,16 @@ impl Record {
         }
         // A slash-command wrapper is NOT a turn boundary (§4.2.3), but when the user
         // typed prose after the command (`/compact <prose>`) that prose IS genuine user
-        // input — surface it so `search -t user` still finds it within its turn.
+        // input — surface it as `/name args` so `search -t user` still finds it within
+        // its turn and the wrapper XML never masquerades as prose. Prefilter/gate note:
+        // both the name and the args are VERBATIM raw-line substrings, and the seam
+        // between them is a space (a whitespace-bearing pattern is never
+        // prefilter-eligible), so no synth needle is needed for this render.
         if let Some(args) = self.slash_command_args() {
-            return Some(args);
+            return Some(match self.slash_command_name() {
+                Some(name) => format!("{name} {args}"),
+                None => args,
+            });
         }
         // GOLD §1: an inbound TEAMMATE message opens a turn but is NOT genuine-user, so the
         // genuine-user arm above no longer yields its body. Render the message text here so a
@@ -2789,12 +2832,16 @@ impl Record {
             push_unique(out, Class::CommandStdout);
             return;
         }
-        if s.starts_with(COMMAND_NAME_PREFIX) {
-            push_unique(out, Class::CommandInvocation);
-            // Prose typed after the slash command (`<command-args>`) IS genuine user input.
+        if is_slash_command_wrapper(s) {
+            // Prose typed after the slash command (`<command-args>`) IS genuine user
+            // input — and the RICHER view (richest-view law: the prose beats the
+            // wrapper), so it is pushed FIRST: the unfiltered record-text emission
+            // renders `/name args`, never the wrapper XML. An explicit
+            // `-t harness.command.invocation` still reaches the wrapper form.
             if self.slash_command_args().is_some() {
                 push_unique(out, Class::UserMessage);
             }
+            push_unique(out, Class::CommandInvocation);
             return;
         }
         if s.trim_start().starts_with(SCHEDULE_CONTINUATION_MARKER) {
@@ -4060,9 +4107,44 @@ mod tests {
             r.slash_command_args().as_deref(),
             Some("Just shipped spec-batch-14, summarize")
         );
+        // v0.5: rendered as `/name args` — the prose keeps its command context, and the
+        // wrapper XML never masquerades as the body.
         assert_eq!(
             r.reconstructed_user_text(None).as_deref(),
-            Some("Just shipped spec-batch-14, summarize")
+            Some("/compact Just shipped spec-batch-14, summarize")
+        );
+    }
+
+    #[test]
+    fn command_message_first_wrapper_detected_and_recovered() {
+        // The NEWER CC tag order (`<command-message>` FIRST — both orders coexist in real
+        // corpora). Detection anchored on `<command-name>` alone used to misclassify this
+        // as GENUINE user prose (raw XML as `user.message`, and it opened a turn).
+        let r = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-message>csift</command-message>\n<command-name>/csift</command-name>\n<command-args>what changed in v5?</command-args>"}}"#,
+        );
+        assert!(!r.is_genuine_user(), "wrapper is never the human");
+        assert_eq!(r.slash_command_name().as_deref(), Some("/csift"));
+        assert_eq!(
+            r.slash_command_args().as_deref(),
+            Some("what changed in v5?")
+        );
+        assert_eq!(
+            r.reconstructed_user_text(None).as_deref(),
+            Some("/csift what changed in v5?")
+        );
+        assert_eq!(
+            r.classify(&ClassifyCtx::top_level()),
+            vec![Class::UserMessage, Class::CommandInvocation]
+        );
+        // A no-args NEW-order wrapper is pure machinery: never genuine, never user.message.
+        let bare = parse(
+            r#"{"type":"user","message":{"role":"user","content":"<command-message>compact</command-message>\n<command-name>/compact</command-name>\n<command-args></command-args>"}}"#,
+        );
+        assert!(!bare.is_genuine_user());
+        assert_eq!(
+            bare.classify(&ClassifyCtx::top_level()),
+            vec![Class::CommandInvocation]
         );
     }
 
@@ -5435,9 +5517,11 @@ mod tests {
         let with_args = parse(
             r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>just shipped, summarize</command-args>"}}"#,
         );
+        // v0.5: the prose is the RICHER view (richest-view law) — pushed FIRST so the
+        // unfiltered record-text emission renders `/name args`, not the wrapper XML.
         assert_eq!(
             with_args.classify(&ClassifyCtx::top_level()),
-            vec![Class::CommandInvocation, Class::UserMessage]
+            vec![Class::UserMessage, Class::CommandInvocation]
         );
     }
 

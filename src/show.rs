@@ -112,6 +112,52 @@ fn resolve_single_transcript(target: &std::path::Path) -> Result<PathBuf> {
     }
 }
 
+/// The default cap on emitted record units — `show`'s context-flood guard (law 4: any
+/// cap reports its drop, here with the exact continuation command). `--max-count N`
+/// overrides; `0` = uncapped (the crate-wide `--max-count 0` convention).
+const DEFAULT_SHOW_CAP: usize = 200;
+
+/// The effective unit cap: explicit N wins, `0` lifts the cap entirely, absent = default.
+fn effective_cap(max_count: Option<usize>) -> usize {
+    match max_count {
+        Some(0) => usize::MAX,
+        Some(n) => n,
+        None => DEFAULT_SHOW_CAP,
+    }
+}
+
+/// True when a `--turn` spec is fully EXPLICIT (`N` / `A..B` — both endpoints written as
+/// absolute indices): an ADDRESS by law 1, so resolving to zero records is a miss (hard
+/// error), never an honest-empty. Open / from-the-end forms (`N..`, `..N`, `-k`, `..`)
+/// clamp — the tail-peek (`--turn -3..`) must stay robust on short sessions.
+fn turn_spec_is_explicit(spec: &crate::text::RangeSpec) -> bool {
+    matches!(spec.start, crate::text::Endpoint::At(_))
+        && matches!(spec.end, crate::text::Endpoint::At(_))
+}
+
+/// The turn address-miss error — names the missed turn(s) AND the transcript's actual
+/// turn domain, mirroring the `--line` miss's self-teaching shape.
+fn turn_miss_error(spec: &crate::text::RangeSpec, turn_count: usize) -> anyhow::Error {
+    use crate::text::Endpoint;
+    let shown = match (spec.start, spec.end) {
+        (Endpoint::At(a), Endpoint::At(b)) if a == b => format!("t{a}"),
+        (Endpoint::At(a), Endpoint::At(b)) => format!("t{a}..t{b}"),
+        _ => "the requested turn range".to_string(),
+    };
+    let domain = if turn_count == 0 {
+        "the transcript has 0 turns".to_string()
+    } else {
+        format!(
+            "the transcript has {turn_count} turn(s) (t0..t{})",
+            turn_count - 1
+        )
+    };
+    anyhow::anyhow!(
+        "no such turn(s): {shown} — {domain}; turn indices are 0-based (the `tN` search \
+         prints), and the last k turns are `--turn -k..`"
+    )
+}
+
 /// Entry point for `csift show`.
 pub fn run_show(args: &ShowArgs) -> Result<()> {
     if args.raw && args.format == OutputFormat::Json {
@@ -148,9 +194,16 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
     let specs = resolve_line_specs(&parsed, count_lines(&file)?);
 
     if args.raw {
-        return run_raw(&file, &specs, &uuids, turn_spec);
+        return run_raw(&file, &specs, &uuids, turn_spec, args.max_count);
     }
-    run_rendered(&file, &specs, &uuids, turn_spec, args.format)
+    run_rendered(
+        &file,
+        &specs,
+        &uuids,
+        turn_spec,
+        args.format,
+        args.max_count,
+    )
 }
 
 /// `--raw`: emit the verbatim bytes of each addressed jsonl line, ascending, exactly
@@ -160,6 +213,7 @@ fn run_raw(
     specs: &LineSpecs,
     uuids: &BTreeSet<String>,
     turn_range: Option<crate::text::RangeSpec>,
+    max_count: Option<usize>,
 ) -> Result<()> {
     let Some(mmap) = mmap_bytes(file)? else {
         bail!("transcript {} is empty", file.display());
@@ -174,7 +228,12 @@ fn run_raw(
     // `--turn --raw`: resolve the turn range to its records' physical lines (via the shared
     // grouping, so the turn numbering matches `search`), then emit those lines verbatim.
     if let Some(spec) = turn_range {
-        let (exchanges, _) = fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec))?;
+        let (exchanges, _, turn_count) =
+            fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec))?;
+        // An EXPLICIT turn (`N` / `A..B`) is an address — zero records = miss (law 1).
+        if turn_spec_is_explicit(&spec) && exchanges.is_empty() {
+            return Err(turn_miss_error(&spec, turn_count));
+        }
         for ex in &exchanges {
             for h in &ex.hits {
                 if h.line > 0 {
@@ -231,10 +290,36 @@ fn run_raw(
         bail!("no such record(s): {}", misses.join(", "));
     }
 
+    // Context-flood guard: keep the FIRST `cap` lines, report the drop on stderr (stdout
+    // stays a pure jsonl stream) with the exact continuation command.
+    let cap = effective_cap(max_count);
+    let mut dropped = 0usize;
+    let mut continuation: Option<(usize, usize)> = None;
+    if keep.len() > cap {
+        dropped = keep.len() - cap;
+        let omitted: Vec<usize> = keep.keys().skip(cap).copied().collect();
+        if let (Some(&a), Some(&b)) = (omitted.first(), omitted.last()) {
+            continuation = Some((a, b));
+        }
+        keep = keep.into_iter().take(cap).collect();
+    }
+
     let mut out = std::io::stdout().lock();
     for line in keep.values() {
         out.write_all(line)?;
         out.write_all(b"\n")?;
+    }
+    drop(out);
+    if dropped > 0 {
+        let sid = crate::subagent::session_id_from_path(file);
+        let cont = match continuation {
+            Some((a, b)) => format!(" · continue: csift show @{sid} --line {a}..{b} --raw"),
+            None => String::new(),
+        };
+        eprintln!(
+            "csift: note: +{dropped} more line(s) beyond the {cap}-unit cap{cont}, or pass \
+             --max-count 0 (uncapped)"
+        );
     }
     Ok(())
 }
@@ -247,17 +332,28 @@ fn run_rendered(
     uuids: &BTreeSet<String>,
     turn_range: Option<crate::text::RangeSpec>,
     format: OutputFormat,
+    max_count: Option<usize>,
 ) -> Result<()> {
-    let (exchanges, skipped) = fetch_records(file, specs.all(), uuids.clone(), turn_range)?;
+    let (mut exchanges, skipped, turn_count) =
+        fetch_records(file, specs.all(), uuids.clone(), turn_range)?;
+
+    // Turn address-miss: an EXPLICIT `--turn N` / `--turn A..B` is an ADDRESS (law 1) —
+    // resolving to zero records is a hard error naming the transcript's turn domain,
+    // exactly like a `--line` miss. Open/from-end forms clamp (tail-peek robustness).
+    if let Some(spec) = &turn_range {
+        if turn_spec_is_explicit(spec) && exchanges.is_empty() {
+            return Err(turn_miss_error(spec, turn_count));
+        }
+    }
 
     // Address-miss accounting (explicit lines + uuids must resolve; ranges must yield ≥1).
     let mut hit_lines: BTreeSet<usize> = BTreeSet::new();
-    let mut hit_uuids: BTreeSet<&str> = BTreeSet::new();
+    let mut hit_uuids: BTreeSet<String> = BTreeSet::new();
     for ex in &exchanges {
         for h in &ex.hits {
             hit_lines.insert(h.line);
             if let Some(u) = h.uuid.as_deref() {
-                hit_uuids.insert(u);
+                hit_uuids.insert(u.to_string());
             }
         }
     }
@@ -291,6 +387,53 @@ fn run_rendered(
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(file).unwrap_or_else(|| session_id.clone());
 
+    // Line-addressed RANGES may cover non-record lines (metadata/attachment — never
+    // renderable, silently excluded by the pipeline). Count them so "fetched 1 unit"
+    // from a 12-line range is self-explaining; explicit single-line misses already
+    // errored above.
+    let addressed = specs.all();
+    let non_record_lines = if addressed.is_empty() {
+        0
+    } else {
+        addressed.iter().filter(|n| !hit_lines.contains(n)).count()
+    };
+
+    // Context-flood guard (law 4's last hole): an open range (`--line ..` / `--turn ..`)
+    // used to dump the WHOLE transcript uncapped. Keep the FIRST `cap` record units and
+    // report the drop with the exact continuation command; `--max-count 0` lifts the cap.
+    let cap = effective_cap(max_count);
+    let total_units: usize = exchanges.iter().map(|e| e.hits.len()).sum();
+    let mut dropped = 0usize;
+    let mut remainder_cmd: Option<String> = None;
+    if total_units > cap {
+        dropped = total_units - cap;
+        // The remainder's exact line-domain, computed BEFORE truncation (sidecar hits
+        // have no physical line and cannot ride a --line continuation).
+        let omitted_lines: Vec<usize> = exchanges
+            .iter()
+            .flat_map(|e| e.hits.iter())
+            .skip(cap)
+            .filter(|h| !h.from_sidecar && h.line > 0)
+            .map(|h| h.line)
+            .collect();
+        if let (Some(&a), Some(&b)) = (omitted_lines.first(), omitted_lines.last()) {
+            remainder_cmd = Some(format!("csift show @{session_id} --line {a}..{b}"));
+        }
+        let mut budget = cap;
+        exchanges.retain_mut(|ex| {
+            if budget == 0 {
+                return false;
+            }
+            if ex.hits.len() <= budget {
+                budget -= ex.hits.len();
+            } else {
+                ex.hits.truncate(budget);
+                budget = 0;
+            }
+            true
+        });
+    }
+
     match format {
         OutputFormat::Text => {
             render_text(
@@ -299,6 +442,10 @@ fn run_rendered(
                 is_subagent,
                 &parent_session_id,
                 skipped,
+                dropped,
+                cap,
+                remainder_cmd.as_deref(),
+                non_record_lines,
             );
         }
         OutputFormat::Json => render_json(
@@ -308,17 +455,25 @@ fn run_rendered(
             is_subagent,
             &parent_session_id,
             skipped,
+            dropped,
+            remainder_cmd.as_deref(),
+            non_record_lines,
         )?,
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_text(
     exchanges: &[Exchange],
     session_id: &str,
     is_subagent: bool,
     parent_session_id: &str,
     skipped: usize,
+    dropped: usize,
+    cap: usize,
+    remainder_cmd: Option<&str>,
+    non_record_lines: usize,
 ) {
     if is_subagent {
         println!("SUBAGENT {session_id} · parent SESSION {parent_session_id}");
@@ -340,6 +495,24 @@ fn render_text(
     }
     println!();
     println!("fetched {units} record unit(s)");
+    if dropped > 0 {
+        match remainder_cmd {
+            Some(cmd) => println!(
+                "+{dropped} more record unit(s) beyond the {cap}-unit cap · continue: {cmd}  \
+                 (or --max-count 0 = uncapped)"
+            ),
+            None => println!(
+                "+{dropped} more record unit(s) beyond the {cap}-unit cap — pass \
+                 --max-count 0 (uncapped)"
+            ),
+        }
+    }
+    if non_record_lines > 0 {
+        println!(
+            "{non_record_lines} line(s) in the addressed range are not records \
+             (metadata/attachment — inspect with --raw)"
+        );
+    }
     if merged_any_sidecar(exchanges) {
         println!("with elicitation sidecar");
     }
@@ -348,6 +521,7 @@ fn render_text(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_json(
     exchanges: &[Exchange],
     file: &std::path::Path,
@@ -355,6 +529,9 @@ fn render_json(
     is_subagent: bool,
     parent_session_id: &str,
     skipped: usize,
+    dropped: usize,
+    remainder_cmd: Option<&str>,
+    non_record_lines: usize,
 ) -> Result<()> {
     use serde_json::json;
     let header = json!({
@@ -402,6 +579,9 @@ fn render_json(
     let summary = json!({
         "kind": "summary",
         "records": units,
+        "dropped_by_cap": dropped,
+        "refetch_remainder": remainder_cmd,
+        "non_record_lines": non_record_lines,
         "skipped_lines": skipped,
         "with_elicitation_sidecar": merged_any_sidecar(exchanges),
     });

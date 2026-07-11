@@ -93,6 +93,15 @@ fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// `SetFalse`/`Count`/help/version do not). So the flag set is never duplicated — it
 /// follows the derive definitions automatically.
 ///
+/// ## Pre-subcommand global flags
+///
+/// The subcommand token is LOCATED BY SCANNING, not assumed at `argv[1]`: declared root
+/// flags (e.g. the global `--claude-home <DIR>`, documented as position-free) and their
+/// values are stepped over first. Everything before the subcommand passes through
+/// verbatim; only the segment AFTER the subcommand is reordered. Regression context:
+/// `csift --claude-home DIR list @x --max-count 3` used to skip normalization entirely
+/// (`argv[1]` matched no subcommand), letting the PATH positional swallow `--max-count`.
+///
 /// ## Algorithm (per subcommand args, after the subcommand name)
 ///
 /// - `--` terminator: everything after it is passed through verbatim (clap's escape).
@@ -113,19 +122,87 @@ fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// genuine misuse.
 #[must_use]
 pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
-    // argv[0] = program; argv[1] = subcommand (if any). Find the subcommand and the
-    // index where its args start.
+    // argv[0] = program. The subcommand is NOT necessarily argv[1]: a root-level GLOBAL
+    // flag may precede it (`csift --claude-home DIR list …`). Scan forward from argv[1],
+    // stepping over DECLARED root flags (and the value token of a value-taking one),
+    // until the first non-flag token — the subcommand candidate. Any token we cannot
+    // positively classify (an unknown `--x`, a lone `-`) aborts the scan: argv is
+    // returned untouched and clap reports as usual.
     if argv.len() < 2 {
         return argv;
     }
     let cmd = Cli::command();
-    let sub_name = &argv[1];
+    let mut root_value_long: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut root_all_long: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut root_value_short: std::collections::HashSet<char> = std::collections::HashSet::new();
+    let mut root_all_short: std::collections::HashSet<char> = std::collections::HashSet::new();
+    for a in cmd.get_arguments() {
+        let takes = flag_takes_value(a);
+        if let Some(longs) = a.get_long_and_visible_aliases() {
+            for l in longs {
+                let f = format!("--{l}");
+                if takes {
+                    root_value_long.insert(f.clone());
+                }
+                root_all_long.insert(f);
+            }
+        }
+        if let Some(shorts) = a.get_short_and_visible_aliases() {
+            for c in shorts {
+                root_all_short.insert(c);
+                if takes {
+                    root_value_short.insert(c);
+                }
+            }
+        }
+    }
+    let mut sub_idx = None;
+    let mut scan = 1;
+    while scan < argv.len() {
+        let tok = &argv[scan];
+        if let Some(name) = tok.strip_prefix("--") {
+            if name.is_empty() {
+                return argv; // `--` terminator before any subcommand — nothing to do
+            }
+            let base = name.split_once('=').map_or(name, |(n, _)| n);
+            let flag = format!("--{base}");
+            if !root_all_long.contains(&flag) {
+                return argv; // unknown root flag / typo — leave for clap to report
+            }
+            // Inline `--flag=value` and boolean flags span one token; a bare
+            // value-taking flag also consumes its following token as the value.
+            if name.contains('=') || !root_value_long.contains(&flag) {
+                scan += 1;
+            } else {
+                scan += 2;
+            }
+        } else if let Some(short) = tok.strip_prefix('-') {
+            let Some(first) = short.chars().next() else {
+                return argv; // a lone `-` is never a root flag
+            };
+            if !root_all_short.contains(&first) {
+                return argv;
+            }
+            if tok.len() == 2 && root_value_short.contains(&first) {
+                scan += 2;
+            } else {
+                scan += 1;
+            }
+        } else {
+            sub_idx = Some(scan);
+            break;
+        }
+    }
+    let Some(sub_idx) = sub_idx else {
+        return argv; // flags only, no subcommand — nothing to normalize
+    };
+    let sub_name = &argv[sub_idx];
     let Some(sub) = cmd
         .get_subcommands()
         .find(|s| s.get_name() == sub_name || s.get_all_aliases().any(|a| a == sub_name))
     else {
-        // Not a recognized subcommand (e.g. `--help`, `--version`, a typo) — leave
-        // argv untouched and let clap produce its normal message.
+        // Not a recognized subcommand (a typo) — leave argv untouched and let clap
+        // produce its normal message.
         return argv;
     };
 
@@ -172,8 +249,8 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
         }
     }
 
-    let head = argv[..2].to_vec(); // program + subcommand
-    let rest = &argv[2..];
+    let head = argv[..=sub_idx].to_vec(); // program (+ any root flags) + subcommand
+    let rest = &argv[sub_idx + 1..];
 
     let mut flags: Vec<String> = Vec::new();
     let mut positionals: Vec<String> = Vec::new();
@@ -720,7 +797,7 @@ impl ListArgs {
         unless it contains an uppercase letter; `-i` forces case-insensitive and \
         always wins. `--multiline` lets `.` cross newlines. An EMPTY pattern is a \
         pure filter — it matches every label-eligible record, so combine it with \
-        `--label` / `--since` / `--turn-range` (a bare empty pattern with no other \
+        `--label` / `--since` / `--turn` (a bare empty pattern with no other \
         filter warns that it will emit a lot).\n\n\
         CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
         record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
@@ -745,7 +822,7 @@ impl ListArgs {
         summary). It renders as the parsed `[<kind> <task-id> <status>] <summary>` attribution \
         label — never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
         `search 'background-command' -t harness.notification.background-command`).\n\n\
-        WINDOWING: `--turn-range` takes the shared range grammar — `N` (one turn) · `A..B` \
+        WINDOWING: `--turn` takes the shared range grammar — `N` (one turn) · `A..B` \
         (closed) · `N..` (turn N → the end) · `..N` (start → N) · `-k` = k-th FROM THE END \
         (`-3..` = the last 3 turns), 0-based on turn-boundary order — and INTERSECTS with \
         `--since`/`--until` (both filters AND). Time bounds accept ISO8601 (`2026-06-01`, \
@@ -756,7 +833,7 @@ impl ListArgs {
         `-t`/`-T` filter was on) an active probe that NAMES the label(s) the pattern DOES occur \
         under (e.g. it was excluded by your `-t user.message` but occurs under `agent.tool.use`). \
         Read the diagnosis and adjust the filter; do NOT assume a syntax error. To SEE a scope's \
-        record-types before you filter, run `--count-by-label` (a per-leaf census; with an empty \
+        record-types before you filter, run `--count-by label` (a per-leaf census; with an empty \
         pattern it censuses the whole scope).\n\n\
         `--max-count` caps emitted exchanges but reports the dropped count (default: \
         unlimited — no cap) — there is NO silent truncation anywhere.",
@@ -766,7 +843,7 @@ impl ListArgs {
           csift search -i \"askuserquestion\" -t agent.tool.use  # tool_use blocks naming AUQ\n  \
           csift search \"\" -t user --since 2h .                  # user turns, last 2h, this project\n  \
           csift search \"tail.read\" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
-          csift search \"panic\" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50\n  \
+          csift search \"panic\" -t agent.message -t agent.thinking --turn 10..20 --max-count 50\n  \
           csift search \"persisted-output\" --resolve-persisted --format json\n  \
           csift search \"refactor\" -c                            # COUNT matches only (ripgrep -c idiom)\n  \
           csift search \"refactor\" -l                            # WHICH sessions matched, one id per line (rg -l idiom)\n  \
@@ -819,8 +896,8 @@ impl ListArgs {
         occur under (so an empty `-t user.message` that hid tool-name hits under `agent.tool.use` \
         tells you exactly that). Read the diagnosis and adjust the filter — do NOT assume a syntax \
         error or fall back to hand-parsing jsonl. To SEE a scope's record-types BEFORE you guess a \
-        filter, run `--count-by-label` (a per-leaf census — empty pattern = whole-scope census; a \
-        leaf's count is exactly how many records `-t <leaf>` would surface; JSON `label_count` \
+        filter, run `--count-by label` (a per-leaf census — empty pattern = whole-scope census; a \
+        leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
@@ -829,7 +906,7 @@ impl ListArgs {
         ts_utc, ts_local, refetch}, …]} — `label` is the matched dotted path, `labels` the \
         record's full label set, `from`/`to` the comm direction when the hit is \
         `agent.communication.*`, and `refetch` is the ready-to-run `csift show` command addressed \
-        at the RIGHT id (run it verbatim). With `--count-by-label` the rows are `label_count` \
+        at the RIGHT id (run it verbatim). With `--count-by <axis>` the rows are `census` \
         objects instead. The \
         per-hit objects carry no session_id; it lives on the envelope. With `--siblings`, the \
         envelope also carries a `siblings:[…]` array (same per-hit shape) for the turn's \
@@ -942,17 +1019,21 @@ pub struct SearchArgs {
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
+    #[arg(
+        long = "turn",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
+    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -985,20 +1066,25 @@ pub struct SearchArgs {
     )]
     pub sessions_with_matches: bool,
 
-    /// Print ONLY a per-LABEL census of the matched records — `<count> <role.class.sub>`,
-    /// one leaf per line, richest-count first. The exploration on-ramp: run it with an
-    /// EMPTY pattern to see WHAT record-types a scope actually holds (and how many) BEFORE
-    /// you guess a `-t` — so an empty `-t <leaf>` result is never mistaken for a typo. With
-    /// a real pattern it shows the label DISTRIBUTION of the matches. Counts are
-    /// record-level: each matched record contributes to every leaf in its label set (a
-    /// multi-label record counts under each), so a leaf's number is exactly how many records
-    /// `-t <leaf>` would surface. Honors `-t`/`-T`/time/turn/scope. JSON: `label_count` rows
-    /// + a summary.
+    /// Print ONLY a census of the matched records along ONE fixed axis — `<count> <key>`,
+    /// one key per line. Axes (a CLOSED set, not a query language): `label` (per
+    /// role.class.sub leaf; a record counts under EVERY leaf it carries, so a leaf's number
+    /// is exactly how many records `-t <leaf>` would surface — the exploration on-ramp:
+    /// run `csift search "" <target> --count-by label` BEFORE you guess a `-t`) · `tool`
+    /// (per tool name) · `turn` (per turn, ASCENDING turn order — a histogram) · `session`
+    /// (per transcript) · `pairing` (paired | pending | orphan — "any pending tools?" is
+    /// `csift search "" <t> -t agent.tool.use --count-by pairing`) · `model` (per assistant
+    /// model). Records outside an axis's domain (no tool name / no pairing / no model) are
+    /// excluded AND the excluded count is reported — never silently. Honors
+    /// `-t`/`-T`/time/turn/scope; empty pattern = whole-scope census. JSON: `census` rows
+    /// (`axis`/`key`/`records`) + a summary.
     #[arg(
-        long = "count-by-label",
+        long = "count-by",
+        value_enum,
+        value_name = "AXIS",
         conflicts_with_all = ["count_only", "sessions_with_matches", "siblings", "raw"]
     )]
-    pub count_by_label: bool,
+    pub count_by: Option<CountAxis>,
 
     /// Also render the SIBLING records of every matched turn — the rest of the
     /// back-and-forth, not only the matched line — so a matched USER question surfaces
@@ -1015,7 +1101,7 @@ pub struct SearchArgs {
     /// Emit each matched record's VERBATIM raw jsonl line instead of the rendered exchange
     /// — the same escape hatch as `show --raw` (fields csift does not render: usage,
     /// stop_reason, model, any new field), but FILTERED by the full search surface
-    /// (PATTERN, `-t`/`-T`, time, turn-range, scope). stdout is a pure jsonl stream (pipe
+    /// (PATTERN, `-t`/`-T`, time, turn, scope). stdout is a pure jsonl stream (pipe
     /// into `jq`); scope/drop/malformed notes go to stderr. One line per matched RECORD (a
     /// record hit under several labels emits once); a sidecar-merged record has no physical
     /// line and is omitted with a stderr note. `--resolve-persisted` still affects MATCHING
@@ -1133,6 +1219,13 @@ pub struct ShowArgs {
     )]
     pub turn: Option<String>,
 
+    /// Cap the emitted record units — the CONTEXT-FLOOD guard for open ranges (`--line ..`
+    /// / `--turn ..` address a whole transcript). Defaults to 200; the drop is ALWAYS
+    /// reported, with the exact continuation command for the remainder. `0` = uncapped
+    /// (the crate-wide `--max-count 0` convention).
+    #[arg(long, value_name = "N")]
+    pub max_count: Option<usize>,
+
     /// Emit the VERBATIM raw jsonl line(s) instead of the rendered record view
     /// (mutually exclusive with `--format json`).
     #[arg(long)]
@@ -1191,8 +1284,12 @@ pub struct StatsArgs {
     /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end), 0-based on the transcript's genuine-turn
     /// order (the same axis `search`/`files` use; discover indices from their output). Intersects
     /// (AND) with `--since`/`--until` — e.g. token burn of the last N turns is simply
-    /// `csift stats @main --turn-range -N..` (no need to look up the current turn index).
-    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
+    /// `csift stats @main --turn -N..` (no need to look up the current turn index).
+    #[arg(
+        long = "turn",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub turn_range: Option<String>,
 
     /// Cap the emitted per-session rows (default: unlimited) — bound an unscoped run's output.
@@ -1261,10 +1358,11 @@ pub enum AgentKindFilter {
         timezone) filter to subagents whose TRIGGER time (the parent tool_use ts — the \
         true spawn instant) falls in the window by default; `--order-by start` uses the \
         transcript's first-record ts, `--order-by completion` the last.\n\n\
-        TOPOLOGY: the output is ALWAYS the parent→child tree — workflow runs as parent \
-        nodes of their agents, and a nested sub-subagent under its spawning agent (text \
-        indents by depth; JSON nests `children`). Count by traversing the rendered tree / \
-        nested JSON. `--agent <hex>` grabs ONE subagent with its returned message; \
+        TOPOLOGY: the TEXT output is ALWAYS the parent→child tree — workflow runs as \
+        parent nodes of their agents, and a nested sub-subagent under its spawning agent \
+        (indented by depth). JSON emits the SAME topology as FLAT kind-tagged rows (one \
+        `kind:\"agent\"` row per node, tree pre-order; rebuild nesting from \
+        parent_agent_id + depth). `--agent <hex>` grabs ONE subagent with its returned message; \
         `--returned-message` adds the 3-way-resolved returned message to every row; \
         `--with-files` attaches each node's files-changed list.",
     after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
@@ -1278,14 +1376,14 @@ pub enum AgentKindFilter {
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
         status, never listed). Status is `completed` when a workflow journal carries a \
         `result` event (or the transcript terminates cleanly), else `running`/`unknown`. \
-        The output is ALWAYS the parent→child topology tree (workflow runs as parents of \
-        their agents; a nested sub-subagent under its spawning agent) — there is no flat \
-        mode; count by traversing the tree / nested JSON. `--agent <hex>` grabs ONE subagent \
+        The TEXT output is ALWAYS the parent→child topology tree (workflow runs as parents \
+        of their agents; a nested sub-subagent under its spawning agent); JSON carries the \
+        SAME topology as flat pre-ordered rows. `--agent <hex>` grabs ONE subagent \
         by its bare-hex id (full node + returned \
         message); it is a DIRECT lookup that IGNORES --since/--until/--order-by/--shape and \
         renders just that node (a tree of one), and \
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
-        `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow), a DIFFERENT \
+        `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow | teammate), a DIFFERENT \
         axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
         by `verbatim`/`search -t user` — they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
@@ -1300,32 +1398,33 @@ pub enum AgentKindFilter {
           csift agents --agent <hex>                                       #   grab ONE subagent (direct lookup; ignores time/kind)\n  \
           csift agents @<uuid> --with-files                                # each node + its files-changed list\n  \
           csift agents @<uuid> --returned-message                          # add the 3-way-resolved returned message to every row\n  \
-          csift agents . --format json                                     # machine-readable per-session tree\n\n\
+          csift agents . --format json                                     # machine-readable flat rows (kind: session|run|agent)\n\n\
         JSON SCHEMA (per --format json)\n  \
-          One object PER SESSION: {session_id, workflow_runs:[run], agents:[node]} — the \
-        nested tree shape (always). A node's sub-subagents nest under its `children` \
-        array: {agent_id, agent_type, kind, status, parent_session_id, parent_agent_id, \
-        workflow_id, depth, description, spawn_tool, spawn_tool_use_id, trigger_utc, \
-        trigger_local, started_utc, started_local, completed_utc, completed_local, duration, \
-        skipped_lines}. `agent_type` is the semantic agent ROLE / subagent-type string (e.g. \
-        `Explore`, `general-purpose`, `oh-my-claudecode:critic`, `workflow-subagent`) — \
-        DISTINCT from `kind`, which is the on-disk transcript SHAPE (builtin-task | workflow). \
-        There is no role filter today (only `--shape` for shape). ID-DOMAIN: `agent_id` IS this \
-        record's transcript-own id — the SAME concept other commands call `session_id` (a bare \
-        SUBAGENT hex here, since `agents` only lists subagents, so an `is_subagent` flag is \
-        implied-true and omitted); re-feed `parent_session_id`, never the bare `agent_id`. \
-        `--with-files` adds a \
-        `files_changed` array; `--returned-message` \
-        (implied by a single `--agent`) adds `returned_message` + `returned_message_source`. \
-        A single `--agent <hex>` grab is the ONE exception to the per-session envelope: it \
-        emits just the matched node as a bare object (no enclosing {session_id, …} wrapper). \
-        A workflow RUN parent object is {run_id, task_id, workflow_name, \
-        status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, \
-        started_utc, started_local, children}. Every `_utc` field carries a paired `_local` \
-        (system-local ISO). The malformed-line count rides on each node's `skipped_lines`. \
-        The stream is the standard envelope v2: a leading `{kind:\"header\", …}` line, the \
-        `{kind:\"session\", …}` topology rows, and a closing `{kind:\"summary\", agents, sessions}` \
-        terminator (same shape as every command)."
+          FLAT kind-tagged rows (envelope v2, v0.5): a leading {kind:\"header\", …} line; \
+        per session one light {kind:\"session\", session_id, runs, agents} row (counts \
+        only); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
+        workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
+        default_model, started_utc, started_local} row followed by its member agent rows; \
+        every agent its OWN {kind:\"agent\", …} row in tree PRE-ORDER (a parent row precedes \
+        its children; rebuild nesting from parent_agent_id + depth — there is no \
+        children[] array in JSON, the tree renders in TEXT mode); a closing \
+        {kind:\"summary\", sessions, runs, agents} terminator. Agent-row fields: {agent_id, \
+        shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \
+        workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
+        started_utc/_local, completed_utc/_local, duration, depth, status, \
+        pending_tool_use_id, pending_tool_name, pending_classification, \
+        pending_since_utc/_local, skipped_lines} (+ control_hint on a teammate; \
+        `--with-files` adds `files_changed`; `--returned-message`, implied by a single \
+        `--agent`, adds `returned_message` + `returned_message_source`). `agent_type` is \
+        the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`) — \
+        DISTINCT from `shape`, the on-disk transcript shape (builtin-task | workflow | \
+        teammate); `kind` is the envelope discriminator exclusively. ID-DOMAIN: `agent_id` \
+        IS this transcript's own id (the SAME concept other commands call `session_id`); \
+        re-feed `parent_session_id`, never the bare agent id. A single `--agent <hex>` \
+        grab emits the SAME envelope (header + session + the one agent row + summary) — \
+        no bare-object exception. Every `_utc` field carries a paired `_local` \
+        (system-local ISO). The malformed-line count rides on each agent row's \
+        `skipped_lines`. Idiom: jq 'select(.kind==\"agent\")' reaches every node."
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an
@@ -1455,6 +1554,40 @@ pub enum AgentTimeAxis {
     Completion,
 }
 
+/// The `--count-by <AXIS>` census axis — a CLOSED, documented set (deliberately NOT a
+/// query DSL: aggregation beyond these axes is `stats` / `files --by` / `--raw | jq`).
+/// Doubles as the clap `ValueEnum`, so the value spellings ARE the variant names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CountAxis {
+    /// Per role.class.sub leaf (multi-label: a record counts under EVERY leaf it carries).
+    Label,
+    /// Per tool name (tool_use / tool_result hits; non-tool records excluded + counted).
+    Tool,
+    /// Per turn, ASCENDING turn order (a histogram; keys `t<N>`, `<transcript>·t<N>` when
+    /// more than one transcript is in scope).
+    Turn,
+    /// Per transcript (`session_id` — a top-level uuid or a subagent agent-id).
+    Session,
+    /// Per tool pairing state: `paired` | `pending` | `orphan` (non-tool records excluded).
+    Pairing,
+    /// Per assistant model (records without a model excluded + counted).
+    Model,
+}
+
+impl CountAxis {
+    /// The axis slug used in text footers and the JSON `axis` field.
+    pub fn slug(self) -> &'static str {
+        match self {
+            CountAxis::Label => "label",
+            CountAxis::Tool => "tool",
+            CountAxis::Turn => "turn",
+            CountAxis::Session => "session",
+            CountAxis::Pairing => "pairing",
+            CountAxis::Model => "model",
+        }
+    }
+}
+
 /// The aggregation detail level for `files`, selected by `--by <summary|dir|file|timeline>`
 /// (exactly one is active; default `summary`). Doubles as the clap `ValueEnum` for `--by`,
 /// so the value spellings (`summary`/`dir`/`file`/`timeline`) ARE the variants' value names.
@@ -1509,7 +1642,7 @@ pub enum FilesDetail {
         PATH/encoded-dir for every session under it; with neither, all projects are \
         scanned. SUBAGENT SCOPE (default spans subagents, since OMC fan-out edits happen \
         in subagents): `--no-subagents` restricts to the TOP-LEVEL session only.\n\n\
-        WINDOWING: `--turn-range (N|A..B|N..|-k)` (inclusive, 0-based on genuine-user order) \
+        WINDOWING: `--turn (N|A..B|N..|-k)` (inclusive, 0-based on genuine-user order) \
         INTERSECTS with `--since`/`--until` (both filters AND). Time bounds accept ISO8601 \
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
@@ -1627,17 +1760,21 @@ pub struct FilesArgs {
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
+    #[arg(
+        long = "turn",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
+    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1680,7 +1817,7 @@ pub enum RecoverMode {
     Salvage,
     /// One or more unified-diff patches over the range, segmented at integrity boundaries.
     /// Explicit (`--patches`). The diff/rewind view: shows the changes a session made (compose
-    /// with `--since`/`--until`/`--turn-range` to extract a time window — to rewind a file you
+    /// with `--since`/`--until`/`--turn` to extract a time window — to rewind a file you
     /// still have to an older state, even when the session only partially read it).
     Patches,
     /// The partial, line-numbered point-in-time snapshot as of `--at <WHEN>` (gaps are explicit).
@@ -1732,7 +1869,7 @@ pub enum RecoverMode {
         The TARGET selects the session(s): `@<uuid>` for one, or a project \
         PATH/encoded-dir for every session under it. `--no-subagents` restricts to the \
         top-level session (OMC fan-out edits happen in subagents, so default ON).\n\n\
-        WINDOWING: `--turn-range (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
+        WINDOWING: `--turn (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
         INTERSECTS with `--since`/`--until` (ISO8601 / relative; both filters AND). \
         `--file-lines (N|A..B|N..|-k)` further restricts to a 1-based FILE-line span. `--out <PATH>` writes \
         the reconstructed artifact (restored content / snapshot / concatenated patches) \
@@ -1857,17 +1994,21 @@ pub struct RecoverArgs {
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
+    #[arg(
+        long = "turn",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
+    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1951,7 +2092,7 @@ impl RecoverArgs {
         decodes it straight back to a file — nothing was externalised.\n\n\
         TWO ADDRESSES: `#N` — the session's own `[Image #N]` handle (`verbatim`/`search` show it \
         inline; an ambiguous `#N` errors with the occurrence list, disambiguate via `--since`/\
-        `--turn-range`/`--uuid`); and `L<line>i<n>` — the exact locator (carrying record's JSONL \
+        `--turn`/`--uuid`); and `L<line>i<n>` — the exact locator (carrying record's JSONL \
         line + ordinal within it).\n\n\
         Default action is to LIST (id · media-type · ~size · time). Pass `--out <PATH>` to EXTRACT: \
         a DIRECTORY keeps each image's SOURCE format (auto-named); a FILE path's extension CONVERTS \
@@ -1991,7 +2132,7 @@ pub struct ImageArgs {
     /// per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid>
     /// --no-subagents`). If a `#N` is AMBIGUOUS (CC reuses `#N` across prompts, so it names >1
     /// distinct image), `image` ERRORS with the occurrence list — disambiguate with the exact
-    /// `L<line>i<n>`, or narrow scope via `--since`/`--until` / `--turn-range` / `--uuid`.
+    /// `L<line>i<n>`, or narrow scope via `--since`/`--until` / `--turn` / `--uuid`.
     #[arg(long, value_name = "ID", value_delimiter = ',')]
     pub id: Vec<String>,
 
@@ -2006,7 +2147,11 @@ pub struct ImageArgs {
 
     /// Restrict to images in this turn range — the shared grammar (`N` · `A..B` · `N..` · `-k` from the end), 0-based inclusive. A per-transcript
     /// `#N` disambiguator — needs a single transcript in scope.
-    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
+    #[arg(
+        long = "turn",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub turn_range: Option<String>,
 
     /// Restrict to images carried by the record whose uuid starts with this (a `#N`
@@ -2185,10 +2330,10 @@ impl PlanArgs {
         output is `budget × (sessions in scope)`; a top-of-output scope banner then names the \
         TRUE scope (all discovered top-level + subagent sessions), how many rendered within \
         budget, and the realized multiplier.\n\n\
-        WINDOWING: `--turn-range (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
+        WINDOWING: `--turn (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) \
         intersects (AND) with `--since`/`--until` (ISO8601 / relative `2h`,`3d`,…). NOTE \
         `verbatim` TEXT prints `L<line>` per unit, NOT a turn marker — to pick a value for \
-        `--turn-range` read the index from `csift search` text (`s·t<n>` header) or this \
+        `--turn` read the index from `csift search` text (`s·t<n>` header) or this \
         command's own `--format json` (`turn_index`). \
         `--out <PATH>` captures the SAME rendered reconstruction that prints to stdout into a \
         file (byte-identical — verbatim does NOT line-truncate stdout, so `--out` differs only in \
@@ -2353,17 +2498,21 @@ pub struct VerbatimArgs {
     /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
-    #[arg(long, value_name = "N|A..B|N..|-k", allow_hyphen_values = true)]
+    #[arg(
+        long = "turn",
+        value_name = "N|A..B|N..|-k",
+        allow_hyphen_values = true
+    )]
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
+    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 

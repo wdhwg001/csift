@@ -436,6 +436,61 @@ fn custom_claude_home_via_env_var_and_flag() {
 }
 
 #[test]
+fn pre_subcommand_global_flag_with_trailing_flags() {
+    // REGRESSION (≤v0.4.1): normalize_argv assumed argv[1] was the subcommand, so a
+    // GLOBAL flag placed BEFORE the subcommand disabled normalization entirely and the
+    // allow_hyphen_values PATH positional swallowed every flag that followed a
+    // positional — `csift --claude-home DIR list <ENC> --max-count 1` died with a
+    // misleading "not a project target". The subcommand is now located by SCANNING over
+    // declared root flags (+ their values), so "flag order is free" and "--claude-home
+    // any position" hold in combination.
+    let h = populated_home();
+    let claude_home = h.projects().parent().unwrap().to_path_buf();
+    let home_s = claude_home.to_str().unwrap().to_string();
+
+    // (1) The dead quadrant: global flag BEFORE subcommand + value flag AFTER a positional.
+    let out = h.run(&[
+        "--claude-home",
+        home_s.as_str(),
+        "list",
+        ENC,
+        "--max-count",
+        "1",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains(SESS), "row listed:\n{}", out.stdout);
+
+    // (2) Same shape through `search` (PATTERN-first positional) with trailing --format json.
+    let out = h.run(&[
+        "--claude-home",
+        home_s.as_str(),
+        "search",
+        "xyzzy-no-such-text",
+        ENC,
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(r#""kind":"header""#),
+        "envelope present even on zero matches:\n{}",
+        out.stdout
+    );
+
+    // (3) The inline `--claude-home=DIR` form spans one token and is scanned over too.
+    let eq = format!("--claude-home={home_s}");
+    let out = h.run(&[eq.as_str(), "list", ENC, "--max-count", "1"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains(SESS));
+
+    // (4) Guard: an UNKNOWN pre-subcommand flag aborts the scan and reaches clap's
+    // standard unexpected-argument error (argv passes through untouched).
+    let out = h.run(&["--bogus", "list"]);
+    assert!(!out.success);
+    assert!(out.stderr.contains("--bogus"), "stderr: {}", out.stderr);
+}
+
+#[test]
 fn list_encoded_token_after_flag_ordering() {
     let h = populated_home();
     // Exercises normalize_argv: a leading-`-` encoded token THEN --format json.
@@ -642,9 +697,9 @@ fn search_no_match_reports_zero() {
 #[test]
 fn search_count_by_label_censuses_the_scope() {
     let h = populated_home();
-    // Empty pattern + --count-by-label = "what record-types are here?" — the exploration
+    // Empty pattern + --count-by label = "what record-types are here?" — the exploration
     // on-ramp so an empty `-t <leaf>` result is never mistaken for a typo.
-    let out = h.run(&["search", "", "--no-subagents", "--count-by-label"]);
+    let out = h.run(&["search", "", "--no-subagents", "--count-by", "label"]);
     assert!(out.success, "stderr: {}", out.stderr);
     for leaf in [
         "user.message",
@@ -659,25 +714,133 @@ fn search_count_by_label_censuses_the_scope() {
             out.stdout
         );
     }
-    // JSON: label_count rows + a summary carrying the record + label totals.
+    // JSON: census rows (axis/key/records) + a summary carrying the totals.
     let out = h.run(&[
         "search",
         "",
         "--no-subagents",
-        "--count-by-label",
+        "--count-by",
+        "label",
         "--format",
         "json",
     ]);
-    let rows = json_rows(&out.stdout, "label_count");
-    assert!(!rows.is_empty(), "no label_count rows:\n{}", out.stdout);
+    let rows = json_rows(&out.stdout, "census");
+    assert!(!rows.is_empty(), "no census rows:\n{}", out.stdout);
+    assert!(
+        rows.iter()
+            .all(|r| r["axis"] == "label" && r["key"].is_string() && r["records"].is_u64()),
+        "census row shape:\n{}",
+        out.stdout
+    );
     let summary = json_summary(&out.stdout);
+    assert_eq!(summary["axis"], "label", "summary: {summary}");
     assert!(
         summary["matched_records"].as_u64().unwrap() >= 5,
         "summary: {summary}"
     );
     assert!(
-        summary["distinct_labels"].as_u64().unwrap() >= 5,
+        summary["distinct_keys"].as_u64().unwrap() >= 5,
         "summary: {summary}"
+    );
+    assert_eq!(
+        summary["excluded_records"], 0,
+        "label axis excludes nothing"
+    );
+}
+
+#[test]
+fn search_count_by_other_axes() {
+    let h = populated_home();
+
+    // `tool`: per tool name; non-tool records are excluded AND the exclusion is reported.
+    let out = h.run(&[
+        "search",
+        "",
+        "--no-subagents",
+        "--count-by",
+        "tool",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows = json_rows(&out.stdout, "census");
+    assert!(!rows.is_empty(), "tool census rows:\n{}", out.stdout);
+    let summary = json_summary(&out.stdout);
+    assert_eq!(summary["axis"], "tool");
+    assert!(
+        summary["excluded_records"].as_u64().unwrap() > 0,
+        "non-tool records must be counted as excluded: {summary}"
+    );
+
+    // `pairing`: the fixtures carry paired tool traffic → a `paired` key exists.
+    let out = h.run(&[
+        "search",
+        "",
+        "--no-subagents",
+        "--count-by",
+        "pairing",
+        "--format",
+        "json",
+    ]);
+    let rows = json_rows(&out.stdout, "census");
+    assert!(
+        rows.iter().any(|r| r["key"] == "paired"),
+        "pairing census must show paired:\n{}",
+        out.stdout
+    );
+
+    // `turn`: an ascending histogram, keys `t<N>` (single transcript in scope).
+    let out = h.run(&[
+        "search",
+        "",
+        "--no-subagents",
+        "--count-by",
+        "turn",
+        "--format",
+        "json",
+    ]);
+    let rows = json_rows(&out.stdout, "census");
+    let keys: Vec<String> = rows
+        .iter()
+        .map(|r| r["key"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        keys.iter().all(|k| k.starts_with('t')),
+        "turn keys: {keys:?}"
+    );
+    let mut sorted = keys.clone();
+    sorted.sort_by_key(|k| k[1..].parse::<usize>().unwrap_or(usize::MAX));
+    assert_eq!(keys, sorted, "turn axis must be ascending: {keys:?}");
+
+    // `session`: one key per transcript.
+    let out = h.run(&[
+        "search",
+        "",
+        "--no-subagents",
+        "--count-by",
+        "session",
+        "--format",
+        "json",
+    ]);
+    let summary = json_summary(&out.stdout);
+    assert!(summary["distinct_keys"].as_u64().unwrap() >= 1);
+
+    // An unknown axis is a clap parse error naming the closed set.
+    let out = h.run(&["search", "", "--count-by", "bogus"]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("possible values"),
+        "stderr: {}",
+        out.stderr
+    );
+
+    // The old v0.4 spelling is gone (zero-BC): unknown argument + tip at the new one.
+    let out = h.run(&["search", "", "--count-by-label"]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("'--count-by'"),
+        "tip names the new flag: {}",
+        out.stderr
     );
 }
 
@@ -763,18 +926,18 @@ fn search_empty_diagnosis_reports_genuine_absence() {
 fn range_open_and_negative_forms() {
     let h = populated_home();
     let t = at(SESS);
-    // Count exchanges under a turn-range spec (empty pattern = pure filter).
+    // Count exchanges under a turn spec (empty pattern = pure filter).
     let count = |spec: &str| -> String {
         let out = h.run(&[
             "search",
             "",
             t.as_str(),
             "--no-subagents",
-            "--turn-range",
+            "--turn",
             spec,
             "-c",
         ]);
-        assert!(out.success, "turn-range {spec:?} stderr: {}", out.stderr);
+        assert!(out.success, "turn {spec:?} stderr: {}", out.stderr);
         out.stdout.trim().to_string()
     };
     // The top-level fixture has 2 genuine-user turns (index 0 and 1).
@@ -785,7 +948,7 @@ fn range_open_and_negative_forms() {
     assert_eq!(count("-2.."), "2", "from-end: the last 2 turns = both");
     // The `-1..` value begins with `-`; allow_hyphen_values must let it through (not be
     // mistaken for a flag). A closed reversal is still a hard error.
-    let rev = h.run(&["search", "", t.as_str(), "--turn-range", "9..3", "-c"]);
+    let rev = h.run(&["search", "", t.as_str(), "--turn", "9..3", "-c"]);
     assert!(!rev.success, "a reversed closed range must error");
     // Line axis: `--line -1..` = the last physical jsonl line (the fixture's malformed tail).
     let raw = h.run(&["show", t.as_str(), "--line", "-1..", "--raw"]);
@@ -1918,7 +2081,7 @@ fn stats_turn_range_windows_the_aggregates() {
         ),
     );
     // Bare-N shorthand: turn 1 only — Edit counted, Read not, turns == 1.
-    let out = h.run(&["stats", enc, "--turn-range", "1", "--format", "json"]);
+    let out = h.run(&["stats", enc, "--turn", "1", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let rows = json_rows(&out.stdout, "session");
     assert_eq!(rows.len(), 1);
@@ -2107,8 +2270,8 @@ fn range_grammar_is_n_or_dotdot_everywhere() {
         "the error teaches the ..-form: {}",
         dash.stderr
     );
-    // `--turn-range` accepts bare N (≡ N..N).
-    let bare = h.run(&["search", "go", &format!("@{sess}"), "--turn-range", "0"]);
+    // `--turn` accepts bare N (≡ N..N).
+    let bare = h.run(&["search", "go", &format!("@{sess}"), "--turn", "0"]);
     assert!(bare.success, "stderr: {}", bare.stderr);
     assert!(
         bare.stdout.contains("go"),
@@ -2116,9 +2279,365 @@ fn range_grammar_is_n_or_dotdot_everywhere() {
         bare.stdout
     );
     // ...and still rejects the dash form with the same teaching error.
-    let tdash = h.run(&["search", "go", &format!("@{sess}"), "--turn-range", "0-1"]);
+    let tdash = h.run(&["search", "go", &format!("@{sess}"), "--turn", "0-1"]);
     assert!(!tdash.success);
     assert!(tdash.stderr.contains("START..END"), "got: {}", tdash.stderr);
+}
+
+#[test]
+fn turn_range_old_spelling_hard_errors() {
+    // v0.5.0 renamed `--turn-range` → `--turn` on every windowing command (zero-BC
+    // policy: no alias). The old spelling must be an unknown argument, and clap's
+    // similarity tip must point at the new one — the stale-knowledge recovery path.
+    let h = populated_home();
+    let out = h.run(&["search", "go", ENC, "--turn-range", "0"]);
+    assert!(
+        !out.success,
+        "old spelling must hard-error:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("--turn-range"),
+        "names the offending token: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("'--turn'"),
+        "the tip names the new spelling: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn timestamps_canonical_local_marker_everywhere() {
+    // v0.5 W1-7: every TEXT timestamp is `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`
+    // — name AND offset together (zero conversion arithmetic left to the reader), the
+    // raw-UTC parenthetical copy is GONE, and the marker is a FORMAT derived from the
+    // system zone per instant, never a hardcoded value.
+    let h = populated_home();
+    let at_s = at(SESS);
+    let tz_syd = [("TZ", "Australia/Sydney")];
+
+    // populated_home's instants are June 2026 → Sydney winter = AEST(UTC+10).
+    for cmd in [
+        vec!["list", at_s.as_str(), "--no-subagents"],
+        vec!["stats", at_s.as_str(), "--no-subagents"],
+        vec!["search", "carry", at_s.as_str(), "--no-subagents"],
+        vec!["show", at_s.as_str(), "--turn", "0"],
+    ] {
+        let out = h.run_with_env(&cmd, &tz_syd);
+        assert!(out.success, "{cmd:?} stderr: {}", out.stderr);
+        assert!(
+            out.stdout.contains("AEST(UTC+10)"),
+            "{cmd:?} missing the canonical marker:\n{}",
+            out.stdout
+        );
+        assert!(
+            !out.stdout.contains("Z)"),
+            "{cmd:?} must carry no raw-UTC copy:\n{}",
+            out.stdout
+        );
+    }
+
+    // DST correctness: a JANUARY instant under the SAME zone renders AEDT(UTC+11) —
+    // the offset is computed per instant, not per process.
+    let jan = "77777777-8888-4999-8aaa-bbbbccccdddd";
+    h.write(
+        &format!("{ENC}/{jan}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"j1","sessionId":"77777777-8888-4999-8aaa-bbbbccccdddd","timestamp":"2026-01-15T05:00:00.000Z","message":{"role":"user","content":"summer question"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"j2","sessionId":"77777777-8888-4999-8aaa-bbbbccccdddd","timestamp":"2026-01-15T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"summer answer"}]}}"#,
+            "\n",
+        ),
+    );
+    let out = h.run_with_env(&["list", &format!("@{jan}")], &tz_syd);
+    assert!(
+        out.stdout.contains("AEDT(UTC+11)"),
+        "January in Sydney is AEDT(UTC+11):\n{}",
+        out.stdout
+    );
+
+    // Non-hardcode proof: the SAME June fixture under an Indian zone renders the
+    // fractional, zero-padded form.
+    let out = h.run_with_env(
+        &["list", at_s.as_str(), "--no-subagents"],
+        &[("TZ", "Asia/Kolkata")],
+    );
+    assert!(
+        out.stdout.contains("IST(UTC+05:30)"),
+        "Indian zone renders IST(UTC+05:30):\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn slash_command_wrapper_extracted_in_both_tag_orders() {
+    // The slash-command wrapper appears in TWO tag orders in real corpora: OLD
+    // (`<command-name>` first) and NEW (`<command-message>` first — current CC).
+    // Detection must catch both; the rendered body is `/name args` (never wrapper XML),
+    // and a pattern INSIDE the args matches through the literal prefilter + whole-file
+    // gate (args are verbatim raw substrings).
+    let h = Home::new();
+    let sess = "5c5d5e5f-2222-4333-8444-955566677788";
+    let body = concat!(
+        r#"{"type":"user","uuid":"c1","sessionId":"5c5d5e5f-2222-4333-8444-955566677788","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args>old order zqxjkvold</command-args>"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a1","sessionId":"5c5d5e5f-2222-4333-8444-955566677788","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"first reply"}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"c2","sessionId":"5c5d5e5f-2222-4333-8444-955566677788","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"<command-message>csift</command-message>\n<command-name>/csift</command-name>\n<command-args>new order zqxjkvnew</command-args>"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a2","sessionId":"5c5d5e5f-2222-4333-8444-955566677788","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"second reply"}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"c3","sessionId":"5c5d5e5f-2222-4333-8444-955566677788","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"<command-message>compact</command-message>\n<command-name>/compact</command-name>\n<command-args></command-args>"}}"#,
+        "\n",
+    );
+    h.write(
+        &format!("-Users-testuser-Projects-slash/{sess}.jsonl"),
+        body,
+    );
+    let at = format!("@{sess}");
+
+    // A literal inside the NEW-order args matches through prefilter/gate; the excerpt is
+    // the extracted `/name args` form, never wrapper XML.
+    let out = h.run(&["search", "zqxjkvnew", &at]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("/csift new order zqxjkvnew"),
+        "extracted render: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("<command-args>"),
+        "wrapper XML must not leak: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("user.message"), "{}", out.stdout);
+
+    // Same for the OLD order.
+    let out = h.run(&["search", "zqxjkvold", &at]);
+    assert!(
+        out.stdout.contains("/compact old order zqxjkvold"),
+        "{}",
+        out.stdout
+    );
+
+    // `show` renders the same extraction (shared engine).
+    let out = h.run(&["show", &at, "--line", "3"]);
+    assert!(
+        out.stdout.contains("/csift new order zqxjkvnew"),
+        "{}",
+        out.stdout
+    );
+
+    // A NO-ARGS wrapper (either order) is machinery: never user.message, and it must NOT
+    // count as a genuine turn opener (all three wrappers fold; no turn boundary shifts).
+    let out = h.run(&["search", "", &at, "--count-by", "label", "--format", "json"]);
+    let rows = json_rows(&out.stdout, "census");
+    let user_msgs = rows
+        .iter()
+        .find(|r| r["key"] == "user.message")
+        .and_then(|r| r["records"].as_u64())
+        .unwrap_or(0);
+    assert_eq!(user_msgs, 2, "only the two with-args wrappers: {rows:?}");
+    let invocations = rows
+        .iter()
+        .find(|r| r["key"] == "harness.command.invocation")
+        .and_then(|r| r["records"].as_u64())
+        .unwrap_or(0);
+    assert_eq!(invocations, 3, "all three wrappers: {rows:?}");
+
+    // The explicit harness lens still reaches the wrapper form. (`-c` counts EXCHANGES,
+    // and no wrapper opens a turn, so all three fold into the single turn-0 lead — the
+    // per-RECORD count is the census assertion above.)
+    let out = h.run(&["search", "", &at, "-t", "harness.command.invocation", "-c"]);
+    assert_eq!(out.stdout.trim(), "1", "{}", out.stdout);
+    let out = h.run(&["search", "", &at, "-t", "harness.command.invocation"]);
+    assert!(
+        out.stdout.contains("harness.command.invocation"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
+    // W2-8: `verbatim` on a session with ZERO compactions self-diagnoses (stderr) and
+    // points at `show --turn` — the tail-peek misuse correction; --slice (the hook path)
+    // stays quiet. W2-9: list rows carry the sidecar TRI-STATE (`sidecar_present`).
+    let h = populated_home();
+    let at = format!("@{SESS}");
+
+    let out = h.run(&["verbatim", &at]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stderr.contains("has no compaction"),
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("csift show @"),
+        "the note names the correct command: {}",
+        out.stderr
+    );
+
+    let out = h.run(&["verbatim", &at, "--slice", "1"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stderr.contains("has no compaction"),
+        "--slice must stay quiet (hook path): {}",
+        out.stderr
+    );
+
+    // Tri-state ①: no sidecar file → present:false (hook unknown — cannot conclude).
+    let out = h.run(&["list", &at, "--format", "json"]);
+    let rows = json_rows(&out.stdout, "session");
+    assert!(
+        rows.iter().all(|r| r["sidecar_present"] == false),
+        "{rows:?}"
+    );
+
+    // Tri-state ②: a sidecar with only a RESOLVED pair (nothing pending) → present:true,
+    // with_elicitation_sidecar:false — "hook installed AND not blocked" is now assertable.
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        concat!(
+            r#"{"type":"csift-elicitation-resolved","uuid":"r1","timestamp":"2026-06-07T05:00:10.000Z","#,
+            r#""sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","csift":"elicitation-marker-v1","#,
+            r#""csiftPhase":"resolved","csiftKind":"AskUserQuestion","csiftKey":"k1"}"#,
+            "\n",
+        ),
+    );
+    let out = h.run(&["list", &at, "--format", "json"]);
+    let rows = json_rows(&out.stdout, "session");
+    let top: Vec<_> = rows.iter().filter(|r| r["is_subagent"] == false).collect();
+    assert!(!top.is_empty());
+    assert!(top.iter().all(|r| r["sidecar_present"] == true), "{rows:?}");
+    assert!(
+        top.iter().all(|r| r["with_elicitation_sidecar"] == false),
+        "resolved-only sidecar has nothing pending: {rows:?}"
+    );
+}
+
+#[test]
+fn show_turn_oob_and_flood_guard() {
+    // v0.5.0: (a) an EXPLICIT `--turn N`/`A..B` is an ADDRESS — fully out of range is a
+    // hard error naming the transcript's turn domain (it used to be a silent empty, the
+    // one address-miss that violated law 1); (b) open ranges are capped (DEFAULT 200,
+    // here forced low) with the exact continuation command reported; (c) non-record
+    // lines inside an addressed range are counted, never silently absorbed.
+    let h = Home::new();
+    let sess = "9a9b9c9d-1111-4222-8333-944455566677";
+    let mut lines = String::new();
+    for i in 0..3 {
+        lines.push_str(&format!(
+            r#"{{"type":"user","uuid":"u{i}","sessionId":"{sess}","timestamp":"2026-06-07T05:0{i}:00.000Z","message":{{"role":"user","content":"question {i}"}}}}"#
+        ));
+        lines.push('\n');
+        lines.push_str(&format!(
+            r#"{{"type":"assistant","uuid":"a{i}","sessionId":"{sess}","timestamp":"2026-06-07T05:0{i}:05.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"answer {i}"}}]}}}}"#
+        ));
+        lines.push('\n');
+    }
+    // A metadata line (never renderable) — line 7.
+    lines.push_str(&format!(
+        r#"{{"type":"attachment","uuid":"m1","sessionId":"{sess}"}}"#
+    ));
+    lines.push('\n');
+    h.write(
+        &format!("-Users-testuser-Projects-oob/{sess}.jsonl"),
+        &lines,
+    );
+    let at = format!("@{sess}");
+
+    // (1) Explicit single turn out of range = hard error with the turn domain.
+    let out = h.run(&["show", &at, "--turn", "99"]);
+    assert!(!out.success, "stdout: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no such turn(s): t99"),
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("3 turn(s) (t0..t2)"),
+        "stderr: {}",
+        out.stderr
+    );
+
+    // (2) Explicit closed range fully out = same error; PARTIALLY out clamps.
+    let out = h.run(&["show", &at, "--turn", "50..99"]);
+    assert!(!out.success);
+    let out = h.run(&["show", &at, "--turn", "1..99"]);
+    assert!(out.success, "partially-out clamps: {}", out.stderr);
+
+    // (3) From-end / open forms clamp — the tail-peek must stay robust.
+    let out = h.run(&["show", &at, "--turn", "-9.."]);
+    assert!(out.success, "stderr: {}", out.stderr);
+
+    // (4) Flood guard: keep-first + the exact continuation command; the metadata line
+    //     in the addressed range is counted, not silently absorbed.
+    let out = h.run(&["show", &at, "--line", "..", "--max-count", "2"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("fetched 2 record unit(s)"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("+4 more record unit(s)"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains(&format!("continue: csift show @{sess} --line 3..6")),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("1 line(s) in the addressed range are not records"),
+        "{}",
+        out.stdout
+    );
+
+    // (5) `--max-count 0` = uncapped (the crate-wide convention).
+    let out = h.run(&["show", &at, "--line", "..", "--max-count", "0"]);
+    assert!(
+        out.stdout.contains("fetched 6 record unit(s)"),
+        "{}",
+        out.stdout
+    );
+
+    // (6) JSON summary carries the machine echo of all three.
+    let out = h.run(&[
+        "show",
+        &at,
+        "--line",
+        "..",
+        "--max-count",
+        "2",
+        "--format",
+        "json",
+    ]);
+    let summary = json_summary(&out.stdout);
+    assert_eq!(summary["dropped_by_cap"].as_u64(), Some(4), "{summary}");
+    assert_eq!(summary["non_record_lines"].as_u64(), Some(1), "{summary}");
+    assert!(
+        summary["refetch_remainder"]
+            .as_str()
+            .is_some_and(|s| s.contains("--line 3..6")),
+        "{summary}"
+    );
+
+    // (7) The raw mode caps too (stderr note; stdout stays pure jsonl).
+    let out = h.run(&["show", &at, "--line", "..", "--max-count", "2", "--raw"]);
+    assert_eq!(out.stdout.lines().count(), 2, "{}", out.stdout);
+    assert!(
+        out.stderr.contains("+5 more line(s)"),
+        "raw cap counts LINES (metadata included): {}",
+        out.stderr
+    );
 }
 
 #[test]
@@ -2432,12 +2951,12 @@ fn cross_surface_session_id_is_identical_for_a_subagent() {
 #[test]
 fn search_session_filter_and_turn_range() {
     let h = populated_home();
-    // --session selects the parent; --turn-range picks turn 1 only.
+    // --session selects the parent; --turn picks turn 1 only.
     let out = h.run(&[
         "search",
         "",
         at(SESS).as_str(),
-        "--turn-range",
+        "--turn",
         "1..1",
         "--no-subagents",
     ]);
@@ -2452,7 +2971,7 @@ fn search_session_filter_and_turn_range() {
 
 #[test]
 fn search_turn_range_intersects_with_time_window() {
-    // --turn-range ∧ --since/--until INTERSECT (both filters AND) — the old
+    // --turn ∧ --since/--until INTERSECT (both filters AND) — the old
     // mutual-exclusion interface law is gone. An impossible intersection (turns exist,
     // but none inside the window) is an honest empty result, exit 0.
     let h = populated_home();
@@ -2460,7 +2979,7 @@ fn search_turn_range_intersects_with_time_window() {
         "search",
         "carry",
         &at(SESS),
-        "--turn-range",
+        "--turn",
         "0..1",
         "--until",
         "2027-01-01",
@@ -2475,7 +2994,7 @@ fn search_turn_range_intersects_with_time_window() {
         "search",
         "carry",
         &at(SESS),
-        "--turn-range",
+        "--turn",
         "0..1",
         "--until",
         "2020-01-01",
@@ -3861,18 +4380,10 @@ fn agents_classifies_teammate_and_id_round_trips() {
     // (1)+(2) classification + name-join recovery, via JSON.
     let out = h.run(&["agents", &format!("@{sess}"), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let node = out
-        .stdout
-        .lines()
-        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .flat_map(|v| {
-            v.get("agents")
-                .and_then(|a| a.as_array())
-                .cloned()
-                .unwrap_or_default()
-        })
+    let node = json_rows(&out.stdout, "agent")
+        .into_iter()
         .find(|n| n.get("shape").and_then(|k| k.as_str()) == Some("teammate"))
-        .expect("a teammate node in agents JSON");
+        .expect("a teammate row in agents JSON");
     assert_eq!(node["agent_id"], tid);
     assert_eq!(node["agent_type"], "oh-my-claudecode:qa-tester"); // real type, not the handle
     assert_eq!(node["name"], "VSRepro");
@@ -3955,17 +4466,10 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     h.write(&format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"), frozen);
 
     let find = |stdout: &str| -> serde_json::Value {
-        stdout
-            .lines()
-            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-            .flat_map(|v| {
-                v.get("agents")
-                    .and_then(|a| a.as_array())
-                    .cloned()
-                    .unwrap_or_default()
-            })
+        json_rows(stdout, "agent")
+            .into_iter()
             .find(|n| n["agent_id"] == hex)
-            .expect("the subagent node")
+            .expect("the subagent row")
     };
 
     // FROZEN: running + escalation-blocked, NOT completed.
@@ -4056,23 +4560,20 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
         r#"{"agentType":"Explore","description":"child agent","toolUseId":"call_child"}"#,
     );
 
-    // JSON (always the per-session tree): the parent is a top-level agent (depth 0, root)
-    // and the child nests UNDER it (depth 1, parent_agent_id=parentaaa), recovering its
-    // trigger/description from the PARENT transcript's spawn (not main).
+    // JSON (v0.5 FLAT rows): one `kind:"agent"` row per node in tree PRE-ORDER — the
+    // child follows its parent, links via parent_agent_id, carries depth 1, and the
+    // child's trigger/description come from the PARENT transcript's spawn (not main).
     let j = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
     assert!(j.success, "stderr: {}", j.stderr);
-    let env = json_rows(&j.stdout, "session").remove(0);
-    let top_agents = env["agents"].as_array().expect("agents array");
-    let parent = top_agents
+    let agents = json_rows(&j.stdout, "agent");
+    let parent = agents
         .iter()
         .find(|o| o["agent_id"] == "parentaaa")
-        .expect("parent node at top level");
-    let child = parent["children"]
-        .as_array()
-        .expect("parent has children")
+        .expect("parent row");
+    let child = agents
         .iter()
         .find(|o| o["agent_id"] == "childbbb")
-        .expect("child node nested under parent");
+        .expect("child row");
     assert_eq!(
         child["parent_agent_id"], "parentaaa",
         "child links to parent: {child}"
@@ -4092,25 +4593,23 @@ fn agents_nested_subagent_topology_links_parent_depth_and_tree() {
         serde_json::json!(0),
         "parent depth 0: {parent}"
     );
-
-    // Tree JSON (always on): child nests UNDER parent in the agents[].children array.
-    let tj = h.run(&["agents", at(sess).as_str(), "--format", "json"]);
-    assert!(tj.success, "stderr: {}", tj.stderr);
-    let tree = json_rows(&tj.stdout, "session").remove(0);
-    let agents = tree["agents"].as_array().expect("agents array");
-    let proot = agents
+    // Pre-order: the parent row precedes the child row; no children[] nesting in JSON.
+    let pi = agents
         .iter()
-        .find(|o| o["agent_id"] == "parentaaa")
-        .expect("parent at top level of tree");
-    let kids = proot["children"].as_array().expect("parent has children");
-    assert_eq!(
-        kids[0]["agent_id"], "childbbb",
-        "child nested under parent: {proot}"
-    );
+        .position(|o| o["agent_id"] == "parentaaa")
+        .unwrap();
+    let ci = agents
+        .iter()
+        .position(|o| o["agent_id"] == "childbbb")
+        .unwrap();
+    assert!(pi < ci, "pre-order: parent before child");
     assert!(
-        !agents.iter().any(|o| o["agent_id"] == "childbbb"),
-        "child is NOT also a top-level tree node: {tree}"
+        agents.iter().all(|o| o.get("children").is_none()),
+        "flat rows carry no children[]: {agents:?}"
     );
+    // The session row is a light counts-only grouping marker.
+    let sess_row = json_rows(&j.stdout, "session").remove(0);
+    assert_eq!(sess_row["agents"], serde_json::json!(2), "{sess_row}");
 
     // Tree TEXT (always on): child indented one level deeper than parent.
     let tt = h.run(&["agents", at(sess).as_str()]);
@@ -4184,9 +4683,9 @@ fn agents_text_returned_files_and_tree_render() {
 
 #[test]
 fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
-    // `--kind builtin-task --format json` hits the BuiltinTask JSON-label arm; the always-on
-    // tree JSON nests `children`; a multi-node text render shows every node's lifecycle. All
-    // on the populated home (a builtin + a workflow subagent).
+    // `--kind builtin-task --format json` hits the BuiltinTask JSON-label arm; v0.5 JSON
+    // is FLAT kind-tagged rows (no children[] nesting — the tree lives in TEXT mode and
+    // in parent_agent_id/depth); a multi-node text render shows every node's lifecycle.
     let h = populated_home();
     let bt = h.run(&[
         "agents",
@@ -4202,12 +4701,17 @@ fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
         "builtin-task JSON label missing: {}",
         bt.stdout
     );
-    let tree = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
-    assert!(tree.success, "stderr: {}", tree.stderr);
+    let flat = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
+    assert!(flat.success, "stderr: {}", flat.stderr);
     assert!(
-        tree.stdout.contains("children"),
-        "tree JSON must nest children: {}",
-        tree.stdout
+        !flat.stdout.contains("\"children\""),
+        "v0.5 flat rows must not nest children[]: {}",
+        flat.stdout
+    );
+    assert!(
+        !json_rows(&flat.stdout, "agent").is_empty(),
+        "kind:agent rows present: {}",
+        flat.stdout
     );
     // Text render with BOTH subagents → both lifecycle blocks print.
     let text = h.run(&["agents", at(SESS).as_str()]);
@@ -4369,25 +4873,12 @@ fn agents_json_rows() {
     let h = populated_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The per-session tree envelope: gather every node's `kind` from the top-level
-    // `agents[]` plus each workflow run's nested `children[]`.
-    let mut kinds = Vec::new();
-    let mut push_kind = |v: &serde_json::Value| {
-        if let Some(k) = v.get("shape").and_then(|k| k.as_str()) {
-            kinds.push(k.to_string());
-        }
-    };
-    for line in out.stdout.lines().filter(|l| !l.trim().is_empty()) {
-        let env: serde_json::Value = serde_json::from_str(line).expect("valid json");
-        for n in env["agents"].as_array().into_iter().flatten() {
-            push_kind(n);
-        }
-        for run in env["workflow_runs"].as_array().into_iter().flatten() {
-            for c in run["children"].as_array().into_iter().flatten() {
-                push_kind(c);
-            }
-        }
-    }
+    // v0.5 FLAT rows: every node is its own `kind:"agent"` row — the uniform envelope
+    // idiom (`jq 'select(.kind=="agent")'`) reaches all shapes directly.
+    let kinds: Vec<String> = json_rows(&out.stdout, "agent")
+        .iter()
+        .filter_map(|n| n.get("shape").and_then(|k| k.as_str()).map(String::from))
+        .collect();
     assert!(kinds.iter().any(|k| k == "builtin-task"));
     assert!(kinds.iter().any(|k| k == "workflow"));
 }
@@ -4921,14 +5412,12 @@ fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The per-session tree envelope: the built-in topo11 is a top-level `agents[]` node.
-    let env = json_rows(&out.stdout, "session").remove(0);
-    let builtin = env["agents"]
-        .as_array()
-        .expect("agents array")
+    // v0.5 flat rows: the built-in topo11 is its own `kind:"agent"` row.
+    let rows = json_rows(&out.stdout, "agent");
+    let builtin = rows
         .iter()
         .find(|v| v.get("agent_id").and_then(|a| a.as_str()) == Some("topo11"))
-        .expect("the built-in topo11 node");
+        .expect("the built-in topo11 row");
     assert_eq!(builtin["trigger_utc"], "2026-06-07T04:59:58.000Z");
     assert_eq!(builtin["started_utc"], "2026-06-07T05:00:00.000Z");
     assert_ne!(builtin["trigger_utc"], builtin["started_utc"]);
@@ -4993,12 +5482,10 @@ fn agents_returned_message_three_way_resolution() {
         "json",
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The per-session tree envelope: the built-in topo11 is a top-level `agents[]` node; the
-    // workflow topo22 nests under its run's `children[]`.
-    let env = json_rows(&out.stdout, "session").remove(0);
-    let builtin = env["agents"]
-        .as_array()
-        .expect("agents array")
+    // v0.5 flat rows: builtin + workflow agents are both `kind:"agent"` rows; the run is
+    // its own `kind:"run"` row (workflow_id joins them).
+    let rows = json_rows(&out.stdout, "agent");
+    let builtin = rows
         .iter()
         .find(|v| v["agent_id"] == "topo11")
         .expect("topo11");
@@ -5008,34 +5495,33 @@ fn agents_returned_message_three_way_resolution() {
         "SYNC-RETURN: the built-in carry answer"
     );
     assert_eq!(builtin["returned_message_source"], "sync-tool-result");
-    let wf = env["workflow_runs"]
-        .as_array()
-        .expect("workflow_runs array")
+    let wf = rows
         .iter()
-        .flat_map(|r| r["children"].as_array().into_iter().flatten())
         .find(|v| v["agent_id"] == "topo22")
         .expect("topo22");
     // WORKFLOW → journal result payload.
     assert_eq!(wf["returned_message"], "WF-RETURN: journal payload");
     assert_eq!(wf["returned_message_source"], "workflow-journal");
+    // The run row precedes its member agent row and carries the run metadata.
+    let runs = json_rows(&out.stdout, "run");
+    assert_eq!(runs.len(), 1, "{}", out.stdout);
+    assert_eq!(runs[0]["run_id"], "wf_topo");
+    assert_eq!(runs[0]["workflow_name"], "carry-wf");
+    assert_eq!(wf["workflow_id"], "wf_topo", "join key intact: {wf}");
 }
 
 #[test]
 fn agents_returned_message_omitted_by_default() {
     // Without --returned-message (and without --agent), the returned message is NOT in
-    // the JSON — keeping a plain listing compact. Check a NODE inside the tree envelope.
+    // the JSON — keeping a plain listing compact.
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    let env = json_rows(&out.stdout, "session").remove(0);
-    let node = env["agents"]
-        .as_array()
-        .expect("agents array")
-        .first()
-        .expect("at least one top-level node");
+    let rows = json_rows(&out.stdout, "agent");
+    assert!(!rows.is_empty());
     assert!(
-        node.get("returned_message").is_none(),
-        "returned_message must be omitted by default: {node}"
+        rows.iter().all(|n| n.get("returned_message").is_none()),
+        "returned_message must be omitted by default: {rows:?}"
     );
 }
 
@@ -5058,11 +5544,15 @@ fn agents_single_agent_grab_includes_returned_and_files() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .collect();
-    // envelope v2: header + ONE session row (its agents[] holds the one node) + summary —
-    // the bare-node special case is gone (one consumer code path).
-    assert_eq!(lines.len(), 3, "header + session + summary: {:?}", lines);
-    let sess_row = json_rows(&out.stdout, "session").remove(0);
-    let agents = sess_row["agents"].as_array().expect("agents array");
+    // envelope v2 flat rows: header + session row + the one agent row + summary —
+    // the bare-node special case stays gone (one consumer code path).
+    assert_eq!(
+        lines.len(),
+        4,
+        "header + session + agent + summary: {:?}",
+        lines
+    );
+    let agents = json_rows(&out.stdout, "agent");
     assert_eq!(agents.len(), 1, "exactly the one selected node");
     let v = &agents[0];
     assert_eq!(v["agent_id"], "topo11");
@@ -5081,24 +5571,30 @@ fn agents_tree_renders_workflow_run_as_parent_of_its_agents() {
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // One object per session: workflow_runs[] (each with children[]) + agents[].
-    let v = json_rows(&out.stdout, "session").remove(0);
-    let runs = v["workflow_runs"].as_array().expect("workflow_runs");
+    // v0.5 flat rows: the run is a `kind:"run"` row; its member agent row FOLLOWS it
+    // (emission order = run, then its agents pre-order, then built-ins).
+    let runs = json_rows(&out.stdout, "run");
     assert_eq!(runs.len(), 1, "one workflow run");
     let run = &runs[0];
     assert_eq!(run["run_id"], "wf_topo");
     assert_eq!(run["workflow_name"], "carry-wf");
     assert_eq!(run["agent_count"], 1);
-    let children = run["children"].as_array().expect("run children");
-    assert_eq!(
-        children.len(),
-        1,
-        "the workflow agent is nested under its run"
-    );
-    assert_eq!(children[0]["agent_id"], "topo22");
-    // The built-in (no workflow_id) is a top-level agent, NOT under the run.
-    let builtins = v["agents"].as_array().expect("top-level agents");
-    assert!(builtins.iter().any(|a| a["agent_id"] == "topo11"));
+    let agents = json_rows(&out.stdout, "agent");
+    let wf_member = agents
+        .iter()
+        .find(|a| a["agent_id"] == "topo22")
+        .expect("workflow member row");
+    assert_eq!(wf_member["workflow_id"], "wf_topo", "join key: {wf_member}");
+    // The built-in (no workflow_id) is its own row with a null workflow_id.
+    let builtin = agents
+        .iter()
+        .find(|a| a["agent_id"] == "topo11")
+        .expect("builtin row");
+    assert_eq!(builtin["workflow_id"], serde_json::Value::Null);
+    // Emission order: run row before its member's agent row.
+    let run_pos = out.stdout.find(r#""kind":"run""#).unwrap();
+    let member_pos = out.stdout.find("topo22").unwrap();
+    assert!(run_pos < member_pos, "run row precedes its members");
 
     // Text tree shows the WORKFLOW header with its run id + the nested agent.
     let text = h.run(&["agents", at(SESS).as_str()]);
@@ -5146,46 +5642,38 @@ fn agents_tree_keeps_workflow_agents_without_a_run_manifest() {
     // the manifested run, topo33 in the manifest-less wf_orphan). The tree must surface ALL.
     let expected_ids = ["topo11", "topo22", "topo33"];
 
-    // TREE view (always on) must surface topo33 — under a SYNTHESIZED run for wf_orphan whose
-    // run-level fields are null (no manifest) but whose children carry the agent.
+    // v0.5 flat rows: topo33 must still surface — a SYNTHESIZED `kind:"run"` row stands
+    // in for the manifest-less wf_orphan (null run fields), and the agent rides as its
+    // own `kind:"agent"` row joined by workflow_id.
     let tree = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(tree.success, "stderr: {}", tree.stderr);
-    let v = json_rows(&tree.stdout, "session").remove(0);
-    let runs = v["workflow_runs"].as_array().expect("workflow_runs");
+    let runs = json_rows(&tree.stdout, "run");
     let orphan_run = runs
         .iter()
         .find(|r| r["run_id"] == "wf_orphan")
-        .expect("a synthesized run node for the manifest-less wf_orphan");
-    // The synthesized run carries no manifest metadata, only its agents.
+        .expect("a synthesized run row for the manifest-less wf_orphan");
     assert!(orphan_run["status"].is_null(), "no manifest → null status");
     assert!(
         orphan_run["agent_count"].is_null(),
         "no manifest → null agent_count"
     );
-    let children = orphan_run["children"].as_array().expect("orphan children");
-    assert_eq!(
-        children.len(),
-        1,
-        "the orphan agent nests under its stand-in"
-    );
-    assert_eq!(children[0]["agent_id"], "topo33");
 
-    // No agent is lost: every discovered agent appears somewhere in the tree.
-    let mut tree_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for a in v["agents"].as_array().unwrap() {
-        tree_ids.insert(a["agent_id"].as_str().unwrap().to_string());
-    }
-    for r in runs {
-        for c in r["children"].as_array().unwrap() {
-            tree_ids.insert(c["agent_id"].as_str().unwrap().to_string());
-        }
-    }
+    // No agent is lost: every discovered agent has its own row.
+    let tree_ids: std::collections::BTreeSet<String> = json_rows(&tree.stdout, "agent")
+        .iter()
+        .filter_map(|a| a["agent_id"].as_str().map(String::from))
+        .collect();
     for id in expected_ids {
         assert!(
             tree_ids.contains(id),
-            "tree dropped agent {id} (tree={tree_ids:?})"
+            "flat rows dropped agent {id} (rows={tree_ids:?})"
         );
     }
+    let orphan_member = json_rows(&tree.stdout, "agent")
+        .into_iter()
+        .find(|a| a["agent_id"] == "topo33")
+        .expect("topo33 row");
+    assert_eq!(orphan_member["workflow_id"], "wf_orphan", "join key");
 
     // Text tree shows the orphan run header + the agent (not silently omitted).
     let text = h.run(&["agents", at(SESS).as_str()]);
@@ -5393,11 +5881,11 @@ fn files_by_dir_groups_and_counts() {
 
 #[test]
 fn files_turn_range_excludes_later_bash() {
-    // --turn-range 0..0 keeps the turn-0 structured edits and DROPS the turn-1 bash rm.
+    // --turn 0..0 keeps the turn-0 structured edits and DROPS the turn-1 bash rm.
     let h = files_scenario_home();
-    let out = h.run(&["files", at(SESS).as_str(), "--turn-range", "0..0"]);
+    let out = h.run(&["files", at(SESS).as_str(), "--turn", "0..0"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("turn-range=0..0"));
+    assert!(out.stdout.contains("turn=0..0"));
     // 5 mutations remain (2 writes + 3 edits), not 6 (the bash rm is in turn 1).
     assert!(
         out.stdout.contains("5 mutation(s)"),
@@ -5408,13 +5896,13 @@ fn files_turn_range_excludes_later_bash() {
 
 #[test]
 fn files_turn_range_and_since_intersect() {
-    // The ONE windowing rule: `--turn-range` and `--since`/`--until` AND together (the
+    // The ONE windowing rule: `--turn` and `--since`/`--until` AND together (the
     // former mutual-exclusion bail was a leftover — search/recover/stats always intersected).
     let h = files_scenario_home();
     let out = h.run(&[
         "files",
         at(SESS).as_str(),
-        "--turn-range",
+        "--turn",
         "0..1",
         "--since",
         "2h",
@@ -6614,7 +7102,7 @@ fn recover_two_modes_conflict() {
 
 #[test]
 fn recover_turn_range_intersects_with_time_window() {
-    // --turn-range ∧ --since/--until intersect (both filters AND); a window that
+    // --turn ∧ --since/--until intersect (both filters AND); a window that
     // excludes everything still succeeds with an honest empty reconstruction.
     let h = recover_scenario_home();
     let out = h.run(&[
@@ -6623,7 +7111,7 @@ fn recover_turn_range_intersects_with_time_window() {
         "--file",
         RFILE,
         "--coverage",
-        "--turn-range",
+        "--turn",
         "0..99",
         "--until",
         "2027-01-01",
@@ -8265,7 +8753,7 @@ fn recover_at_json_line_range_outside_known_keeps_seen_total() {
 
 #[test]
 fn recover_turn_range_alone_is_accepted() {
-    // `--turn-range` WITHOUT --since/--until is valid (drives the `&&` right operand of the
+    // `--turn` WITHOUT --since/--until is valid (drives the `&&` right operand of the
     // mutual-exclusion guard to its false side: turn_range set, since/until both absent).
     let h = recover_scenario_home();
     let out = h.run(&[
@@ -8274,12 +8762,12 @@ fn recover_turn_range_alone_is_accepted() {
         "--file",
         RFILE,
         "--coverage",
-        "--turn-range",
+        "--turn",
         "0..0",
     ]);
     assert!(
         out.success,
-        "a bare --turn-range is not a conflict: {}",
+        "a bare --turn is not a conflict: {}",
         out.stderr
     );
     // Turn 0 only → the first segment's reads/edits are in scope; the turn-1 boundary is not.
@@ -9399,7 +9887,7 @@ fn turns_turn_range_and_since_intersect() {
         "verbatim",
         at(SESS).as_str(),
         "--no-subagents",
-        "--turn-range",
+        "--turn",
         "0..2",
         "--since",
         "2h",
@@ -9947,7 +10435,7 @@ fn turns_assistant_only_orphan_lead_renders() {
 
 #[test]
 fn turns_turn_range_alone_is_not_a_conflict() {
-    // --turn-range WITHOUT --since/--until is valid (the L186 false arm: turn_range set
+    // --turn WITHOUT --since/--until is valid (the L186 false arm: turn_range set
     // but since/until both None). Restrict to turns 0..2.
     let h = turns_home();
     let out = h.run(&[
@@ -9956,23 +10444,20 @@ fn turns_turn_range_alone_is_not_a_conflict() {
         "--no-subagents",
         "--budget",
         "40000",
-        "--turn-range",
+        "--turn",
         "0..2",
         "--format",
         "json",
     ]);
     assert!(
         out.success,
-        "a bare --turn-range must not conflict: {}",
+        "a bare --turn must not conflict: {}",
         out.stderr
     );
     let objs = json_lines(&out.stdout);
     // No turn beyond index 2 selected.
     for o in objs.iter().filter(|o| o.get("role").is_some()) {
-        assert!(
-            o["turn_index"].as_u64().unwrap() <= 2,
-            "turn-range cap: {o}"
-        );
+        assert!(o["turn_index"].as_u64().unwrap() <= 2, "turn cap: {o}");
     }
 }
 
@@ -10067,7 +10552,7 @@ fn turns_budget_is_chars_only() {
 
 #[test]
 fn turns_turn_range_excludes_out_of_window_turns() {
-    // A turn-range that excludes the LOW turns (the L278 `turn_index < lo` true arm) and
+    // A turn that excludes the LOW turns (the L278 `turn_index < lo` true arm) and
     // the HIGH turns (`turn_index > hi` true arm).
     let h = turns_home();
     let out = h.run(&[
@@ -10076,7 +10561,7 @@ fn turns_turn_range_excludes_out_of_window_turns() {
         "--no-subagents",
         "--budget",
         "40000",
-        "--turn-range",
+        "--turn",
         "3..5",
         "--format",
         "json",
@@ -10342,9 +10827,36 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
 /// DEFAULT now keeps the LONGEST agent message + the first-if-substantive + the rich
 /// middles, so this baseline is reproduced by the `--agent-msgs eot-only` ESCAPE, not by
 /// the implicit default. Captured under `TZ=UTC` so the system-local timestamp render is
-/// deterministic across machines. Re-capture (only on an INTENDED eot-only-output change):
-///   TZ=UTC csift turns @<SESS> --no-subagents --budget 40000 --agent-msgs eot-only
+/// deterministic across machines. Re-capture (ONLY on an INTENDED eot-only-output change):
+///   cargo test --test cli_integration recapture_turns_pre_feature_baseline -- --ignored
+/// then review the baseline diff like any code change.
 const TURNS_PRE_FEATURE_BASELINE: &str = include_str!("turns_pre_feature_baseline.txt");
+
+/// The executable re-capture procedure for the baseline above — NOT a behavioral test
+/// (ignored by default; the fixture is a temp Home, so no hand-run command can reproduce
+/// it). Writes the current eot-only output to tests/turns_pre_feature_baseline.txt.
+#[test]
+#[ignore = "capture tool — rewrites tests/turns_pre_feature_baseline.txt; run only on an intended output change"]
+fn recapture_turns_pre_feature_baseline() {
+    let h = turns_home();
+    let out = h.run_with_env(
+        &[
+            "verbatim",
+            at(SESS).as_str(),
+            "--no-subagents",
+            "--budget",
+            "40000",
+            "--agent-msgs",
+            "eot-only",
+        ],
+        &[("TZ", "UTC")],
+    );
+    assert!(out.success, "stderr: {}", out.stderr);
+    let dest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/turns_pre_feature_baseline.txt");
+    std::fs::write(&dest, &out.stdout).expect("write baseline");
+    eprintln!("captured {} bytes to {}", out.stdout.len(), dest.display());
+}
 
 #[test]
 fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
@@ -11824,7 +12336,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
         "image",
         at(SESS).as_str(),
         "--no-subagents",
-        "--turn-range",
+        "--turn",
         "1..1",
         "--id",
         "1",
@@ -11834,7 +12346,7 @@ fn image_hash_n_disambiguators_resolve_to_one() {
     assert!(by_turn.success, "stderr: {}", by_turn.stderr);
     assert!(
         by_turn.stdout.contains("\"id\": \"L3i1\"") || by_turn.stdout.contains("\"id\":\"L3i1\""),
-        "turn-range 1..1 → the line-3 blue #1:\n{}",
+        "turn 1..1 → the line-3 blue #1:\n{}",
         by_turn.stdout
     );
 

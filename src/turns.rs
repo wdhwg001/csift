@@ -447,7 +447,7 @@ struct ScanResult {
 
 /// Entry point for `csift verbatim`.
 pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
-    // `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
+    // `--turn` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
     if !(args.round_trip_fraction > 0.0 && args.round_trip_fraction < 1.0) {
@@ -545,7 +545,7 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
     // its user/assistant timestamp). The summary dedup set is computed from the FULL
     // (un-windowed) newest summary so a window never silently un-dedups.
     for sr in &mut sessions {
-        // Resolve `--turn-range` open/from-end forms against THIS session's own turn count.
+        // Resolve `--turn` open/from-end forms against THIS session's own turn count.
         let bounds = turn_range.map(|spec| {
             let tc = sr
                 .turns
@@ -563,6 +563,24 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
                 .or_else(|| t.assistant_eot().and_then(|a| a.ts_utc.as_deref()));
             window_admits(t.turn_index, ts, bounds, &time_window)
         });
+    }
+
+    // Misuse self-diagnosis: `verbatim` exists to restore what a compaction CLIPPED. A
+    // session with ZERO compaction summaries has nothing clipped — the caller almost
+    // certainly wants `show --turn` (full records, no budget/truncation). stderr only
+    // (stdout stays the reconstruction); suppressed in --slice mode (the hook path is
+    // deliberate and must stay quiet).
+    if args.slice.is_none() {
+        for sr in &sessions {
+            if sr.summaries.is_empty() {
+                eprintln!(
+                    "csift: note: @{} has no compaction — nothing was clipped; for plain \
+                     reading use `csift show @{} --turn <N|A..B|-k..>` (full records, no \
+                     budget)",
+                    sr.session_id, sr.session_id
+                );
+            }
+        }
     }
 
     // Resolve the richness configuration (master mode + thresholds, profile applied
@@ -1995,10 +2013,10 @@ fn spanned_boundary_count(turns: &[TurnSlice], selected: &[Selected]) -> usize {
 // Window-range parsing (shared parser in `crate::text`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Parse a `--turn-range` token into a [`RangeSpec`] (the shared grammar), resolved per-session
+/// Parse a `--turn` token into a [`RangeSpec`] (the shared grammar), resolved per-session
 /// against that transcript's own turn count (0-based).
 fn parse_turn_range(s: &str) -> Result<crate::text::RangeSpec> {
-    crate::text::parse_range_spec(s, "--turn-range", false)
+    crate::text::parse_range_spec(s, "--turn", false)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

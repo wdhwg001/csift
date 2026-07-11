@@ -5,6 +5,33 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.5.0] - 2026-07-11
+
+Breaking rework, zero backcompat.
+
+- The per-command turn-window flag is `--turn` everywhere (was `--turn-range`);
+  same range grammar, same AND-intersection with `--since`/`--until`.
+- The label census generalizes to `--count-by <AXIS>` with six closed axes:
+  `label` · `tool` · `turn` · `session` · `pairing` · `model`; JSON row kind
+  is `census`; records outside an axis's domain are excluded and reported.
+- `agents --format json` is FLAT (envelope v2, no exceptions): session → run →
+  agent rows in tree pre-order; nesting is text-only, rebuilt from
+  `parent_agent_id`/`depth`; an unreachable node is appended, never dropped.
+- `show`: an EXPLICIT `--turn` miss is a hard error naming the domain
+  (open/from-end forms clamp); a 200-record-unit flood guard with the exact
+  continuation command; `--max-count 0` = uncapped uniformly on
+  list/stats/search/show.
+- Timestamps (text) take the ONE canonical local form
+  `YYYY-MM-DD HH:MM:SS[.mmm] TZAB(UTC±offset)` — the second UTC copy is gone.
+- Slash-command wrappers detected in BOTH tag orders (`<command-message>`
+  first is current CC); a new-order wrapper no longer masquerades as human
+  prose or opens a turn.
+- `list` rows gain `sidecar_present` (tri-state elicitation evidence); `files`
+  JSON summary gains `sessions`; `verbatim` prints a per-session
+  no-compaction note routing to `show --turn`; `normalize_argv` locates the
+  subcommand by scanning past root flags — flag order is free in combination
+  with `--claude-home`.
+
 ## [0.4.1] - 2026-07-11
 
 - Version + tag discipline codified: `Cargo.toml` ≡ SKILL surface header ≡

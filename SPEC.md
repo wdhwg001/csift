@@ -232,8 +232,8 @@ A `type:"user"` `text`-block (or bare-string) record whose content is **EXACTLY*
 #### 4.2.2 `<local-command-stdout>…` (52)
 String content (NOT `isMeta`) starting with `<local-command-stdout>` — local-command OUTPUT (machine), not the user's prose. (Its sibling `<local-command-caveat>` carries `isMeta` and classifies `harness.meta.hook`.) Does NOT open a turn (excluded via `starts_with`); classifies **`harness.command.stdout`** (§5).
 
-#### 4.2.3 `<command-name>…` slash-command wrapper (54)
-String content (NOT `isMeta`) starting with `<command-name>` — the machine-templated EXPANSION of a slash command. The templated wrapper does NOT open a turn and classifies **`harness.command.invocation`** (§5); any genuine prose the user typed after the command lives in `<command-args>…</command-args>` and is recovered separately (`slash_command_args`) so it ALSO classifies **`user.message`** (the wrapper carries both labels — the invocation marker plus the recovered user prose).
+#### 4.2.3 slash-command wrapper — BOTH tag orders (`<command-name>…` / `<command-message>…`)
+The machine-templated EXPANSION of a slash command. **Current CC emits `<command-message>` FIRST, then `<command-name>`** (verified in real corpora: 14 new-order sessions vs 35 older `<command-name>`-first ones), so detection is `is_slash_command_wrapper` — string content (NOT `isMeta`) whose LEADING tag is EITHER `<command-name>` OR `<command-message>` (the new `COMMAND_MESSAGE_PREFIX`). **`is_genuine_user` excludes BOTH orders** (a new-order wrapper no longer masquerades as human prose or opens a turn — a v0.5 correctness fix; turn NUMBERING may shift on a transcript carrying new-order wrappers). The templated wrapper does NOT open a turn. Classification is multi-label: any genuine prose the user typed after the command lives in `<command-args>…</command-args>` and is recovered via `slash_command_name` as `/name args`, so a WITH-ARGS wrapper classifies **`[user.message, harness.command.invocation]`** with `user.message` FIRST (the richest-view law, §5.2) — the UNFILTERED render is the extracted `/name args`, never the wrapper XML; a NO-ARGS wrapper classifies **`harness.command.invocation`** ONLY. An explicit `-t harness.command.invocation` still renders the raw wrapper. (No new Matcher synth needle is needed — the name + args are verbatim raw substrings and the rendered seam is a space, so a whitespace-bearing pattern is never prefilter-eligible.)
 
 #### 4.2.4 Tool-use rejection — `is_error:true` tool_result (31 with-message / 36 without)
 When the user REJECTS a tool use (ExitPlanMode plan kick-back, or a rejected AskUserQuestion / Edit / …), the result carrier is `is_error:true` with content beginning `"The user doesn't want to proceed with this tool use…"`. TWO sub-shapes:
@@ -313,7 +313,7 @@ The `-t` axis is a 3-role, **25-leaf** dotted taxonomy (`model::Class`; `Class::
 ### 5.1 The tree (role → class → sub)
 ```
 user                                       (the human)
-├─ user.message            genuine prose (string or text-only blocks; incl. slash-command <command-args>)
+├─ user.message            genuine prose (string or text-only blocks; incl. a slash-command's args, rendered `/name args` — §4.2.3)
 ├─ user.answer             AUQ answer (the Q+options+answer unit; INCLUDES the question)   ALSO agent.tool.result
 └─ user.rejection          plan/tool reject + typed instruction (render [plan:<path>] for ExitPlanMode)  ALSO agent.tool.result
 
@@ -344,6 +344,7 @@ A physical record can carry several labels; `search` emits it **ONCE** under the
 |---|---|---|---|---|
 | AUQ answer carrier (non-errored tool_result + answers) | `user.answer` | `agent.tool.result` | — | `user.answer` |
 | plan/tool reject w/ typed msg (is_error tool_result + marker) | `user.rejection` | `agent.tool.result` | — | `user.rejection` |
+| slash-command wrapper WITH args (either tag order) | `user.message` | `harness.command.invocation` | — | `user.message` (renders `/name args`) |
 | `SendMessage` tool_use, `input.type=="message"` | `agent.tool.use` | `agent.communication.sent` | self ⇨ to | `…sent` |
 | `SendMessage` tool_use, `input.type=="shutdown_request"` | `agent.tool.use` | `agent.communication.signal` | self ⇨ to | `…signal` |
 | `Task`/`Agent`/`Workflow` spawn tool_use | `agent.tool.use` | `agent.communication.sent` | self ⇨ child | `…sent` |
@@ -394,15 +395,15 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >   `(+N more · csift show …)` pointer + JSON `siblings_hidden`/`turn_lines`);
 >   `image --id` takes bare digits or `L<line>i<n>` (the `#N` input form errors).
 > - **Guardrails**: a bare id target errors "did you mean '@<id>'?"; a search PATTERN
->   starting `@` errors; a uuid-shaped PATTERN notes on stderr; `--turn-range` now
->   INTERSECTS `--since`/`--until`.
+>   starting `@` errors; a uuid-shaped PATTERN notes on stderr; the turn window (v0.5 `--turn`)
+>   now INTERSECTS `--since`/`--until`.
 
 > **v0.3 CHANGE LEDGER (authoritative — supersedes any conflicting older text).**
 > - **ONE range-token grammar** (extended in v0.4): every range flag (`show --line`/`--turn`,
->   `--turn-range`, `--file-lines`) takes `N` · `A..B` · `N..` (to the end) · `..N` (from the
->   start) · `-k` = k-th from the end (`-3..` = the last 3), resolved per-target; the dash form
->   `A-B` is REMOVED (hard error teaching the `..` spelling), a reversed closed range errors.
->   `--turn-range` + `--since`/`--until`
+>   the per-command turn window — v0.5 `--turn` — and `--file-lines`) takes `N` · `A..B` · `N..`
+>   (to the end) · `..N` (from the start) · `-k` = k-th from the end (`-3..` = the last 3),
+>   resolved per-target; the dash form `A-B` is REMOVED (hard error teaching the `..` spelling),
+>   a reversed closed range errors. The turn window + `--since`/`--until`
 >   now INTERSECT on EVERY command (`files`/`verbatim` dropped their leftover
 >   mutual-exclusion bails).
 > - **`-T`/`--label-not`** (search): label EXCLUSION, same selector grammar as `-t` (the
@@ -415,7 +416,7 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 > - **`refetch`**: search JSON hits + verbatim `collapsed_agents` rows carry the ready-to-run
 >   `csift show` command addressed at the line-owning transcript.
 > - **`verbatim` REQUIRES a target** (budget × every-session flood guard). **`list`** gains
->   `--since`/`--until` (activity-span intersection); **`stats`** gains `--turn-range`
+>   `--since`/`--until` (activity-span intersection); **`stats`** gains the turn window (v0.5 `--turn`)
 >   (and its positional accepts encoded `-Users-…` dirs — an `allow_hyphen_values`
 >   omission fixed).
 > - **Teammate ids with dashed NAMES round-trip** (`aP1-engine-9cf2…`): the
@@ -434,15 +435,17 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >   IDENTICAL to `search`'s `s1·tN`. `show --turn -3..` = the last 3 turns (the tail-peek /
 >   live-monitoring intent).
 > - **Range grammar extended** (`text::parse_range_spec` + `RangeSpec::resolve`, replacing
->   `parse_range`). EVERY range flag (`show --line`, `show --turn`, `--turn-range`,
->   `--file-lines`) now accepts `N` · `A..B` · `N..` (to the end) · `..N` (from the start) ·
+>   `parse_range`). EVERY range flag (`show --line`, the per-command `--turn` window, and
+>   `--file-lines`) now
+>   accepts `N` · `A..B` · `N..` (to the end) · `..N` (from the start) ·
 >   `-k` = the k-th from the end (`-3..` = the last 3, `-1` = the last) — all inclusive. The
 >   dash form `A-B` still hard-errors (teaches `..`); a statically reversed closed range
 >   (`9..3`) errors. Open / from-end forms resolve PER TARGET (the last 3 turns of EACH
->   session). The space form `--turn-range -3..` parses (`allow_hyphen_values`).
-> - **`search --count-by-label`**: a per-LEAF census of the matched records (empty PATTERN =
->   a whole-scope census; a leaf's count = how many records `-t <leaf>` would surface). JSON
->   emits `label_count` rows.
+>   session). The space form `--turn -3..` parses (`allow_hyphen_values`).
+> - **`search --count-by <AXIS>`** (see the v0.5.0 ledger for the rename):
+>   a per-KEY census of the matched records along one closed axis (empty PATTERN =
+>   a whole-scope census; on the `label` axis a leaf's count = how many records `-t <leaf>`
+>   would surface). JSON emits `census` rows.
 > - **Empty-result self-diagnosis** (search): a zero-match run prints a stderr diagnosis —
 >   "a DEFINITIVE absence (exit 0), NOT an error", the active filters, and (when `-t`/`-T`
 >   was on) an ACTIVE PROBE naming the label(s) the pattern DOES occur under. JSON summary
@@ -455,8 +458,77 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >   `session_ids_truncated` → **`transcript_ids_truncated`** (named apart from `-l`'s
 >   owning-session id stream).
 
+> **v0.5.0 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
+> 0.5.0 rework (0 backcompat; `csift 0.5.0`). Items 1–7 + 11 are BREAKING:
+> 1. **The per-command turn-window flag is renamed to `--turn`** on every command that had it
+>    (`search`/`stats`/`files`/`recover`/`verbatim`/`image`; the old name carried a `-range`
+>    suffix) — SAME range grammar (`N`/`A..B`/`N..`/`..N`/`-k`/`..`), same AND-intersection with
+>    `--since`/`--until`. `show --turn` is unchanged. The parse-error label is now `--turn`; the
+>    `files` text footer fragment now reads `turn=SPEC`.
+> 2. **The label census is generalized to `--count-by <AXIS>`** (search terminal mode; the old
+>    flag was label-only). Closed axes: `label` | `tool` | `turn` | `session` | `pairing` |
+>    `model`. `label` MULTI-counts (a record counts under every leaf it carries); the other axes
+>    count each record ONCE, and records outside an axis's domain (no tool / pairing / model) are
+>    EXCLUDED with the excluded count reported. `turn` sorts ASCENDING (a histogram; keys `t<N>`,
+>    `<full-transcript-id>·t<N>` when >1 transcript in scope); the others sort count-DESC. JSON:
+>    the old per-leaf census row kind is REPLACED by kind **`census`** `{axis, key, records}`;
+>    summary `{axis, matched_records, distinct_keys, excluded_records, dropped_by_cap,
+>    skipped_lines}`. Still conflicts with `-c`/`-l`/`--siblings`/`--raw`. The empty-result
+>    diagnosis recommends `--count-by label`.
+> 3. **`agents --format json` is FLAT** (envelope v2, NO exceptions — the old nested
+>    `{session_id, workflow_runs:[…children…], agents:[…]}` per-session object AND the bare-node
+>    `--agent` special case are BOTH gone). Now: header → per session a light
+>    `{kind:"session", session_id, runs:N, agents:N}` row → each in-scope workflow run a
+>    `{kind:"run", …run fields…, session_id}` row (NO `children`) → its member `{kind:"agent",
+>    …node fields…}` rows in tree PRE-ORDER → built-in agents pre-order → `{kind:"summary",
+>    sessions, runs, agents}`. Tree NESTING is TEXT-mode only; JSON consumers rebuild it from
+>    `parent_agent_id`/`depth`. A node unreachable from any root (a forged parent cycle) is
+>    APPENDED, never dropped (the old nested shape silently dropped such nodes).
+> 4. **`show --turn` address-miss is a HARD error.** An EXPLICIT `--turn N` or `--turn A..B`
+>    resolving to zero records errors naming the domain (`no such turn(s): t99 — the transcript
+>    has 2 turn(s) (t0..t1); …`); open/from-end forms (`N..`/`..N`/`-k`/`..`) CLAMP (tail-peek
+>    robustness). Both rendered and `--raw` modes.
+> 5. **`show` flood guard.** Default cap `DEFAULT_SHOW_CAP = 200` record units (keep-FIRST); the
+>    text drop line is `+N more record unit(s) beyond the {cap}-unit cap · continue: csift show
+>    @<id> --line A..B  (or --max-count 0 = uncapped)`; JSON summary gains `dropped_by_cap`,
+>    `refetch_remainder`, `non_record_lines`. New `show --max-count N` flag; `--raw` caps by LINE
+>    with an equivalent stderr note. A line-RANGE covering non-record lines prints `N line(s) in
+>    the addressed range are not records (metadata/attachment — inspect with --raw)`.
+> 6. **`--max-count 0` = uncapped, uniformly** on `list`/`stats`/`search`/`show` (previously
+>    `Some(0)` was a literal zero-cap absurdity).
+> 7. **Timestamps (text): ONE canonical form** — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`
+>    (`2026-07-11 15:33:37 AEST(UTC+10)`). The OLD dual form `… AEST (2026-…Z)` and the bare
+>    `…+10:00` form are GONE (the UTC copy invited timezone-math errors). `timez::format_timestamp`
+>    (seconds) + `format_local_compact` (ms) share one renderer + `tz_marker`. JSON `ts_utc`/
+>    `ts_local` unchanged.
+> 8. **`files` JSON summary gains `sessions`** (distinct owning sessions among emitted rows);
+>    deliberately NO `dropped_by_cap` (files has no cap).
+> 9. **`verbatim` self-diagnosis** — a non-`--slice` run prints, per session with ZERO
+>    compaction summaries, the stderr note `csift: note: @<id> has no compaction — nothing was
+>    clipped; for plain reading use \`csift show @<id> --turn <N|A..B|-k..>\` (full records, no
+>    budget)`.
+> 10. **`list` rows gain `sidecar_present: bool`** (the elicitation sidecar FILE exists = hook
+>    installed; tri-state: present+pending = blocked / present+none = provably not blocked /
+>    absent = cannot conclude).
+> 11. **Slash-command wrapper — BOTH tag orders.** Current CC emits `<command-message>` FIRST
+>    (verified: 14 new-order sessions vs 35 old-order). Detection is `is_slash_command_wrapper`
+>    (either leading tag; new `COMMAND_MESSAGE_PREFIX`). `is_genuine_user` now excludes BOTH
+>    orders (a new-order wrapper no longer masquerades as human prose or opens a turn — turn
+>    NUMBERING may shift on transcripts with new-order wrappers; a correctness fix). `classify`:
+>    a with-args wrapper → `[user.message, harness.command.invocation]` with `user.message` FIRST
+>    (richest-view law), so the unfiltered render is the extracted `/name args` (`slash_command_name`),
+>    never wrapper XML; a no-args wrapper → `harness.command.invocation` only. An explicit
+>    `-t harness.command.invocation` still renders the raw wrapper.
+> 12. **`pairing` JSON enum documented:** `paired` | `pending` | `orphan` | `null`.
+> 13. **`normalize_argv` fix (P0):** the subcommand is located by SCANNING over declared root
+>    flags (+ their value tokens; `--flag=value` spans one token), so `csift --claude-home DIR
+>    list @x --max-count 3` works — previously a pre-subcommand global flag disabled normalization
+>    and any flag after a positional was swallowed by the PATH positional with a misleading "not a
+>    project target" error. "Flag order is free" and "`--claude-home` any position" now hold in
+>    combination.
 
-> **Common conventions.** All timestamps display as **system-local timezone + raw UTC** side-by-side (e.g. `2026-06-07 15:43:00 AEST (2026-06-07T05:43:00.000Z)` on a machine in Sydney; the `<TZ>` abbrev and offset auto-track the detected local zone) via `jiff` (`TimeZone::system()`). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
+
+> **Common conventions.** Every TEXT timestamp is a SINGLE canonical local form — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` (e.g. `2026-07-11 15:33:37 AEST(UTC+10)` on a machine in Sydney; January Sydney = `AEDT(UTC+11)`; India = `IST(UTC+05:30)`), via `jiff` (`TimeZone::system()`). The marker is a FORMAT not a value: the abbreviation + offset are derived from the system zone at that instant (DST-correct), so the only mental step is "shift by the given offset"; a whole-hour offset renders compact (`UTC+10`), a fractional one zero-padded (`UTC+05:30`), and a zone with no abbreviation renders `(UTC±offset)` alone. **There is NO raw-UTC parenthetical in text** (the former `… AEST (…Z)` dual form and the bare-offset `…+10:00` form are GONE — the UTC copy invited LLM timezone-conversion errors); machine UTC lives ONLY in JSON (`ts_utc`, §8.2). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 
 ### 6.1 `list` — "which session is this?" fast index
 
@@ -468,11 +540,11 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 | `[PATH]…` | repeatable positional | all projects | a real cwd OR an encoded dir (§2.3); 0 args ⇒ every dir under projects root (default-capped — see `--max-count`) |
 | `--since WHEN` / `--until WHEN` | string | none | keep a session iff its [first-activity, last-activity] SPAN (the head/tail timestamps this index already reads — never a full scan) INTERSECTS the window, so a long-running session straddling the window still lists; a session with no readable timestamp never matches a bounded window |
 | `--sessions-from F` | path or `-` | none | union an id list into the scope (the shared §6.2 semantics) |
-| `--max-count N` | usize | 50 for an UNSCOPED run, else unlimited | cap the emitted rows. An UNSCOPED (all-projects, no target / `--sessions-from`) listing floods the reader's context, so it DEFAULT-caps to the **50 most-recently-active** sessions (kept by max first/last-user + last-agent ts, then restored to path order); the drop is REPORTED (text footer + JSON `dropped_by_cap`), never silent. A scoped query (any target or `--sessions-from`) is UNCAPPED unless `--max-count` is passed; an explicit `--max-count` overrides the default in both cases. |
+| `--max-count N` | usize | 50 for an UNSCOPED run, else unlimited | cap the emitted rows. An UNSCOPED (all-projects, no target / `--sessions-from`) listing floods the reader's context, so it DEFAULT-caps to the **50 most-recently-active** sessions (kept by max first/last-user + last-agent ts, then restored to path order); the drop is REPORTED (text footer + JSON `dropped_by_cap`), never silent. A scoped query (any target or `--sessions-from`) is UNCAPPED unless `--max-count` is passed; an explicit `--max-count` overrides the default in both cases. **`--max-count 0` = UNCAPPED** (the crate-wide convention on `list`/`stats`/`search`/`show`), NOT a zero-row cap. |
 | `--format text\|json` | enum | `text` | output format |
 | `--no-subagents` | bool | — | restrict to top-level `<uuid>.jsonl` sessions only. Subagent transcripts (built-in `subagents/agent-<hex>.jsonl` + workflow `subagents/workflows/wf_*/agent-<hex>.jsonl`) are listed by default; the uniform `--subagents` twin affirms the default. Workflow `journal.jsonl` is excluded (not a transcript). |
 
-**Per-session fields emitted:** `session-id`, **first** genuine-user message (+ts), **last** genuine-user message (+ts), **last** agent message (+ts), the session `cwd` (decoded from data, §2.4), `version`, `gitBranch`. Each message is a one-line excerpt (truncated with an explicit `… (+N chars)` marker — never silent).
+**Per-session fields emitted:** `session-id`, **first** genuine-user message (+ts), **last** genuine-user message (+ts), **last** agent message (+ts), the session `cwd` (decoded from data, §2.4), `version`, `gitBranch`, and `sidecar_present` (JSON `bool`) — whether the elicitation-sidecar FILE exists for the session (i.e. the CC hook is installed). It is a TRI-STATE for "is this session blocked on a human?": `sidecar_present:true` + ≥1 pending elicitation = blocked; `true` + none = provably NOT blocked on an elicitation; `false` = the hook is not installed, so "nothing pending" is NOT concludable. Each message is a one-line excerpt (truncated with an explicit `… (+N chars)` marker — never silent).
 
 **Algorithm (NON-FUNCTIONAL: must be fast on 200 MB+):**
 1. Resolve target dir(s) (§2.3); enumerate `*.jsonl` directly under each (skip childless dirs, §1).
@@ -484,11 +556,11 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 ```
 SESSION  0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
   cwd      /Users/testuser/Projects/widget_app_prototype   (branch main, CC 2.1.159)
-  first ◂  2026-06-07 14:01:09 AEST (2026-06-07T04:01:09.123Z)
+  first ◂  2026-06-07 14:01:09 AEST(UTC+10)
            Write the AUTHORITATIVE SPEC.md for csift…
-  last ◂   2026-06-07 15:48:22 AEST (2026-06-07T05:48:22.880Z)
+  last ◂   2026-06-07 15:48:22 AEST(UTC+10)
            also add a --no-subagents flag please
-  last ▸   2026-06-07 15:49:10 AEST (2026-06-07T05:49:10.004Z)
+  last ▸   2026-06-07 15:49:10 AEST(UTC+10)
            Done — SPEC.md rewritten; summary below.
 ```
 (`◂` = user, `▸` = agent.)
@@ -516,12 +588,12 @@ csift list --format json .                              # machine-readable index
 | `--label-not SEL` | `-T` | repeatable selector | none | EXCLUDE labels matching the selector (same grammar/validation as `-t`; the rg `-t`/`-T` duality). Effective set = (`-t` selectors, or ALL) minus (`-T` selectors); a multi-label record renders under its richest SURVIVING label; a statically-empty combination hard-errors. Filters HITS only — `--siblings` rendering is unaffected. |
 | `--ignore-case` | `-i` | bool | smart-case | force case-insensitive |
 | `--multiline` | — | bool | false | let `.` cross newlines / multiline mode |
-| `--turn-range N\|A..B\|N..\|-k` | — | string | none | inclusive 0-based turn window in the shared §6 range-token grammar (`N` ≡ `N..N`; `N..` to the end; `..N` from the start; `-k` = k-th from the end, so `-3..` = the last 3 turns); INTERSECTS (AND) `--since`/`--until` |
+| `--turn N\|A..B\|N..\|-k` | — | string | none | inclusive 0-based turn window in the shared §6 range-token grammar (`N` ≡ `N..N`; `N..` to the end; `..N` from the start; `-k` = k-th from the end, so `-3..` = the last 3 turns); INTERSECTS (AND) `--since`/`--until`. |
 | `--since WHEN` / `--until WHEN` | — | string | none | time bounds (ISO8601 or relative `2h`/`3d`/…, system-local; bare date ⇒ local midnight) |
-| `--max-count N` | — | usize | none (**unlimited — no cap**) | cap emitted exchanges; **reports dropped count** |
+| `--max-count N` | — | usize | none (**unlimited — no cap**) | cap emitted exchanges; **reports dropped count**. `--max-count 0` = uncapped (the crate-wide convention). |
 | `--count-only` | `-c` | bool | off | print ONLY the match total — one integer counting EXCHANGES, not lines (ripgrep `-c` idiom); honors every filter. The total is ALSO in the normal footer, so `--count-only` just isolates it for a pipe. |
 | `--sessions-with-matches` | `-l` | bool | off | print ONLY the distinct matching OWNING sessions (`parent_session_id`), one per line, sorted, UNCAPPED (a `--max-count` drop notes on stderr). Pipes into `--sessions-from -`. (Per-transcript detail = the JSON summary's `transcript_ids`, ≤100 + `transcript_ids_truncated` — named apart from this owning-session stream.) |
-| `--count-by-label` | — | bool | off | instead of exchanges, print a per-LEAF CENSUS of the matched records — `<count>  <label>` per line, richest-first (stderr carries the record/label accounting). Each matched record contributes to EVERY leaf in its label set, so a leaf's count is exactly how many records `-t <leaf>` would surface; an EMPTY PATTERN makes it a whole-scope census (the exploration on-ramp so an empty `-t <leaf>` result is never mistaken for a typo). Honors `-t`/`-T`/time/turn/scope. JSON: a `label_count` row per leaf + a `{matched_records, distinct_labels, …}` summary. |
+| `--count-by AXIS` | — | value-enum | off | instead of exchanges, print a per-KEY CENSUS of the matched records along ONE closed axis — `<count>  <key>` per line (stderr carries the record accounting). The axis is a CLOSED value-enum, NOT a query language: `label` (per role.class.sub leaf — a record counts under EVERY leaf it carries, so a leaf's count = how many records `-t <leaf>` would surface; the exploration on-ramp) · `tool` (per tool name) · `turn` (per turn, ASCENDING turn order — a histogram; keys `t<N>`, or `<full-transcript-id>·t<N>` when >1 transcript is in scope) · `session` (per transcript) · `pairing` (`paired`\|`pending`\|`orphan` — the one-command "any pending tools?") · `model` (per assistant model). `label` MULTI-counts; every OTHER axis counts each record ONCE and EXCLUDES records outside its domain (no tool/pairing/model), REPORTING the excluded count (never silent). `label` sorts richest-first; the others count-DESC except `turn` (ascending). An EMPTY PATTERN = a whole-scope census. Honors `-t`/`-T`/time/turn/scope; a THIRD terminal mode (conflicts with `-c`/`-l`/`--siblings`/`--raw`). JSON: a `census` row per key (`{axis, key, records}`) + a `{axis, matched_records, distinct_keys, excluded_records, dropped_by_cap, skipped_lines}` summary. |
 | `--raw` | — | bool | off | emit each matched record's VERBATIM jsonl line (deduped per record) instead of the rendered exchange — `show --raw`'s escape hatch on search's whole filter surface. stdout = pure jsonl; scope/drop/malformed notes → stderr; sidecar-merged records (no physical line) are omitted with a stderr note. Excludes `--format json`/`--siblings`/`-c`/`-l`/`--no-truncate`. |
 | `--siblings` | — | bool | off | render each matched turn's NON-matched records (the surrounding back-and-forth) under a FIXED zero-arg policy: message units always (user.*, agent.message, agent.communication.*); thinking≤2, tool.use≤3, tool.result≤3, harness≤2 per leaf; overflow surfaces an explicit `(+N more · csift show @<id> --line A..B)` pointer + JSON `siblings_hidden`/`turn_lines` |
 | `--no-truncate` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (no `--full` alias — that spelling was removed as ambiguous). When NOT set and ≥1 excerpt is clipped, a trailing reader-caution prints (text) / `excerpts_truncated:true` (JSON): an excerpt is a match-centered FRAGMENT, not a summary, and can misrepresent the record's full intent — re-fetch via `--no-truncate` or `csift show` (§6.11; every JSON hit's `refetch` is the ready-to-run command) |
@@ -536,9 +608,9 @@ csift list --format json .                              # machine-readable index
 
 **Regex dialect — linear-time (RE2-class).** The pattern is the Rust `regex` 1.12 crate (`regex::bytes`), which **guarantees linear-time matching** in the input length: **no catastrophic backtracking, ever**. *Supported:* literals; character classes `[...]` / `[^...]` / `\d \w \s` + Unicode classes `\p{...}`; alternation `|`; groups `(...)` / non-capturing `(?:...)`; quantifiers `* + ? {m,n}` (greedy + lazy `*?`); anchors `^ $ \b \B`; dot `.` (`--multiline` lets it cross newlines); inline flags `(?i)(?m)(?s)(?x)`; Unicode-aware by default. ***Deliberately NOT supported*** (they require a non-linear engine): backreferences `\1`; lookahead/lookbehind `(?=) (?!) (?<=) (?<!)`; atomic groups / possessive quantifiers `(?>...)` / `a*+`. A pattern using these **fails to compile** with a clear error — by design, not a bug. This boundary is documented identically in `--help` (`search`'s `after_help`) and `SKILL.md`.
 
-**Validation:** `--turn-range` and `--since`/`--until` INTERSECT (AND) — the one windowing rule shared by every subcommand. A `-t`/`-T` combination whose effective label set is statically empty is a hard error. An empty `PATTERN` with no other filter is allowed (matches every label-eligible record) but warns (`empty pattern with no category/time/turn/session filter …`) that it will emit a lot.
+**Validation:** `--turn` and `--since`/`--until` INTERSECT (AND) — the one windowing rule shared by every subcommand. A `-t`/`-T` combination whose effective label set is statically empty is a hard error. An empty `PATTERN` with no other filter is allowed (matches every label-eligible record) but warns (`empty pattern with no category/time/turn/session filter …`) that it will emit a lot.
 
-**Zero-match self-diagnosis (the anti-slippage keystone).** A zero-result search is an ANSWER — a DEFINITIVE absence — not a syntax error, and must never be misread as one. A run that emits nothing prints a diagnosis to **stderr** (stdout stays a pure/empty stream): *"csift: 0 matches — a DEFINITIVE absence (exit 0), NOT an error. Scope: N session(s). Active filters: &lt;the `-t`/`-T`/`--since`/`--until`/`--turn-range` echo, or `none`&gt;."* Then, when a `-t`/`-T` filter was active AND the pattern DOES occur under OTHER labels, an **active probe** names them: *"⚠ but "&lt;pattern&gt;" DOES occur — R record(s) under: &lt;leaf ×n · …&gt;. Your -t/-T excluded them; drop -t/-T or select one of those labels."* (the exact `-t user.message` searching-a-tool-name trap). When the label filter was active but the pattern is genuinely absent even unfiltered, it says so; with no label filter it points at `csift search "" <target> --count-by-label`. JSON echoes this in the summary: `definitive_absence:true`, `active_filters`, and `excluded_by_label` (the per-leaf rows + record total, or null).
+**Zero-match self-diagnosis (the anti-slippage keystone).** A zero-result search is an ANSWER — a DEFINITIVE absence — not a syntax error, and must never be misread as one. A run that emits nothing prints a diagnosis to **stderr** (stdout stays a pure/empty stream): *"csift: 0 matches — a DEFINITIVE absence (exit 0), NOT an error. Scope: N session(s). Active filters: &lt;the `-t`/`-T`/`--since`/`--until`/`--turn` echo, or `none`&gt;."* Then, when a `-t`/`-T` filter was active AND the pattern DOES occur under OTHER labels, an **active probe** names them: *"⚠ but "&lt;pattern&gt;" DOES occur — R record(s) under: &lt;leaf ×n · …&gt;. Your -t/-T excluded them; drop -t/-T or select one of those labels."* (the exact `-t user.message` searching-a-tool-name trap). When the label filter was active but the pattern is genuinely absent even unfiltered, it says so; with no label filter it points at `csift search "" <target> --count-by label`. JSON echoes this in the summary: `definitive_absence:true`, `active_filters`, and `excluded_by_label` (the per-leaf rows + record total, or null).
 
 **Filter application order per session:** target selection (positional PATH/`@<uuid>`/`*.jsonl`) → label eligibility (§5) → time/turn window → regex match → round-trip reconstruction (§6.4) → `--max-count` cap (with drop accounting).
 
@@ -550,7 +622,7 @@ csift list --format json .                              # machine-readable index
 ```
 s1 = 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
 
-s1·t47  2026-06-07 14:32:05.478+10:00
+s1·t47  2026-06-07 14:32:05.478 AEST(UTC+10)
   ◂ user.message  L990  why is the tail-read carry needed?
   ▸ agent.thinking  L994  The carry holds an incomplete line straddling a chunk boundary…
   ▸ agent.message  L1003  The carry is the partial line at the low-offset edge of each chunk…
@@ -568,7 +640,7 @@ csift search "carry"                                   # all projects, smart-cas
 csift search -i "askuserquestion" -t agent.tool.use   # tool_use blocks naming AUQ
 csift search "" -t user --since 2h .                   # pure filter: genuine user turns, last 2h, this project
 csift search "tail.read" --multiline @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
-csift search "panic" -t agent.message -t agent.thinking --turn-range 10..20 --max-count 50
+csift search "panic" -t agent.message -t agent.thinking --turn 10..20 --max-count 50
 csift search "" -t agent.communication.inbox @<uuid>   # inbound peer/teammate messages (from ⇨ self)
 csift search "" -t harness.notification @<uuid>        # subagent/workflow/bg-command completion pulses
 csift search "" @<uuid> -t agent -T agent.thinking     # the agent role MINUS thinking (-T excludes)
@@ -576,8 +648,9 @@ csift search "deadline" -l                             # WHICH sessions mention 
 csift search "deadline" -l | csift stats --sessions-from -   # …then aggregate exactly those
 csift search "" @<uuid> -t agent.message --raw | jq -r '.message.model'  # raw lines: unrendered fields
 csift search "let's chat" -t user --siblings           # the match WITH the turn's other side (fixed policy)
-csift search "" @<uuid> --count-by-label                # whole-scope per-leaf census (what a scope holds, before filtering)
-csift search "AskUserQuestion" @<uuid> --count-by-label # which labels a term occurs under (before guessing a -t)
+csift search "" @<uuid> --count-by label               # whole-scope per-leaf census (what a scope holds, before filtering)
+csift search "AskUserQuestion" @<uuid> --count-by label # which labels a term occurs under (before guessing a -t)
+csift search "" @<uuid> -t agent.tool.use --count-by pairing  # any pending tools? (paired|pending|orphan)
 csift search "persisted-output" --resolve-persisted --format json
 ```
 
@@ -672,7 +745,9 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 | `--with-files` | bool | off | attach each node's files-changed list (reuses the `files` extractors over the subagent's own transcript) |
 | `--format text\|json` | enum | `text` | output format |
 
-**Per-subagent (node) fields emitted:** `agent_id` (bare hex, or a teammate `aName-<hex>` id — the name may itself carry dashes), `kind`, `parent_session_id`, `parent_agent_id` (the spawning agent for a nested subagent; `null` ⇒ a direct child of the session, depth 0), `spawn_tool_use_id`, `spawn_tool` (`Agent`/`Task`/`Workflow`), `workflow_id` (workflow only), `agent_type` (meta `agentType`, fallback the spawn's `subagent_type`), `description` (built-in meta, fallback the spawn's), `trigger_utc`/`trigger_local` (the true spawn instant), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration` (trigger→completion), `status`, the FROZEN-LANE fields `pending_tool_use_id`/`pending_tool_name`/`pending_classification`/`pending_since_utc`(+`_local`) (all `null` on a normal lane), `depth`, `skipped_lines`; plus on demand `returned_message` + `returned_message_source`, `files_changed[]`, and `children[]`. **Frozen-lane detection:** when a subagent's NEWEST meaningful record is an UNRETURNED `tool_use` (no following `tool_result` for its id — a permission escalation leaves NO jsonl trace, the lane just freezes there), `status` is forced `running` (NEVER `completed` — overriding the end-of-turn-text walk-back, which would otherwise read the assistant text PRECEDING the frozen tool_use as a clean finish) and `pending_classification` ∈ {`escalation-blocked`, `awaiting-execution`}: `escalation-blocked` iff the pending Bash command is one CC's `dangerous-rm` classifier ([`bash_danger`], a 1:1 lexical port of the 2.1.x binary's `Ywa`/`egp`/`Zhp`) would HOIST for human approval even under bypass (≈ waiting for a Yes); else `awaiting-execution` (slow tool OR wedged — indistinguishable in jsonl; weigh elapsed-since-`pending_since_utc`). The JSON ALWAYS emits one object per session: `{session_id, workflow_runs:[{…manifest fields…, children:[node]}], agents:[node]}`. The ONE exception is a single `--agent <hex>` grab, which emits just the matched node as a bare object (no per-session envelope).
+**Per-subagent (`kind:"agent"`) node fields emitted:** `agent_id` (bare hex, or a teammate `aName-<hex>` id — the name may itself carry dashes), `shape` (the transcript shape — `builtin-task`\|`workflow`\|`teammate`; JSON key is `shape`, not `kind` — `kind` is the envelope's row tag), `parent_session_id`, `parent_agent_id` (the spawning agent for a nested subagent; `null` ⇒ a direct child of the session, depth 0), `spawn_tool_use_id`, `spawn_tool` (`Agent`/`Task`/`Workflow`), `workflow_id` (workflow only), `agent_type` (meta `agentType`, fallback the spawn's `subagent_type`), `name`/`team_name` (teammate only, else null), `description` (built-in meta, fallback the spawn's), `trigger_utc`/`trigger_local` (the true spawn instant), `started_utc`/`started_local` (first transcript record ts), `completed_utc`/`completed_local` (last transcript record ts), `duration` (trigger→completion), `status`, the FROZEN-LANE fields `pending_tool_use_id`/`pending_tool_name`/`pending_classification`/`pending_since_utc`(+`_local`) (all `null` on a normal lane), `depth`, `skipped_lines`, `control_hint` (teammate only); plus on demand `returned_message` + `returned_message_source` and `files_changed[]`. **Frozen-lane detection:** when a subagent's NEWEST meaningful record is an UNRETURNED `tool_use` (no following `tool_result` for its id — a permission escalation leaves NO jsonl trace, the lane just freezes there), `status` is forced `running` (NEVER `completed` — overriding the end-of-turn-text walk-back, which would otherwise read the assistant text PRECEDING the frozen tool_use as a clean finish) and `pending_classification` ∈ {`escalation-blocked`, `awaiting-execution`}: `escalation-blocked` iff the pending Bash command is one CC's `dangerous-rm` classifier ([`bash_danger`], a 1:1 lexical port of the 2.1.x binary's `Ywa`/`egp`/`Zhp`) would HOIST for human approval even under bypass (≈ waiting for a Yes); else `awaiting-execution` (slow tool OR wedged — indistinguishable in jsonl; weigh elapsed-since-`pending_since_utc`).
+
+**`--format json` is FLAT (envelope v2, NO exceptions — v0.5).** The stream is: `{kind:"header",command:"agents"}` → per in-scope session a light `{kind:"session", session_id, runs:N, agents:N}` count row → per in-scope workflow RUN a `{kind:"run", run_id, task_id, workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, started_utc/local, session_id}` row (NO `children`) followed by its member agent rows, then the session's built-in agents — every agent as its OWN `{kind:"agent", …node fields above…}` row in tree PRE-ORDER (a nested sub-subagent immediately after its parent) → `{kind:"summary", sessions, runs, agents}`. **Tree NESTING is TEXT-mode ONLY** (the text output is still a parent→child tree); JSON consumers rebuild it from `parent_agent_id`/`depth` (`jq 'select(.kind=="agent")'` reaches every node). A node UNREACHABLE from any root (a forged parent cycle) is APPENDED, never dropped — the pre-order guarantees full coverage where the old nested `{session_id, workflow_runs:[…children…], agents:[…]}` shape silently dropped such nodes. A single `--agent <hex>` grab is NOT a special JSON shape — it emits the same envelope (header → session → the one agent, with `returned_message`/`files_changed` → summary); the old bare-node exception is gone.
 
 **Status resolution (honest — never over-claims "failed"):** `completed` when a workflow `journal.jsonl` carries a `result` event for the agent OR the transcript terminates with a visible assistant end-of-turn message; `running` when records exist with a start but no completion signal; `unknown` when no timestamps are determinable.
 
@@ -715,7 +790,7 @@ Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of
 | `--by <summary\|dir\|file\|timeline>` | value-enum | `summary` | detail level (below) |
 | `--regex RE` | string | none | keep only mutated paths whose **full absolute path** matches the Rust `regex` pattern ANYWHERE (used as-is; invalid pattern = hard error) |
 | `--glob PAT` | string | none | keep only mutated paths whose **full absolute path** matches the glob (`**` crosses `/`, via `globset`; invalid pattern = hard error) |
-| `--turn-range N\|A..B\|N..\|-k` | string | none | inclusive 0-based turn window (shared range-token grammar: `N`/`A..B`/`N..`/`..N`/`-k` from the end); INTERSECTS (AND) `--since`/`--until` |
+| `--turn N\|A..B\|N..\|-k` | string | none | inclusive 0-based turn window (shared range-token grammar: `N`/`A..B`/`N..`/`..N`/`-k` from the end); INTERSECTS (AND) `--since`/`--until`. |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`/…, system-local) |
 | `--format text\|json` | enum | `text` | output format |
 
@@ -727,9 +802,9 @@ Every `files` row + boundary also carries the **JSONL line number** (`Lnnnn`) of
 
 Regardless of detail level, an **Edit-before-Read boundaries** section follows the mutation body (and shows on its own when a session ONLY hit boundaries, no mutations), one row per boundary `(⚠ path, Lnnnn, turn, ts, kind)`.
 
-**Filtering** is per-mutation. **Path filters** `--regex` / `--glob` are OPTIONAL, combinable with each other and with `--by`, and **ANDed** (a path must satisfy every supplied filter); both match against the **full absolute path** and are applied to mutations AND boundaries **BEFORE** the `--by` rollup, so summary/dir/file/timeline and the boundary section all reflect the filtered set (a filter that removes everything yields the normal `no file mutations found`). **Time/turn filters** `--turn-range` (turn index assigned by the §6.4 genuine-user delimiter, shared with `search`) and `--since`/`--until` (a mutation with no timestamp never falls inside a *bounded* window — same rule as §6.2). **No silent truncation:** skipped malformed lines are counted and surfaced.
+**Filtering** is per-mutation. **Path filters** `--regex` / `--glob` are OPTIONAL, combinable with each other and with `--by`, and **ANDed** (a path must satisfy every supplied filter); both match against the **full absolute path** and are applied to mutations AND boundaries **BEFORE** the `--by` rollup, so summary/dir/file/timeline and the boundary section all reflect the filtered set (a filter that removes everything yields the normal `no file mutations found`). **Time/turn filters** `--turn` (turn index assigned by the §6.4 genuine-user delimiter, shared with `search`) and `--since`/`--until` (a mutation with no timestamp never falls inside a *bounded* window — same rule as §6.2). **No silent truncation:** skipped malformed lines are counted and surfaced.
 
-**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then the Edit-before-Read boundary section (if any), then a footer: distinct files + total mutations + boundary count, the active detail level, the turn/time filter context, the Bash-heuristic caveat, and the skipped-line count. Empty result (no mutations AND no boundaries) prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--by timeline` with `{path, op, ts_utc, ts_local, turn_index, line_no, is_create, heuristic}`), then one `{type:"edit_before_read_boundary", path, line_no, turn_index, kind, ts_utc, ts_local, session_id, is_subagent, parent_session_id}` per boundary (in every detail mode), then a trailing summary object `{distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention).
+**Output.** Text groups under a `SESSION <id>` header, then the level-appropriate body, then the Edit-before-Read boundary section (if any), then a footer: distinct files + total mutations + boundary count, the active detail level (`detail=…`), the turn/time filter context (`turn=<SPEC>` when `--turn` is set), the Bash-heuristic caveat, and the skipped-line count. Empty result (no mutations AND no boundaries) prints `no file mutations found`. JSON is one object per emitted unit (bucket / dir / file with the counts + first/last; or per mutation for `--by timeline` with `{path, op, ts_utc, ts_local, turn_index, line_no, is_create, heuristic}`), then one `{type:"edit_before_read_boundary", path, line_no, turn_index, kind, ts_utc, ts_local, session_id, is_subagent, parent_session_id}` per boundary (in every detail mode), then a trailing summary object `{distinct_files, total_mutations, edit_before_read_boundaries, sessions, skipped_lines, detail_level}` (mirrors §6.2's trailing-summary convention; `sessions` = the distinct owning sessions among emitted rows — v0.5). `files` has NO row cap, so the summary deliberately carries NO `dropped_by_cap`.
 
 **Perf shape** is `search`'s: a single forward pass per file (mmap + SIMD newline scan + a pre-JSON mutation byte-prefilter, full parse only on candidate lines), no large-blob retention (extract small `FileMutation` strings, drop the record — never hold `originalFile`/`content`/`structuredPatch`), rayon across files on the default pool (= CPU count).
 
@@ -772,7 +847,7 @@ csift files @<uuid> --format json | jq 'select(.type=="edit_before_read_boundary
 | `--file ABS_PATH` \| `@plan` | string | none | the file to reconstruct (exact raw-string match + basename-suffix fallback); **REQUIRED** for every mode. The magic value `@plan` resolves the session-bound plan file (§6.7.1) and reconstructs it like any other file |
 | `--no-subagents` | bool | spans subagents | restrict to the top-level session; subagent transcripts are spanned by default (OMC fan-out edits happen there). The only span flag. |
 | `--salvage` / `--patches` / `--at WHEN` / `--coverage` (alias `--dry-run`) | clap group `mode` | restore (none set) | the reconstruction mode (mutually exclusive; with NONE set, the default restore mode applies) |
-| `--turn-range N\|A..B\|N..\|-k` | string | none | inclusive 0-based turn window (shared range-token grammar: `N`/`A..B`/`N..`/`..N`/`-k` from the end); INTERSECTS (AND) `--since`/`--until` |
+| `--turn N\|A..B\|N..\|-k` | string | none | inclusive 0-based turn window (shared range-token grammar: `N`/`A..B`/`N..`/`..N`/`-k` from the end); INTERSECTS (AND) `--since`/`--until`. |
 | `--since WHEN` / `--until WHEN` | string | none | time bound (ISO8601 / relative) |
 | `--file-lines N\|A..B\|N..\|-k` | string | none | 1-based inclusive FILE-line span to restrict the reconstructed line space (shared range-token grammar: `N`/`A..B`/`N..`/`..N`/`-k` from the end) |
 | `--out PATH` | path | none | write the reconstructed artifact (snapshot / plan / concatenated patches) verbatim; the summary still prints to stdout |
@@ -856,7 +931,9 @@ csift recover @<uuid> --file @plan          # DUMP the plan's content (this subc
 
 **Chunked output for hook injection (`--slice <N>` / `--window <N>`).** A Claude Code `SessionStart` hook can inject at most **10,000 CHARACTERS** of `additionalContext` (over-cap output is replaced by a file-path + preview, so the body is lost), so a >10K reconstruction must be fanned across several hooks. `--slice <N>` prints ONLY the Nth (1-based) chunk of the verbatim DOCUMENT (the `--out` body — turn units + boundary banners, NO scope/header/footer chrome) after packing its lines greedily into `≤ --window`-CHARACTER chunks. `--window` defaults to 10000 and counts CHARACTERS (Unicode scalars — the unit the cap itself counts, so CJK prose is not 3× over-charged the way bytes would be), hard-splitting any single line longer than the window on a char boundary so no chunk ever exceeds it. Slicing is **deterministic** (same session + `--budget` ⇒ identical chunk boundaries; concatenating slices `1..K` reproduces the document byte-for-byte), so N independent `SessionStart(compact)` hooks each request their own slice and the lock/ordering lives in the hook shell. An out-of-range `N` prints nothing (exit 0); `--slice` is **text-only** and **mutually exclusive with `--out`** and with `--format json`; `--slice 0` or `--window 0` errors. **`--slices <N>` (FIXED-FLEET mode)** pins the chunk COUNT to match a fixed set of N registered `SessionStart` hooks: csift fills the N newest-first slices with WHOLE turns (the per-role 600/900 caps are dropped — a turn is ellipsized only if it ALONE exceeds one window) and DISCARDS the oldest overflow, so the count never drifts to 5/6/7 as the conversation grows (the hook count never needs re-tuning); the realized budget becomes `N × --window` and `--budget` is ignored, with `--slice i` still picking which chunk to print. Without `--slices`, `--slice` keeps its legacy budget-driven, variable-chunk-count behavior. Safe to fire on every compaction — the drop-and-re-inject cycle (the old injection is summarized away pre-boundary while `SessionStart('compact')` re-injects fresh) prevents context pile-up.
 
-**Windowing** matches every sibling: `--turn-range N|A..B|N..|-k` (inclusive, 0-based genuine-user order, the shared range-token grammar — `-3..` = the last 3 turns) INTERSECTS (AND) `--since`/`--until` (ISO8601 / relative). **A target is REQUIRED** — `--budget` applies PER session, so a bare `csift verbatim` (0 targets ⇒ ALL projects everywhere else — `list` alone still SCANS every project but DEFAULT-caps its emitted rows to 50, a non-silent `dropped_by_cap`) would realize budget × every session of every project; it hard-errors with the valid target forms (`@<uuid>`/`@main`/`@<agent-id>`/project path/`--sessions-from`).
+**No-compaction self-diagnosis (v0.5).** `verbatim` restores what a COMPACTION clipped — so on a session with ZERO compaction summaries there was nothing to clip. A non-`--slice` run prints, per such session, a stderr note steering to the right tool: `csift: note: @<id> has no compaction — nothing was clipped; for plain reading use `csift show @<id> --turn <N|A..B|-k..>` (full records, no budget)`. (stdout still carries whatever verbatim reconstructed; the note is advisory.)
+
+**Windowing** matches every sibling: `--turn N|A..B|N..|-k` (inclusive, 0-based genuine-user order, the shared range-token grammar — `-3..` = the last 3 turns) INTERSECTS (AND) `--since`/`--until` (ISO8601 / relative). **A target is REQUIRED** — `--budget` applies PER session, so a bare `csift verbatim` (0 targets ⇒ ALL projects everywhere else — `list` alone still SCANS every project but DEFAULT-caps its emitted rows to 50, a non-silent `dropped_by_cap`) would realize budget × every session of every project; it hard-errors with the valid target forms (`@<uuid>`/`@main`/`@<agent-id>`/project path/`--sessions-from`).
 
 **Example invocations:**
 ```bash
@@ -878,7 +955,7 @@ csift verbatim . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 
 
 **Two addresses, by design.**
 
-- **`#N` — the session handle** (preferred). This is the SAME `[Image #N]` number the model sees and refers to ("re-share #32") — Claude Code renders pasted images as `[Image #N]` text markers, and `image` recovers `N` by positionally zipping a record's markers with its image blocks. So a consumer reading a `[Image #32]` reference (in `verbatim`/`search` output, or in its own context) addresses it directly: `--id 32` (bare digits — a `#`-prefixed `--id` is REJECTED, since unquoted `#` is a shell comment). **`#N` is NOT unique across a session** — CC numbers per-prompt and **reuses** low numbers across prompts (`history.ts`: "unique within a single prompt but not across prompts"). When a `#N` names **>1 distinct image**, `--id N` is **AMBIGUOUS and ERRORS** with the occurrence list — each occurrence's `t<turn>` / `L<line>i<n>` locator / uuid / time / excerpt-around-`[Image #N]` — rather than silently guessing. Disambiguate by the exact locator, or by narrowing scope with `--since`/`--until` (a time window), `--turn-range`, or `--uuid` (each can be **pre-applied** so `#N` is already unique — e.g. `--since 1h` for the last hour). When a record's marker count doesn't match its image count, `#N` is left unset for that record (only the locator addresses it) — never mis-attributed.
+- **`#N` — the session handle** (preferred). This is the SAME `[Image #N]` number the model sees and refers to ("re-share #32") — Claude Code renders pasted images as `[Image #N]` text markers, and `image` recovers `N` by positionally zipping a record's markers with its image blocks. So a consumer reading a `[Image #32]` reference (in `verbatim`/`search` output, or in its own context) addresses it directly: `--id 32` (bare digits — a `#`-prefixed `--id` is REJECTED, since unquoted `#` is a shell comment). **`#N` is NOT unique across a session** — CC numbers per-prompt and **reuses** low numbers across prompts (`history.ts`: "unique within a single prompt but not across prompts"). When a `#N` names **>1 distinct image**, `--id N` is **AMBIGUOUS and ERRORS** with the occurrence list — each occurrence's `t<turn>` / `L<line>i<n>` locator / uuid / time / excerpt-around-`[Image #N]` — rather than silently guessing. Disambiguate by the exact locator, or by narrowing scope with `--since`/`--until` (a time window), `--turn`, or `--uuid` (each can be **pre-applied** so `#N` is already unique — e.g. `--since 1h` for the last hour). When a record's marker count doesn't match its image count, `#N` is left unset for that record (only the locator addresses it) — never mis-attributed.
 - **`L<line>i<n>` — the exact locator** (always unambiguous). The 1-based JSONL line of the carrying record + the 1-based ordinal of the image among that record's image blocks (a direct `Block::Image`, OR an `{type:"image"}` element nested in a `tool_result` content array, counted in document order). Stable because the transcript is append-only, and consistent with the `Lnnnnn` line refs `recover`/`verbatim`/`search` already emit. Use it to pin one specific occurrence regardless of `#N` reuse.
 
 `verbatim` and `search` both surface these ids inline (`[N image(s): #32, #33, …]` under a user turn / as a hit suffix), so an id seen there feeds straight back into `--id`. Default action is to **LIST** (deduped — see Behaviour); `--out <DIR>` switches to **EXTRACT**.
@@ -889,7 +966,7 @@ csift verbatim . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 
 | `[PATH]…` | repeatable positional | all projects | project target(s) (§2.3); a `@<uuid>` positional restricts to one top-level session |
 | `--id ID` | repeatable + comma | none | address images by the handle NUMBER as bare digits (`--id 32,33` — the `#N` the model saw; a `#`-prefixed input errors with "drop the #", because unquoted `#` is a shell comment) or the exact `L<line>i<n>` locator (`--id L6812i1,L6812i2`); without `--out` filters the LISTING, with `--out` selects what to extract. Both forms are per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid> --no-subagents`). An ambiguous handle errors (above) |
 | `--since` / `--until WHEN` | string | none | time bound (ISO8601 or relative `2h`/`3d`, system-local) — narrows the image set, a `#N` disambiguator |
-| `--turn-range N\|A..B\|N..\|-k` | string | none | 0-based inclusive turn window — a per-transcript `#N` disambiguator (shared range-token grammar; turn indices come from the shared §6.4 delimiter) |
+| `--turn N\|A..B\|N..\|-k` | string | none | 0-based inclusive turn window — a per-transcript `#N` disambiguator (shared range-token grammar; turn indices come from the shared §6.4 delimiter). |
 | `--uuid PREFIX` | string | none | restrict to the record whose uuid starts with this — a `#N` disambiguator (the uuid is shown in the ambiguity list / JSON) |
 | `--out PATH` | path | none | EXTRACT. The path's EXTENSION drives the format (the `convert in out.jpg` idiom): a **directory** (or any path with no `png`/`jpg`/`jpeg`/`gif`/`webp` extension) writes each image auto-named `<session-short>[-img<N>]-L<line>i<n>.<ext>` in its SOURCE format; a path WITH one of those extensions writes the **single** selected image to exactly that file, CONVERTING if the format differs (see below). >1 image with a file path is an error. Without `--out`, only LIST |
 | `--no-subagents` | bool | spans subagents | restrict to the top-level session; subagent transcripts are scanned by default (a tool screenshot may live there). The only span flag. |
@@ -901,9 +978,9 @@ csift verbatim . --window 9000 --slices 4 --slice 1  # print the 1st of those 4 
 
 **Text output example** (leads with the `#N` handle when known, else the bare locator):
 ```
-#1    L6802i1  image/png ~440 KB  2026-06-11 10:25:50 AEST (2026-06-11T00:25:50.942Z)
-#2    L6812i1  image/png ~440 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
-#3    L6812i2  image/png ~252 KB  2026-06-11 10:27:10 AEST (2026-06-11T00:27:10.447Z)
+#1    L6802i1  image/png ~440 KB  2026-06-11 10:25:50 AEST(UTC+10)
+#2    L6812i1  image/png ~440 KB  2026-06-11 10:27:10 AEST(UTC+10)
+#3    L6812i2  image/png ~252 KB  2026-06-11 10:27:10 AEST(UTC+10)
 55 image(s) · 3 transcript(s)
 ```
 (A subagent image row is suffixed `  SUBAGENT <hex> · parent <uuid>`.) The **listing/JSON** is one object per image (`handle`, `seq`, `id` [the `L<line>i<n>` locator], `line_no`, `img_index`, `session_id`, `is_subagent`, `parent_session_id`, `source_kind`, `media_type`, `b64_len`, `est_bytes`, `url`, `record_uuid`, `ts_utc`/`ts_local`) + a trailing `{images, transcripts, skipped_lines}` summary. **Extract JSON** carries `path`, `bytes`, `media_type` (output), `source_media_type`, `converted`, and `notes` (the conversion/first-frame warnings).
@@ -930,7 +1007,7 @@ There is NO `pending` subcommand. Three elicitations BLOCK a session on a human 
 
 ### 6.11 `show` — fetch specific record(s) of ONE transcript
 
-`csift show TARGET (--line N|A..B,…)…|(--uuid U,…)…|(--turn N|A..B|-k) [--raw] [--format json]`
+`csift show TARGET (--line N|A..B,…)…|(--uuid U,…)…|(--turn N|A..B|-k) [--raw] [--max-count N] [--format json]`
 
 The reader companion to `search` (search FINDS with match-centered excerpts; show
 FETCHES the records you NAME, full). TARGET resolves to exactly ONE transcript:
@@ -950,35 +1027,50 @@ addressing mode: `--line` (jsonl line), `--uuid` (record uuid), or `--turn` (tur
 - Rendered default: each addressed record FULL through search's per-record pipeline
   (classify → labels, plan pointers, tool pairing, elicitation-sidecar merge; a record
   yields one row per rendered unit). Only `role:user`/`role:assistant` message lines
-  are renderable — a metadata/attachment line misses with an error that points at
-  `--raw`.
+  are renderable — a single-line miss on a metadata/attachment line is an error that
+  points at `--raw`; a line-RANGE covering some non-record lines prints the count note
+  `N line(s) in the addressed range are not records (metadata/attachment — inspect with
+  --raw)` and renders the rest (JSON summary `non_record_lines`).
 - `--raw`: the VERBATIM jsonl line bytes (malformed/torn lines included — that is the
   point; the escape hatch for fields csift does not render). Mutually exclusive with
-  `--format json`; reads the transcript file only (no sidecar merge).
-- Exit law: an explicit `--line N`/`--uuid U` that resolves to nothing = hard error;
-  a range clamps to EOF but errors when it yields zero records.
+  `--format json`; reads the transcript file only (no sidecar merge). Caps by LINE with an
+  equivalent stderr continuation note.
+- Flood guard (v0.5): a default cap of `DEFAULT_SHOW_CAP = 200` record units (open ranges
+  — `--line ..` / `--turn ..` — address a whole transcript) — keep-FIRST; the drop ALWAYS
+  reports the exact continuation: `+N more record unit(s) beyond the 200-unit cap ·
+  continue: csift show @<id> --line A..B  (or --max-count 0 = uncapped)`. `--max-count N`
+  overrides; `--max-count 0` = UNCAPPED (the crate-wide convention).
+- Exit law (v0.5): an explicit `--line N` / `--uuid U` / `--turn N` / `--turn A..B` that
+  resolves to zero records = HARD error naming the domain (a turn miss: `no such turn(s):
+  t99 — the transcript has 2 turn(s) (t0..t1); …`). Open / from-end forms (`N..`, `..N`,
+  `-k`, `..`) CLAMP to the file (tail-peek robustness — `--turn -9..` on a 2-turn session
+  is fine), erroring only when the clamped range still yields nothing. Applies in both
+  rendered and `--raw` modes.
 - JSON: header + `{"kind":"record", …trio…, turn_index, line(null for a sidecar
   record), uuid, label, labels, tool_name, from, to, pairing, tool_use_id, source,
   ts_utc/local, text, image_ids}` rows + summary
-  `{records, skipped_lines, with_elicitation_sidecar}`.
+  `{records, dropped_by_cap, refetch_remainder, non_record_lines, skipped_lines,
+  with_elicitation_sidecar}` (`refetch_remainder` = the `csift show` continuation command
+  when the cap dropped rows, else null).
 
 ### 6.12 `stats` — one-scan aggregates per session
 
-`csift stats [PATH|@…]… [--since W] [--until W] [--turn-range N|A..B|-k] [--max-count N] [--sessions-from F] [--subagents|--no-subagents] [--format json]`
+`csift stats [PATH|@…]… [--since W] [--until W] [--turn N|A..B|-k] [--max-count N] [--sessions-from F] [--subagents|--no-subagents] [--format json]`
 
 Per session (spans subagents by default; each transcript is its own row): physical
 `lines`; `user_records`/`assistant_records`; `turns` (the shared §6.4 grouping);
 `compactions` (isCompactSummary count); first/last timestamps + duration; `tokens`
 per model (summed `message.usage` input/output/cache_read/cache_creation); `tools`
 call counts by tool_use name. `--since`/`--until` bound the COUNTED records (turn
-grouping runs over the windowed set); `--turn-range` windows on the genuine-turn
-axis — indices computed over the FULL transcript (stable), then INTERSECTED (AND)
-with the time window. Text prints per-session blocks + a scope TOTAL
-block when >1 session; JSON is header + `kind:"session"` rows + a summary carrying
+grouping runs over the windowed set); `--turn`
+windows on the genuine-turn axis — indices computed over the FULL transcript (stable),
+then INTERSECTED (AND) with the time window. Text prints per-session blocks + a scope
+TOTAL block when >1 session; JSON is header + `kind:"session"` rows + a summary carrying
 scope totals (`sessions`, `turns`, merged `tools`/`tokens`, `skipped_lines`). One
 fixed shape — no view modes, no tuning flags. `--max-count N` (opt-in, default
 unlimited) bounds an unscoped run's emitted per-session rows to the N most-recently-active,
 reporting the drop (never silent); the scope TOTAL block then covers the shown subset.
+`--max-count 0` = UNCAPPED (the crate-wide convention).
 
 ## 7. Performance design (NON-FUNCTIONAL contract)
 
@@ -1040,7 +1132,7 @@ When stage-2 anchors a prefilter (7d) and the invocation is not an addressing fe
 ### 8.1 Text (default) — LLM/human-readable
 
 - Clear, scannable **session / turn / label / timestamp** headers (examples in §6.1, §6.2).
-- Timestamps: `YYYY-MM-DD HH:MM:SS <TZ> (RAW_UTC_ISO8601)` — system-local timezone + raw UTC, via `jiff` (`TimeZone::system()`; `<TZ>` auto-tracks the detected zone).
+- **Timestamps — one canonical LOCAL form (v0.5):** `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`, e.g. `2026-07-11 15:33:37 AEST(UTC+10)`, `IST(UTC+05:30)`. Derived from the system zone at that instant (DST-correct) via `jiff` (`TimeZone::system()`): the abbreviation + offset are a FORMAT, not a stored value; whole-hour offsets compact (`UTC+10`), fractional zero-padded (`UTC+05:30`), no-abbreviation zones render `(UTC±offset)` alone. `timez::format_timestamp` (seconds) and `format_local_compact` (milliseconds) share the one renderer. **No raw-UTC parenthetical in text** — the machine UTC lives ONLY in JSON (`ts_utc`), per the PAIR LAW below. (The former `… AEST (…Z)` dual form and the bare `…+10:00` form are removed — the UTC copy invited timezone-conversion errors.)
 - Excerpts truncated only with an explicit `… (+N chars)` marker (never silent).
 - Footers state match counts and **dropped counts** (`N dropped` when `--max-count` capped).
 
@@ -1051,19 +1143,33 @@ Every JSON stream is EXACTLY three parts, no exceptions (S==0, `-c`, restore inc
 1. `{"kind":"header","command":"<cmd>", …}` — the FIRST line, always. Span commands add
    `sessions_in_scope`/`top_level_sessions`/`subagent_sessions`; `verbatim` adds its
    budget/automation fields.
-2. Kind-tagged rows — list→`session`, search→`exchange`, show→`record`, stats→`session`,
-   files→`mutation|file|dir|bucket|boundary`, agents→`session`, verbatim→`turn|
+2. Kind-tagged rows — list→`session`, search→`exchange` | `census`, show→`record`,
+   stats→`session`, files→`mutation|file|dir|bucket|boundary`,
+   agents→`session|run|agent` (the v0.5 FLAT shape — one light `session` count row, each
+   workflow `run`, and every subagent as its own `agent` row in tree pre-order; NESTING is
+   text-mode only, rebuilt in JSON from `parent_agent_id`/`depth`; there is NO nested
+   `workflow_runs`/`children` row field, and `--agent` is no exception), verbatim→`turn|
    compaction_boundary|collapsed_agents`, plan→`plan`, image→`image|extract`,
    whoami→`identity`, recover→`coverage|segment|snapshot|restore|boundary`.
-3. `{"kind":"summary", …}` — the LAST line, always (even all-zero counts).
+3. `{"kind":"summary", …}` — the LAST line, always (even all-zero counts). Notable
+   summaries: search `census` mode → `{axis, matched_records, distinct_keys,
+   excluded_records, dropped_by_cap, skipped_lines}`; files → adds `sessions` (distinct
+   owning sessions) but deliberately NO `dropped_by_cap` (files has no cap); show →
+   `{records, dropped_by_cap, refetch_remainder, non_record_lines, skipped_lines,
+   with_elicitation_sidecar}`; agents → `{sessions, runs, agents}`.
 
 One reading idiom serves everything: `jq 'select(.kind=="<row>")'`; the summary is
 `tail -1 | jq`. Vocabulary: `kind` belongs to the envelope EXCLUSIVELY; the jsonl-line
 key is `line` (everywhere; `--file-lines` is the one FILE-line flag); a transcript's
 shape is `shape`; a boundary's what-changed classifier is `cause`; an automation
-pulse's class is its `trigger`. Every spanning row carries the id trio
-(`session_id`/`is_subagent`/`parent_session_id`) and timestamped rows carry
-`ts_utc`+`ts_local`. Whole-stream `json.load` fails by design — parse per line (NDJSON).
+pulse's class is its `trigger`; a tool hit's pairing state is the closed enum `pairing`
+∈ `paired` | `pending` | `orphan` | `null` (non-tool records). Every spanning row carries
+the id trio (`session_id`/`is_subagent`/`parent_session_id`). **Timestamp PAIR LAW:** every
+machine instant is a `_utc`+`_local` PAIR — a record's OWN instant is `ts_utc`+`ts_local`;
+a NAMED instant is `<name>_utc`+`<name>_local` (`first_*`, `last_*`, `trigger_*`,
+`started_*`, `completed_*`, `pending_since_*`). `_utc` is the raw ISO-8601 Z; `_local` is
+the same instant with the system offset. (The text form derives from these but drops the
+UTC copy — §8.1.) Whole-stream `json.load` fails by design — parse per line (NDJSON).
 
 
 ## 9. Non-functional gates & invariants (checklist)
@@ -1075,7 +1181,7 @@ pulse's class is its `trigger`. Every spanning row carries the id trio
 - [ ] **Genuine-user correctness** (the load-bearing rule): excludes tool_result-carriers, `isCompactSummary`, and `isMeta` pseudo-turns; AUQ answers handled per §4.4. Unit-tested against fixtures incl. the `isMeta` case. (§4.1–§4.2)
 - [ ] **Path encoding:** `[^A-Za-z0-9]→'-'`, no collapse, case-preserved; reverse never attempted; target detection real-path-vs-encoded per §2.3. (§2)
 - [ ] **whoami:** env-var-first (`CLAUDE_CODE_SESSION_ID`, exact name), error-with-guidance on absence, **never** mtime/process-walk. (§6.3)
-- [ ] **Timestamps:** system-local timezone + raw UTC everywhere (auto-detected via `TimeZone::system()`). (§8.1)
+- [ ] **Timestamps:** one canonical local text form `<TZAB>(UTC±offset)` (no raw-UTC copy; auto-detected via `TimeZone::system()`); machine UTC only in JSON, paired `_utc`+`_local`. (§8.1, §8.2)
 - [ ] **Example-rich `--help`** for every subcommand (the invocations in §6.1–§6.3 are the baseline). (clap `long_about`/`after_help`)
 - [ ] **Gates green:** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. No crate-level `#![allow(dead_code)]`; the only `#[allow(dead_code)]` is targeted on `model::Record`/`Block` for SPEC-mandated record-shape fields retained for tolerance/completeness (justified inline).
 

@@ -507,12 +507,14 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
 }
 
 fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &View) -> Result<()> {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
-    // envelope v2: header (always) → one kind:"session" row per session (its workflow runs
-    // + built-in agents nested) → summary (always). A single `--agent <hex>` grab emits the
-    // SAME session-wrapped shape (its `agents` array simply holds the one node) — one
-    // consumer code path, no bare-node special case.
+    // envelope v2, FLAT rows (v0.5): header → per session a light `kind:"session"` row
+    // (counts only) → each workflow run as its own `kind:"run"` row followed by its
+    // member `kind:"agent"` rows (tree PRE-ORDER) → the built-in agents (pre-order) →
+    // summary. The tree nests in TEXT mode only; JSON consumers reconstruct it from
+    // `parent_agent_id`/`depth` — so `jq 'select(.kind=="agent")'` addresses every node,
+    // the uniform envelope idiom the old one-giant-session-row shape defeated.
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_header(
@@ -520,7 +522,6 @@ fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &Vie
             serde_json::json!({})
         ))?
     );
-    use std::collections::BTreeMap;
     let mut by_session: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
     for n in nodes {
         by_session
@@ -533,80 +534,102 @@ fn render_json(nodes: &[SubagentNode], workflow_runs: &[WorkflowRun], view: &Vie
         .filter_map(|n| n.workflow_id.as_deref())
         .collect();
 
+    let mut runs_total = 0usize;
     for (session, snodes) in &by_session {
-        let mut runs_json = Vec::new();
-        for run in workflow_runs {
-            if !in_scope_wf.contains(run.run_id.as_str()) {
-                continue;
-            }
-            let children: Vec<_> = snodes
+        let runs: Vec<&WorkflowRun> = workflow_runs
+            .iter()
+            .filter(|r| {
+                in_scope_wf.contains(r.run_id.as_str())
+                    && snodes
+                        .iter()
+                        .any(|n| n.workflow_id.as_deref() == Some(r.run_id.as_str()))
+            })
+            .collect();
+        runs_total += runs.len();
+        let obj = serde_json::json!({
+            "kind": "session",
+            "session_id": session,
+            "runs": runs.len(),
+            "agents": snodes.len(),
+        });
+        println!("{}", serde_json::to_string(&obj)?);
+        for run in &runs {
+            println!(
+                "{}",
+                serde_json::to_string(&workflow_run_json(run, session))?
+            );
+            let members: Vec<&SubagentNode> = snodes
                 .iter()
                 .filter(|n| n.workflow_id.as_deref() == Some(run.run_id.as_str()))
-                .map(|n| node_json(n, view))
+                .copied()
                 .collect();
-            if children.is_empty() {
-                continue;
+            for n in preorder(&members) {
+                println!("{}", serde_json::to_string(&agent_row(n, view))?);
             }
-            runs_json.push(workflow_run_json(run, children));
         }
-        let builtin_nodes: Vec<&SubagentNode> = snodes
+        let builtin: Vec<&SubagentNode> = snodes
             .iter()
             .filter(|n| n.workflow_id.is_none())
             .copied()
             .collect();
-        let builtins = nested_builtin_json(&builtin_nodes, view);
-        let obj = serde_json::json!({
-            "kind": "session",
-            "session_id": session,
-            "workflow_runs": runs_json,
-            "agents": builtins,
-        });
-        println!("{}", serde_json::to_string(&obj)?);
+        for n in preorder(&builtin) {
+            println!("{}", serde_json::to_string(&agent_row(n, view))?);
+        }
     }
     let summary = crate::text::envelope_summary(serde_json::json!({
         "sessions": by_session.len(),
+        "runs": runs_total,
         "agents": nodes.len(),
     }));
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())
 }
 
-/// Built-in agents as nested JSON (tree view): roots (parent absent or out-of-scope) each
-/// carry their sub-subagents under `children`, recursively. Mirrors the text tree's nesting.
-/// Cycle-safe: a forged parent cycle yields no root, so it is simply not emitted.
-fn nested_builtin_json(builtin: &[&SubagentNode], view: &View) -> Vec<serde_json::Value> {
+/// Tree PRE-ORDER over a node set: roots (parent absent or out-of-set) sorted by id,
+/// children sorted by id, depth-first. A node unreachable from any root (a forged
+/// parent cycle) is APPENDED at the end rather than dropped — flat rows must never
+/// lose a node (the old nested shape silently omitted such nodes).
+fn preorder<'a>(nodes: &[&'a SubagentNode]) -> Vec<&'a SubagentNode> {
     use std::collections::{BTreeMap, HashSet};
-    let ids: HashSet<&str> = builtin.iter().map(|n| n.agent_id.as_str()).collect();
-    let mut kids: BTreeMap<&str, Vec<&SubagentNode>> = BTreeMap::new();
-    let mut roots: Vec<&SubagentNode> = Vec::new();
-    for &n in builtin {
+    let ids: HashSet<&str> = nodes.iter().map(|n| n.agent_id.as_str()).collect();
+    let mut kids: BTreeMap<&str, Vec<&'a SubagentNode>> = BTreeMap::new();
+    let mut roots: Vec<&'a SubagentNode> = Vec::new();
+    for &n in nodes {
         match n.parent_agent_id.as_deref() {
             Some(p) if ids.contains(p) => kids.entry(p).or_default().push(n),
             _ => roots.push(n),
         }
     }
     roots.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
-    roots
-        .iter()
-        .map(|n| json_with_kids(n, view, &kids))
-        .collect()
+    let mut out: Vec<&'a SubagentNode> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut stack: Vec<&'a SubagentNode> = roots.into_iter().rev().collect();
+    while let Some(n) = stack.pop() {
+        if !seen.insert(n.agent_id.as_str()) {
+            continue;
+        }
+        out.push(n);
+        if let Some(cs) = kids.get(n.agent_id.as_str()) {
+            let mut cs = cs.clone();
+            cs.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
+            for c in cs.into_iter().rev() {
+                stack.push(c);
+            }
+        }
+    }
+    for &n in nodes {
+        if !seen.contains(n.agent_id.as_str()) {
+            out.push(n);
+        }
+    }
+    out
 }
 
-/// One node's JSON with its sub-subagents embedded under `children` (recursive).
-fn json_with_kids(
-    n: &SubagentNode,
-    view: &View,
-    kids: &std::collections::BTreeMap<&str, Vec<&SubagentNode>>,
-) -> serde_json::Value {
+/// One flat `kind:"agent"` row — [`node_json`] plus the envelope discriminator.
+fn agent_row(n: &SubagentNode, view: &View) -> serde_json::Value {
     let mut v = node_json(n, view);
-    if let Some(cs) = kids.get(n.agent_id.as_str()) {
-        let mut cs = cs.clone();
-        cs.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
-        let arr: Vec<serde_json::Value> =
-            cs.iter().map(|c| json_with_kids(c, view, kids)).collect();
-        if let Some(map) = v.as_object_mut() {
-            map.insert("children".to_string(), serde_json::Value::Array(arr));
-        }
+    if let Some(map) = v.as_object_mut() {
+        map.insert("kind".to_string(), serde_json::json!("agent"));
     }
     v
 }
@@ -684,9 +707,12 @@ fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
     obj
 }
 
-/// A workflow RUN's JSON object with its agents nested under `children`.
-fn workflow_run_json(run: &WorkflowRun, children: Vec<serde_json::Value>) -> serde_json::Value {
+/// A workflow RUN's flat `kind:"run"` row — its member agents follow as their own
+/// `kind:"agent"` rows (no nesting in JSON; `workflow_id` joins them back to the run).
+fn workflow_run_json(run: &WorkflowRun, session_id: &str) -> serde_json::Value {
     serde_json::json!({
+        "kind": "run",
+        "session_id": session_id,
         "run_id": run.run_id,
         "task_id": run.task_id,
         "workflow_name": run.workflow_name,
@@ -700,7 +726,6 @@ fn workflow_run_json(run: &WorkflowRun, children: Vec<serde_json::Value>) -> ser
         // Pair every `_utc` with its system-local companion, matching node_json and every
         // other ts-emission site (the run object was the lone exception with a bare _utc).
         "started_local": run.started_utc.as_deref().and_then(local_iso),
-        "children": children,
     })
 }
 
