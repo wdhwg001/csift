@@ -1,6 +1,6 @@
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.5.2** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.6.0** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -13,7 +13,7 @@ Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Bui
 | read a session's recent turns ("what's it doing now") | `show TARGET --turn -3..` |
 | what record-types live here, and how many | `search "" TARGET --count-by label` |
 | which tools ran, how often (per-record census) | `search "" TARGET --count-by tool` — or `stats` (per-CALL counts) |
-| any pending / unanswered tool calls | `search "" T -t agent.tool.use --count-by pairing` — or `agents` (frozen lanes) |
+| any pending / unanswered tool calls | `search "" T --count-by pairing` (the count) — or `agents` (per-lane detail: which tool, since when, escalation-blocked vs awaiting) |
 | which model(s) produced the replies | `search "" TARGET --count-by model` |
 | hits per turn (a histogram) | `search PATTERN TARGET --count-by turn` |
 | tokens burned · tool totals · turn count · time span | `stats [target…]` |
@@ -45,6 +45,8 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | `--raw` and `--format json` combine | they exclude each other (`--raw` IS machine output: verbatim jsonl lines) |
 | zero matches means your syntax failed | it is a DEFINITIVE absence (exit 0) and search says so on stderr — read the diagnosis; when a `-t` excluded the hits it NAMES the label they live under |
 | a stopped teammate needs TaskStop / pkill | teammates are in-process: `SendMessage` by name with `{"type":"shutdown_request"}` — TaskStop rejects every teammate id form |
+| `completed_utc` = "when it stopped" | non-null ONLY when `status:"completed"` — a frozen/running lane carries null; its tail instant is `last_activity_utc/_local` (every timestamped lane; == `pending_since_utc` when frozen) |
+| the pairing census needs `-t agent.tool.use` | pairing rides the tool BLOCK through the communication views — a frozen `SendMessage` counts as `pending` with no `-t` at all |
 | timestamps need timezone arithmetic | text timestamps are already LOCAL with the offset inline — `2026-07-11 15:33 AEST(UTC+10)`; UTC lives only in JSON `ts_utc` |
 
 ## Five laws (all commands)
@@ -93,7 +95,7 @@ csift search PATTERN [target…] [-t SEL]… [-T SEL]… [-i] [--multiline] [--s
   [--no-truncate] [--resolve-persisted] [--sessions-from F] [--no-subagents] [--format json]
 ```
 Empty `""` pattern = pure filter. A hit returns the complete round-trip (tool_use with its result; user turn with reply; an answered AUQ as one Q+A unit). Terminal modes (mutually exclusive): `-c` prints one integer (EXCHANGES, `--max-count` drops added back) · `-l` prints the distinct owning session uuids, one per line, uncapped — pipes into `--sessions-from -` · `--count-by AXIS` prints a census (below).
-- `--count-by AXIS` — a per-key census of the matched records along ONE closed axis (not a query language): `label` (per leaf; a record counts under every leaf it carries — run with `""` before guessing any `-t`) · `tool` (per tool name) · `turn` (ascending histogram) · `session` (per transcript) · `pairing` (paired | pending | orphan — "any pending tools?" in one command) · `model` (per assistant model). Records outside an axis's domain are excluded and the excluded count is reported.
+- `--count-by AXIS` — a per-key census of the matched RECORDS along ONE closed axis (not a query language; a record whose several sections match still counts once): `label` (per leaf; a record counts under every leaf it carries, so a leaf's number == what `-t <leaf>` surfaces — run with `""` before guessing any `-t`) · `tool` (per tool name) · `turn` (ascending histogram) · `session` (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id; rides the tool block through the communication views, so a frozen SendMessage is `pending` — "any pending tools?" needs no `-t`) · `model` (per assistant model). Records outside an axis's domain are excluded and the excluded count is reported.
 - Excerpts are ~400-char match-centered fragments; when anything clipped, text prints a caution + JSON summary `excerpts_truncated:true`. Full text: `--no-truncate` (also un-clips JSON `excerpt`) or the hit's `refetch`.
 - `--siblings` (zero-arg): also render the turn's other records — messages always, thinking≤2 · tool.use≤3 · tool.result≤3 · harness≤2 per leaf; overflow prints `(+N more · csift show @<id> --line A..B)` — run it verbatim.
 - `--raw`: the matched records' VERBATIM jsonl lines on the whole filter surface — stdout pure jsonl for `jq` (notes → stderr; sidecar-merged hits have no physical line and are omitted with a note). The answer to any unrendered-field question.
@@ -102,7 +104,7 @@ Empty `""` pattern = pure filter. A hit returns the complete round-trip (tool_us
 
 ```bash
 csift search "panic" @<uuid> -t agent --since 6h
-csift search "" @<uuid> -t agent.tool.use --count-by pairing   # any pending tools?
+csift search "" @<uuid> --count-by pairing                     # any pending tools?
 csift search "todo" . -l | csift stats --sessions-from -       # aggregate matching sessions
 csift search "" @<uuid> -t agent -T agent.thinking             # agent role minus thinking
 ```
@@ -235,7 +237,7 @@ Key fields per row (fixture-verified):
 - show `record`: trio + `turn_index, line (null=sidecar), uuid, label, labels[], tool_name, from, to, pairing, tool_use_id, source, ts_utc/local, text (FULL), image_ids[]`. Summary: `records, dropped_by_cap, refetch_remainder, non_record_lines, skipped_lines, with_elicitation_sidecar`.
 - list `session`: trio + `path, cwd, version, git_branch, first_user/last_user/last_agent ({excerpt, ts_utc, ts_local}|null), skipped_lines, pending_elicitations[], sidecar_present, with_elicitation_sidecar`. Summary: `sessions, dropped_by_cap, skipped_lines`.
 - stats `session`: trio + `lines, user_records, assistant_records, turns, compactions, first_utc/local, last_utc/local, tokens{model→{input,output,cache_read,cache_creation}}, tools{name→count}, skipped_lines`. Summary adds scope totals (`tokens`, `tools`, `turns`).
-- agents `session`: `session_id, runs, agents` (counts). `run`: `session_id, run_id, task_id, workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, started_utc/local`. `agent`: `agent_id, shape, parent_session_id, parent_agent_id, depth, workflow_id, agent_type, name, team_name, description, spawn_tool(_use_id), trigger/started/completed_utc+local, duration, status, pending_tool_use_id/tool_name/classification/since_*, skipped_lines, control_hint?` (+ `returned_message(_source)`, `files_changed[]` when requested). Summary: `sessions, runs, agents`.
+- agents `session`: `session_id, runs, agents` (counts). `run`: `session_id, run_id, task_id, workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, started_utc/local`. `agent`: `agent_id, shape, parent_session_id, parent_agent_id, depth, workflow_id, agent_type, name, team_name, description, spawn_tool(_use_id), trigger/started/completed/last_activity_utc+local, duration, status, pending_tool_use_id/tool_name/classification/since_*, skipped_lines — completed_* and duration are non-null ONLY when status=completed; last_activity_* is the tail instant on every timestamped lane (== pending_since_* when frozen), control_hint?` (+ `returned_message(_source)`, `files_changed[]` when requested). Summary: `sessions, runs, agents`.
 - verbatim `turn`: trio + `turn_index, line (null=sidecar), source, role, ts_utc/local, tool_calls, full_chars, rendered_chars, truncated, elided_*, also_in_summary, compactions_before, text (FULL), is_automation (+trigger_kind, task_id, status, event)`; `compaction_boundary`: `line, summary_chars`; `collapsed_agents`: `first_line, last_line, refetch`. Header adds budget + automation split.
 - files rows carry the trio + `path, op, turn_index, line, is_create, heuristic, ts_utc/local` (timeline) or per-op counts + `first/last_utc/local` (grouped); `boundary`: `path, line, turn_index, cause, ts_utc/local`. Summary: `sessions, distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level` (no cap ⇒ no `dropped_by_cap`).
 - whoami `identity`: trio + `depth, path`.
@@ -284,7 +286,7 @@ csift show @U --turn -3..             # the last 3 turns (tail-peek "what's it d
 # what record-types exist before you filter (so an empty -t is never a mystery):
 csift search "" @U --count-by label
 # pending tools / tool frequency / model census — one command each:
-csift search "" @U -t agent.tool.use --count-by pairing
+csift search "" @U --count-by pairing
 csift stats @U --no-subagents          # tool CALL counts + tokens + turns
 csift search "" @U --count-by model
 # any unrendered field of matched records — never hand-parse the file:

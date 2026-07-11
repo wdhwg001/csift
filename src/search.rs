@@ -603,18 +603,45 @@ impl AddressSet {
     }
 }
 
-/// Per-leaf record census of a matched exchange set (GOLD §5): each matched record (one
-/// [`Hit`] per record, richest view) contributes to EVERY leaf in its full label set, so a
-/// leaf's tally is exactly how many records `-t <leaf>` would surface. Returns the per-leaf
-/// counts and the distinct matched-record total. Shared by `--count-by label` and the
-/// zero-hit label probe (so both report the SAME numbers).
+/// Iterate an exchange's hits as RECORD groups. One record can emit SEVERAL hits — one per
+/// matching section (GOLD §3 G4/G5: a batched notification surfaces each section, a
+/// text+tool_use assistant record surfaces both views) — as a run of consecutive hits
+/// sharing a physical jsonl line ([`collect_record_hits`] emits per record, in order). A
+/// sidecar-merged hit has no physical line (`line == 0`) and a sidecar record emits exactly
+/// ONE hit, so it forms its own group. Censuses count RECORDS, never sections — without
+/// this grouping a leaf tally drifted above what `-t <leaf>` surfaces (the documented
+/// invariant), by exactly the multi-section overlap.
+fn record_groups(hits: &[Hit]) -> Vec<&[Hit]> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < hits.len() {
+        let mut j = i + 1;
+        if hits[i].line > 0 {
+            while j < hits.len() && hits[j].line == hits[i].line {
+                j += 1;
+            }
+        }
+        out.push(&hits[i..j]);
+        i = j;
+    }
+    out
+}
+
+/// Per-leaf record census of a matched exchange set (GOLD §5): each matched RECORD (a
+/// multi-section record is grouped by [`record_groups`], never multi-counted) contributes
+/// to EVERY leaf in its full label set, so a leaf's tally is exactly how many records
+/// `-t <leaf>` would surface. Returns the per-leaf counts and the distinct matched-record
+/// total. Shared by `--count-by label` and the zero-hit label probe (so both report the
+/// SAME numbers).
 fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize) {
     let mut counts: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut records = 0usize;
     for ex in exchanges {
-        for h in &ex.hits {
+        for group in record_groups(&ex.hits) {
             records += 1;
-            for &leaf in &h.labels {
+            // The label set is per-RECORD (classify output), identical across the
+            // record's section hits — read it off the first.
+            for &leaf in &group[0].labels {
                 *counts.entry(leaf).or_insert(0) += 1;
             }
         }
@@ -626,10 +653,12 @@ fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize
 /// `label` multi-counts (every leaf a record carries; exactly [`label_census`]'s numbers);
 /// every other axis counts each matched record ONCE under its single key, and records
 /// OUTSIDE the axis's domain (no tool name / no pairing / no model) are excluded AND
-/// tallied so the caller can report them (no silent drop). Returns the rows already in
-/// output order — `turn` ascending on (transcript, turn index) so it reads as a histogram,
-/// every other axis richest-count first — plus the matched-record total and the excluded
-/// count.
+/// tallied so the caller can report them (no silent drop). A multi-section record is ONE
+/// record ([`record_groups`]); its axis value is the first `Some` among its section hits
+/// (the tool.use view carries the tool/pairing its sibling message-view hit does not).
+/// Returns the rows already in output order — `turn` ascending on (transcript, turn index)
+/// so it reads as a histogram, every other axis richest-count first — plus the
+/// matched-record total and the excluded count.
 fn axis_census(
     exchanges: &[Exchange],
     axis: crate::cli::CountAxis,
@@ -641,16 +670,16 @@ fn axis_census(
     let mut records = 0usize;
     let mut excluded = 0usize;
     for ex in exchanges {
-        for h in &ex.hits {
+        for group in record_groups(&ex.hits) {
             records += 1;
             match axis {
                 A::Label => {
-                    for &leaf in &h.labels {
+                    for &leaf in &group[0].labels {
                         *counts.entry(leaf.to_string()).or_insert(0) += 1;
                     }
                 }
-                A::Tool => match &h.tool_name {
-                    Some(t) => *counts.entry(t.clone()).or_insert(0) += 1,
+                A::Tool => match group.iter().find_map(|h| h.tool_name.clone()) {
+                    Some(t) => *counts.entry(t).or_insert(0) += 1,
                     None => excluded += 1,
                 },
                 A::Turn => {
@@ -659,7 +688,7 @@ fn axis_census(
                         .or_insert(0) += 1;
                 }
                 A::Session => *counts.entry(ex.session_id.clone()).or_insert(0) += 1,
-                A::Pairing => match h.pair {
+                A::Pairing => match group.iter().find_map(|h| h.pair) {
                     Some(Pairing::Paired) => *counts.entry("paired".to_string()).or_insert(0) += 1,
                     Some(Pairing::PendingNoResult) => {
                         *counts.entry("pending".to_string()).or_insert(0) += 1;
@@ -669,8 +698,8 @@ fn axis_census(
                     }
                     None => excluded += 1,
                 },
-                A::Model => match &h.model {
-                    Some(m) => *counts.entry(m.clone()).or_insert(0) += 1,
+                A::Model => match group.iter().find_map(|h| h.model.clone()) {
+                    Some(m) => *counts.entry(m).or_insert(0) += 1,
                     None => excluded += 1,
                 },
             }
@@ -1868,21 +1897,30 @@ fn tool_pair_ids(records: &[Kept]) -> (HashSet<String>, HashSet<String>) {
     (uses, results)
 }
 
-/// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7): an
-/// `agent.tool.use` is paired iff its result-id is present (else pending — frozen / elicitation /
-/// unreturned); an `agent.tool.result` is paired iff its use-id is present (else orphan —
-/// compacted / sliced away). A non-tool hit (or one with no id) is left `None`.
+/// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7). Pairing is a
+/// property of the underlying tool_use/tool_result BLOCK, so it rides EVERY view of that
+/// block — the plain `agent.tool.*` views AND the communication views that supersede them
+/// under the richest-view law (a SendMessage/spawn `agent.communication.sent`/`.signal`
+/// rides a tool_use block; a subagent-return `agent.communication.inbox` rides a
+/// tool_result block). Without this, a FROZEN SendMessage (the dominant stuck-lane shape
+/// in a teams session) fell outside the `pairing` census whenever its comm view won the
+/// dedup. A use-side hit is paired iff its result-id is present (else pending — frozen /
+/// elicitation / unreturned); a result-side hit is paired iff its use-id is present (else
+/// orphan — compacted / sliced away). A hit with no `tool_use_id` (a record-text unit:
+/// an inbound teammate-message, an idle signal section) stays `None` — outside the axis.
 fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &HashSet<String>) {
     let Some(id) = h.tool_use_id.as_deref() else {
         return;
     };
     h.pair = match h.class {
-        Class::AgentToolUse => Some(if result_ids.contains(id) {
-            Pairing::Paired
-        } else {
-            Pairing::PendingNoResult
-        }),
-        Class::AgentToolResult => Some(if use_ids.contains(id) {
+        Class::AgentToolUse | Class::CommSent | Class::CommSignal => {
+            Some(if result_ids.contains(id) {
+                Pairing::Paired
+            } else {
+                Pairing::PendingNoResult
+            })
+        }
+        Class::AgentToolResult | Class::CommInbox => Some(if use_ids.contains(id) {
             Pairing::Paired
         } else {
             Pairing::OrphanResult

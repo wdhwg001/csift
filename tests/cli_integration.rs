@@ -749,6 +749,116 @@ fn search_count_by_label_censuses_the_scope() {
 }
 
 #[test]
+fn search_census_counts_records_not_sections_and_pairing_rides_comm_views() {
+    // Two census laws in one fixture. (1) A record that emits SEVERAL section hits (here an
+    // assistant record carrying a text block AND a tool_use block) is ONE record to every
+    // census — a leaf's tally must equal what `-t <leaf>` surfaces, never drift above it by
+    // the multi-section overlap. (2) Pairing is a property of the underlying tool block, so
+    // it rides the communication view too: a SendMessage with no tool_result is `pending`
+    // even though its richest view is agent.communication.sent — the "anything stuck?"
+    // census needs no `-t` at all.
+    let enc = "-Users-testuser-Projects-census";
+    let sess = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-26T09:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-26T09:01:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"scanning now"},{"type":"tool_use","id":"toolu_c1","name":"Bash","input":{"command":"ls"}}]}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"u2","timestamp":"2026-06-26T09:02:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_c1","content":"ok"}]}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-26T09:03:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_c2","name":"SendMessage","input":{"to":"peer","message":{"type":"message","content":"ping"}}}]}}"#,
+            "\n",
+        ),
+    );
+    let target = format!("@{sess}");
+    let census = |args: &[&str]| -> (Vec<serde_json::Value>, serde_json::Value) {
+        let mut full = vec!["search", "", target.as_str()];
+        full.extend_from_slice(args);
+        full.extend_from_slice(&["--format", "json"]);
+        let out = h.run(&full);
+        assert!(out.success, "stderr: {}", out.stderr);
+        (json_rows(&out.stdout, "census"), json_summary(&out.stdout))
+    };
+
+    // Label census: the text+tool_use record counts ONCE under each of its leaves.
+    let (rows, summary) = census(&["--count-by", "label"]);
+    let count = |key: &str| -> u64 {
+        rows.iter()
+            .find(|r| r["key"] == key)
+            .map_or(0, |r| r["records"].as_u64().unwrap())
+    };
+    assert_eq!(count("agent.message"), 1, "rows: {rows:?}");
+    // The text+tool record AND the SendMessage record both carry agent.tool.use.
+    assert_eq!(count("agent.tool.use"), 2, "rows: {rows:?}");
+    assert_eq!(count("agent.communication.sent"), 1, "rows: {rows:?}");
+    // 4 RECORDS in scope (opener, text+tool, result, send) — the multi-section record
+    // must not inflate the total.
+    assert_eq!(summary["matched_records"], 4, "summary: {summary}");
+
+    // Pairing census, NO -t: the returned Bash is paired, the unreturned SendMessage is
+    // pending (via its comm view), the genuine opener is outside the axis and reported.
+    let (rows, summary) = census(&["--count-by", "pairing"]);
+    let count = |key: &str| -> u64 {
+        rows.iter()
+            .find(|r| r["key"] == key)
+            .map_or(0, |r| r["records"].as_u64().unwrap())
+    };
+    assert_eq!(count("paired"), 2, "use+result both paired: {rows:?}");
+    assert_eq!(count("pending"), 1, "the frozen SendMessage: {rows:?}");
+    assert_eq!(summary["excluded_records"], 1, "the opener: {summary}");
+
+    // The comm selector agrees — the send is IN the pairing domain now, not excluded.
+    let (rows, summary) = census(&["-t", "agent.communication.sent", "--count-by", "pairing"]);
+    assert_eq!(rows.len(), 1, "rows: {rows:?}");
+    assert_eq!(rows[0]["key"], "pending");
+    assert_eq!(summary["excluded_records"], 0, "summary: {summary}");
+}
+
+#[test]
+fn show_bad_flag_error_names_the_flag_not_the_target() {
+    // A mistyped/foreign flag on `show` must be blamed BY NAME in any position — never the
+    // user's perfectly valid target (the misattribution sent a real consumer down a
+    // targeting-grammar rabbit hole). Same error family as every sibling command.
+    let h = populated_home();
+    let sess = format!("@{SESS}");
+    for argv in [
+        vec!["show", &sess, "--line", "1", "--no-truncate"], // flag after target
+        vec!["show", "--no-truncate", &sess, "--line", "1"], // flag before target
+        vec!["show", &sess, "--bogus-flag"],                 // fully invented flag
+    ] {
+        let out = h.run(&argv);
+        assert!(!out.success, "must fail: {argv:?}");
+        let flag = if argv.contains(&"--bogus-flag") {
+            "--bogus-flag"
+        } else {
+            "--no-truncate"
+        };
+        assert!(
+            out.stderr.contains(flag) && out.stderr.contains("did you mistype a flag"),
+            "error must name {flag}: {}",
+            out.stderr
+        );
+        assert!(
+            !out.stderr
+                .contains(&format!("unexpected argument '{sess}'")),
+            "must not blame the valid target: {}",
+            out.stderr
+        );
+    }
+    // Two targets: a pointed arity error (addresses are per-FILE), not a clap surplus.
+    let out = h.run(&["show", &sess, "@1234abcd", "--line", "1"]);
+    assert!(!out.success);
+    assert!(
+        out.stderr.contains("exactly ONE transcript"),
+        "arity error: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn search_count_by_other_axes() {
     let h = populated_home();
 
@@ -4486,11 +4596,30 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
         node["pending_tool_use_id"],
         "toolu_0137gHdLDnXKsa94qGmmnbqV"
     );
-    // Text surfaces the disambiguation prominently.
+    // completed_* is STATUS-GATED: a frozen lane carries no completion instant (the naive
+    // `if completed_utc: done` consumer must not false-positive); its tail ts lives in
+    // last_activity_* and equals the freeze instant.
+    assert!(
+        node["completed_utc"].is_null() && node["completed_local"].is_null(),
+        "a frozen lane must not carry a completion instant: {node}"
+    );
+    assert!(
+        node["duration"].is_null(),
+        "no duration while frozen: {node}"
+    );
+    assert_eq!(node["last_activity_utc"], "2026-06-26T10:43:31.906Z");
+    assert_eq!(node["last_activity_utc"], node["pending_since_utc"]);
+    // Text surfaces the disambiguation prominently — and no "completed"/"last-seen" line
+    // (the PENDING line already carries the freeze instant).
     let txt = h.run(&["agents", &format!("@{sess}")]);
     assert!(
         txt.stdout.contains("PENDING") && txt.stdout.contains("escalation-blocked"),
         "no pending line: {}",
+        txt.stdout
+    );
+    assert!(
+        !txt.stdout.contains("completed  2026") && !txt.stdout.contains("last-seen"),
+        "frozen lane must not print a terminal-instant line: {}",
         txt.stdout
     );
 
@@ -4510,6 +4639,55 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     assert!(
         node2["pending_classification"].is_null(),
         "resolved lane must not be pending: {node2}"
+    );
+    // Completed lane: completion instant present and == last activity.
+    assert_eq!(node2["completed_utc"], "2026-06-26T11:21:00.000Z");
+    assert_eq!(node2["last_activity_utc"], node2["completed_utc"]);
+}
+
+#[test]
+fn agents_running_not_frozen_prints_last_seen_not_completed() {
+    // A lane whose NEWEST meaningful record is a returned tool_result with NO closing
+    // assistant text: not frozen (nothing pending), not completed (no terminal message) —
+    // the honest middle. Its tail instant must surface as last_activity/"last-seen",
+    // NEVER as a fabricated completion.
+    let enc = "-Users-testuser-Projects-midflight";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let hex = "beef4c5868015a8be";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-26T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"beef4c5868015a8be","timestamp":"2026-06-26T10:00:00.000Z","message":{"role":"user","content":"scan"}}"#,
+            "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-26T10:01:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_mid1","name":"Bash","input":{"command":"ls"}}]}}"#,
+            "\n",
+            r#"{"type":"user","timestamp":"2026-06-26T10:02:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_mid1","content":"ok"}]}}"#,
+            "\n",
+        ),
+    );
+    let out = h.run(&["agents", &format!("@{sess}"), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let node = json_rows(&out.stdout, "agent")
+        .into_iter()
+        .find(|n| n["agent_id"] == hex)
+        .expect("the subagent row");
+    assert_eq!(node["status"], "running", "honest middle: {node}");
+    assert!(node["pending_classification"].is_null(), "{node}");
+    assert!(
+        node["completed_utc"].is_null() && node["duration"].is_null(),
+        "running lane must not claim completion: {node}"
+    );
+    assert_eq!(node["last_activity_utc"], "2026-06-26T10:02:00.000Z");
+    let txt = h.run(&["agents", &format!("@{sess}")]);
+    assert!(
+        txt.stdout.contains("last-seen") && !txt.stdout.contains("completed  2026"),
+        "text must print last-seen, not completed: {}",
+        txt.stdout
     );
 }
 

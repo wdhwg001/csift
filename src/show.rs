@@ -179,7 +179,22 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
         .map(|s| crate::text::parse_range_spec(s, "--turn", false))
         .transpose()?;
 
-    let file = resolve_single_transcript(&args.target)?;
+    // The clap-side Vec is an error-attribution device (see `ShowArgs::target`); the
+    // command contract is still exactly ONE transcript per call.
+    let target = match args.target.as_slice() {
+        [one] => one,
+        many => bail!(
+            "show reads exactly ONE transcript per call; got {} targets: {} — record \
+             addresses (`--line`/`--uuid`/`--turn`) are per-FILE, so fetch each \
+             transcript with its own `csift show` call",
+            many.len(),
+            many.iter()
+                .map(|p| format!("'{}'", p.display()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+    let file = resolve_single_transcript(target)?;
     if parsed.is_empty() && uuids.is_empty() && turn_spec.is_none() {
         bail!(
             "show needs an address: `--line <N|A..B|N..|-k>` (1-based jsonl lines, the `Lnnnn` \

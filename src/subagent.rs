@@ -1164,7 +1164,16 @@ pub struct SubagentNode {
     pub trigger_utc: Option<String>,
     /// Child transcript HEAD ts (the lagging secondary "when").
     pub started_utc: Option<String>,
+    /// The COMPLETION instant — populated ONLY when `status == Completed`. A frozen /
+    /// running / unknown lane carries `None` here: its tail ts is a freeze or
+    /// last-activity instant, NOT a completion, and a consumer doing the name-driven
+    /// thing (`if completed_utc: treat as done`) must not get a false positive (the
+    /// text tree suppressed the misleading "completed" line long before the JSON did).
     pub completed_utc: Option<String>,
+    /// Tail newest-record ts — the lane's LAST-ACTIVITY instant, present whenever the
+    /// transcript has any timestamp regardless of status. Equals `completed_utc` on a
+    /// completed lane; on a frozen lane it equals `pending_since_utc`.
+    pub last_activity_utc: Option<String>,
     /// The subagent's returned message (§3), resolved 3-ways. `None` when unresolved.
     pub returned_message: Option<String>,
     pub returned_message_source: Option<ReturnedMsgSource>,
@@ -1474,7 +1483,12 @@ fn node_for(
         description,
         trigger_utc,
         started_utc: lc.started_utc.clone(),
-        completed_utc: lc.completed_utc.clone(),
+        // The lifecycle's `completed_utc` is the raw tail ts; it is a COMPLETION only
+        // when the status resolved Completed — otherwise it is last-activity.
+        completed_utc: (lc.status == SubagentStatus::Completed)
+            .then(|| lc.completed_utc.clone())
+            .flatten(),
+        last_activity_utc: lc.completed_utc.clone(),
         returned_message,
         returned_message_source,
         status: lc.status,

@@ -211,7 +211,13 @@ fn window_admits(node: &SubagentNode, window: &TimeWindow, axis: AgentTimeAxis) 
     let ts = match axis {
         AgentTimeAxis::Trigger => node.trigger_utc.as_deref(),
         AgentTimeAxis::Start => node.started_utc.as_deref(),
-        AgentTimeAxis::Completion => node.completed_utc.as_deref(),
+        // The completion axis windows on the lane's TERMINAL instant — the tail
+        // newest-record ts (== the completion instant on a completed lane, the
+        // freeze/last-activity instant otherwise), exactly the long-documented
+        // "--order-by completion = the last record's ts". `completed_utc` itself is
+        // status-gated (None unless Completed), which would silently drop every
+        // frozen lane from a bounded window — the one shape a monitor asks about.
+        AgentTimeAxis::Completion => node.last_activity_utc.as_deref(),
     };
     window.contains(ts)
 }
@@ -469,9 +475,12 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         "{ind2}started    {}",
         format_timestamp(n.started_utc.as_deref())
     );
-    // A frozen lane is not completed — its last-record ts is the freeze instant, already shown on
-    // the PENDING line as "frozen since". Suppress the misleading "completed"/"duration" lines.
-    if n.pending_classification.is_none() {
+    // Truthful terminal line: only a COMPLETED lane prints "completed" (+ duration) —
+    // `completed_utc` is status-gated at the node, so presence == completion. A frozen
+    // lane's tail instant is already on the PENDING line as "frozen since"; any other
+    // non-completed lane (running-not-frozen / unknown) prints the tail ts as
+    // "last-seen" so the instant is never lost and never mislabeled.
+    if n.completed_utc.is_some() {
         println!(
             "{ind2}completed  {}",
             format_timestamp(n.completed_utc.as_deref())
@@ -479,6 +488,11 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         if let Some(dur) = duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()) {
             println!("{ind2}duration   {dur}");
         }
+    } else if n.pending_classification.is_none() {
+        println!(
+            "{ind2}last-seen  {}",
+            format_timestamp(n.last_activity_utc.as_deref())
+        );
     }
     if view.want_returned {
         if let (Some(msg), Some(src)) = (&n.returned_message, n.returned_message_source) {
@@ -656,8 +670,13 @@ fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "trigger_local": n.trigger_utc.as_deref().and_then(local_iso),
         "started_utc": n.started_utc,
         "started_local": n.started_utc.as_deref().and_then(local_iso),
+        // Status-gated: non-null ONLY when `status` is `completed` (a frozen/running
+        // lane's tail ts is NOT a completion — it lives in `last_activity_*` below,
+        // and on a frozen lane also in `pending_since_*`).
         "completed_utc": n.completed_utc,
         "completed_local": n.completed_utc.as_deref().and_then(local_iso),
+        "last_activity_utc": n.last_activity_utc,
+        "last_activity_local": n.last_activity_utc.as_deref().and_then(local_iso),
         "duration": duration_label(n.trigger_utc.as_deref(), n.completed_utc.as_deref()),
         "status": n.status.label(),
         "pending_tool_use_id": n.pending_tool_use_id,
@@ -783,6 +802,7 @@ mod tests {
             trigger_utc: trigger.map(str::to_string),
             started_utc: start.map(str::to_string),
             completed_utc: complete.map(str::to_string),
+            last_activity_utc: complete.map(str::to_string),
             returned_message: None,
             returned_message_source: None,
             status: SubagentStatus::Completed,

@@ -293,7 +293,15 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
                     i += 1;
                 }
             } else {
-                // A boolean long flag (or an unknown `--x`): no paired value.
+                // A boolean long flag (or an unknown `--x`): no paired value. An unknown
+                // long is deliberately hoisted WITH the declared ones: on a command whose
+                // first positional refuses hyphen values (`search` PATTERN) clap then
+                // reports it as an unknown flag WITH a did-you-mean tip (the old-spelling
+                // recovery path, e.g. `--turn-range` → `--turn`), and on every
+                // target-taking command the `allow_hyphen_values` PATH/TARGET Vec absorbs
+                // it into `parse_project_target`, which rejects it BY NAME ("did you
+                // mistype a flag?"). Correct attribution in both regimes — see
+                // `ShowArgs::target` for why show's TARGET must be a Vec for this.
                 flags.push(tok.clone());
                 i += 1;
             }
@@ -977,11 +985,12 @@ impl ListArgs {
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
-        record_uuids:[…], hits:[{label, labels:[…], line, uuid, excerpt, tool_name, from, to, \
-        ts_utc, ts_local, refetch}, …]} — `label` is the matched dotted path, `labels` the \
-        record's full label set, `from`/`to` the comm direction when the hit is \
-        `agent.communication.*`, and `refetch` is the ready-to-run `csift show` command addressed \
-        at the RIGHT id (run it verbatim). With `--count-by <axis>` the rows are `census` \
+        record_uuids:[…], hits:[{label, labels:[…], line, uuid, excerpt, tool_name, pairing, \
+        from, to, ts_utc, ts_local, refetch}, …]} — `label` is the matched dotted path, `labels` \
+        the record's full label set, `pairing` the tool_use↔tool_result join state \
+        (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
+        when the hit is `agent.communication.*`, and `refetch` is the ready-to-run `csift show` \
+        command addressed at the RIGHT id (run it verbatim). With `--count-by <axis>` the rows are `census` \
         objects instead. The \
         per-hit objects carry no session_id; it lives on the envelope. With `--siblings`, the \
         envelope also carries a `siblings:[…]` array (same per-hit shape) for the turn's \
@@ -1145,17 +1154,21 @@ pub struct SearchArgs {
     pub sessions_with_matches: bool,
 
     /// Print ONLY a census of the matched records along ONE fixed axis — `<count> <key>`,
-    /// one key per line. Axes (a CLOSED set, not a query language): `label` (per
+    /// one key per line. Every axis counts RECORDS (a record whose several sections match
+    /// still counts once). Axes (a CLOSED set, not a query language): `label` (per
     /// role.class.sub leaf; a record counts under EVERY leaf it carries, so a leaf's number
     /// is exactly how many records `-t <leaf>` would surface — the exploration on-ramp:
     /// run `csift search "" <target> --count-by label` BEFORE you guess a `-t`) · `tool`
     /// (per tool name) · `turn` (per turn, ASCENDING turn order — a histogram) · `session`
-    /// (per transcript) · `pairing` (paired | pending | orphan — "any pending tools?" is
-    /// `csift search "" <t> -t agent.tool.use --count-by pairing`) · `model` (per assistant
-    /// model). Records outside an axis's domain (no tool name / no pairing / no model) are
-    /// excluded AND the excluded count is reported — never silently. Honors
-    /// `-t`/`-T`/time/turn/scope; empty pattern = whole-scope census. JSON: `census` rows
-    /// (`axis`/`key`/`records`) + a summary.
+    /// (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id;
+    /// covers every record riding a tool_use/tool_result block INCLUDING the
+    /// SendMessage/spawn/subagent-return communication views, so "any pending tools?" is
+    /// just `csift search "" <t> --count-by pairing` — a frozen SendMessage counts as
+    /// pending under any selector) · `model` (per assistant model). Records outside an
+    /// axis's domain (no tool name / no pairing / no model) are excluded AND the excluded
+    /// count is reported — never silently. Honors `-t`/`-T`/time/turn/scope; empty
+    /// pattern = whole-scope census. JSON: `census` rows (`axis`/`key`/`records`) + a
+    /// summary.
     #[arg(
         long = "count-by",
         value_enum,
@@ -1277,8 +1290,14 @@ impl SearchArgs {
 )]
 pub struct ShowArgs {
     /// ONE transcript: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | a `*.jsonl` path.
-    #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true)]
-    pub target: std::path::PathBuf,
+    // Declared as a Vec DELIBERATELY (the run handler enforces exactly-one): a single
+    // non-Vec positional with `allow_hyphen_values` makes clap consume a mistyped
+    // long flag AS the target and report the user's VALID target as the surplus
+    // "unexpected argument" — the wrong-hypothesis rabbit hole. The Vec absorbs the
+    // bad token instead, so `parse_project_target` rejects it BY NAME with the same
+    // "did you mistype a flag?" error every sibling command gives.
+    #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true, required = true, num_args = 1..)]
+    pub target: Vec<std::path::PathBuf>,
 
     /// 1-based jsonl line(s) in the shared range grammar: `N` · `A..B` · `N..` · `..N` · `-k` from the end (`-20..` = last 20), repeatable / comma-joined
     /// (`--line 87,495..500,992`).
@@ -1456,7 +1475,9 @@ pub enum AgentKindFilter {
         `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
         timezone) filter to subagents whose TRIGGER time (the parent tool_use ts — the \
         true spawn instant) falls in the window by default; `--order-by start` uses the \
-        transcript's first-record ts, `--order-by completion` the last.\n\n\
+        transcript's first-record ts, `--order-by completion` the last (the lane's \
+        TERMINAL instant, `last_activity_utc` — so a frozen lane windows on its freeze \
+        instant rather than vanishing from a bounded window for never completing).\n\n\
         TOPOLOGY: the TEXT output is ALWAYS the parent→child tree — workflow runs as \
         parent nodes of their agents, and a nested sub-subagent under its spawning agent \
         (indented by depth). JSON emits the SAME topology as FLAT kind-tagged rows (one \
@@ -1510,9 +1531,13 @@ pub enum AgentKindFilter {
         {kind:\"summary\", sessions, runs, agents} terminator. Agent-row fields: {agent_id, \
         shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \
         workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
-        started_utc/_local, completed_utc/_local, duration, depth, status, \
-        pending_tool_use_id, pending_tool_name, pending_classification, \
+        started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
+        depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
         pending_since_utc/_local, skipped_lines} (+ control_hint on a teammate; \
+        completed_utc/_local and duration are non-null ONLY when status is `completed` — \
+        a frozen/running lane is NOT done, and its tail instant lives in \
+        last_activity_utc/_local, which every timestamped lane carries (on a frozen lane \
+        it equals pending_since_utc); \
         `--with-files` adds `files_changed`; `--returned-message`, implied by a single \
         `--agent`, adds `returned_message` + `returned_message_source`). `agent_type` is \
         the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`) — \

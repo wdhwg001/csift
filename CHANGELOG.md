@@ -5,6 +5,21 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.0] - 2026-07-12
+
+- **Breaking (agents JSON):** `completed_utc/_local` (+ `duration`) are
+  non-null ONLY when `status == "completed"` (a frozen lane is never "done");
+  every timestamped lane gains the `last_activity_utc/_local` pair (the tail
+  newest-record instant).
+- `show`'s TARGET is a Vec so a mistyped or foreign `--flag` is rejected BY
+  NAME instead of being consumed as the target; two real targets get a
+  pointed one-transcript arity error.
+- Censuses count RECORDS, not per-section hits — a leaf tally now equals
+  exactly what `-t <leaf>` surfaces.
+- `pairing` rides the tool BLOCK through the communication views: a frozen
+  SendMessage is `pending` under ANY selector ("any pending tools?" needs no
+  `-t`).
+
 ## [0.5.2] - 2026-07-11
 
 - `search --help`'s COUNT section says the `-c` integer is the EXCHANGE total
