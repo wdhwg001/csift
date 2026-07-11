@@ -5,6 +5,13 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.4.1] - 2026-07-11
+
+- Version + tag discipline codified: `Cargo.toml` ≡ SKILL surface header ≡
+  `csift --version` move together in the same commit; every release gets an
+  annotated `vX.Y.Z` tag; `--help` text is release surface. This release
+  bumps for the v0.4 round's `--help` corrections.
+
 ## [0.4.0] - 2026-07-11
 
 Breaking rework, zero backcompat.
