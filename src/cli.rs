@@ -615,14 +615,16 @@ impl ImageOutFormat {
         `SUBAGENT <hex> · parent SESSION <uuid>` (a bare hex is NOT a re-feedable target — \
         re-feed the parent uuid), and a top-level row keeps the plain `SESSION <uuid>` header.\n\n\
         JSON SCHEMA (per --format json)\n  \
-          One BARE object per session (JSONL — one record per line, no envelope): \
-        {session_id, is_subagent, parent_session_id, path, cwd, git_branch, version, \
-        first_user, last_user, last_agent, skipped_lines}. `is_subagent` flags a bare-hex \
-        subagent row; `parent_session_id` is the re-feedable owning uuid (= session_id for a \
-        top-level row) — never re-feed a subagent `session_id`. The \
-        `first_user`/`last_user`/`last_agent` fields are {excerpt, ts_utc, ts_local} \
-        sub-objects (or null when absent). UNLIKE search/files/recover/verbatim, this stream has \
-        NO trailing terminator object — it is pure JSONL, end-of-stream = EOF."
+          The standard envelope v2 (same as every command): a `{kind:\"header\", \
+        command:\"list\", sessions_in_scope, top_level_sessions, subagent_sessions}` line, then \
+        ONE `{kind:\"session\", …}` row per session — {session_id, is_subagent, \
+        parent_session_id, path, cwd, git_branch, version, first_user, last_user, last_agent, \
+        skipped_lines} — then a closing `{kind:\"summary\", sessions, skipped_lines, \
+        dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
+        the re-feedable owning uuid (= session_id for a top-level row) — never re-feed a \
+        subagent `session_id`. The `first_user`/`last_user`/`last_agent` fields are {excerpt, \
+        ts_utc, ts_local} sub-objects (or null when absent). `dropped_by_cap` > 0 when the \
+        unscoped-flood cap trimmed rows (the most-recent 50 are kept)."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, a direct
@@ -946,11 +948,11 @@ pub struct SearchArgs {
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
+    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1104,7 +1106,7 @@ pub struct ShowArgs {
     #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true)]
     pub target: std::path::PathBuf,
 
-    /// 1-based jsonl line(s) in the shared range grammar: `N` · `A..B` · `N..` · `-k` from the end (`-20..` = last 20), repeatable / comma-joined
+    /// 1-based jsonl line(s) in the shared range grammar: `N` · `A..B` · `N..` · `..N` · `-k` from the end (`-20..` = last 20), repeatable / comma-joined
     /// (`--line 87,495..500,992`).
     #[arg(
         long,
@@ -1321,8 +1323,9 @@ pub enum AgentKindFilter {
         status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, \
         started_utc, started_local, children}. Every `_utc` field carries a paired `_local` \
         (system-local ISO). The malformed-line count rides on each node's `skipped_lines`. \
-        UNLIKE search/files/recover/verbatim, this stream has NO trailing terminator object — it \
-        is pure JSONL, end-of-stream = EOF."
+        The stream is the standard envelope v2: a leading `{kind:\"header\", …}` line, the \
+        `{kind:\"session\", …}` topology rows, and a closing `{kind:\"summary\", agents, sessions}` \
+        terminator (same shape as every command)."
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an
@@ -1630,11 +1633,11 @@ pub struct FilesArgs {
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
+    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1860,11 +1863,11 @@ pub struct RecoverArgs {
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
+    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
@@ -1957,8 +1960,8 @@ impl RecoverArgs {
     after_help = "EXAMPLES\n  \
           csift image @<uuid>                             # list every image (deduped)\n  \
           csift image . --format json                     # machine-readable listing\n  \
-          csift image @<uuid> --no-subagents --id '#32,#33,#34,#36' --out /tmp/imgs  # re-share by handle\n  \
-          csift image @<uuid> --no-subagents --id '#1' --since 1h --out /tmp/imgs    # disambiguate a reused #1\n  \
+          csift image @<uuid> --no-subagents --id '32,33,34,36' --out /tmp/imgs  # re-share by handle\n  \
+          csift image @<uuid> --no-subagents --id '1' --since 1h --out /tmp/imgs    # disambiguate a reused #1\n  \
           csift image @<uuid> --no-subagents --id L6812i2 --out /tmp/shot.jpg        # one image -> a file, convert"
 )]
 pub struct ImageArgs {
@@ -1982,7 +1985,7 @@ pub struct ImageArgs {
     #[arg(long = "sessions-from", value_name = "FILE|-")]
     pub sessions_from: Option<std::path::PathBuf>,
 
-    /// ADDRESS specific images by the `#N` session handle (`--id #32,#33`) or the exact
+    /// ADDRESS specific images by the `#N` session handle (`--id 32,33`) or the exact
     /// `L<line>i<n>` locator (`--id L6812i1`). Repeatable + comma-delimited. Without `--out`,
     /// filters the LISTING to these; with `--out`, extracts only these. Both forms are
     /// per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid>
@@ -2249,15 +2252,11 @@ impl PlanArgs {
           an automation USER unit additionally\n  \
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
-          {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; a trailing\n  \
-          {kind:\"skipped_lines\", skipped_lines:N} ALWAYS closes the stream (even when N=0),\n  \
-          so a JSONL consumer can detect end-of-stream. NOTE the terminator SHAPE is NOT yet\n  \
-          uniform tool-wide: verbatim is the ONLY command whose terminator is `kind`-tagged.\n  \
-          search closes with `{matched,dropped_by_cap,skipped_lines}`, files with\n  \
-          `{total_mutations,distinct_files,skipped_lines,detail_level}`, recover with\n  \
-          `{summary:{…}}` (nested) — all THREE untagged — and list/agents emit NO terminator\n  \
-          (end-of-stream = EOF). Key any portable EOF check on the per-command shape, not on a\n  \
-          shared `kind:\"skipped_lines\"` (a tool-wide `{kind:\"end\",…}` is a planned change)."
+          {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; and a trailing\n  \
+          {kind:\"summary\", skipped_lines} ALWAYS closes the stream (even when 0). The envelope\n  \
+          is UNIFORM tool-wide (envelope v2): EVERY command's stream is `{kind:\"header\",…}` →\n  \
+          kind-tagged rows → `{kind:\"summary\",…}`, so `tail -1 | jq 'select(.kind==\
+          \"summary\")'` reads the footer of ANY command identically."
 )]
 pub struct VerbatimArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
@@ -2360,11 +2359,11 @@ pub struct VerbatimArgs {
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
     /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Mutually exclusive with --turn-range.
+    /// MIDNIGHT that day. Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Mutually exclusive with --turn-range.
+    /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn-range (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
