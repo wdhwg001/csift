@@ -488,7 +488,44 @@ fn resolve_selection<'a>(
         ));
     }
     if !unresolved.is_empty() {
-        bail!("--id matched no image: {}", unresolved.join(", "));
+        // Name the handles that DO exist: `#N` is inherited from CC's paste-time
+        // `[Image #N]` numbering, so a transcript's handles can start past #1 and carry
+        // holes — a bare "matched no image" reads like a csift drop when it is a source gap.
+        let mut present: Vec<usize> = images.iter().filter_map(|i| i.seq).collect();
+        present.sort_unstable();
+        present.dedup();
+        let unnumbered = images.iter().filter(|i| i.seq.is_none()).count();
+        let inventory = if present.is_empty() && unnumbered == 0 {
+            "the scope carries no images at all".to_string()
+        } else {
+            const HANDLE_CAP: usize = 24;
+            let mut s: String = present
+                .iter()
+                .take(HANDLE_CAP)
+                .map(|n| format!("#{n}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            if present.len() > HANDLE_CAP {
+                s.push_str(&format!(" (+{} more)", present.len() - HANDLE_CAP));
+            }
+            if unnumbered > 0 {
+                if !s.is_empty() {
+                    s.push_str(" + ");
+                }
+                s.push_str(&format!(
+                    "{unnumbered} unnumbered image(s) (address by the L<line>i<n> locator)"
+                ));
+            }
+            format!("present here: {s}")
+        };
+        bail!(
+            "--id matched no image: {} — {inventory}. `#N` handles are inherited from Claude \
+             Code's paste-time `[Image #N]` numbering, NOT a dense 1..N index csift assigns, \
+             so a transcript's handles can start past #1 and carry holes; a missing number is \
+             a source gap (that number's image never landed in this transcript), not a \
+             dropped image. Run `csift image` on the same target to see the full listing.",
+            unresolved.join(", ")
+        );
     }
     Ok(sel)
 }

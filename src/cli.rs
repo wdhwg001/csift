@@ -480,15 +480,22 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         JSON OUTPUT (--format json)\n  \
           Every command emits the same envelope: one `{\"kind\":\"header\",…}` line, then\n  \
         kind-tagged rows, then one `{\"kind\":\"summary\",…}` line — even for zero matches.\n  \
-        Select rows with `jq 'select(.kind==\"…\")'`; the summary is always `tail -1`. Rows\n  \
+        Select rows with `jq 'select(.kind==\"…\")'`; the summary is always `tail -1`. Do\n  \
+        the select BEFORE projecting fields — a field template applied to the mixed stream\n  \
+        stamps the header/summary rows as all-null rows. Rows\n  \
         carry the id trio (`session_id` / `is_subagent` / `parent_session_id`); search hits\n  \
-        carry `refetch` — a ready-to-run `csift show` command for that exact record. Full\n  \
+        carry `refetch` — a ready-to-run `csift show` command for that exact record. The\n  \
+        trio lives on the ROW (the exchange), not inside `.hits[]` — flattening hits alone\n  \
+        yields `session_id: null`; run each hit's `refetch` verbatim, or merge the trio in\n  \
+        first (`. as $e | .hits[] | . + {session_id: $e.session_id}`). Full\n  \
         row schemas live in each subcommand's --help.\n\n\
         PITFALLS WORTH KNOWING UP FRONT\n  \
           - An empty pattern (\"\") matches EVERYTHING: it is the base for -t/time/turn\n    \
         filters and the census on-ramp (`csift search \"\" <target> --count-by label`).\n  \
           - `search -c` counts round-trip EXCHANGES, not records or lines; per-record\n    \
-        counts are `--count-by <axis>`.\n  \
+        counts are `--count-by <axis>`; `stats`' tool tallies are per CALL. Three units\n    \
+        — exchange, record, call — so `--count-by tool` reading ≈2× a `stats` tally\n    \
+        (use + result carrier) is a unit difference, not a discrepancy.\n  \
           - `search -l` prints owning SESSION uuids (what `--sessions-from -` consumes);\n    \
         the JSON summary's `transcript_ids` is the finer per-transcript list. Two\n    \
         different questions, two different answers.\n  \
@@ -532,32 +539,20 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// List sessions with first/last genuine-user + last-agent message and timestamps.
+    // Per-command about/long_about/after_help live on each *Args struct's #[command(...)]
+    // block. A variant doc comment here SHADOWS the struct's about + long_about (clap
+    // derive precedence) — that shadowing kept every subcommand's long_about invisible
+    // until v0.6.2. Keep the variants bare.
     List(ListArgs),
-    /// Regex-search sessions, returning complete request/response round-trip exchanges.
     Search(SearchArgs),
-    /// Fetch specific record(s) of ONE transcript by line / turn index / record uuid — rendered
-    /// full, or verbatim raw jsonl with `--raw`.
     Show(ShowArgs),
-    /// One-scan aggregates per session: records, turns, tool calls by name, tokens by
-    /// model, time span, compactions.
     Stats(StatsArgs),
-    /// Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID, falling back
-    /// to CODEX_COMPANION_SESSION_ID).
     Whoami(WhoamiArgs),
-    /// List a session's subagents with kind, start/completion timestamps + status.
     Agents(AgentsArgs),
-    /// Which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash).
     Files(FilesArgs),
-    /// Reconstruct a file's history from the transcript — segmented diff-patches,
-    /// point-in-time partial snapshot, or coverage scoping.
     Recover(RecoverArgs),
-    /// Locate the Plan-Mode plan file BOUND to a session (via its `plan_mode` attachment).
     Plan(PlanArgs),
-    /// Turn-fidelity reconstruction — restore the verbatim user/assistant
-    /// back-and-forth a compaction summary clipped, within a char budget.
     Verbatim(VerbatimArgs),
-    /// List + extract the images a session carries (inline base64 blocks → files).
     Image(ImageArgs),
 }
 
@@ -732,6 +727,7 @@ impl ImageOutFormat {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "List sessions with first/last genuine-user + last-agent message and timestamps",
     long_about = "List sessions with a fast quick-identity tuple per session — WITHOUT \
         parsing the whole file. For each session jsonl under the target(s) it emits: \
         session id, the FIRST genuine-user message (+ time), the LAST genuine-user \
@@ -856,6 +852,7 @@ impl ListArgs {
 
 #[derive(Debug, Clone, Args, Default)]
 #[command(
+    about = "Regex-search sessions, returning complete request/response round-trip exchanges",
     long_about = "Regex-search transcripts, returning the COMPLETE round-trip exchange \
         containing each hit — never a bare fragment. A turn is delimited by a genuine \
         user message; the emitted exchange is the whole turn (the opening user record \
@@ -1166,7 +1163,11 @@ pub struct SearchArgs {
     /// role.class.sub leaf; a record counts under EVERY leaf it carries, so a leaf's number
     /// is exactly how many records `-t <leaf>` would surface — the exploration on-ramp:
     /// run `csift search "" <target> --count-by label` BEFORE you guess a `-t`) · `tool`
-    /// (per tool name) · `turn` (per turn, ASCENDING turn order — a histogram) · `session`
+    /// (per tool name — RECORDS again: a completed call is a tool_use record PLUS a
+    /// tool_result carrier record, so expect ≈2× the per-CALL tallies `stats` prints; an
+    /// answered AskUserQuestion re-homes its carrier to user.answer, so AUQ stays ≈1×.
+    /// The 2× gap is a unit difference, not a discrepancy) · `turn` (per turn, ASCENDING
+    /// turn order — a histogram) · `session`
     /// (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id;
     /// covers every record riding a tool_use/tool_result block INCLUDING the
     /// SendMessage/spawn/subagent-return communication views, so "any pending tools?" is
@@ -1254,9 +1255,8 @@ impl SearchArgs {
 /// `csift show` — fetch specific record(s) of ONE transcript, rendered full (or raw).
 #[derive(Args, Debug)]
 #[command(
-    about = "Fetch record(s) of ONE transcript by line number / record uuid — the reader \
-             companion to `search` (search FINDS and shows match-centered excerpts; show \
-             FETCHES the records you name, full)",
+    about = "Fetch specific record(s) of ONE transcript by line / turn index / record uuid \
+             — rendered full, or verbatim raw jsonl with `--raw`",
     long_about = "Fetch the record(s) at specific 1-based jsonl line number(s) (the `Lnnnn` \
         every csift surface prints) and/or record uuid(s), from exactly ONE transcript. \
         Default output renders each record FULL (label + timestamp + complete text — the \
@@ -1355,11 +1355,13 @@ pub struct ShowArgs {
 /// `csift stats` — one-scan aggregates per session (and a scope total).
 #[derive(Args, Debug)]
 #[command(
-    about = "Aggregate a session (or scope): records, turns, tool calls by name, tokens \
+    about = "One-scan aggregates per session: records, turns, tool calls by name, tokens \
              by model, time span, compactions",
     long_about = "One scan, one fixed rich shape — the aggregation questions that \
         otherwise force hand-rolled jsonl parsing: token burn per model \
-        (message.usage sums), tool-call counts by name, turn count, first/last \
+        (message.usage sums), tool-call counts by name (per CALL — one per invocation; \
+        `search --count-by tool` counts RECORDS, use + result carrier, so it reads ≈2× \
+        these tallies — a unit difference, not a discrepancy), turn count, first/last \
         timestamps + duration, compaction count, malformed-line count. Spans subagents \
         by default (each transcript is its own row; the scope TOTAL block sums them). \
         `--since`/`--until` bound the counted records by timestamp.",
@@ -1466,6 +1468,7 @@ pub enum AgentKindFilter {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "List a session's subagents with kind, start/completion timestamps + status",
     long_about = "List a session's SUBAGENT lifecycle: every subagent transcript the \
         session spawned, with its id, KIND, start + completion timestamps, duration, \
         and a determinable status. Three on-disk shapes are discovered under \
@@ -1548,7 +1551,10 @@ pub enum AgentKindFilter {
         last_activity_utc/_local, which every timestamped lane carries (on a frozen lane \
         it equals pending_since_utc); \
         `--with-files` adds `files_changed`; `--returned-message`, implied by a single \
-        `--agent`, adds `returned_message` + `returned_message_source`). `agent_type` is \
+        `--agent`, adds `returned_message` + `returned_message_source` — the NEWEST \
+        message the child EVER returned, source-tagged; on a frozen/running lane it \
+        PREDATES the pending call, so a lane can carry BOTH a returned_message and \
+        pending_* — the return is history, the pending_* fields are now). `agent_type` is \
         the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`) — \
         DISTINCT from `shape`, the on-disk transcript shape (builtin-task | workflow | \
         teammate); `kind` is the envelope discriminator exclusively. ID-DOMAIN: `agent_id` \
@@ -1749,6 +1755,7 @@ pub enum FilesDetail {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "Which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)",
     long_about = "Show which FILES and DIRECTORIES a session modified, and when. csift \
         extracts file mutations from a session's transcript (spanning its subagents by \
         default, since OMC fan-out edits happen in subagents):\n  \
@@ -1967,6 +1974,8 @@ pub enum RecoverMode {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "Reconstruct a file's history from the transcript — segmented diff-patches, \
+             point-in-time partial snapshot, or coverage scoping",
     long_about = "Reconstruct a single file's history from a session transcript. Unlike \
         `files` (which only ROLLS UP that a file was touched), `recover` rebuilds the \
         file's CONTENT line-by-line from the transcript's Reads / Writes / Edits, in \
@@ -2229,6 +2238,7 @@ impl RecoverArgs {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "List + extract the images a session carries (inline base64 blocks → files)",
     long_about = "List and EXTRACT the images a session carries. A pasted/attached image (and a \
         tool-result screenshot) is stored INLINE on a record as a base64 image block, so `image` \
         decodes it straight back to a file — nothing was externalised.\n\n\
@@ -2284,7 +2294,11 @@ pub struct ImageArgs {
     /// per-transcript, so `--id` needs a single transcript in scope (pin with `@<uuid>
     /// --no-subagents`). If a `#N` is AMBIGUOUS (CC reuses `#N` across prompts, so it names >1
     /// distinct image), `image` ERRORS with the occurrence list — disambiguate with the exact
-    /// `L<line>i<n>`, or narrow scope via `--since`/`--until` / `--turn` / `--uuid`.
+    /// `L<line>i<n>`, or narrow scope via `--since`/`--until` / `--turn` / `--uuid`. `#N` is
+    /// inherited from CC's paste-time `[Image #N]` numbering, NOT a dense 1..N index csift
+    /// assigns — a transcript's handles can start past #1 and carry HOLES (a number whose
+    /// image never landed in this transcript); a `--id` miss therefore ERRORS naming the
+    /// handles that DO exist, and the plain listing shows them all.
     #[arg(long, value_name = "ID", value_delimiter = ',')]
     pub id: Vec<String>,
 
@@ -2348,6 +2362,7 @@ impl ImageArgs {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "Locate the Plan-Mode plan file BOUND to a session (via its `plan_mode` attachment)",
     long_about = "Locate the Plan-Mode PLAN FILE bound to a session. Claude Code stores plans \
         flat under `~/.claude/plans/<three-words>.md` (a subagent's gets an `-agent-<hex>` \
         suffix); the random name is bound to the session by the `plan_mode` ATTACHMENT the \
@@ -2431,6 +2446,8 @@ impl PlanArgs {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "Turn-fidelity reconstruction — restore the verbatim user/assistant \
+             back-and-forth a compaction summary clipped, within a char budget",
     long_about = "Turn-fidelity reconstruction: restore the verbatim user/assistant \
         back-and-forth that a Claude Code COMPACTION SUMMARY clipped. A summary preserves \
         TASK STATE (the 9-section synthesis: intent, file ledger, errors+fixes, plan, next \
@@ -2759,6 +2776,8 @@ impl VerbatimArgs {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID, falling \
+             back to CODEX_COMPANION_SESSION_ID)",
     long_about = "Identify the CALLING Claude Code session, false-positive-safe.\n\n\
         Claude Code exports `CLAUDE_CODE_SESSION_ID` into every Bash-tool environment, \
         and its value equals the calling session's own jsonl basename exactly. That \

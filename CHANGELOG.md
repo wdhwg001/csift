@@ -5,6 +5,20 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.2] - 2026-07-12
+
+- `image --id` miss error explains itself: it names the handles PRESENT,
+  states that `#N` is inherited from paste-time numbering (holes and non-1
+  starts are source gaps, not csift drops), and routes to the plain listing.
+- The three count units are cross-referenced where the numbers collide:
+  `-c` counts EXCHANGES · `--count-by` counts RECORDS (a tool call + its
+  result carrier ⇒ ≈2× the call figure) · `stats` tools count CALLS.
+- Docs: the jq merge idiom for flattening hits with their exchange-row ids;
+  `select(.kind==…)` before projecting; `returned_message` is the NEWEST
+  message the child ever returned (on a frozen lane it predates the pending
+  call).
+- Every subcommand's `long_about` was dead text — now rendered.
+
 ## [0.6.1] - 2026-07-12
 
 - An unrecognized `@`-token is a HARD error naming the @-grammar — it never

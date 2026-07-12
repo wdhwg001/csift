@@ -12811,6 +12811,51 @@ fn image_id_selection_json_and_unresolved() {
     ]);
     assert!(!miss.success);
     assert!(miss.stderr.contains("L999i9"), "stderr: {}", miss.stderr);
+    // v0.6.2: the miss explains itself — inventory (this fixture's images carry no
+    // [Image #N] markers, so all are unnumbered) + the paste-time numbering provenance.
+    assert!(
+        miss.stderr.contains("unnumbered image(s)"),
+        "stderr: {}",
+        miss.stderr
+    );
+    assert!(
+        miss.stderr.contains("paste-time"),
+        "stderr: {}",
+        miss.stderr
+    );
+}
+
+// A `#N` miss on a transcript whose handles carry HOLES (inherited paste-time numbers
+// starting past #1) must name the handles that DO exist and call the miss a source gap —
+// never a bare "matched no image" that reads like a csift drop.
+#[test]
+fn image_id_miss_names_present_handles_and_explains_holes() {
+    let h = Home::new();
+    let r0 = serde_json::json!({
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
+        "version":"2.1.0","timestamp":"2026-06-07T05:00:00.000Z",
+        "message":{"role":"user","content":[
+            {"type":"text","text":"see [Image #2] and [Image #4]"},
+            img_block("image/png", PNG_RED), img_block("image/png", PNG_GREEN)]}
+    });
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &format!("{r0}\n"));
+    let miss = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "1"]);
+    assert!(!miss.success);
+    assert!(
+        miss.stderr.contains("--id matched no image: #1"),
+        "stderr: {}",
+        miss.stderr
+    );
+    assert!(
+        miss.stderr.contains("present here: #2 #4"),
+        "stderr: {}",
+        miss.stderr
+    );
+    assert!(
+        miss.stderr.contains("source gap"),
+        "stderr: {}",
+        miss.stderr
+    );
 }
 
 #[test]

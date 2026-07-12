@@ -623,6 +623,46 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.2 CHANGE LEDGER (non-breaking; error-text + help/SKILL surface — `csift 0.6.2`).**
+> The sixth-audit release (Sonnet 5's v0.6.1 review — the most honest witness of the
+> series: zero refuted findings, all four suggestions doc/diagnostic-level; no
+> previously-succeeding invocation changes behavior).
+> 1. **`image --id` miss error explains itself.** The bare "`--id matched no image: #1`"
+>    was the last error that said WHAT without WHY. `#N` handles are inherited from CC's
+>    paste-time `[Image #N]` numbering (positional zip, image.rs), NOT a dense 1..N index —
+>    a transcript's handles can start past #1 and carry holes (verified live: a real
+>    session's handles run #2..#11 with no `[Image #1]`/`[Image #6]` marker anywhere in the
+>    file — a source gap, not a csift drop). The miss error now names the handles PRESENT
+>    (cap 24 + explicit `+N more`; unnumbered images pointed at their `L<line>i<n>`
+>    locator), states the numbering provenance, and routes to the plain listing.
+>    `image --help` + SKILL document the hole semantics.
+> 2. **The three count units are cross-referenced where the numbers collide.** `stats`'
+>    tool tallies count CALLS; `search --count-by tool` counts RECORDS (tool_use + result
+>    carrier ⇒ ≈2× the call figure; an answered AskUserQuestion re-homes its carrier to
+>    `user.answer`, so AUQ stays ≈1× — verified: 11/11 tools exactly 2× on a real session,
+>    AUQ the sole exception). One sentence each in `stats --help`, the `--count-by` flag
+>    doc, and the root-help PITFALLS (`-c` = EXCHANGES · `--count-by` = RECORDS · `stats`
+>    tools = CALLS), plus a SKILL wrong-assumption row — the witness nearly filed the 2×
+>    gap as a counting bug.
+> 3. **Doc-only, two jq-ecosystem traps + one field-semantics note:** (a) the id trio
+>    lives on the EXCHANGE row, so bare `.hits[]` flattening yields `session_id: null`
+>    silently — root help + SKILL jq canon now show the merge idiom
+>    (`. as $e | .hits[] | . + {session_id: $e.session_id}`) and re-route to `refetch`;
+>    (b) root help JSON OUTPUT: `select(.kind==…)` BEFORE projecting, or header/summary
+>    rows stamp all-null; (c) `agents` `returned_message` is the NEWEST message the child
+>    EVER returned — on a frozen/running lane it predates the pending call (read beside
+>    `pending_*`, never as the outcome); help + SKILL note it.
+> 4. **Every subcommand's `long_about` was DEAD TEXT — now rendered (side-catch while
+>    verifying item 2).** The `Command` enum's variant doc comments SHADOWED each `*Args`
+>    struct's `about` + `long_about` (clap derive precedence: variant attributes override
+>    the augmented struct's), so all 11 struct-level `long_about` prose blocks — the
+>    long-form intros written across v0.4–v0.6 — never rendered in any `--help`. Fix:
+>    variants are bare (a source comment forbids re-docking docs there); every struct
+>    carries `about` (wording identical to the old variant one-liners, so the root
+>    subcommand list is byte-stable — except `show`, whose struct about was itself stale,
+>    predating `--turn`) + its now-visible `long_about`. The help lints
+>    (`help_mentions_only_declared_flags` / examples) now scan the newly-rendered prose.
+
 
 > **Common conventions.** Every TEXT timestamp is a SINGLE canonical local form — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` (e.g. `2026-07-11 15:33:37 AEST(UTC+10)` on a machine in Sydney; January Sydney = `AEDT(UTC+11)`; India = `IST(UTC+05:30)`), via `jiff` (`TimeZone::system()`). The marker is a FORMAT not a value: the abbreviation + offset are derived from the system zone at that instant (DST-correct), so the only mental step is "shift by the given offset"; a whole-hour offset renders compact (`UTC+10`), a fractional one zero-padded (`UTC+05:30`), and a zone with no abbreviation renders `(UTC±offset)` alone. **There is NO raw-UTC parenthetical in text** (the former `… AEST (…Z)` dual form and the bare-offset `…+10:00` form are GONE — the UTC copy invited LLM timezone-conversion errors); machine UTC lives ONLY in JSON (`ts_utc`, §8.2). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 

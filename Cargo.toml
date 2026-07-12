@@ -1,6 +1,6 @@
 [package]
 name = "csift"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Greendam <8943519+wdhwg001@users.noreply.github.com>"]
 edition = "2021"
 rust-version = "1.89"

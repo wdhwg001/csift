@@ -1,6 +1,6 @@
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.6.1** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.6.2** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -50,6 +50,9 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | timestamps need timezone arithmetic | text timestamps are already LOCAL with the offset inline — `2026-07-11 15:33 AEST(UTC+10)`; UTC lives only in JSON `ts_utc` |
 | `@trap` failing = you mistyped the marker | from the MAIN thread a FIRST use ALWAYS misses (CC flushes the main record only after the command completes; a subagent resolves first try) — use `@main` there, or re-run the SAME command+marker; a FRESH marker restarts the race and misses again |
 | piping text output through `head -N` is safe | excerpts keep a record's LITERAL newlines (a multiline Bash command renders as-is) — `head` can cut mid-record and hide overflow pointers; the line-safe form is `--format json` (one object per line) |
+| `stats` and `--count-by tool` should agree | three count units, three commands: `-c` = EXCHANGES, `--count-by` = RECORDS, `stats` tools = CALLS. A call = tool_use record + tool_result carrier, so `--count-by tool` reads ≈2× the `stats` tally (an answered AskUserQuestion re-homes its carrier to `user.answer`, so AUQ stays ≈1×) — a unit difference, not a bug |
+| image `#N` handles run densely 1..N | `#N` is inherited from CC's paste-time `[Image #N]` numbering — handles can start past #1 and carry HOLES (that number's image never landed in this transcript); a `--id` miss errors naming the handles that DO exist |
+| `.hits[]` can be flattened bare | the id trio lives on the EXCHANGE row, not inside each hit — bare flattening yields `session_id: null` silently; run the hit's `refetch` verbatim, or merge first: `. as $e \| .hits[] \| . + {session_id: $e.session_id}` |
 
 ## Five laws (all commands)
 
@@ -220,7 +223,7 @@ Text = a parent→child tree (nesting is logical, from spawn links; disk is flat
 csift image [target] [--id N|L<line>i<n>]… [--out DIR|FILE.ext]
   [--since W] [--until W] [--turn N|A..B|N..|-k] [--uuid PREFIX] [--sessions-from F] [--no-subagents] [--format json]
 ```
-Default list (content-deduped). `--id` input = bare digits (the `[Image #N]` number; display shows `#N`, input drops the `#`) or the always-unique locator `L<line>i<n>`; an ambiguous `#N` hard-errors with the occurrence list. `--out`: dir ⇒ source-format files; `file.ext` ⇒ converted by extension (png lossless · jpeg/webp q90 · gif dithered). search/verbatim cite ids inline (`[1 image: #265]`).
+Default list (content-deduped). `--id` input = bare digits (the `[Image #N]` number; display shows `#N`, input drops the `#`) or the always-unique locator `L<line>i<n>`; an ambiguous `#N` hard-errors with the occurrence list. `#N` is inherited from CC's paste-time `[Image #N]` numbering, NOT a dense 1..N index — handles can start past #1 and carry holes (a source gap: that number's image never landed in this transcript); a `--id` miss errors naming the handles that DO exist. `--out`: dir ⇒ source-format files; `file.ext` ⇒ converted by extension (png lossless · jpeg/webp q90 · gif dithered). search/verbatim cite ids inline (`[1 image: #265]`).
 
 ---
 
@@ -240,7 +243,7 @@ Key fields per row (fixture-verified):
 - show `record`: trio + `turn_index, line (null=sidecar), uuid, label, labels[], tool_name, from, to, pairing, tool_use_id, source, ts_utc/local, text (FULL), image_ids[]`. Summary: `records, dropped_by_cap, refetch_remainder, non_record_lines, skipped_lines, with_elicitation_sidecar`.
 - list `session`: trio + `path, cwd, version, git_branch, first_user/last_user/last_agent ({excerpt, ts_utc, ts_local}|null), skipped_lines, pending_elicitations[], sidecar_present, with_elicitation_sidecar`. Summary: `sessions, dropped_by_cap, skipped_lines`.
 - stats `session`: trio + `lines, user_records, assistant_records, turns, compactions, first_utc/local, last_utc/local, tokens{model→{input,output,cache_read,cache_creation}}, tools{name→count}, skipped_lines`. Summary adds scope totals (`tokens`, `tools`, `turns`).
-- agents `session`: `session_id, runs, agents` (counts). `run`: `session_id, run_id, task_id, workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, started_utc/local`. `agent`: `agent_id, shape, parent_session_id, parent_agent_id, depth, workflow_id, agent_type, name, team_name, description, spawn_tool(_use_id), trigger/started/completed/last_activity_utc+local, duration, status, pending_tool_use_id/tool_name/classification/since_*, skipped_lines — completed_* and duration are non-null ONLY when status=completed; last_activity_* is the tail instant on every timestamped lane (== pending_since_* when frozen), control_hint?` (+ `returned_message(_source)`, `files_changed[]` when requested). Summary: `sessions, runs, agents`.
+- agents `session`: `session_id, runs, agents` (counts). `run`: `session_id, run_id, task_id, workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, started_utc/local`. `agent`: `agent_id, shape, parent_session_id, parent_agent_id, depth, workflow_id, agent_type, name, team_name, description, spawn_tool(_use_id), trigger/started/completed/last_activity_utc+local, duration, status, pending_tool_use_id/tool_name/classification/since_*, skipped_lines — completed_* and duration are non-null ONLY when status=completed; last_activity_* is the tail instant on every timestamped lane (== pending_since_* when frozen), control_hint?` (+ `returned_message(_source)`, `files_changed[]` when requested — `returned_message` is the NEWEST message the child EVER returned; on a frozen/running lane it predates the pending call, so read it beside `pending_*`, never as the outcome). Summary: `sessions, runs, agents`.
 - verbatim `turn`: trio + `turn_index, line (null=sidecar), source, role, ts_utc/local, tool_calls, full_chars, rendered_chars, truncated, elided_*, also_in_summary, compactions_before, text (FULL), is_automation (+trigger_kind, task_id, status, event)`; `compaction_boundary`: `line, summary_chars`; `collapsed_agents`: `first_line, last_line, refetch`. Header adds budget + automation split.
 - files rows carry the trio + `path, op, turn_index, line, is_create, heuristic, ts_utc/local` (timeline) or per-op counts + `first/last_utc/local` (grouped); `boundary`: `path, line, turn_index, cause, ts_utc/local`. Summary: `sessions, distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level` (no cap ⇒ no `dropped_by_cap`).
 - whoami `identity`: trio + `depth, path`.
@@ -253,6 +256,9 @@ Never jq the transcript FILE (you lose span resolution, the sidecar merge, and t
 csift search "" @U -t agent.message --raw | jq -r '.message.model' | sort | uniq -c     # any raw field
 csift search P @U --format json | jq 'select(.kind=="exchange") | .hits[] | {label, line, excerpt}'
 csift search P @U --format json | tail -1 | jq                                          # the summary
+# flattening .hits[] with addressing intent: merge the exchange trio in FIRST —
+csift search P @U --format json | jq -c 'select(.kind=="exchange") | . as $e | .hits[] | . + {session_id: $e.session_id}'
+# (bare `.hits[] | {session_id, …}` yields session_id:null — the trio lives on the exchange row; better: run each hit's refetch verbatim)
 csift agents @U --format json | jq 'select(.kind=="agent") | {agent_id, shape, status}'
 csift stats @main --no-subagents --format json | tail -1 | jq .tokens                    # token burn
 csift files @U --by file --format json | jq -r 'select(.kind=="file" and (.heuristic|not)).path'
