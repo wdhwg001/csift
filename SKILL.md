@@ -1,6 +1,6 @@
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.6.0** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.6.1** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -48,6 +48,8 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | `completed_utc` = "when it stopped" | non-null ONLY when `status:"completed"` — a frozen/running lane carries null; its tail instant is `last_activity_utc/_local` (every timestamped lane; == `pending_since_utc` when frozen) |
 | the pairing census needs `-t agent.tool.use` | pairing rides the tool BLOCK through the communication views — a frozen `SendMessage` counts as `pending` with no `-t` at all |
 | timestamps need timezone arithmetic | text timestamps are already LOCAL with the offset inline — `2026-07-11 15:33 AEST(UTC+10)`; UTC lives only in JSON `ts_utc` |
+| `@trap` failing = you mistyped the marker | from the MAIN thread a FIRST use ALWAYS misses (CC flushes the main record only after the command completes; a subagent resolves first try) — use `@main` there, or re-run the SAME command+marker; a FRESH marker restarts the race and misses again |
+| piping text output through `head -N` is safe | excerpts keep a record's LITERAL newlines (a multiline Bash command renders as-is) — `head` can cut mid-record and hide overflow pointers; the line-safe form is `--format json` (one object per line) |
 
 ## Five laws (all commands)
 
@@ -61,12 +63,13 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 
 `@<uuid>` one session · `@<uuid-prefix>` (4-11 hex, unique else error) · `@main` calling top-level (env) · `@trap:<marker>` calling SUBAGENT (§trap) · `@<agent-id>` a subagent + its subtree (ids from `agents`; bare hex ≥12 or teammate form `aVSRepro-68a2…` — a teammate name may itself carry dashes, `aP1-engine-9cf2…`) · `.`/real path/`-Users-…` encoded dir ⇒ project(s) · `*.jsonl` one transcript · 0 targets ⇒ ALL projects (`list` caps the unscoped flood; `verbatim` REQUIRES a target).
 - A bare id without `@` errors with "did you mean '@…'?" — ids always take `@`.
+- An unrecognized `@`-shape (a 1-3-char prefix, a dashed fragment, a non-id token) errors naming the grammar — it never falls through to path resolution.
 - `--sessions-from <FILE|->` (every multi-target command): scope to an id list — whitespace-separated uuid/prefix/agent-id tokens, bare or `@`-prefixed (exactly what `search -l` emits); UNION with positionals, per-id fail-loud, an explicitly empty list = empty scope (exit 0 — a pipeline that found nothing propagates nothing).
 - `search` is the one command whose FIRST positional is PATTERN; targets follow: `csift search P @<uuid>`. A pattern starting `@` errors (escape `\@`); a uuid-shaped pattern prints a stderr note.
 - `show` targets exactly ONE transcript: `@<uuid>` = that top-level file (never spans), `@<agent-id>` = that subagent's file.
 
 ### @trap:<marker> — "which subagent am I?"
-A running subagent cannot read its own id from env. Invent a fresh marker, put it literally IN the csift command; csift finds the transcript whose Bash tool_use carries it. Grammar (enforced): exactly 3 CamelCase words + exactly 4 non-trivial trailing digits, hand-invented, context-independent — shaped like `@trap:JollyShinyBrook4283`, which is a RESERVED example csift hard-rejects (invent your own; never script-generate or reuse). From MAIN just use `@main`. `whoami @trap:<marker>` returns the full upstream ancestry chain.
+A running subagent cannot read its own id from env. Invent a fresh marker, put it literally IN the csift command; csift finds the transcript whose Bash tool_use carries it. Grammar (enforced): exactly 3 CamelCase words + exactly 4 non-trivial trailing digits, hand-invented, context-independent — shaped like `@trap:JollyShinyBrook4283`, which is a RESERVED example csift hard-rejects (invent your own; never script-generate or reuse). TIMING: a subagent's transcript records the command mid-run — a first try resolves; the MAIN thread's own record is flushed only AFTER the command completes, so a top-level FIRST use always misses. From MAIN use `@main` (env-based, no race); if you must trap there, re-run the SAME command with the SAME marker — one-shot means one marker per identity question, not one per attempt (a fresh marker restarts the race and misses again). `whoami @trap:<marker>` returns the full upstream ancestry chain.
 
 ## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 25 leaves
 
@@ -95,7 +98,7 @@ csift search PATTERN [target…] [-t SEL]… [-T SEL]… [-i] [--multiline] [--s
   [--no-truncate] [--resolve-persisted] [--sessions-from F] [--no-subagents] [--format json]
 ```
 Empty `""` pattern = pure filter. A hit returns the complete round-trip (tool_use with its result; user turn with reply; an answered AUQ as one Q+A unit). Terminal modes (mutually exclusive): `-c` prints one integer (EXCHANGES, `--max-count` drops added back) · `-l` prints the distinct owning session uuids, one per line, uncapped — pipes into `--sessions-from -` · `--count-by AXIS` prints a census (below).
-- `--count-by AXIS` — a per-key census of the matched RECORDS along ONE closed axis (not a query language; a record whose several sections match still counts once): `label` (per leaf; a record counts under every leaf it carries, so a leaf's number == what `-t <leaf>` surfaces — run with `""` before guessing any `-t`) · `tool` (per tool name) · `turn` (ascending histogram) · `session` (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id; rides the tool block through the communication views, so a frozen SendMessage is `pending` — "any pending tools?" needs no `-t`) · `model` (per assistant model). Records outside an axis's domain are excluded and the excluded count is reported.
+- `--count-by AXIS` — a per-key census of the matched RECORDS along ONE closed axis (not a query language; a record whose several sections match still counts once): `label` (per leaf; a record counts under every leaf it carries, so a leaf's number == what `-t <leaf>` surfaces — run with `""` before guessing any `-t`) · `tool` (per tool name) · `turn` (ascending histogram) · `session` (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id; rides the tool block through the communication views, so a frozen SendMessage is `pending` — "any pending tools?" needs no `-t`) · `model` (per assistant model — the raw `message.model` value; CC's `<synthetic>` placeholder, a fabricated stand-in assistant record such as an API-error notice, is reported verbatim). Records outside an axis's domain are excluded and the excluded count is reported.
 - Excerpts are ~400-char match-centered fragments; when anything clipped, text prints a caution + JSON summary `excerpts_truncated:true`. Full text: `--no-truncate` (also un-clips JSON `excerpt`) or the hit's `refetch`.
 - `--siblings` (zero-arg): also render the turn's other records — messages always, thinking≤2 · tool.use≤3 · tool.result≤3 · harness≤2 per leaf; overflow prints `(+N more · csift show @<id> --line A..B)` — run it verbatim.
 - `--raw`: the matched records' VERBATIM jsonl lines on the whole filter surface — stdout pure jsonl for `jq` (notes → stderr; sidecar-merged hits have no physical line and are omitted with a note). The answer to any unrendered-field question.
@@ -141,7 +144,7 @@ Head+tail read only (fast at any size). Unscoped all-projects run caps at the 50
 ```
 csift whoami [@main|@trap:<marker>] [--format json]
 ```
-Reads `$CLAUDE_CODE_SESSION_ID` (alias `$CODEX_COMPANION_SESSION_ID`). Neither set ⇒ errors with guidance — never guesses by mtime. Subagent caveat: the env var is the subagent's own id in a built-in Task subagent but the PARENT's id in a workflow `agent()` subagent — `@trap` resolves it env-independently. `@trap` returns the full upstream chain (self depth 0 → root).
+Reads `$CLAUDE_CODE_SESSION_ID` (alias `$CODEX_COMPANION_SESSION_ID`). Neither set ⇒ errors with guidance — never guesses by mtime. Subagent caveat: current CC hands an Agent-tool subagent the PARENT session's id (the subagent's OWN id is withheld from env; workflow `agent()` likewise; older builds handed a Task subagent its own id) — so from a subagent, plain `whoami` usually resolves the ROOT; `@trap` resolves the true self env-independently and returns the full upstream chain (self depth 0 → root). @trap timing: subagent = first try; MAIN = first use always misses (use `@main`, or re-run the SAME command+marker) — see §trap.
 
 ## stats — aggregates (tokens · tools · turns · span)
 

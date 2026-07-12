@@ -466,10 +466,14 @@ enum TrapSelf {
 
 /// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash
 /// `tool_use` command carries the (unique, literal) marker AND the literal `csift` — i.e. the
-/// very command that launched this run. Mechanism: CC records an assistant message — including
-/// its tool_use — to the transcript BEFORE the tool runs (verified: an in-process subagent's
-/// Bash can already grep its own marker mid-execution), so when csift runs it can see the command
-/// that launched it. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
+/// very command that launched this run. Mechanism + TIMING (both verified live 2026-07-12): a
+/// SUBAGENT's transcript records the launching tool_use eagerly — its own Bash can grep the
+/// marker mid-execution, so a first try resolves; the MAIN conversation's record is flushed only
+/// AFTER the current Bash call completes (a 3s in-command sleep still saw 0 on disk), so a
+/// top-level FIRST use ALWAYS misses and only a re-run of the SAME marker (now in the previous,
+/// flushed record) resolves. @trap therefore earns its keep for subagents (which cannot name
+/// themselves); a main thread should prefer `@main` (env-based, no race) — the no-match error
+/// routes both. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
 /// transcripts; a subagent match → that agent (then its subtree, per scope); only the main
 /// transcript → the session. The marker grammar is enforced strictly (see
 /// [`validate_trap_marker`]) precisely so the discipline cannot be shortcut: it must be a fresh,
@@ -501,8 +505,12 @@ fn resolve_trap(marker: &str) -> Result<TrapSelf> {
         0 => bail!(
             "@trap: marker `{marker}` not found in a `csift` Bash command of the calling session. \
              It must appear LITERALLY in THIS csift invocation (no shell variable / concatenation, \
-             and the command must actually run `csift`); if it does, the transcript may not have \
-             flushed yet — re-run."
+             and the command must actually run `csift`). TIMING: a SUBAGENT's transcript already \
+             carries its command mid-run (a first try resolves), but the MAIN conversation's own \
+             record is only flushed AFTER the current command finishes — a top-level FIRST use \
+             always misses. If you are the top-level thread: use `@main` (env-based, no race), or \
+             re-run this EXACT command with the SAME marker (a fresh marker restarts the race and \
+             misses again)."
         ),
         n => bail!(
             "@trap: marker `{marker}` is AMBIGUOUS — it matched {n} subagents. Use a fresher, \
@@ -953,10 +961,34 @@ pub fn resolve_session_files(
                     session_prefixes.push(id.to_string());
                     session_target = true;
                 }
-                // `@-Users-…` (or any non-id token) → an encoded project-dir name.
-                _ => {
+                // `@-Users-…` → an encoded project-dir name (encoded cwds ALWAYS lead with
+                // `-`, since the absolute path's `/` encodes to `-`).
+                _ if id.starts_with('-') => {
                     explicit_dirs.push(resolve_target(Path::new(id))?);
                     session_target = true;
+                }
+                // Any other `@`-token is an UNRECOGNIZED id shape: fail loud naming the
+                // @-grammar. It must NEVER fall through to path resolution — a stripped
+                // `@a` used to become the cwd-relative path `a` and report a misleading
+                // "no Claude Code project dir", sending the caller down a filesystem
+                // debugging trail for what is an ID typo (the one spot the fail-loud
+                // targeting law was silently violated).
+                _ => {
+                    let hexish = !id.is_empty() && id.bytes().all(|b| b.is_ascii_hexdigit());
+                    if hexish && id.len() < 4 {
+                        bail!(
+                            "`@{id}` is too short for a session-uuid prefix — a prefix \
+                             needs 4-11 leading (dashless) hex chars; add more characters \
+                             (`csift list` shows the full uuids)"
+                        );
+                    }
+                    bail!(
+                        "`@{id}` is not a recognized @-target — expected `@<uuid>` | \
+                         `@<uuid-prefix>` (4-11 dashless leading hex) | `@<agent-id>` \
+                         (what `csift agents` prints) | `@main` | `@trap:<marker>` | \
+                         `@-Users-…` (an encoded project dir). A project PATH is targeted \
+                         without `@`."
+                    );
                 }
             }
             continue;

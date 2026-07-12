@@ -426,8 +426,11 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         reports your bare hex + parent uuid). CC withholds a subagent's OWN id from its Bash \
         environment, so a running subagent cannot name itself via env. Instead you INVENT a marker \
         and embed it LITERALLY in this very csift command; csift finds the transcript whose Bash \
-        `csift` command carries that marker (CC records the tool_use to disk before it runs) and \
-        scopes to that agent's subtree — or to the session itself, if you are the main thread. \
+        `csift` command carries that marker and scopes to that agent's subtree. TIMING: a \
+        subagent's transcript records the command mid-run, so a first try resolves; the MAIN \
+        conversation flushes its own record only AFTER the command completes, so a top-level \
+        FIRST use always misses — from the main thread use `@main` instead (env-based, no race), \
+        or re-run the SAME command with the SAME marker. \
         DISCIPLINE (enforced): invent the marker ONE-SHOT, by you, right now — an imaginative, \
         literary, random, CONTEXT-INDEPENDENT token of EXACTLY 3 CamelCase words + 4 random digits, \
         shaped like `@trap:JollyShinyBrook4283` — but that exact literal is the RESERVED doc \
@@ -496,7 +499,11 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           - A pending AskUserQuestion / ExitPlanMode / MCP prompt is invisible in the\n    \
         transcript until answered. csift merges pending ones from a hook-written sidecar\n    \
         when present, and `list` reports `sidecar_present` — so you can tell \"nothing\n    \
-        pending\" apart from \"no hook installed\".\n\n\
+        pending\" apart from \"no hook installed\".\n  \
+          - Text-mode excerpts keep a record's LITERAL newlines (a multiline Bash command\n    \
+        renders as-is), so piping text output through `head -N` can cut mid-record and\n    \
+        hide the overflow pointers. The line-safe machine form is `--format json` (one\n    \
+        object per line); the honest caps are `--max-count` and the built-in drop reports.\n\n\
         WHAT csift WILL NOT DO\n  \
           Semantic/BM25 search (regex is the tool — broaden the pattern, or census first);\n  \
         ad-hoc aggregation languages (the closed `--count-by` axes, `stats`, and\n  \
@@ -1164,9 +1171,11 @@ pub struct SearchArgs {
     /// covers every record riding a tool_use/tool_result block INCLUDING the
     /// SendMessage/spawn/subagent-return communication views, so "any pending tools?" is
     /// just `csift search "" <t> --count-by pairing` — a frozen SendMessage counts as
-    /// pending under any selector) · `model` (per assistant model). Records outside an
-    /// axis's domain (no tool name / no pairing / no model) are excluded AND the excluded
-    /// count is reported — never silently. Honors `-t`/`-T`/time/turn/scope; empty
+    /// pending under any selector) · `model` (per assistant model, the raw `message.model`
+    /// value — Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in
+    /// assistant record such as an API-error notice, is reported verbatim). Records
+    /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
+    /// the excluded count is reported — never silently. Honors `-t`/`-T`/time/turn/scope; empty
     /// pattern = whole-scope census. JSON: `census` rows (`axis`/`key`/`records`) + a
     /// summary.
     #[arg(
@@ -2785,14 +2794,19 @@ impl VerbatimArgs {
         CODEX_COMPANION_SESSION_ID (the Codex companion plugin's alias). If NEITHER is set, \
         whoami errors with guidance to pass an `@<uuid>` target — it never guesses by mtime.\n\n\
         SUBAGENT CAVEAT\n  \
-          What the env var names depends on HOW the subagent was spawned. In a built-in \
-        Task/Agent SUBAGENT it holds the SUBAGENT's OWN id (so `whoami` identifies the \
-        subagent). In an ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) it \
-        holds the PARENT session id (so `whoami` resolves the ROOT instead). For a DEFINITIVE, \
+          What the env var names depends on HOW the subagent was spawned and has CHANGED \
+        across CC versions: current CC hands an Agent-tool subagent the PARENT session's id \
+        (verified live 2026-07-12 — the subagent's OWN id is withheld from its env), and an \
+        ORCHESTRATED/workflow subagent (e.g. an OMC Workflow `agent()`) likewise holds the \
+        PARENT id; older builds handed a built-in Task subagent its OWN id. So from a \
+        subagent, plain `whoami` usually resolves the ROOT, not you. For a DEFINITIVE, \
         env-INDEPENDENT answer use `whoami @trap:<marker>`: you embed a one-shot literal marker in \
         that very command and csift maps it to your subagent hex and walks the UPSTREAM CHAIN up to \
         the top-level root (the @trap form's JSON is `{chain:[{session_id, is_subagent, \
-        parent_session_id, depth, path}, …]}`). \
+        parent_session_id, depth, path}, …]}`). @trap TIMING: a subagent's transcript records the \
+        command mid-run (a first try resolves); the MAIN conversation flushes its own record only \
+        AFTER the command completes, so a top-level FIRST use always misses — from the main thread \
+        use `@main` (no race), or re-run the SAME command with the SAME marker. \
         WITHOUT @trap, don't assume which id the env gave — feed it to `csift agents --agent <id> \
         --format json`; a returned node → read `parent_session_id` for the ROOT; `no subagent \
         matched` → the id is ALREADY top-level. Plain `whoami` JSON carries only {session_id, \

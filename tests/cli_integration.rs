@@ -5262,6 +5262,55 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
         "guides back to the literal-csift requirement: {}",
         miss.stderr
     );
+    // The no-match error routes BOTH timing paths: the main thread to `@main` (its own
+    // record only flushes after the command completes, so a first use always misses) and
+    // the retry to the SAME marker (a fresh one restarts the race).
+    assert!(
+        miss.stderr.contains("@main") && miss.stderr.contains("SAME marker"),
+        "routes the main-thread flush race: {}",
+        miss.stderr
+    );
+}
+
+// An UNRECOGNIZED `@`-shape must fail loud naming the @-grammar — never strip the `@` and
+// fall through to cwd-relative path resolution (the old behavior sent an ID typo down a
+// misleading "no Claude Code project dir" filesystem trail).
+#[test]
+fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {
+    let h = populated_home();
+    // 1-3 dashless hex chars: below the 4-char uuid-prefix minimum → the dedicated message.
+    for tok in ["@a", "@22", "@224"] {
+        let out = h.run(&["list", tok]);
+        assert!(!out.success, "{tok} must hard-error: {}", out.stdout);
+        assert!(
+            out.stderr.contains("too short") && out.stderr.contains("4-11"),
+            "{tok} names the prefix minimum: {}",
+            out.stderr
+        );
+        assert!(
+            !out.stderr.contains("no Claude Code project dir"),
+            "{tok} must not fall through to path resolution: {}",
+            out.stderr
+        );
+    }
+    // Non-hex / dashed / empty tokens → the general @-grammar error.
+    for tok in ["@notanid", "@1234-ab", "@"] {
+        let out = h.run(&["list", tok]);
+        assert!(!out.success, "{tok} must hard-error: {}", out.stdout);
+        assert!(
+            out.stderr.contains("not a recognized @-target"),
+            "{tok} names the grammar: {}",
+            out.stderr
+        );
+    }
+    // The `@-Users-…` encoded-dir spelling STILL resolves (encoded cwds lead with `-`).
+    let enc = h.run(&["list", &format!("@{ENC}")]);
+    assert!(enc.success, "stderr: {}", enc.stderr);
+    assert!(
+        enc.stdout.contains(SESS),
+        "lists the fixture session: {}",
+        enc.stdout
+    );
 }
 
 #[test]

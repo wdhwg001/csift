@@ -5,6 +5,21 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.1] - 2026-07-12
+
+- An unrecognized `@`-token is a HARD error naming the @-grammar — it never
+  falls through to path resolution (a stripped `@a` used to become a
+  cwd-relative path with a misleading project-dir error); a 1-3-char hex token
+  gets the dedicated too-short-for-a-prefix message.
+- `@trap` main-thread timing documented and routed by the error: a subagent's
+  transcript records the launching tool_use eagerly, but the MAIN
+  conversation's record flushes only after the current Bash call completes —
+  a top-level first use always misses; `@main` for the main thread, re-run
+  the SAME marker otherwise.
+- Docs: `--count-by model` reports the raw `<synthetic>` key verbatim; text
+  excerpts keep literal newlines (`| head -N` can cut mid-record — the
+  line-safe machine form is `--format json`).
+
 ## [0.6.0] - 2026-07-12
 
 - **Breaking (agents JSON):** `completed_utc/_local` (+ `duration`) are

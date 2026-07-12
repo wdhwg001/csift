@@ -594,6 +594,35 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 > 5. **Help drift fixed in passing:** the `search --help` JSON hit-field list now includes
 >    `pairing` (it was always emitted).
 
+> **v0.6.1 CHANGE LEDGER (non-breaking; error-text + help/SKILL surface — `csift 0.6.1`).**
+> The fifth-audit release (Sonnet 5's v0.6.0 re-review: two real findings, both fixed at
+> root; no previously-succeeding invocation changes behavior).
+> 1. **Unrecognized `@`-shape = hard error (targeting fail-loud closure).** The shared
+>    resolver's `@`-dispatch catch-all treated ANY unmatched token as an encoded
+>    project-dir name — so `@a` / `@22` / `@224` (below the 4-char uuid-prefix minimum)
+>    silently stripped the `@`, fell through to cwd-relative path resolution, and reported
+>    a misleading "no Claude Code project dir for …/a" (a filesystem debugging trail for an
+>    ID typo; the one spot the fail-loud targeting law was violated). The encoded-dir arm
+>    now requires the `-`-leading encoded shape (`@-Users-…` still works); every other
+>    unrecognized `@`-token hard-errors naming the @-grammar, with a dedicated "too short
+>    for a session-uuid prefix — needs 4-11 leading (dashless) hex chars" message for a
+>    1-3-char hex token. `--sessions-from` already bailed on non-id tokens (unchanged).
+> 2. **`@trap` main-thread timing documented + error routes the fix (verified live).** The
+>    trap premise "CC records the tool_use before it runs" holds ONLY for a subagent's own
+>    transcript (eager flush — first try resolves, re-verified); the MAIN conversation's
+>    record is flushed AFTER the current Bash call completes (a 3s in-command sleep still
+>    saw 0 on disk), so a top-level FIRST use ALWAYS misses and only re-running the SAME
+>    marker (now in the flushed previous record) resolves. The no-match error now states
+>    the timing split and routes both paths (`@main` for the main thread — env-based, no
+>    race; re-run the SAME command+marker otherwise; a FRESH marker restarts the race).
+>    SKILL/`--help` document it; the `whoami` SUBAGENT CAVEAT is corrected to current CC
+>    (an Agent-tool subagent's env holds the PARENT id — own id withheld; older builds
+>    handed a Task subagent its own id).
+> 3. **Doc-only:** `--count-by model` documents the raw `<synthetic>` key (a CC-fabricated
+>    stand-in assistant record, e.g. an API-error notice — reported verbatim); a new
+>    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
+>    mid-record — the line-safe machine form is `--format json`.
+
 
 > **Common conventions.** Every TEXT timestamp is a SINGLE canonical local form — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` (e.g. `2026-07-11 15:33:37 AEST(UTC+10)` on a machine in Sydney; January Sydney = `AEDT(UTC+11)`; India = `IST(UTC+05:30)`), via `jiff` (`TimeZone::system()`). The marker is a FORMAT not a value: the abbreviation + offset are derived from the system zone at that instant (DST-correct), so the only mental step is "shift by the given offset"; a whole-hour offset renders compact (`UTC+10`), a fractional one zero-padded (`UTC+05:30`), and a zone with no abbreviation renders `(UTC±offset)` alone. **There is NO raw-UTC parenthetical in text** (the former `… AEST (…Z)` dual form and the bare-offset `…+10:00` form are GONE — the UTC copy invited LLM timezone-conversion errors); machine UTC lives ONLY in JSON (`ts_utc`, §8.2). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 
