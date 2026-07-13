@@ -557,6 +557,21 @@ pub enum Command {
     Plan(PlanArgs),
     Verbatim(VerbatimArgs),
     Image(ImageArgs),
+    // HIDDEN catch-all for the REMOVED `turns` name (→ `verbatim`, v0.5). Exists only so
+    // the rename gets the pointed successor error the `-t thinking` legacy values get,
+    // instead of clap's teach-nothing "unrecognized subcommand". Never works, always bails
+    // (main.rs). Kept bare like every variant (the shadowing rule above); a plain comment,
+    // not a doc comment, so nothing ever renders for it.
+    #[command(hide = true)]
+    Turns(TurnsRenamedArgs),
+}
+
+/// Argument sink for the hidden [`Command::Turns`] tombstone: swallows EVERY token (flags
+/// included) so the rename error always wins — a flag-parse error must never preempt it.
+#[derive(Args, Debug)]
+pub struct TurnsRenamedArgs {
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0.., hide = true)]
+    pub rest: Vec<std::ffi::OsString>,
 }
 
 /// True iff `selector` (a dotted `role.class.sub` path) is a dot-SEGMENT prefix of `path` —
@@ -1589,7 +1604,10 @@ pub enum AgentKindFilter {
         per session one light {kind:\"session\", session_id, runs, agents} row (counts \
         only); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
         workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
-        default_model, started_utc, started_local} row followed by its member agent rows; \
+        default_model, started_utc, started_local} row followed by its member agent rows \
+        (a RUN row's `status` is the workflow journal's own last status VERBATIM — an OPEN \
+        set, not a csift enum; observed values include `completed` and `killed` — distinct \
+        from an AGENT row's csift-computed `status`); \
         every agent its OWN {kind:\"agent\", …} row in tree PRE-ORDER (a parent row precedes \
         its children; rebuild nesting from parent_agent_id + depth — there is no \
         children[] array in JSON, the tree renders in TEXT mode); a closing \
@@ -1607,7 +1625,10 @@ pub enum AgentKindFilter {
         `--agent`, adds `returned_message` + `returned_message_source` — the NEWEST \
         message the child EVER returned, source-tagged; on a frozen/running lane it \
         PREDATES the pending call, so a lane can carry BOTH a returned_message and \
-        pending_* — the return is history, the pending_* fields are now). `agent_type` is \
+        pending_* — the return is history, the pending_* fields are now; the TEXT render \
+        brands a non-completed lane's message inline (`history — predates the still-open \
+        lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending). \
+        `agent_type` is \
         the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`) — \
         DISTINCT from `shape`, the on-disk transcript shape (builtin-task | workflow | \
         teammate); `kind` is the envelope discriminator exclusively. ID-DOMAIN: `agent_id` \

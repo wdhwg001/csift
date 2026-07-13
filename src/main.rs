@@ -76,5 +76,12 @@ fn run(cli: Cli) -> Result<()> {
         Command::Plan(args) => plan::run_plan(&args),
         Command::Verbatim(args) => turns::run_verbatim(&args),
         Command::Image(args) => image::run_image(&args),
+        // The hidden rename tombstone (cli.rs): always the pointed error, never a run.
+        Command::Turns(_) => anyhow::bail!(
+            "`csift turns` was RENAMED to `csift verbatim` in v0.5 — same command, same \
+             flags (reconstruct the VERBATIM turns a compaction summary clipped): re-run \
+             as `csift verbatim …`. To simply READ a session's recent turns (no compaction \
+             involved), that is `csift show <target> --turn -3..`."
+        ),
     }
 }

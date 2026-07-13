@@ -1,6 +1,6 @@
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.6.3** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.6.4** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -54,6 +54,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | image `#N` handles run densely 1..N | `#N` is inherited from CC's paste-time `[Image #N]` numbering — handles can start past #1 and carry HOLES (that number's image never landed in this transcript); a `--id` miss errors naming the handles that DO exist |
 | `.hits[]` can be flattened bare | the id trio lives on the EXCHANGE row, not inside each hit — bare flattening yields `session_id: null` silently; run the hit's `refetch` verbatim, or merge first: `. as $e \| .hits[] \| . + {session_id: $e.session_id}` |
 | `ScheduleWakeup` calls live under `harness.schedule.*` | a tool CALL classifies by role — arming a wakeup is `agent.tool.use` like any other tool; `harness.schedule.wakeup` is only the FIRED tick (the harness-injected, marker-carrying wakeup prompt), and a custom-prompt tick lands as an isMeta record (excluded, like all isMeta) |
+| `csift turns` reads a session's turns | `turns` was RENAMED `verbatim` in v0.5 (compaction reconstruction only); the old name never runs — it errors naming the successor. Plain turn READING is `show <target> --turn -3..` |
 
 ## Five laws (all commands)
 
@@ -77,7 +78,7 @@ A running subagent cannot read its own id from env. Invent a fresh marker, put i
 
 ## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 25 leaves
 
-Selector = dot-segment prefix: `-t agent` (role) · `-t agent.tool` (use+result) · a full leaf = just it. No `-t` ⇒ all. `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). Don't guess a record's leaf — run `--count-by label` to see the distribution.
+Selector = dot-segment prefix: `-t agent` (role) · `-t agent.tool` (use+result) · a full leaf = just it. No `-t` ⇒ all. `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
 
 ```
 user     .message   genuine human prose (incl. slash-command args, rendered `/name args`)
@@ -160,6 +161,8 @@ Per session: lines, user/assistant record counts, turns, compactions, first→la
 
 ## files — what changed, when
 
+Two different "which sessions touched X?" questions, two commands: sessions that EDITED the file = `files --glob '**/X'` (structural — Edit/Write/MultiEdit authoritative, Bash marked `heuristic`); sessions that merely MENTION it = `search "X" -l` (text recall, catches discussion too). Default to `files` for mutations, `search -l` for provenance/chatter.
+
 ```
 csift files [target…] [--by summary|dir|file|timeline] [--regex RE] [--glob PAT]
   [--turn N|A..B|N..|-k] [--since W] [--until W] [--sessions-from F] [--no-subagents] [--format json]
@@ -217,6 +220,7 @@ Text = a parent→child tree (nesting is logical, from spawn links; disk is flat
 - `--order-by` sets sort AND the `--since/--until` axis: `trigger` (default; the parent tool_use ts = true spawn) · `start` · `completion`. `--agent ID` = one node (implies returned-message; miss = error).
 - Frozen lane: the newest record an unreturned tool_use ⇒ `status:"running"` + `pending_classification`: `escalation-blocked` (a dangerous-rm Bash CC hoists for approval — the one positively confirmable state) | `awaiting-execution` (slow OR wedged — weigh `pending_since_utc`).
 - Teammate control (csift is read-only; this is a pointer): steer/terminate via `SendMessage` BY NAME (`message:{type:"shutdown_request"}`), never TaskStop (rejects every teammate id form) or pkill (in-process). Text footer + node `control_hint`.
+- `returned_message` = the NEWEST message the child EVER returned — on a non-completed lane it predates the pending call, and the text render brands it inline (`history — predates the still-open lane, NOT the outcome`): a "work is complete"-sounding tail on a frozen lane is history, not the ending. A `run` row's `status` is the workflow journal's verbatim last word (open set; observed `completed`/`killed`).
 
 ## image — pasted images
 
@@ -236,7 +240,7 @@ Row kinds: list→`session` · search→`exchange` | `census` · show→`record`
 
 Shared row fields — the id trio on every spanning row: `session_id` (the transcript's OWN id: top-level uuid or subagent agent-id, both round-trip as `@…`) + `is_subagent` + `parent_session_id` (the owning uuid; = session_id on top-level rows). The two-rule id law: line-addressed fetches use `session_id`; scope-level re-targeting uses `parent_session_id`. Hits and collapsed rows carry `refetch` — a ready-to-run `csift show` command at the right id; prefer running it verbatim over assembling your own.
 
-Field enums: `pairing` = `paired` | `pending` | `orphan` | null · census `axis` = `label|tool|turn|session|pairing|model` · `shape` = `builtin-task|workflow|teammate` · `source` = `elicitation-sidecar` | null · files `op` = `write|edit|multi_edit|notebook_edit|bash`.
+Field enums: `pairing` = `paired` | `pending` | `orphan` | null · census `axis` = `label|tool|turn|session|pairing|model` · `shape` = `builtin-task|workflow|teammate` · `source` = `elicitation-sidecar` | null · files `op` = `write|edit|multi_edit|notebook_edit|bash`. An agents RUN row's `status` is NOT one of these closed sets — it is the workflow journal's own last status verbatim (open set; observed: `completed`, `killed`), distinct from an agent row's csift-computed `status`.
 
 Key fields per row (fixture-verified):
 - search `exchange`: trio + `turn_index, ts_utc/local, record_uuids, hits[]`; each hit: `label, labels[], line (null=sidecar), uuid, ts_utc/local, tool_name, from, to, pairing, tool_use_id, source, excerpt, image_ids[], refetch`. Summary: `matched, sessions, transcript_ids[≤100], transcript_ids_truncated, dropped_by_cap, skipped_lines, with_elicitation_sidecar, excerpts_truncated` (+ on zero matches `definitive_absence, active_filters, excluded_by_label`).
@@ -264,6 +268,10 @@ csift agents @U --format json | jq 'select(.kind=="agent") | {agent_id, shape, s
 csift stats @main --no-subagents --format json | tail -1 | jq .tokens                    # token burn
 csift files @U --by file --format json | jq -r 'select(.kind=="file" and (.heuristic|not)).path'
 csift search "" @U -t agent.tool.use --raw | jq 'select(.message.content[]?.input.command? // "" | test("rm "))'
+# RECORD-level pipeline (fetch a filtered subset of hits FULL): select in jq, then run the
+# csift-generated refetch commands — each already addresses the hit's OWN transcript, so this
+# composes across subagents where a line-number pipe could not (lines are per-FILE):
+csift search P @U --format json | jq -r 'select(.kind=="exchange") | .hits[] | select(.label=="agent.tool.result") | .refetch' | sh
 ```
 
 ## What csift will NOT do (and the designated alternative)
@@ -284,6 +292,7 @@ While pending, these three leave NO trace in native jsonl (whole-turn buffered /
 - `--claude-home DIR` (global, any position — even before the subcommand) repoints `~/.claude`; precedence flag > `$CLAUDE_CONFIG_DIR` > `$HOME/.claude`.
 - Path filters (`files --regex/--glob`) are case-exact (paths); search PATTERN is smart-case (text).
 - Retention: CC deletes transcripts older than `cleanupPeriodDays` (default 30!). Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json`; recommend 180/365 — csift can only read what survives.
+- Exit codes: the contract is 0 vs non-zero, nothing finer. De facto a USAGE error (clap parse: bad flag/selector/conflict) exits 2 while a csift-level error (address miss, pinned id matching nothing) exits 1 — clap's convention, informational only; don't build on the split.
 
 ## Recipes
 

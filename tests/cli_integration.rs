@@ -1136,10 +1136,12 @@ fn turns_command_renamed_to_verbatim() {
     // Zero-BC: the old `turns` verb is GONE — it hits the wall (unknown subcommand), which
     // sends a stale model back to re-read SKILL rather than silently mis-running.
     let old = h.run(&["turns", t.as_str()]);
-    assert!(!old.success, "the old `turns` command must be unknown now");
+    assert!(!old.success, "the old `turns` command must never run");
+    // v0.6.4: the wall is still a wall, but a POINTED one — the hidden tombstone names the
+    // successor (the `-t thinking` treatment) instead of clap's generic unrecognized error.
     assert!(
-        old.stderr.contains("unrecognized subcommand"),
-        "error flags the removed verb: {}",
+        old.stderr.contains("RENAMED to `csift verbatim`"),
+        "error names the successor: {}",
         old.stderr
     );
     // The new `verbatim` verb is the compaction-fidelity reconstructor.
@@ -4869,6 +4871,87 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     // Completed lane: completion instant present and == last activity.
     assert_eq!(node2["completed_utc"], "2026-06-26T11:21:00.000Z");
     assert_eq!(node2["last_activity_utc"], node2["completed_utc"]);
+}
+
+#[test]
+fn turns_old_subcommand_name_gets_the_rename_error() {
+    // R8: the v0.5 `turns`→`verbatim` rename used to surface as clap's teach-nothing
+    // "unrecognized subcommand" — the one error below the tool's water line. The hidden
+    // tombstone now bails with the successor (and swallows any flags, so the message
+    // never loses to a flag-parse error).
+    let h = populated_home();
+    let out = h.run(&["turns", &at(SESS), "--slices", "4", "--turn", "-3.."]);
+    assert!(!out.success, "the tombstone must never run: {}", out.stdout);
+    assert!(
+        out.stderr.contains("RENAMED to `csift verbatim`")
+            && out.stderr.contains("show <target> --turn"),
+        "pointed rename error expected, got: {}",
+        out.stderr
+    );
+    // Hidden: no COMMAND ROW for it in the root help (a clap row is `  turns` alone or
+    // `turns` + 2+ spaces + about; wrapped PROSE lines like "turns a compaction summary…"
+    // are not rows and must not trip this).
+    let help = h.run(&["--help"]);
+    assert!(
+        !help.stdout.lines().any(|l| {
+            let t = l.trim_start();
+            t == "turns" || t.starts_with("turns  ")
+        }),
+        "turns must stay hidden from the subcommand list: {}",
+        help.stdout
+    );
+}
+
+#[test]
+fn agents_returned_message_on_open_lane_carries_history_caution() {
+    // R8: a frozen teammate's newest returned message read like a clean finale ("work is
+    // complete, confirming shutdown") and nearly fooled a real reader. On a NON-completed
+    // lane the text render brands the message as history inline; a completed lane stays
+    // unbranded.
+    let enc = "-Users-testuser-Projects-rmcaution";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let hex = "ab8a4c5868015a8be";
+    let frozen = concat!(
+        r#"{"type":"user","isSidechain":true,"agentId":"ab8a4c5868015a8be","timestamp":"2026-06-26T10:40:00.000Z","message":{"role":"user","content":"teardown"}}"#,
+        "\n",
+        r#"{"type":"assistant","timestamp":"2026-06-26T10:42:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Work is complete — confirming the shutdown request."}]}}"#,
+        "\n",
+        r#"{"type":"assistant","timestamp":"2026-06-26T10:43:31.906Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_0137gHdLDnXKsa94qGmmnbqV","name":"Bash","input":{"command":"echo wait"}}]}}"#,
+        "\n",
+    );
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-26T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+    );
+    h.write(&format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"), frozen);
+
+    // FROZEN lane: the returned line must carry the inline history caution.
+    let out = h.run(&["agents", &format!("@{sess}"), "--returned-message"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("history — predates the still-open lane, NOT the outcome"),
+        "open-lane returned message must be branded as history: {}",
+        out.stdout
+    );
+
+    // RESOLVED (tool_result + closing text) → completed lane, no caution.
+    let resolved = format!(
+        "{frozen}{}{}",
+        "{\"type\":\"user\",\"timestamp\":\"2026-06-26T11:20:13.911Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_0137gHdLDnXKsa94qGmmnbqV\",\"content\":\"ok\"}]}}\n",
+        "{\"type\":\"assistant\",\"timestamp\":\"2026-06-26T11:21:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Teardown complete.\"}]}}\n"
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"),
+        &resolved,
+    );
+    let out2 = h.run(&["agents", &format!("@{sess}"), "--returned-message"]);
+    assert!(
+        out2.stdout.contains("returned") && !out2.stdout.contains("predates the still-open lane"),
+        "a completed lane's returned message must stay unbranded: {}",
+        out2.stdout
+    );
 }
 
 #[test]

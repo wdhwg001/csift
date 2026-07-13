@@ -496,7 +496,20 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     }
     if view.want_returned {
         if let (Some(msg), Some(src)) = (&n.returned_message, n.returned_message_source) {
-            println!("{ind2}returned   ({}) {}", src.label(), one_line(msg));
+            // On a non-completed lane the newest returned/observed message PREDATES the
+            // still-open work — a "work is complete, confirming shutdown" tail reads like
+            // an outcome and has misled a real reader (R8). Brand it inline next to the
+            // source tag; don't rely on the reader remembering the schema note.
+            // `completed_utc` is status-gated, so absence == the lane is not completed.
+            if n.completed_utc.is_none() {
+                println!(
+                    "{ind2}returned   ({} · history — predates the still-open lane, NOT the outcome) {}",
+                    src.label(),
+                    one_line(msg)
+                );
+            } else {
+                println!("{ind2}returned   ({}) {}", src.label(), one_line(msg));
+            }
         } else {
             println!("{ind2}returned   (unresolved)");
         }

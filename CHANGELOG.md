@@ -5,6 +5,22 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.4] - 2026-07-13
+
+- The removed `turns` name gets a tombstone error: a hidden variant always
+  bails naming the rename (`verbatim`, same flags) and routes plain turn
+  reading to `show <target> --turn -3..`. A wall, never a shim — it never
+  runs.
+- `agents` text brands a non-completed lane's `returned_message` inline
+  (`history — predates the still-open lane, NOT the outcome`); a completed
+  lane stays unbranded.
+- Docs: a workflow RUN row's `status` is journal-verbatim (an open set, not a
+  csift enum); the richest-view dedup rule stated mechanically (`labels[]` is
+  richest-first; the rendered view is the first label surviving `-t`/`-T`);
+  exit codes de facto (usage errors 2, csift errors 1 — the contract stays
+  0-vs-non-zero); the record-level jq pipeline idiom (select in jq, run the
+  csift-generated `refetch`).
+
 ## [0.6.3] - 2026-07-13
 
 - Elicitation-sidecar GHOST-PENDING guard (correctness): Claude Code fires no

@@ -623,6 +623,34 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.4 CHANGE LEDGER (non-breaking; error-text + render + doc surface — `csift 0.6.4`).**
+> The eighth-audit release (Sonnet 5 on v0.6.3 — the round that verified the v0.5→v0.6.3
+> arc against a resurfaced pre-v0.5 critique and found the remaining gaps at the edges).
+> 1. **The removed `turns` name gets a tombstone error.** `csift turns …` used to hit
+>    clap's teach-nothing "unrecognized subcommand" — the one error left below the tool's
+>    water line (the `-t thinking` legacy values got successor pointers in v0.6.3; the
+>    LARGER rename taught nothing). A hidden `Turns` variant (bare, `#[command(hide)]`,
+>    swallowing every token so a flag-parse error can never preempt the message) now
+>    always bails: renamed `verbatim` in v0.5, same flags — and routes plain turn READING
+>    to `show <target> --turn -3..`. Still a wall, never a shim: it never runs.
+> 2. **`agents` text brands a non-completed lane's `returned_message` inline.** A frozen
+>    teammate's newest returned message can READ like a clean finale ("work is complete,
+>    confirming shutdown" — a real two-week frozen lane) and nearly misled a real reader
+>    despite the schema note. On a lane with no status-gated `completed_utc`, the text
+>    render now prints `returned (<source> · history — predates the still-open lane, NOT
+>    the outcome) <msg>`; a completed lane stays unbranded. JSON is unchanged (status sits
+>    beside it).
+> 3. **Doc-only:** (a) an agents RUN row's `status` is the workflow journal's last word
+>    VERBATIM — an open set (observed `completed`/`killed`), not a csift enum, distinct
+>    from the agent row's computed status (help + SKILL note it); (b) the richest-view
+>    dedup rule stated mechanically: `labels[]` is richest-first and the rendered view is
+>    the FIRST label surviving `-t`/`-T` — no lookup table needed; (c) exit codes: usage
+>    errors exit 2 (clap convention), csift errors exit 1 — informational, the contract
+>    stays 0-vs-non-zero; (d) the RECORD-level pipeline idiom canonized in SKILL jq canon
+>    (select hits in jq → run their csift-generated `refetch` commands; a primitive was
+>    REJECTED — it would break `show`'s single-transcript law); (e) files-vs-search
+>    routing: EDITED = `files --glob`, MENTIONED = `search -l`.
+
 > **v0.6.3 CHANGE LEDGER (non-breaking; correctness + consistency fixes — `csift 0.6.3`).**
 > The seventh-audit release (Sonnet 5's v0.6.2 review — the first witness to surface a
 > CORRECTNESS-class defect; its mechanism hypothesis was wrong, the phenomenon real).
