@@ -5,6 +5,17 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.7] - 2026-07-14
+
+Doc-only convergence round.
+
+- SKILL names verbatim's two automation header fields: `automation_by_kind`
+  (the SELECTED triggers per class) vs `automation_in_scope_by_kind` (every
+  in-scope pulse regardless of budget).
+- `agents` `returned_message` semantics stated: it is the ORCHESTRATOR's
+  record of the child's return, not the agent's own conclusion; the child's
+  final words are always `show @<agent-id> --turn -1..`.
+
 ## [0.6.6] - 2026-07-14
 
 - Obviously-corrupt lines are COUNTED (correctness): every byte-prefilter

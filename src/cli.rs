@@ -1639,7 +1639,12 @@ pub enum AgentKindFilter {
         PREDATES the pending call, so a lane can carry BOTH a returned_message and \
         pending_* — the return is history, the pending_* fields are now; the TEXT render \
         brands a non-completed lane's message inline (`history — predates the still-open \
-        lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending). \
+        lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending. \
+        SEMANTICS: it answers \"what did the ORCHESTRATOR record as the return\", not \
+        \"what did the agent conclude\" — a `sync-tool-result` source faithfully reports \
+        the parent's tool_result even when the harness truncated it to a `Done. \
+        agentId: …` wrapper; the child's own final words are always \
+        `csift show @<agent-id> --turn -1..`). \
         `agent_type` is \
         the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`) — \
         DISTINCT from `shape`, the on-disk transcript shape (builtin-task | workflow | \

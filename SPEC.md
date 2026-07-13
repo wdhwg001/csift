@@ -623,6 +623,24 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.7 CHANGE LEDGER (non-breaking; help/SKILL doc surface only — `csift 0.6.7`).**
+> The eleventh-audit release (Sonnet 5 on v0.6.6 — a convergence round: 114 invocations
+> across all twelve command surfaces, every prior-round fix independently re-verified
+> including the documented residual boundary of the R10 malformed-shape check, ZERO new
+> behavioral findings; the round's whole yield is two documentation clauses).
+> 1. **SKILL names verbatim's two automation header fields** — `automation_by_kind` (the
+>    SELECTED triggers per class) vs `automation_in_scope_by_kind` (every in-scope pulse
+>    regardless of budget; the same window-vs-scope pairing as `boundaries_*`). The
+>    distinction was already fully documented in `verbatim --help`'s schema prose — the
+>    witness's "I had to guess from the name alone" was overbroad (it read SKILL, not
+>    --help; the R10 sampled-one-row shape again) — but SKILL's field list really did say
+>    only "+ the automation split". Both facts recorded; the list now names both.
+> 2. **`returned_message` semantics stated: the ORCHESTRATOR's record, not the agent's
+>    conclusion** (agents --help + SKILL). A `sync-tool-result` source faithfully reports
+>    the parent's tool_result even when the harness truncated it to a `Done. agentId: …`
+>    wrapper (verified live on a real spawned subagent); the child's own final words are
+>    always `show @<agent-id> --turn -1..`.
+
 > **v0.6.6 CHANGE LEDGER (non-breaking; correctness fix + header/JSON surface — `csift 0.6.6`).**
 > The tenth-audit release (Sonnet 5 on v0.6.5 — the first witness to build a synthetic
 > `--claude-home` fixture, closing a gap six prior reports had declined on a mistaken
