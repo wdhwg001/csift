@@ -623,6 +623,41 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.5 CHANGE LEDGER (non-breaking; correctness fix + additive JSON — `csift 0.6.5`).**
+> The ninth-audit release (Sonnet 5 on v0.6.4 — its self-initiated integrity re-audit
+> surfaced the round's headline bug; one suggestion was refuted as already-shipped).
+> 1. **Bare ISO datetimes are LOCAL wall-clock time — the time-of-day is no longer
+>    silently discarded (correctness).** `--since "2026-07-13T20:00:00"` (bare, no
+>    offset/`Z`) used to collapse to local MIDNIGHT: jiff's civil-Date parser accepts a
+>    full datetime string and keeps only its date part, and `parse_absolute` tried Date
+>    before any DateTime arm — so a bounded window looked exactly like a quiet time period
+>    (the worst silent-wrong-answer shape a time flag can produce; verified live: three
+>    different times of day returned byte-identical results). A civil-DateTime arm now
+>    precedes the Date arm — bare datetime ⇒ system-local wall clock, the bare-date
+>    convention extended — guarded so a string CARRYING a malformed offset still bails
+>    (jiff's civil parsers ignore offsets; it must never be re-read as local). One fix
+>    covers every WHEN consumer (`--since`/`--until` on search/list/stats/agents/files/
+>    recover/image/verbatim). The bail text + every WHEN doc now name all three forms.
+> 2. **The id trio rides EVERY search hit row (additive).** Two independent audits (R6,
+>    R9) tripped on bare `.hits[]` flattening yielding `session_id: null` — jq cannot fail
+>    loud on a missing key, so the data now matches the natural access pattern:
+>    `session_id`/`is_subagent`/`parent_session_id` on each hit (and sibling) object,
+>    duplicating the exchange row's copy. The help sentence claiming "per-hit objects
+>    carry no session_id" is corrected; `refetch` stays the preferred single-record path.
+> 3. **Advisory notes fire AFTER target resolution.** `search "" @abc` used to print the
+>    empty-pattern scope warning, then fail resolution — a warning about a run that was
+>    never going to happen. Resolution now precedes the uuid-as-text note and the
+>    may-emit-a-lot warning.
+> 4. **Doc-only:** SKILL's JSON reference gains the missing `plan` / `recover`
+>    (coverage|segment|snapshot|boundary) / `image` row schemas (transcribed from live
+>    output — the R9 witness burned a round-trip guessing `plan_file` as `path`); @trap
+>    marker uniqueness is stated as CONVERSATION-wide (concurrent agents collide →
+>    AMBIGUOUS error, verified live by two real subagents); `show`'s help notes a "turn"
+>    can be dozens of records on an agentic session (cap-protected). REFUTED, no change:
+>    "stats --help lacks the ≈2× cross-reference" — it has carried it since v0.6.2 (the
+>    witness never ran `stats --help`; its 5 transcript mentions were its own report
+>    prose).
+
 > **v0.6.4 CHANGE LEDGER (non-breaking; error-text + render + doc surface — `csift 0.6.4`).**
 > The eighth-audit release (Sonnet 5 on v0.6.3 — the round that verified the v0.5→v0.6.3
 > arc against a resurfaced pre-v0.5 critique and found the remaining gaps at the edges).

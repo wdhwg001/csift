@@ -100,7 +100,8 @@ impl TimeWindow {
 }
 
 /// Parse one bound: try the relative form first (`<N><unit>`), then absolute
-/// ISO8601 (full instant, or a bare date interpreted at system-local midnight).
+/// ISO8601 (full instant; bare datetime = system-local wall clock; bare date =
+/// system-local midnight).
 fn parse_bound(s: &str) -> Result<Timestamp> {
     let s = s.trim();
     if let Some(ts) = parse_relative(s)? {
@@ -144,11 +145,29 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
     Ok(Some(then.timestamp()))
 }
 
-/// Absolute ISO8601: a full instant (`2026-06-01T00:00:00Z`) or a bare date
-/// (`2026-06-01`, taken at system-local midnight).
+/// Absolute ISO8601: a full instant (`2026-06-01T05:00:00Z` / `…+10:00`), a bare civil
+/// DATETIME (`2026-06-01T05:00:00` — system-LOCAL wall-clock time, the same local
+/// convention as a bare date), or a bare date (`2026-06-01`, system-local midnight).
 fn parse_absolute(s: &str) -> Result<Timestamp> {
     if let Ok(ts) = s.parse::<Timestamp>() {
         return Ok(ts);
+    }
+    // Bare civil DATETIME (no offset / `Z`) → system-local wall clock → UTC. This arm MUST
+    // precede the Date arm: jiff's civil-Date parser ACCEPTS a full datetime string and
+    // keeps only its date part, so with Date tried first a bare "2026-07-13T20:00:00"
+    // silently collapsed to local MIDNIGHT — a bounded window that looked exactly like a
+    // quiet time period (the R9 silent-wrong-answer bug; the worst failure shape a
+    // time-window flag can produce). The offset guard keeps this arm honest: jiff's civil
+    // parsers also IGNORE a trailing offset, so a string that CARRIES one but failed the
+    // Timestamp parse above is malformed and must fall through to the bail, never be
+    // re-read as local wall-clock time.
+    if !has_offset_indicator(s) {
+        if let Ok(dt) = s.parse::<jiff::civil::DateTime>() {
+            let zoned = dt.to_zoned(local_tz()).with_context(|| {
+                format!("cannot place datetime {s:?} in the system-local timezone")
+            })?;
+            return Ok(zoned.timestamp());
+        }
     }
     // Bare civil date → system-local midnight → UTC.
     if let Ok(date) = s.parse::<jiff::civil::Date>() {
@@ -158,9 +177,20 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
         return Ok(zoned.timestamp());
     }
     bail!(
-        "cannot parse time bound {s:?}: expected ISO8601 (e.g. 2026-06-01 or \
-         2026-06-01T05:00:00Z) or a relative form (e.g. 2h, 3d, 90m)"
+        "cannot parse time bound {s:?}: expected ISO8601 — `2026-06-01` (bare date = \
+         system-local midnight), `2026-06-01T05:00:00` (bare datetime = system-LOCAL \
+         wall-clock time), `2026-06-01T05:00:00Z` / `…+10:00` (explicit zone) — or a \
+         relative form (e.g. 2h, 3d, 90m)"
     )
+}
+
+/// True when the TIME part of an ISO8601-ish string carries a zone indicator (`Z`/`z`, `+`,
+/// or a `-` AFTER the date/time separator — the date part's own dashes don't count).
+fn has_offset_indicator(s: &str) -> bool {
+    match s.find(['T', 't', ' ']) {
+        Some(sep) => s[sep + 1..].contains(['Z', 'z', '+', '-']),
+        None => false,
+    }
 }
 
 /// `now` in the system-local timezone (auto-detected). [`local_tz`] is infallible,
@@ -179,6 +209,34 @@ mod tests {
         assert!(w.is_unbounded());
         assert!(w.contains(Some("2026-06-07T05:00:00Z")));
         assert!(w.contains(None));
+    }
+
+    #[test]
+    fn bare_datetime_is_local_wall_clock_not_midnight_collapse() {
+        // R9: jiff's civil-Date parser accepts a full datetime string (keeping only the
+        // date), so a bare datetime used to collapse silently to local midnight. The
+        // DateTime arm must yield date-midnight + the stated time-of-day, in the SAME
+        // local zone — assert the delta, which is TZ-independent (no DST transition on
+        // 2026-06-01 in any mainstream zone between 00:00 and 05:00).
+        let midnight = parse_bound("2026-06-01").unwrap();
+        let five_am = parse_bound("2026-06-01T05:00:00").unwrap();
+        let delta = five_am.as_second() - midnight.as_second();
+        assert_eq!(
+            delta,
+            5 * 3600,
+            "time-of-day must be honored, not discarded"
+        );
+        // And two different times of day must differ (the collapse made them equal).
+        let eight_pm = parse_bound("2026-06-01T20:00:00").unwrap();
+        assert_ne!(five_am, eight_pm);
+    }
+
+    #[test]
+    fn malformed_offset_still_fails_loud() {
+        // A string CARRYING a zone indicator that Timestamp rejects must bail, never be
+        // silently re-read as local wall-clock (jiff's civil parsers ignore offsets).
+        assert!(parse_bound("2026-06-01T05:00:00+99:00").is_err());
+        assert!(parse_bound("2026-13-99T99:99:99").is_err());
     }
 
     #[test]

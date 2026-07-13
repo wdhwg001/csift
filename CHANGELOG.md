@@ -5,6 +5,20 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.5] - 2026-07-13
+
+- Bare ISO datetimes are LOCAL wall-clock time (correctness): `--since
+  "2026-07-13T20:00:00"` used to collapse silently to local midnight (the
+  civil-Date parser kept only the date part). A civil-DateTime arm now
+  precedes the Date arm; a string carrying a malformed offset still bails.
+  One fix covers every `--since`/`--until` consumer.
+- The id trio (`session_id` / `is_subagent` / `parent_session_id`) rides EVERY
+  search hit and sibling object, so bare `.hits[]` flattening keeps real ids.
+- Advisory notes fire AFTER target resolution — never a warning about a run
+  that was never going to happen.
+- SKILL: the missing `plan` / `recover` / `image` JSON row schemas added;
+  `@trap` marker uniqueness stated as conversation-wide.
+
 ## [0.6.4] - 2026-07-13
 
 - The removed `turns` name gets a tombstone error: a hidden variant always

@@ -483,11 +483,10 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
         Select rows with `jq 'select(.kind==\"…\")'`; the summary is always `tail -1`. Do\n  \
         the select BEFORE projecting fields — a field template applied to the mixed stream\n  \
         stamps the header/summary rows as all-null rows. Rows\n  \
-        carry the id trio (`session_id` / `is_subagent` / `parent_session_id`); search hits\n  \
-        carry `refetch` — a ready-to-run `csift show` command for that exact record. The\n  \
-        trio lives on the ROW (the exchange), not inside `.hits[]` — flattening hits alone\n  \
-        yields `session_id: null`; run each hit's `refetch` verbatim, or merge the trio in\n  \
-        first (`. as $e | .hits[] | . + {session_id: $e.session_id}`). Full\n  \
+        carry the id trio (`session_id` / `is_subagent` / `parent_session_id`) — INCLUDING\n  \
+        every search hit inside `.hits[]` (v0.6.5), so bare `.hits[]` flattening carries\n  \
+        real ids; each hit also carries `refetch` — a ready-to-run `csift show` command for\n  \
+        that exact record (still the preferred single-record path). Full\n  \
         row schemas live in each subcommand's --help.\n\n\
         PITFALLS WORTH KNOWING UP FRONT\n  \
           - An empty pattern (\"\") matches EVERYTHING: it is the base for -t/time/turn\n    \
@@ -843,9 +842,9 @@ pub struct ListArgs {
     /// Only sessions ACTIVE in this window: keep a session iff its [first-activity,
     /// last-activity] span — the timestamps this index already reads (head+tail, never a
     /// full scan) — INTERSECTS `[--since, --until]`, so a long-running session that
-    /// straddles the window still lists. WHEN = ISO8601 (bare date ⇒ local midnight) or
-    /// relative `45s 90m 2h 3d 1w` (that long ago). A session with no readable timestamp
-    /// never matches a bounded window.
+    /// straddles the window still lists. WHEN = ISO8601 (bare date ⇒ local midnight; bare
+    /// datetime ⇒ LOCAL wall-clock; `Z`/`+10:00` ⇒ explicit) or relative `45s 90m 2h 3d 1w`
+    /// (that long ago). A session with no readable timestamp never matches a bounded window.
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
@@ -923,8 +922,9 @@ impl ListArgs {
         WINDOWING: `--turn` takes the shared range grammar — `N` (one turn) · `A..B` \
         (closed) · `N..` (turn N → the end) · `..N` (start → N) · `-k` = k-th FROM THE END \
         (`-3..` = the last 3 turns), 0-based on turn-boundary order — and INTERSECTS with \
-        `--since`/`--until` (both filters AND). Time bounds accept ISO8601 (`2026-06-01`, \
-        `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, `45s`, `1w`) meaning \
+        `--since`/`--until` (both filters AND). Time bounds accept ISO8601 (`2026-06-01` = local \
+        midnight · `2026-06-01T05:00:00` BARE = that LOCAL wall-clock time · \
+        `2026-06-01T05:00:00Z`/`…+10:00` = explicit zone) or a relative form (`2h`, `3d`, `90m`, `45s`, `1w`) meaning \
         \"that long ago\" in the system local timezone.\n\n\
         ZERO MATCHES IS A DEFINITIVE ANSWER, NOT A FAILURE: a no-match search prints a stderr \
         diagnosis — \"DEFINITIVE absence (exit 0), NOT an error\", the active filters, and (when a \
@@ -1021,14 +1021,16 @@ impl ListArgs {
         JSON SCHEMA (per --format json)\n  \
           One ENVELOPE object PER matched exchange (NOT one bare record per line): \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
-        record_uuids:[…], hits:[{label, labels:[…], line, uuid, excerpt, tool_name, pairing, \
+        record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
+        labels:[…], line, uuid, excerpt, tool_name, pairing, \
         from, to, ts_utc, ts_local, refetch}, …]} — `label` is the matched dotted path, `labels` \
         the record's full label set, `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
         when the hit is `agent.communication.*`, and `refetch` is the ready-to-run `csift show` \
         command addressed at the RIGHT id (run it verbatim). With `--count-by <axis>` the rows are `census` \
         objects instead. The \
-        per-hit objects carry no session_id; it lives on the envelope. With `--siblings`, the \
+        id trio rides EVERY hit object too (so bare `.hits[]` flattening keeps real ids); \
+        `refetch` stays the preferred single-record path. With `--siblings`, the \
         envelope also carries a `siblings:[…]` array (same per-hit shape) for the turn's \
         non-matched records. Envelopes stream in \
         a COMBINED STABLE CHRONOLOGICAL order (subagent exchanges interleaved with top-level \
@@ -1151,8 +1153,9 @@ pub struct SearchArgs {
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
-    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
+    /// an ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime
+    /// (`2026-06-01T05:00:00`) = that LOCAL wall-clock time; or a bare date (`2026-06-01`)
+    /// = LOCAL MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
@@ -1688,8 +1691,9 @@ pub struct AgentsArgs {
     pub kinds: Vec<AgentKindFilter>,
 
     /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
-    /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`); an ISO8601 datetime
-    /// (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL MIDNIGHT. Filters by
+    /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`); an ISO8601 instant
+    /// (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime (`2026-06-01T05:00:00`) = that
+    /// LOCAL wall-clock time; or a bare date (`2026-06-01`) = LOCAL MIDNIGHT. Filters by
     /// TRIGGER time by default (`--order-by start|completion` switches axis).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
@@ -1989,8 +1993,9 @@ pub struct FilesArgs {
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
-    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
+    /// an ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime
+    /// (`2026-06-01T05:00:00`) = that LOCAL wall-clock time; or a bare date (`2026-06-01`)
+    /// = LOCAL MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
@@ -2228,8 +2233,9 @@ pub struct RecoverArgs {
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
-    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
+    /// an ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime
+    /// (`2026-06-01T05:00:00`) = that LOCAL wall-clock time; or a bare date (`2026-06-01`)
+    /// = LOCAL MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 
@@ -2761,8 +2767,9 @@ pub struct VerbatimArgs {
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
-    /// an ISO8601 datetime (`2026-06-01T05:00:00Z`); or a bare date (`2026-06-01`) = LOCAL
-    /// MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
+    /// an ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime
+    /// (`2026-06-01T05:00:00`) = that LOCAL wall-clock time; or a bare date (`2026-06-01`)
+    /// = LOCAL MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
     #[arg(long, value_name = "WHEN")]
     pub since: Option<String>,
 

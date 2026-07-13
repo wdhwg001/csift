@@ -866,13 +866,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             .iter()
             .filter_map(|p| p.to_str())
             .any(path::pins_single_session);
-    if path::is_uuid(&args.pattern) && !has_session_filter {
-        eprintln!(
-            "csift: note: searching for this uuid as TEXT across the scope; to scope the \
-             search TO that session, pass it as a target: `csift search <PATTERN> @{}`",
-            args.pattern
-        );
-    }
     // A `-t`/`-T` combination that excludes everything it includes can never match — a
     // statically-detectable mistake, so fail loud (never an honest-looking empty result).
     if args.label_filter().is_statically_empty() {
@@ -885,6 +878,25 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     }
 
     let matcher = build_matcher(args)?;
+
+    // ── Resolve targets → session files via the shared (optionally subagent-spanning)
+    //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.)
+    //    Resolution runs BEFORE the advisory notes below: an unreachable target must fail
+    //    first, not after a scope warning about a run that was never going to happen (R9). ──
+    let session_files = path::resolve_targets_with_session_list(
+        &args.targets(),
+        args.sessions_from.as_deref(),
+        args.want_subagents().into(),
+        path::Caller::Other,
+    )?;
+
+    if path::is_uuid(&args.pattern) && !has_session_filter {
+        eprintln!(
+            "csift: note: searching for this uuid as TEXT across the scope; to scope the \
+             search TO that session, pass it as a target: `csift search <PATTERN> @{}`",
+            args.pattern
+        );
+    }
     if matcher.is_pure_filter()
         && args.labels.is_empty()
         && args.labels_not.is_empty()
@@ -897,15 +909,6 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
              matches every exchange in scope — this may emit a lot."
         );
     }
-
-    // ── Resolve targets → session files via the shared (optionally subagent-spanning)
-    //    resolver. (Record FETCHING by line/uuid is `csift show`'s job, not search's.) ──
-    let session_files = path::resolve_targets_with_session_list(
-        &args.targets(),
-        args.sessions_from.as_deref(),
-        args.want_subagents().into(),
-        path::Caller::Other,
-    )?;
 
     // `--siblings <SPEC>`: parse the repeatable caps ONCE here (a malformed spec is a hard
     // error, surfaced before any scan). `None` ⇒ siblings off. Parsed up front so the per-file
@@ -2869,7 +2872,8 @@ fn refetch_json(session_id: &str, h: &Hit) -> serde_json::Value {
     }
 }
 
-fn hit_json(session_id: &str, h: &Hit) -> serde_json::Value {
+fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
+    let session_id: &str = &ex.session_id;
     // Comm direction (GOLD §4): `from`/`to` only for an `agent.communication.*` hit, else null.
     let (from, to) = match &h.direction {
         Some((f, t)) => (serde_json::json!(f), serde_json::json!(t)),
@@ -2878,6 +2882,15 @@ fn hit_json(session_id: &str, h: &Hit) -> serde_json::Value {
     // Tool pairing (GOLD §7): the `▹` join state of an agent.tool.use/result hit, else null.
     let pairing = pairing_json(h.pair);
     serde_json::json!({
+        // The id TRIO rides EVERY hit row too (R9): bare `.hits[]` flattening is the single
+        // most natural jq idiom against the most-piped command, and with the trio only on
+        // the exchange row it yielded silent nulls — two independent audits tripped on it.
+        // jq cannot fail loud on a missing key, so the data matches the natural access
+        // pattern instead. (The exchange row keeps its copy; `refetch` stays the preferred
+        // single-hit path.)
+        "session_id": ex.session_id,
+        "is_subagent": ex.is_subagent,
+        "parent_session_id": ex.parent_session_id,
         // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
         "label": h.class.path(),
         "labels": h.labels,
@@ -2920,11 +2933,7 @@ fn render_json(outcome: &SearchOutcome, diagnosis: Option<&EmptyDiagnosis>) -> R
         ))?
     );
     for ex in &outcome.exchanges {
-        let hits: Vec<_> = ex
-            .hits
-            .iter()
-            .map(|h| hit_json(&ex.session_id, h))
-            .collect();
+        let hits: Vec<_> = ex.hits.iter().map(|h| hit_json(ex, h)).collect();
         let mut obj = json!({
             "kind": "exchange",
             "session_id": ex.session_id,
@@ -2945,11 +2954,7 @@ fn render_json(outcome: &SearchOutcome, diagnosis: Option<&EmptyDiagnosis>) -> R
         // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
         // Present only when there are siblings — absent ⇒ none (keeps the common envelope lean).
         if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
-            let sibs: Vec<_> = ex
-                .siblings
-                .iter()
-                .map(|h| hit_json(&ex.session_id, h))
-                .collect();
+            let sibs: Vec<_> = ex.siblings.iter().map(|h| hit_json(ex, h)).collect();
             obj["siblings"] = json!(sibs);
             obj["siblings_hidden"] = json!(ex.siblings_hidden);
             obj["turn_lines"] = json!([ex.turn_lines.0, ex.turn_lines.1]);

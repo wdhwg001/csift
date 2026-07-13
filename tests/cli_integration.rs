@@ -4955,6 +4955,94 @@ fn agents_returned_message_on_open_lane_carries_history_caution() {
 }
 
 #[test]
+fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
+    // R9 §18a: jiff's civil-Date parser accepts a full datetime string (keeping only the
+    // date part), so `--since "…T20:00:00"` (bare, no offset) silently collapsed to local
+    // MIDNIGHT — a bounded window that read exactly like a quiet time period. Bare
+    // datetimes are now system-LOCAL wall-clock time (the bare-date convention extended).
+    let h = Home::new();
+    let enc = "-Users-test-Projects-tw";
+    let sess = "cccccccc-dddd-4eee-8fff-000000000000";
+    // Two genuine user turns: 05:00Z (=15:00 AEST) and 09:00Z (=19:00 AEST).
+    let body = concat!(
+        r#"{"type":"user","uuid":"u1","sessionId":"cccccccc-dddd-4eee-8fff-000000000000","cwd":"/Users/test/Projects/tw","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"afternoon message"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply one"}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"u2","sessionId":"cccccccc-dddd-4eee-8fff-000000000000","timestamp":"2026-06-07T09:00:00.000Z","message":{"role":"user","content":"evening message"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T09:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply two"}]}}"#,
+        "\n",
+    );
+    h.write(&format!("{enc}/{sess}.jsonl"), body);
+    let tz = [("TZ", "Australia/Sydney")];
+    let count = |since: &str| -> String {
+        let out = h.run_with_env(
+            &["search", "", &format!("@{sess}"), "--since", since, "-c"],
+            &tz,
+        );
+        assert!(out.success, "since={since} stderr: {}", out.stderr);
+        out.stdout.trim().to_string()
+    };
+    // Bare date = local midnight → both turns.
+    assert_eq!(count("2026-06-07"), "2");
+    // Bare datetime 16:00 AEST sits between the two (15:00 / 19:00 AEST) → exactly 1.
+    // Under the old midnight-collapse this returned 2, identically to the bare date.
+    assert_eq!(count("2026-06-07T16:00:00"), "1");
+    // And a bare datetime PAST both → 0 (three distinct answers ⇒ time-of-day honored).
+    assert_eq!(count("2026-06-07T20:00:00"), "0");
+    // A malformed offset must still fail loud, never be re-read as local wall-clock.
+    let bad = h.run_with_env(
+        &[
+            "search",
+            "",
+            &format!("@{sess}"),
+            "--since",
+            "2026-06-07T16:00:00+99:00",
+        ],
+        &tz,
+    );
+    assert!(!bad.success, "malformed offset must hard-error");
+}
+
+#[test]
+fn search_hit_rows_carry_the_id_trio() {
+    // R9: bare `.hits[]` flattening is the most natural jq idiom against the most-piped
+    // command; the trio now rides every hit row (matching the exchange row's copy), so the
+    // idiom yields real ids instead of silent nulls.
+    let h = populated_home();
+    let out = h.run(&["search", "carry", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    for ex in json_rows(&out.stdout, "exchange") {
+        for hit in ex["hits"].as_array().unwrap() {
+            assert_eq!(hit["session_id"], ex["session_id"], "hit trio: {hit}");
+            assert_eq!(hit["is_subagent"], ex["is_subagent"]);
+            assert_eq!(hit["parent_session_id"], ex["parent_session_id"]);
+        }
+    }
+}
+
+#[test]
+fn unresolvable_target_errors_before_scope_warning() {
+    // R9 §16.4: the empty-pattern "may emit a lot" advisory used to fire BEFORE target
+    // resolution — a warning about a run that was never going to happen. Resolution now
+    // fails first; the advisory never fires on an unreachable target.
+    let h = populated_home();
+    let out = h.run(&["search", "", "@abc"]);
+    assert!(!out.success, "3-char prefix must hard-error");
+    assert!(
+        out.stderr.contains("too short"),
+        "the @-grammar error must fire: {}",
+        out.stderr
+    );
+    assert!(
+        !out.stderr.contains("may emit a lot"),
+        "no scope advisory for a run that never happens: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn agents_running_not_frozen_prints_last_seen_not_completed() {
     // A lane whose NEWEST meaningful record is a returned tool_result with NO closing
     // assistant text: not frozen (nothing pending), not completed (no terminal message) —
