@@ -151,6 +151,15 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
     // cap, ALL-projects listing defaults to 50 while a scoped query (a target / --sessions-from)
     // stays unlimited. The kept rows are the MOST RECENTLY active (what an unscoped list wants),
     // then restored to the deterministic path order for display.
+    // SCOPE counts are captured BEFORE the flood-guard cap (and before the row cap only —
+    // after the `--since`/`--until` window, which narrows what the listing covers): the
+    // scope banner / JSON header answer "how big is the range this query covered", exactly
+    // like every other spanning command, where `--max-count`-class ROW caps never shrink
+    // the scope numbers. Without this, an unscoped all-projects `list` reported the capped
+    // 50 as the scope — off from the real corpus by orders of magnitude (R7 §2.4).
+    let scope_sub = summaries.iter().filter(|s| s.is_subagent).count();
+    let scope_top = summaries.len() - scope_sub;
+
     let all_projects = args.paths.is_empty() && args.sessions_from.is_none();
     // `--max-count 0` = uncapped (the crate-wide convention) — it beats the default cap.
     let cap = match args.max_count {
@@ -170,8 +179,8 @@ pub fn run_list(args: &ListArgs) -> Result<()> {
 
     // 4. Render.
     match args.format {
-        OutputFormat::Text => render_text(&summaries, dropped),
-        OutputFormat::Json => render_json(&summaries, dropped)?,
+        OutputFormat::Text => render_text(&summaries, dropped, scope_top, scope_sub),
+        OutputFormat::Json => render_json(&summaries, dropped, scope_top, scope_sub)?,
     }
     Ok(())
 }
@@ -369,7 +378,7 @@ fn capture_identity_if_empty(
 
 // ── Text rendering ──
 
-fn render_text(summaries: &[SessionSummary], dropped: usize) {
+fn render_text(summaries: &[SessionSummary], dropped: usize, scope_top: usize, scope_sub: usize) {
     if summaries.is_empty() {
         println!("no sessions found");
         return;
@@ -378,10 +387,9 @@ fn render_text(summaries: &[SessionSummary], dropped: usize) {
     // return 1 top-level + N subagent rows — surface that split up front (mirroring
     // `turns --subagents` + now `files`/`search`/`recover`) so the default-span
     // surprise is announced, not buried. Printed only when the resolved set actually spans
-    // ≥1 subagent. ONE shared emitter / wording across every spanning surface.
-    let sub = summaries.iter().filter(|s| s.is_subagent).count();
-    let top = summaries.len() - sub;
-    crate::text::emit_scope_banner(top, sub);
+    // ≥1 subagent. ONE shared emitter / wording across every spanning surface. The counts
+    // are the PRE-CAP scope (the row flood-guard never shrinks them — R7 §2.4).
+    crate::text::emit_scope_banner(scope_top, scope_sub);
     for (i, s) in summaries.iter().enumerate() {
         if i > 0 {
             println!();
@@ -466,17 +474,22 @@ fn print_preview(label: &str, preview: Option<&MessagePreview>) {
 
 // ── JSON rendering (deterministic, one object per session) ──
 
-fn render_json(summaries: &[SessionSummary], dropped: usize) -> Result<()> {
+fn render_json(
+    summaries: &[SessionSummary],
+    dropped: usize,
+    scope_top: usize,
+    scope_sub: usize,
+) -> Result<()> {
     use serde_json::json;
     // envelope v2: header (always) → kind-tagged session rows → summary (always).
-    let sub = summaries.iter().filter(|s| s.is_subagent).count();
-    let top = summaries.len() - sub;
+    // Header scope = the PRE-CAP resolved range (the flood-guard caps ROWS, never the
+    // scope numbers — R7 §2.4); the summary's `sessions` stays the emitted-row count.
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
             "list",
-            top,
-            sub,
+            scope_top,
+            scope_sub,
             json!({})
         ))?
     );

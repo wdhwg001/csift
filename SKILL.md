@@ -1,6 +1,6 @@
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.6.2** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.6.3** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -53,6 +53,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | `stats` and `--count-by tool` should agree | three count units, three commands: `-c` = EXCHANGES, `--count-by` = RECORDS, `stats` tools = CALLS. A call = tool_use record + tool_result carrier, so `--count-by tool` reads ≈2× the `stats` tally (an answered AskUserQuestion re-homes its carrier to `user.answer`, so AUQ stays ≈1×) — a unit difference, not a bug |
 | image `#N` handles run densely 1..N | `#N` is inherited from CC's paste-time `[Image #N]` numbering — handles can start past #1 and carry HOLES (that number's image never landed in this transcript); a `--id` miss errors naming the handles that DO exist |
 | `.hits[]` can be flattened bare | the id trio lives on the EXCHANGE row, not inside each hit — bare flattening yields `session_id: null` silently; run the hit's `refetch` verbatim, or merge first: `. as $e \| .hits[] \| . + {session_id: $e.session_id}` |
+| `ScheduleWakeup` calls live under `harness.schedule.*` | a tool CALL classifies by role — arming a wakeup is `agent.tool.use` like any other tool; `harness.schedule.wakeup` is only the FIRED tick (the harness-injected, marker-carrying wakeup prompt), and a custom-prompt tick lands as an isMeta record (excluded, like all isMeta) |
 
 ## Five laws (all commands)
 
@@ -101,7 +102,7 @@ csift search PATTERN [target…] [-t SEL]… [-T SEL]… [-i] [--multiline] [--s
   [--no-truncate] [--resolve-persisted] [--sessions-from F] [--no-subagents] [--format json]
 ```
 Empty `""` pattern = pure filter. A hit returns the complete round-trip (tool_use with its result; user turn with reply; an answered AUQ as one Q+A unit). Terminal modes (mutually exclusive): `-c` prints one integer (EXCHANGES, `--max-count` drops added back) · `-l` prints the distinct owning session uuids, one per line, uncapped — pipes into `--sessions-from -` · `--count-by AXIS` prints a census (below).
-- `--count-by AXIS` — a per-key census of the matched RECORDS along ONE closed axis (not a query language; a record whose several sections match still counts once): `label` (per leaf; a record counts under every leaf it carries, so a leaf's number == what `-t <leaf>` surfaces — run with `""` before guessing any `-t`) · `tool` (per tool name) · `turn` (ascending histogram) · `session` (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id; rides the tool block through the communication views, so a frozen SendMessage is `pending` — "any pending tools?" needs no `-t`) · `model` (per assistant model — the raw `message.model` value; CC's `<synthetic>` placeholder, a fabricated stand-in assistant record such as an API-error notice, is reported verbatim). Records outside an axis's domain are excluded and the excluded count is reported.
+- `--count-by AXIS` — a per-key census of the matched RECORDS along ONE closed axis (not a query language; a record whose several sections match still counts once): `label` (per leaf; a record counts under every leaf it carries THAT SURVIVES your `-t`/`-T` — a dual-labeled record never leaks its filtered-out twin into the keys, so `-t user -T user.message --count-by label` shows user.* keys only; with no filter that is the full label set — run with `""` and no `-t` before guessing any `-t`) · `tool` (per tool name) · `turn` (ascending histogram) · `session` (per transcript) · `pairing` (paired | pending | orphan, joined by tool_use_id; rides the tool block through the communication views, so a frozen SendMessage is `pending` — "any pending tools?" needs no `-t`) · `model` (per assistant model — the raw `message.model` value; CC's `<synthetic>` placeholder, a fabricated stand-in assistant record such as an API-error notice, is reported verbatim). Records outside an axis's domain are excluded and the excluded count is reported.
 - Excerpts are ~400-char match-centered fragments; when anything clipped, text prints a caution + JSON summary `excerpts_truncated:true`. Full text: `--no-truncate` (also un-clips JSON `excerpt`) or the hit's `refetch`.
 - `--siblings` (zero-arg): also render the turn's other records — messages always, thinking≤2 · tool.use≤3 · tool.result≤3 · harness≤2 per leaf; overflow prints `(+N more · csift show @<id> --line A..B)` — run it verbatim.
 - `--raw`: the matched records' VERBATIM jsonl lines on the whole filter surface — stdout pure jsonl for `jq` (notes → stderr; sidecar-merged hits have no physical line and are omitted with a note). The answer to any unrendered-field question.
@@ -121,7 +122,7 @@ csift search "" @<uuid> -t agent -T agent.thinking             # agent role minu
 csift show TARGET ( (--line N|A..B|N..|-k,…)… | --turn N|A..B|N..|-k | (--uuid U,…)… )
   [--raw] [--max-count N] [--format json]
 ```
-- TARGET = exactly one transcript. One addressing mode is REQUIRED (no selector = a teaching error; csift never dumps a whole transcript by accident). `--turn N` fetches EVERY record of that turn — its whole back-and-forth — in the same numbering `search` prints (`s1·t270` ⇒ `--turn 270`); `--turn -3..` is the tail-peek.
+- TARGET = exactly one transcript — `show` is the ONE targeting command with NO subagent-span pair (`--no-subagents`/`--subagents` are rejected with the rule, not a typo guess); to read a subagent, target its own `@<agent-id>`. One addressing mode is REQUIRED (no selector = a teaching error; csift never dumps a whole transcript by accident). `--turn N` fetches EVERY record of that turn — its whole back-and-forth — in the same numbering `search` prints (`s1·t270` ⇒ `--turn 270`); `--turn -3..` is the tail-peek.
 - Address misses error with the domain: `no such turn(s): t99 — the transcript has 2 turn(s) (t0..t1)`; open/from-end forms clamp (a `--turn -9..` on a 2-turn session is fine).
 - Renders FULL records through search's pipeline (labels, pairing, plan pointers, sidecar merge). A metadata/attachment line is not a record — a range covering some prints `N line(s) in the addressed range are not records (… — inspect with --raw)`; a single-line miss error points at `--raw`.
 - Cap: 200 record units by default; the drop prints `+N more record unit(s) … · continue: csift show @<id> --line A..B` (JSON `dropped_by_cap` + `refetch_remainder`). `--max-count N` / `0` = uncapped. `--raw` caps by line with the same stderr continuation.
@@ -140,7 +141,7 @@ csift show @<uuid> --line 46550 --raw       # exact bytes (all fields)
 csift list [target…] [--since W] [--until W] [--max-count N] [--sessions-from F]
   [--no-subagents] [--format json]
 ```
-Head+tail read only (fast at any size). Unscoped all-projects run caps at the 50 most-recently-active rows (drop reported; a scoped query is uncapped; `--max-count N` overrides, `0` = uncapped). `--since/--until` keep a session iff its [first, last] activity span intersects the window. Rows: cwd (+branch, CC version), first ◂ / last ◂ / last ▸ excerpts (200 chars) + timestamps; subagent rows read `SUBAGENT <hex> · parent SESSION <uuid>`; pending elicitations annotate. JSON adds the sidecar tri-state: `sidecar_present:true` + pendings = blocked; `true` + none = provably not blocked on an elicitation; `false` = hook not installed, cannot conclude.
+Head+tail read only (fast at any size). Unscoped all-projects run caps at the 50 most-recently-active rows (drop reported; a scoped query is uncapped; `--max-count N` overrides, `0` = uncapped) — the scope banner / JSON header `sessions_in_scope` stay the PRE-cap resolved range ("how big is my corpus" reads off line 1; only the ROWS are capped). `--since/--until` keep a session iff its [first, last] activity span intersects the window. Rows: cwd (+branch, CC version), first ◂ / last ◂ / last ▸ excerpts (200 chars) + timestamps; subagent rows read `SUBAGENT <hex> · parent SESSION <uuid>`; pending elicitations annotate. JSON adds the sidecar tri-state: `sidecar_present:true` + pendings = blocked; `true` + none = provably not blocked on an elicitation; `false` = hook not installed, cannot conclude.
 
 ## whoami — identify the caller (false-positive-safe)
 
@@ -275,7 +276,7 @@ csift search "" @U -t agent.tool.use --raw | jq 'select(.message.content[]?.inpu
 
 ## Elicitation sidecar — pending AskUserQuestion / ExitPlanMode / MCP
 
-While pending, these three leave NO trace in native jsonl (whole-turn buffered / in-memory) — a session blocked on a human looks stalled. A CC hook (recipe 3) appends markers to `<uuid>/elicitations.jsonl` (a sidecar, never the transcript). csift merges UNRESOLVED pendings automatically wherever it reads a session: they classify `agent.tool.use`, verbatim appends each as its own newest turn, list annotates. Once answered, CC writes the real record and the pending pairs off — no duplicates. A merged record has no physical line: renders `(elicitation sidecar)`, JSON `source:"elicitation-sidecar"` + null `line`; surfaces print `with elicitation sidecar`. The sidecar cannot be targeted directly (error). Tri-state on list rows: `sidecar_present:false` = hook not installed — "nothing pending" is then NOT concludable.
+While pending, these three leave NO trace in native jsonl (whole-turn buffered / in-memory) — a session blocked on a human looks stalled. A CC hook (recipe 3) appends markers to `<uuid>/elicitations.jsonl` (a sidecar, never the transcript). csift merges UNRESOLVED pendings automatically wherever it reads a session: they classify `agent.tool.use`, verbatim appends each as its own newest turn, list annotates. Once answered, CC writes the real record and the pending pairs off — no duplicates. GHOST GUARD: a REJECTED AUQ/plan fires no PostToolUse, so the hook can miss its `resolved` marker — csift therefore also drops any AUQ/ExitPlanMode pending whose tool id already appears on a native record (structural check, a quoted id in prose doesn't count): the native transcript outranks the sidecar, so a stale marker can never report a long-closed elicitation as pending. MCP markers have no native form — sidecar pairing stays their only signal. A merged record has no physical line: renders `(elicitation sidecar)`, JSON `source:"elicitation-sidecar"` + null `line`; surfaces print `with elicitation sidecar`. The sidecar cannot be targeted directly (error). Tri-state on list rows: `sidecar_present:false` = hook not installed — "nothing pending" is then NOT concludable.
 
 ## Conventions
 
@@ -350,7 +351,7 @@ jq -n --arg c "$ctx" '{hookSpecificOutput:{hookEventName:"PostToolUseFailure",ad
 Register: `{"matcher":"TaskStop","hooks":[{"type":"command","command":"/ABS/taskstop-teammate-redirect.sh"}]}` under `PostToolUseFailure`.
 
 ### Hook 3 — Elicitation markers: backfill the sidecar csift merges
-Fires when AUQ/ExitPlanMode/MCP elicitation OPENS and CLOSES; appends pending/resolved markers to the sidecar. MUST print nothing (observe only). Verified live: the pending marker lands the instant the picker appears.
+Fires when AUQ/ExitPlanMode/MCP elicitation OPENS and CLOSES; appends pending/resolved markers to the sidecar. MUST print nothing (observe only). Verified live: the pending marker lands the instant the picker appears. A REJECTION does NOT fire `PostToolUse` (verified on real data: every observed unpaired pending was a rejected plan/AUQ), so subscribe `PostToolUseFailure` too — belt-and-suspenders for whichever closure events CC emits; csift's ghost guard drops any still-unpaired stale pending against the native transcript regardless.
 
 ```bash
 #!/usr/bin/env bash
@@ -361,7 +362,7 @@ ev=$(jq -r '.hook_event_name//empty' <<<"$in" 2>/dev/null); tool=$(jq -r '.tool_
 kind=""; phase=""
 case "$ev" in
   PreToolUse)  case "$tool" in AskUserQuestion|ExitPlanMode) kind="$tool"; phase="pending";; esac ;;
-  PostToolUse) case "$tool" in AskUserQuestion|ExitPlanMode) kind="$tool"; phase="resolved";; esac ;;
+  PostToolUse|PostToolUseFailure) case "$tool" in AskUserQuestion|ExitPlanMode) kind="$tool"; phase="resolved";; esac ;;
   Elicitation)       kind="mcp-elicitation"; phase="pending" ;;
   ElicitationResult) kind="mcp-elicitation"; phase="resolved" ;;
 esac
@@ -389,4 +390,4 @@ else
 fi
 printf '%s\n' "$rec" >>"$sidecar" 2>/dev/null || exit 0
 ```
-Register 4 events (one script, absolute path): `PreToolUse`+`PostToolUse` matcher `"AskUserQuestion|ExitPlanMode"`; `Elicitation`+`ElicitationResult` (no matcher).
+Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `"AskUserQuestion|ExitPlanMode"`; `Elicitation`+`ElicitationResult` (no matcher).

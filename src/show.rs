@@ -160,6 +160,11 @@ fn turn_miss_error(spec: &crate::text::RangeSpec, turn_count: usize) -> anyhow::
 
 /// Entry point for `csift show`.
 pub fn run_show(args: &ShowArgs) -> Result<()> {
+    // Reject the (hidden, no-op) span pair with the pointed rule instead of letting
+    // `allow_hyphen_values` feed it to the TARGET parser as a mistyped-flag guess (R7 §2.3).
+    if let Some(msg) = args.span_flag_error() {
+        bail!(msg);
+    }
     if args.raw && args.format == OutputFormat::Json {
         bail!("--raw is mutually exclusive with --format json (raw IS the file's own JSON)");
     }

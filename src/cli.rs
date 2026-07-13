@@ -506,7 +506,10 @@ fn flag_takes_value(a: &clap::Arg) -> bool {
           - A pending AskUserQuestion / ExitPlanMode / MCP prompt is invisible in the\n    \
         transcript until answered. csift merges pending ones from a hook-written sidecar\n    \
         when present, and `list` reports `sidecar_present` — so you can tell \"nothing\n    \
-        pending\" apart from \"no hook installed\".\n  \
+        pending\" apart from \"no hook installed\". A sidecar pending whose elicitation the\n    \
+        NATIVE transcript already shows closed (e.g. a REJECTED plan — Claude Code fires\n    \
+        no PostToolUse for a rejection, so the hook never got to write its resolved\n    \
+        marker) is auto-dropped: the native record outranks the sidecar.\n  \
           - Text-mode excerpts keep a record's LITERAL newlines (a multiline Bash command\n    \
         renders as-is), so piping text output through `head -N` can cut mid-record and\n    \
         hide the overflow pointers. The line-safe machine form is `--format json` (one\n    \
@@ -658,14 +661,24 @@ impl<'a> LabelFilter<'a> {
 fn parse_label_selector(s: &str) -> Result<String, String> {
     let s = s.trim();
     if selector_is_valid(s) {
-        Ok(s.to_string())
-    } else {
-        Err(format!(
-            "unknown label selector '{s}'. A selector is a dotted role.class.sub path or any \
-             prefix of one. Valid: {}",
-            label_selectors().join(", ")
-        ))
+        return Ok(s.to_string());
     }
+    // The pre-v0.5 FLAT spellings get a direct successor pointer (faster convergence than
+    // scanning the 25-value list) — a guidance hint, not a compat shim: still a hard error.
+    let legacy = match s {
+        "thinking" => Some("agent.thinking"),
+        "tool" => Some("agent.tool"),
+        "tool-response" => Some("agent.tool.result"),
+        _ => None,
+    };
+    let hint = legacy.map_or(String::new(), |t| {
+        format!(" ('{s}' is the pre-v0.5 flat spelling — today that is `{t}`.)")
+    });
+    Err(format!(
+        "unknown label selector '{s}'.{hint} A selector is a dotted role.class.sub path or any \
+         prefix of one. Valid: {}",
+        label_selectors().join(", ")
+    ))
 }
 
 /// How to render matches.
@@ -880,7 +893,11 @@ impl ListArgs {
         `user.message`; an AskUserQuestion answer is `user.answer` (the full Q+options+answer \
         unit); a plan-rejection-with-message is `user.rejection` (+ a [plan: …] pointer). An \
         inbound peer/teammate message is `agent.communication.inbox` (NOT `user`); a \
-        `<task-notification>` automation pulse is `harness.notification.*` (NOT `user`).\n\n\
+        `<task-notification>` automation pulse is `harness.notification.*` (NOT `user`). A \
+        tool named after harness machinery still classifies by ROLE: a `ScheduleWakeup` CALL \
+        (arming a timer) is `agent.tool.use` like any other tool — `harness.schedule.wakeup` \
+        is only the FIRED tick, the harness-injected marker-carrying wakeup prompt (a \
+        custom-prompt tick lands as an isMeta record, excluded like all isMeta).\n\n\
         AUTOMATION TRIGGERS: a `<task-notification>` (a background-command / workflow / \
         spawned-agent / monitor COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
         OPENS a turn like a human message but classifies under `harness.notification.<kind>` \
@@ -1176,9 +1193,13 @@ pub struct SearchArgs {
     /// value — Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in
     /// assistant record such as an API-error notice, is reported verbatim). Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
-    /// the excluded count is reported — never silently. Honors `-t`/`-T`/time/turn/scope; empty
-    /// pattern = whole-scope census. JSON: `census` rows (`axis`/`key`/`records`) + a
-    /// summary.
+    /// the excluded count is reported — never silently. Honors `-t`/`-T`/time/turn/scope;
+    /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis
+    /// counts each surviving record ONLY under its labels that pass the same filter — a
+    /// dual-labeled record never leaks its filtered-out twin into the census (so
+    /// `-t user -T user.message --count-by label` shows user.* keys only; drop `-t`/`-T`
+    /// to census a record set's FULL label sets). JSON: `census` rows
+    /// (`axis`/`key`/`records`) + a summary.
     #[arg(
         long = "count-by",
         value_enum,
@@ -1350,6 +1371,38 @@ pub struct ShowArgs {
     /// Emit JSON instead of the rendered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+
+    /// HIDDEN no-op subagent-span flag. `show` has NO span control: it fetches from exactly
+    /// ONE transcript, never a set — but ten sibling commands accept the span pair, so a
+    /// muscle-memory `--no-subagents` here is a REAL observed slip (R7 §2.3). Accepted only
+    /// to emit a pointed error naming the actual rule, instead of the misleading generic
+    /// "did you mistype a flag?" the TARGET value-parser would give. See
+    /// [`ShowArgs::span_flag_error`].
+    #[arg(long = "no-subagents", hide = true)]
+    pub no_subagents: bool,
+
+    /// Hidden no-op twin (see `no_subagents`): both span switches are accepted-then-rejected.
+    #[arg(long = "subagents", hide = true)]
+    pub subagents: bool,
+}
+
+impl ShowArgs {
+    /// The pointed rejection for the hidden span pair (the `agents` precedent): name the
+    /// actual rule and the correct next move, not a typo hypothesis.
+    #[must_use]
+    pub fn span_flag_error(&self) -> Option<&'static str> {
+        if self.no_subagents || self.subagents {
+            Some(
+                "`show` has no subagent-span flag: it fetches record(s) from exactly ONE \
+                 transcript and never spans a session's subagents (line numbers are \
+                 per-FILE). Drop the span flag. To read a subagent transcript, target it \
+                 directly: `csift show @<agent-id> --line N` (the id `agents`/`search` \
+                 print); to search across a session AND its subagents use `csift search`.",
+            )
+        } else {
+            None
+        }
+    }
 }
 
 /// `csift stats` — one-scan aggregates per session (and a scope total).

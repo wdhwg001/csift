@@ -5,6 +5,20 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.3] - 2026-07-13
+
+- Elicitation-sidecar GHOST-PENDING guard (correctness): Claude Code fires no
+  PostToolUse for a REJECTED AskUserQuestion/ExitPlanMode, so the hook can
+  never write `resolved` there. A pending whose key appears on a native record
+  as an actual `tool_use` block id / `tool_result` id (structural check) is
+  dropped like a resolved pair — the native transcript outranks the sidecar.
+- `list`'s scope banner / JSON `sessions_in_scope` report the PRE-cap resolved
+  range; the flood guard caps only the rows.
+- `--count-by label` census keys pass the active `-t`/`-T` predicate — a
+  dual-labeled record no longer leaks its filtered-out twin into the keys.
+- `show` rejects the span pair with the single-transcript rule; legacy flat
+  `-t` values (`thinking`/`tool`/`tool-response`) name their successor path.
+
 ## [0.6.2] - 2026-07-12
 
 - `image --id` miss error explains itself: it names the handles PRESENT,

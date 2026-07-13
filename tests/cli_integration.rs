@@ -3789,6 +3789,232 @@ fn search_auq_answer_dedups_to_user_answer() {
 }
 
 #[test]
+fn count_by_label_census_respects_label_filters() {
+    // R7 §2.3: `-t`/`-T` decide which records ENTER the census, and the label-axis KEYS pass
+    // the same predicate — a dual-labeled record (an AUQ answer = user.answer +
+    // agent.tool.result) must not leak its filtered-out twin into the census keys.
+    let h = Home::new();
+    let sess = "44444444-5555-6666-7777-888888888888";
+    let lines = [
+        r#"{"type":"user","uuid":"u0","sessionId":"44444444-5555-6666-7777-888888888888","cwd":"/Users/x/auq","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,
+        r#"{"type":"user","uuid":"ans","parentUuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which?\"=\"the zzopt option\". You can now continue."}]}}"#,
+    ];
+    h.write(
+        &format!("-Users-x-auq/{sess}.jsonl"),
+        &(lines.join("\n") + "\n"),
+    );
+
+    // Filtered: only the SURVIVING label keys appear.
+    let out = h.run(&[
+        "search",
+        "",
+        at(sess).as_str(),
+        "--no-subagents",
+        "-t",
+        "user",
+        "-T",
+        "user.message",
+        "--count-by",
+        "label",
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let keys: Vec<String> = json_rows(&out.stdout, "census")
+        .iter()
+        .map(|r| r["key"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        keys,
+        vec!["user.answer".to_string()],
+        "census keys must pass the -t/-T predicate: {}",
+        out.stdout
+    );
+
+    // Unfiltered: the FULL label set is still censused (both leaves of the dual record).
+    let full = h.run(&[
+        "search",
+        "",
+        at(sess).as_str(),
+        "--no-subagents",
+        "--count-by",
+        "label",
+        "--format",
+        "json",
+    ]);
+    let full_keys: Vec<String> = json_rows(&full.stdout, "census")
+        .iter()
+        .map(|r| r["key"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        full_keys.contains(&"user.answer".to_string())
+            && full_keys.contains(&"agent.tool.result".to_string()),
+        "no filter ⇒ full label sets: {}",
+        full.stdout
+    );
+}
+
+#[test]
+fn elicitation_ghost_pending_dropped_when_natively_closed() {
+    // R7 §3 (the ghost-pending guard): Claude Code fires NO PostToolUse for a REJECTED
+    // AUQ/ExitPlanMode, so the hook never writes its `resolved` marker — sidecar-internal
+    // pairing alone would report the elicitation pending FOREVER while the native transcript
+    // long since holds the flushed tool_use + rejection tool_result. The native record
+    // outranks the sidecar: the ghost is dropped like a resolved pair (and never duplicated
+    // beside the native record in search).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the work"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_GHOST","name":"AskUserQuestion","input":{"questions":[{"question":"Deploy now?"}]}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a1","timestamp":"2026-06-07T05:01:10.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_GHOST","content":"The user doesn't want to proceed with this tool use. The tool use was rejected.","is_error":true}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n",
+            auq_pending_line("toolu_GHOST", "2026-06-07T05:00:55.000Z", "Deploy now?")
+        ),
+    );
+
+    // search: the native record surfaces; the sidecar ghost does NOT (no duplicate).
+    let j = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "--no-subagents",
+        "-t",
+        "agent.tool.use",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let hits: Vec<serde_json::Value> = json_rows(&j.stdout, "exchange")
+        .into_iter()
+        .flat_map(|ex| ex["hits"].as_array().unwrap().clone())
+        .collect();
+    assert!(
+        hits.iter()
+            .any(|h| h["tool_use_id"] == "toolu_GHOST" && h["source"].is_null()),
+        "the native record must surface: {hits:?}"
+    );
+    assert!(
+        !hits.iter().any(|h| h["source"] == "elicitation-sidecar"),
+        "the natively-closed ghost must be dropped, never merged as a duplicate: {hits:?}"
+    );
+
+    // list: sidecar detected, but NOTHING reported pending.
+    let lj = h.run(&["list", &at(SESS), "--no-subagents", "--format", "json"]);
+    assert!(lj.success, "stderr: {}", lj.stderr);
+    let row = json_rows(&lj.stdout, "session").remove(0);
+    assert_eq!(row["sidecar_present"], true);
+    assert!(
+        row["pending_elicitations"].as_array().unwrap().is_empty(),
+        "a natively-closed elicitation must not report as pending: {row}"
+    );
+}
+
+#[test]
+fn elicitation_pending_kept_when_key_only_quoted_in_prose() {
+    // The ghost guard is STRUCTURAL: the key appearing inside another record's TEXT (a Bash
+    // command grepping for it) is not closure evidence — a genuinely-open elicitation whose
+    // id someone merely quoted must stay pending.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","sessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","cwd":"/Users/testuser/Projects/foo","version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the work"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_OTHER","name":"Bash","input":{"command":"grep toolu_STILLOPEN session.jsonl"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n",
+            auq_pending_line(
+                "toolu_STILLOPEN",
+                "2026-06-07T05:02:00.000Z",
+                "Which branch?"
+            )
+        ),
+    );
+    let lj = h.run(&["list", &at(SESS), "--no-subagents", "--format", "json"]);
+    assert!(lj.success, "stderr: {}", lj.stderr);
+    let row = json_rows(&lj.stdout, "session").remove(0);
+    assert_eq!(
+        row["pending_elicitations"].as_array().unwrap().len(),
+        1,
+        "a prose quote of the key is NOT closure — must stay pending: {row}"
+    );
+}
+
+#[test]
+fn list_scope_banner_reports_pre_cap_scope() {
+    // R7 §2.4: the scope banner / JSON header answer "how big is the covered range" — the
+    // row flood-guard (`--max-count` / the unscoped default cap) must never shrink them.
+    let h = populated_home(); // 1 top-level + 2 subagent = 3 in scope
+    let lj = h.run(&["list", "--max-count", "2", "--format", "json"]);
+    assert!(lj.success, "stderr: {}", lj.stderr);
+    let header: serde_json::Value =
+        serde_json::from_str(lj.stdout.lines().next().unwrap()).unwrap();
+    assert_eq!(
+        header["sessions_in_scope"], 3,
+        "header scope must be PRE-cap: {header}"
+    );
+    assert_eq!(
+        json_rows(&lj.stdout, "session").len(),
+        2,
+        "rows stay capped"
+    );
+    assert_eq!(json_summary(&lj.stdout)["dropped_by_cap"], 1);
+
+    let lt = h.run(&["list", "--max-count", "2"]);
+    assert!(
+        lt.stdout.contains("3 sessions in scope"),
+        "text banner must be PRE-cap: {}",
+        lt.stdout
+    );
+}
+
+#[test]
+fn show_span_flag_is_rejected_with_the_pointed_rule() {
+    // R7 §2.3: ten sibling commands take the span pair; `show` does not — the muscle-memory
+    // slip gets the actual rule, not the generic "did you mistype a flag?" guess.
+    let h = populated_home();
+    for flag in ["--no-subagents", "--subagents"] {
+        let out = h.run(&["show", &at(SESS), flag, "--line", "1"]);
+        assert!(!out.success, "span flag must be rejected: {}", out.stdout);
+        assert!(
+            out.stderr.contains("no subagent-span flag")
+                && out.stderr.contains("exactly ONE transcript"),
+            "pointed rule expected, got: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn legacy_flat_selector_error_names_the_successor() {
+    let h = populated_home();
+    for (legacy, successor) in [
+        ("thinking", "agent.thinking"),
+        ("tool", "agent.tool"),
+        ("tool-response", "agent.tool.result"),
+    ] {
+        let out = h.run(&["search", "x", &at(SESS), "-t", legacy]);
+        assert!(!out.success, "legacy selector must still hard-error");
+        assert!(
+            out.stderr.contains("pre-v0.5") && out.stderr.contains(successor),
+            "'{legacy}' should point at '{successor}': {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
 fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
     // P3a G1 + G4/G5 + self-alias: a `<task-notification>` carrying a `<result>` is the background
     // agent's report → it classifies BOTH `harness.notification.*` (the pulse) AND

@@ -623,6 +623,49 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.3 CHANGE LEDGER (non-breaking; correctness + consistency fixes — `csift 0.6.3`).**
+> The seventh-audit release (Sonnet 5's v0.6.2 review — the first witness to surface a
+> CORRECTNESS-class defect; its mechanism hypothesis was wrong, the phenomenon real).
+> 1. **Elicitation-sidecar GHOST-PENDING guard (correctness).** Claude Code fires NO
+>    `PostToolUse` for a REJECTED AskUserQuestion/ExitPlanMode, so the recipe-3 hook never
+>    writes the `resolved` marker on that path — sidecar-internal pairing alone then
+>    reported the elicitation pending FOREVER (verified live: 6/6 real ghost keys across
+>    4 sessions were all rejections; the ghost also DUPLICATED beside its flushed native
+>    record in `search`, and its own `pairing:"paired"` was csift holding the disproof).
+>    `elicitation::unresolved_pending` now cross-checks the native transcript: an
+>    AUQ/ExitPlanMode pending whose `csiftKey` appears on a native record as an actual
+>    `tool_use` block `id` / `tool_result` `tool_use_id` (STRUCTURAL check — a key quoted
+>    in prose does not count) is dropped like a resolved pair. The native record outranks
+>    the sidecar; MCP markers (no native form, non-unique keys) stay sidecar-paired only.
+>    Cost: paid only when ≥1 AUQ/EPM key is sidecar-unresolved. SKILL recipe 3 also
+>    subscribes `PostToolUseFailure` (belt-and-suspenders for hook-side pairing).
+> 2. **`list` scope banner / JSON header report the PRE-cap range.** The unscoped
+>    flood-guard capped the ROWS and then derived the banner from the capped set, so line 1
+>    read "scope 50 sessions in scope" over a ~8000-transcript corpus (~160× off) — the
+>    only spanning surface whose scope numbers a row cap could shrink. Banner + header
+>    `sessions_in_scope` now come from the resolved pre-cap set; the summary's `sessions`
+>    stays the emitted-row count and `dropped_by_cap` is unchanged.
+> 3. **`--count-by label` keys pass the active `-t`/`-T` predicate.** The census counted
+>    each surviving record under its FULL label set, so a dual-labeled record leaked its
+>    filtered-out twin into the keys (`-t user -T user.message` censused
+>    `agent.tool.result`; a `-t harness` census was dominated by
+>    `agent.communication.inbox`). Keys now follow the same include-minus-exclude
+>    predicate that admits the record's views; membership and record totals are unchanged,
+>    and the zero-match probe still reports FULL label sets (it exists to name what the
+>    dropped filter excluded). No filter ⇒ unchanged full-set census.
+> 4. **`show` rejects the span pair with the rule (muscle-memory guard).** Ten sibling
+>    commands accept `--no-subagents`/`--subagents`; `show` fed them to the TARGET parser's
+>    "did you mistype a flag?" guess. Hidden accepted-then-rejected pair (the `agents`
+>    precedent) now states: show fetches from exactly ONE transcript, never spans — target
+>    a subagent by its own `@<agent-id>`.
+> 5. **Legacy flat selector errors name their successor.** `-t thinking`/`tool`/
+>    `tool-response` still hard-error, now with a direct pointer (`'thinking' is the
+>    pre-v0.5 flat spelling — today that is agent.thinking`) ahead of the 25-value list.
+>    Plus doc-only: the `-t` taxonomy help notes a `ScheduleWakeup` CALL is
+>    `agent.tool.use` (arming) while `harness.schedule.wakeup` is only the FIRED
+>    marker-carrying tick (a custom-prompt tick is isMeta ⇒ excluded); root-help PITFALLS
+>    + SKILL document the ghost guard.
+
 > **v0.6.2 CHANGE LEDGER (non-breaking; error-text + help/SKILL surface — `csift 0.6.2`).**
 > The sixth-audit release (Sonnet 5's v0.6.1 review — the most honest witness of the
 > series: zero refuted findings, all four suggestions doc/diagnostic-level; no

@@ -629,11 +629,20 @@ fn record_groups(hits: &[Hit]) -> Vec<&[Hit]> {
 
 /// Per-leaf record census of a matched exchange set (GOLD §5): each matched RECORD (a
 /// multi-section record is grouped by [`record_groups`], never multi-counted) contributes
-/// to EVERY leaf in its full label set, so a leaf's tally is exactly how many records
-/// `-t <leaf>` would surface. Returns the per-leaf counts and the distinct matched-record
-/// total. Shared by `--count-by label` and the zero-hit label probe (so both report the
-/// SAME numbers).
-fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize) {
+/// to every leaf in its label set that SURVIVES the active `-t`/`-T` filter, so a leaf's
+/// tally is exactly how many records `-t <leaf>` (composed with your other filters) would
+/// surface. With no filter that is the record's FULL label set — but under `-t`/`-T` a
+/// dual-labeled record must not leak its filtered-out twin into the census (R7 §2.3: a
+/// `-t user -T user.message` census showing `agent.tool.result`, or a `-t harness` census
+/// dominated by `agent.communication.inbox` keys, reads as the filter not working). The
+/// filter decides membership per-VIEW already; the census keys follow the same predicate.
+/// Returns the per-leaf counts and the distinct matched-record total. Shared by
+/// `--count-by label` and the zero-hit label probe (the probe passes
+/// [`LabelFilter::all`] — it deliberately reports what the DROPPED filter excluded).
+fn label_census(
+    exchanges: &[Exchange],
+    filter: LabelFilter<'_>,
+) -> (BTreeMap<&'static str, usize>, usize) {
     let mut counts: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut records = 0usize;
     for ex in exchanges {
@@ -642,7 +651,9 @@ fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize
             // The label set is per-RECORD (classify output), identical across the
             // record's section hits — read it off the first.
             for &leaf in &group[0].labels {
-                *counts.entry(leaf).or_insert(0) += 1;
+                if filter.selected(leaf) {
+                    *counts.entry(leaf).or_insert(0) += 1;
+                }
             }
         }
     }
@@ -662,6 +673,7 @@ fn label_census(exchanges: &[Exchange]) -> (BTreeMap<&'static str, usize>, usize
 fn axis_census(
     exchanges: &[Exchange],
     axis: crate::cli::CountAxis,
+    filter: LabelFilter<'_>,
 ) -> (Vec<(String, usize)>, usize, usize) {
     use crate::cli::CountAxis as A;
     let multi_transcript = distinct_session_count(exchanges) > 1;
@@ -674,8 +686,12 @@ fn axis_census(
             records += 1;
             match axis {
                 A::Label => {
+                    // Keys pass the SAME `-t`/`-T` predicate that admitted the record's
+                    // views (see [`label_census`] — R7 §2.3).
                     for &leaf in &group[0].labels {
-                        *counts.entry(leaf.to_string()).or_insert(0) += 1;
+                        if filter.selected(leaf) {
+                            *counts.entry(leaf.to_string()).or_insert(0) += 1;
+                        }
                     }
                 }
                 A::Tool => match group.iter().find_map(|h| h.tool_name.clone()) {
@@ -1030,7 +1046,11 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // accounting note goes to stderr (text) so `<count> <key>` stays pipe-clean. Records
     // outside the axis's domain are excluded AND reported (never silent).
     if let Some(axis) = args.count_by {
-        let (rows, records, excluded) = axis_census(&outcome.exchanges, axis);
+        let (rows, records, excluded) = axis_census(
+            &outcome.exchanges,
+            axis,
+            LabelFilter::new(&args.labels, &args.labels_not),
+        );
         let slug = axis.slug();
         match args.format {
             OutputFormat::Text => {
@@ -1162,7 +1182,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             for fr in probe_files {
                 probe_ex.extend(fr.exchanges);
             }
-            let (counts, recs) = label_census(&probe_ex);
+            // The probe deliberately reports the FULL label sets — it exists to name
+            // exactly what the dropped `-t`/`-T` filter excluded.
+            let (counts, recs) = label_census(&probe_ex, LabelFilter::all());
             (recs > 0).then(|| {
                 let mut rows: Vec<(String, usize)> = counts
                     .into_iter()

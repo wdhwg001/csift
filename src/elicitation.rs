@@ -66,7 +66,96 @@ pub fn unresolved_pending(session_jsonl: &Path) -> Result<(Vec<Record>, usize)> 
     let Ok(contents) = std::fs::read_to_string(&path) else {
         return Ok((Vec::new(), 0));
     };
-    Ok(pair_unresolved(&contents))
+    let (mut pending, skipped) = pair_unresolved(&contents);
+    drop_natively_closed(session_jsonl, &mut pending);
+    Ok((pending, skipped))
+}
+
+/// The GHOST-PENDING guard: drop sidecar-unresolved pendings that the NATIVE transcript
+/// proves closed.
+///
+/// Claude Code fires NO `PostToolUse` hook for a REJECTED AskUserQuestion / ExitPlanMode
+/// (a rejection is not a tool completion), so the sidecar's `resolved` marker is never
+/// written on that path — sidecar-internal pairing alone would then report the elicitation
+/// as pending FOREVER, while the native transcript long since holds the flushed `tool_use`
+/// plus its rejection `tool_result` (verified on real data: every observed ghost was a
+/// rejection). The native record is the higher-authority truth source — the sidecar exists
+/// only to carry what the native jsonl does NOT yet hold. An AUQ/ExitPlanMode turn is
+/// buffered in memory and flushed ONLY when the elicitation closes, so its tool id
+/// appearing on a native record — as a `tool_use` block `id` OR a `tool_result`
+/// `tool_use_id` — proves closure (answered or rejected alike). Such a stale pending is
+/// dropped exactly like a sidecar-resolved pair (the same dedup class, silent by design).
+///
+/// MCP markers are exempt: an MCP elicitation never has a native form, so sidecar pairing
+/// stays its only signal — and its `csiftKey` may be a non-unique server name, unsafe to
+/// substring-scan.
+///
+/// Cost: paid ONLY when ≥1 AUQ/ExitPlanMode key is sidecar-unresolved (rare — typically
+/// zero). One mmap + a per-key `memmem` byte scan; only the few lines containing the key
+/// bytes are parsed, and a key merely QUOTED in prose (e.g. a Bash command grepping for it)
+/// fails the structural block-id check and does not count as closure.
+fn drop_natively_closed(session_jsonl: &Path, pending: &mut Vec<Record>) {
+    if !pending.iter().any(is_native_tool_kind) {
+        return;
+    }
+    let Ok(Some(map)) = crate::parse::mmap_bytes(session_jsonl) else {
+        return; // Unreadable/empty native transcript ⇒ no closure evidence; keep pendings.
+    };
+    let bytes: &[u8] = &map;
+    pending.retain(|rec| {
+        if !is_native_tool_kind(rec) {
+            return true;
+        }
+        match rec.csift_key.as_deref() {
+            Some(key) if !key.is_empty() => !native_closes(bytes, key),
+            _ => true,
+        }
+    });
+}
+
+/// A pending marker whose kind eventually gets a NATIVE record (keyed by tool_use_id) —
+/// the only kinds the ghost guard may cross-check.
+fn is_native_tool_kind(rec: &Record) -> bool {
+    matches!(
+        rec.csift_kind.as_deref(),
+        Some("AskUserQuestion" | "ExitPlanMode")
+    )
+}
+
+/// True when the native transcript bytes hold a record whose `tool_use` block `id` or
+/// `tool_result` `tool_use_id` equals `key` — STRUCTURAL, not substring: each `memmem` hit
+/// expands to its enclosing line and only that line is parsed, so a key quoted inside some
+/// other record's text never counts as closure.
+fn native_closes(bytes: &[u8], key: &str) -> bool {
+    let finder = memchr::memmem::Finder::new(key.as_bytes());
+    let mut start = 0usize;
+    while start < bytes.len() {
+        let Some(off) = finder.find(&bytes[start..]) else {
+            return false;
+        };
+        let pos = start + off;
+        let line_start = memchr::memrchr(b'\n', &bytes[..pos]).map_or(0, |i| i + 1);
+        let line_end = memchr::memchr(b'\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);
+        if let Ok(Some(rec)) = crate::parse::parse_line(&bytes[line_start..line_end]) {
+            if record_bears_tool_id(&rec, key) {
+                return true;
+            }
+        }
+        start = line_end + 1; // Next line — further hits on THIS line share its parse.
+    }
+    false
+}
+
+/// Does a parsed record carry `key` as an actual tool-block id (use or result)?
+fn record_bears_tool_id(rec: &Record, key: &str) -> bool {
+    let Some(blocks) = rec.blocks() else {
+        return false;
+    };
+    blocks.iter().any(|b| match b {
+        crate::model::Block::ToolUse { id, .. } => id.as_deref() == Some(key),
+        crate::model::Block::ToolResult { tool_use_id, .. } => tool_use_id.as_deref() == Some(key),
+        _ => false,
+    })
 }
 
 /// True when `path` is a csift elicitation sidecar — either by basename (`elicitations.jsonl`)
@@ -389,6 +478,31 @@ mod tests {
     #[test]
     fn content_sniff_rejects_empty() {
         assert!(!content_is_sidecar(""));
+    }
+
+    #[test]
+    fn native_closes_on_a_structural_tool_use_id() {
+        // The flushed native record of a REJECTED ExitPlanMode: tool_use block bearing the key.
+        let native = r#"{"type":"assistant","uuid":"n1","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_GHOST1","name":"ExitPlanMode","input":{}}]}}"#;
+        assert!(native_closes(native.as_bytes(), "toolu_GHOST1"));
+    }
+
+    #[test]
+    fn native_closes_on_a_tool_result_carrier() {
+        let native = r#"{"type":"user","uuid":"n2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_GHOST2","content":"The user doesn't want to proceed","is_error":true}]}}"#;
+        assert!(native_closes(native.as_bytes(), "toolu_GHOST2"));
+    }
+
+    #[test]
+    fn native_close_ignores_a_key_quoted_in_prose() {
+        // The key appears INSIDE another record's text (a Bash command grepping for it) —
+        // structural check must NOT count that as closure.
+        let native = concat!(
+            r#"{"type":"assistant","uuid":"n3","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_OTHER","name":"Bash","input":{"command":"grep toolu_GHOST3 session.jsonl"}}]}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"n4","message":{"role":"user","content":"mentioning toolu_GHOST3 in prose"}}"#,
+        );
+        assert!(!native_closes(native.as_bytes(), "toolu_GHOST3"));
     }
 
     #[test]
