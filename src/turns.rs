@@ -679,7 +679,8 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
     // is no longer bottlenecked on one core.
     let (records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_turn_candidate(line) {
-            return crate::parse::LineVerdict::Ignore;
+            // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+            return crate::parse::non_candidate_verdict(line);
         }
         match crate::parse::parse_line(line) {
             Ok(Some(rec)) => crate::parse::LineVerdict::Keep((line_no, rec)),
@@ -1651,8 +1652,8 @@ fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usize {
     // renderer uses, then sum their char lengths (+ newline).
     let line_session = format!("SESSION {}", sr.session_id);
     let line_budget = format!(
-        "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
-        budget, 0.0_f64, summaries
+        "  budget {} chars · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
+        budget, 0.0_f64, summaries, summaries
     );
     // The `selected` line carries the automation note ` (N automation triggers)` ONLY when
     // the session actually HAS automation-trigger turns (N ≤ turns). Reserve that space
@@ -2163,9 +2164,18 @@ fn render_text(
         } else {
             println!("SESSION {}", sr.session_id);
         }
+        // `spanned K of N`: K = boundaries the budget-selected window crossed (a QUERY
+        // property — a small budget can read 0 on a compaction-heavy session), N = the
+        // session's true total in scope (the TRANSCRIPT property). Naming both kills the
+        // R10 misread where `spanned 0` on a 4-boundary session looked like a bug until the
+        // reader varied the budget (same disambiguation pattern as the automation
+        // `in scope (not all selected)` note below).
         println!(
-            "  budget {} chars · round-trip-fraction {:.2} · spanned {} compaction boundaries",
-            ctx.budget_chars, ctx.rt_fraction, plan.spanned_boundaries
+            "  budget {} chars · round-trip-fraction {:.2} · spanned {} of {} compaction boundaries in scope",
+            ctx.budget_chars,
+            ctx.rt_fraction,
+            plan.spanned_boundaries,
+            sr.summaries.len()
         );
         // Header automation note carries a PER-CLASS breakdown, not just the lumped scalar,
         // so a reader sees the composition (`2 background-command, 1 agent`) without scanning
@@ -2718,6 +2728,20 @@ fn render_json(
     // `sessions_in_scope` is the TRUE scope (every discovered session); `sessions_rendered` is
     // how many fit the budget. Keeping them distinct stops a `--budget` knob from silently
     // rewriting "scope" and keeps a targeted top-level uuid from reading as `0 top-level`.
+    // Budget-accounting aggregates (R10): the text header's per-session numbers, summed —
+    // so "did this reconstruction consume its budget / cross the compactions" is machine-
+    // answerable without regex-parsing the text header (the machine format must never be
+    // thinner than the human one). `boundaries_total` is the sessions' TRUE boundary count
+    // in scope; `boundaries_spanned` is what the budget-selected windows crossed (a query
+    // property — see the text header's `spanned K of N`).
+    let total_assistant: usize = plans
+        .iter()
+        .filter(|p| !p.selected.is_empty())
+        .map(|p| count_sides(p, &ctx.cfg).1)
+        .sum();
+    let chars_used: usize = plans.iter().map(|p| p.rendered_chars).sum();
+    let boundaries_spanned: usize = plans.iter().map(|p| p.spanned_boundaries).sum();
+    let boundaries_total: usize = sessions.iter().map(|sr| sr.summaries.len()).sum();
     let header = json!({
         "kind": "header",
         "command": "turns",
@@ -2728,7 +2752,12 @@ fn render_json(
         "budget_chars": ctx.budget_chars,
         "budget_is_per_session": true,
         "max_total_chars": ctx.budget_chars.saturating_mul(sc.rendered.max(1)),
+        "round_trip_fraction": ctx.rt_fraction,
+        "chars_used": chars_used,
+        "boundaries_spanned": boundaries_spanned,
+        "boundaries_total": boundaries_total,
         "selected_user": total_user,
+        "selected_assistant": total_assistant,
         "automation_triggers": total_automation,
         "automation_by_kind": by_kind,
         "automation_in_scope_by_kind": in_scope_by_kind,

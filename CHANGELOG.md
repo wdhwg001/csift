@@ -5,6 +5,22 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.6] - 2026-07-14
+
+- Obviously-corrupt lines are COUNTED (correctness): every byte-prefilter
+  rejection path runs an O(1) shape check (non-blank but not `{…}`-framed ⇒
+  malformed), so free-text garbage and crash-truncation move `skipped_lines`
+  on every command. Documented residue: a `{…}`-framed invalid INTERIOR is
+  only counted on a parse candidate.
+- `verbatim`'s header reads `spanned K of N compaction boundaries in scope`
+  (K alone read as a transcript property); its JSON header carries the full
+  budget accounting (`round_trip_fraction`, `chars_used`, `boundaries_*`,
+  `selected_*`).
+- Docs: under `--turn`/time windows every `stats` figure windows EXCEPT
+  `lines`; an hours-old `awaiting-execution` lane is overwhelmingly an
+  abandoned parent session — weigh `pending_since_utc`; `--siblings` caps
+  apply to NON-matching context records only.
+
 ## [0.6.5] - 2026-07-13
 
 - Bare ISO datetimes are LOCAL wall-clock time (correctness): `--since

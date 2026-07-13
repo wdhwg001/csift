@@ -1391,7 +1391,8 @@ fn search_one_file(
                     return crate::parse::LineVerdict::Ignore; // verdict already "full scan"
                 }
                 if !line_is_transcript_candidate(line, needs_compact_boundary) {
-                    return crate::parse::LineVerdict::Ignore;
+                    // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+                    return crate::parse::non_candidate_verdict(line);
                 }
                 if matcher.line_prefilter_hits(line) || matcher.synth_conservative_hits(line) {
                     force_full.store(true, Ordering::Relaxed);
@@ -1463,7 +1464,8 @@ fn search_one_file(
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_transcript_candidate(line, needs_compact_boundary) {
-            return crate::parse::LineVerdict::Ignore;
+            // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+            return crate::parse::non_candidate_verdict(line);
         }
         let can_hit = matcher.line_may_match(line);
         match crate::parse::parse_line(line) {

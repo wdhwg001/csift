@@ -124,7 +124,8 @@ fn stats_one_file(
 
     let (records, skipped): (Vec<Record>, usize) = scan_lines_parallel(bytes, |line, _| {
         if !line_is_stats_candidate(line) {
-            return LineVerdict::Ignore;
+            // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+            return crate::parse::non_candidate_verdict(line);
         }
         match crate::parse::parse_line(line) {
             Ok(Some(rec)) => LineVerdict::Keep(rec),

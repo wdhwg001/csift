@@ -1,6 +1,6 @@
 SESSION 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
-  budget 40000 chars · round-trip-fraction 0.50 · spanned 3 compaction boundaries
-  selected 13 user + 12 assistant units across 13 turns · 4887 / 40000 chars used
+  budget 40000 chars · round-trip-fraction 0.50 · spanned 3 of 3 compaction boundaries in scope
+  selected 13 user + 12 assistant units across 13 turns · 4901 / 40000 chars used
   ────────────────────────────────────────────────────────────
 ▽ L1  USER  (2026-06-07 00:00:01 UTC(UTC+0))
 the very first ask about the café budget walk logic

@@ -5043,6 +5043,81 @@ fn unresolvable_target_errors_before_scope_warning() {
 }
 
 #[test]
+fn malformed_non_candidate_lines_are_counted_never_invisible() {
+    // R10: a syntactically-invalid line carries no role marker, so the §7 byte prefilter
+    // routed it to the silent Ignore branch — `skipped_lines` reported 0 on a corrupted
+    // file, indistinguishable from a clean one (the exact failure the malformed law
+    // exists to rule out). The O(1) shape check now counts the two realistic corruption
+    // shapes: free-text garbage (no leading '{') and crash-truncation (no trailing '}').
+    let h = Home::new();
+    let enc = "-Users-test-Projects-corrupt";
+    let sess = "dddddddd-eeee-4fff-8000-111111111111";
+    let body = concat!(
+        r#"{"type":"user","uuid":"u1","sessionId":"dddddddd-eeee-4fff-8000-111111111111","cwd":"/Users/test/Projects/corrupt","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"only real record"}}"#,
+        "\n",
+        "THIS IS COMPLETE GARBAGE NOT JSON AT ALL !!!",
+        "\n",
+        // Crash-truncated mid-string: brace-opened, never closed. It CARRIES a role
+        // marker, so it exercises the candidate parse-failure path (already counted
+        // pre-R10) while the garbage line above exercises the new shape path.
+        r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"te"#,
+        "\n",
+        "\n", // blank — NOT malformed, never counted
+    );
+    h.write(&format!("{enc}/{sess}.jsonl"), body);
+    let at = format!("@{sess}");
+    for args in [
+        vec!["search", "", at.as_str(), "--no-subagents"],
+        vec!["list", at.as_str(), "--no-subagents"],
+        vec!["show", at.as_str(), "--turn", ".."],
+        vec!["stats", at.as_str(), "--no-subagents"],
+    ] {
+        let mut a = args.clone();
+        a.extend(["--format", "json"]);
+        let out = h.run(&a);
+        assert!(out.success, "{args:?} stderr: {}", out.stderr);
+        assert_eq!(
+            json_summary(&out.stdout)["skipped_lines"],
+            2,
+            "{args:?} must count BOTH corrupt lines: {}",
+            out.stdout
+        );
+    }
+    // Text mode surfaces the shared malformed note.
+    let t = h.run(&["search", "", &at, "--no-subagents"]);
+    assert!(
+        format!("{}{}", t.stdout, t.stderr).contains("2 malformed line(s) skipped"),
+        "text note missing: {} ||| {}",
+        t.stdout,
+        t.stderr
+    );
+}
+
+#[test]
+fn verbatim_header_carries_budget_accounting_in_json_and_spanned_of_total_in_text() {
+    // R10: `spanned N compaction boundaries` read as a TRANSCRIPT property when it is a
+    // QUERY property (budget-window-relative) — the text now prints `spanned K of N … in
+    // scope`, and the JSON header carries the full budget accounting the text header
+    // shows (the machine format must never be thinner than the human one).
+    let h = populated_home();
+    let out = h.run(&["verbatim", &at(SESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let header: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().next().unwrap()).unwrap();
+    for key in [
+        "budget_chars",
+        "round_trip_fraction",
+        "chars_used",
+        "boundaries_spanned",
+        "boundaries_total",
+        "selected_user",
+        "selected_assistant",
+    ] {
+        assert!(!header[key].is_null(), "header must carry {key}: {header}");
+    }
+}
+
+#[test]
 fn agents_running_not_frozen_prints_last_seen_not_completed() {
     // A lane whose NEWEST meaningful record is a returned tool_result with NO closing
     // assistant text: not frozen (nothing pending), not completed (no terminal message) —

@@ -175,7 +175,10 @@ where
 {
     scan_lines_parallel(bytes, |line, line_no| {
         if !prefilter(line) {
-            return LineVerdict::Ignore;
+            // R10: a NON-candidate line still gets the O(1) shape check, so obviously-
+            // corrupt lines (free-text garbage, crash-truncation) are COUNTED, never
+            // invisible — the byte prefilter must not exempt them from the malformed law.
+            return non_candidate_verdict(line);
         }
         match parse_line(line) {
             Ok(Some(rec)) => LineVerdict::Keep((line_no, rec)),
@@ -183,6 +186,32 @@ where
             Err(_) => LineVerdict::Skip,
         }
     })
+}
+
+/// The verdict for a line a byte-prefilter rejected: `Skip` (⇒ counted malformed) when the
+/// line is OBVIOUSLY not a JSON object, else `Ignore` (a legit non-candidate record).
+/// Convenience wrapper over [`line_shape_malformed`] for the scan closures.
+#[must_use]
+pub fn non_candidate_verdict<T>(line: &[u8]) -> LineVerdict<T> {
+    if line_shape_malformed(line) {
+        LineVerdict::Skip
+    } else {
+        LineVerdict::Ignore
+    }
+}
+
+/// True when a line is OBVIOUSLY not a JSON object record: non-blank but not brace-framed
+/// (`{…}`). This is the O(1) malformed-shape check every non-candidate prefilter path runs
+/// so the "a skipped malformed line is COUNTED, never hidden" law (AGENTS §4) survives the
+/// §7 byte prefilters — free-text garbage has no leading `{`, and a crash-truncated record
+/// loses its trailing `}` (the two realistic corruption shapes; R10 found them silently
+/// invisible to every `skipped_lines` counter). The documented residual boundary: a
+/// brace-framed line whose INTERIOR is invalid JSON is only detected when it is a parse
+/// CANDIDATE — validating every non-candidate line would repeal the §7 perf contract.
+#[must_use]
+pub fn line_shape_malformed(line: &[u8]) -> bool {
+    let t = line.trim_ascii();
+    !t.is_empty() && (t[0] != b'{' || t[t.len() - 1] != b'}')
 }
 
 /// Core of [`scan_lines_parallel`] with an explicit chunk target, so a test can force multi-chunk
@@ -443,6 +472,10 @@ where
     let mut stop = false;
     let mut handle = |line: &[u8], skipped: &mut usize, stop: &mut bool| {
         if !pre(line) {
+            // R10: obviously-corrupt non-candidates are still COUNTED (the malformed law).
+            if line_shape_malformed(line) {
+                *skipped += 1;
+            }
             return;
         }
         match parse_line(line) {
@@ -495,6 +528,10 @@ where
     let mut skipped = 0usize;
     for raw in RevLines::with_chunk(bytes, TAIL_CHUNK) {
         if !pre(&raw) {
+            // R10: obviously-corrupt non-candidates are still COUNTED (the malformed law).
+            if line_shape_malformed(&raw) {
+                skipped += 1;
+            }
             continue;
         }
         match parse_line(&raw) {

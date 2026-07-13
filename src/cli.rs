@@ -1231,7 +1231,10 @@ pub struct SearchArgs {
     /// WITH the agent's reply (answers "I said X, what did you say back?"). FIXED policy,
     /// zero arguments: message units always render (user.*, agent.message,
     /// agent.communication.*); chattier machinery is capped per leaf (agent.thinking ≤ 2,
-    /// agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2); anything capped away is
+    /// agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2) — the caps apply to the
+    /// NON-matching context records ONLY; your actual pattern hits always render in full,
+    /// however many share a leaf (so a `--siblings` block can legitimately show more than
+    /// the cap count of same-leaf lines). Anything capped away is
     /// counted and surfaced as an explicit `(+N more · csift show @<id> --line A..B)`
     /// pointer. A record that itself matched is never repeated as a sibling. No effect
     /// under `--count-only`.
@@ -1435,7 +1438,9 @@ impl ShowArgs {
         these tallies — a unit difference, not a discrepancy), turn count, first/last \
         timestamps + duration, compaction count, malformed-line count. Spans subagents \
         by default (each transcript is its own row; the scope TOTAL block sums them). \
-        `--since`/`--until` bound the counted records by timestamp.",
+        `--since`/`--until` bound the counted records by timestamp. Under `--turn`/time \
+        windowing every figure windows EXCEPT `lines`, which stays the file's physical \
+        line count (a file fact, not a window fact).",
     after_help = "EXAMPLES\n  \
           csift stats @<uuid>                    # one session + its subagents\n  \
           csift stats @<uuid> --no-subagents     # just the top-level thread\n  \
@@ -1620,6 +1625,10 @@ pub enum AgentKindFilter {
         started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
         depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
         pending_since_utc/_local, skipped_lines} (+ control_hint on a teammate; \
+        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \
+        abandoned — jsonl cannot tell them apart, and at corpus scale a lane pending for \
+        hours/days is overwhelmingly \"parent session ended, nobody is coming back\", not \
+        in-flight work: weigh `pending_since_utc` against now yourself; \
         completed_utc/_local and duration are non-null ONLY when status is `completed` — \
         a frozen/running lane is NOT done, and its tail instant lives in \
         last_activity_utc/_local, which every timestamped lane carries (on a frozen lane \
@@ -2549,7 +2558,11 @@ impl PlanArgs {
         another). `--max-compactions` only caps how far.\n\n\
         BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in CHARS \
         (sizing rule of thumb: ≈4 chars/token) — it is applied PER session \
-        in scope. `verbatim` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
+        in scope. The header's `spanned K of N compaction boundaries in scope` is \
+        budget-relative on the K side: K counts the boundaries the SELECTED window crossed \
+        (a small budget on a compaction-heavy session can legitimately read `0 of 4` — the \
+        backward-from-EOF selection didn't reach them), while N is the session's true \
+        total; the session-wide count is also `stats`' `compactions` (unwindowed). `verbatim` defaults to the TOP-LEVEL thread only, so a bare-uuid run realizes \
         just `budget` chars; with `--subagents` a target that spans S subagents \
         realizes up to `budget × (1 + S)` chars total (a scope banner surfaces the \
         multiplier). `--round-trip-fraction` \
@@ -2634,10 +2647,14 @@ impl PlanArgs {
           A targeted top-level session that does not fit `budget` is reported with an explicit\n  \
           `skipped — needs ≥ N chars` note, never silently dropped.\n\n\
         JSON SCHEMA (per --format json)\n  \
-          A leading `{kind:\"session_header\", sessions_in_scope, sessions_rendered,\n  \
+          A leading `{kind:\"header\", sessions_in_scope, sessions_rendered,\n  \
           top_level_sessions, subagent_sessions, budget_chars, budget_is_per_session,\n  \
-          max_total_chars, selected_user, automation_triggers, automation_by_kind,\n  \
-          automation_in_scope_by_kind}` object —\n  \
+          max_total_chars, round_trip_fraction, chars_used, boundaries_spanned,\n  \
+          boundaries_total, selected_user, selected_assistant, automation_triggers,\n  \
+          automation_by_kind, automation_in_scope_by_kind, with_elicitation_sidecar}`\n  \
+          object (the full budget accounting the text header shows —\n  \
+          `boundaries_spanned` is budget-window-relative, `boundaries_total` the scope's\n  \
+          true total) —\n  \
           `sessions_in_scope` is the TRUE scope (every discovered session), `sessions_rendered`\n  \
           is how many fit the budget, the top_level/subagent split is over ALL in scope,\n  \
           `budget_chars`/`max_total_chars` are ALWAYS in CHARS,\n  \

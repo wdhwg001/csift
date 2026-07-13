@@ -623,6 +623,45 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.6 CHANGE LEDGER (non-breaking; correctness fix + header/JSON surface — `csift 0.6.6`).**
+> The tenth-audit release (Sonnet 5 on v0.6.5 — the first witness to build a synthetic
+> `--claude-home` fixture, closing a gap six prior reports had declined on a mistaken
+> ethics premise; its meta-finding stands: "does the reported count match reality" keeps
+> paying).
+> 1. **Obviously-corrupt lines are COUNTED (correctness — the malformed law had a hole).**
+>    A syntactically-invalid line carries no `"role":…` marker, so every §7 byte prefilter
+>    routed it to the silent `Ignore` branch: `skipped_lines` reported 0 on a corrupted
+>    file across search/list/show/stats/files/recover/verbatim — a partially-corrupt file
+>    was indistinguishable from a clean one, the exact signature the law exists to rule
+>    out. Every non-candidate path now runs an O(1) SHAPE check
+>    (`parse::line_shape_malformed`: non-blank but not `{…}`-framed ⇒ counted): free-text
+>    garbage has no leading `{`, crash-truncation loses its trailing `}` — the two
+>    realistic corruption shapes. Zero §7 regression (two byte compares on non-candidate
+>    lines only); verified zero false positives across a 315-transcript real corpus. The
+>    documented residue: a `{…}`-framed line with an invalid INTERIOR is only counted when
+>    it is a parse candidate — validating every non-candidate line would repeal §7.
+> 2. **`verbatim`'s header reads `spanned K of N compaction boundaries in scope`.** K
+>    (budget-window-relative) alone read as a TRANSCRIPT property — `spanned 0` on a
+>    4-boundary session under a small `--budget` looked like a bug and cost the witness a
+>    real debugging detour. N is the session's true total (same self-disambiguation
+>    pattern as the automation `in scope (not all selected)` note). The golden baseline is
+>    recaptured.
+> 3. **`verbatim --format json`'s header carries the full budget accounting** —
+>    `round_trip_fraction, chars_used, boundaries_spanned, boundaries_total,
+>    selected_assistant` join the existing fields, so "did the reconstruction consume its
+>    budget / cross the compactions" is machine-answerable without regex-parsing the text
+>    header. (The witness's "JSON is strictly thinner than text" was OVERBROAD — it only
+>    read the trailing summary and missed the leading header row, which already carried
+>    budget/selected/automation/sidecar — but the accounting fields really were absent;
+>    both facts recorded.) Help fixed alongside: the schema doc said `kind:"session_header"`
+>    while the binary emits `kind:"header"` — pre-existing drift.
+> 4. **Doc-only:** `stats` help/SKILL note that under `--turn`/time windowing every figure
+>    windows EXCEPT `lines` (a file fact); `agents` help/SKILL state the staleness reality
+>    of `awaiting-execution` (at corpus scale an hours/days-old pending lane is
+>    overwhelmingly an abandoned parent session — 54 such lanes live in the audit corpus,
+>    oldest 6 weeks; weigh `pending_since_utc` yourself); `--siblings` caps apply to
+>    NON-matching context records only (hits always render in full).
+
 > **v0.6.5 CHANGE LEDGER (non-breaking; correctness fix + additive JSON — `csift 0.6.5`).**
 > The ninth-audit release (Sonnet 5 on v0.6.4 — its self-initiated integrity re-audit
 > surfaced the round's headline bug; one suggestion was refuted as already-shipped).
