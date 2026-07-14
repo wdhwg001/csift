@@ -988,7 +988,12 @@ impl ListArgs {
         error — by design, not a bug.\n  \
           Case: smart-case by default (insensitive unless the pattern has an uppercase \
         letter); -i forces insensitive. --multiline lives in the SAME dialect (it sets \
-        the (?s)(?m) flags).\n\n\
+        the (?s)(?m) flags). CAVEAT — tool_use.input is matched RE-SERIALIZED: every \
+        tool_use's matchable text is its name + the re-serialized JSON input (not just \
+        AskUserQuestion's), so a real newline inside e.g. a Bash `input.command` is \
+        already the two-character sequence \\n by match time — match the literal `\\\\n`; \
+        --multiline is correctly irrelevant there (it helps only where the RENDERED text \
+        keeps real newlines: message text, thinking, tool_result bodies).\n\n\
         AUTOMATION TRIGGERS (`harness.notification.*`)\n  \
           A machine `<task-notification>` (a background-command / workflow / spawned-agent / \
         monitor-tick COMPLETION pulse) OPENS a turn but classifies under \

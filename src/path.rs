@@ -509,8 +509,10 @@ fn resolve_trap(marker: &str) -> Result<TrapSelf> {
              carries its command mid-run (a first try resolves), but the MAIN conversation's own \
              record is only flushed AFTER the current command finishes — a top-level FIRST use \
              always misses. If you are the top-level thread: use `@main` (env-based, no race), or \
-             re-run this EXACT command with the SAME marker (a fresh marker restarts the race and \
-             misses again)."
+             re-run this EXACT command with the SAME marker as a NEW, SEPARATE Bash invocation — \
+             a second attempt inside the SAME shell script does NOT count (the whole script is ONE \
+             still-in-flight command; nothing flushes until it exits), and a fresh marker restarts \
+             the race and misses again."
         ),
         n => bail!(
             "@trap: marker `{marker}` is AMBIGUOUS — it matched {n} subagents. Use a fresher, \

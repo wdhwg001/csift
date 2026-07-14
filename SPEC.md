@@ -623,6 +623,32 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.10 CHANGE LEDGER (non-breaking; help/error-text/doc surface only — `csift 0.6.10`).**
+> The fourteenth-audit release (Sonnet 5 on v0.6.9 — the strongest convergence evidence
+> yet: the witness independently re-verified the whole R9→R10→refutation saga with
+> CORRECT wire-format fixtures from scratch, spawned a live subagent to confirm both
+> sides of the @trap timing asymmetry, closed R13's open `--multiline` thread by root
+> cause, argued R13's completeness from the JSON grammar itself (RFC 8259: space/tab are
+> the only legal intra-line whitespace — the NBSP case is invalid JSON, i.e. the already-
+> named §4 residue), and surfaced zero new behavioral defects; every remaining yield is
+> text-level).
+> 1. **@trap retry granularity stated in the error + docs.** "Re-run the SAME command"
+>    invited an agentic caller to batch both attempts into ONE shell script — which is
+>    still ONE in-flight Bash tool_use (nothing flushes until the script exits), so both
+>    miss. The no-match error, SKILL's §trap, and the assumption table now say the retry
+>    must be a NEW, SEPARATE Bash invocation.
+> 2. **`--multiline` × re-serialized `tool_use.input` documented** (search --help +
+>    SKILL): EVERY tool_use's matchable text is name + re-serialized JSON input (not only
+>    AskUserQuestion's), so an embedded real newline is the two-character `\n` by match
+>    time — match the literal `\\n`; `--multiline` is correctly irrelevant there.
+> 3. **Doc completeness:** verbatim header's `automation_triggers` /
+>    `budget_is_per_session` / `sessions_rendered` added to SKILL's field list; the
+>    v0.6.9 ledger's "agree line-for-line" tightened to "agree in kind, tail-window
+>    width differs by scan target" (a tear on the penultimate line is caught by `list`,
+>    not by `agents` — verified at positions 298/299/300); a new SKILL row records the
+>    self-echo trap (a nonce used as a search pattern writes itself into your own live
+>    transcript — absence checks must scope away from your own session).
+
 > **v0.6.9 CHANGE LEDGER (non-breaking; correctness fix — serialization-tolerant candidate detection — `csift 0.6.9`).**
 > The thirteenth-audit release (Sonnet 5 on v0.6.8). The witness's headline (§1: "R12
 > made `list` full-coverage but left `agents` unfixed") was REFUTED as an artifact of
@@ -630,7 +656,11 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 > (`"role": "user"`), which blinded every byte prefilter, forcing `list`'s head scan to
 > walk whole files (hence "full coverage") while `agents`' unprefiltered lifecycle
 > stopped early as designed (hence "unfixed"); on compact (wire-format) fixtures the
-> two commands agree line-for-line and R12's fix + note are live on both. But the
+> two commands agree IN KIND — window census, same disclosure trigger and wording, R12's
+> fix + note live on both — while the tail-window WIDTH differs by scan target (`list`
+> needs `last_user` + `last_agent`, two lines under alternating roles; `agents` needs one
+> terminal record — so a tear on the penultimate line is caught by `list` and not by
+> `agents`; R14's precision correction of this ledger's original "line-for-line"). But the
 > witness's §2 IS the gold, and it is the same phenomenon R12's auditor hit and
 > under-filed as a "fixture lesson":
 > 1. **Stage-1 candidate detection is serialization-tolerant.** A valid-JSON record

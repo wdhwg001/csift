@@ -5,6 +5,19 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.10] - 2026-07-14
+
+- `@trap` retry guidance states the granularity: the retry must be a NEW,
+  SEPARATE Bash invocation — two attempts inside one shell script are still one
+  in-flight tool_use, so both miss (error text + SKILL + assumption table).
+- Documented: EVERY `tool_use`'s matchable text is its name + the re-serialized
+  JSON input, so an embedded real newline is the two-character `\n` by match
+  time — match the literal `\\n`; `--multiline` is correctly irrelevant there.
+- SKILL completeness: verbatim header fields `automation_triggers`,
+  `budget_is_per_session`, `sessions_rendered` named; the self-echo trap
+  recorded (a nonce used as a search pattern writes itself into your own live
+  transcript — scope absence checks away from your own session).
+
 ## [0.6.9] - 2026-07-14
 
 - Stage-1 candidate detection is serialization-tolerant (correctness): a
