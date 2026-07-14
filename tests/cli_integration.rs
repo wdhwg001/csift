@@ -5094,6 +5094,142 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
 }
 
 #[test]
+fn list_all_garbage_counts_each_line_once_not_twice() {
+    // R12 §1.4: the head scan and the tail scan each walked the whole file (nothing
+    // genuine to stop at) and each booked the same malformed lines — an all-garbage
+    // file reported exactly 2× at every size. The tail scan now floors at the head
+    // scan's consumed-end offset, so the two windows are disjoint.
+    let h = Home::new();
+    let enc = "-Users-test-Projects-garbage";
+    let sess = "eeeeeeee-aaaa-4bbb-8ccc-000000000005";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        "GARBAGE 1\nGARBAGE 2\nGARBAGE 3\nGARBAGE 4\nGARBAGE 5\n",
+    );
+    let at = format!("@{sess}");
+    let out = h.run(&["list", &at, "--no-subagents", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(
+        json_summary(&out.stdout)["skipped_lines"],
+        5,
+        "each malformed line booked exactly once: {}",
+        out.stdout
+    );
+    // Text mode: the note scope-qualifies the number (window census, not a whole-file
+    // verdict) and routes the census question to stats.
+    let t = h.run(&["list", &at, "--no-subagents"]);
+    assert!(
+        t.stdout
+            .contains("5 malformed line(s) skipped (among the head/tail lines read"),
+        "scope-qualified note missing: {}",
+        t.stdout
+    );
+}
+
+#[test]
+fn list_skipped_lines_is_a_window_census_stats_is_the_authority() {
+    // R12 §1 disclosure pin: a malformed line OUTSIDE list's head/tail windows is
+    // invisible to `list` BY DESIGN (§7: list never scans the middle — full coverage
+    // measured ~4× its unscoped runtime), while `stats` (a full scan) is the
+    // corruption-census authority over the same bytes. Pinning BOTH numbers keeps the
+    // divergence a documented contract instead of silent drift.
+    let h = Home::new();
+    let enc = "-Users-test-Projects-midtear";
+    let sess = "eeeeeeee-aaaa-4bbb-8ccc-000000000150";
+    let mut body = String::new();
+    for i in 0..20 {
+        if i == 9 {
+            body.push_str("MID-FILE TEAR not json\n");
+            continue;
+        }
+        let (ty, role) = if i % 2 == 0 {
+            ("user", "user")
+        } else {
+            ("assistant", "assistant")
+        };
+        body.push_str(&format!(
+            r#"{{"type":"{ty}","uuid":"m{i}","timestamp":"2026-06-07T05:00:{i:02}.000Z","message":{{"role":"{role}","content":[{{"type":"text","text":"msg {i}"}}]}}}}"#
+        ));
+        body.push('\n');
+    }
+    h.write(&format!("{enc}/{sess}.jsonl"), &body);
+    let at = format!("@{sess}");
+    let l = h.run(&["list", &at, "--no-subagents", "--format", "json"]);
+    assert!(l.success, "stderr: {}", l.stderr);
+    assert_eq!(
+        json_summary(&l.stdout)["skipped_lines"],
+        0,
+        "the mid-file tear sits outside list's windows (disclosed design): {}",
+        l.stdout
+    );
+    let s = h.run(&["stats", &at, "--no-subagents", "--format", "json"]);
+    assert!(s.success, "stderr: {}", s.stderr);
+    assert_eq!(
+        json_summary(&s.stdout)["skipped_lines"],
+        1,
+        "stats full-scans and must see the tear: {}",
+        s.stdout
+    );
+}
+
+#[test]
+fn sidecar_schema_skewed_marker_is_counted_never_invisible() {
+    // R12 §2: a sentinel-bearing sidecar line the CURRENT schema cannot read (a
+    // pre-release fossil: `phase`/`kind`/`key` instead of `csiftPhase`/…) used to be
+    // fully invisible — correctly never merged, but not counted either. It now moves
+    // `skipped_lines` on every sidecar-merging surface (valid-JSON-ness ≠ silence).
+    let h = Home::new();
+    let enc = "-Users-test-Projects-fossil";
+    let sess = "eeeeeeee-aaaa-4bbb-8ccc-00000000f055";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"q"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"a"}]}}"#,
+            "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/elicitations.jsonl"),
+        concat!(
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","phase":"pending","kind":"AskUserQuestion","key":"toolu_fossil","sessionId":"eeeeeeee-aaaa-4bbb-8ccc-00000000f055"}"#,
+            "\n",
+        ),
+    );
+    let at = format!("@{sess}");
+    let l = h.run(&["list", &at, "--no-subagents", "--format", "json"]);
+    assert!(l.success, "stderr: {}", l.stderr);
+    assert_eq!(
+        json_summary(&l.stdout)["skipped_lines"],
+        1,
+        "the fossil marker must move the counter: {}",
+        l.stdout
+    );
+    let rows = json_rows(&l.stdout, "session");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["sidecar_present"], true, "{rows:?}");
+    assert_eq!(
+        rows[0]["pending_elicitations"].as_array().map(Vec::len),
+        Some(0),
+        "a fossil never merges as pending: {rows:?}"
+    );
+    let s = h.run(&["search", "", &at, "--no-subagents", "--format", "json"]);
+    assert!(s.success, "stderr: {}", s.stderr);
+    let sum = json_summary(&s.stdout);
+    assert_eq!(
+        sum["skipped_lines"], 1,
+        "search folds the sidecar skip in: {}",
+        s.stdout
+    );
+    assert_eq!(
+        sum["with_elicitation_sidecar"], false,
+        "nothing merged — only counted: {}",
+        s.stdout
+    );
+}
+
+#[test]
 fn verbatim_header_carries_budget_accounting_in_json_and_spanned_of_total_in_text() {
     // R10: `spanned N compaction boundaries` read as a TRANSCRIPT property when it is a
     // QUERY property (budget-window-relative) — the text now prints `spanned K of N … in

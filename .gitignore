@@ -3,3 +3,4 @@
 *.pdb
 .DS_Store
 /reference/
+/.omc/

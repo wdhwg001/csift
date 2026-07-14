@@ -444,9 +444,15 @@ impl Iterator for RevLines<'_> {
 
 /// Iterate parsed records from the HEAD of a file, calling `keep` for each
 /// successfully-parsed record. `keep` returns `false` to stop early (e.g. once the
-/// first genuine-user is found). Malformed lines are skipped and counted; the skip
-/// count is returned. Never parses past the caller's early-stop point.
-pub fn head_records<F>(path: &Path, keep: F) -> Result<usize>
+/// first genuine-user is found). Malformed lines are skipped and counted. Never
+/// parses past the caller's early-stop point.
+///
+/// Returns `(skipped, consumed_end)`: `consumed_end` is the byte offset just past
+/// the last line this scan examined (a line boundary; `bytes.len()` when the scan
+/// reached EOF). A caller pairing this with a tail scan over the SAME file MUST
+/// pass `consumed_end` as the tail's `floor` so the two windows are disjoint and a
+/// malformed line is counted exactly once (R12: the head+tail double-book).
+pub fn head_records<F>(path: &Path, keep: F) -> Result<(usize, usize)>
 where
     F: FnMut(&Record) -> bool,
 {
@@ -458,13 +464,13 @@ where
 /// discipline `search`/`turns`/`files` already use). Lets `list` skip the routinely
 /// huge non-message lines (attachment / file-history-snapshot / queue-operation)
 /// without paying `serde_json` for them.
-pub fn head_records_prefiltered<P, F>(path: &Path, pre: P, mut keep: F) -> Result<usize>
+pub fn head_records_prefiltered<P, F>(path: &Path, pre: P, mut keep: F) -> Result<(usize, usize)>
 where
     P: Fn(&[u8]) -> bool,
     F: FnMut(&Record) -> bool,
 {
     let Some(mmap) = mmap_file(path)? else {
-        return Ok(0);
+        return Ok((0, 0));
     };
     let bytes: &[u8] = &mmap;
     let mut skipped = 0usize;
@@ -491,14 +497,14 @@ where
     for nl in memchr_iter(b'\n', bytes) {
         handle(&bytes[start..nl], &mut skipped, &mut stop);
         if stop {
-            return Ok(skipped);
+            return Ok((skipped, nl + 1));
         }
         start = nl + 1;
     }
     if start < bytes.len() {
         handle(&bytes[start..], &mut skipped, &mut stop);
     }
-    Ok(skipped)
+    Ok((skipped, bytes.len()))
 }
 
 /// Iterate parsed records from the TAIL of a file (newest-first) via the backward
@@ -506,17 +512,26 @@ where
 /// `false` to stop (e.g. once BOTH the last genuine-user and last agent message
 /// are found). Malformed lines are skipped+counted; the skip count is returned.
 /// Never parses the whole file when the anchors are near the end.
-pub fn tail_records<F>(path: &Path, keep: F) -> Result<usize>
+///
+/// `floor` = the paired head scan's `consumed_end` (0 when there is no head scan):
+/// lines BELOW it are still walked for anchors when the tail region runs dry, but
+/// are never re-counted — the head scan already booked them (R12).
+pub fn tail_records<F>(path: &Path, floor: usize, keep: F) -> Result<usize>
 where
     F: FnMut(&Record) -> bool,
 {
-    tail_records_chunked(path, TAIL_CHUNK, keep)
+    tail_records_chunked(path, TAIL_CHUNK, floor, keep)
 }
 
 /// [`tail_records`] with a RAW-byte prefilter (the backward mirror of
 /// [`head_records_prefiltered`]): a line failing `pre` is neither parsed nor
 /// counted, so a tail dominated by huge metadata lines costs only the newline scan.
-pub fn tail_records_prefiltered<P, F>(path: &Path, pre: P, mut keep: F) -> Result<usize>
+pub fn tail_records_prefiltered<P, F>(
+    path: &Path,
+    pre: P,
+    floor: usize,
+    mut keep: F,
+) -> Result<usize>
 where
     P: Fn(&[u8]) -> bool,
     F: FnMut(&Record) -> bool,
@@ -525,8 +540,12 @@ where
         return Ok(0);
     };
     let bytes: &[u8] = &mmap;
+    let floor = floor.min(bytes.len());
     let mut skipped = 0usize;
-    for raw in RevLines::with_chunk(bytes, TAIL_CHUNK) {
+    let mut stopped = false;
+    // Phase 1 — the region the paired head scan did NOT examine (`bytes[floor..]`,
+    // a line boundary): parsed, anchored, and COUNTED.
+    for raw in RevLines::with_chunk(&bytes[floor..], TAIL_CHUNK) {
         if !pre(&raw) {
             // R10: obviously-corrupt non-candidates are still COUNTED (the malformed law).
             if line_shape_malformed(&raw) {
@@ -537,6 +556,7 @@ where
         match parse_line(&raw) {
             Ok(Some(rec)) => {
                 if !keep(&rec) {
+                    stopped = true;
                     break;
                 }
             }
@@ -544,11 +564,32 @@ where
             Err(_) => skipped += 1,
         }
     }
+    // Phase 2 — anchors still missing: continue into the head-examined region
+    // WITHOUT counting (the head scan already booked those lines; re-counting is the
+    // pre-v0.6.8 double-book). Same lines, same newest-first order as the old
+    // full-file walk, so anchor semantics are unchanged.
+    if !stopped && floor > 0 {
+        for raw in RevLines::with_chunk(&bytes[..floor], TAIL_CHUNK) {
+            if !pre(&raw) {
+                continue;
+            }
+            if let Ok(Some(rec)) = parse_line(&raw) {
+                if !keep(&rec) {
+                    break;
+                }
+            }
+        }
+    }
     Ok(skipped)
 }
 
 /// [`tail_records`] with an explicit chunk size (tests force the carry path).
-pub fn tail_records_chunked<F>(path: &Path, chunk: usize, mut keep: F) -> Result<usize>
+pub fn tail_records_chunked<F>(
+    path: &Path,
+    chunk: usize,
+    floor: usize,
+    mut keep: F,
+) -> Result<usize>
 where
     F: FnMut(&Record) -> bool,
 {
@@ -556,16 +597,28 @@ where
         return Ok(0);
     };
     let bytes: &[u8] = &mmap;
+    let floor = floor.min(bytes.len());
     let mut skipped = 0usize;
-    for raw in RevLines::with_chunk(bytes, chunk) {
+    let mut stopped = false;
+    for raw in RevLines::with_chunk(&bytes[floor..], chunk) {
         match parse_line(&raw) {
             Ok(Some(rec)) => {
                 if !keep(&rec) {
+                    stopped = true;
                     break;
                 }
             }
             Ok(None) => {}
             Err(_) => skipped += 1,
+        }
+    }
+    if !stopped && floor > 0 {
+        for raw in RevLines::with_chunk(&bytes[..floor], chunk) {
+            if let Ok(Some(rec)) = parse_line(&raw) {
+                if !keep(&rec) {
+                    break;
+                }
+            }
         }
     }
     Ok(skipped)
@@ -682,7 +735,7 @@ mod tests {
         let mut last_user: Option<String> = None;
         let mut last_agent: Option<String> = None;
         // Use a tiny chunk to force the carry path even on this small file.
-        let skipped = tail_records_chunked(f.path(), 8, |rec| {
+        let skipped = tail_records_chunked(f.path(), 8, 0, |rec| {
             if last_agent.is_none() {
                 if let Some(t) = rec.agent_text() {
                     last_agent = Some(t);
@@ -710,7 +763,7 @@ mod tests {
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"a"}]}}"#,
         ]);
         let mut agent: Option<String> = None;
-        let skipped = tail_records_chunked(f.path(), 4, |rec| {
+        let skipped = tail_records_chunked(f.path(), 4, 0, |rec| {
             if let Some(t) = rec.agent_text() {
                 agent = Some(t);
             }
@@ -731,7 +784,7 @@ mod tests {
             r#"{ broken tail line"#,
         ]);
         let mut seen = 0usize;
-        let skipped = tail_records_chunked(f.path(), 4, |_rec| {
+        let skipped = tail_records_chunked(f.path(), 4, 0, |_rec| {
             seen += 1;
             true // scan everything
         })
@@ -790,10 +843,11 @@ mod tests {
     #[test]
     fn empty_file_is_safe() {
         let f = tempfile_path::TempJsonl::empty();
-        let s = tail_records(f.path(), |_| true).expect("tail empty");
+        let s = tail_records(f.path(), 0, |_| true).expect("tail empty");
         assert_eq!(s, 0);
-        let s = head_records(f.path(), |_| true).expect("head empty");
+        let (s, consumed) = head_records(f.path(), |_| true).expect("head empty");
         assert_eq!(s, 0);
+        assert_eq!(consumed, 0);
     }
 
     // ── Branch-completeness ──
@@ -814,7 +868,7 @@ mod tests {
         );
         // head/tail over a missing file surface the same open error.
         assert!(head_records(&missing, |_| true).is_err());
-        assert!(tail_records(&missing, |_| true).is_err());
+        assert!(tail_records(&missing, 0, |_| true).is_err());
     }
 
     #[test]
@@ -920,7 +974,7 @@ mod tests {
             r#"{"type":"user","message":{"role":"user","content":"real"}}"#,
         ]);
         let mut first: Option<String> = None;
-        let skipped = head_records(f.path(), |rec| {
+        let (skipped, _) = head_records(f.path(), |rec| {
             if let Some(t) = rec.genuine_user_text() {
                 first = Some(t);
                 return false;
@@ -976,6 +1030,72 @@ mod tests {
         })
         .expect("head read");
         assert_eq!(count, 1, "stopped after the first record");
+    }
+
+    #[test]
+    fn head_tail_disjoint_windows_never_double_count() {
+        // R12: a head scan + tail scan over the SAME file used to double-book every
+        // malformed line both passes walked (an all-garbage file reported exactly 2×).
+        // The head returns its consumed-end offset; passing it as the tail floor keeps
+        // the windows disjoint, so each line is booked exactly once.
+        let f = tmp_jsonl(&["{ garbage one", "{ garbage two", "{ garbage three"]);
+        let (head_skipped, consumed) = head_records(f.path(), |_| true).expect("head");
+        assert_eq!(head_skipped, 3);
+        let tail_skipped = tail_records(f.path(), consumed, |_| true).expect("tail");
+        assert_eq!(
+            tail_skipped, 0,
+            "the tail must not re-book head-counted lines"
+        );
+    }
+
+    #[test]
+    fn tail_floor_still_walks_below_for_anchors_without_counting() {
+        // The ONLY genuine user sits inside the head window. The tail scan (floor past
+        // it) must still find it as an anchor (phase 2 of the backward walk) while
+        // counting nothing below the floor — anchor semantics are byte-identical to the
+        // old full-file walk; only the double-booked count changed.
+        let f = tmp_jsonl(&[
+            r#"{ broken head line"#,
+            r#"{"type":"user","message":{"role":"user","content":"only q"}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"a"}]}}"#,
+        ]);
+        let mut first: Option<String> = None;
+        let (head_skipped, consumed) = head_records(f.path(), |rec| {
+            if let Some(t) = rec.genuine_user_text() {
+                first = Some(t);
+                return false;
+            }
+            true
+        })
+        .expect("head");
+        assert_eq!(head_skipped, 1);
+        assert_eq!(first.as_deref(), Some("only q"));
+        let mut last_user: Option<String> = None;
+        let mut last_agent: Option<String> = None;
+        let tail_skipped = tail_records(f.path(), consumed, |rec| {
+            if last_agent.is_none() {
+                if let Some(t) = rec.agent_text() {
+                    last_agent = Some(t);
+                }
+            }
+            if last_user.is_none() {
+                if let Some(t) = rec.genuine_user_text() {
+                    last_user = Some(t);
+                }
+            }
+            last_user.is_none() || last_agent.is_none()
+        })
+        .expect("tail");
+        assert_eq!(last_agent.as_deref(), Some("a"));
+        assert_eq!(
+            last_user.as_deref(),
+            Some("only q"),
+            "anchor below the floor is still found"
+        );
+        assert_eq!(
+            tail_skipped, 0,
+            "the broken head line is booked by the head scan only"
+        );
     }
 
     #[test]

@@ -256,51 +256,56 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let mut git_branch: Option<String> = None;
     let mut data_session_id: Option<String> = None;
 
-    let head_skipped = head_records_prefiltered(path, line_is_list_candidate, |rec| {
-        // First user message = a genuine human turn, an answered AskUserQuestion, or a
-        // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
-        // single-record head scan, so a rejection surfaces its typed instruction without
-        // the `[plan: …]` pointer (the pointer is a turns/search affordance). A
-        // `<task-notification>` / inbound `<teammate-message>` renders its clean label /
-        // inbound-comm form via `preview_text` rather than the raw XML it used to show.
-        if let Some(text) = preview_text(rec) {
-            // Capture identity off the first user record (it carries cwd / version /
-            // gitBranch / sessionId in real data).
-            cwd = rec.cwd.clone();
-            version = rec.version.clone();
-            git_branch = rec.git_branch.clone();
-            data_session_id = rec.session_id.clone();
-            first_user = Some(MessagePreview::from(rec.timestamp.clone(), &text));
-            return false; // stop the head scan
-        }
-        true
-    })?;
+    let (head_skipped, head_consumed) =
+        head_records_prefiltered(path, line_is_list_candidate, |rec| {
+            // First user message = a genuine human turn, an answered AskUserQuestion, or a
+            // tool-use rejection-with-message (§4.1/§4.4/§4.2.4). No PlanIndex in this
+            // single-record head scan, so a rejection surfaces its typed instruction without
+            // the `[plan: …]` pointer (the pointer is a turns/search affordance). A
+            // `<task-notification>` / inbound `<teammate-message>` renders its clean label /
+            // inbound-comm form via `preview_text` rather than the raw XML it used to show.
+            if let Some(text) = preview_text(rec) {
+                // Capture identity off the first user record (it carries cwd / version /
+                // gitBranch / sessionId in real data).
+                cwd = rec.cwd.clone();
+                version = rec.version.clone();
+                git_branch = rec.git_branch.clone();
+                data_session_id = rec.session_id.clone();
+                first_user = Some(MessagePreview::from(rec.timestamp.clone(), &text));
+                return false; // stop the head scan
+            }
+            true
+        })?;
 
     // ── TAIL read: last genuine-user + last agent message (newest-first) ──
     let mut last_user: Option<MessagePreview> = None;
     let mut last_agent: Option<MessagePreview> = None;
-    let tail_skipped = tail_records_prefiltered(path, line_is_list_candidate, |rec| {
-        if last_agent.is_none() {
-            if let Some(text) = rec.agent_text() {
-                last_agent = Some(MessagePreview::from(rec.timestamp.clone(), &text));
+    // `head_consumed` as the floor keeps the two windows DISJOINT: a malformed line is
+    // counted exactly once (R12 killed the head+tail double-book on files where both
+    // scans used to walk the same region).
+    let tail_skipped =
+        tail_records_prefiltered(path, line_is_list_candidate, head_consumed, |rec| {
+            if last_agent.is_none() {
+                if let Some(text) = rec.agent_text() {
+                    last_agent = Some(MessagePreview::from(rec.timestamp.clone(), &text));
+                }
             }
-        }
-        if last_user.is_none() {
-            if let Some(text) = preview_text(rec) {
-                last_user = Some(MessagePreview::from(rec.timestamp.clone(), &text));
-                // Backfill identity from the tail if the head never found a genuine
-                // user (e.g. a session whose only user turns are near the end).
-                capture_identity_if_empty(
-                    rec,
-                    &mut cwd,
-                    &mut version,
-                    &mut git_branch,
-                    &mut data_session_id,
-                );
+            if last_user.is_none() {
+                if let Some(text) = preview_text(rec) {
+                    last_user = Some(MessagePreview::from(rec.timestamp.clone(), &text));
+                    // Backfill identity from the tail if the head never found a genuine
+                    // user (e.g. a session whose only user turns are near the end).
+                    capture_identity_if_empty(
+                        rec,
+                        &mut cwd,
+                        &mut version,
+                        &mut git_branch,
+                        &mut data_session_id,
+                    );
+                }
             }
-        }
-        last_user.is_none() || last_agent.is_none()
-    })?;
+            last_user.is_none() || last_agent.is_none()
+        })?;
 
     // Prefer the filename-derived id; cross-check with the data id (§2.4 spirit).
     let session_id = if session_id.is_empty() {
@@ -441,8 +446,10 @@ fn render_text(summaries: &[SessionSummary], dropped: usize, scope_top: usize, s
         }
 
         if s.skipped_lines > 0 {
+            // R12: scope-qualify — `list` reads head/tail windows only, so its count is a
+            // window census, not a whole-file verdict (that is `stats`, a full scan).
             println!(
-                "  note     {}",
+                "  note     {} (among the head/tail lines read — full census: csift stats)",
                 crate::text::malformed_note(s.skipped_lines)
             );
         }

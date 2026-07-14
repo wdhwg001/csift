@@ -5,6 +5,19 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.8] - 2026-07-14
+
+- `list`/`agents` head+tail scans no longer double-book malformed lines: the
+  tail scan floors at the head scan's consumed end, so the two windows are
+  disjoint and every malformed line in them is counted exactly once (an
+  all-garbage file used to report exactly 2×).
+- `list`'s malformed count is a DISCLOSED window census, never a whole-file
+  verdict: the note reads `… skipped (among the head/tail lines read — full
+  census: csift stats)`, and `stats` is named the full-scan census authority.
+- A sidecar marker line the current schema cannot read (a pre-release fossil
+  under old field names) is counted as malformed — provably-ours yet
+  uninterpretable never buys silence.
+
 ## [0.6.7] - 2026-07-14
 
 Doc-only convergence round.

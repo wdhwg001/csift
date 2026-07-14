@@ -785,12 +785,21 @@ impl ImageOutFormat {
         command:\"list\", sessions_in_scope, top_level_sessions, subagent_sessions}` line, then \
         ONE `{kind:\"session\", …}` row per session — {session_id, is_subagent, \
         parent_session_id, path, cwd, git_branch, version, first_user, last_user, last_agent, \
-        skipped_lines} — then a closing `{kind:\"summary\", sessions, skipped_lines, \
+        skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar} — then \
+        a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \
         the re-feedable owning uuid (= session_id for a top-level row) — never re-feed a \
         subagent `session_id`. The `first_user`/`last_user`/`last_agent` fields are {excerpt, \
         ts_utc, ts_local} sub-objects (or null when absent). `dropped_by_cap` > 0 when the \
-        unscoped-flood cap trimmed rows (the most-recent 50 are kept)."
+        unscoped-flood cap trimmed rows (the most-recent 50 are kept).\n\n\
+        SKIPPED_LINES SEMANTICS (window census, NOT a whole-file verdict)\n  \
+          `list` reads only the head/tail lines it needs (the §7 fast-overview contract — it \
+        never scans the middle of a transcript), so its `skipped_lines` counts malformed lines \
+        among the LINES READ: 0 means \"the lines read were clean\", and a mid-file tear is \
+        OUTSIDE the windows by design. The full-scan corruption census over the same bytes is \
+        `csift stats` (every full-scan command — search/files/recover — agrees with it). \
+        Within the read windows every malformed line — and every sidecar marker the current \
+        schema cannot read — is booked exactly once."
 )]
 pub struct ListArgs {
     /// One or more targets: an actual filesystem cwd, a direct
@@ -1453,7 +1462,9 @@ impl ShowArgs {
         tokens:{<model>:{input, output, cache_read, cache_creation}}, tools:{<name>:count}, \
         skipped_lines}. The summary adds the scope totals ({sessions, tokens, tools, turns, \
         dropped_by_cap, skipped_lines}) — `tail -1 | jq .tokens` is the one-liner for total \
-        burn."
+        burn. `skipped_lines` here is a FULL-SCAN census (stats parses every line) — the \
+        corruption-census authority for \"does this transcript carry a torn/corrupt line \
+        anywhere\"; `list`'s same-named field covers only the head/tail lines list reads."
 )]
 pub struct StatsArgs {
     /// Project path(s) / `@<uuid>` / `@<agent-id>` / `*.jsonl` — same targeting grammar as
@@ -1654,7 +1665,9 @@ pub enum AgentKindFilter {
         grab emits the SAME envelope (header + session + the one agent row + summary) — \
         no bare-object exception. Every `_utc` field carries a paired `_local` \
         (system-local ISO). The malformed-line count rides on each agent row's \
-        `skipped_lines`. Idiom: jq 'select(.kind==\"agent\")' reaches every node."
+        `skipped_lines` — a head/tail WINDOW census like `list`'s (lifecycle reads only the \
+        transcript's edges; full census: `csift stats @<agent-id>`). \
+        Idiom: jq 'select(.kind==\"agent\")' reaches every node."
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an

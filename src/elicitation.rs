@@ -22,9 +22,11 @@
 //! Group the sidecar's lines by `csiftKey`. A key with a `csiftPhase:"pending"` record and NO
 //! `csiftPhase:"resolved"` record is UNRESOLVED — its pending record is exactly the one
 //! missing from the native transcript, so it is emitted. A malformed line is skipped +
-//! COUNTED (the never-silent invariant, AGENTS.md §4); a non-marker line (no
-//! `csift:"elicitation-marker-v1"`) is skipped silently. A missing sidecar dir / file ⇒ no
-//! merge (never an error).
+//! COUNTED (the never-silent invariant, AGENTS.md §4), and so is a SENTINEL-BEARING marker
+//! whose `csiftPhase` the current schema cannot read (schema skew, e.g. a pre-release
+//! fossil — R12: provably ours yet uninterpretable is a failure signature, never silent);
+//! only a non-marker line (no `csift:"elicitation-marker-v1"`) is skipped silently. A
+//! missing sidecar dir / file ⇒ no merge (never an error).
 //!
 //! ## Keyed by the TOP-LEVEL session
 //!
@@ -204,7 +206,8 @@ struct PendingRec {
 /// timestamp ascending, malformed-line count). A key with a `pending` record and NO
 /// `resolved` record is unresolved → its pending record is emitted (the one CC has not yet
 /// written natively). A non-marker line is skipped silently; a malformed (unparseable,
-/// non-blank) line is skipped + counted.
+/// non-blank) line is skipped + counted, and so is a sentinel-bearing marker whose
+/// `csiftPhase` is absent/unknown (schema skew — counted, never invisible; R12).
 fn pair_unresolved(contents: &str) -> (Vec<Record>, usize) {
     // First pass: collect every pending record (keyed) and the set of resolved keys.
     let mut pending: HashMap<String, PendingRec> = HashMap::new();
@@ -246,8 +249,13 @@ fn pair_unresolved(contents: &str) -> (Vec<Record>, usize) {
                 pending.insert(key, PendingRec { rec, ts });
             }
             _ => {
-                // An unknown / absent phase on an otherwise-valid marker — ignore (neither an
-                // open nor a close). Not malformed JSON, so not counted.
+                // An unknown / absent phase on a SENTINEL-BEARING marker: the line is provably
+                // ours (`csift:"elicitation-marker-v1"`) yet the current schema cannot read it
+                // (e.g. a pre-release fossil written under older field names — `phase` instead
+                // of `csiftPhase`). Neither an open nor a close, but never invisible either:
+                // an uninterpretable marker is a failure signature and must move a counter
+                // (R12 — the malformed law's spirit; valid-JSON-ness does not buy silence).
+                skipped += 1;
             }
         }
     }
@@ -402,6 +410,22 @@ mod tests {
         let (recs, skipped) = pair_unresolved(&lines);
         assert_eq!(skipped, 0);
         assert!(recs.is_empty(), "a paired pending+resolved must be dropped");
+    }
+
+    #[test]
+    fn schema_skewed_marker_is_counted_not_invisible() {
+        // R12: a pre-release fossil carries the sentinel but an OLD field naming
+        // (`phase`/`kind`/`key`, not `csiftPhase`/…) — provably ours, uninterpretable
+        // by the current schema. It must move the skip counter, never merge, never
+        // vanish (valid-JSON-ness does not buy silence).
+        let lines = concat!(
+            r#"{"type":"csift-elicitation","csift":"elicitation-marker-v1","#,
+            r#""phase":"pending","kind":"AskUserQuestion","key":"toolu_fossil"}"#
+        )
+        .to_string();
+        let (recs, skipped) = pair_unresolved(&lines);
+        assert!(recs.is_empty(), "a fossil never merges as pending");
+        assert_eq!(skipped, 1, "schema skew moves the counter");
     }
 
     #[test]

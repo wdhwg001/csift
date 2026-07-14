@@ -658,7 +658,7 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     // HEAD: first record's timestamp == start. We do not need genuine-user logic
     // here — the very first record (isSidechain user seed) IS the start instant.
     let mut started_utc: Option<String> = None;
-    let head_skipped = head_records(&subagent.path, |rec| {
+    let (head_skipped, head_consumed) = head_records(&subagent.path, |rec| {
         if let Some(ts) = &rec.timestamp {
             started_utc = Some(ts.clone());
             return false; // first timestamped record is enough
@@ -677,7 +677,8 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     let mut saw_any = false;
     let mut newest_decided = false;
     let mut pending: Option<PendingToolUse> = None;
-    let tail_skipped = tail_records(&subagent.path, |rec| {
+    // Disjoint from the head window (R12): a malformed line is never double-booked.
+    let tail_skipped = tail_records(&subagent.path, head_consumed, |rec| {
         saw_any = true;
         if completed_utc.is_none() {
             if let Some(ts) = &rec.timestamp {
@@ -1249,7 +1250,7 @@ fn resolve_returned_message(
 /// carrying visible text.
 fn child_tail_text(path: &Path) -> Option<String> {
     let mut found: Option<String> = None;
-    let _ = tail_records(path, |rec| {
+    let _ = tail_records(path, 0, |rec| {
         if let Some(t) = rec.agent_text() {
             found = Some(t);
             return false; // newest visible assistant text is enough

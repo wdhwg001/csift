@@ -623,6 +623,35 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.8 CHANGE LEDGER (non-breaking; correctness fix + disclosed window semantics — `csift 0.6.8`).**
+> The twelfth-audit release (Sonnet 5 on v0.6.7 — the round that broke R11's convergence
+> declaration by varying a NEW axis: malformed-line POSITION as an independent variable
+> from presence, compared ACROSS commands on identical bytes; both findings reproduced
+> byte-for-byte).
+> 1. **`list`/`agents` head+tail scans no longer double-book malformed lines
+>    (correctness).** The two scans each counted whatever they walked, summed without
+>    dedup — an all-garbage file reported exactly 2× at every size (both scans, finding
+>    no anchor, walked the whole file). The head reader now returns its consumed-end
+>    offset and the tail reader floors there: the windows are DISJOINT, every malformed
+>    line in the read regions is booked exactly once. Anchor semantics unchanged (the
+>    tail still walks below the floor for missing anchors — it just never re-counts).
+> 2. **`list`'s window census is DISCLOSED, not silently narrower.** A mid-file tear is
+>    outside `list`'s head/tail windows BY DESIGN (§7: full coverage measured ~4× the
+>    unscoped runtime — the tradeoff stands, the silence about it does not). The text
+>    note now reads `… skipped (among the head/tail lines read — full census: csift
+>    stats)`; list/agents/stats `--help`, SKILL law 4, the assumption table, and the
+>    schema tables all state the window-vs-census split; `stats` is named the full-scan
+>    corruption-census authority. An e2e pins BOTH numbers (list 0 / stats 1 on the same
+>    mid-tear bytes) so the divergence stays a contract, never drift. (list --help also
+>    gained the row fields `sidecar_present`/`pending_elicitations`/
+>    `with_elicitation_sidecar` its schema prose had omitted.)
+> 3. **A schema-skewed sidecar marker is COUNTED (the fossil hole).** A sidecar line
+>    bearing the `csift:"elicitation-marker-v1"` sentinel whose `csiftPhase` the current
+>    schema cannot read (pre-release fossils under old field names: `phase`/`kind`/`key`)
+>    was invisible — correctly never merged, but uncounted. The unknown-phase arm now
+>    moves `skipped_lines` on every sidecar-merging surface: provably-ours yet
+>    uninterpretable is a failure signature; valid-JSON-ness does not buy silence.
+
 > **v0.6.7 CHANGE LEDGER (non-breaking; help/SKILL doc surface only — `csift 0.6.7`).**
 > The eleventh-audit release (Sonnet 5 on v0.6.6 — a convergence round: 114 invocations
 > across all twelve command surfaces, every prior-round fix independently re-verified

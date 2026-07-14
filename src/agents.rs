@@ -526,8 +526,9 @@ fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         }
     }
     if n.skipped_lines > 0 {
+        // R12: same window census as `list` — lifecycle reads the transcript head/tail only.
         println!(
-            "{ind2}note     {}",
+            "{ind2}note     {} (among the head/tail lines read — full census: csift stats)",
             crate::text::malformed_note(n.skipped_lines)
         );
     }
