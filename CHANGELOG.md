@@ -5,6 +5,17 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.6.9] - 2026-07-14
+
+- Stage-1 candidate detection is serialization-tolerant (correctness): a
+  valid-JSON record whose serialization differs from the compact wire format
+  (whitespace around the colon — python `json.dumps` defaults, a jq/editor
+  round-trip) used to vanish one layer BEFORE any malformed counter: no match,
+  no count, zero disclosure. The role needles now route through shared
+  whitespace-tolerant matchers; every other prefilter needle is
+  serialization-safe by construction, and the needle law is codified in
+  AGENTS.md. Framing is unchanged: one record per line.
+
 ## [0.6.8] - 2026-07-14
 
 - `list`/`agents` head+tail scans no longer double-book malformed lines: the

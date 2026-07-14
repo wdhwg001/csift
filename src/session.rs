@@ -237,8 +237,8 @@ fn preview_text(rec: &Record) -> Option<String> {
 /// are routinely the LARGEST lines in a transcript, so this is the difference
 /// between a head/tail read and paying `serde_json` for megabyte noise lines.
 fn line_is_list_candidate(line: &[u8]) -> bool {
-    memchr::memmem::find(line, br#""role":"user""#).is_some()
-        || memchr::memmem::find(line, br#""role":"assistant""#).is_some()
+    // R13: serialization-tolerant (whitespace around the colon is the same record).
+    crate::parse::line_has_role_marker(line)
 }
 
 /// Build a [`SessionSummary`] for one session file via HEAD + TAIL reads only.

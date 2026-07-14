@@ -1553,10 +1553,11 @@ fn search_one_file(
 /// `file-history-snapshot`, `queue-operation`, and metadata noise pre-JSON. Kept
 /// deliberately permissive (substring, not structural) so no genuine turn is lost.
 fn line_is_transcript_candidate(line: &[u8], needs_compact_boundary: bool) -> bool {
-    // Every user/assistant record carries `"role":"user"`/`"role":"assistant"`.
-    // (Genuine-user string content, tool carriers, assistant blocks all do.)
-    memmem::find(line, br#""role":"user""#).is_some()
-        || memmem::find(line, br#""role":"assistant""#).is_some()
+    // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
+    // marker (genuine-user string content, tool carriers, assistant blocks all do).
+    // R13: matched serialization-tolerantly — `"role": "user"` (reserialized JSON,
+    // whitespace around the colon) is the same record and must not vanish silently.
+    crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
         // inspect their `compactMetadata` — but ONLY when an active `-t` selector can reach that label

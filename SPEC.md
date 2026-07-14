@@ -623,6 +623,30 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.6.9 CHANGE LEDGER (non-breaking; correctness fix — serialization-tolerant candidate detection — `csift 0.6.9`).**
+> The thirteenth-audit release (Sonnet 5 on v0.6.8). The witness's headline (§1: "R12
+> made `list` full-coverage but left `agents` unfixed") was REFUTED as an artifact of
+> its own second finding — its fixtures used python `json.dumps` DEFAULT separators
+> (`"role": "user"`), which blinded every byte prefilter, forcing `list`'s head scan to
+> walk whole files (hence "full coverage") while `agents`' unprefiltered lifecycle
+> stopped early as designed (hence "unfixed"); on compact (wire-format) fixtures the
+> two commands agree line-for-line and R12's fix + note are live on both. But the
+> witness's §2 IS the gold, and it is the same phenomenon R12's auditor hit and
+> under-filed as a "fixture lesson":
+> 1. **Stage-1 candidate detection is serialization-tolerant.** A valid-JSON record
+>    whose serialization differs from CC's compact wire format (whitespace around the
+>    colon: `json.dumps` defaults, a jq/editor round-trip) used to vanish one layer
+>    BEFORE any malformed counter — no preview, no record count, no search match,
+>    `skipped_lines: 0`, zero disclosure. The six role needles (search/turns/list/
+>    stats + the user-only hook in files/recover) now route through shared
+>    whitespace-tolerant matchers (`parse::line_has_role_marker` /
+>    `line_has_user_role_marker`); a keyless line costs ONE `memmem` scan where the
+>    old disjunct cost two, so §7 holds. Every other needle in the tree was
+>    inventoried and is serialization-safe by construction (value substrings /
+>    key-only forms); the needle law is codified in AGENTS.md §3.3a. The framing law
+>    is unchanged: one record per LINE — pretty-printed multi-line JSON still breaks
+>    jsonl framing and counts as malformed.
+
 > **v0.6.8 CHANGE LEDGER (non-breaking; correctness fix + disclosed window semantics — `csift 0.6.8`).**
 > The twelfth-audit release (Sonnet 5 on v0.6.7 — the round that broke R11's convergence
 > declaration by varying a NEW axis: malformed-line POSITION as an independent variable

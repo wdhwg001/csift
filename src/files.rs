@@ -305,7 +305,10 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
 /// no mutation in it). Broad-by-design (substring, not structural) so no mutation is
 /// lost. Like `search`'s prefilter, this only gates the parse.
 fn line_is_files_candidate(line: &[u8]) -> bool {
-    memmem::find(line, br#""role":"user""#).is_some()
+    // R13: the genuine-user hook is serialization-tolerant (user-only — assistant
+    // coverage rides the tool-name needles below, so admitting every assistant
+    // text record here would repeal this prefilter).
+    crate::parse::line_has_user_role_marker(line)
         || memmem::find(line, b"Edit").is_some()
         || memmem::find(line, b"Write").is_some()
         || memmem::find(line, b"Bash").is_some()

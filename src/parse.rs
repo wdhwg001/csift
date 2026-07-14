@@ -74,6 +74,54 @@ fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
     Ok(Some(mmap))
 }
 
+/// Serialization-tolerant role-marker test — THE stage-1 candidate needle for
+/// message records (R13). CC's own wire format is compact JSON, but a hand-authored
+/// or reserialized line may carry whitespace around the colon (`"role": "user"`) —
+/// valid JSON, the same record. The old exact-byte needles (`"role":"user"`)
+/// silently DROPPED such lines one layer BEFORE any malformed counter could see
+/// them: not skipped, not counted, simply invisible on every surface. One `memmem`
+/// pass for the quoted key + an O(1) verify per hit; a keyless line costs ONE scan
+/// where the old disjunct cost two, so §7 holds (benchmarked on the real corpus).
+/// The quoted-key needle cannot match content text: inside a JSON string the quotes
+/// are escaped (`\"role\"`), which breaks the needle bytes.
+fn line_role_value_matches(line: &[u8], accept_user: bool, accept_assistant: bool) -> bool {
+    const KEY: &[u8] = br#""role""#;
+    let mut at = 0usize;
+    while let Some(rel) = memchr::memmem::find(&line[at..], KEY) {
+        let mut j = at + rel + KEY.len();
+        while line.get(j).is_some_and(|b| b.is_ascii_whitespace()) {
+            j += 1;
+        }
+        if line.get(j) == Some(&b':') {
+            j += 1;
+            while line.get(j).is_some_and(|b| b.is_ascii_whitespace()) {
+                j += 1;
+            }
+            let rest = &line[j.min(line.len())..];
+            if (accept_user && rest.starts_with(br#""user""#))
+                || (accept_assistant && rest.starts_with(br#""assistant""#))
+            {
+                return true;
+            }
+        }
+        at += rel + KEY.len();
+    }
+    false
+}
+
+/// `"role"` is `"user"` OR `"assistant"` (any JSON whitespace around the colon) —
+/// the candidate test for `search`/`show`/`verbatim`/`list`/`stats` stage-1 filters.
+pub fn line_has_role_marker(line: &[u8]) -> bool {
+    line_role_value_matches(line, true, true)
+}
+
+/// `"role"` is `"user"` only — the genuine-user/carrier hook `files`/`recover` use
+/// (their assistant-side coverage rides tool-name needles, so admitting every
+/// assistant text record here would repeal their §7 prefilter).
+pub fn line_has_user_role_marker(line: &[u8]) -> bool {
+    line_role_value_matches(line, true, false)
+}
+
 /// Strip a trailing `\r`/`\n` and report whether the remaining bytes are non-blank.
 fn line_payload(line: &[u8]) -> Option<&[u8]> {
     let line = line.strip_suffix(b"\n").unwrap_or(line);
@@ -1030,6 +1078,51 @@ mod tests {
         })
         .expect("head read");
         assert_eq!(count, 1, "stopped after the first record");
+    }
+
+    #[test]
+    fn role_marker_is_serialization_tolerant() {
+        // R13: the compact wire form and every JSON-whitespace variant are the SAME
+        // record — all must be candidates.
+        for ok in [
+            br#"{"message":{"role":"user","content":"x"}}"#.as_slice(),
+            br#"{"message":{"role": "user","content":"x"}}"#.as_slice(),
+            br#"{"message":{"role" : "user","content":"x"}}"#.as_slice(),
+            b"{\"message\":{\"role\":\t\"assistant\",\"content\":[]}}".as_slice(),
+            br#"{"message":{"role": "assistant"}}"#.as_slice(),
+        ] {
+            assert!(
+                line_has_role_marker(ok),
+                "{:?}",
+                String::from_utf8_lossy(ok)
+            );
+        }
+        // Non-markers: other role values, keyless mentions, and content-embedded
+        // (escaped-quote) forms must NOT be admitted.
+        for no in [
+            br#"{"input":{"role":"admin"}}"#.as_slice(),
+            br#"{"text":"the role of the user"}"#.as_slice(),
+            br#"{"text":"quoted {\"role\": \"user\"} in prose"}"#.as_slice(),
+            br#"{"role":}"#.as_slice(),
+            br#"{"role"}"#.as_slice(),
+        ] {
+            assert!(
+                !line_has_role_marker(no),
+                "{:?}",
+                String::from_utf8_lossy(no)
+            );
+        }
+        // The user-only variant (files/recover) rejects assistant markers.
+        assert!(line_has_user_role_marker(
+            br#"{"message":{"role": "user"}}"#
+        ));
+        assert!(!line_has_user_role_marker(
+            br#"{"message":{"role": "assistant"}}"#
+        ));
+        // A later valid marker after an earlier false hit is still found.
+        assert!(line_has_role_marker(
+            br#"{"a":{"role":"admin"},"message":{"role": "user"}}"#
+        ));
     }
 
     #[test]

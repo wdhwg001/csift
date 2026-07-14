@@ -94,8 +94,8 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
 /// message line or an `isCompactSummary` carrier (itself role:user, so the role probes
 /// cover it too — kept explicit for clarity, not reach).
 fn line_is_stats_candidate(line: &[u8]) -> bool {
-    memchr::memmem::find(line, br#""role":"user""#).is_some()
-        || memchr::memmem::find(line, br#""role":"assistant""#).is_some()
+    // R13: serialization-tolerant (whitespace around the colon is the same record).
+    crate::parse::line_has_role_marker(line)
 }
 
 fn stats_one_file(

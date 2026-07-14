@@ -5094,6 +5094,61 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
 }
 
 #[test]
+fn reserialized_spaced_json_records_are_full_citizens() {
+    // R13: a valid-JSON record whose serialization differs from CC's compact wire
+    // format by one space (`"role": "user"` — python json.dumps defaults, a jq /
+    // editor round-trip) used to vanish one layer BEFORE any malformed counter
+    // could see it: no preview, no record count, no search match, skipped_lines 0 —
+    // invisible on every surface with zero disclosure. Stage-1 candidate detection
+    // is now serialization-tolerant (`parse::line_has_role_marker`), so such
+    // records are full citizens everywhere.
+    let h = Home::new();
+    let enc = "-Users-test-Projects-spaced";
+    let sess = "eeeeeeee-aaaa-4bbb-8ccc-00000005aced";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type": "user", "uuid": "u1", "timestamp": "2026-06-07T05:00:00.000Z", "message": {"role": "user", "content": "SPACED_ALPHA question"}}"#,
+            "\n",
+            r#"{"type": "assistant", "uuid": "a1", "timestamp": "2026-06-07T05:00:01.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "SPACED_BETA answer"}]}}"#,
+            "\n",
+        ),
+    );
+    let at = format!("@{sess}");
+    let s = h.run(&["search", "SPACED_BETA", &at, "--no-subagents", "-c"]);
+    assert!(s.success, "stderr: {}", s.stderr);
+    assert_eq!(
+        s.stdout.trim(),
+        "1",
+        "a spaced record must match: {}",
+        s.stdout
+    );
+    let st = h.run(&["stats", &at, "--no-subagents", "--format", "json"]);
+    assert!(st.success, "stderr: {}", st.stderr);
+    let row = &json_rows(&st.stdout, "session")[0];
+    assert_eq!(row["user_records"], 1, "{}", st.stdout);
+    assert_eq!(row["assistant_records"], 1, "{}", st.stdout);
+    let l = h.run(&["list", &at, "--no-subagents", "--format", "json"]);
+    assert!(l.success, "stderr: {}", l.stderr);
+    let lr = &json_rows(&l.stdout, "session")[0];
+    assert!(
+        lr["first_user"]["excerpt"]
+            .as_str()
+            .is_some_and(|e| e.contains("SPACED_ALPHA")),
+        "{}",
+        l.stdout
+    );
+    assert!(
+        lr["last_agent"]["excerpt"]
+            .as_str()
+            .is_some_and(|e| e.contains("SPACED_BETA")),
+        "{}",
+        l.stdout
+    );
+    assert_eq!(json_summary(&l.stdout)["skipped_lines"], 0, "{}", l.stdout);
+}
+
+#[test]
 fn list_all_garbage_counts_each_line_once_not_twice() {
     // R12 §1.4: the head scan and the tail scan each walked the whole file (nothing
     // genuine to stop at) and each booked the same malformed lines — an all-garbage

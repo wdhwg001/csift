@@ -1,6 +1,6 @@
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.6.8** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.6.9** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -55,6 +55,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | `.hits[]` flattening loses the ids | not anymore: the id trio rides EVERY hit row too (matching the exchange row), so `jq '.hits[] \| {session_id, label}'` carries real ids bare; a hit's `refetch` stays the preferred single-record fetch |
 | `ScheduleWakeup` calls live under `harness.schedule.*` | a tool CALL classifies by role — arming a wakeup is `agent.tool.use` like any other tool; `harness.schedule.wakeup` is only the FIRED tick (the harness-injected, marker-carrying wakeup prompt), and a custom-prompt tick lands as an isMeta record (excluded, like all isMeta) |
 | `csift turns` reads a session's turns | `turns` was RENAMED `verbatim` in v0.5 (compaction reconstruction only); the old name never runs — it errors naming the successor. Plain turn READING is `show <target> --turn -3..` |
+| csift only reads CC's exact compact serialization | candidate detection is serialization-TOLERANT (since v0.6.9): a reserialized `"role": "user"` line (json.dumps defaults, a jq round-trip) is a full citizen — same previews, counts, matches. The framing law still stands: one record per LINE (pretty-printed multi-line JSON breaks jsonl framing and counts as malformed) |
 | `list skipped_lines: 0` = the file is clean | `list` reads only the head/tail lines it needs (the fast-overview contract), so its count covers the LINES READ — a mid-file tear is outside its windows BY DESIGN, and the text note says so. The whole-file corruption census is `stats` (full scan; search/files/recover agree with it). Each `agents` row's `skipped_lines` is the same window census (lifecycle reads the transcript's edges) |
 
 ## Five laws (all commands)

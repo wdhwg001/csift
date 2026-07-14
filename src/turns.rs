@@ -718,9 +718,11 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
 /// broadened so a pure-text assistant turn (no Edit/Write/Read/Bash) is never missed.
 /// Coarse by design; the structural parse decides what each line really is.
 fn line_is_turn_candidate(line: &[u8]) -> bool {
-    memmem::find(line, br#""role":"user""#).is_some()
-        || memmem::find(line, br#""role":"assistant""#).is_some()
-        || memmem::find(line, br#""type":"assistant""#).is_some()
+    // R13: role markers matched serialization-tolerantly (whitespace around the
+    // colon is the same record); the remaining needles are key-only / value
+    // substrings, which survive reserialization by construction.
+    crate::parse::line_has_role_marker(line)
+        || memmem::find(line, br#""type":"assistant""#).is_some() // redundant belt for the role hook
         || memmem::find(line, b"isCompactSummary").is_some() // summaries: seeds + boundaries
         || memmem::find(line, b"tool_use").is_some() // for the [N tool calls] count
 }

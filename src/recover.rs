@@ -682,7 +682,8 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
 /// integrity errors, attachments, history snapshots — not just mutations).
 /// Coarse by design; the structural parse decides what each line really is.
 fn line_is_recover_candidate(line: &[u8]) -> bool {
-    memmem::find(line, br#""role":"user""#).is_some()
+    // R13: the genuine-user hook is serialization-tolerant (user-only, like files').
+    crate::parse::line_has_user_role_marker(line)
         || memmem::find(line, b"toolUseResult").is_some()
         || memmem::find(line, b"Edit").is_some()
         || memmem::find(line, b"Write").is_some()
