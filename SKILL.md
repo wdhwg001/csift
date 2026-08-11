@@ -1,3 +1,22 @@
+---
+name: csift
+description: >-
+  Read, search and analyze Claude Code session transcripts (the .jsonl files
+  under ~/.claude/projects). Use this INSTEAD of grep/ripgrep/cat/jq/python over
+  those files - reach for it the moment you would hand-scan or hand-parse a
+  session jsonl. Use it to find where a phrase or regex appears across ALL
+  sessions, with each hit timestamp, line number and owning session; answer
+  which session said or did X; answer when did X happen by pulling a message
+  exact time; read specific records by line, turn or uuid; see what a session
+  is doing right now (recent turns, whether it is live, pending tool calls);
+  see which tools ran, tokens burned, models used, files changed; recover a
+  file or a deleted plan rebuilt from the transcript; restore the verbatim
+  turns a compaction summary clipped; locate the plan bound to a session; and
+  list and identify sessions. Returns full round-trips with per-hit line
+  numbers, local timestamps and ready-to-run refetch commands. Pure regex, not
+  semantic search.
+---
+
 # csift — ripgrep for Claude Code session transcripts
 
 Surface: **v0.6.10** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
