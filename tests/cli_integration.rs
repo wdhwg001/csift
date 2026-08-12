@@ -6156,6 +6156,103 @@ fn plan_spans_subagents_by_default_and_restricts() {
 }
 
 #[test]
+fn count_by_tool_reports_exact_record_counts() {
+    // Mutation pin: the per-axis counters must actually COUNT (a `+=` degraded to a
+    // no-op leaves every tally at zero and the excluded total frozen) — pin exact
+    // numbers on a fixed fixture: parent Write (tool_use + result carrier = 2 records)
+    // + subagent Write (tool_use only = 1 record).
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["search", "", at(SESS).as_str(), "--count-by", "tool"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("3  Write"),
+        "Write must tally 3 records: {}",
+        out.stdout
+    );
+    assert!(
+        out.stderr.contains("excluded") || out.stderr.contains("no tool"),
+        "records outside the tool axis are reported: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn zero_match_diagnosis_on_a_clean_corpus_has_no_malformed_caveat() {
+    // Mutation pin (the dual of the skipped-lines disclosure): on a corpus with ZERO
+    // malformed lines, the zero-match diagnosis must NOT print the parseable-lines caveat.
+    let h = Home::new();
+    let _ = header_collision_scenario(&h); // clean fixtures, no malformed lines
+    let out = h.run(&["search", "ZZABSENTZZ"]);
+    assert!(out.success, "zero-match exits 0: {}", out.stderr);
+    assert!(
+        out.stderr.contains("0 matches"),
+        "diagnosis present: {}",
+        out.stderr
+    );
+    assert!(
+        !out.stderr.contains("malformed"),
+        "no malformed caveat on a clean corpus: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn scope_banner_splits_top_level_and_subagent_exactly() {
+    // Mutation pin: the banner's top-level/subagent split arithmetic (scope_top is the
+    // resolved-set remainder after counting subagent paths).
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["search", "", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("2 sessions in scope (1 top-level + 1 subagent)"),
+        "exact scope split: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
+    // Mutation pin: the 12+-hex exact-miss prefix FALLBACK has its own ambiguity guard —
+    // two agents sharing 12 leading hex chars must produce the AMBIGUOUS error naming
+    // both ids, never the generic no-subagent miss (and never a silent pick).
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "55667788-9900-4000-8000-00000000000a";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"lead"}}"#, "\n",
+        ),
+    );
+    let twin_a = "abcd1234abcd1234aaaa";
+    let twin_b = "abcd1234abcd1234bbbb";
+    for (agent, word) in [(twin_a, "TWINALPHA"), (twin_b, "TWINBETA")] {
+        h.write(
+            &format!("{enc}/{sess}/subagents/agent-{agent}.jsonl"),
+            &format!(
+                "{}\n",
+                format_args!(
+                    r#"{{"type":"user","isSidechain":true,"agentId":"{agent}","timestamp":"2026-06-07T05:00:02.000Z","message":{{"role":"user","content":"seed {word}"}}}}"#
+                ),
+            ),
+        );
+    }
+    // 16 shared leading hex chars -> the 16-char token is an exact-miss AND a 2-way prefix.
+    let ambi = h.run(&["search", "TWIN", &format!("@{}", &twin_a[..16])]);
+    assert!(!ambi.success, "ambiguous fallback must error");
+    assert!(
+        ambi.stderr.contains("AMBIGUOUS")
+            && ambi.stderr.contains(twin_a)
+            && ambi.stderr.contains(twin_b),
+        "the fallback names both candidates: {}",
+        ambi.stderr
+    );
+}
+
+#[test]
 fn sessions_from_accepts_every_id_shape() {
     // Mutation pin: the --sessions-from token gate accepts each id shape INDEPENDENTLY —
     // a full uuid, a 4-11-hex uuid prefix, and an agent id (the `||` chain must not
