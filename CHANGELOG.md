@@ -5,6 +5,23 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.3] - 2026-08-12
+
+- Path encoding is now EXACTLY Claude Code's (evidence extracted from the CC
+  2.1.228 binary): the cwd is NFC-normalized, then replaced per UTF-16 code
+  unit — an NFD-spelled accented path now encodes identically to its NFC
+  spelling (closing a formerly-documented divergence that resolved the wrong
+  dir on macOS NFD paths), and an astral char yields two dashes, matching the
+  JS regex's view.
+- Windows drive-encoded project dirs (`C:\Users\x` → `C--Users-x`,
+  letter-led) are first-class targets: both the bare positional token and
+  `@C--Users-…` resolve; a drive-shaped token matching no projects dir falls
+  through to real-path resolution. A UNC-encoded dir (`--server-…`) is
+  targeted via the `@` form (the mistyped-flag guard's error now says so).
+- Verified from the same binary, no code change needed: CC's config home is
+  `CLAUDE_CONFIG_DIR ?? os.homedir() + "/.claude"` (NFC-normalized) — Windows
+  never consults `HOME`, confirming the 0.7.1 per-platform split.
+
 ## [0.7.2] - 2026-08-12
 
 - Performance round (behavior-identical — a 28-command byte-exact A/B battery

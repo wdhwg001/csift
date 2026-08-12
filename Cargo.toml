@@ -1,6 +1,6 @@
 [package]
 name = "csift"
-version = "0.7.2"
+version = "0.7.3"
 authors = ["Greendam <8943519+wdhwg001@users.noreply.github.com>"]
 edition = "2021"
 rust-version = "1.89"
@@ -36,6 +36,7 @@ aho-corasick = "1.1.4"
 # multi-thread. mimalloc removes that bottleneck. No unsafe in THIS crate — the
 # `#[global_allocator]` registration in main.rs is a safe attribute.
 mimalloc = { version = "0.1", default-features = false }
+unicode-normalization = "0.1.25"
 
 [dev-dependencies]
 # Installs a git pre-commit hook on first `cargo test`/build that runs the same

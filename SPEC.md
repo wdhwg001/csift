@@ -49,14 +49,14 @@ The three subagent transcript/journal shapes (A)/(B)/(C) and the `agents` subcom
 ### 2.1 Forward encoding (cwd → projects dir name) — DEFINITIVE
 
 ```
-encoded = re.sub(r'[^A-Za-z0-9]', '-', session_start_cwd)
+encoded = nfc(session_start_cwd).replace(/[^a-zA-Z0-9]/g, "-")   // JS semantics: per UTF-16 code unit
 ```
 
-Every byte **not** in `[A-Za-z0-9]` becomes a single `-`, **one-for-one, position-preserving, with NO collapsing of consecutive dashes**. That is the entire algorithm.
+The cwd is **NFC-normalized**, then every UTF-16 **code unit** not in `[A-Za-z0-9]` becomes a single `-`, **one-for-one, position-preserving, with NO collapsing of consecutive dashes** (extracted verbatim from the 2.1.228 binary: `gT`/`upo` — `e.replace(/[^a-zA-Z0-9]/g,"-")` — with `.normalize("NFC")` riding every projectRoot path). Unit-wise matters only off ASCII: an astral char is two surrogate units → **two** dashes; an NFC-composed accent is one unit → one dash. That is the entire algorithm.
 
 - `/`, `_`, `.`, space, `-`, and every other non-alphanumeric → a single `-` each. No special-casing of dots, dot-dirs, or extensions.
 - **No dash collapsing.** Two adjacent special chars emit two dashes. **Proof:** the real dir `-Users-testuser-Projects-Acme-widget-factory--cache-worktrees-sunny-meadow` decodes from `/Users/testuser/Projects/Acme/widget_factory/.cache-worktrees/sunny-meadow`: the `/.` (slash then the hidden-dir dot) emits a literal `--`. A collapse rule can never emit `--`, so its mere existence refutes collapsing.
-- **Leading `/`** (absolute paths always start with `/`) → a leading `-`. Every encoded dir begins with `-`. No stripping.
+- **Leading `/`** (Unix absolute paths) → a leading `-`; every Unix-encoded dir begins with `-`. No stripping. **On WINDOWS the shape differs:** `C:\Users\x` → **`C--Users-x`** (the drive letter passes through; `:` and `\` are one dash each — a drive-encoded dir leads with a LETTER), and a UNC `\\server\share` → `--server-share` (leads with `--`). Both shapes are first-class `@`-targets; the bare-positional form covers Unix + drive shapes (a bare `--…` token is reserved for the mistyped-flag guard — target a UNC-encoded dir via `@--server-…`).
 - **Trailing separator:** cwds are stored without a trailing slash, so no trailing dash in practice.
 - **Case is preserved** (`Users`, `Projects`, `Acme` keep their capitals — NOT lowercased). Letters/digits pass through unchanged.
 
@@ -68,20 +68,24 @@ Worked examples (all verified):
 | `/Users/testuser/Projects/Acme/widget_factory-worktrees/main` | `-Users-testuser-Projects-Acme-widget-factory-worktrees-main` |
 | `/a/.claude/b` | `-a--claude-b` |
 
-Reference implementation (matches `src/path.rs::encode_cwd`, operates on the char stream, ASCII-alphanumeric pass-through, everything else → `-`):
+Reference implementation (matches `src/path.rs::encode_cwd`: NFC first, then per UTF-16 code unit — ASCII-alphanumeric pass-through, every other unit → `-`):
 
 ```rust
 pub fn encode_cwd(cwd: &Path) -> String {
-    cwd.to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+    use unicode_normalization::UnicodeNormalization;
+    let s: String = cwd.to_string_lossy().nfc().collect();
+    s.encode_utf16()
+        .map(|u| match u8::try_from(u) {
+            Ok(b) if b.is_ascii_alphanumeric() => char::from(b),
+            _ => '-',
+        })
         .collect()
 }
 ```
 
-**Two more rules CC applies that the naive encoding above omits (verified against the cleanroom `sanitizePath` AND the shipping binary `Siq`, 2026-06-16):**
+**Two more rules CC applies (verified against the cleanroom `sanitizePath` AND the shipping binaries — `Siq` 2026-06-16, re-verified as `gT`/`upo`/`wn` in 2.1.228 on 2026-08-12):**
 
-1. **Canonicalization first.** CC encodes the cwd's **`realpath` + Unicode-NFC** form (`canonicalizePath`), not the raw string — so `/tmp`↔`/private/tmp` symlinks and NFC/NFD variants *converge* to one dir. csift's `absolutize` does the realpath (`canonicalize`) but **not** NFC; for an all-ASCII path (the overwhelming case) this is identical, and a non-ASCII byte encodes to `-` either way — the only divergence is the dash COUNT for an NFD-decomposed non-ASCII path (an accepted, documented edge gap).
+1. **Canonicalization first.** CC encodes the cwd's **`realpath` + Unicode-NFC** form (`canonicalizePath`), not the raw string — so `/tmp`↔`/private/tmp` symlinks and NFC/NFD variants *converge* to one dir. csift's `absolutize` does the realpath (`canonicalize`) and `encode_cwd` now applies NFC + the unit-wise replacement itself, so the formerly-documented NFD dash-count divergence is **closed** (v0.7.3): an NFD-decomposed accented path encodes identically to its NFC spelling, matching CC.
 
 2. **200-char cap + hash (`MAX_SANITIZED_LENGTH = 200`).** If the encoded string exceeds 200 chars, CC stores the dir as **`<first-200>-<hash>`** — `Bun.hash` on the CLI, a djb2 variant in the SDK (so the SAME path gets DIFFERENT suffixes depending on which wrote it). Because the suffix is not reconstructible, CC's own `findProjectDir` does **not** recompute it — it **prefix-scans** the projects root for a dir starting with `<first-200>-`. `resolve_target` mirrors this exactly (§2.3 step 3). `encode_cwd` itself stays the *raw* full encoding (it also feeds the §2.4 cross-check); the cap lives in the lookup.
 
@@ -372,6 +376,27 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 ---
 
 ## 6. Subcommand specifications
+
+> **v0.7.3 CHANGE LEDGER (non-breaking; correctness fix + target-grammar widening, evidence extracted from the CC 2.1.228 binary — `csift 0.7.3`).**
+> A binary-forensics pass (the bash_danger / plan-namer method) answered both open
+> Windows questions from CC's own shipped code, then fixed csift to match:
+> 1. **Config-home resolution VERIFIED (no code change).** CC 2.1.228:
+>    `wn = (CLAUDE_CONFIG_DIR ?? join(os.homedir(), ".claude")).normalize("NFC")` —
+>    `os.homedir()` never consults `HOME` on Windows, confirming v0.7.1's per-platform
+>    split. (Divergence noted, csift deliberately saner: CC's `??` would accept an EMPTY
+>    `CLAUDE_CONFIG_DIR` as a real value; csift treats empty as unset.)
+> 2. **Encoding is now CC-EXACT (§2.1 law updated).** The sanitizer (`gT`/`upo`) runs the
+>    JS regex per UTF-16 CODE UNIT on the NFC form. `encode_cwd` now applies NFC first
+>    (new `unicode-normalization` dep) and replaces per code unit — closing the
+>    formerly-documented NFD dash-count divergence (an NFD accented path now encodes
+>    identically to its NFC spelling) and matching the astral-char two-dash behavior.
+> 3. **Windows drive-encoded dirs are first-class targets (§2.3).** `C:\Users\x` encodes
+>    to `C--Users-x` (letter-led, not `-`-led): `looks_like_encoded_token` accepts the
+>    `<letter>--…` shape, the `@`-grammar routes `@C--Users-…`, and a bare drive token
+>    that matches no projects dir falls through to the real-path interpretation (it CAN
+>    be a real relative path, unlike a `-`-led token). A UNC-encoded dir (`--server-…`)
+>    is targetable via the `@` form only (the bare `--…` positional stays reserved for
+>    the mistyped-flag guard, which now says so).
 
 > **v0.7.2 CHANGE LEDGER (non-breaking; performance only, zero surface change — `csift 0.7.2`).**
 > A real-corpus profiling round (macOS `sample` + hyperfine on a frozen APFS-clone

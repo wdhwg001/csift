@@ -19,7 +19,7 @@ description: >-
 
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.7.2** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.7.3** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -89,7 +89,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 
 ## Targeting (positional, every command; `whoami` optional)
 
-`@<uuid>` one session · `@<uuid-prefix>` (4-11 hex, unique else error) · `@main` calling top-level (env) · `@trap:<marker>` calling SUBAGENT (§trap) · `@<agent-id>` a subagent + its subtree (ids from `agents`; bare hex ≥12 or teammate form `aVSRepro-68a2…` — a teammate name may itself carry dashes, `aP1-engine-9cf2…`) · `.`/real path/`-Users-…` encoded dir ⇒ project(s) · `*.jsonl` one transcript · 0 targets ⇒ ALL projects (`list` caps the unscoped flood; `verbatim` REQUIRES a target).
+`@<uuid>` one session · `@<uuid-prefix>` (4-11 hex, unique else error) · `@main` calling top-level (env) · `@trap:<marker>` calling SUBAGENT (§trap) · `@<agent-id>` a subagent + its subtree (ids from `agents`; bare hex ≥12 or teammate form `aVSRepro-68a2…` — a teammate name may itself carry dashes, `aP1-engine-9cf2…`) · `.`/real path/encoded dir (`-Users-…`; Windows `C--Users-…`; UNC via `@--server-…`) ⇒ project(s) · `*.jsonl` one transcript · 0 targets ⇒ ALL projects (`list` caps the unscoped flood; `verbatim` REQUIRES a target).
 - A bare id without `@` errors with "did you mean '@…'?" — ids always take `@`.
 - An unrecognized `@`-shape (a 1-3-char prefix, a dashed fragment, a non-id token) errors naming the grammar — it never falls through to path resolution.
 - `--sessions-from <FILE|->` (every multi-target command): scope to an id list — whitespace-separated uuid/prefix/agent-id tokens, bare or `@`-prefixed (exactly what `search -l` emits); UNION with positionals, per-id fail-loud, an explicitly empty list = empty scope (exit 0 — a pipeline that found nothing propagates nothing).
