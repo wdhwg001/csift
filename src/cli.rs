@@ -1177,10 +1177,14 @@ pub struct SearchArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Cap emitted exchanges (default: unlimited — no cap). NO silent truncation — the drop
-    /// count is reported.
-    #[arg(long, value_name = "N")]
-    pub max_count: Option<usize>,
+    /// Cap emitted exchanges — SIGNED: `N` keeps the EARLIEST N of the chronological stream,
+    /// `-N` keeps the LATEST N (so `--max-count 1` = the first occurrence ever, `--max-count -1`
+    /// = the most recent one), `0` = uncapped (default: unlimited). The kept exchanges always
+    /// emit oldest-first among themselves — the sign only selects which END of the stream
+    /// survives, mirroring the shared range grammar's `-k = from the end`. NO silent
+    /// truncation — the head banner shows the emitted window, the footer reports the drop.
+    #[arg(long, value_name = "N", allow_negative_numbers = true)]
+    pub max_count: Option<i64>,
 
     /// Print ONLY the total number of matching exchanges (one integer) — the ripgrep
     /// `-c` idiom for "how many times X?". Honors every filter (`-t`, time window,

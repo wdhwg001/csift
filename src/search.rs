@@ -1000,11 +1000,19 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     outcome.total_matched = all.len();
     outcome.total_sessions = distinct_session_count(&all);
 
-    // `--max-count 0` = uncapped (the crate-wide convention).
-    if let Some(cap) = args.max_count.filter(|&n| n > 0) {
-        if all.len() > cap {
-            outcome.dropped_by_cap = all.len() - cap;
-            all.truncate(cap);
+    // `--max-count 0` = uncapped (the crate-wide convention). SIGNED: a positive N keeps the
+    // EARLIEST N of the chronological stream, a negative N the LATEST N — the kept exchanges
+    // still emit oldest-first among themselves (ONE ordering rule; the sign only selects a
+    // prefix or suffix of the sorted timeline, mirroring the range grammar's `-k` from-end).
+    if let Some(cap) = args.max_count.filter(|&n| n != 0) {
+        let keep = usize::try_from(cap.unsigned_abs()).unwrap_or(usize::MAX);
+        if all.len() > keep {
+            outcome.dropped_by_cap = all.len() - keep;
+            if cap > 0 {
+                all.truncate(keep);
+            } else {
+                all.drain(..all.len() - keep);
+            }
         }
     }
     outcome.exchanges = all;
@@ -1161,8 +1169,9 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         }
         if outcome.dropped_by_cap > 0 {
             eprintln!(
-                "csift: note: {} exchange(s) dropped by --max-count",
-                outcome.dropped_by_cap
+                "csift: note: {} {} exchange(s) dropped by --max-count",
+                outcome.dropped_by_cap,
+                dropped_side(args)
             );
         }
         if outcome.skipped_lines > 0 {
@@ -2712,6 +2721,26 @@ fn noun<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
     }
 }
 
+/// The end of the chronological stream a signed `--max-count` KEEPS — the head banner's
+/// window word ("earliest" for `N`, "latest" for `-N`).
+fn window_end(args: &SearchArgs) -> &'static str {
+    if args.max_count.is_some_and(|n| n < 0) {
+        "latest"
+    } else {
+        "earliest"
+    }
+}
+
+/// The side the cap DROPPED — the tail footer's drop word ("later" when the earliest are
+/// kept, "earlier" when the latest are).
+fn dropped_side(args: &SearchArgs) -> &'static str {
+    if args.max_count.is_some_and(|n| n < 0) {
+        "earlier"
+    } else {
+        "later"
+    }
+}
+
 /// The first `n` chars of an id (codepoint-safe; ids are ASCII in practice). A shorter id
 /// renders whole.
 fn id_prefix(id: &str, n: usize) -> &str {
@@ -2785,7 +2814,11 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         noun(outcome.total_sessions, "session", "sessions"),
     );
     if outcome.dropped_by_cap > 0 {
-        print!(" · showing earliest {}", outcome.exchanges.len());
+        print!(
+            " · showing {} {}",
+            window_end(args),
+            outcome.exchanges.len()
+        );
     }
     if outcome.exchanges.iter().any(|ex| ex.started_utc.is_none()) {
         print!(" · undated last");
@@ -2869,7 +2902,11 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         print!(" · label-not={}", args.labels_not.join(","));
     }
     if outcome.dropped_by_cap > 0 {
-        print!(" · {} dropped by --max-count", outcome.dropped_by_cap);
+        print!(
+            " · {} {} dropped by --max-count",
+            outcome.dropped_by_cap,
+            dropped_side(args)
+        );
     }
     println!();
     if merged_any_sidecar(&outcome.exchanges) {

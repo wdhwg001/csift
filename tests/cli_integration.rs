@@ -2870,16 +2870,22 @@ fn header_collision_scenario(h: &Home) -> (&'static str, &'static str, &'static 
     let c1 = "aaaabbbb-1111-4000-8000-000000000001";
     let c2 = "aaaabbbb-2222-4000-8000-000000000002";
     let solo = "ccccdddd-3333-4000-8000-000000000003";
-    for (sess, word) in [(c1, "COLLIDEONE"), (c2, "COLLIDETWO"), (solo, "SOLOWORD")] {
+    // Distinct per-session hours so the chronological order is unambiguous:
+    // COLLIDEONE (05h) < COLLIDETWO (06h) < SOLOWORD (07h).
+    for (i, (sess, word)) in [(c1, "COLLIDEONE"), (c2, "COLLIDETWO"), (solo, "SOLOWORD")]
+        .into_iter()
+        .enumerate()
+    {
+        let hour = 5 + i;
         h.write(
             &format!("{enc}/{sess}.jsonl"),
             &format!(
                 "{}\n{}\n",
                 format_args!(
-                    r#"{{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"SEEDWORD {word}"}}}}"#
+                    r#"{{"type":"user","timestamp":"2026-06-07T0{hour}:00:00.000Z","message":{{"role":"user","content":"SEEDWORD {word}"}}}}"#
                 ),
                 format_args!(
-                    r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"ack {word}"}}]}}}}"#
+                    r#"{{"type":"assistant","timestamp":"2026-06-07T0{hour}:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"ack {word}"}}]}}}}"#
                 ),
             ),
         );
@@ -3090,7 +3096,7 @@ fn search_match_banner_at_head_mirrors_footer_and_json() {
     );
     assert!(
         cap.stdout.contains("matched 3 exchanges · 3 sessions")
-            && cap.stdout.contains("1 dropped by --max-count"),
+            && cap.stdout.contains("1 later dropped by --max-count"),
         "capped footer: {}",
         cap.stdout
     );
@@ -3121,6 +3127,80 @@ fn search_match_banner_at_head_mirrors_footer_and_json() {
         !cb.stdout.contains("matches  "),
         "no banner under --count-by: {}",
         cb.stdout
+    );
+}
+
+#[test]
+fn search_signed_max_count_selects_the_window_ends() {
+    // `--max-count N` keeps the EARLIEST N of the chronological stream, `-N` the LATEST N,
+    // `0` stays uncapped; the kept exchanges always emit oldest-first among themselves, and
+    // both ends disclose the window (banner: showing earliest/latest; footer: later/earlier
+    // dropped).
+    let h = Home::new();
+    let _ = header_collision_scenario(&h); // COLLIDEONE (05h) < COLLIDETWO (06h) < SOLOWORD (07h)
+
+    let first = h.run(&["search", "SEEDWORD", "--max-count", "1"]);
+    assert!(first.success, "stderr: {}", first.stderr);
+    assert!(
+        first.stdout.contains("COLLIDEONE")
+            && !first.stdout.contains("COLLIDETWO")
+            && !first.stdout.contains("SOLOWORD"),
+        "--max-count 1 keeps the chronologically EARLIEST exchange: {}",
+        first.stdout
+    );
+    assert!(
+        first.stdout.contains("showing earliest 1")
+            && first.stdout.contains("2 later dropped by --max-count"),
+        "disclosures at both ends: {}",
+        first.stdout
+    );
+
+    let last = h.run(&["search", "SEEDWORD", "--max-count", "-1"]);
+    assert!(last.success, "stderr: {}", last.stderr);
+    assert!(
+        last.stdout.contains("SOLOWORD")
+            && !last.stdout.contains("COLLIDEONE")
+            && !last.stdout.contains("COLLIDETWO"),
+        "--max-count -1 keeps the chronologically LATEST exchange: {}",
+        last.stdout
+    );
+    assert!(
+        last.stdout.contains("showing latest 1")
+            && last.stdout.contains("2 earlier dropped by --max-count"),
+        "disclosures at both ends: {}",
+        last.stdout
+    );
+
+    // A latest-N window still emits oldest-first among the kept exchanges.
+    let two = h.run(&["search", "SEEDWORD", "--max-count", "-2"]);
+    assert!(two.success, "stderr: {}", two.stderr);
+    assert!(
+        !two.stdout.contains("COLLIDEONE"),
+        "the earliest exchange is outside the latest-2 window: {}",
+        two.stdout
+    );
+    let pos2 = two.stdout.find("COLLIDETWO").expect("second kept");
+    let pos3 = two.stdout.find("SOLOWORD").expect("third kept");
+    assert!(
+        pos2 < pos3,
+        "kept exchanges emit oldest-first among themselves: {}",
+        two.stdout
+    );
+
+    // `0` = uncapped (the crate-wide convention), no window note.
+    let all = h.run(&["search", "SEEDWORD", "--max-count", "0"]);
+    assert!(all.success, "stderr: {}", all.stderr);
+    assert!(
+        all.stdout.contains("COLLIDEONE")
+            && all.stdout.contains("COLLIDETWO")
+            && all.stdout.contains("SOLOWORD"),
+        "--max-count 0 is uncapped: {}",
+        all.stdout
+    );
+    assert!(
+        !all.stdout.contains("showing "),
+        "no window note when uncapped: {}",
+        all.stdout
     );
 }
 
@@ -4716,7 +4796,7 @@ fn search_global_max_count_caps_across_files() {
     // TRUE total at both ends; the emitted window + global drop are disclosed.
     assert!(out.stdout.contains("matched 2"), "{}", out.stdout);
     assert!(out.stdout.contains("showing earliest 1"), "{}", out.stdout);
-    assert!(out.stdout.contains("1 dropped"));
+    assert!(out.stdout.contains("1 later dropped"), "{}", out.stdout);
     assert!(out.stdout.contains("by --max-count"));
 }
 
