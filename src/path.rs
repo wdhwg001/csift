@@ -537,13 +537,14 @@ fn resolve_trap(marker: &str) -> Result<TrapSelf> {
         1 => Ok(TrapSelf::Agent(subagent_hits.remove(0))),
         0 if main_hit => Ok(TrapSelf::Session(session_id)),
         0 => bail!(
-            "@trap: marker `{marker}` not found in a `csift` Bash command of the calling session. \
+            "@trap: marker `{marker}` not found in a `csift` shell command (Bash / PowerShell) of \
+             the calling session. \
              It must appear LITERALLY in THIS csift invocation (no shell variable / concatenation, \
              and the command must actually run `csift`). TIMING: a SUBAGENT's transcript already \
              carries its command mid-run (a first try resolves), but the MAIN conversation's own \
              record is only flushed AFTER the current command finishes — a top-level FIRST use \
              always misses. If you are the top-level thread: use `@main` (env-based, no race), or \
-             re-run this EXACT command with the SAME marker as a NEW, SEPARATE Bash invocation — \
+             re-run this EXACT command with the SAME marker as a NEW, SEPARATE shell invocation — \
              a second attempt inside the SAME shell script does NOT count (the whole script is ONE \
              still-in-flight command; nothing flushes until it exits), and a fresh marker restarts \
              the race and misses again."
@@ -769,7 +770,8 @@ fn locate_session_jsonl(id: &str) -> Option<PathBuf> {
 /// trap, not some unrelated command that merely echoed the token. A byte prefilter (`memmem` on
 /// the rare marker) skips a transcript that never mentions it without parsing — so a giant main
 /// transcript is mmap-scanned, not deserialized, unless the (unique) marker is present. Matching
-/// the Bash tool_use INPUT (not anywhere) avoids a false hit on a tool_result that echoed it.
+/// the SHELL tool_use INPUT (`Bash`, or Windows' `PowerShell` tool — not anywhere) avoids a
+/// false hit on a tool_result that echoed it.
 fn bash_command_carries_trap(path: &Path, marker: &str) -> bool {
     let Ok(Some(mmap)) = crate::parse::mmap_bytes(path) else {
         return false;
@@ -792,7 +794,13 @@ fn bash_command_carries_trap(path: &Path, marker: &str) -> bool {
                         ..
                     } = b
                     {
-                        if n == "Bash"
+                        // Both SHELL tools carry the invocation in `input.command`: `Bash`
+                        // everywhere, and Windows' SEPARATE `PowerShell` tool (CC 2.1.228:
+                        // the fallback when Git-for-Windows bash is absent, or the gated
+                        // preference — same `command` field, verbatim from the binary's
+                        // tool registry). A Bash-only gate left @trap blind exactly on the
+                        // mandatory Windows fallback.
+                        if (n == "Bash" || n == "PowerShell")
                             && inp
                                 .get("command")
                                 .and_then(serde_json::Value::as_str)

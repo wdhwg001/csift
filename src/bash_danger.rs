@@ -80,6 +80,15 @@ pub fn is_dangerous_rm(command: &str) -> bool {
 
 /// Mirror of CC's `Ywa(command)`: the first dangerous `rm`/`rmdir` removal in `command`, or
 /// `None`. See the module docs for the fidelity contract + the one deviation.
+///
+/// STALENESS NOTE (binary evidence, 2026-08-12): CC 2.1.228's classifier (`aLa`) has
+/// EVOLVED past the 2.1.x generation this port mirrors — it strips `$(…)` groups to a
+/// FIXPOINT (this port is single-pass), and a tree-sitter pass bails to explicit approval
+/// when a command carries >64 command substitutions. csift's escalation-blocked prediction
+/// can therefore diverge from current CC on those shapes; a port refresh is a recorded
+/// follow-up, not silent drift. (CC also ships a separate Windows `PowerShell` tool; this
+/// lexical-bash classifier deliberately does NOT run on PowerShell commands — a pending
+/// PowerShell lane classifies awaiting-execution.)
 #[must_use]
 pub fn dangerous_rm(command: &str) -> Option<DangerousRm> {
     // `if(!e.includes("$")||!/\brm(?:dir)?\b/.test(e))return null`

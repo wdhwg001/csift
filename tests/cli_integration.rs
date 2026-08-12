@@ -6480,6 +6480,40 @@ fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
 }
 
 #[test]
+fn trap_resolves_a_powershell_shell_command() {
+    // On Windows without Git-for-Windows bash, CC's shell tool is a SEPARATE tool named
+    // `PowerShell` (same `input.command` field — extracted from the 2.1.228 binary). A
+    // marker riding a PowerShell tool_use must resolve @trap exactly like a Bash one.
+    let h = Home::new();
+    let enc = "C--Users-dev-winproj";
+    let sess = "aabbccdd-eeff-4000-8000-00000000000f";
+    let hex = "ddd444eee555fff66";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"win go"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{hex}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"ddd444eee555fff66","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"sub: the PSTRAPWORK task"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ps1","name":"PowerShell","input":{"command":"csift search PSTRAPWORK @trap:QuietHarborRelay5271"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run_with_env(
+        &["search", "PSTRAPWORK", "@trap:QuietHarborRelay5271"],
+        &[("CLAUDE_CODE_SESSION_ID", sess)],
+    );
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(hex),
+        "the PowerShell-carried marker scopes to the subagent: {}",
+        out.stdout
+    );
+}
+
+#[test]
 fn windows_drive_encoded_dir_targets_resolve() {
     // A Windows cwd (`C:\Users\dev\winproj`) encodes to a DRIVE-LETTER-led projects dir
     // (`C--Users-dev-winproj` — verbatim from CC's sanitizer), which leads with a letter,
