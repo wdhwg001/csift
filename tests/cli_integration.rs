@@ -6174,7 +6174,7 @@ fn stats_aggregates_are_exact() {
         &format!("{enc}/{sess}.jsonl"),
         concat!(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":111,"output_tokens":44},"content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/a.md","content":"x"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":111,"output_tokens":44,"cache_read_input_tokens":5,"cache_creation_input_tokens":4},"content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/a.md","content":"x"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:40.000Z","toolUseResult":{"type":"create","filePath":"/p/a.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":222,"output_tokens":55},"content":[{"type":"text","text":"done"}]}}"#, "\n",
         ),
@@ -6225,8 +6225,10 @@ fn stats_aggregates_are_exact() {
         "MERGED tool calls across the two transcripts: {}",
         js.stdout
     );
+    // The asserted merged values are UNIQUE to the merged object (5+7 / 4+3 — no single
+    // row carries them): a per-row field must never be able to satisfy the merge pin.
     assert!(
-        js.stdout.contains(r#""cache_read":7"#) && js.stdout.contains(r#""cache_creation":3"#),
+        js.stdout.contains(r#""cache_read":12"#) && js.stdout.contains(r#""cache_creation":7"#),
         "the cache accumulators merge too: {}",
         js.stdout
     );
