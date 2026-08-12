@@ -53,12 +53,13 @@ pub fn parse_argv() -> Cli {
 }
 
 /// Value parser for a project-target positional/option. Accepts a real cwd, an encoded
-/// `-Users-…` token (SINGLE leading `-`), or `.`. It REJECTS a `--`-leading token: an
-/// encoded projects-dir basename always starts with a SINGLE `-` (an absolute cwd's leading
-/// `/` encodes to one `-`), so a DOUBLE-dash token can never be a real target — it is an
-/// unknown / typo'd flag the `allow_hyphen_values` positional would otherwise swallow,
-/// surfacing the misleading `no project dir named "--xxx"` error instead of clap's clean
-/// `unexpected argument '--xxx'` + `did you mean --no-subagents?` suggestion. Returning `Err`
+/// token (`-Users-…` with a SINGLE leading `-`, or the Windows drive shape `C--Users-…`),
+/// or `.`. It REJECTS a `--`-leading token: overwhelmingly that is an unknown / typo'd
+/// flag the `allow_hyphen_values` positional would otherwise swallow, surfacing the
+/// misleading `no project dir named "--xxx"` error instead of clap's clean
+/// `unexpected argument '--xxx'` + `did you mean --no-subagents?` suggestion. (The ONE
+/// legitimate `--`-leading target — a UNC-encoded `--server-…` dir — is deliberately
+/// routed through the `@--server-…` form instead, which the error names.) Returning `Err`
 /// here makes clap reconsider the token and emit that standard message uniformly across
 /// every scope-operating subcommand (search/whoami already did; the rest did not). A SINGLE
 /// `-` token is still accepted (it is a genuine encoded target). The [`normalize_argv`]
@@ -67,8 +68,8 @@ pub fn parse_argv() -> Cli {
 fn parse_project_target(s: &str) -> Result<PathBuf, String> {
     if s.starts_with("--") {
         return Err(format!(
-            "unexpected argument '{s}' — not a project target (encoded dirs start with a \
-             single '-', never '--'); did you mistype a flag?"
+            "unexpected argument '{s}' — not a project target; did you mistype a flag? \
+             (a UNC-encoded dir is targeted as '@{s}')"
         ));
     }
     Ok(PathBuf::from(s))
@@ -3188,11 +3189,14 @@ mod tests {
         assert!(parse_project_target("/Users/testuser/Projects/foo").is_ok());
         assert!(parse_project_target(".").is_ok());
         assert!(parse_project_target("-a--claude-b").is_ok());
-        // A `--`-leading token can NEVER be a real encoded dir (those start with ONE `-`),
-        // so it is rejected → clap reports "unexpected argument" instead of the misleading
-        // "no project dir named --xxx". A single `-` token still parses (encoded target).
+        assert!(parse_project_target("C--Users-dev-proj").is_ok()); // Windows drive shape
+                                                                    // A bare `--`-leading token is rejected as a probable mistyped flag → clap reports
+                                                                    // "unexpected argument" instead of the misleading "no project dir named --xxx"
+                                                                    // (the one real `--`-led target, a UNC-encoded dir, goes through the `@` form —
+                                                                    // the error says so). A single `-` token still parses (encoded target).
         let err = parse_project_target("--by-fil").unwrap_err();
         assert!(err.contains("unexpected argument"), "got: {err}");
+        assert!(err.contains("'@--by-fil'"), "routes the UNC escape: {err}");
         assert!(parse_project_target("-singledash").is_ok());
     }
 

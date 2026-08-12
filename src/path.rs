@@ -33,18 +33,25 @@ use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Context, Result};
 
-/// Encode an absolute cwd to its Claude Code project-dir basename.
-///
-/// Every byte not in `[A-Za-z0-9]` becomes a single `-`; no dash collapsing.
+/// Encode an absolute cwd to its Claude Code project-dir basename — the EXACT transform
+/// CC applies (extracted verbatim from the 2.1.228 binary): the cwd is first
+/// NFC-normalized (every CC path rides `.normalize("NFC")` — a macOS filesystem hands out
+/// NFD, so an accented path is re-composed before encoding), then the JS regex
+/// `replace(/[^a-zA-Z0-9]/g,"-")` runs per UTF-16 CODE UNIT: every unit outside ASCII
+/// alphanumerics becomes ONE `-` — so an astral char (two surrogate units) yields TWO
+/// dashes, and a Windows `C:\Users\x` yields `C--Users-x` (`:` and `\` are one unit
+/// each). No dash collapsing, no case folding. A char-wise or byte-wise replacement
+/// DIVERGES from CC on any non-ASCII cwd and resolves the wrong dir.
 #[must_use]
 pub fn encode_cwd(cwd: &Path) -> String {
+    use unicode_normalization::UnicodeNormalization;
     let s = cwd.to_string_lossy();
+    let s: String = s.nfc().collect();
     let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-        } else {
-            out.push('-');
+    for unit in s.encode_utf16() {
+        match u8::try_from(unit) {
+            Ok(b) if b.is_ascii_alphanumeric() => out.push(char::from(b)),
+            _ => out.push('-'),
         }
     }
     out
@@ -156,15 +163,25 @@ pub struct ProjectDir {
     pub target_cwd: Option<PathBuf>,
 }
 
-/// True iff `token` is a plausible pre-encoded projects-dir basename: starts with
-/// `-`, contains only `[A-Za-z0-9-]` (so no `/`), per §2.3 step 1.
+/// True iff `token` is a plausible pre-encoded projects-dir basename, per §2.3 step 1:
+/// only `[A-Za-z0-9-]` (so no `/`), and one of the two shapes CC's encoder can emit for
+/// an absolute path — a Unix cwd leads with `-` (the leading `/` encodes to `-`; a UNC
+/// `\\server\…` leads with `--`), a WINDOWS cwd leads with `<drive-letter>--` (the `:`
+/// and `\` of `C:\` each encode to `-`, verbatim from the 2.1.228 binary's sanitizer).
 fn looks_like_encoded_token(token: &str) -> bool {
-    let mut chars = token.chars();
-    match chars.next() {
-        Some('-') => {}
-        _ => return false,
+    if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return false;
     }
-    token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    token.starts_with('-') || is_drive_encoded_token(token)
+}
+
+/// The Windows drive-letter encoded shape: `<letter>--…` (`C:\Users\x` → `C--Users-x`).
+/// Distinct from every other token class: a Unix encoded dir leads with `-`, an id is
+/// hex/uuid-shaped, and a real RELATIVE path named like this is disambiguated by the
+/// caller (encoded-dir lookup first, real-path fallthrough on a miss).
+fn is_drive_encoded_token(token: &str) -> bool {
+    let b = token.as_bytes();
+    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b'-' && b[2] == b'-'
 }
 
 /// If `target` is (or lives directly under) the projects root and names a single
@@ -247,12 +264,16 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
             });
         }
         // A leading-`-` token that doesn't exist as a dir: don't silently fall
-        // through to path-encoding (it can't be a real absolute path anyway).
-        bail!(
-            "no Claude Code project dir named {:?} under {}",
-            token,
-            root.display()
-        );
+        // through to path-encoding (it can't be a real absolute path anyway). A
+        // WINDOWS-shaped token (`C--…`) CAN also be a real relative path, so that
+        // shape falls through to the real-path interpretation below instead.
+        if token.starts_with('-') {
+            bail!(
+                "no Claude Code project dir named {:?} under {}",
+                token,
+                root.display()
+            );
+        }
     }
 
     // §2.3 step 2: treat as a real filesystem path — absolutize + encode + look up.
@@ -976,9 +997,9 @@ pub fn resolve_session_files(
                     session_prefixes.push(id.to_string());
                     session_target = true;
                 }
-                // `@-Users-…` → an encoded project-dir name (encoded cwds ALWAYS lead with
-                // `-`, since the absolute path's `/` encodes to `-`).
-                _ if id.starts_with('-') => {
+                // `@-Users-…` / `@C--Users-…` → an encoded project-dir name (a Unix cwd's
+                // leading `/` encodes to `-`; a Windows cwd's `C:\` encodes to `C--`).
+                _ if id.starts_with('-') || is_drive_encoded_token(id) => {
                     explicit_dirs.push(resolve_target(Path::new(id))?);
                     session_target = true;
                 }
@@ -1001,8 +1022,8 @@ pub fn resolve_session_files(
                         "`@{id}` is not a recognized @-target — expected `@<uuid>` | \
                          `@<uuid-prefix>` (4-11 dashless leading hex) | `@<agent-id>` \
                          (what `csift agents` prints) | `@main` | `@trap:<marker>` | \
-                         `@-Users-…` (an encoded project dir). A project PATH is targeted \
-                         without `@`."
+                         `@-Users-…` / `@C--Users-…` (an encoded project dir). A project \
+                         PATH is targeted without `@`."
                     );
                 }
             }
@@ -1678,6 +1699,32 @@ mod tests {
         // `target == root` exactly → zero components remain → not a single-token match.
         let root = Path::new("/home/u/.claude/projects");
         assert!(strip_projects_root_prefix(root, root).is_none());
+    }
+
+    #[test]
+    fn encode_matches_cc_exactly_on_non_ascii_and_windows_paths() {
+        // Extracted-law parity (CC 2.1.228 `gT`/`upo` + `.normalize("NFC")`): the
+        // replacement runs per UTF-16 code unit on the NFC form.
+        // NFC and NFD spellings of the same accented path encode IDENTICALLY.
+        assert_eq!(encode_cwd(Path::new("/tmp/caf\u{e9}")), "-tmp-caf-");
+        assert_eq!(encode_cwd(Path::new("/tmp/cafe\u{301}")), "-tmp-caf-");
+        // An astral char is TWO surrogate units → TWO dashes (the JS regex's view).
+        assert_eq!(encode_cwd(Path::new("/tmp/x\u{1D11E}y")), "-tmp-x--y");
+        // A Windows cwd: the drive colon and each backslash are one dash → `C--…`.
+        assert_eq!(
+            encode_cwd(Path::new(r"C:\Users\dev\proj")),
+            "C--Users-dev-proj"
+        );
+    }
+
+    #[test]
+    fn encoded_token_shapes_unix_windows_unc() {
+        assert!(looks_like_encoded_token("-Users-dev-example-project"));
+        assert!(looks_like_encoded_token("C--Users-dev-proj")); // Windows drive shape
+        assert!(looks_like_encoded_token("--server-share-proj")); // UNC (leads with --)
+        assert!(!looks_like_encoded_token("Users-dev")); // no encoded lead-in
+        assert!(!looks_like_encoded_token("C--Users/dev")); // a separator disqualifies
+        assert!(!looks_like_encoded_token("C-Users-dev")); // one dash after the drive ≠ `C:\`
     }
 
     #[test]

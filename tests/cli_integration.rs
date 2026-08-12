@@ -6480,6 +6480,37 @@ fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
 }
 
 #[test]
+fn windows_drive_encoded_dir_targets_resolve() {
+    // A Windows cwd (`C:\Users\dev\winproj`) encodes to a DRIVE-LETTER-led projects dir
+    // (`C--Users-dev-winproj` — verbatim from CC's sanitizer), which leads with a letter,
+    // not `-`. Both target forms must resolve it: the bare positional token and the
+    // `@`-prefixed form.
+    let h = Home::new();
+    let enc = "C--Users-dev-winproj";
+    let sess = "99aabbcc-ddee-4000-8000-00000000000e";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"win work"}}"#, "\n",
+        ),
+    );
+    let bare = h.run(&["list", enc]);
+    assert!(bare.success, "stderr: {}", bare.stderr);
+    assert!(
+        bare.stdout.contains(sess),
+        "bare drive-encoded token resolves: {}",
+        bare.stdout
+    );
+    let at_form = h.run(&["list", &format!("@{enc}")]);
+    assert!(at_form.success, "stderr: {}", at_form.stderr);
+    assert!(
+        at_form.stdout.contains(sess),
+        "@-prefixed drive-encoded token resolves: {}",
+        at_form.stdout
+    );
+}
+
+#[test]
 fn sessions_from_accepts_every_id_shape() {
     // Mutation pin: the --sessions-from token gate accepts each id shape INDEPENDENTLY —
     // a full uuid, a 4-11-hex uuid prefix, and an agent id (the `||` chain must not
