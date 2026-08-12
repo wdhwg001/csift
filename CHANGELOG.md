@@ -5,6 +5,17 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.1] - 2026-08-12
+
+- The default data root resolves per platform, the way Claude Code's own
+  `os.homedir()` does (correctness): `$HOME/.claude` on Unix,
+  `%USERPROFILE%\.claude` on Windows — `HOME` is never read on Windows, so a
+  stray Git-Bash/MSYS `HOME` (often a POSIX-style path a native process cannot
+  open) no longer points csift at a `.claude` dir Claude Code never writes.
+  Precedence is unchanged: `--claude-home` > `$CLAUDE_CONFIG_DIR` > the OS
+  home's `.claude`. The error message and `--claude-home` help name both
+  variables.
+
 ## [0.7.0] - 2026-08-12
 
 Breaking text-surface release; JSON output is unchanged.

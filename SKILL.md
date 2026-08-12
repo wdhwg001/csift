@@ -19,7 +19,7 @@ description: >-
 
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.7.0** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
+Surface: **v0.7.1** (must == `csift --version`). If an invocation you were CONFIDENT about errors, your knowledge is stale — an older csift surface from prefill/summary/habit. Re-read THIS file (it always matches the installed binary); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 
@@ -321,7 +321,7 @@ While pending, these three leave NO trace in native jsonl (whole-turn buffered /
 ## Conventions
 
 - WHEN grammar (`--since/--until/--at`): relative `45s 90m 2h 3d 1w` (that long ago, system-local) or ISO8601 — bare date ⇒ local midnight · BARE datetime (`2026-06-01T05:00:00`, no `Z`/offset) ⇒ that LOCAL wall-clock time · `Z`/`+10:00` ⇒ explicit zone. Bounds inclusive; records without timestamps never match a bounded window.
-- `--claude-home DIR` (global, any position — even before the subcommand) repoints `~/.claude`; precedence flag > `$CLAUDE_CONFIG_DIR` > `$HOME/.claude`.
+- `--claude-home DIR` (global, any position — even before the subcommand) repoints `~/.claude`; precedence flag > `$CLAUDE_CONFIG_DIR` > the OS home's `.claude` (`$HOME` on Unix, `%USERPROFILE%` on Windows — the same resolution Claude Code uses; a stray Git-Bash `HOME` is ignored there).
 - Path filters (`files --regex/--glob`) are case-exact (paths); search PATTERN is smart-case (text).
 - Retention: CC deletes transcripts older than `cleanupPeriodDays` (default 30!). Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json`; recommend 180/365 — csift can only read what survives.
 - Exit codes: the contract is 0 vs non-zero, nothing finer. De facto a USAGE error (clap parse: bad flag/selector/conflict) exits 2 while a csift-level error (address miss, pinned id matching nothing) exits 1 — clap's convention, informational only; don't build on the split.

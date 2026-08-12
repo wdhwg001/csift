@@ -624,6 +624,18 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.7.1 CHANGE LEDGER (non-breaking; correctness fix — per-platform home resolution — `csift 0.7.1`).**
+> 1. **The default data root resolves the way Claude Code's own `os.homedir()` does.**
+>    `path::home_dir()` consulted `$HOME` first on EVERY platform; CC uses `$HOME` on Unix
+>    but ONLY `%USERPROFILE%` on Windows. A bare Windows shell worked by accident (no
+>    `HOME`, so the `std::env::home_dir()` fallback already returned the profile dir), but
+>    a Git-Bash/MSYS shell exports a stray `HOME` — often a POSIX-style `/c/Users/...` a
+>    native process cannot open — and csift resolved a `.claude` dir CC never writes.
+>    `home_dir()` is now cfg-split (Unix: `$HOME` non-empty, else the OS fallback; Windows:
+>    `%USERPROFILE%` non-empty, else the OS fallback — `HOME` is never read there). The
+>    precedence contract is unchanged: `--claude-home` > `$CLAUDE_CONFIG_DIR` > the OS
+>    home's `.claude`. The error message and `--claude-home` help name both variables.
+
 > **v0.7.0 BREAKING-CHANGE LEDGER (authoritative — supersedes any conflicting older text; text surface only, JSON unchanged — `csift 0.7.0`).**
 > Motivated by field telemetry of agent consumers abandoning the tool mid-task: a broad
 > query's per-invocation session table flooded the head of the output before the first
