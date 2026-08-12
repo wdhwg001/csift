@@ -66,6 +66,7 @@ impl Home {
         let mut child = Command::new(exe)
             .args(args)
             .env("HOME", &self.root)
+            .env("USERPROFILE", &self.root) // the Windows home var — same relocation there
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_COMPANION_SESSION_ID")
             .stdin(std::process::Stdio::piped())
@@ -92,6 +93,7 @@ impl Home {
         let mut cmd = Command::new(exe);
         cmd.args(args)
             .env("HOME", &self.root)
+            .env("USERPROFILE", &self.root) // the Windows home var — same relocation there
             // Make whoami deterministic: clear the session env unless a test sets it.
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_COMPANION_SESSION_ID");
@@ -344,8 +346,9 @@ fn list_ignores_stray_non_dir_entries_in_projects_root() {
     assert!(out.stdout.contains(SESS), "real project still listed");
 }
 
-// NOTE: the `$HOME`-unset / `$HOME`-empty fallback arms of `path::home_dir`
-// (var_os None / empty → the OS `home_dir()` fallback) are intentionally NOT
+// NOTE: the unset/empty fallback arms of `path::home_dir` — `$HOME` on Unix,
+// `%USERPROFILE%` on Windows, the platform arm CC's own `os.homedir()` uses
+// (var_os None / empty → the OS `home_dir()` fallback) — are intentionally NOT
 // integration-tested: removing HOME makes the binary scan the developer's REAL
 // `~/.claude/projects`, which is non-hermetic (variable contents, potentially large)
 // and reads real user data. The fallback is a thin, audited 3-line guard; it is left

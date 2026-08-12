@@ -50,17 +50,30 @@ pub fn encode_cwd(cwd: &Path) -> String {
     out
 }
 
-/// The user's home directory, honoring `$HOME` first (the SPEC ties everything to
-/// `$HOME`), then falling back to the OS notion of home.
+/// The user's home directory, resolved the way Claude Code itself resolves it (Node's
+/// `os.homedir()`): `$HOME` on Unix, `%USERPROFILE%` on Windows. The per-platform split is
+/// load-bearing on Windows — CC never consults `HOME` there, but Git-Bash/MSYS shells
+/// export one (often a POSIX-style `/c/Users/...` a native process cannot use), and
+/// honoring it would point csift at a `.claude` dir CC never writes. The conventional env
+/// var is read first so a test harness can relocate home per-subprocess; `std::env::home_dir`
+/// (un-deprecated, Windows-correct since Rust 1.85 — MSRV is above both) is the fallback.
 fn home_dir() -> Result<PathBuf> {
+    #[cfg(not(windows))]
     if let Some(h) = std::env::var_os("HOME") {
         if !h.is_empty() {
             return Ok(PathBuf::from(h));
         }
     }
-    // Last resort on platforms / test envs without $HOME.
-    #[allow(deprecated)]
-    std::env::home_dir().ok_or_else(|| anyhow!("cannot determine home directory ($HOME unset)"))
+    #[cfg(windows)]
+    if let Some(h) = std::env::var_os("USERPROFILE") {
+        if !h.is_empty() {
+            return Ok(PathBuf::from(h));
+        }
+    }
+    // Last resort on platforms / test envs without the conventional variable.
+    std::env::home_dir().ok_or_else(|| {
+        anyhow!("cannot determine home directory ($HOME on Unix / %USERPROFILE% on Windows unset)")
+    })
 }
 
 /// Process-wide override for the Claude config dir, installed once from the global

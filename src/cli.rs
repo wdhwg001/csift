@@ -533,8 +533,9 @@ pub struct Cli {
     /// been relocated. Applies to EVERY subcommand (it determines where session
     /// transcripts and plan files are read from). Highest priority; the `$CLAUDE_CONFIG_DIR`
     /// env var (Claude Code's own relocation mechanism) is honored too, and a bare
-    /// `~/.claude` under `$HOME` is the default. Point this at the dir that IS the `.claude`
-    /// equivalent — transcripts are read from `<DIR>/projects/<encoded>/*.jsonl`.
+    /// `.claude` under the OS home dir (`$HOME` on Unix, `%USERPROFILE%` on Windows — the
+    /// same resolution Claude Code uses) is the default. Point this at the dir that IS the
+    /// `.claude` equivalent — transcripts are read from `<DIR>/projects/<encoded>/*.jsonl`.
     #[arg(long = "claude-home", value_name = "DIR", global = true)]
     pub claude_home: Option<PathBuf>,
 }
