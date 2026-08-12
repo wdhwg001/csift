@@ -307,16 +307,23 @@ fn scan_one_file(path: &Path) -> Result<FileResult> {
 fn line_is_files_candidate(line: &[u8]) -> bool {
     // R13: the genuine-user hook is serialization-tolerant (user-only — assistant
     // coverage rides the tool-name needles below, so admitting every assistant
-    // text record here would repeal this prefilter).
-    crate::parse::line_has_user_role_marker(line)
-        || memmem::find(line, b"Edit").is_some()
-        || memmem::find(line, b"Write").is_some()
-        || memmem::find(line, b"Bash").is_some()
-        || memmem::find(line, b"filePath").is_some()
-        // Keep tool_result ERROR carriers — they carry the Edit-before-Read boundaries (and
-        // drive `failed_ids`, so a cancelled/errored op is never miscounted as a real mutation),
-        // and an error carrier may not otherwise match (its `"role":"user"` is its only hook).
-        || memmem::find(line, b"is_error").is_some()
+    // text record here would repeal this prefilter). Finders built ONCE (per-line
+    // hot path — the stateless form rebuilt its searcher every call).
+    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 5]> =
+        std::sync::LazyLock::new(|| {
+            [
+                memmem::Finder::new(b"Edit"),
+                memmem::Finder::new(b"Write"),
+                memmem::Finder::new(b"Bash"),
+                memmem::Finder::new(b"filePath"),
+                // Keep tool_result ERROR carriers — they carry the Edit-before-Read boundaries
+                // (and drive `failed_ids`, so a cancelled/errored op is never miscounted as a
+                // real mutation), and an error carrier may not otherwise match (its
+                // `"role":"user"` is its only hook).
+                memmem::Finder::new(b"is_error"),
+            ]
+        });
+    crate::parse::line_has_user_role_marker(line) || NEEDLES.iter().any(|f| f.find(line).is_some())
 }
 
 /// Extract the bare file mutations carried by a record slice — the SAME structured +

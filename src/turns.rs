@@ -720,11 +720,18 @@ fn scan_one_file(path: &Path) -> Result<ScanResult> {
 fn line_is_turn_candidate(line: &[u8]) -> bool {
     // R13: role markers matched serialization-tolerantly (whitespace around the
     // colon is the same record); the remaining needles are key-only / value
-    // substrings, which survive reserialization by construction.
+    // substrings, which survive reserialization by construction. Finders built ONCE
+    // (per-line hot path — the stateless form rebuilt its searcher every call).
+    static TYPE_ASSISTANT: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(br#""type":"assistant""#));
+    static IS_COMPACT_SUMMARY: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"isCompactSummary"));
+    static TOOL_USE: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"tool_use"));
     crate::parse::line_has_role_marker(line)
-        || memmem::find(line, br#""type":"assistant""#).is_some() // redundant belt for the role hook
-        || memmem::find(line, b"isCompactSummary").is_some() // summaries: seeds + boundaries
-        || memmem::find(line, b"tool_use").is_some() // for the [N tool calls] count
+        || TYPE_ASSISTANT.find(line).is_some() // redundant belt for the role hook
+        || IS_COMPACT_SUMMARY.find(line).is_some() // summaries: seeds + boundaries
+        || TOOL_USE.find(line).is_some() // for the [N tool calls] count
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

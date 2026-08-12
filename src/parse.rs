@@ -86,8 +86,14 @@ fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
 /// are escaped (`\"role\"`), which breaks the needle bytes.
 fn line_role_value_matches(line: &[u8], accept_user: bool, accept_assistant: bool) -> bool {
     const KEY: &[u8] = br#""role""#;
+    // Built ONCE (memchr's construct-once pattern): this predicate runs per LINE across
+    // every spanning command's stage-1 prefilter, and the stateless `memmem::find`
+    // rebuilt its searcher on every call (a real-corpus profile showed `Searcher::new`
+    // riding the hot path).
+    static KEY_FINDER: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(br#""role""#));
     let mut at = 0usize;
-    while let Some(rel) = memchr::memmem::find(&line[at..], KEY) {
+    while let Some(rel) = KEY_FINDER.find(&line[at..]) {
         let mut j = at + rel + KEY.len();
         while line.get(j).is_some_and(|b| b.is_ascii_whitespace()) {
             j += 1;
@@ -299,16 +305,23 @@ where
     let chunks: Vec<(usize, usize)> = bounds.windows(2).map(|w| (w[0], w[1])).collect();
 
     // start_line[i] = 1 + (newlines strictly before chunk i's first byte) = the serial scan's
-    // line number for that chunk's first visited line.
-    let nl_per_chunk: Vec<usize> = chunks
-        .iter()
-        .map(|&(s, e)| memchr_iter(b'\n', &bytes[s..e]).count())
-        .collect();
+    // line number for that chunk's first visited line. Only the PREFIX sums are consumed
+    // (chunk 0 always starts at line 1), so a single-chunk scan skips the counting pass
+    // entirely, and a multi-chunk scan counts in PARALLEL and never counts the last chunk —
+    // the serial whole-slice count here used to be a full extra pass over every byte before
+    // any parallel work began (idle workers on the single-giant-file case).
     let mut start_line = Vec::with_capacity(chunks.len());
-    let mut acc = 1usize;
-    for &n in &nl_per_chunk {
-        start_line.push(acc);
-        acc += n;
+    start_line.push(1usize);
+    if chunks.len() > 1 {
+        let nl_per_chunk: Vec<usize> = chunks[..chunks.len() - 1]
+            .par_iter()
+            .map(|&(s, e)| memchr_iter(b'\n', &bytes[s..e]).count())
+            .collect();
+        let mut acc = 1usize;
+        for &n in &nl_per_chunk {
+            acc += n;
+            start_line.push(acc);
+        }
     }
 
     // ── Parallel scan; rayon's ordered collect keeps chunk order, and each chunk's items are

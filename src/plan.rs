@@ -61,7 +61,10 @@ pub struct PlanRef {
 /// a giant transcript parses only its handful of attachment lines (the scan still splits
 /// newlines over the whole file, but `serde_json` runs on almost nothing).
 fn line_is_plan_candidate(line: &[u8]) -> bool {
-    memchr::memmem::find(line, b"plan_mode").is_some()
+    // Built ONCE (per-line hot path — the stateless form rebuilt its searcher every call).
+    static PLAN_MODE: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"plan_mode"));
+    PLAN_MODE.find(line).is_some()
 }
 
 /// Resolve the plan file BOUND to one session transcript (the latest `plan_mode`

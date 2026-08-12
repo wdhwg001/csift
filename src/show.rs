@@ -265,14 +265,22 @@ fn run_raw(
     let mut total_lines = 0usize;
     let mut keep: std::collections::BTreeMap<usize, Vec<u8>> = std::collections::BTreeMap::new();
 
+    // One owned finder per addressed uuid, built ONCE before the line walk (the
+    // stateless per-line `memmem::find` rebuilt its searcher on every call). The
+    // zip below is order-safe: `uuid_line` is a BTreeMap, so `keys()` here and
+    // `iter_mut()` below walk the SAME sorted order.
+    let uuid_finders: Vec<memchr::memmem::Finder<'static>> = uuid_line
+        .keys()
+        .map(|u| memchr::memmem::Finder::new(u.as_bytes()).into_owned())
+        .collect();
     let mut line_no = 0usize;
     scan_lines_bytes(bytes, |line| {
         line_no += 1;
         total_lines = line_no;
         let mut want = wanted_lines.contains(&line_no);
         if !want && !uuids.is_empty() {
-            for (u, slot) in uuid_line.iter_mut() {
-                if slot.is_none() && memchr::memmem::find(line, u.as_bytes()).is_some() {
+            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {
+                if slot.is_none() && finder.find(line).is_some() {
                     // Confirm structurally: the record's OWN uuid must equal it (a body
                     // merely quoting the uuid must not satisfy the address).
                     if let Ok(Some(rec)) = crate::parse::parse_line(line) {

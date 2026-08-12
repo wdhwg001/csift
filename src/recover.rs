@@ -683,17 +683,24 @@ fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
 /// Coarse by design; the structural parse decides what each line really is.
 fn line_is_recover_candidate(line: &[u8]) -> bool {
     // R13: the genuine-user hook is serialization-tolerant (user-only, like files').
-    crate::parse::line_has_user_role_marker(line)
-        || memmem::find(line, b"toolUseResult").is_some()
-        || memmem::find(line, b"Edit").is_some()
-        || memmem::find(line, b"Write").is_some()
-        || memmem::find(line, b"Read").is_some()
-        || memmem::find(line, b"Bash").is_some()
-        || memmem::find(line, b"filePath").is_some()
-        || memmem::find(line, b"file_path").is_some()
-        || memmem::find(line, b"file-history-snapshot").is_some()
-        || memmem::find(line, b"edited_text_file").is_some()
-        || memmem::find(line, b"tool_use_error").is_some()
+    // Finders built ONCE (per-line hot path — the stateless form rebuilt its searcher
+    // every call).
+    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 10]> =
+        std::sync::LazyLock::new(|| {
+            [
+                memmem::Finder::new(b"toolUseResult"),
+                memmem::Finder::new(b"Edit"),
+                memmem::Finder::new(b"Write"),
+                memmem::Finder::new(b"Read"),
+                memmem::Finder::new(b"Bash"),
+                memmem::Finder::new(b"filePath"),
+                memmem::Finder::new(b"file_path"),
+                memmem::Finder::new(b"file-history-snapshot"),
+                memmem::Finder::new(b"edited_text_file"),
+                memmem::Finder::new(b"tool_use_error"),
+            ]
+        });
+    crate::parse::line_has_user_role_marker(line) || NEEDLES.iter().any(|f| f.find(line).is_some())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

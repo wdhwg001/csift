@@ -949,6 +949,11 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     }
 
     // ── Parallel scan across files; collect order-stable, then merge ──
+    // Inner per-turn fan-out is enabled only when the resolved scope is too SMALL to fill
+    // the pool from the outside (a scoped one/few-transcript query, `show`'s fetch): with
+    // thousands of files the across-files fan-out already saturates every worker, and
+    // nested fan-out just adds steal churn (measured: broad-match wall +0.2s, sys +0.13s).
+    let inner_parallel = session_files.len() <= rayon::current_num_threads() * 2;
     let per_file: Vec<FileResult> = session_files
         .par_iter()
         .map(|p| {
@@ -961,6 +966,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                 None,
                 want_siblings,
                 &spawn_map,
+                inner_parallel,
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -1208,6 +1214,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
                         None,
                         false,
                         &spawn_map,
+                        inner_parallel,
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -1359,6 +1366,8 @@ pub(crate) fn fetch_records(
         use_address.then_some(&address),
         false,
         &spawn_map,
+        // ONE transcript — nothing else fills the pool, so the inner fan-out is free.
+        true,
     )?;
     Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
 }
@@ -1374,6 +1383,7 @@ fn search_one_file(
     address: Option<&AddressSet>,
     want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
+    inner_parallel: bool,
 ) -> Result<FileResult> {
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok(FileResult {
@@ -1383,6 +1393,13 @@ fn search_one_file(
         });
     };
     let bytes: &[u8] = &mmap;
+
+    // A GIANT transcript's per-turn match phase fans out even under a broad scan: such a
+    // file is the straggler the rest of the pool ends up waiting on (only a handful of
+    // files this size exist, so the nested fan-out adds no measurable steal churn — unlike
+    // enabling it for every mid-size file, which did).
+    const HUGE_FILE_BYTES: usize = 64 * 1024 * 1024;
+    let inner_parallel = inner_parallel || bytes.len() >= HUGE_FILE_BYTES;
 
     // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector —
     // computed up front because BOTH the whole-file gate below and the candidate scan key on it.
@@ -1541,6 +1558,7 @@ fn search_one_file(
         address,
         want_siblings,
         spawn_map,
+        inner_parallel,
     );
 
     // `--raw`: backfill each hit's VERBATIM source line from this file's mmap — one pass
@@ -1588,6 +1606,8 @@ fn line_is_transcript_candidate(line: &[u8], needs_compact_boundary: bool) -> bo
     // marker (genuine-user string content, tool carriers, assistant blocks all do).
     // R13: matched serialization-tolerantly — `"role": "user"` (reserialized JSON,
     // whitespace around the colon) is the same record and must not vanish silently.
+    static COMPACT_BOUNDARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"compact_boundary"));
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
@@ -1596,7 +1616,7 @@ fn line_is_transcript_candidate(line: &[u8], needs_compact_boundary: bool) -> bo
         // `&&` short-circuits BEFORE the memmem, so a non-boundary search pays ZERO. When it IS run,
         // the `||` chain still reaches this memmem only on lines that already failed both role checks,
         // and boundary records are rare — so the §7 perf contract holds either way.
-        || (needs_compact_boundary && memmem::find(line, b"compact_boundary").is_some())
+        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())
 }
 
 /// Walk retained records in file order, delimit turns by genuine-user records, and
@@ -1613,6 +1633,7 @@ fn reconstruct_and_match(
     address: Option<&AddressSet>,
     want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
+    inner_parallel: bool,
 ) -> (Vec<Exchange>, usize) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -1659,7 +1680,7 @@ fn reconstruct_and_match(
         is_subagent,
         parent_id: &parent_session_id,
         first_opener_line,
-        spawn: spawn_lookup.map(|s| s as &dyn SpawnLookup),
+        spawn: spawn_lookup.map(|s| s as &(dyn SpawnLookup + Sync)),
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -1668,17 +1689,18 @@ fn reconstruct_and_match(
     } else {
         EXCERPT_MAX
     };
-    let mut out = Vec::new();
-
     // Resolve the `--turn` spec against THIS transcript's turn count (0-based), so
     // open/from-end forms (`N..`, `-3..` = the last 3) materialize per-file.
     let turn_bounds = turn_range.map(|spec| spec.resolve(index_turns.len(), false));
 
-    for (turn_index, idxs) in index_turns.iter().enumerate() {
+    // Build one turn's Exchange (or None when range-filtered / hit-free) — ONE closure
+    // shared verbatim by the serial and parallel walks below, so the two paths cannot
+    // drift apart.
+    let build_exchange = |turn_index: usize, idxs: &[usize]| -> Option<Exchange> {
         // Turn-range filter (inclusive, 0-based on genuine-user order).
         if let Some((lo, hi)) = turn_bounds {
             if turn_index < lo || turn_index > hi {
-                continue;
+                return None;
             }
         }
 
@@ -1702,7 +1724,7 @@ fn reconstruct_and_match(
             &env,
         );
         if hits.is_empty() {
-            continue;
+            return None;
         }
 
         // `--siblings`: render the turn's NON-matched records (the rest of the
@@ -1753,7 +1775,7 @@ fn reconstruct_and_match(
             (Some(&a), Some(&b)) => (a, b),
             _ => (0, 0),
         };
-        out.push(Exchange {
+        Some(Exchange {
             session_id: session_id.clone(),
             is_subagent,
             parent_session_id: parent_session_id.clone(),
@@ -1764,8 +1786,31 @@ fn reconstruct_and_match(
             siblings_hidden,
             turn_lines,
             record_uuids,
-        });
-    }
+        })
+    };
+
+    // Per-turn match+render is INDEPENDENT work, and it used to run serially per file —
+    // on a scoped query against a single giant transcript the whole phase sat on one
+    // worker while the pool idled (the dominant `cvwait` in a real-corpus profile).
+    // The fan-out is DOUBLE-GATED: `inner_parallel` (the caller's scope is too small to
+    // fill the pool from the outside — a broad scan keeps the serial walk: nested
+    // fan-out under a saturated pool measurably ADDS steal churn) and a size threshold
+    // (a small file's join overhead isn't worth it). An ordered collect keeps the
+    // output byte-identical to the serial walk.
+    const PAR_TURNS_MIN_RECORDS: usize = 1024;
+    let out: Vec<Exchange> = if inner_parallel && records.len() >= PAR_TURNS_MIN_RECORDS {
+        index_turns
+            .par_iter()
+            .enumerate()
+            .filter_map(|(i, idxs)| build_exchange(i, idxs))
+            .collect()
+    } else {
+        index_turns
+            .iter()
+            .enumerate()
+            .filter_map(|(i, idxs)| build_exchange(i, idxs))
+            .collect()
+    };
 
     // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
     (out, index_turns.len())
@@ -1885,7 +1930,7 @@ struct ClassifyEnv<'a> {
     /// The physical line of the first record that `opens_turn()` — the subagent spawn-prompt seed
     /// (flips it from `user.message` to `agent.communication.inbox`). `None` ⇒ no opener.
     first_opener_line: Option<usize>,
-    spawn: Option<&'a dyn SpawnLookup>,
+    spawn: Option<&'a (dyn SpawnLookup + Sync)>,
 }
 
 impl ClassifyEnv<'_> {
@@ -1899,7 +1944,7 @@ impl ClassifyEnv<'_> {
             is_transcript_opener: self.is_subagent
                 && kept.line_no != 0
                 && Some(kept.line_no) == self.first_opener_line,
-            spawn: self.spawn,
+            spawn: self.spawn.map(|s| s as &dyn SpawnLookup),
         }
     }
 }
@@ -3683,6 +3728,7 @@ mod tests {
             None,
             a.siblings,
             &spawn_map,
+            false,
         );
         exchanges
     }

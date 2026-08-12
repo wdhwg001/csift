@@ -111,9 +111,17 @@ impl ImageRef {
 /// Pre-JSON byte prefilter: a line MIGHT carry an image block. Coarse by design — the
 /// structural walk (`record_images`) decides what each line really holds.
 fn line_is_image_candidate(line: &[u8]) -> bool {
-    memmem::find(line, br#""type":"image""#).is_some()
-        || memmem::find(line, br#""media_type""#).is_some()
-        || memmem::find(line, b"base64").is_some()
+    // Finders built ONCE (per-line hot path — the stateless form rebuilt its
+    // searcher every call).
+    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 3]> =
+        std::sync::LazyLock::new(|| {
+            [
+                memmem::Finder::new(br#""type":"image""#),
+                memmem::Finder::new(br#""media_type""#),
+                memmem::Finder::new(b"base64"),
+            ]
+        });
+    NEEDLES.iter().any(|f| f.find(line).is_some())
 }
 
 /// Human-friendly byte size (`294 KB`, `1.2 MB`).
