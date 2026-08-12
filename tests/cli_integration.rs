@@ -6156,6 +6156,71 @@ fn plan_spans_subagents_by_default_and_restricts() {
 }
 
 #[test]
+fn gated_no_match_still_counts_malformed_exactly() {
+    // Mutation pin on the malformed law's GATE path: a no-match literal query lets the
+    // whole-file gate close every file WITHOUT building records — the gated accounting
+    // must still report the exact malformed count (a degraded `+=` would drift it).
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "66778899-aabb-4000-8000-00000000000b";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"clean line"}}"#, "\n",
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"torn"#, "\n", // crash-truncated candidate
+            r#"free text garbage line"#, "\n", // non-candidate garbage
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"also clean"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "zzgatedmiss",
+        &format!("@{sess}"),
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let last: serde_json::Value =
+        serde_json::from_str(out.stdout.lines().next_back().unwrap()).unwrap();
+    assert_eq!(last["matched"], serde_json::json!(0));
+    assert_eq!(
+        last["skipped_lines"],
+        serde_json::json!(2),
+        "exactly the torn candidate + the garbage line: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn clean_run_notes_are_absent_in_terminal_modes() {
+    // Mutation pin (duals of the `> 0` note gates): on a clean, uncapped run the -l /
+    // --count-by / --raw surfaces must print NO zero-count accounting notes.
+    let h = Home::new();
+    let _ = header_collision_scenario(&h); // clean, three sessions, no caps in play
+    let l = h.run(&["search", "SEEDWORD", "-l"]);
+    assert!(l.success, "stderr: {}", l.stderr);
+    assert!(
+        !l.stderr.contains("note:"),
+        "-l prints no notes on a clean uncapped run: {}",
+        l.stderr
+    );
+    let cb = h.run(&["search", "SEEDWORD", "--count-by", "label"]);
+    assert!(cb.success, "stderr: {}", cb.stderr);
+    assert!(
+        !cb.stderr.contains("dropped") && !cb.stderr.contains("malformed"),
+        "--count-by prints no drop/malformed notes on a clean run: {}",
+        cb.stderr
+    );
+    let raw = h.run(&["search", "SEEDWORD", "--raw"]);
+    assert!(raw.success, "stderr: {}", raw.stderr);
+    assert!(
+        !raw.stderr.contains("note:"),
+        "--raw prints no notes on a clean uncapped run: {}",
+        raw.stderr
+    );
+}
+
+#[test]
 fn count_by_tool_reports_exact_record_counts() {
     // Mutation pin: the per-axis counters must actually COUNT (a `+=` degraded to a
     // no-op leaves every tally at zero and the excluded total frozen) — pin exact
