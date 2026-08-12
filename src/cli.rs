@@ -958,7 +958,22 @@ impl ListArgs {
           csift search \"\" @<uuid> -t agent -T agent.thinking    # the agent role MINUS its thinking (-T excludes)\n  \
           csift search \"\" @<uuid> -t agent.message --raw | jq -r '.message.model'  # raw lines: any unrendered field\n  \
           csift search \"let's chat\" -t user --siblings              # the match WITH the turn's other side\n  \
-          csift search \"let's chat\" -t user --siblings --no-truncate # …and READ the reply end-to-end\n\n\
+          csift search \"let's chat\" -t user --siblings --no-truncate # …and READ the reply end-to-end\n  \
+          csift search \"X\" --max-count 1                        # when did X FIRST happen? (earliest exchange)\n  \
+          csift search \"X\" --max-count -1                       # most recent occurrence of X\n  \
+          csift show @<tok> --line <n>                            # follow up a hit: paste its header token + L<n>\n\n\
+        OUTPUT GEOMETRY (text mode)\n  \
+          Exchanges emit oldest-first (stable chronological across every transcript in \
+        scope; undated exchanges last). Each exchange header opens with a STABLE id-prefix \
+        token — the first 8 chars of the owning transcript id (a within-output collision \
+        lengthens the colliding group to 12, then the full id; a teammate id renders whole) \
+        — directly usable as an `@` target, identical across invocations. A subagent \
+        exchange carries `(parent <first-8>)` on every header. The head carries scope + \
+        match totals + direction; the tail repeats the totals and adds integrity notes and \
+        refetch guidance; each over-long fragment marks its own truncation inline \
+        (`(+N chars)`). To limit output, prefer `--max-count N` (earliest N) or \
+        `--max-count -N` (latest N) over piping into `head`/`tail` — a capped run keeps \
+        every note; a pipe amputates one end of the ledger.\n\n\
         SIBLINGS (`--siblings`)\n  \
           A match renders only the records that MATCHED. `--siblings` additionally renders \
         the OTHER records of the same turn (the back-and-forth around the hit) under a `·` marker, \

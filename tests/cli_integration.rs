@@ -1083,7 +1083,7 @@ fn show_by_turn_fetches_the_whole_turn() {
         "turn 0 agent reply: {}",
         out.stdout
     );
-    // Turn 1 is a DIFFERENT turn — the numbering matches what `search` prints as `s1·tN`.
+    // Turn 1 is a DIFFERENT turn — the numbering matches the `·tN` in `search`'s headers.
     let out1 = h.run(&["show", t.as_str(), "--turn", "1"]);
     assert!(
         out1.stdout.contains("now explain the panic path"),

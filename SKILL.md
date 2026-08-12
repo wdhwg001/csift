@@ -122,7 +122,7 @@ Glyphs: `◂` user · `▸` agent · `⚙` harness · `·` sibling · `▹` tool
 
 ```
 csift search PATTERN [target…] [-t SEL]… [-T SEL]… [-i] [--multiline] [--since W] [--until W]
-  [--turn N|A..B|N..|-k] [--max-count N] [-c | -l | --count-by AXIS] [--raw] [--siblings]
+  [--turn N|A..B|N..|-k] [--max-count ±N] [-c | -l | --count-by AXIS] [--raw] [--siblings]
   [--no-truncate] [--resolve-persisted] [--sessions-from F] [--no-subagents] [--format json]
 ```
 Empty `""` pattern = pure filter. A hit returns the complete round-trip (tool_use with its result; user turn with reply; an answered AUQ as one Q+A unit). Terminal modes (mutually exclusive): `-c` prints one integer (EXCHANGES, `--max-count` drops added back) · `-l` prints the distinct owning session uuids, one per line, uncapped — pipes into `--sessions-from -` · `--count-by AXIS` prints a census (below).
@@ -132,13 +132,19 @@ Empty `""` pattern = pure filter. A hit returns the complete round-trip (tool_us
 - `--raw`: the matched records' VERBATIM jsonl lines on the whole filter surface — stdout pure jsonl for `jq` (notes → stderr; sidecar-merged hits have no physical line and are omitted with a note). The answer to any unrendered-field question.
 - `--resolve-persisted`: inline `tool-results/<id>.txt` files before matching (regex reaches externalized output); under `--raw` it affects matching only.
 - `--multiline` sets `(?s)(?m)`. Caveat: EVERY tool_use's matchable text is its name + the RE-SERIALIZED JSON input (not only AskUserQuestion's), so a real newline inside e.g. a Bash `input.command` is already the two-character sequence `\n` by match time — match the literal `\\n`; `--multiline` is correctly irrelevant there. It helps only where rendered text keeps real newlines (message text, thinking, tool_result bodies).
-- Zero matches: stderr prints "0 matches — a DEFINITIVE absence (exit 0), NOT an error" + active filters + (under `-t`/`-T`) `⚠ but "X" DOES occur — N record(s) under: <labels>`. JSON summary: `definitive_absence`/`active_filters`/`excluded_by_label`.
+- OUTPUT GEOMETRY (text): exchanges emit oldest-first (stable chronological across every transcript in scope; undated exchanges last). Each exchange header opens with a STABLE id-prefix token `<tok>·t<N>` — `<tok>` = the first 8 chars of the owning transcript id, directly usable as an `@` target, identical across invocations (a within-output collision lengthens the colliding group to 12 chars, then the full id; a teammate id renders whole); a subagent exchange carries `(parent <first-8-of-owning-uuid>)` on EVERY header. The head carries scope + match totals + direction (`matches  N exchanges · M sessions · oldest first[· showing earliest|latest K][· undated last]`); the tail repeats the totals and adds integrity notes + refetch guidance; each over-long fragment marks its own truncation inline (`(+N chars)`). To limit output, prefer `--max-count N` (earliest N) or `--max-count -N` (latest N) over piping into `head`/`tail` — a capped run keeps every note; a pipe amputates one end of the ledger.
+- `--max-count` is SIGNED: `N` keeps the EARLIEST N of the chronological stream, `-N` the LATEST N, `0` = uncapped; the kept exchanges still emit oldest-first among themselves. The footer names the dropped side (`N later|earlier dropped by --max-count`).
+- Zero matches: stderr prints "0 matches — a DEFINITIVE absence (exit 0), NOT an error" + active filters + the malformed-line count when >0 (the absence is definitive for parseable lines only) + (under `-t`/`-T`) `⚠ but "X" DOES occur — N record(s) under: <labels>`. JSON summary: `definitive_absence`/`active_filters`/`excluded_by_label`.
 
 ```bash
 csift search "panic" @<uuid> -t agent --since 6h
 csift search "" @<uuid> --count-by pairing                     # any pending tools?
 csift search "todo" . -l | csift stats --sessions-from -       # aggregate matching sessions
 csift search "" @<uuid> -t agent -T agent.thinking             # agent role minus thinking
+csift search "X" --max-count 1                                 # when did X FIRST happen? (earliest exchange, local ts on the header)
+csift search "X" --max-count -1                                # most recent occurrence of X
+# find a phrase across ALL sessions, then read one hit in full:
+#   copy <tok> and L<n> from the hit → csift show @<tok> --line <n>   (or --turn <N> for the whole turn)
 ```
 
 ## show — fetch records by line / turn / uuid (the reader; also the raw escape hatch)
@@ -147,7 +153,7 @@ csift search "" @<uuid> -t agent -T agent.thinking             # agent role minu
 csift show TARGET ( (--line N|A..B|N..|-k,…)… | --turn N|A..B|N..|-k | (--uuid U,…)… )
   [--raw] [--max-count N] [--format json]
 ```
-- TARGET = exactly one transcript — `show` is the ONE targeting command with NO subagent-span pair (`--no-subagents`/`--subagents` are rejected with the rule, not a typo guess); to read a subagent, target its own `@<agent-id>`. One addressing mode is REQUIRED (no selector = a teaching error; csift never dumps a whole transcript by accident). `--turn N` fetches EVERY record of that turn — its whole back-and-forth — in the same numbering `search` prints (`s1·t270` ⇒ `--turn 270`); `--turn -3..` is the tail-peek. A "turn" is everything since the last human-authored boundary — on a heavily-agentic session one turn can be DOZENS of records (a whole autonomous investigation); the 200-unit cap + drop report keep even a huge turn context-safe.
+- TARGET = exactly one transcript — `show` is the ONE targeting command with NO subagent-span pair (`--no-subagents`/`--subagents` are rejected with the rule, not a typo guess); to read a subagent, target its own `@<agent-id>`. One addressing mode is REQUIRED (no selector = a teaching error; csift never dumps a whole transcript by accident). `--turn N` fetches EVERY record of that turn — its whole back-and-forth — in the same numbering `search` prints (a `<tok>·t270` header ⇒ `--turn 270`, and the header's `<tok>` is the `@` target); `--turn -3..` is the tail-peek. A "turn" is everything since the last human-authored boundary — on a heavily-agentic session one turn can be DOZENS of records (a whole autonomous investigation); the 200-unit cap + drop report keep even a huge turn context-safe.
 - Address misses error with the domain: `no such turn(s): t99 — the transcript has 2 turn(s) (t0..t1)`; open/from-end forms clamp (a `--turn -9..` on a 2-turn session is fine).
 - Renders FULL records through search's pipeline (labels, pairing, plan pointers, sidecar merge). A metadata/attachment line is not a record — a range covering some prints `N line(s) in the addressed range are not records (… — inspect with --raw)`; a single-line miss error points at `--raw`.
 - Cap: 200 record units by default; the drop prints `+N more record unit(s) … · continue: csift show @<id> --line A..B` (JSON `dropped_by_cap` + `refetch_remainder`). `--max-count N` / `0` = uncapped. `--raw` caps by line with the same stderr continuation.

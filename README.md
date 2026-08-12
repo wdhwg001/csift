@@ -24,9 +24,9 @@
 ```console
 # "What did that session decide about rate limiting — and where's the code?"
 $ csift search "rate limit" @13d9645a -t agent --since 1d
-s1 = 13d9645a-3a5b-4a92-b83d-e0f94c5a9b90
+matches  1 exchange · 1 session · oldest first
 
-s1·t42  2026-06-20 22:14:07.811 AEST(UTC+10)
+13d9645a·t42  2026-06-20 22:14:07.811 AEST(UTC+10)
   ▸ agent.message  L8821  Added a sliding-window limiter (10 req/min/IP); the 429 path now
                   returns Retry-After and logs the offending IP — gateway/src/rate_limit.rs:88.
 matched 1 exchange · 1 session · label=agent
@@ -139,7 +139,7 @@ Run `csift <command> --help` for the full flag set and examples.
 |---|---|
 | **`list`** | fast "which session is this?" index — first/last user + last agent, per session |
 | **`search`** | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `-l` matching sessions, `--raw` verbatim lines) |
-| **`show`** | fetch the exact record(s) you name — `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `s1·tN` turn index) of one transcript, rendered full or `--raw` bytes |
+| **`show`** | fetch the exact record(s) you name — `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes |
 | **`stats`** | one-scan aggregates per session: tokens by model, tool calls, turns, span, compactions |
 | **`agents`** | a session's subagents: kind, lifecycle, status, and the parent→child topology |
 | **`whoami`** | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe |

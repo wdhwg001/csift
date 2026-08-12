@@ -11,6 +11,7 @@
 - **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--format json` for machine use.
 - **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
 - **Quality gates (hard):** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` all green. No `unwrap`/`expect` in library/hot paths (only `main` maps error→exit code, tests may `unwrap`). **No silent truncation** anywhere.
+- **Output geometry (crate-wide design law, v0.7.0).** A truncating consumer (`| head -N` / `| tail -N`) amputates exactly one end of the output. Therefore: (a) anything load-bearing appears at BOTH ends, or inline on the rows themselves; (b) the head must carry enough to interpret what follows (scope, totals, direction); (c) the tail remains the complete ledger (full summary, integrity notes, cautions); (d) the blessed way to limit output is `--max-count`, which keeps every note intact — piping through `head`/`tail` is the discouraged fallback. (Applied to `search` in v0.7.0; auditing the other subcommands against this law is a recorded follow-up.)
 
 ---
 
@@ -623,6 +624,42 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
 >    mid-record — the line-safe machine form is `--format json`.
 
+> **v0.7.0 BREAKING-CHANGE LEDGER (authoritative — supersedes any conflicting older text; text surface only, JSON unchanged — `csift 0.7.0`).**
+> Motivated by field telemetry of agent consumers abandoning the tool mid-task: a broad
+> query's per-invocation session table flooded the head of the output before the first
+> hit, a table ordinal reused across invocations silently addressed the wrong session,
+> and the emission order was a coded contract no doc surfaced — each drove a consumer
+> back to hand-parsing raw jsonl.
+> 1. **Self-resolving exchange headers; session legend REMOVED (§6.2).** The `s<N> = <id>`
+>    table and the `s<N>·t<turn>` ordinal header are gone. Every exchange header now opens
+>    with a STABLE id-prefix token: the first 8 chars of the owning transcript id
+>    (`<tok>·t<turn>`), derived from the id alone — identical across invocations, directly
+>    usable as an `@` target, zero joins. Within one output, DISTINCT ids sharing their
+>    first 8 chars lengthen as a group to their first 12 raw chars (a uuid token spans its
+>    first dash), then to the full id; a teammate agent id (name-embedded, not hex-led)
+>    renders whole. A subagent exchange carries `(parent <first-8-of-owning-uuid>)` on
+>    EVERY header so a tail-truncated read still resolves ownership.
+> 2. **Resolver widening so every emitted token round-trips (§2.3, fail-loud).** The
+>    `@`-prefix match domain is now the UNION of top-level session uuids and subagent
+>    agent ids (a unique subagent hit dispatches like a full `@<agent-id>`); a literal
+>    `8-4-4-4-12`-layout prefix longer than 11 chars is a valid uuid-prefix token; a
+>    12+-hex token keeps exact-agent-id semantics first, then falls back to a unique
+>    literal-prefix match. Ambiguity always errors naming the candidates.
+> 3. **Output geometry contract (§0 law; `search` text mode).** A head `matches` banner
+>    (`matches  N exchanges · M sessions · oldest first[· showing earliest|latest K]
+>    [· undated last]`) follows the scope banner whenever ≥1 exchange matched; the tail
+>    footer now repeats the TRUE (pre-cap) totals beside its drop accounting. Suppressed
+>    in `-c`/`-l`/`--count-by`/`--raw`/`--format json`. The stderr zero-match diagnosis
+>    now discloses the malformed-line count when >0 (an absence claim is definitive for
+>    parseable lines only). JSON summary shape unchanged (post-cap `matched` +
+>    `dropped_by_cap` reconcile to the banner total).
+> 4. **Signed `--max-count` (§6.2).** `N` keeps the EARLIEST N of the chronological
+>    stream (unchanged), `-N` keeps the LATEST N, `0` stays uncapped. ONE ordering rule:
+>    the kept exchanges always emit oldest-first among themselves — the sign only selects
+>    which end survives (mirrors the range grammar's `-k` from-end form). Both ends
+>    disclose the window; the footer names the dropped side (`N later|earlier dropped by
+>    --max-count`). `show`/`list`/`stats` `--max-count` unchanged.
+
 > **v0.6.10 CHANGE LEDGER (non-breaking; help/error-text/doc surface only — `csift 0.6.10`).**
 > The fourteenth-audit release (Sonnet 5 on v0.6.9 — the strongest convergence evidence
 > yet: the witness independently re-verified the whole R9→R10→refutation saga with
@@ -1000,11 +1037,11 @@ csift list --format json .                              # machine-readable index
 
 **Output — complete round-trip:** see §6.4. Each emitted unit is one **Exchange** with a session header, turn index, and the matched hit(s) shown in context of their full round-trip.
 
-**Text output example.** Each distinct session is declared ONCE in a label table (`s1 = <uuid>`), then every exchange header is the cheap `s<N>·t<turn>` reference + a single compact local instant (the offset already pins it — no second UTC copy); hit lines are `  <glyph> <label>[ <tool>]  L<line>  <excerpt>` where `<glyph>` is the ROLE glyph (`◂` user · `▸` agent · `⚙` harness) and `<label>` is the full dotted leaf path, DECORATED with `from ⇨ to` on a comm hit and the `▹` pairing on a tool hit:
+**Text output example.** Every exchange header opens with a STABLE id-prefix token (`<tok>·t<turn>`, `<tok>` = the first 8 chars of the owning transcript id — an `@` target as-is; within-output collisions lengthen the group 8 → 12 → full; a subagent header adds `(parent <first-8>)`) + a single compact local instant (the offset already pins it — no second UTC copy); hit lines are `  <glyph> <label>[ <tool>]  L<line>  <excerpt>` where `<glyph>` is the ROLE glyph (`◂` user · `▸` agent · `⚙` harness) and `<label>` is the full dotted leaf path, DECORATED with `from ⇨ to` on a comm hit and the `▹` pairing on a tool hit:
 ```
-s1 = 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+matches  1 exchange · 1 session · oldest first
 
-s1·t47  2026-06-07 14:32:05.478 AEST(UTC+10)
+0a1b2c3d·t47  2026-06-07 14:32:05.478 AEST(UTC+10)
   ◂ user.message  L990  why is the tail-read carry needed?
   ▸ agent.thinking  L994  The carry holds an incomplete line straddling a chunk boundary…
   ▸ agent.message  L1003  The carry is the partial line at the low-offset edge of each chunk…
@@ -1404,7 +1441,7 @@ addressing mode: `--line` (jsonl line), `--uuid` (record uuid), or `--turn` (tur
 - Addressing modes (pick ONE): `--line N|A..B|N..|-k` (1-based jsonl line, repeatable /
   comma-joined), `--uuid U` (record uuid, repeatable / comma-joined), or `--turn
   N|A..B|-k` — a 0-based TURN index/range in the SAME range-token grammar, whose numbering
-  is IDENTICAL to `search`'s `s1·tN` header. `--turn` fetches EVERY record of the named
+  is IDENTICAL to the `·tN` in `search`'s exchange headers. `--turn` fetches EVERY record of the named
   turn(s) (the whole back-and-forth), so `show @<uuid> --turn -3..` reads the last 3 turns
   straight from the live transcript — the tail-peek / monitoring path `verbatim` (§6.8) is
   deliberately NOT.
