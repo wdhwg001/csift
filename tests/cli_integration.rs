@@ -6163,6 +6163,51 @@ fn plan_spans_subagents_by_default_and_restricts() {
 }
 
 #[test]
+fn stats_aggregates_are_exact() {
+    // Mutation pin on the stats aggregation core: token sums per model, tool CALL
+    // counts, the span label, and the JSON id trio must carry REAL values — an emptied
+    // merge map or a += degraded to *= zeroed them with no test on the numbers.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "8899aabb-ccdd-4000-8000-00000000000d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":111,"output_tokens":44},"content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/a.md","content":"x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:40.000Z","toolUseResult":{"type":"create","filePath":"/p/a.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":222,"output_tokens":55},"content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &format!("@{sess}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("relay-model-x"),
+        "model row present: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("333") && out.stdout.contains("99"),
+        "token sums 111+222=333 in / 44+55=99 out: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("Write"), "tool tally: {}", out.stdout);
+    assert!(
+        out.stdout.contains("1m05s"),
+        "span label for the 65s session: {}",
+        out.stdout
+    );
+    let js = h.run(&["stats", &format!("@{sess}"), "--format", "json"]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    assert!(
+        js.stdout
+            .contains(&format!(r#""parent_session_id":"{sess}""#)),
+        "the JSON id trio is populated: {}",
+        js.stdout
+    );
+}
+
+#[test]
 fn show_turn_explicit_miss_errors_and_open_forms_clamp() {
     // Mutation pin on the v0.5 turn-address law: an EXPLICIT single --turn miss is a hard
     // error naming the turn; an OPEN out-of-range form CLAMPS (never a hard error); and a
