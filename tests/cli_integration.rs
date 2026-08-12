@@ -6069,6 +6069,108 @@ fn agents_clean_run_text_hygiene() {
 }
 
 #[test]
+fn stats_spans_subagents_by_default_and_restricts() {
+    // Mutation pin on the span contract (§ subcommand spanning default): `stats` spans the
+    // session's subagent transcripts by default; `--no-subagents` restricts to the top level.
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let span = h.run(&["stats", at(SESS).as_str()]);
+    assert!(span.success, "stderr: {}", span.stderr);
+    assert!(
+        span.stdout.contains("sub111"),
+        "stats spans subagents by default: {}",
+        span.stdout
+    );
+    let top = h.run(&["stats", at(SESS).as_str(), "--no-subagents"]);
+    assert!(top.success, "stderr: {}", top.stderr);
+    assert!(
+        !top.stdout.contains("sub111"),
+        "--no-subagents restricts stats to the top level: {}",
+        top.stdout
+    );
+}
+
+#[test]
+fn image_spans_subagents_by_default_and_restricts() {
+    // Same span-contract pin for `image`: an image carried ONLY by a subagent transcript is
+    // listed by default and disappears under --no-subagents.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"no images up here"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub222.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"sub222","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"[Image #1] look"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}"#, "\n",
+        ),
+    );
+    let span = h.run(&["image", at(SESS).as_str()]);
+    assert!(span.success, "stderr: {}", span.stderr);
+    assert!(
+        span.stdout.contains("png"),
+        "image spans subagents by default: {}",
+        span.stdout
+    );
+    let top = h.run(&["image", at(SESS).as_str(), "--no-subagents"]);
+    assert!(top.success, "stderr: {}", top.stderr);
+    assert!(
+        !top.stdout.contains("png"),
+        "--no-subagents restricts image to the top level: {}",
+        top.stdout
+    );
+}
+
+#[test]
+fn plan_spans_subagents_by_default_and_restricts() {
+    // Same span-contract pin for `plan`: a plan_mode binding carried ONLY by a subagent
+    // transcript resolves by default and disappears under --no-subagents.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"no plan up here"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub333.jsonl"),
+        concat!(
+            r#"{"type":"attachment","isSidechain":true,"agentId":"sub333","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"/p/plans/quiet-harbor-relay.md","planExists":false},"uuid":"att1","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+        ),
+    );
+    let span = h.run(&["plan", at(SESS).as_str()]);
+    assert!(span.success, "stderr: {}", span.stderr);
+    assert!(
+        span.stdout.contains("quiet-harbor-relay"),
+        "plan spans subagents by default: {}",
+        span.stdout
+    );
+    let top = h.run(&["plan", at(SESS).as_str(), "--no-subagents"]);
+    assert!(
+        !top.stdout.contains("quiet-harbor-relay"),
+        "--no-subagents restricts plan to the top level: {}",
+        top.stdout
+    );
+}
+
+#[test]
+fn files_by_dir_renders_directory_rollup() {
+    // Mutation pin: the `--by dir` render path emits the per-directory rollup (a deleted
+    // renderer body must not pass by silence).
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["files", at(SESS).as_str(), "--by", "dir"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("/parent") && out.stdout.contains("/sub"),
+        "directory rollup must name both dirs: {}",
+        out.stdout
+    );
+}
+
+#[test]
 fn agents_agent_grab_bypasses_time_and_kind_filters() {
     // `--agent <hex>` is a DIRECT lookup: even with a --since window that would exclude the
     // agent's trigger time AND a --kind that does not match, the grab still resolves.

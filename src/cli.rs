@@ -3010,6 +3010,21 @@ pub struct WhoamiArgs {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn image_out_format_ext_and_media_type_pinned() {
+        // Mutation pin: the transcode surface's extension/media-type mapping, per variant.
+        use super::ImageOutFormat as F;
+        for (f, ext, mt) in [
+            (F::Png, "png", "image/png"),
+            (F::Jpeg, "jpg", "image/jpeg"),
+            (F::Gif, "gif", "image/gif"),
+            (F::Webp, "webp", "image/webp"),
+        ] {
+            assert_eq!(f.ext(), ext);
+            assert_eq!(f.media_type(), mt);
+        }
+    }
+
     use super::*;
     use clap::CommandFactory;
 
@@ -3451,8 +3466,27 @@ mod tests {
         assert!(!selector_is_segment_prefix("agent.too", "agent.tool.use"));
         assert!(!selector_is_segment_prefix("user", "agent.message"));
         // Validity is derived from Class::ALL: every emitted selector is valid; junk is not.
-        for s in label_selectors() {
-            assert!(selector_is_valid(&s), "{s} must be valid");
+        // Mutation pin: the loop below is VACUOUS over an empty selector space, so the
+        // space's size and membership are asserted first (an empty `label_selectors()`
+        // must never pass by silence).
+        let sels = label_selectors();
+        assert!(sels.len() > 25, "selector space too small: {}", sels.len());
+        for want in [
+            "user",
+            "agent",
+            "harness",
+            "agent.tool",
+            "agent.tool.use",
+            "agent.communication",
+            "harness.notification.monitor",
+            "user.answer",
+        ] {
+            assert!(sels.contains(&want.to_string()), "missing selector {want}");
+        }
+        let set: std::collections::BTreeSet<&String> = sels.iter().collect();
+        assert_eq!(set.len(), sels.len(), "selectors must be de-duplicated");
+        for s in &sels {
+            assert!(selector_is_valid(s), "{s} must be valid");
         }
         assert!(selector_is_valid("user"));
         assert!(selector_is_valid("agent.communication.inbox"));

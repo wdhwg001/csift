@@ -1123,6 +1123,58 @@ fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_lines: usize)
 mod tests {
     use super::*;
 
+    /// A minimal [`ImageRef`] carrying only what `ext()` consults.
+    fn media_ref(mt: &str) -> ImageRef {
+        ImageRef {
+            session_id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d".into(),
+            is_subagent: false,
+            parent_session_id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d".into(),
+            line_no: 1,
+            img_index: 1,
+            seq: None,
+            fingerprint: String::new(),
+            source_kind: "base64".into(),
+            media_type: mt.into(),
+            b64_len: 0,
+            est_bytes: 0,
+            url: None,
+            ts_utc: None,
+            record_uuid: None,
+            data: None,
+        }
+    }
+
+    #[test]
+    fn media_type_to_ext_mapping_pinned() {
+        // Mutation pin: every media-type arm, plus the never-fabricated `bin` fallback.
+        for (mt, ext) in [
+            ("image/png", "png"),
+            ("image/jpeg", "jpg"),
+            ("image/jpg", "jpg"),
+            ("image/gif", "gif"),
+            ("image/webp", "webp"),
+            ("image/svg+xml", "svg"),
+            ("image/bmp", "bmp"),
+            ("image/tiff", "tiff"),
+            ("image/heic", "heic"),
+            ("image/avif", "avif"),
+            ("application/octet-stream", "bin"),
+        ] {
+            assert_eq!(media_ref(mt).ext(), ext, "{mt}");
+        }
+    }
+
+    #[test]
+    fn human_bytes_boundaries() {
+        // Mutation pin: the KB/MB thresholds and both formatting shapes.
+        assert_eq!(human_bytes(0), "0 B");
+        assert_eq!(human_bytes(1023), "1023 B");
+        assert_eq!(human_bytes(1024), "1 KB");
+        assert_eq!(human_bytes(294_912), "288 KB");
+        assert_eq!(human_bytes(1_048_576), "1.0 MB");
+        assert_eq!(human_bytes(1_258_291), "1.2 MB");
+    }
+
     #[test]
     fn base64_roundtrip_standard_and_padded() {
         // "hi" → "aGk=", "caf\u{e9}" bytes → padded; whitespace tolerated.
