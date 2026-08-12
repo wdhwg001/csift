@@ -1813,6 +1813,25 @@ mod tests {
     }
 
     #[test]
+    fn trivial_digit_runs_pinned() {
+        // Mutation pin: constant-step runs in -2..=2 are trivial; anything else is not —
+        // including runs where only the FIRST step matches (the conjunction must hold
+        // across all three steps).
+        for t in ["0000", "1234", "9876", "1357", "2468", "4321"] {
+            assert!(is_trivial_4_digits(t), "{t} is a trivial run");
+        }
+        for ok in ["4283", "1233", "1122", "5180", "7391"] {
+            assert!(!is_trivial_4_digits(ok), "{ok} is not a trivial run");
+        }
+    }
+
+    #[test]
+    fn minimum_length_marker_is_accepted() {
+        // Mutation pin: the 13-char minimum (3 words x 3 chars + 4 digits) is INCLUSIVE.
+        assert!(validate_trap_marker("FoxBarBaz4283").is_ok());
+    }
+
+    #[test]
     fn validate_trap_marker_enforces_the_strict_grammar() {
         // Accepted: EXACTLY 3 imaginative CamelCase words + 4 non-trivial digits.
         for ok in [

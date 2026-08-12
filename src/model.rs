@@ -4675,6 +4675,45 @@ mod tests {
     }
 
     #[test]
+    fn plural_word_pick_pinned() {
+        // Mutation pin: `"s"` for anything but exactly one.
+        assert_eq!(plural(0), "s");
+        assert_eq!(plural(1), "");
+        assert_eq!(plural(2), "s");
+    }
+
+    #[test]
+    fn monitor_cadence_tokens_route_each_disjunct() {
+        // Mutation pin: each cadence token ALONE routes a `Background command "…"` pulse to
+        // Monitor (the disjuncts must stay independent), and a plain name stays bg-command.
+        for s in [
+            r#"Background command "nightly monitor tick (25min)" completed"#,
+            r#"Background command "liveness probe" completed"#,
+            r#"Background command "Re-arm corrected watchdog" completed"#,
+            r#"Background command "Relaunch monitor timer (cycle 2)" completed"#,
+        ] {
+            assert_eq!(
+                AutomationKind::from_summary(Some(s)),
+                AutomationKind::Monitor,
+                "{s}"
+            );
+        }
+        assert_eq!(
+            AutomationKind::from_summary(Some(r#"Background command "build project" completed"#)),
+            AutomationKind::BackgroundCommand,
+            "a plain quoted name stays background-command"
+        );
+        // The word must be STANDALONE — a substring inside a larger word is not the signal.
+        assert_eq!(
+            AutomationKind::from_summary(Some(
+                r#"Background command "monitoring-dashboard build" completed"#
+            )),
+            AutomationKind::BackgroundCommand,
+            "substring 'monitor' inside a larger word must not route"
+        );
+    }
+
+    #[test]
     fn automation_label_failed_status_and_no_summary() {
         // A non-`completed` status is rendered verbatim (the status arm is not hardcoded).
         let failed = parse(

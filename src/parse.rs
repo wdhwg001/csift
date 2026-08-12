@@ -690,6 +690,18 @@ mod tests {
     use super::*;
     use std::io::Write;
 
+    #[test]
+    fn shape_malformed_needs_both_braces() {
+        // Mutation pin: EACH missing brace alone marks the line malformed (crash-truncation
+        // loses the trailing `}`; a torn head loses the leading `{`; free text has neither).
+        assert!(line_shape_malformed(b"{\"a\":1")); // trailing brace lost
+        assert!(line_shape_malformed(b"\"a\":1}")); // leading brace lost
+        assert!(line_shape_malformed(b"free text garbage"));
+        assert!(!line_shape_malformed(b"{\"a\":1}"));
+        assert!(!line_shape_malformed(b"  ")); // blank is not malformed
+        assert!(!line_shape_malformed(b"")); // empty is not malformed
+    }
+
     /// Collect ALL backward lines (as Strings) for a byte slice at a given chunk
     /// size, dropping blanks (matching the parse-path's blank filter).
     fn rev_nonblank(bytes: &[u8], chunk: usize) -> Vec<String> {

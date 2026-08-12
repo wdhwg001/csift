@@ -6156,6 +6156,23 @@ fn plan_spans_subagents_by_default_and_restricts() {
 }
 
 #[test]
+fn sessions_from_accepts_every_id_shape() {
+    // Mutation pin: the --sessions-from token gate accepts each id shape INDEPENDENTLY —
+    // a full uuid, a 4-11-hex uuid prefix, and an agent id (the `||` chain must not
+    // collapse into a conjunction).
+    let h = populated_home();
+    for tok in [SESS.to_string(), SESS[..8].to_string()] {
+        let out = h.run_with_stdin(&["list", "--sessions-from", "-"], &format!("{tok}\n"));
+        assert!(out.success, "token {tok}: {}", out.stderr);
+        assert!(
+            out.stdout.contains(SESS),
+            "token {tok} resolves the session: {}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
 fn files_by_dir_renders_directory_rollup() {
     // Mutation pin: the `--by dir` render path emits the per-directory rollup (a deleted
     // renderer body must not pass by silence).
