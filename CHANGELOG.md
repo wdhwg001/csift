@@ -5,6 +5,38 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.0] - 2026-08-12
+
+Breaking text-surface release; JSON output is unchanged.
+
+- **Breaking:** `search` exchange headers are self-resolving. Each header opens
+  with a STABLE id-prefix token — the first 8 chars of the owning transcript id
+  (`<tok>·t<N>`) — instead of a per-invocation `sN` ordinal, and the
+  `sN = <id>` session legend block is removed entirely. A token is a valid `@`
+  target as-is and identical across invocations; within one output, distinct
+  ids sharing their first 8 chars lengthen together (8 → 12 → full id); a
+  teammate id (name-embedded, not hex-led) renders whole. A subagent exchange
+  carries `(parent <first-8>)` on EVERY header.
+- Resolver widening so every emitted token round-trips (all fail-loud on
+  ambiguity): the `@`-prefix match domain is the UNION of top-level session
+  uuids and subagent agent ids; a literal `8-4-4-4-12`-layout prefix longer
+  than 11 chars is a valid uuid-prefix token; a 12+-hex token keeps
+  exact-agent-id semantics first, then falls back to a unique literal-prefix
+  match.
+- Output geometry: a head `matches` banner (true totals · `oldest first` · the
+  emitted window · `undated last` when present) follows the scope banner; the
+  tail footer repeats the TRUE pre-cap totals beside its drop accounting; the
+  stderr zero-match diagnosis discloses the malformed-line count (an absence
+  claim is definitive for parseable lines only). The both-ends placement law
+  joins SPEC section 0 as a crate-wide design law.
+- `--max-count` is SIGNED: `N` keeps the EARLIEST N of the chronological
+  stream, `-N` the LATEST N, `0` stays uncapped; the kept exchanges still emit
+  oldest-first among themselves. Both ends disclose the window; the footer
+  names the dropped side (`N later|earlier dropped by --max-count`).
+- Docs: an OUTPUT GEOMETRY section in `search --help` and SKILL; recipes for
+  "when did X first happen" (`--max-count 1`), "most recent occurrence"
+  (`--max-count -1`), and the header-token follow-up into `show`.
+
 ## [0.6.10] - 2026-07-14
 
 - `@trap` retry guidance states the granularity: the retry must be a NEW,
