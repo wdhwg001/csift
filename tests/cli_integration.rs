@@ -6232,6 +6232,11 @@ fn stats_aggregates_are_exact() {
         "the cache accumulators merge too: {}",
         js.stdout
     );
+    assert!(
+        js.stdout.contains(r#""is_subagent":true"#),
+        "the subagent row's id-domain discriminator is real, never defaulted: {}",
+        js.stdout
+    );
 }
 
 #[test]
