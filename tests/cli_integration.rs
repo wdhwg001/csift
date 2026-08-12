@@ -5239,6 +5239,18 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
         "no pending line: {}",
         txt.stdout
     );
+    // Mutation pins: the PENDING detail line sits one indent level UNDER its node head,
+    // and the escalation class (and only that class) carries the dangerous-rm explainer.
+    assert!(
+        txt.stdout.contains("\n    PENDING"),
+        "PENDING must be an indented detail line: {}",
+        txt.stdout
+    );
+    assert!(
+        txt.stdout.contains("HOISTS"),
+        "escalation-blocked carries the hoist explainer: {}",
+        txt.stdout
+    );
     assert!(
         !txt.stdout.contains("completed  2026") && !txt.stdout.contains("last-seen"),
         "frozen lane must not print a terminal-instant line: {}",
@@ -6027,6 +6039,31 @@ fn agents_single_agent_grab_text() {
     assert!(
         out.stdout.contains("aaa111"),
         "node not grabbed: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn agents_clean_run_text_hygiene() {
+    // Mutation pins on the tree renderer: a single-session run has NO leading blank line
+    // and no blank-before-first-SESSION; a corpus with no teammates prints NO teammate
+    // control hint; a clean lane never prints a zero-count malformed note.
+    let h = populated_home();
+    let out = h.run(&["agents", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.starts_with('\n') && !out.stdout.contains("\n\nSESSION"),
+        "no blank line ahead of the first session: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("teammate rows are in-process"),
+        "teammate control hint must be gated on a teammate being present: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("0 malformed"),
+        "a clean lane never prints a zero-count malformed note: {}",
         out.stdout
     );
 }

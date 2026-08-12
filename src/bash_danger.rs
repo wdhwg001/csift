@@ -232,6 +232,41 @@ fn strip_leading_keywords(mut s: &str) -> &str {
 mod tests {
     use super::*;
 
+    // ── Mutation-kill pins (cargo-mutants survivors): each case was derived to
+    //    DIFFERENTIATE a surviving operator flip from the shipped behavior — a
+    //    boundary the ordinary fixtures never reached. ──
+
+    #[test]
+    fn redirect_target_token_is_skipped_not_flagged() {
+        // `rm -r $X > $TMP/`: the SEPARATED redirect target (`$TMP/`) is Zhp-shaped but
+        // belongs to the redirect, not to rm — CC's walker skips it (the extra advance
+        // after a bare redirect operator). A broken skip would flag it as the rm target.
+        assert!(dangerous_rm("rm -r $X > $TMP/").is_none());
+        // The FUSED form (`2>$TMP/`, operator + target in one token) is also a redirect.
+        assert!(dangerous_rm("rm -r $X 2>$TMP/").is_none());
+    }
+
+    #[test]
+    fn amp_to_semicolon_boundary_forms() {
+        // Lone `&` converts at EVERY position including the string edges; the two-byte
+        // operators (`&&` / `>&` / `<&` / `&>`) are preserved.
+        assert_eq!(amp_to_semicolon("a & b"), "a ; b");
+        assert_eq!(amp_to_semicolon("a&"), "a;"); // trailing: no next byte to consult
+        assert_eq!(amp_to_semicolon("&b"), ";b"); // leading: no previous byte to consult
+        assert_eq!(amp_to_semicolon("a&&b"), "a&&b");
+        assert_eq!(amp_to_semicolon("2>&1"), "2>&1");
+        assert_eq!(amp_to_semicolon("<&0"), "<&0");
+        assert_eq!(amp_to_semicolon("a&>x"), "a&>x");
+    }
+
+    #[test]
+    fn plain_group_removal_edges() {
+        // A group at string START is a plain group (there is no preceding byte).
+        assert_eq!(remove_plain_groups("(a b) x"), "  x");
+        // A `$`-preceded group is KEPT (the `$(…)` pass owns it); a plain one is spaced.
+        assert_eq!(remove_plain_groups("a$(b) (c) d"), "a$(b)   d");
+    }
+
     #[test]
     fn flags_the_real_escalation_command() {
         // The exact teardown clause that triggered the 36.7-min hoist (agent-ab8a4c…, L630):

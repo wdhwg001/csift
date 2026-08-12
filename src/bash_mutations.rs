@@ -1438,6 +1438,44 @@ mod tests {
             .collect()
     }
 
+    // ── Mutation-kill pins (cargo-mutants survivors): heredoc scanning boundaries the
+    //    ordinary fixtures never reached — wrong consumed-offset arithmetic corrupts the
+    //    SECOND delimiter on a line, and a broken closer comparison leaks body lines. ──
+
+    #[test]
+    fn heredoc_delims_forms_and_offsets() {
+        assert_eq!(heredoc_delims("cat <<EOF"), ["EOF"]);
+        assert_eq!(heredoc_delims("cat <<-END x"), ["END"]);
+        assert_eq!(heredoc_delims("cat <<'A B'"), ["A B"]);
+        assert_eq!(heredoc_delims(r#"cat <<"QD" y"#), ["QD"]);
+        // Two on one line, in order — the consumed-offset arithmetic must be exact.
+        assert_eq!(heredoc_delims("cat <<ONE <<'TWO'"), ["ONE", "TWO"]);
+        // A here-STRING is not a heredoc (no body line follows).
+        assert!(heredoc_delims("cat <<<word").is_empty());
+        // A bare delimiter stops at a shell metacharacter.
+        assert_eq!(heredoc_delims("cat <<EOF;echo x"), ["EOF"]);
+    }
+
+    #[test]
+    fn heredoc_bodies_dropped_until_exact_closer() {
+        let cmd = "cat <<EOF > $OUT\nline one\nline two\nEOF\necho after";
+        let stripped = strip_heredoc_bodies(cmd);
+        assert!(
+            !stripped.contains("line one") && !stripped.contains("line two"),
+            "body lines must drop: {stripped}"
+        );
+        assert!(
+            stripped.contains("echo after"),
+            "post-closer line kept: {stripped}"
+        );
+        // A body line that merely CONTAINS the delimiter is not the closer.
+        let s2 = strip_heredoc_bodies("cat <<EOF\nnot EOF here\nEOF\necho tail");
+        assert!(
+            !s2.contains("not EOF here") && s2.contains("echo tail"),
+            "closer is exact-trimmed-match only: {s2}"
+        );
+    }
+
     #[test]
     fn rm_each_non_flag_operand() {
         assert_eq!(
