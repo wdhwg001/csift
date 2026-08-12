@@ -5,6 +5,23 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.4] - 2026-08-12
+
+- The Windows shell is a SEPARATE Claude Code tool named `PowerShell` (same
+  `input.command` field; enabled by env override, forced on when
+  Git-for-Windows bash is absent, else feature-gated — extracted from the CC
+  2.1.228 binary; the Windows `Bash` tool runs the real Git-for-Windows
+  bash). `@trap` self-identification now matches BOTH shell tools — it was
+  blind exactly in the bashless Windows fallback mode. Error/retry guidance
+  says "shell (Bash / PowerShell) invocation".
+- Documented deliberate non-changes: the bash-lexical layers (dangerous-rm
+  escalation classification, shell-side mutation attribution in
+  files/recover) do not run on PowerShell records — a pending PowerShell
+  lane classifies awaiting-execution; structured Read/Write/Edit attribution
+  is unaffected. Also recorded: CC 2.1.228's dangerous-rm has evolved past
+  the ported generation (fixpoint substitution stripping, a tree-sitter bail
+  at 64+ command substitutions) — a port refresh is a tracked follow-up.
+
 ## [0.7.3] - 2026-08-12
 
 - Path encoding is now EXACTLY Claude Code's (evidence extracted from the CC
