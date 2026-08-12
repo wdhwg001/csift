@@ -1155,7 +1155,7 @@ pub struct SearchArgs {
     /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
+    /// Discover turn indices from the `<id>·t<n>` exchange header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
     #[arg(
@@ -1381,7 +1381,8 @@ pub struct ShowArgs {
     /// 0-based TURN index/range — the `tN` `search` prints — in the SAME grammar as `--line`
     /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end, so `-3..` = the last 3 turns,
     /// `42..` = turn 42 → the end). Fetches EVERY record of the named turns (reads a turn's
-    /// whole back-and-forth), and the turn numbering matches `search`'s `s1·tN` exactly.
+    /// whole back-and-forth), and the turn numbering matches the `·t<N>` in `search`'s
+    /// exchange headers exactly.
     /// Mutually exclusive with `--line`/`--uuid` (pick ONE addressing mode).
     #[arg(
         long,
@@ -2013,7 +2014,7 @@ pub struct FilesArgs {
     /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
+    /// Discover turn indices from the `<id>·t<n>` exchange header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
     #[arg(
@@ -2235,7 +2236,7 @@ pub struct RecoverArgs {
     /// grammar as `--since` — a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw` (`45s`, `90m`, `2h`, `3d`,
     /// `1w`) = that long ago, an ISO8601 datetime (`2026-06-01T05:00:00Z`), or a bare date
     /// (`2026-06-01`) = LOCAL MIDNIGHT — PLUS the recover-only forms `@turn:<N>` (snapshot as
-    /// of the first line after genuine-user turn N — discover N from the `s·t<n>` header in
+    /// of the first line after genuine-user turn N — discover N from the `<id>·t<n>` header in
     /// `csift search` text, or `turn_index` in any `--format json` record) and `@line:<N>`
     /// (snapshot as of JSONL TRANSCRIPT line N — the `line_no` shown in this tool's output,
     /// NOT a file line of `--file`; for a 1-based FILE-line span of `--file` use `--file-lines`
@@ -2253,7 +2254,7 @@ pub struct RecoverArgs {
     /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
+    /// Discover turn indices from the `<id>·t<n>` exchange header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
     #[arg(
@@ -2795,7 +2796,7 @@ pub struct VerbatimArgs {
     /// Inclusive turn-index range in the shared grammar — `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) — 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
     /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
-    /// Discover turn indices from the `s·t<n>` header in `csift search` text output, or the
+    /// Discover turn indices from the `<id>·t<n>` exchange header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.
     #[arg(

@@ -1311,7 +1311,7 @@ pub(crate) fn fetch_records(
     let matcher = Matcher::pure();
     // A line/uuid ADDRESS restricts to named records; a `--turn` range (address empty) selects
     // every record of the named turns — the SAME per-file grouping `search` numbers turns by, so
-    // `show --turn N` is byte-identical to the turn `search` cites as `s1·tN`.
+    // `show --turn N` is byte-identical to the turn `search` cites as `<tok>·tN`.
     let address = AddressSet { lines, uuids };
     let use_address = !(address.lines.is_empty() && address.uuids.is_empty());
     let time_window = TimeWindow::from_args(None, None)?;
@@ -2681,6 +2681,53 @@ fn render_label(h: &Hit) -> String {
     h.class.path().to_string()
 }
 
+/// The first `n` chars of an id (codepoint-safe; ids are ASCII in practice). A shorter id
+/// renders whole.
+fn id_prefix(id: &str, n: usize) -> &str {
+    id.char_indices().nth(n).map_or(id, |(i, _)| &id[..i])
+}
+
+/// Header tokens for every DISTINCT owning transcript id in the output. A hex-led id (a
+/// session uuid / a bare-hex agent id) takes its first 8 chars; when two DISTINCT in-scope ids
+/// share those 8, the COLLIDING GROUP lengthens to its first 12 raw chars (for a uuid that
+/// spans the first dash — still a valid `@` target); a still-colliding pair falls back to the
+/// full id. A non-hex id shape (a teammate id embeds its NAME, not hex) is its own token —
+/// rendered in full. Deterministic and derived from the ids alone, so tokens are STABLE
+/// across invocations by construction.
+fn header_tokens(exchanges: &[Exchange]) -> HashMap<&str, String> {
+    let ids: std::collections::BTreeSet<&str> =
+        exchanges.iter().map(|e| e.session_id.as_str()).collect();
+    let mut tok: HashMap<&str, String> = HashMap::new();
+    let mut by8: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for id in ids {
+        if crate::path::is_uuid(id) || crate::path::is_bare_subagent_hex(id) {
+            by8.entry(id_prefix(id, 8)).or_default().push(id);
+        } else {
+            tok.insert(id, id.to_string());
+        }
+    }
+    for (p8, group) in by8 {
+        if let [only] = group.as_slice() {
+            tok.insert(only, p8.to_string());
+            continue;
+        }
+        let mut by12: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for id in group {
+            by12.entry(id_prefix(id, 12)).or_default().push(id);
+        }
+        for (p12, g) in by12 {
+            if let [only] = g.as_slice() {
+                tok.insert(only, p12.to_string());
+            } else {
+                for id in g {
+                    tok.insert(id, id.to_string());
+                }
+            }
+        }
+    }
+    tok
+}
+
 fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // SCOPE banner FIRST (before the empty check) so a bare `csift search '' <uuid>` fan-out
     // announces it spanned N subagents up front — same disclosure as list/files/turns.
@@ -2693,49 +2740,46 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         return;
     }
 
-    // ── Session-label table: each distinct session's FULL id is printed ONCE here (`s1 = …`),
-    //    then every exchange references the cheap `s1` label. An LLM follows the reference for
-    //    free, so the uuid never repeats per row (the dominant token cost of the old header). ──
-    let mut label: HashMap<&str, String> = HashMap::new();
-    let mut order: Vec<&Exchange> = Vec::new();
-    for ex in &outcome.exchanges {
-        if !label.contains_key(ex.session_id.as_str()) {
-            label.insert(ex.session_id.as_str(), format!("s{}", label.len() + 1));
-            order.push(ex);
-        }
-    }
-    for ex in &order {
-        let lab = &label[ex.session_id.as_str()];
-        if ex.is_subagent {
-            // The parent's own label if it is in scope, else its bare uuid.
-            let parent = label
-                .get(ex.parent_session_id.as_str())
-                .map(String::as_str)
-                .unwrap_or(ex.parent_session_id.as_str());
-            println!("{lab} = {} (subagent · parent {parent})", ex.session_id);
-        } else {
-            println!("{lab} = {}", ex.session_id);
-        }
-    }
+    // ── Self-resolving exchange headers: each header opens with a STABLE token — the leading
+    //    chars of the owning transcript id — derived from the id alone, never from enumeration
+    //    order, so a token pasted from ANY previous invocation still names the same transcript.
+    //    The token is a valid `@` target as-is (prefix resolution is fail-loud on ambiguity),
+    //    so every row is copy-paste addressable with zero joins, and the output has no
+    //    O(matched-sessions) legend block ahead of the first hit. ──
+    let tok = header_tokens(&outcome.exchanges);
 
     for ex in &outcome.exchanges {
         println!();
-        // `s1·t6` — the session label + 0-based turn index + the single compact local instant
-        // (offset already pins it; no second UTC copy). Per-hit timestamps are omitted in text
-        // (this turn time covers them); the JSON envelope still carries each hit's `ts_utc`.
-        let lab = &label[ex.session_id.as_str()];
-        println!(
-            "{lab}·t{}  {}",
-            ex.turn_index,
-            format_local_compact(ex.started_utc.as_deref())
-        );
+        // `<tok>·t6` — the id-prefix token + 0-based turn index (the SAME numbering
+        // `show --turn` addresses) + the single compact local instant (offset already pins it;
+        // no second UTC copy). Per-hit timestamps are omitted in text (this turn time covers
+        // them); the JSON envelope still carries each hit's `ts_utc`. A subagent exchange
+        // carries its parent on EVERY header (a tail-truncated read must still resolve); the
+        // parent token is the plain first-8 of the owning top-level uuid — no collision
+        // machinery (the resolver's fail-loud ambiguity check is the backstop).
+        let t = &tok[ex.session_id.as_str()];
+        if ex.is_subagent {
+            println!(
+                "{t}·t{} (parent {})  {}",
+                ex.turn_index,
+                id_prefix(&ex.parent_session_id, 8),
+                format_local_compact(ex.started_utc.as_deref())
+            );
+        } else {
+            println!(
+                "{t}·t{}  {}",
+                ex.turn_index,
+                format_local_compact(ex.started_utc.as_deref())
+            );
+        }
         for hit in &ex.hits {
             print_record_line(role_glyph(hit.class), hit);
             // Close the text-mode ID-law hole for SUBAGENT hits: a line number is per-FILE, so
             // it must be fetched with the SUBAGENT's own id (`session_id`), NEVER the parent
             // uuid (that would silently fetch the WRONG record). Top-level hits are safe (the
-            // `s1 = <uuid>` header IS the fetch id), so only the hazard rows carry the explicit
-            // ready-to-run command — the same address JSON's per-hit `refetch` gives.
+            // header token IS an `@`-targetable prefix of the fetch id), so only the hazard
+            // rows carry the explicit ready-to-run command (with the FULL id — zero ambiguity
+            // risk) — the same address JSON's per-hit `refetch` gives.
             if ex.is_subagent && !hit.from_sidecar && hit.line > 0 {
                 println!("      ↳ csift show @{} --line {}", ex.session_id, hit.line);
             }

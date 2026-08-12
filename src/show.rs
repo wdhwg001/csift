@@ -175,7 +175,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
         .map(|u| u.trim().to_string())
         .filter(|u| !u.is_empty())
         .collect();
-    // `--turn` addresses by turn index (0-based, the `s1·tN` search prints) rather than by
+    // `--turn` addresses by turn index (0-based, the `·tN` search's headers print) rather than by
     // jsonl line — the SAME shared range grammar (`N`/`A..B`/`N..`/`-k`). Clap forbids mixing
     // it with `--line`/`--uuid`, so it is a self-contained addressing mode.
     let turn_spec = args

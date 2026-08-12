@@ -646,13 +646,8 @@ fn search_text_returns_round_trip_exchange() {
     let out = h.run(&["search", "carry"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("s1 = "),
-        "the session-label table:\n{}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("·t"),
-        "exchanges reference the label: {}",
+        out.stdout.contains(&format!("{}·t", &SESS[..8])),
+        "the id-prefix header token:\n{}",
         out.stdout
     );
     assert!(out.stdout.contains("matched"));
@@ -2798,15 +2793,21 @@ fn search_text_output_is_token_lean() {
     let h = populated_home();
     let out = h.run(&["search", "carry", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // Session id declared ONCE in an `s1 = <uuid>` table; exchanges reference the `s1·t<n>` label.
+    // Every exchange header opens with the STABLE id-prefix token (`<first-8>·t<n>`) — no
+    // per-invocation `sN` ordinal, no `sN = <uuid>` legend block anywhere in the output.
     assert!(
-        out.stdout.contains(&format!("s1 = {SESS}")),
-        "session-label table: {}",
+        out.stdout.contains(&format!("{}·t", &SESS[..8])),
+        "id-prefix header token: {}",
         out.stdout
     );
     assert!(
-        out.stdout.contains("s1·t"),
-        "exchange references the label: {}",
+        !out.stdout.lines().any(|l| l.starts_with("s1 = ")),
+        "no legend line: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("s1·t"),
+        "no ordinal header: {}",
         out.stdout
     );
     // The old heavyweight header is gone: no `═══` rule, no uppercase `SESSION `/`TURN `.
@@ -2820,11 +2821,11 @@ fn search_text_output_is_token_lean() {
         "no uppercase TURN: {}",
         out.stdout
     );
-    // The uuid appears exactly once (in the table), not repeated per exchange.
+    // The FULL uuid never repeats per exchange — the 8-char prefix token carries each header.
     assert_eq!(
         out.stdout.matches(SESS).count(),
-        1,
-        "the full uuid is printed once, then referenced: {}",
+        0,
+        "the full uuid is never printed; the prefix token references it: {}",
         out.stdout
     );
     // Timestamps are single local+offset (no `(<UTC>)` second copy on the turn header).
@@ -2832,6 +2833,208 @@ fn search_text_output_is_token_lean() {
         !out.stdout.contains(" (2026-"),
         "no parenthesised UTC copy: {}",
         out.stdout
+    );
+}
+
+#[test]
+fn search_header_tokens_are_stable_across_invocations() {
+    // The header token derives from the transcript id (its leading chars), never from
+    // enumeration order — two identical invocations emit byte-identical output, so a token
+    // pasted from an earlier run still names the same transcript.
+    let h = populated_home();
+    let a = h.run(&["search", "carry"]);
+    let b = h.run(&["search", "carry"]);
+    assert!(
+        a.success && b.success,
+        "stderr: {} / {}",
+        a.stderr,
+        b.stderr
+    );
+    assert_eq!(
+        a.stdout, b.stdout,
+        "byte-identical output across identical invocations"
+    );
+}
+
+/// Three top-level sessions for the collision tests: two ids share their first 8 chars, the
+/// third does not. Each carries one searchable round-trip seeded with `SEEDWORD`.
+fn header_collision_scenario(h: &Home) -> (&'static str, &'static str, &'static str) {
+    let enc = "-Users-dev-example-project";
+    let c1 = "aaaabbbb-1111-4000-8000-000000000001";
+    let c2 = "aaaabbbb-2222-4000-8000-000000000002";
+    let solo = "ccccdddd-3333-4000-8000-000000000003";
+    for (sess, word) in [(c1, "COLLIDEONE"), (c2, "COLLIDETWO"), (solo, "SOLOWORD")] {
+        h.write(
+            &format!("{enc}/{sess}.jsonl"),
+            &format!(
+                "{}\n{}\n",
+                format_args!(
+                    r#"{{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"SEEDWORD {word}"}}}}"#
+                ),
+                format_args!(
+                    r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"ack {word}"}}]}}}}"#
+                ),
+            ),
+        );
+    }
+    (c1, c2, solo)
+}
+
+#[test]
+fn search_header_token_collision_lengthens_the_group_only() {
+    // Two DISTINCT ids sharing their first 8 chars lengthen TOGETHER to their first 12 raw
+    // chars (for a uuid that spans the first dash — still a valid `@` target); the
+    // non-colliding third id stays at 8. The bare collided 8-prefix never appears as a token.
+    let h = Home::new();
+    let _ = header_collision_scenario(&h);
+    let out = h.run(&["search", "SEEDWORD"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("aaaabbbb-111\u{b7}t"),
+        "colliding id 1 lengthens to 12: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("aaaabbbb-222\u{b7}t"),
+        "colliding id 2 lengthens to 12: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("ccccdddd\u{b7}t"),
+        "non-collider stays at 8: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("aaaabbbb\u{b7}t"),
+        "the collided bare 8-prefix must not appear as a token: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn search_lengthened_uuid_token_resolves_and_short_prefix_fails_loud() {
+    // A collision-lengthened header token (12 chars, spanning the uuid's first dash) is a
+    // valid `@` target; the ambiguous bare 8-prefix fails loud naming the candidates.
+    let h = Home::new();
+    let (c1, c2, _) = header_collision_scenario(&h);
+    let one = h.run(&["search", "SEEDWORD", "@aaaabbbb-111"]);
+    assert!(one.success, "stderr: {}", one.stderr);
+    assert!(one.stdout.contains("COLLIDEONE"), "got: {}", one.stdout);
+    assert!(
+        !one.stdout.contains("COLLIDETWO"),
+        "the sibling session must be out of scope: {}",
+        one.stdout
+    );
+    let ambi = h.run(&["search", "SEEDWORD", "@aaaabbbb"]);
+    assert!(!ambi.success, "an ambiguous prefix must error");
+    assert!(
+        ambi.stderr.contains("AMBIGUOUS") && ambi.stderr.contains(c1) && ambi.stderr.contains(c2),
+        "the error names both candidates: {}",
+        ambi.stderr
+    );
+}
+
+#[test]
+fn search_subagent_header_carries_parent_token_on_every_exchange() {
+    // EVERY subagent exchange header carries `(parent <first-8-of-owning-uuid>)` — a
+    // tail-truncated read must still resolve ownership; top-level headers carry no parent.
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["search", "", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains(&format!("sub111\u{b7}t0 (parent {})", &SESS[..8])),
+        "subagent header carries the parent token: {}",
+        out.stdout
+    );
+    for line in out.stdout.lines() {
+        if line.starts_with(&format!("{}\u{b7}t", &SESS[..8])) {
+            assert!(
+                !line.contains("(parent"),
+                "a top-level header must not carry a parent: {line}"
+            );
+        }
+    }
+}
+
+/// A session owning two subagents whose 16-hex ids share their first 8 chars, plus one
+/// distinct-prefix subagent — the agent-side prefix-resolution fixtures.
+fn agent_prefix_scenario(h: &Home) -> (&'static str, &'static str, &'static str) {
+    let enc = "-Users-dev-example-project";
+    let sess = "11112222-3333-4000-8000-000000000004";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"lead"}}"#, "\n",
+        ),
+    );
+    let alpha = "e1e2a3b4c5d6f708";
+    let beta = "e1e2a3b4ffff0001";
+    let gamma = "f0a1b2c3d4e5f607";
+    for (agent, word) in [
+        (alpha, "AGENTALPHA"),
+        (beta, "AGENTBETA"),
+        (gamma, "AGENTGAMMA"),
+    ] {
+        h.write(
+            &format!("{enc}/{sess}/subagents/agent-{agent}.jsonl"),
+            &format!(
+                "{}\n",
+                format_args!(
+                    r#"{{"type":"user","isSidechain":true,"agentId":"{agent}","timestamp":"2026-06-07T05:00:02.000Z","message":{{"role":"user","content":"seed {word}"}}}}"#
+                ),
+            ),
+        );
+    }
+    (alpha, beta, gamma)
+}
+
+#[test]
+fn search_and_show_resolve_an_agent_id_prefix_token() {
+    // An 8-char prefix of a subagent's bare-hex id — the exact header token `search`
+    // emits — resolves as an `@` target on every target-taking surface.
+    let h = Home::new();
+    let (_, _, gamma) = agent_prefix_scenario(&h);
+    let out = h.run(&["search", "AGENTGAMMA", &format!("@{}", &gamma[..8])]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("AGENTGAMMA"), "got: {}", out.stdout);
+    let s = h.run(&["show", &format!("@{}", &gamma[..8]), "--line", "1"]);
+    assert!(s.success, "show by agent prefix: {}", s.stderr);
+    assert!(s.stdout.contains("AGENTGAMMA"), "got: {}", s.stdout);
+}
+
+#[test]
+fn search_agent_twelve_hex_token_falls_back_to_unique_prefix() {
+    // Two agents sharing their first 8 hex lengthen their header tokens to 12; a 12-hex
+    // token routes as an exact agent id, misses, and falls back to a UNIQUE literal-prefix
+    // match. The ambiguous 8-hex form fails loud naming both ids.
+    let h = Home::new();
+    let (alpha, beta, _) = agent_prefix_scenario(&h);
+    let out = h.run(&["search", "seed"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(&format!("{}\u{b7}t", &alpha[..12]))
+            && out.stdout.contains(&format!("{}\u{b7}t", &beta[..12])),
+        "colliding agent tokens lengthen to 12: {}",
+        out.stdout
+    );
+    let one = h.run(&["search", "AGENT", &format!("@{}", &alpha[..12])]);
+    assert!(one.success, "stderr: {}", one.stderr);
+    assert!(one.stdout.contains("AGENTALPHA"), "got: {}", one.stdout);
+    assert!(
+        !one.stdout.contains("AGENTBETA"),
+        "the sibling agent must be out of scope: {}",
+        one.stdout
+    );
+    let ambi = h.run(&["search", "AGENT", &format!("@{}", &alpha[..8])]);
+    assert!(!ambi.success, "an ambiguous agent prefix must error");
+    assert!(
+        ambi.stderr.contains("AMBIGUOUS")
+            && ambi.stderr.contains(alpha)
+            && ambi.stderr.contains(beta),
+        "the error names both agent ids: {}",
+        ambi.stderr
     );
 }
 
@@ -5810,7 +6013,7 @@ fn target_jsonl_file_path_scopes_to_session() {
     let out = h.run(&["search", "carry", jsonl.to_str().unwrap(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains(SESS),
+        out.stdout.contains(&format!("{}\u{b7}t", &SESS[..8])),
         "scoped to the session: {}",
         out.stdout
     );
@@ -6115,7 +6318,7 @@ fn target_at_uuid_prefix_resolves_unique_and_errors_on_ambiguity() {
     let none = h.run(&["list", "@99999999"]);
     assert!(!none.success);
     assert!(
-        none.stderr.contains("no session id starts with"),
+        none.stderr.contains("no session or agent id starts with"),
         "{}",
         none.stderr
     );
@@ -7425,7 +7628,7 @@ fn search_at_uuid_path_scopes_to_session() {
     let out = h.run(&["search", "", at(SESS).as_str()]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("s1 = "),
+        out.stdout.contains(&format!("{}·t", &SESS[..8])),
         "scoped search should return the session's exchanges: {}",
         out.stdout
     );

@@ -1067,6 +1067,14 @@ pub fn resolve_session_files(
             String,
             std::collections::BTreeSet<String>,
         > = std::collections::BTreeMap::new();
+        // The prefix-match domain is the UNION of top-level session uuids and SUBAGENT agent
+        // ids — `search` emits an id-prefix header token for subagent exchanges too, and every
+        // emitted token must round-trip as an `@` target. Agent hits are collected apart so a
+        // unique agent match dispatches down the agent path (its subtree, per scope).
+        let mut prefix_agent_hits: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeSet<String>,
+        > = std::collections::BTreeMap::new();
         let have_filter = !session_ids.is_empty() || !session_prefixes.is_empty();
         for pd in &dirs {
             let read = match std::fs::read_dir(&pd.dir) {
@@ -1078,6 +1086,37 @@ pub fn resolve_session_files(
                 let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
                 if is_file && p.extension().is_some_and(|e| e == "jsonl") {
                     let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+                    // COLLISION GUARD (§2.1): when this dir was resolved from a REAL path, the
+                    // lossy encoding means a DIFFERENT cwd can share it. Keep only files whose
+                    // recorded `cwd` IS this target — so a sibling's sessions (and their
+                    // subagents) never leak in. A file whose `cwd` is ABSENT is kept. (Runs
+                    // BEFORE the prefix domain below, so an out-of-target session contributes
+                    // neither itself nor its subagent ids.)
+                    if let Some(want) = &pd.target_cwd {
+                        if let Some(stored) = read_first_cwd(&p) {
+                            if !cwd_equivalent(&stored, want) {
+                                continue;
+                            }
+                        }
+                    }
+                    // UNION DOMAIN: a prefix may name a subagent of a session that itself does
+                    // NOT match, so agent-id enumeration runs before the keep/skip filter. Cost
+                    // is only paid on a prefix-targeted invocation.
+                    if !session_prefixes.is_empty() {
+                        if let Ok(subs) = crate::subagent::subagent_transcript_files(&p) {
+                            for sp in subs {
+                                let sid = crate::subagent::session_id_from_path(&sp);
+                                for pfx in &session_prefixes {
+                                    if sid.starts_with(pfx.as_str()) {
+                                        prefix_agent_hits
+                                            .entry(pfx.clone())
+                                            .or_default()
+                                            .insert(sid.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // An exact id OR a uuid-PREFIX (`@13d9645a…`) keeps the file.
                     let matched_prefix = session_prefixes
                         .iter()
@@ -1089,17 +1128,6 @@ pub fn resolve_session_files(
                             continue;
                         }
                     }
-                    // COLLISION GUARD (§2.1): when this dir was resolved from a REAL path, the
-                    // lossy encoding means a DIFFERENT cwd can share it. Keep only files whose
-                    // recorded `cwd` IS this target — so a sibling's sessions (and their
-                    // subagents) never leak in. A file whose `cwd` is ABSENT is kept.
-                    if let Some(want) = &pd.target_cwd {
-                        if let Some(stored) = read_first_cwd(&p) {
-                            if !cwd_equivalent(&stored, want) {
-                                continue;
-                            }
-                        }
-                    }
                     if let Some(pfx) = matched_prefix {
                         prefix_hits.entry(pfx).or_default().insert(stem.to_string());
                     }
@@ -1108,18 +1136,33 @@ pub fn resolve_session_files(
             }
         }
 
-        // A uuid PREFIX must resolve to EXACTLY ONE session — else error (never silently pick).
+        // A PREFIX must resolve to EXACTLY ONE id across the union domain — else error (never
+        // silently pick). A unique SUBAGENT match dispatches exactly like a full `@<agent-id>`
+        // target; the top-level scan kept no file for it, so only the agent path emits.
         for pfx in &session_prefixes {
-            match prefix_hits.get(pfx).map(std::collections::BTreeSet::len) {
-                None | Some(0) => bail!(
-                    "no session id starts with `{pfx}` under the resolved target(s) — check the \
-                     prefix, or widen the scope."
+            let top = prefix_hits.get(pfx);
+            let agents = prefix_agent_hits.get(pfx);
+            let n_top = top.map_or(0, std::collections::BTreeSet::len);
+            let n_agents = agents.map_or(0, std::collections::BTreeSet::len);
+            match n_top + n_agents {
+                0 => bail!(
+                    "no session or agent id starts with `{pfx}` under the resolved target(s) — \
+                     check the prefix, or widen the scope."
                 ),
-                Some(1) => {}
-                Some(n) => {
-                    let ids: Vec<&str> = prefix_hits[pfx].iter().map(String::as_str).collect();
+                1 => {
+                    if let Some(a) = agents.and_then(|s| s.iter().next()) {
+                        agent_hexes.push(a.clone());
+                    }
+                }
+                n => {
+                    let ids: Vec<&str> = top
+                        .into_iter()
+                        .flatten()
+                        .chain(agents.into_iter().flatten())
+                        .map(String::as_str)
+                        .collect();
                     bail!(
-                        "`@{pfx}` is AMBIGUOUS: {n} sessions start with it ({}). Use more of the uuid.",
+                        "`@{pfx}` is AMBIGUOUS: {n} ids start with it ({}). Use more of the id.",
                         ids.join(", ")
                     );
                 }
@@ -1200,6 +1243,37 @@ fn resolve_agent_subtree(
                 }
             }
             return Ok(out);
+        }
+    }
+    // Exact id matched nothing. A collision-lengthened `search` header token is a PREFIX of a
+    // bare-hex agent id (12 hex chars routes here as an exact-id shape), so before giving up,
+    // try a unique literal-prefix match over the in-scope agent ids — fail-loud on ambiguity,
+    // a unique hit resolves exactly like the full id.
+    if hex.len() >= 12 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        let mut hits: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for pd in dirs {
+            for top in top_level_jsonls(&pd.dir) {
+                for p in crate::subagent::subagent_transcript_files(&top)? {
+                    let sid = crate::subagent::session_id_from_path(&p);
+                    if sid.starts_with(hex) {
+                        hits.insert(sid);
+                    }
+                }
+            }
+        }
+        match hits.len() {
+            1 => {
+                let full = hits.iter().next().map(String::as_str).unwrap_or(hex);
+                return resolve_agent_subtree(dirs, full, scope);
+            }
+            n if n > 1 => {
+                let ids: Vec<&str> = hits.iter().map(String::as_str).collect();
+                bail!(
+                    "`@{hex}` is AMBIGUOUS: {n} agent ids start with it ({}). Use more of the id.",
+                    ids.join(", ")
+                );
+            }
+            _ => {}
         }
     }
     bail!(
@@ -1332,12 +1406,27 @@ pub fn is_subagent_id(s: &str) -> bool {
     is_bare_subagent_hex(s) || is_teammate_agent_id(s)
 }
 
-/// True for a session-uuid PREFIX `@13d9645a` form: a dash-less hex run of 4..=11 chars — long
-/// enough to be near-collision-free (a uuid's first segment is 8 hex = 4 billion), short enough
-/// that it is unambiguously NEITHER a full uuid (32 hex + dashes) NOR an agent hex (≥12). The
-/// caller prefix-matches it against session uuids and errors if it is not unique.
+/// True for a session-uuid PREFIX in either emitted form:
+/// - the short dash-less run (`@13d9645a`, 4..=11 hex) — long enough to be near-collision-free
+///   (a uuid's first segment is 8 hex = 4 billion), short enough that it is unambiguously
+///   NEITHER a full uuid (32 hex + dashes) NOR an agent hex (≥12);
+/// - a longer LITERAL prefix of the canonical `8-4-4-4-12` layout (`@13d9645a-3a5b`, 12..=35
+///   chars, a dash exactly at each template position) — the collision-lengthened header token
+///   `search` emits when two in-scope transcript ids share their first 8 chars.
+///
+/// The caller prefix-matches either form against the enumerated ids and errors if it is not
+/// unique. (A dash-less run of ≥12 hex is claimed as an agent id BEFORE this predicate runs.)
 fn is_uuid_prefix(s: &str) -> bool {
-    (4..=11).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_hexdigit())
+    if (4..=11).contains(&s.len()) {
+        return s.bytes().all(|b| b.is_ascii_hexdigit());
+    }
+    if (12..36).contains(&s.len()) {
+        return s.bytes().enumerate().all(|(i, b)| match i {
+            8 | 13 | 18 | 23 => b == b'-',
+            _ => b.is_ascii_hexdigit(),
+        });
+    }
+    false
 }
 
 #[cfg(test)]
@@ -1696,12 +1785,18 @@ mod tests {
     fn is_uuid_prefix_covers_first_segment_not_full_or_agent() {
         assert!(is_uuid_prefix("13d9")); // 4 hex (minimum)
         assert!(is_uuid_prefix("13d9645a")); // 8 hex (the uuid first segment)
-        assert!(is_uuid_prefix("13d9645a3a5")); // 11 hex (max)
-                                                // Too short (<4), too long (≥12 = agent-hex territory), non-hex, dashed → NOT a prefix.
+        assert!(is_uuid_prefix("13d9645a3a5")); // 11 hex (max dash-less)
+                                                // Too short (<4), dash-less ≥12 (agent-hex territory), non-hex, off-template dash → NOT a prefix.
         assert!(!is_uuid_prefix("13d")); // 3
-        assert!(!is_uuid_prefix("13d9645a3a5b")); // 12 → agent hex
+        assert!(!is_uuid_prefix("13d9645a3a5b")); // 12 dash-less → agent hex
         assert!(!is_uuid_prefix("13d9645g")); // non-hex g
-        assert!(!is_uuid_prefix("13d9-645a")); // dashed
+        assert!(!is_uuid_prefix("13d9-645a")); // dash off the 8-4-4-4-12 template
+                                               // LITERAL layout prefixes (collision-lengthened header tokens) ARE prefixes.
+        assert!(is_uuid_prefix("13d9645a-3a5")); // 12 chars, dash at template position 8
+        assert!(is_uuid_prefix("13d9645a-3a5b-4a92")); // deeper into the layout
+        assert!(is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b9")); // 35 (max — one short of full)
+        assert!(!is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b90")); // 36 = a FULL uuid, not a prefix
+        assert!(!is_uuid_prefix("13d9645a-3a5g")); // non-hex inside the layout
     }
 
     #[test]
