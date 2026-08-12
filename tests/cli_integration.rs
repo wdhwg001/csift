@@ -1319,7 +1319,14 @@ fn search_category_filter_and_max_count() {
     // records are spawn-prompt openers, now `agent.communication.inbox`, not `user`.)
     let out = h.run(&["search", "carry", "--max-count", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("matched 1"), "{}", out.stdout);
+    // The footer reports the TRUE match total (both-ends law) — the cap only windows the
+    // emitted exchanges, and the drop is disclosed at BOTH ends.
+    assert!(out.stdout.contains("matched 3"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("showing earliest 1"),
+        "the head banner discloses the window: {}",
+        out.stdout
+    );
     assert!(
         out.stdout.contains("dropped by --max-count"),
         "{}",
@@ -3039,6 +3046,105 @@ fn search_agent_twelve_hex_token_falls_back_to_unique_prefix() {
 }
 
 #[test]
+fn search_match_banner_at_head_mirrors_footer_and_json() {
+    // The head banner carries the TRUE totals + direction before the first exchange; the
+    // footer repeats the same numbers; the JSON summary's post-cap `matched` +
+    // `dropped_by_cap` reconcile to the banner total.
+    let h = Home::new();
+    let _ = header_collision_scenario(&h);
+    let out = h.run(&["search", "SEEDWORD"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // No subagents in scope → the scope banner is suppressed, so the banner is line 1.
+    assert_eq!(
+        out.stdout.lines().next(),
+        Some("matches  3 exchanges · 3 sessions · oldest first"),
+        "head banner: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("matched 3 exchanges · 3 sessions · label=all"),
+        "footer repeats the totals: {}",
+        out.stdout
+    );
+    let js = h.run(&["search", "SEEDWORD", "--format", "json"]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    assert!(
+        !js.stdout.contains("matches  "),
+        "no banner in JSON mode: {}",
+        js.stdout
+    );
+    let last: serde_json::Value =
+        serde_json::from_str(js.stdout.lines().next_back().unwrap()).unwrap();
+    assert_eq!(last["matched"], serde_json::json!(3));
+    assert_eq!(last["sessions"], serde_json::json!(3));
+
+    // Capped: the banner keeps the TRUE total and discloses the window; JSON reconciles.
+    let cap = h.run(&["search", "SEEDWORD", "--max-count", "2"]);
+    assert!(cap.success, "stderr: {}", cap.stderr);
+    assert_eq!(
+        cap.stdout.lines().next(),
+        Some("matches  3 exchanges · 3 sessions · oldest first · showing earliest 2"),
+        "capped head banner: {}",
+        cap.stdout
+    );
+    assert!(
+        cap.stdout.contains("matched 3 exchanges · 3 sessions")
+            && cap.stdout.contains("1 dropped by --max-count"),
+        "capped footer: {}",
+        cap.stdout
+    );
+    let capjs = h.run(&["search", "SEEDWORD", "--max-count", "2", "--format", "json"]);
+    let last: serde_json::Value =
+        serde_json::from_str(capjs.stdout.lines().next_back().unwrap()).unwrap();
+    assert_eq!(
+        last["matched"].as_u64().unwrap() + last["dropped_by_cap"].as_u64().unwrap(),
+        3,
+        "JSON post-cap matched + dropped reconcile to the banner total"
+    );
+
+    // Single-purpose modes carry no banner.
+    let c = h.run(&["search", "SEEDWORD", "-c"]);
+    assert!(
+        !c.stdout.contains("matches  "),
+        "no banner under -c: {}",
+        c.stdout
+    );
+    let l = h.run(&["search", "SEEDWORD", "-l"]);
+    assert!(
+        !l.stdout.contains("matches  "),
+        "no banner under -l: {}",
+        l.stdout
+    );
+    let cb = h.run(&["search", "SEEDWORD", "--count-by", "label"]);
+    assert!(
+        !cb.stdout.contains("matches  "),
+        "no banner under --count-by: {}",
+        cb.stdout
+    );
+}
+
+#[test]
+fn search_zero_match_diagnosis_discloses_skipped_lines() {
+    // An absence claim over a corpus with malformed lines must disclose them: the stderr
+    // zero-match diagnosis carries the skipped count (the fixture home has malformed lines).
+    let h = populated_home();
+    let out = h.run(&["search", "ZZNOSUCHPATTERNZZ"]);
+    assert!(out.success, "a zero-match search exits 0: {}", out.stderr);
+    assert!(
+        out.stderr.contains("0 matches"),
+        "diagnosis frames the absence: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("malformed line(s) skipped")
+            && out.stderr.contains("parseable lines only"),
+        "diagnosis disclosed the skipped lines: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn files_bare_uuid_positional_routes_to_session() {
     // The documented `csift files <uuid>` form (a bare uuid in the positional slot) now
     // resolves as a session filter across all projects, not as a (nonexistent) project
@@ -4607,7 +4713,9 @@ fn search_global_max_count_caps_across_files() {
     }
     let out = h.run(&["search", "zzcap", "--max-count", "1", "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains("matched 1"));
+    // TRUE total at both ends; the emitted window + global drop are disclosed.
+    assert!(out.stdout.contains("matched 2"), "{}", out.stdout);
+    assert!(out.stdout.contains("showing earliest 1"), "{}", out.stdout);
     assert!(out.stdout.contains("1 dropped"));
     assert!(out.stdout.contains("by --max-count"));
 }

@@ -174,6 +174,12 @@ pub struct Exchange {
 #[derive(Debug, Clone, Default)]
 pub struct SearchOutcome {
     pub exchanges: Vec<Exchange>,
+    /// TRUE total of matching exchanges BEFORE any `--max-count` window (== `exchanges.len()`
+    /// when uncapped). The head banner and tail footer both report THIS number (§6.2 both-ends
+    /// law) — a capped run additionally discloses the emitted window.
+    pub total_matched: usize,
+    /// Distinct matching transcripts BEFORE the cap (pairs with `total_matched`).
+    pub total_sessions: usize,
     /// How many matching exchanges were dropped by `--max-count` (0 if none).
     pub dropped_by_cap: usize,
     /// Total malformed lines skipped while scanning (surfaced, never hidden).
@@ -754,6 +760,9 @@ fn axis_census(
 struct EmptyDiagnosis {
     sessions_in_scope: usize,
     active_filters: String,
+    /// Malformed lines skipped during the scan — an absence claim over a corpus with skipped
+    /// lines must DISCLOSE them (the claim is definitive only for the parseable lines).
+    skipped_lines: usize,
     label_filtered: bool,
     /// `Some((per-leaf rows richest-first, total records))` when a `-t`/`-T` filter was active
     /// AND the pattern matches under OTHER labels; `None` when no label filter, or the pattern
@@ -794,6 +803,14 @@ fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
          Scope: {} session(s). Active filters: {}.",
         diag.sessions_in_scope, diag.active_filters
     );
+    if diag.skipped_lines > 0 {
+        // Integrity caveat: skipped lines were never matched, so the absence claim spans
+        // only the parseable corpus — an honest zero must say so.
+        eprintln!(
+            "csift: caveat: {} — the absence is definitive for parseable lines only.",
+            crate::text::malformed_note(diag.skipped_lines)
+        );
+    }
     let quoted = if pattern.is_empty() {
         "the filter".to_string()
     } else {
@@ -978,6 +995,10 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         timestamp_sort_key(a.started_utc.as_deref())
             .cmp(&timestamp_sort_key(b.started_utc.as_deref()))
     });
+    // TRUE totals, captured BEFORE the cap window — the head banner and tail footer report
+    // these; the JSON summary keeps its post-cap `matched` + `dropped_by_cap` pair unchanged.
+    outcome.total_matched = all.len();
+    outcome.total_sessions = distinct_session_count(&all);
 
     // `--max-count 0` = uncapped (the crate-wide convention).
     if let Some(cap) = args.max_count.filter(|&n| n > 0) {
@@ -1202,6 +1223,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         let diag = EmptyDiagnosis {
             sessions_in_scope: outcome.scope_top + outcome.scope_sub,
             active_filters: active_filters_str(args),
+            skipped_lines: outcome.skipped_lines,
             label_filtered,
             excluded_by_label,
         };
@@ -2681,6 +2703,15 @@ fn render_label(h: &Hit) -> String {
     h.class.path().to_string()
 }
 
+/// Singular/plural word pick for a count (the banner + footer share one rule).
+fn noun<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
+    if n == 1 {
+        one
+    } else {
+        many
+    }
+}
+
 /// The first `n` chars of an id (codepoint-safe; ids are ASCII in practice). A shorter id
 /// renders whole.
 fn id_prefix(id: &str, n: usize) -> &str {
@@ -2739,6 +2770,27 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         }
         return;
     }
+
+    // ── MATCH banner (head): the TRUE totals + the emission direction, echoed BEFORE the
+    //    first exchange so a `| head`-truncated read still knows what it is looking at; the
+    //    tail footer repeats the totals (the both-ends placement law — anything load-bearing
+    //    must survive a consumer that amputates one end). Free: the timeline is fully
+    //    materialized before the first output byte. An active cap discloses the emitted
+    //    window inline; undated exchanges (sorted last) are called out only when present. ──
+    print!(
+        "matches  {} {} · {} {} · oldest first",
+        outcome.total_matched,
+        noun(outcome.total_matched, "exchange", "exchanges"),
+        outcome.total_sessions,
+        noun(outcome.total_sessions, "session", "sessions"),
+    );
+    if outcome.dropped_by_cap > 0 {
+        print!(" · showing earliest {}", outcome.exchanges.len());
+    }
+    if outcome.exchanges.iter().any(|ex| ex.started_utc.is_none()) {
+        print!(" · undated last");
+    }
+    println!();
 
     // ── Self-resolving exchange headers: each header opens with a STABLE token — the leading
     //    chars of the owning transcript id — derived from the id alone, never from enumeration
@@ -2800,22 +2852,18 @@ fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         }
     }
 
-    // ── Compact lowercase footer: match + distinct-session totals (both always present — each is
-    //    one cheap number, isolated by `-c`/`-l` only for piping), drop accounting, unresolved. ──
+    // ── Compact lowercase footer: the SAME true totals the head banner carries (the both-ends
+    //    law — `-c`/`-l` isolate a single number for piping), drop accounting, unresolved. ──
     let cat = if args.labels.is_empty() {
         "all".to_string()
     } else {
         args.labels.join(",")
     };
     println!();
-    let n = outcome.exchanges.len();
-    let ex_word = if n == 1 { "exchange" } else { "exchanges" };
-    let n_sessions = distinct_session_count(&outcome.exchanges);
-    let sess_word = if n_sessions == 1 {
-        "session"
-    } else {
-        "sessions"
-    };
+    let n = outcome.total_matched;
+    let ex_word = noun(n, "exchange", "exchanges");
+    let n_sessions = outcome.total_sessions;
+    let sess_word = noun(n_sessions, "session", "sessions");
     print!("matched {n} {ex_word} · {n_sessions} {sess_word} · label={cat}");
     if !args.labels_not.is_empty() {
         print!(" · label-not={}", args.labels_not.join(","));
