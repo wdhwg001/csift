@@ -1,6 +1,6 @@
 # SPEC.md — csift
 
-> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All eleven subcommands (§6) are built; §11 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `verbatim` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
+> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All eleven subcommands (§6) are built; §10 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `verbatim` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
 
 ---
 
@@ -373,257 +373,6 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
-> **v0.2 BREAKING-CHANGE LEDGER (authoritative — supersedes any conflicting older text
-> in this section).** The 0.2 ergonomics rework (0 backcompat, one-way-per-intent):
-> - **`show` (new, §6.11)** owns record FETCHING; `search --line/--uuid` (and the
->   `<hex>:<spec>` pin) are REMOVED. `show --raw` emits verbatim jsonl line bytes.
-> - **`stats` (new, §6.12)**: one-scan per-session aggregates (tokens by model, tool
->   counts, turns, span, compactions).
-> - **envelope v2 (§8.2)**: every `--format json` stream = ONE header line +
->   kind-tagged rows + ONE summary line, no exceptions; the jsonl-line key is `line`
->   everywhere; a boundary's classifier is `cause`; files' grouping key is always
->   `path`; agents' bare-node `--agent` JSON special case is gone; whoami emits
->   `identity` rows; verbatim's `skipped_lines` trailer folded into `summary`.
-> - **Flags**: `-t` long form is `--label` (category/selector vocabulary retired);
->   `agents --kind` → `--shape` (+ node field `shape`); `recover --line-range` →
->   `--file-lines`; span switches are the uniform pair `--subagents`/`--no-subagents`
->   (verbatim's `--include-subagents` gone; agents rejects both); `verbatim --budget-unit` +
->   the five tuning knobs (`--agent-run-threshold`, `--agent-rich-min-chars`,
->   `--agent-declaration-max-chars`, `--keep-first`, `--no-keep-first`) are REMOVED
->   (`--budget` is chars; `--profile heavy|light` is the whole tuning surface);
->   `--siblings` is a zero-arg fixed policy (message units always; thinking≤2,
->   tool.use≤3, tool.result≤3, harness≤2; overflow surfaces an explicit
->   `(+N more · csift show …)` pointer + JSON `siblings_hidden`/`turn_lines`);
->   `image --id` takes bare digits or `L<line>i<n>` (the `#N` input form errors).
-> - **Guardrails**: a bare id target errors "did you mean '@<id>'?"; a search PATTERN
->   starting `@` errors; a uuid-shaped PATTERN notes on stderr; the turn window (v0.5 `--turn`)
->   now INTERSECTS `--since`/`--until`.
-
-> **v0.3 CHANGE LEDGER (authoritative — supersedes any conflicting older text).**
-> - **ONE range-token grammar** (extended in v0.4): every range flag (`show --line`/`--turn`,
->   the per-command turn window — v0.5 `--turn` — and `--file-lines`) takes `N` · `A..B` · `N..`
->   (to the end) · `..N` (from the start) · `-k` = k-th from the end (`-3..` = the last 3),
->   resolved per-target; the dash form `A-B` is REMOVED (hard error teaching the `..` spelling),
->   a reversed closed range errors. The turn window + `--since`/`--until`
->   now INTERSECT on EVERY command (`files`/`verbatim` dropped their leftover
->   mutual-exclusion bails).
-> - **`-T`/`--label-not`** (search): label EXCLUSION, same selector grammar as `-t` (the
->   rg -t/-T duality); richest-SURVIVING-view dedup; statically-empty combos hard-error.
-> - **`--sessions-from <FILE|->`** on every multi-target command (list/search/stats/
->   agents/files/recover/plan/verbatim/image): union an id list into the scope; empty list =
->   empty scope. **`search -l`** emits the matching OWNING session ids (uncapped) to pipe
->   into it. **`search --raw`** emits matched records' verbatim jsonl lines (stdout pure,
->   notes on stderr).
-> - **`refetch`**: search JSON hits + verbatim `collapsed_agents` rows carry the ready-to-run
->   `csift show` command addressed at the line-owning transcript.
-> - **`verbatim` REQUIRES a target** (budget × every-session flood guard). **`list`** gains
->   `--since`/`--until` (activity-span intersection); **`stats`** gains the turn window (v0.5 `--turn`)
->   (and its positional accepts encoded `-Users-…` dirs — an `allow_hyphen_values`
->   omission fixed).
-> - **Teammate ids with dashed NAMES round-trip** (`aP1-engine-9cf2…`): the
->   `is_teammate_agent_id` head accepts `[A-Za-z0-9-]` with an explicit `!is_uuid` guard.
-
-> **v0.4 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
-> 0.4 rework (0 backcompat; `csift 0.4.0`):
-> - **`turns` → `verbatim`** (rename, zero-BC — old `csift turns` is now an UNRECOGNIZED
->   subcommand; the module stays `src/turns.rs`, the handler is `run_verbatim`). `verbatim`
->   is REFRAMED as the compaction-fidelity SPECIALIST: it restores the verbatim turns a
->   COMPACTION SUMMARY clipped — NOT the tail-peek tool. The "read a session's recent turns
->   from the live transcript" intent moved to **`show --turn`** (below). The subcommand
->   COUNT is still eleven.
-> - **`show --turn N|A..B|-k`** (§6.11): a THIRD addressing mode (mutually exclusive with
->   `--line`/`--uuid`) that fetches EVERY record of the named turn(s); the turn numbering is
->   IDENTICAL to `search`'s `s1·tN`. `show --turn -3..` = the last 3 turns (the tail-peek /
->   live-monitoring intent).
-> - **Range grammar extended** (`text::parse_range_spec` + `RangeSpec::resolve`, replacing
->   `parse_range`). EVERY range flag (`show --line`, the per-command `--turn` window, and
->   `--file-lines`) now
->   accepts `N` · `A..B` · `N..` (to the end) · `..N` (from the start) ·
->   `-k` = the k-th from the end (`-3..` = the last 3, `-1` = the last) — all inclusive. The
->   dash form `A-B` still hard-errors (teaches `..`); a statically reversed closed range
->   (`9..3`) errors. Open / from-end forms resolve PER TARGET (the last 3 turns of EACH
->   session). The space form `--turn -3..` parses (`allow_hyphen_values`).
-> - **`search --count-by <AXIS>`** (see the v0.5.0 ledger for the rename):
->   a per-KEY census of the matched records along one closed axis (empty PATTERN =
->   a whole-scope census; on the `label` axis a leaf's count = how many records `-t <leaf>`
->   would surface). JSON emits `census` rows.
-> - **Empty-result self-diagnosis** (search): a zero-match run prints a stderr diagnosis —
->   "a DEFINITIVE absence (exit 0), NOT an error", the active filters, and (when `-t`/`-T`
->   was on) an ACTIVE PROBE naming the label(s) the pattern DOES occur under. JSON summary
->   gains `definitive_absence` / `active_filters` / `excluded_by_label`.
-> - **Flood guards**: **`list`** DEFAULT-caps an UNSCOPED (all-projects) listing to the 50
->   most-recently-active rows (drop reported: text footer + JSON `dropped_by_cap`;
->   `--max-count` overrides; a scoped query — a target / `--sessions-from` — is uncapped).
->   **`stats`** gained an opt-in `--max-count`. `files`/`agents` stay scope-bounded.
-> - **JSON field rename** (search summary): `session_ids` → **`transcript_ids`**,
->   `session_ids_truncated` → **`transcript_ids_truncated`** (named apart from `-l`'s
->   owning-session id stream).
-
-> **v0.5.0 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
-> 0.5.0 rework (0 backcompat; `csift 0.5.0`). Items 1–7 + 11 are BREAKING:
-> 1. **The per-command turn-window flag is renamed to `--turn`** on every command that had it
->    (`search`/`stats`/`files`/`recover`/`verbatim`/`image`; the old name carried a `-range`
->    suffix) — SAME range grammar (`N`/`A..B`/`N..`/`..N`/`-k`/`..`), same AND-intersection with
->    `--since`/`--until`. `show --turn` is unchanged. The parse-error label is now `--turn`; the
->    `files` text footer fragment now reads `turn=SPEC`.
-> 2. **The label census is generalized to `--count-by <AXIS>`** (search terminal mode; the old
->    flag was label-only). Closed axes: `label` | `tool` | `turn` | `session` | `pairing` |
->    `model`. `label` MULTI-counts (a record counts under every leaf it carries); the other axes
->    count each record ONCE, and records outside an axis's domain (no tool / pairing / model) are
->    EXCLUDED with the excluded count reported. `turn` sorts ASCENDING (a histogram; keys `t<N>`,
->    `<full-transcript-id>·t<N>` when >1 transcript in scope); the others sort count-DESC. JSON:
->    the old per-leaf census row kind is REPLACED by kind **`census`** `{axis, key, records}`;
->    summary `{axis, matched_records, distinct_keys, excluded_records, dropped_by_cap,
->    skipped_lines}`. Still conflicts with `-c`/`-l`/`--siblings`/`--raw`. The empty-result
->    diagnosis recommends `--count-by label`.
-> 3. **`agents --format json` is FLAT** (envelope v2, NO exceptions — the old nested
->    `{session_id, workflow_runs:[…children…], agents:[…]}` per-session object AND the bare-node
->    `--agent` special case are BOTH gone). Now: header → per session a light
->    `{kind:"session", session_id, runs:N, agents:N}` row → each in-scope workflow run a
->    `{kind:"run", …run fields…, session_id}` row (NO `children`) → its member `{kind:"agent",
->    …node fields…}` rows in tree PRE-ORDER → built-in agents pre-order → `{kind:"summary",
->    sessions, runs, agents}`. Tree NESTING is TEXT-mode only; JSON consumers rebuild it from
->    `parent_agent_id`/`depth`. A node unreachable from any root (a forged parent cycle) is
->    APPENDED, never dropped (the old nested shape silently dropped such nodes).
-> 4. **`show --turn` address-miss is a HARD error.** An EXPLICIT `--turn N` or `--turn A..B`
->    resolving to zero records errors naming the domain (`no such turn(s): t99 — the transcript
->    has 2 turn(s) (t0..t1); …`); open/from-end forms (`N..`/`..N`/`-k`/`..`) CLAMP (tail-peek
->    robustness). Both rendered and `--raw` modes.
-> 5. **`show` flood guard.** Default cap `DEFAULT_SHOW_CAP = 200` record units (keep-FIRST); the
->    text drop line is `+N more record unit(s) beyond the {cap}-unit cap · continue: csift show
->    @<id> --line A..B  (or --max-count 0 = uncapped)`; JSON summary gains `dropped_by_cap`,
->    `refetch_remainder`, `non_record_lines`. New `show --max-count N` flag; `--raw` caps by LINE
->    with an equivalent stderr note. A line-RANGE covering non-record lines prints `N line(s) in
->    the addressed range are not records (metadata/attachment — inspect with --raw)`.
-> 6. **`--max-count 0` = uncapped, uniformly** on `list`/`stats`/`search`/`show` (previously
->    `Some(0)` was a literal zero-cap absurdity).
-> 7. **Timestamps (text): ONE canonical form** — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`
->    (`2026-07-11 15:33:37 AEST(UTC+10)`). The OLD dual form `… AEST (2026-…Z)` and the bare
->    `…+10:00` form are GONE (the UTC copy invited timezone-math errors). `timez::format_timestamp`
->    (seconds) + `format_local_compact` (ms) share one renderer + `tz_marker`. JSON `ts_utc`/
->    `ts_local` unchanged.
-> 8. **`files` JSON summary gains `sessions`** (distinct owning sessions among emitted rows);
->    deliberately NO `dropped_by_cap` (files has no cap).
-> 9. **`verbatim` self-diagnosis** — a non-`--slice` run prints, per session with ZERO
->    compaction summaries, the stderr note `csift: note: @<id> has no compaction — nothing was
->    clipped; for plain reading use \`csift show @<id> --turn <N|A..B|-k..>\` (full records, no
->    budget)`.
-> 10. **`list` rows gain `sidecar_present: bool`** (the elicitation sidecar FILE exists = hook
->    installed; tri-state: present+pending = blocked / present+none = provably not blocked /
->    absent = cannot conclude).
-> 11. **Slash-command wrapper — BOTH tag orders.** Current CC emits `<command-message>` FIRST
->    (verified: 14 new-order sessions vs 35 old-order). Detection is `is_slash_command_wrapper`
->    (either leading tag; new `COMMAND_MESSAGE_PREFIX`). `is_genuine_user` now excludes BOTH
->    orders (a new-order wrapper no longer masquerades as human prose or opens a turn — turn
->    NUMBERING may shift on transcripts with new-order wrappers; a correctness fix). `classify`:
->    a with-args wrapper → `[user.message, harness.command.invocation]` with `user.message` FIRST
->    (richest-view law), so the unfiltered render is the extracted `/name args` (`slash_command_name`),
->    never wrapper XML; a no-args wrapper → `harness.command.invocation` only. An explicit
->    `-t harness.command.invocation` still renders the raw wrapper.
-> 12. **`pairing` JSON enum documented:** `paired` | `pending` | `orphan` | `null`.
-> 13. **`normalize_argv` fix (P0):** the subcommand is located by SCANNING over declared root
->    flags (+ their value tokens; `--flag=value` spans one token), so `csift --claude-home DIR
->    list @x --max-count 3` works — previously a pre-subcommand global flag disabled normalization
->    and any flag after a positional was swallowed by the PATH positional with a misleading "not a
->    project target" error. "Flag order is free" and "`--claude-home` any position" now hold in
->    combination.
-
-> **v0.5.1 CHANGE LEDGER (non-breaking; help-text surface only — `csift 0.5.1`).** The
-> `--help` parity release: the FIVE-DOCUMENT CONTRACT is now `SKILL.md` = the LLM manual ·
-> `--help` = the human (CLI-proficient) manual, INFORMATION-PARITY with SKILL but written in
-> plain prose with stronger structure/layout · `README.md` = promotion · `SPEC.md` = design
-> intent · `AGENTS.md` = maintenance guide. Behavior is unchanged; only help text moved:
-> 1. Root `csift --help` gains five human-toned sections: THE RULES EVERY COMMAND FOLLOWS
->    (exit codes / ranges / subagents / caps / time — the SKILL "five laws" in prose), JSON
->    OUTPUT (the envelope contract + jq idiom + id trio + `refetch`), PITFALLS WORTH KNOWING
->    UP FRONT (the SKILL wrong-assumptions table in prose), WHAT csift WILL NOT DO, and
->    RETENTION (`cleanupPeriodDays`).
-> 2. `search --help` gains THE LABEL TAXONOMY — the full 3-role / 25-leaf tree with per-leaf
->    one-liners, selector grammar, richest-view rule and the glyph legend (it previously
->    existed only in SKILL/SPEC).
-> 3. `show`/`stats`/`plan`/`whoami`/`image` `--help` gain JSON SCHEMA sections (fixture-
->    verified row/summary fields), completing per-command schema coverage (list/search/
->    agents/files/recover/verbatim already had one).
-> 4. Every `--sessions-from` help (×9) now states that resolved ids follow the command's
->    normal SPAN rules (span-by-default commands expand each session to its subagents; add
->    `--no-subagents` to pin).
-> 5. `whoami --help`'s composition example is fixed for the v0.5.0 flat envelopes (it
->    consumed `agents` JSON with bare `jq -r .field`; now `select(.kind=="identity")`).
-
-> **v0.6.0 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
-> fourth-audit release (a Sonnet 5 hands-on round surfaced one real parser trap and two
-> field-truthfulness gaps; every fix is root-cause, none is a doc workaround). Preceded by
-> v0.5.2, a help-only PATCH (search COUNT section: "integer EXCHANGE total" + `-l` routing)
-> that carried no ledger of its own.
-> 1. **`show` bad-flag attribution (bug fix, error-text surface).** `show`'s TARGET was the
->    only single non-Vec positional in the tree; with `allow_hyphen_values`, a mistyped or
->    foreign `--flag` was consumed AS the target and clap blamed the user's VALID target as
->    the surplus token ("unexpected argument '@…'") — the wrong-hypothesis rabbit hole.
->    TARGET is now a Vec (`num_args=1..`) with the run handler enforcing exactly-one, so a
->    bad long flag in ANY position falls into `parse_project_target` and is rejected BY
->    NAME with the same "did you mistype a flag?" error every sibling command gives; two
->    real targets get a pointed "show reads exactly ONE transcript per call" arity error
->    (addresses are per-FILE). The old-spelling did-you-mean tips (`--turn-range` → `--turn`)
->    are unchanged.
-> 2. **Census counts RECORDS, not section hits (bug fix, §6.2/§8.2 numbers change).** One
->    record can emit several per-section hits (a batched notification, a text+tool_use
->    assistant record); `--count-by` and the zero-match label probe counted each hit, so a
->    leaf tally could drift ABOVE what `-t <leaf>` surfaces (the documented invariant) and
->    comm-heavy scopes inflated hard (a real 8-signal record counted 8×). All censuses now
->    group hits per record (`record_groups`); the axis value is the first `Some` among the
->    record's section hits; `matched record(s)` wording is now literally true.
-> 3. **Pairing rides the tool BLOCK through communication views (§6.2 pairing domain
->    widened).** `pairing` is a property of the tool_use/tool_result join, but it was only
->    populated on `agent.tool.*`-classed hits — a SendMessage/spawn whose richest view is
->    `agent.communication.sent`/`.signal` (and a subagent-return `…inbox` on a tool_result)
->    fell OUTSIDE the pairing census. The frozen-SendMessage lane (the dominant stuck shape
->    in a teams session) is now `pending` under ANY selector: "any pending tools?" =
->    `csift search "" T --count-by pairing`, no `-t` needed. Record-text comm units (an
->    inbound teammate-message, an idle signal section) carry no tool_use_id and stay
->    outside the axis, reported as excluded.
-> 4. **`agents` `completed_*` is status-gated + new `last_activity_*` pair (BREAKING, agent
->    row).** `completed_utc/_local` (and `duration`) are non-null ONLY when
->    `status:"completed"` — a frozen teammate carried `completed_utc == pending_since_utc`,
->    a false "done" for any name-driven consumer (the TEXT tree had suppressed the
->    misleading line since v0.5.0; JSON now agrees). Every timestamped lane carries the new
->    `last_activity_utc/_local` pair (the tail newest-record instant; == `pending_since_*`
->    on a frozen lane). TEXT prints `completed`+`duration` only on a completed lane and
->    `last-seen` on a running-not-frozen one (a frozen lane keeps its PENDING line as the
->    sole instant carrier). `--order-by completion` and its `--since/--until` window run on
->    the terminal instant (`last_activity`) — numerically identical to the old behavior, so
->    frozen lanes still window on their freeze instant.
-> 5. **Help drift fixed in passing:** the `search --help` JSON hit-field list now includes
->    `pairing` (it was always emitted).
-
-> **v0.6.1 CHANGE LEDGER (non-breaking; error-text + help/SKILL surface — `csift 0.6.1`).**
-> The fifth-audit release (Sonnet 5's v0.6.0 re-review: two real findings, both fixed at
-> root; no previously-succeeding invocation changes behavior).
-> 1. **Unrecognized `@`-shape = hard error (targeting fail-loud closure).** The shared
->    resolver's `@`-dispatch catch-all treated ANY unmatched token as an encoded
->    project-dir name — so `@a` / `@22` / `@224` (below the 4-char uuid-prefix minimum)
->    silently stripped the `@`, fell through to cwd-relative path resolution, and reported
->    a misleading "no Claude Code project dir for …/a" (a filesystem debugging trail for an
->    ID typo; the one spot the fail-loud targeting law was violated). The encoded-dir arm
->    now requires the `-`-leading encoded shape (`@-Users-…` still works); every other
->    unrecognized `@`-token hard-errors naming the @-grammar, with a dedicated "too short
->    for a session-uuid prefix — needs 4-11 leading (dashless) hex chars" message for a
->    1-3-char hex token. `--sessions-from` already bailed on non-id tokens (unchanged).
-> 2. **`@trap` main-thread timing documented + error routes the fix (verified live).** The
->    trap premise "CC records the tool_use before it runs" holds ONLY for a subagent's own
->    transcript (eager flush — first try resolves, re-verified); the MAIN conversation's
->    record is flushed AFTER the current Bash call completes (a 3s in-command sleep still
->    saw 0 on disk), so a top-level FIRST use ALWAYS misses and only re-running the SAME
->    marker (now in the flushed previous record) resolves. The no-match error now states
->    the timing split and routes both paths (`@main` for the main thread — env-based, no
->    race; re-run the SAME command+marker otherwise; a FRESH marker restarts the race).
->    SKILL/`--help` document it; the `whoami` SUBAGENT CAVEAT is corrected to current CC
->    (an Agent-tool subagent's env holds the PARENT id — own id withheld; older builds
->    handed a Task subagent its own id).
-> 3. **Doc-only:** `--count-by model` documents the raw `<synthetic>` key (a CC-fabricated
->    stand-in assistant record, e.g. an API-error notice — reported verbatim); a new
->    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
->    mid-record — the line-safe machine form is `--format json`.
-
 > **v0.7.1 CHANGE LEDGER (non-breaking; correctness fix — per-platform home resolution — `csift 0.7.1`).**
 > 1. **The default data root resolves the way Claude Code's own `os.homedir()` does.**
 >    `path::home_dir()` consulted `$HOME` first on EVERY platform; CC uses `$HOME` on Unix
@@ -958,6 +707,256 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    predating `--turn`) + its now-visible `long_about`. The help lints
 >    (`help_mentions_only_declared_flags` / examples) now scan the newly-rendered prose.
 
+> **v0.6.1 CHANGE LEDGER (non-breaking; error-text + help/SKILL surface — `csift 0.6.1`).**
+> The fifth-audit release (Sonnet 5's v0.6.0 re-review: two real findings, both fixed at
+> root; no previously-succeeding invocation changes behavior).
+> 1. **Unrecognized `@`-shape = hard error (targeting fail-loud closure).** The shared
+>    resolver's `@`-dispatch catch-all treated ANY unmatched token as an encoded
+>    project-dir name — so `@a` / `@22` / `@224` (below the 4-char uuid-prefix minimum)
+>    silently stripped the `@`, fell through to cwd-relative path resolution, and reported
+>    a misleading "no Claude Code project dir for …/a" (a filesystem debugging trail for an
+>    ID typo; the one spot the fail-loud targeting law was violated). The encoded-dir arm
+>    now requires the `-`-leading encoded shape (`@-Users-…` still works); every other
+>    unrecognized `@`-token hard-errors naming the @-grammar, with a dedicated "too short
+>    for a session-uuid prefix — needs 4-11 leading (dashless) hex chars" message for a
+>    1-3-char hex token. `--sessions-from` already bailed on non-id tokens (unchanged).
+> 2. **`@trap` main-thread timing documented + error routes the fix (verified live).** The
+>    trap premise "CC records the tool_use before it runs" holds ONLY for a subagent's own
+>    transcript (eager flush — first try resolves, re-verified); the MAIN conversation's
+>    record is flushed AFTER the current Bash call completes (a 3s in-command sleep still
+>    saw 0 on disk), so a top-level FIRST use ALWAYS misses and only re-running the SAME
+>    marker (now in the flushed previous record) resolves. The no-match error now states
+>    the timing split and routes both paths (`@main` for the main thread — env-based, no
+>    race; re-run the SAME command+marker otherwise; a FRESH marker restarts the race).
+>    SKILL/`--help` document it; the `whoami` SUBAGENT CAVEAT is corrected to current CC
+>    (an Agent-tool subagent's env holds the PARENT id — own id withheld; older builds
+>    handed a Task subagent its own id).
+> 3. **Doc-only:** `--count-by model` documents the raw `<synthetic>` key (a CC-fabricated
+>    stand-in assistant record, e.g. an API-error notice — reported verbatim); a new
+>    pitfall row: text-mode excerpts keep LITERAL newlines, so `| head -N` can cut
+>    mid-record — the line-safe machine form is `--format json`.
+
+> **v0.6.0 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
+> fourth-audit release (a Sonnet 5 hands-on round surfaced one real parser trap and two
+> field-truthfulness gaps; every fix is root-cause, none is a doc workaround). Preceded by
+> v0.5.2, a help-only PATCH (search COUNT section: "integer EXCHANGE total" + `-l` routing)
+> that carried no ledger of its own.
+> 1. **`show` bad-flag attribution (bug fix, error-text surface).** `show`'s TARGET was the
+>    only single non-Vec positional in the tree; with `allow_hyphen_values`, a mistyped or
+>    foreign `--flag` was consumed AS the target and clap blamed the user's VALID target as
+>    the surplus token ("unexpected argument '@…'") — the wrong-hypothesis rabbit hole.
+>    TARGET is now a Vec (`num_args=1..`) with the run handler enforcing exactly-one, so a
+>    bad long flag in ANY position falls into `parse_project_target` and is rejected BY
+>    NAME with the same "did you mistype a flag?" error every sibling command gives; two
+>    real targets get a pointed "show reads exactly ONE transcript per call" arity error
+>    (addresses are per-FILE). The old-spelling did-you-mean tips (`--turn-range` → `--turn`)
+>    are unchanged.
+> 2. **Census counts RECORDS, not section hits (bug fix, §6.2/§8.2 numbers change).** One
+>    record can emit several per-section hits (a batched notification, a text+tool_use
+>    assistant record); `--count-by` and the zero-match label probe counted each hit, so a
+>    leaf tally could drift ABOVE what `-t <leaf>` surfaces (the documented invariant) and
+>    comm-heavy scopes inflated hard (a real 8-signal record counted 8×). All censuses now
+>    group hits per record (`record_groups`); the axis value is the first `Some` among the
+>    record's section hits; `matched record(s)` wording is now literally true.
+> 3. **Pairing rides the tool BLOCK through communication views (§6.2 pairing domain
+>    widened).** `pairing` is a property of the tool_use/tool_result join, but it was only
+>    populated on `agent.tool.*`-classed hits — a SendMessage/spawn whose richest view is
+>    `agent.communication.sent`/`.signal` (and a subagent-return `…inbox` on a tool_result)
+>    fell OUTSIDE the pairing census. The frozen-SendMessage lane (the dominant stuck shape
+>    in a teams session) is now `pending` under ANY selector: "any pending tools?" =
+>    `csift search "" T --count-by pairing`, no `-t` needed. Record-text comm units (an
+>    inbound teammate-message, an idle signal section) carry no tool_use_id and stay
+>    outside the axis, reported as excluded.
+> 4. **`agents` `completed_*` is status-gated + new `last_activity_*` pair (BREAKING, agent
+>    row).** `completed_utc/_local` (and `duration`) are non-null ONLY when
+>    `status:"completed"` — a frozen teammate carried `completed_utc == pending_since_utc`,
+>    a false "done" for any name-driven consumer (the TEXT tree had suppressed the
+>    misleading line since v0.5.0; JSON now agrees). Every timestamped lane carries the new
+>    `last_activity_utc/_local` pair (the tail newest-record instant; == `pending_since_*`
+>    on a frozen lane). TEXT prints `completed`+`duration` only on a completed lane and
+>    `last-seen` on a running-not-frozen one (a frozen lane keeps its PENDING line as the
+>    sole instant carrier). `--order-by completion` and its `--since/--until` window run on
+>    the terminal instant (`last_activity`) — numerically identical to the old behavior, so
+>    frozen lanes still window on their freeze instant.
+> 5. **Help drift fixed in passing:** the `search --help` JSON hit-field list now includes
+>    `pairing` (it was always emitted).
+
+> **v0.5.1 CHANGE LEDGER (non-breaking; help-text surface only — `csift 0.5.1`).** The
+> `--help` parity release: the FIVE-DOCUMENT CONTRACT is now `SKILL.md` = the LLM manual ·
+> `--help` = the human (CLI-proficient) manual, INFORMATION-PARITY with SKILL but written in
+> plain prose with stronger structure/layout · `README.md` = promotion · `SPEC.md` = design
+> intent · `AGENTS.md` = maintenance guide. Behavior is unchanged; only help text moved:
+> 1. Root `csift --help` gains five human-toned sections: THE RULES EVERY COMMAND FOLLOWS
+>    (exit codes / ranges / subagents / caps / time — the SKILL "five laws" in prose), JSON
+>    OUTPUT (the envelope contract + jq idiom + id trio + `refetch`), PITFALLS WORTH KNOWING
+>    UP FRONT (the SKILL wrong-assumptions table in prose), WHAT csift WILL NOT DO, and
+>    RETENTION (`cleanupPeriodDays`).
+> 2. `search --help` gains THE LABEL TAXONOMY — the full 3-role / 25-leaf tree with per-leaf
+>    one-liners, selector grammar, richest-view rule and the glyph legend (it previously
+>    existed only in SKILL/SPEC).
+> 3. `show`/`stats`/`plan`/`whoami`/`image` `--help` gain JSON SCHEMA sections (fixture-
+>    verified row/summary fields), completing per-command schema coverage (list/search/
+>    agents/files/recover/verbatim already had one).
+> 4. Every `--sessions-from` help (×9) now states that resolved ids follow the command's
+>    normal SPAN rules (span-by-default commands expand each session to its subagents; add
+>    `--no-subagents` to pin).
+> 5. `whoami --help`'s composition example is fixed for the v0.5.0 flat envelopes (it
+>    consumed `agents` JSON with bare `jq -r .field`; now `select(.kind=="identity")`).
+
+> **v0.5.0 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
+> 0.5.0 rework (0 backcompat; `csift 0.5.0`). Items 1–7 + 11 are BREAKING:
+> 1. **The per-command turn-window flag is renamed to `--turn`** on every command that had it
+>    (`search`/`stats`/`files`/`recover`/`verbatim`/`image`; the old name carried a `-range`
+>    suffix) — SAME range grammar (`N`/`A..B`/`N..`/`..N`/`-k`/`..`), same AND-intersection with
+>    `--since`/`--until`. `show --turn` is unchanged. The parse-error label is now `--turn`; the
+>    `files` text footer fragment now reads `turn=SPEC`.
+> 2. **The label census is generalized to `--count-by <AXIS>`** (search terminal mode; the old
+>    flag was label-only). Closed axes: `label` | `tool` | `turn` | `session` | `pairing` |
+>    `model`. `label` MULTI-counts (a record counts under every leaf it carries); the other axes
+>    count each record ONCE, and records outside an axis's domain (no tool / pairing / model) are
+>    EXCLUDED with the excluded count reported. `turn` sorts ASCENDING (a histogram; keys `t<N>`,
+>    `<full-transcript-id>·t<N>` when >1 transcript in scope); the others sort count-DESC. JSON:
+>    the old per-leaf census row kind is REPLACED by kind **`census`** `{axis, key, records}`;
+>    summary `{axis, matched_records, distinct_keys, excluded_records, dropped_by_cap,
+>    skipped_lines}`. Still conflicts with `-c`/`-l`/`--siblings`/`--raw`. The empty-result
+>    diagnosis recommends `--count-by label`.
+> 3. **`agents --format json` is FLAT** (envelope v2, NO exceptions — the old nested
+>    `{session_id, workflow_runs:[…children…], agents:[…]}` per-session object AND the bare-node
+>    `--agent` special case are BOTH gone). Now: header → per session a light
+>    `{kind:"session", session_id, runs:N, agents:N}` row → each in-scope workflow run a
+>    `{kind:"run", …run fields…, session_id}` row (NO `children`) → its member `{kind:"agent",
+>    …node fields…}` rows in tree PRE-ORDER → built-in agents pre-order → `{kind:"summary",
+>    sessions, runs, agents}`. Tree NESTING is TEXT-mode only; JSON consumers rebuild it from
+>    `parent_agent_id`/`depth`. A node unreachable from any root (a forged parent cycle) is
+>    APPENDED, never dropped (the old nested shape silently dropped such nodes).
+> 4. **`show --turn` address-miss is a HARD error.** An EXPLICIT `--turn N` or `--turn A..B`
+>    resolving to zero records errors naming the domain (`no such turn(s): t99 — the transcript
+>    has 2 turn(s) (t0..t1); …`); open/from-end forms (`N..`/`..N`/`-k`/`..`) CLAMP (tail-peek
+>    robustness). Both rendered and `--raw` modes.
+> 5. **`show` flood guard.** Default cap `DEFAULT_SHOW_CAP = 200` record units (keep-FIRST); the
+>    text drop line is `+N more record unit(s) beyond the {cap}-unit cap · continue: csift show
+>    @<id> --line A..B  (or --max-count 0 = uncapped)`; JSON summary gains `dropped_by_cap`,
+>    `refetch_remainder`, `non_record_lines`. New `show --max-count N` flag; `--raw` caps by LINE
+>    with an equivalent stderr note. A line-RANGE covering non-record lines prints `N line(s) in
+>    the addressed range are not records (metadata/attachment — inspect with --raw)`.
+> 6. **`--max-count 0` = uncapped, uniformly** on `list`/`stats`/`search`/`show` (previously
+>    `Some(0)` was a literal zero-cap absurdity).
+> 7. **Timestamps (text): ONE canonical form** — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`
+>    (`2026-07-11 15:33:37 AEST(UTC+10)`). The OLD dual form `… AEST (2026-…Z)` and the bare
+>    `…+10:00` form are GONE (the UTC copy invited timezone-math errors). `timez::format_timestamp`
+>    (seconds) + `format_local_compact` (ms) share one renderer + `tz_marker`. JSON `ts_utc`/
+>    `ts_local` unchanged.
+> 8. **`files` JSON summary gains `sessions`** (distinct owning sessions among emitted rows);
+>    deliberately NO `dropped_by_cap` (files has no cap).
+> 9. **`verbatim` self-diagnosis** — a non-`--slice` run prints, per session with ZERO
+>    compaction summaries, the stderr note `csift: note: @<id> has no compaction — nothing was
+>    clipped; for plain reading use \`csift show @<id> --turn <N|A..B|-k..>\` (full records, no
+>    budget)`.
+> 10. **`list` rows gain `sidecar_present: bool`** (the elicitation sidecar FILE exists = hook
+>    installed; tri-state: present+pending = blocked / present+none = provably not blocked /
+>    absent = cannot conclude).
+> 11. **Slash-command wrapper — BOTH tag orders.** Current CC emits `<command-message>` FIRST
+>    (verified: 14 new-order sessions vs 35 old-order). Detection is `is_slash_command_wrapper`
+>    (either leading tag; new `COMMAND_MESSAGE_PREFIX`). `is_genuine_user` now excludes BOTH
+>    orders (a new-order wrapper no longer masquerades as human prose or opens a turn — turn
+>    NUMBERING may shift on transcripts with new-order wrappers; a correctness fix). `classify`:
+>    a with-args wrapper → `[user.message, harness.command.invocation]` with `user.message` FIRST
+>    (richest-view law), so the unfiltered render is the extracted `/name args` (`slash_command_name`),
+>    never wrapper XML; a no-args wrapper → `harness.command.invocation` only. An explicit
+>    `-t harness.command.invocation` still renders the raw wrapper.
+> 12. **`pairing` JSON enum documented:** `paired` | `pending` | `orphan` | `null`.
+> 13. **`normalize_argv` fix (P0):** the subcommand is located by SCANNING over declared root
+>    flags (+ their value tokens; `--flag=value` spans one token), so `csift --claude-home DIR
+>    list @x --max-count 3` works — previously a pre-subcommand global flag disabled normalization
+>    and any flag after a positional was swallowed by the PATH positional with a misleading "not a
+>    project target" error. "Flag order is free" and "`--claude-home` any position" now hold in
+>    combination.
+
+> **v0.4 CHANGE LEDGER (authoritative — supersedes any conflicting older text).** The
+> 0.4 rework (0 backcompat; `csift 0.4.0`):
+> - **`turns` → `verbatim`** (rename, zero-BC — old `csift turns` is now an UNRECOGNIZED
+>   subcommand; the module stays `src/turns.rs`, the handler is `run_verbatim`). `verbatim`
+>   is REFRAMED as the compaction-fidelity SPECIALIST: it restores the verbatim turns a
+>   COMPACTION SUMMARY clipped — NOT the tail-peek tool. The "read a session's recent turns
+>   from the live transcript" intent moved to **`show --turn`** (below). The subcommand
+>   COUNT is still eleven.
+> - **`show --turn N|A..B|-k`** (§6.11): a THIRD addressing mode (mutually exclusive with
+>   `--line`/`--uuid`) that fetches EVERY record of the named turn(s); the turn numbering is
+>   IDENTICAL to `search`'s `s1·tN`. `show --turn -3..` = the last 3 turns (the tail-peek /
+>   live-monitoring intent).
+> - **Range grammar extended** (`text::parse_range_spec` + `RangeSpec::resolve`, replacing
+>   `parse_range`). EVERY range flag (`show --line`, the per-command `--turn` window, and
+>   `--file-lines`) now
+>   accepts `N` · `A..B` · `N..` (to the end) · `..N` (from the start) ·
+>   `-k` = the k-th from the end (`-3..` = the last 3, `-1` = the last) — all inclusive. The
+>   dash form `A-B` still hard-errors (teaches `..`); a statically reversed closed range
+>   (`9..3`) errors. Open / from-end forms resolve PER TARGET (the last 3 turns of EACH
+>   session). The space form `--turn -3..` parses (`allow_hyphen_values`).
+> - **`search --count-by <AXIS>`** (see the v0.5.0 ledger for the rename):
+>   a per-KEY census of the matched records along one closed axis (empty PATTERN =
+>   a whole-scope census; on the `label` axis a leaf's count = how many records `-t <leaf>`
+>   would surface). JSON emits `census` rows.
+> - **Empty-result self-diagnosis** (search): a zero-match run prints a stderr diagnosis —
+>   "a DEFINITIVE absence (exit 0), NOT an error", the active filters, and (when `-t`/`-T`
+>   was on) an ACTIVE PROBE naming the label(s) the pattern DOES occur under. JSON summary
+>   gains `definitive_absence` / `active_filters` / `excluded_by_label`.
+> - **Flood guards**: **`list`** DEFAULT-caps an UNSCOPED (all-projects) listing to the 50
+>   most-recently-active rows (drop reported: text footer + JSON `dropped_by_cap`;
+>   `--max-count` overrides; a scoped query — a target / `--sessions-from` — is uncapped).
+>   **`stats`** gained an opt-in `--max-count`. `files`/`agents` stay scope-bounded.
+> - **JSON field rename** (search summary): `session_ids` → **`transcript_ids`**,
+>   `session_ids_truncated` → **`transcript_ids_truncated`** (named apart from `-l`'s
+>   owning-session id stream).
+
+> **v0.3 CHANGE LEDGER (authoritative — supersedes any conflicting older text).**
+> - **ONE range-token grammar** (extended in v0.4): every range flag (`show --line`/`--turn`,
+>   the per-command turn window — v0.5 `--turn` — and `--file-lines`) takes `N` · `A..B` · `N..`
+>   (to the end) · `..N` (from the start) · `-k` = k-th from the end (`-3..` = the last 3),
+>   resolved per-target; the dash form `A-B` is REMOVED (hard error teaching the `..` spelling),
+>   a reversed closed range errors. The turn window + `--since`/`--until`
+>   now INTERSECT on EVERY command (`files`/`verbatim` dropped their leftover
+>   mutual-exclusion bails).
+> - **`-T`/`--label-not`** (search): label EXCLUSION, same selector grammar as `-t` (the
+>   rg -t/-T duality); richest-SURVIVING-view dedup; statically-empty combos hard-error.
+> - **`--sessions-from <FILE|->`** on every multi-target command (list/search/stats/
+>   agents/files/recover/plan/verbatim/image): union an id list into the scope; empty list =
+>   empty scope. **`search -l`** emits the matching OWNING session ids (uncapped) to pipe
+>   into it. **`search --raw`** emits matched records' verbatim jsonl lines (stdout pure,
+>   notes on stderr).
+> - **`refetch`**: search JSON hits + verbatim `collapsed_agents` rows carry the ready-to-run
+>   `csift show` command addressed at the line-owning transcript.
+> - **`verbatim` REQUIRES a target** (budget × every-session flood guard). **`list`** gains
+>   `--since`/`--until` (activity-span intersection); **`stats`** gains the turn window (v0.5 `--turn`)
+>   (and its positional accepts encoded `-Users-…` dirs — an `allow_hyphen_values`
+>   omission fixed).
+> - **Teammate ids with dashed NAMES round-trip** (`aP1-engine-9cf2…`): the
+>   `is_teammate_agent_id` head accepts `[A-Za-z0-9-]` with an explicit `!is_uuid` guard.
+
+> **v0.2 BREAKING-CHANGE LEDGER (authoritative — supersedes any conflicting older text
+> in this section).** The 0.2 ergonomics rework (0 backcompat, one-way-per-intent):
+> - **`show` (new, §6.11)** owns record FETCHING; `search --line/--uuid` (and the
+>   `<hex>:<spec>` pin) are REMOVED. `show --raw` emits verbatim jsonl line bytes.
+> - **`stats` (new, §6.12)**: one-scan per-session aggregates (tokens by model, tool
+>   counts, turns, span, compactions).
+> - **envelope v2 (§8.2)**: every `--format json` stream = ONE header line +
+>   kind-tagged rows + ONE summary line, no exceptions; the jsonl-line key is `line`
+>   everywhere; a boundary's classifier is `cause`; files' grouping key is always
+>   `path`; agents' bare-node `--agent` JSON special case is gone; whoami emits
+>   `identity` rows; verbatim's `skipped_lines` trailer folded into `summary`.
+> - **Flags**: `-t` long form is `--label` (category/selector vocabulary retired);
+>   `agents --kind` → `--shape` (+ node field `shape`); `recover --line-range` →
+>   `--file-lines`; span switches are the uniform pair `--subagents`/`--no-subagents`
+>   (verbatim's `--include-subagents` gone; agents rejects both); `verbatim --budget-unit` +
+>   the five tuning knobs (`--agent-run-threshold`, `--agent-rich-min-chars`,
+>   `--agent-declaration-max-chars`, `--keep-first`, `--no-keep-first`) are REMOVED
+>   (`--budget` is chars; `--profile heavy|light` is the whole tuning surface);
+>   `--siblings` is a zero-arg fixed policy (message units always; thinking≤2,
+>   tool.use≤3, tool.result≤3, harness≤2; overflow surfaces an explicit
+>   `(+N more · csift show …)` pointer + JSON `siblings_hidden`/`turn_lines`);
+>   `image --id` takes bare digits or `L<line>i<n>` (the `#N` input form errors).
+> - **Guardrails**: a bare id target errors "did you mean '@<id>'?"; a search PATTERN
+>   starting `@` errors; a uuid-shaped PATTERN notes on stderr; the turn window (v0.5 `--turn`)
+>   now INTERSECTS `--since`/`--until`.
 
 > **Common conventions.** Every TEXT timestamp is a SINGLE canonical local form — `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` (e.g. `2026-07-11 15:33:37 AEST(UTC+10)` on a machine in Sydney; January Sydney = `AEDT(UTC+11)`; India = `IST(UTC+05:30)`), via `jiff` (`TimeZone::system()`). The marker is a FORMAT not a value: the abbreviation + offset are derived from the system zone at that instant (DST-correct), so the only mental step is "shift by the given offset"; a whole-hour offset renders compact (`UTC+10`), a fractional one zero-padded (`UTC+05:30`), and a zone with no abbreviation renders `(UTC±offset)` alone. **There is NO raw-UTC parenthetical in text** (the former `… AEST (…Z)` dual form and the bare-offset `…+10:00` form are GONE — the UTC copy invited LLM timezone-conversion errors); machine UTC lives ONLY in JSON (`ts_utc`, §8.2). All subcommands accept `--format text|json` (default `text`). Text output is headered and LLM-friendly; JSON is one object per emitted unit, deterministic order. Errors go to stderr with the full `anyhow` chain; exit code 0 on success, non-zero on error. **No silent truncation** — any cap reports the drop count.
 
@@ -1140,7 +1139,7 @@ A subagent resolves **first-try** (its tool_use is flushed before it runs); the 
 
 ### 6.5 `agents` — a session's subagent TOPOLOGY (kind, trigger/start/completion, returned message, files)
 
-**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. The output is ALWAYS the parent→child tree: workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) parent their agents, and a nested sub-subagent renders under its spawning agent (there is no flat mode). Complements the default subagent span on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents. (Design rationale + verified corpus counts: **§11.3**.)
+**Purpose.** Build the toolUseId-LINKED topology of the subagents a session spawned: each subagent joined back to the parent `Task`/`Agent`/`Workflow` `tool_use` that triggered it, carrying its identity + lifecycle, the TRUE trigger time, the returned message (3-way resolved), and (on demand) its files-changed. The output is ALWAYS the parent→child tree: workflow RUN nodes (from the top-level `workflows/wf_*.json` manifests) parent their agents, and a nested sub-subagent renders under its spawning agent (there is no flat mode). Complements the default subagent span on `list`/`search` (which fold subagent *content* into those views); `agents` is the *topology + lifecycle index* of those same subagents. (Design rationale + verified corpus counts: **§10.3**.)
 
 **Topology linkage (the spawn join).** A built-in subagent's `meta.json` carries `toolUseId` — the id of the parent `Task`/`Agent` `tool_use` that spawned it. csift builds a per-session `ParentSpawnIndex` (one forward scan of the parent transcript) mapping `tool_use_id → {spawn tool name, trigger ts, description, subagent_type}` and `tool_use_id → paired tool_result text`. Each subagent joins on its `spawn_tool_use_id`, recovering:
 
@@ -1252,7 +1251,7 @@ csift files @<uuid> --format json | jq 'select(.type=="edit_before_read_boundary
 
 ### 6.7 `recover` — reconstruct a file's content (or a plan) from the transcript
 
-**Purpose.** Where `files` (§6.6) only reports THAT a file was touched, `recover` rebuilds the file's **content** by replaying its Read / Write / Edit stream in transcript order. Five mutually-exclusive modes (clap group `mode`, **default = restore**): **restore** (no mode flag) hands back the file's FINAL content as RAW restorable bytes (`recover --file X > X`), but ONLY when the session saw the WHOLE file — if it observed just PART (a windowed read + a few edits) restore FAILS LOUDLY rather than emit a holey file. The failure is a SMART diagnostic: covered + missing ranges, EVERY external-change boundary (Edit-before-Read / external edit), and — when a richer state survived BEFORE the first such change (the session-authored "complete as of 5pm" case, or a fuller partial otherwise) — a `dump-the-pre-change-version (--at @line:<before>) + dump-the-changes-since (--patches --since) + reconcile-by-hand` recipe; it ALWAYS closes with the caveat that csift cannot see changes made OUTSIDE the Read/Write/Edit stream (a formatter, husky/pre-commit, git, bash) and does NOT hunt for hidden boundaries (escalated when a bash mutation may have touched the file); **`--salvage`** is restore's never-fails sibling — the best-effort line-numbered FINAL-state fragment (known lines numbered, the rest left as explicit `??? lines A..B unknown` gaps), for a file that is gone, only-partially-read, and barely-edited, where salvaging the surviving proportion beats rewinding (identical output to `--at @latest`); **`--patches`** is the segmented diff-patch CHANGES/rewind view, rendered with FULL context — every read-covered line is shown, not a 3-line window (CC's strict Read-before-Edit guarantees those lines were genuinely observed, so a fully-read, one-line-edited file reproduces in full); **`--at WHEN`** is a point-in-time partial snapshot; **`--coverage`** (alias `--dry-run`) is coverage/scoping only (its per-boundary JSON — `boundaries[]` with `line_no`/`ts`/`kind` — drives the boundary-by-boundary recover/salvage recipe in SKILL.md). `--file` is REQUIRED for all five. A magic `--file @plan` VALUE (not a mode) resolves the session-bound plan file and reconstructs THAT file exactly like any other — its full Write+Edit history, edit-aware — so it composes with every mode and with `--out`/`--format`; this is how you DUMP a plan's content, including a DELETED plan rebuilt from the transcript alone (§6.7.1 covers `@plan` + the sibling `plan` subcommand that LOCATES a session's plan). The motivating use is restoring a file (or a dropped plan) lost in a bad-recovery. (Design rationale — the reference-tool survey + the `originalFile` boundary inversion: **§11.1**.) **Every output reference carries the JSONL line number** (`Lnnnnn`) so a consumer can `Read` the raw jsonl directly — the one genuinely-new capability over the other subcommands (added via a local line counter threaded through `scan_lines_bytes`; the shared signature is untouched).
+**Purpose.** Where `files` (§6.6) only reports THAT a file was touched, `recover` rebuilds the file's **content** by replaying its Read / Write / Edit stream in transcript order. Five mutually-exclusive modes (clap group `mode`, **default = restore**): **restore** (no mode flag) hands back the file's FINAL content as RAW restorable bytes (`recover --file X > X`), but ONLY when the session saw the WHOLE file — if it observed just PART (a windowed read + a few edits) restore FAILS LOUDLY rather than emit a holey file. The failure is a SMART diagnostic: covered + missing ranges, EVERY external-change boundary (Edit-before-Read / external edit), and — when a richer state survived BEFORE the first such change (the session-authored "complete as of 5pm" case, or a fuller partial otherwise) — a `dump-the-pre-change-version (--at @line:<before>) + dump-the-changes-since (--patches --since) + reconcile-by-hand` recipe; it ALWAYS closes with the caveat that csift cannot see changes made OUTSIDE the Read/Write/Edit stream (a formatter, husky/pre-commit, git, bash) and does NOT hunt for hidden boundaries (escalated when a bash mutation may have touched the file); **`--salvage`** is restore's never-fails sibling — the best-effort line-numbered FINAL-state fragment (known lines numbered, the rest left as explicit `??? lines A..B unknown` gaps), for a file that is gone, only-partially-read, and barely-edited, where salvaging the surviving proportion beats rewinding (identical output to `--at @latest`); **`--patches`** is the segmented diff-patch CHANGES/rewind view, rendered with FULL context — every read-covered line is shown, not a 3-line window (CC's strict Read-before-Edit guarantees those lines were genuinely observed, so a fully-read, one-line-edited file reproduces in full); **`--at WHEN`** is a point-in-time partial snapshot; **`--coverage`** (alias `--dry-run`) is coverage/scoping only (its per-boundary JSON — `boundaries[]` with `line_no`/`ts`/`kind` — drives the boundary-by-boundary recover/salvage recipe in SKILL.md). `--file` is REQUIRED for all five. A magic `--file @plan` VALUE (not a mode) resolves the session-bound plan file and reconstructs THAT file exactly like any other — its full Write+Edit history, edit-aware — so it composes with every mode and with `--out`/`--format`; this is how you DUMP a plan's content, including a DELETED plan rebuilt from the transcript alone (§6.7.1 covers `@plan` + the sibling `plan` subcommand that LOCATES a session's plan). The motivating use is restoring a file (or a dropped plan) lost in a bad-recovery. (Design rationale — the reference-tool survey + the `originalFile` boundary inversion: **§10.1**.) **Every output reference carries the JSONL line number** (`Lnnnnn`) so a consumer can `Read` the raw jsonl directly — the one genuinely-new capability over the other subcommands (added via a local line counter threaded through `scan_lines_bytes`; the shared signature is untouched).
 
 **Extraction (verified against the live corpus, 2026-06-08).** Per `--file`, in transcript order:
 
@@ -1344,7 +1343,7 @@ csift recover @<uuid> --file @plan          # DUMP the plan's content (this subc
 
 ### 6.8 `verbatim` — turn-fidelity reconstruction (restore the back-and-forth a compaction summary clipped)
 
-**Purpose.** A Claude Code **compaction summary** preserves TASK STATE (its 9-section synthesis: primary request, key concepts, file ledger, errors+fixes, plan, next step) in high fidelity, but provably **loses turn fidelity**: its "All user messages" section clips real prose turns to `...`-truncated bullets (measured: ~22 real user turns → ~17 bullets), and the assistant side collapses to a SINGLE verbatim quote (the last pre-compaction message). `verbatim` **supplements** the summary — it re-emits the verbatim user/assistant TURNS, in original order, each line carrying the JSONL line number (`Lnnnnn`) so a consumer can `Read` the raw transcript at the cited line. It does **not** re-derive task state (the summary owns that; duplicating it wastes budget and risks contradiction). The split of labor is the summary's own design — its trailer says "read the full transcript at `<path>`" for the exact content it generated; `verbatim` automates that pointer. (The measured basis for every default below, and the proof that the budget really reaches back across compaction boundaries: **§11.2**.)
+**Purpose.** A Claude Code **compaction summary** preserves TASK STATE (its 9-section synthesis: primary request, key concepts, file ledger, errors+fixes, plan, next step) in high fidelity, but provably **loses turn fidelity**: its "All user messages" section clips real prose turns to `...`-truncated bullets (measured: ~22 real user turns → ~17 bullets), and the assistant side collapses to a SINGLE verbatim quote (the last pre-compaction message). `verbatim` **supplements** the summary — it re-emits the verbatim user/assistant TURNS, in original order, each line carrying the JSONL line number (`Lnnnnn`) so a consumer can `Read` the raw transcript at the cited line. It does **not** re-derive task state (the summary owns that; duplicating it wastes budget and risks contradiction). The split of labor is the summary's own design — its trailer says "read the full transcript at `<path>`" for the exact content it generated; `verbatim` automates that pointer. (The measured basis for every default below, and the proof that the budget really reaches back across compaction boundaries: **§10.2**.)
 
 **NOT the tail-peek tool.** `verbatim` is the compaction-fidelity SPECIALIST — its budget / round-trip-floor / richness heuristics all exist for the one job of RESTORING the turns a compaction summary already CLIPPED. To read a session's RECENT turns straight from the live transcript (no compaction involved), use **`show --turn N..`** (§6.11) — e.g. `show @<uuid> --turn -3..` fetches the last 3 turns verbatim. Reach for `verbatim` only when you need to un-clip a summary.
 
@@ -1620,11 +1619,11 @@ UTC copy — §8.1.) Whole-stream `json.load` fails by design — parse per line
 
 ---
 
-## 11. Design notes & empirical grounding
+## 10. Design notes & empirical grounding
 
 > The normative spec is §0–§9; this section records the **design rationale and the measurements** behind the three deepest features (`recover`, `verbatim`, `agents`) — *why* the algorithm is shaped as it is and *why* the magic numbers are what they are. All counts below are empirical, captured against the live `~/.claude/projects` corpus on the dates noted; treat them as representative magnitudes, not invariants (a live session's subagent counts drift upward as it spawns more).
 
-### 11.1 `recover` — reference-tool survey + the `originalFile` boundary inversion
+### 10.1 `recover` — reference-tool survey + the `originalFile` boundary inversion
 
 Four prior tools were studied (ccdiag, claude-file-recovery, coding-agent-session-search, florian-gist). **None reconstructs file content across integrity boundaries, and none segments at out-of-band-edit boundaries** — that is `recover`'s original territory (§6.7). Only four peripheral primitives were harvested from them:
 
@@ -1635,7 +1634,7 @@ Four prior tools were studied (ccdiag, claude-file-recovery, coding-agent-sessio
 
 **The load-bearing inversion** is over claude-file-recovery: where it uses an Edit's `originalFile` to *paper over* drift (assume the file was whatever `originalFile` claims), `recover` uses **replayed-buffer ≠ the next op's `originalFile`** to *detect and segment at* the drift — that disagreement is exactly the AUTHORITATIVE integrity boundary #2 of §6.7. The same "in the LLM's eyes" sparse-buffer model (a `BTreeMap<file_line, cell>`; an absent line is an explicit gap, never fabricated; an un-anchorable edit becomes a counted coverage hole) is what keeps the reconstructed-vs-disk guarantee honest — the contiguous-from-line-1 prefix matches disk byte-for-byte even on a heavily-edited file with no clean anchor. The one genuinely-new capability under all of this is the per-line `Lnnnnn` counter (§6.7), threaded locally so the shared `scan_lines_bytes` signature is untouched.
 
-### 11.2 `verbatim` — the measured basis for every default
+### 10.2 `verbatim` — the measured basis for every default
 
 **What the summary loses (the anatomy that motivates the feature).** Measured over three real sessions (246 MB, 130 MB, and 80 MB): a Claude Code compaction summary preserves task STATE in high fidelity but provably loses TURN fidelity — its §6 "All user messages" clips ~**22 real user prose turns → ~17 `...`-truncated bullets**, and the assistant side collapses ~**239 assistant turns → exactly 1 verbatim quote** (the last pre-compaction message). `verbatim` supplements (never re-derives) the summary by restoring those verbatim turns in order, each carrying its `Lnnnnn`.
 
@@ -1667,7 +1666,7 @@ Four prior tools were studied (ccdiag, claude-file-recovery, coding-agent-sessio
 
 Three conclusions this *proves*: (1) a 40K ellipsized budget spans ≥2 boundaries on both samples (alpha 3, beta 2) — and **the ellipsis compression is what makes it reach back** (alpha 40K: 1 boundary → 3, recovery 5/15 → 22/49); (2) a naive recency walk starves the round-trip guarantee (beta 10K verbatim → 0 users), which is the empirical justification for the 50% floor forcing user inclusion; (3) 200K-context sizing (~10–15K) spans ~1 boundary, 1M-context (~40K) spans 2–3 — matching the budget→reach guidance.
 
-### 11.3 `agents` — the topology fix + verified corpus
+### 10.3 `agents` — the topology fix + verified corpus
 
 **Why the topology layer matters.** Discovering subagent transcripts as a flat list — each nested transcript a detached session, with no LINKAGE back to the parent `tool_use` that spawned it — answers only three of six real queries and answers two more lossily (the "when" would be the lagging child-head ts; there would be no workflow-run grouping). `agents` therefore builds a topology on top of discovery: a `ParentSpawnIndex` (one forward scan of the parent transcript joining `tool_use_id → {spawn tool, trigger ts, description, subagent_type}`) joins each subagent to its spawning `tool_use`, recovering the returned message, files-changed, and the topology tree. Two consequences of the linkage are specified in §6.5: `--order-by` orders/filters on the true `trigger` axis by default (the accurate spawn instant, sharper than the child-head `start` ts), and a subagent row's printed id is the bare `<hex>` (joinable to an `agents` node), not the un-joinable `agent-<hex>` stem.
 
