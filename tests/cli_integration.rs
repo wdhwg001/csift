@@ -3076,6 +3076,13 @@ fn search_match_banner_at_head_mirrors_footer_and_json() {
         "footer repeats the totals: {}",
         out.stdout
     );
+    // Clean-corpus duals for the footer's `> 0` note gates: no malformed note, no
+    // sidecar note, no zero-count drop note in the plain text mode.
+    assert!(
+        !out.stdout.contains("malformed") && !out.stdout.contains("sidecar"),
+        "no zero-count footer notes on a clean run: {}",
+        out.stdout
+    );
     let js = h.run(&["search", "SEEDWORD", "--format", "json"]);
     assert!(js.success, "stderr: {}", js.stderr);
     assert!(
@@ -6152,6 +6159,84 @@ fn plan_spans_subagents_by_default_and_restricts() {
         !top.stdout.contains("quiet-harbor-relay"),
         "--no-subagents restricts plan to the top level: {}",
         top.stdout
+    );
+}
+
+#[test]
+fn show_turn_explicit_miss_errors_and_open_forms_clamp() {
+    // Mutation pin on the v0.5 turn-address law: an EXPLICIT single --turn miss is a hard
+    // error naming the turn; an OPEN out-of-range form CLAMPS (never a hard error); and a
+    // clean in-range fetch prints no cap/non-record notes.
+    let h = Home::new();
+    subagents_only_scenario(&h); // SESS has exactly one turn (t0)
+    let miss = h.run(&["show", at(SESS).as_str(), "--turn", "5"]);
+    assert!(!miss.success, "explicit single miss must hard-error");
+    assert!(
+        miss.stderr.contains("no such turn") && miss.stderr.contains("t5"),
+        "the miss names the turn: {}",
+        miss.stderr
+    );
+    let open = h.run(&["show", at(SESS).as_str(), "--turn", "99.."]);
+    assert!(
+        open.success,
+        "an open out-of-range form clamps, never errors: {}",
+        open.stderr
+    );
+    let ok = h.run(&["show", at(SESS).as_str(), "--turn", "0"]);
+    assert!(ok.success, "stderr: {}", ok.stderr);
+    assert!(
+        !ok.stdout.contains("beyond the") && !ok.stdout.contains("not records"),
+        "no cap/non-record notes on a clean in-range fetch: {}",
+        ok.stdout
+    );
+}
+
+#[test]
+fn json_hits_carry_pairing_and_refetch() {
+    // Mutation pin: the JSON hit objects' `pairing` (a real "paired" value, not a
+    // defaulted null) and the ready-to-run `refetch` command must actually be emitted.
+    let h = Home::new();
+    subagents_only_scenario(&h);
+    let out = h.run(&["search", "", at(SESS).as_str(), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(r#""pairing":"paired""#),
+        "the Write use/result pair carries pairing=paired: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(r#""refetch":"csift show @"#),
+        "every hit carries the ready-to-run refetch: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn siblings_hidden_count_is_exact() {
+    // Mutation pin: the fixed sibling policy's capped-away remainder is COUNTED exactly
+    // (thinking cap = 2; five thinking siblings -> 3 hidden), and the overflow pointer
+    // carries that number — a degraded += froze it with no test on the value.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "778899aa-bbcc-4000-8000-00000000000c";
+    let mut jsonl = String::from(
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"SIBSEED question"}}"#,
+    );
+    jsonl.push('\n');
+    for i in 0..5 {
+        jsonl.push_str(&format!(
+            r#"{{"type":"assistant","uuid":"t{i}","timestamp":"2026-06-07T05:00:0{}.000Z","message":{{"role":"assistant","content":[{{"type":"thinking","thinking":"step {i}"}}]}}}}"#,
+            i + 1
+        ));
+        jsonl.push('\n');
+    }
+    h.write(&format!("{enc}/{sess}.jsonl"), &jsonl);
+    let out = h.run(&["search", "SIBSEED", &format!("@{sess}"), "--siblings"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("(+3 more"),
+        "exactly 3 thinking siblings capped away: {}",
+        out.stdout
     );
 }
 
