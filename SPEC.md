@@ -373,6 +373,27 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.7.2 CHANGE LEDGER (non-breaking; performance only, zero surface change — `csift 0.7.2`).**
+> A real-corpus profiling round (macOS `sample` + hyperfine on a frozen APFS-clone
+> snapshot; a 28-command byte-exact A/B battery pins stdout/stderr/exit codes identical):
+> 1. **Construct-once memmem finders.** Every per-line byte prefilter (the §7d stage-1
+>    role matcher, the turns/files/recover/image/plan needle sets, `show`'s per-uuid
+>    needle) built its searcher on every call via the stateless `memmem::find`; all now
+>    use cached `LazyLock` finders (memchr's documented pattern).
+> 2. **No wasted newline pass.** `scan_lines_parallel_chunked` ran a SERIAL whole-slice
+>    newline count before any parallel work; a single-chunk scan (files < 4 MB — nearly
+>    the whole corpus) never consumed it. Single-chunk scans skip it; multi-chunk scans
+>    count in parallel, never counting the last chunk.
+> 3. **Gated per-turn fan-out (§6.4 walk).** `search`'s per-turn match+render phase ran
+>    serially per file — a giant transcript sat on one worker while the pool idled. The
+>    turn walk now fans out on rayon, DOUBLE-GATED: scope small enough that the
+>    across-files fan-out cannot fill the pool (or the file is 64 MB+, the straggler
+>    class) AND ≥1024 records. Ungated nested fan-out measurably regressed broad scans
+>    (steal churn) and was rejected; serial and parallel walks share one closure, and an
+>    ordered collect keeps output byte-identical.
+> Measured warm: big-session census 1.21×, no-match unscoped 1.13×, caseless literal
+> 1.09×, verbatim 1.08×, phrase 1.06×; user CPU −2–4% across the matrix.
+
 > **v0.7.1 CHANGE LEDGER (non-breaking; correctness fix — per-platform home resolution — `csift 0.7.1`).**
 > 1. **The default data root resolves the way Claude Code's own `os.homedir()` does.**
 >    `path::home_dir()` consulted `$HOME` first on EVERY platform; CC uses `$HOME` on Unix

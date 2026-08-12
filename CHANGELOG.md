@@ -5,6 +5,21 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.2] - 2026-08-12
+
+- Performance round (behavior-identical — a 28-command byte-exact A/B battery
+  pins stdout, stderr, and exit codes unchanged): every per-line byte
+  prefilter now uses construct-once memmem finders (the stateless form
+  rebuilt its searcher on every call); the parallel line scanner no longer
+  runs a serial whole-file newline count (skipped outright for single-chunk
+  files, computed in parallel otherwise); `search`'s per-turn match+render
+  phase fans out on rayon when the scope is small or the file is 64 MB+ (the
+  straggler class), gated so broad scans keep the serial walk. Measured warm
+  on the reference corpus: big-session census 1.21x, no-match unscoped
+  1.13x, caseless literal 1.09x, verbatim 1.08x; user CPU down 2-4 percent.
+- README gains a coverage badge (94.8 percent line coverage,
+  cargo-llvm-cov over the full suite).
+
 ## [0.7.1] - 2026-08-12
 
 - The default data root resolves per platform, the way Claude Code's own
