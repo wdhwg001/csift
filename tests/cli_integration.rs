@@ -6179,6 +6179,16 @@ fn stats_aggregates_are_exact() {
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":222,"output_tokens":55},"content":[{"type":"text","text":"done"}]}}"#, "\n",
         ),
     );
+    // A subagent transcript so the MERGED (multi-transcript) rollup path renders too —
+    // the scoped --iterate verification showed merged_tools/merged_tokens survived a
+    // single-transcript fixture (the merge path was never invoked).
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-aggr222.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aggr222","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"sub work"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":1000,"output_tokens":500,"cache_read_input_tokens":7,"cache_creation_input_tokens":3},"content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/s/b.md","content":"y"}}]}}"#, "\n",
+        ),
+    );
     let out = h.run(&["stats", &format!("@{sess}")]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -6197,12 +6207,27 @@ fn stats_aggregates_are_exact() {
         "span label for the 65s session: {}",
         out.stdout
     );
+    assert!(
+        out.stdout.contains("1333") && out.stdout.contains("599"),
+        "MERGED token sums 333+1000 / 99+500 across the two transcripts: {}",
+        out.stdout
+    );
     let js = h.run(&["stats", &format!("@{sess}"), "--format", "json"]);
     assert!(js.success, "stderr: {}", js.stderr);
     assert!(
         js.stdout
             .contains(&format!(r#""parent_session_id":"{sess}""#)),
         "the JSON id trio is populated: {}",
+        js.stdout
+    );
+    assert!(
+        js.stdout.contains(r#""Write":2"#),
+        "MERGED tool calls across the two transcripts: {}",
+        js.stdout
+    );
+    assert!(
+        js.stdout.contains(r#""cache_read":7"#) && js.stdout.contains(r#""cache_creation":3"#),
+        "the cache accumulators merge too: {}",
         js.stdout
     );
 }
