@@ -52,6 +52,11 @@ agent actually did… and it's also a 200 MB wall of JSON. When you (or your age
 reconstructs files and plans from the Read/Write/Edit stream, and restores the verbatim turns a
 context compaction clipped.
 
+## The name
+
+Pronounced **"c-sift"** (*see-sift*), in the `csplit`/`ctags` naming tradition: **c** for Claude
+Code, **sift** for what it does — sifting gigabytes of transcript for the few lines that matter.
+
 ## ✨ Highlights
 
 - 🔎 **Round-trips, not lines.** A hit returns the whole exchange — the matched tool call with its result, the user turn with the agent's reply — rebuilt from the `uuid`/`parentUuid` graph.
@@ -95,7 +100,11 @@ compaction arrives with the recent verbatim conversation attached.
 
 ## Install
 
-Requires **Rust 1.89+**.
+```bash
+cargo install csift
+```
+
+Requires **Rust 1.89+**. Or from source:
 
 ```bash
 git clone https://github.com/wdhwg001/csift.git

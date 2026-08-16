@@ -6,7 +6,13 @@ edition = "2021"
 rust-version = "1.89"
 description = "ripgrep for Claude Code session transcripts — fast regex list/search over ~/.claude/projects/**/*.jsonl"
 license = "MIT"
-publish = false
+repository = "https://github.com/wdhwg001/csift"
+readme = "README.md"
+keywords = ["claude-code", "claude", "jsonl", "transcript", "search"]
+categories = ["command-line-utilities", "development-tools"]
+# CLAUDE.md is a symlink to AGENTS.md; `cargo package` would dereference it into
+# a duplicate copy inside the crate tarball.
+exclude = ["CLAUDE.md"]
 
 [[bin]]
 name = "csift"
