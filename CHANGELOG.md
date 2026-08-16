@@ -5,6 +5,17 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.5] - 2026-08-16
+
+- Published to crates.io — `cargo install csift` is now the primary install
+  path. Cargo.toml gained the publication metadata (repository, readme,
+  keywords, categories) and dropped the `publish = false` guard; the
+  `CLAUDE.md` symlink is excluded from the crate tarball (it would
+  dereference into a duplicate of `AGENTS.md`).
+- README documents the name — pronounced "c-sift", in the `csplit`/`ctags`
+  naming tradition: c for Claude Code, sift for what it does — and the
+  crates.io install. No CLI surface change.
+
 ## [0.7.4] - 2026-08-12
 
 - The Windows shell is a SEPARATE Claude Code tool named `PowerShell` (same

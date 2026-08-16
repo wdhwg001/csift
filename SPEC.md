@@ -377,6 +377,15 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.7.5 CHANGE LEDGER (non-breaking; packaging/publication release — no CLI surface change — `csift 0.7.5`).**
+> csift is published on crates.io: `cargo install csift` is now the primary install path.
+> Cargo.toml gained the publication metadata (`repository`, `readme`, `keywords`,
+> `categories`; the `publish = false` guard is removed; the `CLAUDE.md` symlink is
+> excluded from the tarball — it would dereference into a duplicate of `AGENTS.md`).
+> README documents the name — pronounced "c-sift", in the `csplit`/`ctags` naming
+> tradition: **c** for Claude Code, **sift** for what it does — and the crates.io
+> install. No command, flag, output shape, or help text changed.
+
 > **v0.7.4 CHANGE LEDGER (non-breaking; correctness fix — the Windows shell tool, evidence extracted from the CC 2.1.228 binary — `csift 0.7.4`).**
 > Binary-forensics round 2 answered "what is the Bash tool on Windows":
 > 1. **The Windows shell is a SEPARATE tool named `PowerShell`** (`mi="Bash"; Ls="PowerShell"`;
