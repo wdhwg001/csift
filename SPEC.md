@@ -377,6 +377,21 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.7.6 CHANGE LEDGER (non-breaking; opt-in hook-context search — `csift 0.7.6`).**
+> `search --additional-context` ALSO scans hook-injected additionalContext — the
+> `type:"attachment"` records a SessionStart/UserPromptSubmit/... hook writes into the
+> transcript (`attachment.type == "hook_additional_context"`; `content` is a string ARRAY,
+> joined with `\n`, bare string tolerated). Off by default: injected context is harness
+> machinery and echoes prompts/files wholesale. Hits classify `harness.meta.hook` (a
+> record-text class; the record never opens a turn). The stage-1 candidate needle
+> (`hook_additional_context`, a bare value substring per the R13 needle law) is `&&`-gated
+> like the D7 boundary keep — a default scan pays ZERO; the widening also fires for an
+> ADDRESSED fetch, so the `csift show @<id> --line N` refetch a hit prints renders the
+> record WITHOUT the flag. The zero-match diagnosis lists the flag among active filters.
+> Docs: README restructured scenario-first; SKILL documents the file-mtime semantics of
+> CC's `cleanupPeriodDays` retention (verified against the 2.1.233 binary: cutoff =
+> now - N days vs `stat.mtime`; deleting a transcript removes its sidecar tree).
+
 > **v0.7.5 CHANGE LEDGER (non-breaking; packaging/publication release — no CLI surface change — `csift 0.7.5`).**
 > csift is published on crates.io: `cargo install csift` is now the primary install path.
 > Cargo.toml gained the publication metadata (`repository`, `readme`, `keywords`,

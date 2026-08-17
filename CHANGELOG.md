@@ -5,6 +5,20 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.6] - 2026-08-17
+
+- `search --additional-context` — opt-in scan of hook-injected
+  additionalContext (the attachment records a SessionStart /
+  UserPromptSubmit / ... hook writes into the transcript). Off by default;
+  hits surface under `harness.meta.hook`; an explicit `show --line`/`--uuid`
+  address renders such a record without the flag, so the refetch a search
+  hit prints always resolves. A default scan pays nothing for the widening.
+- README restructured scenario-first (why -> highlights -> install, the
+  pronunciation under the title, the agent-skill install beside the binary
+  install); SKILL documents the file-mtime semantics of Claude Code's
+  `cleanupPeriodDays` retention; Conventional Commits codified in AGENTS.md;
+  .gitignore gains editor/OS/local-settings rules.
+
 ## [0.7.5] - 2026-08-16
 
 - Published to crates.io — `cargo install csift` is now the primary install
