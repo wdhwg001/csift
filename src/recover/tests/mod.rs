@@ -1,0 +1,28 @@
+//! Unit tests for `recover`: per-arm branch-completeness over lightweight fixtures, in
+//! the style of `files.rs` / `parse.rs`. Locale-neutral multi-byte tokens only
+//! (accented Latin / emoji — `café🛠`), the house fixture style.
+
+use super::*;
+
+fn rec(line: &str) -> Record {
+    serde_json::from_str(line).expect("valid fixture record")
+}
+
+fn extract_events(records: &[(usize, Record)], file: &str) -> Vec<FileEvent> {
+    extract(records, Some(file))
+}
+
+fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
+    lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (i + 1, rec(l)))
+        .collect()
+}
+
+mod part01;
+mod part02;
+mod part03;
+mod part04;
+mod part05;
+mod part06;
