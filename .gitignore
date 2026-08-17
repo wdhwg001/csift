@@ -1,6 +1,23 @@
+# Rust build artifacts
 /target
 **/*.rs.bk
 *.pdb
+
+# Editors
+.vscode/
+.idea/
+
+# Claude Code (machine-local settings)
+.claude/settings.local.json
+
+# macOS
 .DS_Store
+._*
+
+# Windows
+Thumbs.db
+[Dd]esktop.ini
+
+# Local working areas (never part of the repo)
 /reference/
 /.omc/
