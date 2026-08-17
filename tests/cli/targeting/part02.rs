@@ -228,3 +228,84 @@ fn targeting_a_renamed_sidecar_errors_via_content_sniff() {
         out.stderr
     );
 }
+
+#[test]
+fn uuid_prefix_minimum_boundary_is_exactly_four() {
+    // Mutation pin: the too-short-hex boundary is len < 4 (a 4-char prefix RESOLVES; a
+    // 3-char one errors with the dedicated guidance).
+    let h = Home::new();
+    h.write(
+        "-Users-testuser-Projects-pfx/abcd1234-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl",
+        "{\"type\":\"user\",\"uuid\":\"u0\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
+    );
+    let ok = h.run(&["list", "@abcd"]);
+    assert!(
+        ok.success && ok.stdout.contains("abcd1234"),
+        "4-hex prefix resolves: {}\n{}",
+        ok.stderr,
+        ok.stdout
+    );
+    let short = h.run(&["list", "@abc"]);
+    assert!(
+        !short.success && short.stderr.contains("too short"),
+        "3-hex errors with guidance: {}",
+        short.stderr
+    );
+}
+
+#[test]
+fn bare_id_shaped_tokens_get_the_at_hint() {
+    // Mutation pin: the bare-id shape catch fires for BOTH the uuid-prefix shape and the
+    // bare agent-hex shape (the || chain + the !exists guard).
+    let h = Home::new();
+    let p = h.run(&["list", "abcd1234"]);
+    assert!(
+        !p.success && p.stderr.contains("did you mean '@abcd1234'"),
+        "prefix shape hint: {}",
+        p.stderr
+    );
+    let a = h.run(&["list", "aabbccdd11223344"]);
+    assert!(
+        !a.success && a.stderr.contains("did you mean '@aabbccdd11223344'"),
+        "agent-hex shape hint: {}",
+        a.stderr
+    );
+}
+
+#[test]
+fn scan_admits_only_top_level_jsonl_files() {
+    // Mutation pin: the admit condition is is_file AND .jsonl (a stray text file and a
+    // DIRECTORY named *.jsonl must both be ignored by the top-level enumeration).
+    let h = Home::new();
+    h.write(
+        "-Users-testuser-Projects-adm/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl",
+        "{\"type\":\"user\",\"uuid\":\"u0\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"real\"}}\n",
+    );
+    h.write(
+        "-Users-testuser-Projects-adm/note.txt",
+        "not a transcript\n",
+    );
+    h.write(
+        "-Users-testuser-Projects-adm/decoy.jsonl/inner.jsonl",
+        "{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"2026-06-07T05:00:01.000Z\",\"message\":{\"role\":\"user\",\"content\":\"decoy\"}}\n",
+    );
+    let o = h.run(&[
+        "list",
+        "-Users-testuser-Projects-adm",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    assert!(o.success, "stderr: {}", o.stderr);
+    assert_eq!(
+        o.stdout.matches("\"session_id\"").count(),
+        1,
+        "exactly the real session:\n{}",
+        o.stdout
+    );
+    assert!(
+        !o.stdout.contains("decoy"),
+        "the decoy dir never scans:\n{}",
+        o.stdout
+    );
+}

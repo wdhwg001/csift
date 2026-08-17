@@ -60,3 +60,29 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         outj.stdout
     );
 }
+
+#[test]
+fn sessions_with_matches_disclosed_cap_drop_on_stderr() {
+    // Mutation pin: the -l + --max-count drop note fires exactly when dropped_by_cap > 0.
+    let enc = "-Users-testuser-Projects-lcap";
+    let h = Home::new();
+    for i in 0..2u8 {
+        h.write(
+            &format!("{enc}/ee00000{i}-aaaa-4bbb-8ccc-00000000000{i}.jsonl"),
+            &format!("{{\"type\":\"user\",\"uuid\":\"u0\",\"timestamp\":\"2026-06-07T0{i}:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"zzlcap hit\"}}}}\n"),
+        );
+    }
+    let capped = h.run(&["search", "zzlcap", enc, "-l", "--max-count", "1"]);
+    assert!(capped.success, "stderr: {}", capped.stderr);
+    assert!(
+        capped.stderr.contains("dropped by --max-count"),
+        "cap drop disclosed on stderr: {}",
+        capped.stderr
+    );
+    let full = h.run(&["search", "zzlcap", enc, "-l"]);
+    assert!(
+        !full.stderr.contains("dropped by --max-count"),
+        "no note without a drop: {}",
+        full.stderr
+    );
+}

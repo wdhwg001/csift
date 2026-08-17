@@ -394,3 +394,44 @@ fn acceptance_harness_schedule_and_meta() {
         );
     }
 }
+
+#[test]
+fn short_value_flag_pairs_beyond_position_zero() {
+    // Mutation pin (normalize_argv reorder arithmetic): a short value flag at an ODD tail
+    // index still consumes exactly its next token (i+2, never i*2) with flags around it.
+    let h = Home::new();
+    h.write(
+        "-Users-testuser-Projects-argv/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.jsonl",
+        "{\"type\":\"user\",\"uuid\":\"u0\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"zzargv payload\"}}\n",
+    );
+    let o = h.run(&[
+        "search",
+        "zzargv",
+        "-Users-testuser-Projects-argv",
+        "--no-truncate",
+        "--format",
+        "json",
+        "-t",
+        "user",
+    ]);
+    assert!(o.success, "stderr: {}", o.stderr);
+    assert!(
+        o.stdout.contains("\"label\":\"user.message\""),
+        "-t user filter survived the reorder:\n{}",
+        o.stdout
+    );
+}
+
+#[test]
+fn dangling_short_value_flag_is_not_paired_with_the_next_flag() {
+    // Mutation pin: a value-taking short flag followed by another DECLARED flag stays
+    // UNPAIRED (clap reports the missing value), never silently swallows the next flag.
+    let h = Home::new();
+    let o = h.run(&["search", "zz", ".", "-t", "--format"]);
+    assert!(!o.success);
+    assert!(
+        o.stderr.contains("a value is required") && o.stderr.contains("<SELECTOR>"),
+        "clap names the missing SELECTOR value (the -t flag stayed unpaired): {}",
+        o.stderr
+    );
+}

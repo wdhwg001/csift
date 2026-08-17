@@ -83,3 +83,91 @@ fn auq_answer_opens_a_turn_and_surfaces_clean_answer() {
         "AUQ answer must open turn 1: {hit_line}"
     );
 }
+
+#[test]
+fn ghost_guard_is_structural_and_mcp_exempt() {
+    // Mutation pins on the ghost guard: (a) a key natively closed by a REAL tool_use id is
+    // dropped; (b) a key merely QUOTED in prose is NOT closed (structural, not substring);
+    // (c) an MCP pending is EXEMPT even when its key matches a native tool id.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the prosek01 token appears in prose only, and closedk01 is also quoted here first"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"closedk01","name":"AskUserQuestion","input":{"questions":[{"question":"native q"}]}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"mcpk01","name":"Bash","input":{"command":"echo hi"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n{}\n{}\n",
+            auq_pending_line("closedk01", "2026-06-07T05:01:00.000Z", "zzclosed question"),
+            auq_pending_line("prosek01", "2026-06-07T05:02:00.000Z", "zzprose question"),
+            mcp_pending_line(
+                "mcpk01",
+                "2026-06-07T05:03:00.000Z",
+                "gdrive",
+                "authorize zzmcp"
+            )
+        ),
+    );
+    let prose = h.run(&["search", "zzprose", &at(SESS)]);
+    assert!(
+        prose.stdout.contains("zzprose"),
+        "prose-quoted key stays pending (structural guard):\n{}",
+        prose.stdout
+    );
+    let closed = h.run(&["search", "zzclosed", &at(SESS)]);
+    assert!(
+        closed.stdout.contains("no matching exchanges"),
+        "natively-closed key is dropped:\n{}",
+        closed.stdout
+    );
+    let mcp = h.run(&["search", "zzmcp", &at(SESS)]);
+    assert!(
+        mcp.stdout.contains("zzmcp"),
+        "MCP pending is exempt from the native guard:\n{}",
+        mcp.stdout
+    );
+}
+
+#[test]
+fn epm_pending_renders_kind_and_plan_body() {
+    // Mutation pins on pending_text: the ExitPlanMode arm renders "ExitPlanMode: <plan>",
+    // an EMPTY plan renders the bare kind (the !b.is_empty() guard), and plan_text reads
+    // the REAL input.plan (never a fabricated body).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+        ),
+    );
+    let epm = |key: &str, ts: &str, plan: &str| {
+        format!(
+            r#"{{"type":"assistant","uuid":"e-{key}","timestamp":"{ts}","sessionId":"{SESS}","message":{{"role":"assistant","stop_reason":"tool_use","content":[{{"type":"tool_use","id":"{key}","name":"ExitPlanMode","input":{{"plan":"{plan}"}}}}]}},"csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"ExitPlanMode","csiftKey":"{key}"}}"#
+        )
+    };
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            epm("epmk01", "2026-06-07T05:01:00.000Z", "Beacon rollout plan"),
+            epm("epmk02", "2026-06-07T05:02:00.000Z", "")
+        ),
+    );
+    let o = h.run(&["verbatim", &at(SESS)]);
+    assert!(o.success, "stderr: {}", o.stderr);
+    assert!(
+        o.stdout.contains("ExitPlanMode: Beacon rollout plan"),
+        "plan body rendered:\n{}",
+        o.stdout
+    );
+    assert_eq!(
+        o.stdout.matches("ExitPlanMode:").count(),
+        1,
+        "empty plan renders the bare kind (no colon):\n{}",
+        o.stdout
+    );
+}
