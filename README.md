@@ -24,7 +24,9 @@
 ---
 
 ```console
-❯ "what did that session decide about rate limiting and where's the code?"
+──────────────────────────────────────────────────────────────────────────────
+ ❯ what that session decide about rate limiting and wheres the code?
+──────────────────────────────────────────────────────────────────────────────
 
 ⏺ Bash(csift search "rate limit" @13d9645a -t agent --since 1d)
   matches  1 exchange · 1 session · oldest first
