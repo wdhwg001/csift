@@ -789,6 +789,9 @@ fn active_filters_str(args: &SearchArgs) -> String {
     if let Some(t) = &args.turn_range {
         parts.push(format!("--turn {t}"));
     }
+    if args.additional_context {
+        parts.push("--additional-context".to_string());
+    }
     if parts.is_empty() {
         "none".to_string()
     } else {
@@ -1406,6 +1409,12 @@ fn search_one_file(
     let needs_compact_boundary = args
         .label_filter()
         .selected(Class::CompactionBoundary.path());
+    // The `--additional-context` widening mirrors the D7 gate: only when the flag is set AND
+    // the selector can reach `harness.meta.hook` — OR when an ADDRESS names records directly
+    // (`show --line`/`--uuid` must render an addressed attachment record flag-free).
+    let needs_hook_context = (args.additional_context
+        && args.label_filter().selected(Class::MetaHook.path()))
+        || address.is_some();
 
     // ── §7f whole-file gate ──
     // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
@@ -1438,7 +1447,7 @@ fn search_one_file(
                 if force_full.load(Ordering::Relaxed) {
                     return crate::parse::LineVerdict::Ignore; // verdict already "full scan"
                 }
-                if !line_is_transcript_candidate(line, needs_compact_boundary) {
+                if !line_is_transcript_candidate(line, needs_compact_boundary, needs_hook_context) {
                     // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
                     return crate::parse::non_candidate_verdict(line);
                 }
@@ -1511,7 +1520,7 @@ fn search_one_file(
     // never match a boundary, so it pays ZERO for the extra check — the hard `-t` filter PRUNES the
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
-        if !line_is_transcript_candidate(line, needs_compact_boundary) {
+        if !line_is_transcript_candidate(line, needs_compact_boundary, needs_hook_context) {
             // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
             return crate::parse::non_candidate_verdict(line);
         }
@@ -1601,13 +1610,21 @@ fn search_one_file(
 /// transcript message (user/assistant role marker) — drops `attachment`,
 /// `file-history-snapshot`, `queue-operation`, and metadata noise pre-JSON. Kept
 /// deliberately permissive (substring, not structural) so no genuine turn is lost.
-fn line_is_transcript_candidate(line: &[u8], needs_compact_boundary: bool) -> bool {
+fn line_is_transcript_candidate(
+    line: &[u8],
+    needs_compact_boundary: bool,
+    needs_hook_context: bool,
+) -> bool {
     // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
     // marker (genuine-user string content, tool carriers, assistant blocks all do).
     // R13: matched serialization-tolerantly — `"role": "user"` (reserialized JSON,
     // whitespace around the colon) is the same record and must not vanish silently.
     static COMPACT_BOUNDARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"compact_boundary"));
+    // R13 needle law: a bare VALUE substring (the attachment payload's `type` value), never a
+    // compact `"key":"value"` byte pair — a reserialized line keeps the value intact.
+    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"hook_additional_context"));
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
@@ -1617,6 +1634,10 @@ fn line_is_transcript_candidate(line: &[u8], needs_compact_boundary: bool) -> bo
         // the `||` chain still reaches this memmem only on lines that already failed both role checks,
         // and boundary records are rare — so the §7 perf contract holds either way.
         || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())
+        // Opt-in hook-injected additionalContext (`search --additional-context`, or an explicit
+        // `show --line`/`--uuid` address — the refetch a search hit prints must resolve without
+        // the flag). Same `&&`-gating law as the boundary: a default scan pays ZERO.
+        || (needs_hook_context && HOOK_CONTEXT_FINDER.find(line).is_some())
 }
 
 /// Walk retained records in file order, delimit turns by genuine-user records, and
@@ -2504,6 +2525,11 @@ fn record_text_emission(
 /// top-level `content` plus a readable `compactMetadata` excerpt, so the boundary is BOTH matchable
 /// and rendered. `None` when there is no text anywhere.
 fn record_raw_text(rec: &Record) -> Option<String> {
+    // Hook-injected additionalContext attachment: its joined content IS the record's text —
+    // both the searchable body under `--additional-context` and the `show`-addressed render.
+    if let Some(text) = rec.hook_additional_context_text() {
+        return Some(text);
+    }
     let Some(msg) = rec.message.as_ref() else {
         // No `message` blocks → a system record. D7: the boundary's content + compactMetadata.
         return system_record_text(rec);
@@ -3217,6 +3243,7 @@ mod tests {
             siblings: false,
             no_truncate: false,
             resolve_persisted: false,
+            additional_context: false,
             no_subagents: false,
             format: OutputFormat::Text,
         }

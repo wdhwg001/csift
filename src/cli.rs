@@ -1302,6 +1302,14 @@ pub struct SearchArgs {
     #[arg(long)]
     pub resolve_persisted: bool,
 
+    /// Also scan hook-injected `additionalContext` — the `attachment` records a SessionStart /
+    /// UserPromptSubmit / … hook writes into the transcript. Off by default: injected context
+    /// is harness machinery and often echoes prompts and files wholesale, drowning genuine
+    /// hits. When enabled, these records surface under `harness.meta.hook`; an explicit
+    /// `show --line`/`--uuid` address always renders one, flag or not.
+    #[arg(long)]
+    pub additional_context: bool,
+
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,

@@ -15274,3 +15274,120 @@ fn acceptance_mcp_elicitation_searchable_under_tool_use() {
         out.stdout
     );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── search --additional-context: hook-injected attachment records ──
+
+const HOOKCTX_SESS: &str = "5c1d9e02-4b7a-4f3c-9d21-6e8a0b4c7d15";
+
+/// One session: a genuine user turn, a `hook_additional_context` attachment record
+/// (content ARRAY — two blocks, joined with `\n`), and the agent's reply.
+fn hook_context_scenario(h: &Home) {
+    let enc = "-Users-dev-example-project";
+    let body = concat!(
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the beacon work"}}"#,
+        "\n",
+        r#"{"parentUuid":"u1","attachment":{"type":"hook_additional_context","content":["<project-memory-context>\nquartzlantern rules apply\n</project-memory-context>","second block harborlight note"],"hookName":"SessionStart","hookEvent":"SessionStart"},"type":"attachment","uuid":"att1","timestamp":"2026-06-07T05:00:01.000Z"}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"done with the beacon work"}]}}"#,
+        "\n",
+    );
+    h.write(&format!("{enc}/{HOOKCTX_SESS}.jsonl"), body);
+}
+
+#[test]
+fn additional_context_is_invisible_by_default() {
+    // The default scan never parses attachment lines: a pattern that lives only in the
+    // hook-injected context is a DEFINITIVE absence (exit 0), not a hit.
+    let h = Home::new();
+    hook_context_scenario(&h);
+    let out = h.run(&["search", "quartzlantern", &at(HOOKCTX_SESS)]);
+    assert!(out.success, "zero-match exits 0: {}", out.stderr);
+    assert!(
+        out.stdout.contains("no matching exchanges"),
+        "default scan must not see hook context:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
+    let h = Home::new();
+    hook_context_scenario(&h);
+    // First array element matches; the hit is labeled harness.meta.hook at its real line.
+    let out = h.run(&[
+        "search",
+        "quartzlantern",
+        &at(HOOKCTX_SESS),
+        "--additional-context",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("harness.meta.hook")
+            && out.stdout.contains("L2")
+            && out.stdout.contains("quartzlantern"),
+        "flag surfaces the attachment under harness.meta.hook:\n{}",
+        out.stdout
+    );
+    // Second array element is part of the SAME joined text (the `\n` join seam).
+    let out2 = h.run(&[
+        "search",
+        "harborlight",
+        &at(HOOKCTX_SESS),
+        "--additional-context",
+    ]);
+    assert!(
+        out2.stdout.contains("harness.meta.hook"),
+        "every content element is searchable:\n{}",
+        out2.stdout
+    );
+    // The label filter still governs: -t user can never surface it.
+    let out3 = h.run(&[
+        "search",
+        "quartzlantern",
+        &at(HOOKCTX_SESS),
+        "--additional-context",
+        "-t",
+        "user",
+    ]);
+    assert!(
+        out3.stdout.contains("no matching exchanges"),
+        "-t user excludes meta.hook even with the flag:\n{}",
+        out3.stdout
+    );
+    // JSON: the hit carries the leaf as `label`, and the summary reconciles.
+    let outj = h.run(&[
+        "search",
+        "quartzlantern",
+        &at(HOOKCTX_SESS),
+        "--additional-context",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        outj.stdout.contains(r#""label":"harness.meta.hook""#),
+        "JSON hit label:\n{}",
+        outj.stdout
+    );
+}
+
+#[test]
+fn addressed_show_renders_hook_attachment_without_the_flag() {
+    // The refetch a search hit prints (`csift show @<id> --line N`) carries no flag — an
+    // explicit line/uuid address must render the attachment record regardless.
+    let h = Home::new();
+    hook_context_scenario(&h);
+    let out = h.run(&["show", &at(HOOKCTX_SESS), "--line", "2"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("quartzlantern") && out.stdout.contains("harborlight"),
+        "show --line renders the joined hook context flag-free:\n{}",
+        out.stdout
+    );
+    let out2 = h.run(&["show", &at(HOOKCTX_SESS), "--uuid", "att1"]);
+    assert!(
+        out2.stdout.contains("quartzlantern"),
+        "show --uuid renders it too:\n{}",
+        out2.stdout
+    );
+}

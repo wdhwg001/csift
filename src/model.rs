@@ -795,6 +795,35 @@ impl Record {
         serde_json::from_str(raw.get()).ok()
     }
 
+    /// Hook-injected `additionalContext` text: a `type:"attachment"` record whose payload is
+    /// `{"type":"hook_additional_context","content":[…],…}` — the context a SessionStart /
+    /// UserPromptSubmit / … hook injected into the turn. `content` is a string ARRAY in real
+    /// data (one element per injected block; joined with `\n`), tolerated as a bare string.
+    /// `None` for every other record shape. Cheap for non-attachment records (one type
+    /// compare before any parse).
+    #[must_use]
+    pub fn hook_additional_context_text(&self) -> Option<String> {
+        if !self.is_type("attachment") {
+            return None;
+        }
+        let v = self.attachment_value()?;
+        let att = v.as_object()?;
+        if att.get("type").and_then(serde_json::Value::as_str) != Some("hook_additional_context") {
+            return None;
+        }
+        match att.get("content")? {
+            serde_json::Value::String(s) => {
+                let s = s.trim();
+                (!s.is_empty()).then(|| s.to_string())
+            }
+            serde_json::Value::Array(parts) => {
+                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();
+                (!texts.is_empty()).then(|| texts.join("\n"))
+            }
+            _ => None,
+        }
+    }
+
     /// Cheap typed probe of the SMALL `toolUseResult` fields the hot paths consult —
     /// deserializing it skips the huge content values (file bodies, stdout echoes)
     /// without allocating them. `None` when there is no `toolUseResult` or it is not a
@@ -2731,6 +2760,15 @@ impl Record {
             if self.csift_phase.as_deref() == Some("pending") {
                 push_unique(&mut out, Class::AgentToolUse);
             }
+            return out;
+        }
+
+        // Hook-injected additionalContext (a `type:"attachment"` record): harness machinery,
+        // not a message — labeled `harness.meta.hook`. Only `search --additional-context`
+        // (or an explicit `show --line`/`--uuid` address) ever parses these lines, so the
+        // label is unreachable elsewhere; the record never opens a turn.
+        if self.hook_additional_context_text().is_some() {
+            push_unique(&mut out, Class::MetaHook);
             return out;
         }
 
@@ -6187,5 +6225,34 @@ mod tests {
         };
         let dbg = format!("{ctx:?}");
         assert!(dbg.contains("has_spawn_lookup: true"), "got: {dbg}");
+    }
+
+    #[test]
+    fn hook_additional_context_text_shapes_and_classify() {
+        // Array content (the real on-disk shape) joins with `\n`; classify → MetaHook only.
+        let arr: Record = serde_json::from_str(
+            r#"{"type":"attachment","uuid":"x1","attachment":{"type":"hook_additional_context","content":["alpha block","beta block"],"hookEvent":"SessionStart"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            arr.hook_additional_context_text().as_deref(),
+            Some("alpha block\nbeta block")
+        );
+        let ctx = ClassifyCtx::top_level();
+        assert_eq!(arr.classify(&ctx), vec![Class::MetaHook]);
+        assert!(!arr.opens_turn());
+
+        // Bare-string content is tolerated (trimmed); a different attachment type is None.
+        let s: Record = serde_json::from_str(
+            r#"{"type":"attachment","attachment":{"type":"hook_additional_context","content":" solo "}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.hook_additional_context_text().as_deref(), Some("solo"));
+        let other: Record = serde_json::from_str(
+            r#"{"type":"attachment","attachment":{"type":"file_snapshot","content":"zz"}}"#,
+        )
+        .unwrap();
+        assert_eq!(other.hook_additional_context_text(), None);
+        assert!(other.classify(&ctx).is_empty());
     }
 }
