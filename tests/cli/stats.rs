@@ -113,3 +113,160 @@ fn stats_split_compactions_and_physical_lines_exact() {
         t.stdout
     );
 }
+
+#[test]
+fn stats_aggregates_records_turns_tools_and_tokens() {
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-statsy";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":5},"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"second ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T06:00:09.000Z","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":1,"output_tokens":2},"content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &format!("@{sess}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(out.stdout.contains("turns 2"), "{}", out.stdout);
+    assert!(out.stdout.contains("Bash×1"), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains("claude-opus-4-8: in 11 · out 22 · cache-read 100 · cache-write 5"),
+        "token sums: {}",
+        out.stdout
+    );
+
+    let j = h.run(&["stats", &format!("@{sess}"), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let row = json_rows(&j.stdout, "session").remove(0);
+    assert_eq!(row["turns"], 2);
+    assert_eq!(row["user_records"], 3); // 2 genuine + 1 tool_result carrier
+    assert_eq!(row["assistant_records"], 2);
+    assert_eq!(row["tools"]["Bash"], 1);
+    assert_eq!(row["tokens"]["claude-opus-4-8"]["output"], 22);
+    let sum = json_summary(&j.stdout);
+    assert_eq!(sum["turns"], 2);
+
+    // --since bounds the counted records (only the second turn's records remain).
+    let win = h.run(&[
+        "stats",
+        &format!("@{sess}"),
+        "--since",
+        "2026-06-07T05:30:00Z",
+        "--format",
+        "json",
+    ]);
+    let row = json_rows(&win.stdout, "session").remove(0);
+    assert_eq!(row["turns"], 1, "window admits only the later turn");
+    assert_eq!(row["tokens"]["claude-opus-4-8"]["output"], 2);
+}
+
+#[test]
+fn stats_turn_range_windows_the_aggregates() {
+    let h = Home::new();
+    let enc = "-Users-testuser-Projects-statturn";
+    let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            // Turn 0: one Read tool call.
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t0","name":"Read","input":{}}]}}"#, "\n",
+            // Turn 1: one Edit tool call.
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"second ask"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{}}]}}"#, "\n",
+        ),
+    );
+    // Bare-N shorthand: turn 1 only — Edit counted, Read not, turns == 1.
+    let out = h.run(&["stats", enc, "--turn", "1", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows = json_rows(&out.stdout, "session");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["turns"], 1, "one turn in window: {}", out.stdout);
+    assert!(
+        rows[0]["tools"].get("Edit").is_some() && rows[0]["tools"].get("Read").is_none(),
+        "only turn 1's tool calls count: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn stats_aggregates_are_exact() {
+    // Mutation pin on the stats aggregation core: token sums per model, tool CALL
+    // counts, the span label, and the JSON id trio must carry REAL values — an emptied
+    // merge map or a += degraded to *= zeroed them with no test on the numbers.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "8899aabb-ccdd-4000-8000-00000000000d";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:30.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":111,"output_tokens":44,"cache_read_input_tokens":5,"cache_creation_input_tokens":4},"content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/a.md","content":"x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:40.000Z","toolUseResult":{"type":"create","filePath":"/p/a.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":222,"output_tokens":55},"content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    // A subagent transcript so the MERGED (multi-transcript) rollup path renders too —
+    // the scoped --iterate verification showed merged_tools/merged_tokens survived a
+    // single-transcript fixture (the merge path was never invoked).
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-aggr222.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aggr222","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"sub work"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":1000,"output_tokens":500,"cache_read_input_tokens":7,"cache_creation_input_tokens":3},"content":[{"type":"tool_use","id":"sw1","name":"Write","input":{"file_path":"/s/b.md","content":"y"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &format!("@{sess}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("relay-model-x"),
+        "model row present: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("333") && out.stdout.contains("99"),
+        "token sums 111+222=333 in / 44+55=99 out: {}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("Write"), "tool tally: {}", out.stdout);
+    assert!(
+        out.stdout.contains("1m05s"),
+        "span label for the 65s session: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("1333") && out.stdout.contains("599"),
+        "MERGED token sums 333+1000 / 99+500 across the two transcripts: {}",
+        out.stdout
+    );
+    let js = h.run(&["stats", &format!("@{sess}"), "--format", "json"]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    assert!(
+        js.stdout
+            .contains(&format!(r#""parent_session_id":"{sess}""#)),
+        "the JSON id trio is populated: {}",
+        js.stdout
+    );
+    assert!(
+        js.stdout.contains(r#""Write":2"#),
+        "MERGED tool calls across the two transcripts: {}",
+        js.stdout
+    );
+    // The asserted merged values are UNIQUE to the merged object (5+7 / 4+3 — no single
+    // row carries them): a per-row field must never be able to satisfy the merge pin.
+    assert!(
+        js.stdout.contains(r#""cache_read":12"#) && js.stdout.contains(r#""cache_creation":7"#),
+        "the cache accumulators merge too: {}",
+        js.stdout
+    );
+    assert!(
+        js.stdout.contains(r#""is_subagent":true"#),
+        "the subagent row's id-domain discriminator is real, never defaulted: {}",
+        js.stdout
+    );
+}

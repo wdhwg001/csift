@@ -1,9 +1,8 @@
-mod part01;
-mod part02;
-mod part03;
-mod part04;
-mod part05;
-mod part06;
-mod part07;
-mod part08;
-mod part09;
+mod basics;
+mod census;
+mod classify;
+mod filters;
+mod headers;
+mod output;
+mod scope;
+mod taxonomy;

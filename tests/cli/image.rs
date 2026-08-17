@@ -340,3 +340,95 @@ fn image_out_extension_transcodes_png_source() {
         assert!(len > 0, "{ext} written and non-empty");
     }
 }
+
+#[test]
+fn image_spans_subagents_by_default_and_restricts() {
+    // Same span-contract pin for `image`: an image carried ONLY by a subagent transcript is
+    // listed by default and disappears under --no-subagents.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"no images up here"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-sub222.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"sub222","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"[Image #1] look"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}"#, "\n",
+        ),
+    );
+    let span = h.run(&["image", at(SESS).as_str()]);
+    assert!(span.success, "stderr: {}", span.stderr);
+    assert!(
+        span.stdout.contains("png"),
+        "image spans subagents by default: {}",
+        span.stdout
+    );
+    let top = h.run(&["image", at(SESS).as_str(), "--no-subagents"]);
+    assert!(top.success, "stderr: {}", top.stderr);
+    assert!(
+        !top.stdout.contains("png"),
+        "--no-subagents restricts image to the top level: {}",
+        top.stdout
+    );
+}
+
+#[test]
+fn image_lists_images_with_stable_ids() {
+    let h = image_home();
+    let out = h.run(&["image", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // r0 = line 1 (1 image), r2 = line 3 (2 images): L1i1 png, L3i1 jpeg, L3i2 png.
+    assert!(out.stdout.contains("L1i1"), "L1i1 missing:\n{}", out.stdout);
+    assert!(out.stdout.contains("L3i1"), "L3i1 missing:\n{}", out.stdout);
+    assert!(out.stdout.contains("L3i2"), "L3i2 missing:\n{}", out.stdout);
+    assert!(out.stdout.contains("image/jpeg"));
+    assert!(
+        out.stdout.contains("3 image(s)"),
+        "count line:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn image_ambiguous_hash_n_errors_with_occurrence_list() {
+    let h = ambiguous_hash_home();
+
+    // Listing surfaces the `#N` handle and shows BOTH #1 images (distinct content → not deduped).
+    let list = h.run(&["image", at(SESS).as_str(), "--no-subagents"]);
+    assert!(list.success, "stderr: {}", list.stderr);
+    assert!(list.stdout.contains("#1") && list.stdout.contains("#2"));
+    assert!(
+        list.stdout.contains("3 image(s)"),
+        "all 3 distinct (no content-dedup):\n{}",
+        list.stdout
+    );
+
+    // `--id 1` is AMBIGUOUS → it must ERROR (not silently pick one) and list every occurrence
+    // with its turn / locator / uuid / time / excerpt so the consumer can disambiguate.
+    let err = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "1"]);
+    assert!(!err.success, "ambiguous 1 must fail, got:\n{}", err.stdout);
+    assert!(err.stderr.contains("ambiguous"), "stderr: {}", err.stderr);
+    assert!(
+        err.stderr.contains("L1i1") && err.stderr.contains("L3i1"),
+        "both occurrences listed: {}",
+        err.stderr
+    );
+    assert!(
+        err.stderr.contains("t0") && err.stderr.contains("t1"),
+        "turn indices shown: {}",
+        err.stderr
+    );
+    // the excerpt centers on the marker, and the uuid prefix is surfaced.
+    assert!(
+        err.stderr.contains("re-sharing") && err.stderr.contains("u1deadbe"),
+        "excerpt + uuid in the list: {}",
+        err.stderr
+    );
+
+    // `--id 2` is UNIQUE (only the line-1 red) → resolves fine.
+    let two = h.run(&["image", at(SESS).as_str(), "--no-subagents", "--id", "2"]);
+    assert!(two.success, "stderr: {}", two.stderr);
+    assert!(two.stdout.contains("L1i2"), "{}", two.stdout);
+}

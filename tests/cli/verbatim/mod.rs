@@ -1,4 +1,7 @@
-mod part01;
-mod part02;
-mod part03;
-mod part04;
+mod artifacts;
+mod budget;
+mod render;
+mod selection;
+mod slices;
+mod surface;
+mod windows;
