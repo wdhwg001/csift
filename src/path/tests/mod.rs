@@ -1,4 +1,6 @@
 use super::*;
 
-mod part01;
-mod part02;
+mod encode;
+mod ids;
+mod roots;
+mod trap;

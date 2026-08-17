@@ -20,9 +20,11 @@ fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
         .collect()
 }
 
-mod part01;
-mod part02;
-mod part03;
-mod part04;
-mod part05;
-mod part06;
+mod boundaries;
+mod coverage;
+mod diff;
+mod events;
+mod patching;
+mod render;
+mod replay;
+mod string_edits;

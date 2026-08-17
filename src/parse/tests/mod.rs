@@ -63,5 +63,5 @@ mod tempfile_path {
     }
 }
 
-mod part01;
-mod part02;
+mod lines;
+mod readers;

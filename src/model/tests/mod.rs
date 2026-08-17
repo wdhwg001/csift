@@ -16,11 +16,14 @@ impl SpawnLookup for FakeSpawn {
     }
 }
 
-mod part01;
-mod part02;
-mod part03;
-mod part04;
-mod part05;
-mod part06;
-mod part07;
-mod part08;
+mod automation;
+mod boundaries;
+mod classify_comm;
+mod classify_harness;
+mod classify_roles;
+mod classify_support;
+mod grouping;
+mod mutation;
+mod peer;
+mod predicates;
+mod record;

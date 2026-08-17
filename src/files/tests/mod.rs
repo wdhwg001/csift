@@ -62,5 +62,36 @@ fn fixture() -> Vec<Record> {
     ]
 }
 
-mod part01;
-mod part02;
+mod buckets;
+mod filters;
+mod mutations;
+mod render;
+
+// ── Rendering branches (called directly so coverage does not depend on the
+//    integration-binary merge; output goes to test stdout, harmless). ──
+
+fn outcome(detail: FilesDetail, muts: Vec<TaggedMutation>) -> Outcome {
+    // Derive the scope span from the mutations' distinct transcripts (test-only proxy for
+    // the real `resolve_session_files` span) so a subagent fixture still drives the banner.
+    // Compute the owned counts BEFORE moving `muts` into the struct.
+    let mut subs = std::collections::BTreeSet::new();
+    let mut tops = std::collections::BTreeSet::new();
+    for m in &muts {
+        if m.is_subagent {
+            subs.insert(m.session_id.clone());
+        } else {
+            tops.insert(m.session_id.clone());
+        }
+    }
+    let (scope_top, scope_sub) = (tops.len(), subs.len());
+    Outcome {
+        detail,
+        mutations: muts,
+        boundaries: Vec::new(),
+        skipped_lines: 0,
+        turn_range: None,
+        time_window_bounded: false,
+        scope_top,
+        scope_sub,
+    }
+}

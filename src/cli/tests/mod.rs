@@ -11,6 +11,7 @@ fn parse(argv: &[&str]) -> Result<Cli, clap::Error> {
     Cli::try_parse_from(normalize_argv(owned))
 }
 
-mod part01;
-mod part02;
-mod part03;
+mod argv;
+mod command_args;
+mod docs;
+mod targets;

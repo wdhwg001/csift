@@ -136,6 +136,7 @@ fn teammate_layout(fx: &Fixture) -> PathBuf {
     session
 }
 
-mod part01;
-mod part02;
-mod part03;
+mod discovery;
+mod ids;
+mod lifecycle;
+mod topology;

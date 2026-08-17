@@ -148,10 +148,23 @@ fn cfg() -> RichnessCfg {
     }
 }
 
-mod part01;
-mod part02;
-mod part03;
-mod part04;
-mod part05;
-mod part06;
-mod part07;
+mod automation;
+mod boundaries;
+mod build;
+mod cost;
+mod dedup;
+mod planning;
+mod render_caps;
+mod richness;
+mod scan;
+mod select;
+
+/// A deterministic body of exactly `n` ASCII chars whose tail token is unique (`TAGn`), so
+/// a test can assert WHICH message survived by substring without coupling to the filler.
+fn body_chars(tag: &str, n: usize) -> String {
+    let suffix = format!(" {tag}");
+    let fill = n.saturating_sub(suffix.chars().count());
+    let mut s = "x".repeat(fill);
+    s.push_str(&suffix);
+    s
+}
