@@ -190,7 +190,8 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
     std::fs::write(&p, "deep file body containing the token wibblewobble here").unwrap();
     let line = format!(
         r#"{{"type":"user","uuid":"u0","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"x","content":"<persisted-output>\nOutput too large (1 KB). Full output saved to: {}\n\nPreview (first 2KB):\n(no token here)\n</persisted-output>"}}]}}}}"#,
-        p.to_string_lossy()
+        // JSON-escape the path: a Windows temp dir carries backslashes.
+        p.to_string_lossy().replace('\\', "\\\\")
     );
     let r: Record = serde_json::from_str(&line).expect("valid record");
 

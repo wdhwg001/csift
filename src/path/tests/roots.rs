@@ -99,9 +99,14 @@ fn absolutize_existing_path_canonicalizes() {
 #[test]
 fn absolutize_nonexistent_absolute_path_normalizes_lexically() {
     // A non-existent ABSOLUTE path → canonicalize fails → the `p.is_absolute()`
-    // true arm + lexical_normalize (resolving the `..`).
-    let abs = absolutize(Path::new("/no/such/csift/a/../b")).expect("absolutize");
-    assert_eq!(abs, PathBuf::from("/no/such/csift/b"));
+    // true arm + lexical_normalize (resolving the `..`). Spelled per platform:
+    // a bare `/x` path is not absolute on Windows.
+    #[cfg(windows)]
+    let (input, want) = (r"C:\no\such\csift\a\..\b", r"C:\no\such\csift\b");
+    #[cfg(not(windows))]
+    let (input, want) = ("/no/such/csift/a/../b", "/no/such/csift/b");
+    let abs = absolutize(Path::new(input)).expect("absolutize");
+    assert_eq!(abs, PathBuf::from(want));
 }
 
 #[test]
