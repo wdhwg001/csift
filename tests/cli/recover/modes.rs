@@ -555,3 +555,37 @@ fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
         "expected a substantial clean prefix, got {prefix_len}"
     );
 }
+
+#[test]
+fn recover_windows_shaped_paths_round_trip() {
+    // Transcript paths with drive letters and backslashes (what Claude Code writes on
+    // Windows) must survive the file-level basename gate and match end to end - the
+    // gate once took the whole backslash path as its needle, which the raw line's
+    // JSON escaping can never contain. String-level, so this pins on every platform.
+    let h = Home::new();
+    let plan = r"C:\Users\w\AppData\plans\gleaming-marble-run.md";
+    let line = format!(
+        concat!(
+            r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"plan"}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"aw","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"pw","name":"Write","input":{{"file_path":"{p}","content":"W1\nW2\n"}}}}]}}}}"#,
+            "\n",
+            r#"{{"type":"user","uuid":"cw","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{{"type":"create","filePath":"{p}","content":"W1\nW2\n"}},"message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"pw","content":"ok"}}]}}}}"#,
+            "\n"
+        ),
+        p = jpath(plan)
+    );
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &line);
+    let full = h.run(&["recover", "--file", plan, "--no-subagents"]);
+    assert!(full.success, "stderr: {}", full.stderr);
+    assert_eq!(full.stdout, "W1\nW2\n");
+    // The basename shorthand crosses the backslash boundary too.
+    let base = h.run(&[
+        "recover",
+        "--file",
+        "gleaming-marble-run.md",
+        "--no-subagents",
+    ]);
+    assert!(base.success, "stderr: {}", base.stderr);
+    assert_eq!(base.stdout, "W1\nW2\n");
+}

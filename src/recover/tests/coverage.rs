@@ -241,3 +241,13 @@ fn gap_ranges_whole_file_unknown_when_no_known_lines() {
     // Empty known + total == 0 → no gaps at all (nothing seen, nothing to mark).
     assert_eq!(gap_ranges(&[], 0), Vec::<(usize, usize)>::new());
 }
+
+#[test]
+fn basename_of_splits_both_separators_and_raw_safety_gates() {
+    assert_eq!(basename_of("/a/b/x.md"), "x.md");
+    assert_eq!(basename_of(r"C:\a\b\x.md"), "x.md");
+    assert_eq!(basename_of("plain.md"), "plain.md");
+    assert!(raw_needle_safe("x.md"));
+    assert!(!raw_needle_safe(""));
+    assert!(!raw_needle_safe("we\"ird.md"));
+}

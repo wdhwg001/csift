@@ -135,7 +135,7 @@ fn list_real_path_target_is_encoded_and_resolved() {
     }
     let out = h.run(&["list", "/Users/testuser/Projects/foo"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    assert!(out.stdout.contains(SESS));
+    assert!(out.stdout.contains(SESS), "stdout: {}", out.stdout);
 }
 
 #[test]

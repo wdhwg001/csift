@@ -177,7 +177,7 @@ pub(crate) fn path_matches(target: Option<&str>, path: &str) -> bool {
     // Basename-suffix fallback: the target is a trailing path segment of the record's
     // path (component-aligned, so `b.rs` does not match `/x/ab.rs`).
     path.strip_suffix(t)
-        .map(|prefix| prefix.is_empty() || prefix.ends_with('/'))
+        .map(|prefix| prefix.is_empty() || prefix.ends_with(['/', '\\']))
         .unwrap_or(false)
 }
 

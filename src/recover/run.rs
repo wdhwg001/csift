@@ -166,7 +166,13 @@ pub(crate) struct BatchOutcome {
 /// The last path component (the filename) - the distinctive token a transcript carries for
 /// every op on the file, and the [`aho_corasick`] pattern that gates parsing.
 pub(crate) fn basename_of(p: &str) -> &str {
-    p.rsplit('/').next().unwrap_or(p)
+    p.rsplit(['/', '\\']).next().unwrap_or(p)
+}
+
+/// A basename is a valid RAW-LINE byte needle only when JSON serialization cannot
+/// rewrite it: no quote, no backslash, no control byte (the SPEC 7d prefilter law).
+pub(crate) fn raw_needle_safe(base: &str) -> bool {
+    !base.is_empty() && base.bytes().all(|b| b >= 0x20 && b != b'"' && b != b'\\')
 }
 
 pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
@@ -200,6 +206,14 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
     //    transcript matching none is skipped without parsing (the single-file prefilter,
     //    generalized to the whole manifest in one Aho-Corasick pass). ──
     let basenames: Vec<String> = targets.iter().map(|t| basename_of(t).to_string()).collect();
+    // A basename JSON serialization can rewrite is no raw-byte needle: its target is
+    // ALWAYS scanned rather than silently gated out (the SPEC 7d prefilter law).
+    let always: Vec<usize> = basenames
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| !raw_needle_safe(b))
+        .map(|(i, _)| i)
+        .collect();
     let ac = aho_corasick::AhoCorasick::new(&basenames)
         .context("building the manifest basename matcher")?;
 
@@ -226,7 +240,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
     // ── ONE parse per transcript; extract every present target from its shared turn grouping. ──
     let per_file: Vec<Vec<(usize, ScanResult)>> = session_files
         .par_iter()
-        .map(|p| scan_one_file_multi(p, &targets, &ac))
+        .map(|p| scan_one_file_multi(p, &targets, &ac, &always))
         .collect::<Result<Vec<_>>>()?;
 
     let mut by_target: Vec<Vec<ScanResult>> = (0..targets.len()).map(|_| Vec::new()).collect();

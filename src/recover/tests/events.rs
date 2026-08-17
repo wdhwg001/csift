@@ -400,3 +400,11 @@ fn path_matches_deep_suffix_after_slash_boundary() {
         "two-segment suffix at a '/' boundary"
     );
 }
+
+#[test]
+fn path_matches_basename_suffix_accepts_windows_separator() {
+    assert!(path_matches(Some("x.md"), r"C:\plans\x.md"));
+    assert!(path_matches(Some("x.md"), "/plans/x.md"));
+    assert!(!path_matches(Some("x.md"), r"C:\plans\ax.md"));
+    assert!(!path_matches(Some("x.md"), "/plans/ax.md"));
+}

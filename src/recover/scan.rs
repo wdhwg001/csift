@@ -9,6 +9,7 @@ pub(crate) fn scan_one_file_multi(
     path: &Path,
     targets: &[String],
     ac: &aho_corasick::AhoCorasick,
+    always: &[usize],
 ) -> Result<Vec<(usize, ScanResult)>> {
     let session_id = crate::subagent::session_id_from_path(path);
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -19,7 +20,7 @@ pub(crate) fn scan_one_file_multi(
         return Ok(Vec::new());
     };
     let bytes: &[u8] = &mmap;
-    if !ac.is_match(bytes) {
+    if always.is_empty() && !ac.is_match(bytes) {
         return Ok(Vec::new());
     }
     // Which manifest basenames appear (overlapping, so a basename that is a substring of
@@ -28,6 +29,7 @@ pub(crate) fn scan_one_file_multi(
         .find_overlapping_iter(bytes)
         .map(|m| m.pattern().as_usize())
         .collect();
+    present.extend_from_slice(always); // gate-exempt targets are always extracted
     present.sort_unstable();
     present.dedup();
 
@@ -191,8 +193,10 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
     //    turning an unscoped recover from a whole-corpus JSON parse into a parse of only the few
     //    transcripts that touched the file. (No target ⇒ no gate; behaviour unchanged.)
     if let Some(t) = target_file {
-        let base = t.rsplit('/').next().unwrap_or(t);
-        if !base.is_empty() && memmem::find(bytes, base.as_bytes()).is_none() {
+        // Both separators: a Windows path's basename must carry no `\` - a needle
+        // with a backslash can never match the raw line (JSON escapes it to `\\`).
+        let base = basename_of(t);
+        if raw_needle_safe(base) && memmem::find(bytes, base.as_bytes()).is_none() {
             return Ok(ScanResult {
                 session_id,
                 is_subagent,
