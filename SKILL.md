@@ -1,20 +1,20 @@
 ---
 name: csift
 description: >-
-  Read, search and analyze Claude Code session transcripts (the .jsonl files
-  under ~/.claude/projects). Use this INSTEAD of grep/ripgrep/cat/jq/python over
-  those files - reach for it the moment you would hand-scan or hand-parse a
-  session jsonl. Use it to find where a phrase or regex appears across ALL
-  sessions, with each hit timestamp, line number and owning session; answer
-  which session said or did X; answer when did X happen by pulling a message
-  exact time; read specific records by line, turn or uuid; see what a session
-  is doing right now (recent turns, whether it is live, pending tool calls);
-  see which tools ran, tokens burned, models used, files changed; recover a
-  file or a deleted plan rebuilt from the transcript; restore the verbatim
-  turns a compaction summary clipped; locate the plan bound to a session; and
-  list and identify sessions. Returns full round-trips with per-hit line
-  numbers, local timestamps and ready-to-run refetch commands. Pure regex, not
-  semantic search.
+  Read, search and analyze Claude Code session transcripts (the .jsonl under
+  ~/.claude/projects). Use this INSTEAD of grep/ripgrep/cat/jq/python over those
+  files - reach for it the moment you would hand-scan or hand-parse a session
+  jsonl, or the moment you are about to record session facts (timestamps, ids,
+  last-activity markers) yourself: query, do not shadow. Find where a phrase or
+  regex appears across ALL sessions and when (timestamp, line, owning session
+  per hit); read records by line, turn or uuid; see what a session is doing
+  right now (recent turns, pending tool calls); see tools, tokens, models, files
+  changed; recover a file or a deleted plan from the transcript; restore the
+  verbatim turns a compaction summary clipped; locate the plan bound to a
+  session; list and identify sessions. Also the query engine for your OWN
+  automation: hooks and scripts read session facts through csift (read-only,
+  sub-second), never shadow state. Full round-trips, ready-to-run refetch
+  commands. Pure regex, not semantic search.
 ---
 
 # csift — ripgrep for Claude Code session transcripts
@@ -67,6 +67,8 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | `completed_utc` = "when it stopped" | non-null ONLY when `status:"completed"` — a frozen/running lane carries null; its tail instant is `last_activity_utc/_local` (every timestamped lane; == `pending_since_utc` when frozen) |
 | the pairing census needs `-t agent.tool.use` | pairing rides the tool BLOCK through the communication views — a frozen `SendMessage` counts as `pending` with no `-t` at all |
 | timestamps need timezone arithmetic | text timestamps are already LOCAL with the offset inline — `2026-07-11 15:33 AEST(UTC+10)`; UTC lives only in JSON `ts_utc` |
+| a hook that needs a session fact needs its own state file | the transcript already records it - before persisting anything (last prompt time, ids, activity markers) ask: does the jsonl already have this? Query csift from the hook (read-only, sub-second, safe inside hooks); a shadow store duplicates ground truth and drifts |
+| "previous prompt" from a UserPromptSubmit hook = the newest `-t user` hit | at that instant the CURRENT prompt's record may or may not be flushed yet (both observed live) - drop hits younger than now-2s and take the newest survivor; the @trap MAIN-thread flush race, different consumer |
 | `@trap` failing = you mistyped the marker | from the MAIN thread a FIRST use ALWAYS misses (CC flushes the main record only after the command completes; a subagent resolves first try) — use `@main` there, or re-run the SAME command+marker; a FRESH marker restarts the race and misses again |
 | "re-run the @trap command" = a second line in my script | the retry must be a NEW, SEPARATE shell-tool invocation (Bash / Windows PowerShell) — two attempts inside ONE shell script are still ONE in-flight command (nothing flushes until the whole script exits), so both miss; batching the retry to save a round trip is exactly the wrong move here |
 | a fresh nonce string is reliably absent from the corpus | not from YOUR OWN live session: using it as a search pattern writes it into your transcript the moment that tool call flushes — the next unscoped/`@main` search finds your own earlier invocation (a self-echo, label `agent.tool.use`). Absence checks: scope away from your own session, or only trust the FIRST use |
