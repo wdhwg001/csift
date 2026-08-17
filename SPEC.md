@@ -377,6 +377,14 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.7.7 CHANGE LEDGER (non-breaking; help prose pass -- `csift 0.7.7`).**
+> Every `--help` page reworked for plain punctuation (em dashes replaced by commas,
+> colons, semicolons, parentheses; one flag-list restructure, zero content loss --
+> the drift guards pin flag mentions and example validity). No flag, output, or JSON
+> change. Repo-side, .rs comments are ASCII-only (em dash banned, gate-enforced);
+> string literals -- output glyphs like the missing-timestamp marker, fixtures,
+> quoted program output -- keep their deliberate non-ASCII.
+
 > **v0.7.6 CHANGE LEDGER (non-breaking; opt-in hook-context search — `csift 0.7.6`).**
 > `search --additional-context` ALSO scans hook-injected additionalContext — the
 > `type:"attachment"` records a SessionStart/UserPromptSubmit/... hook writes into the

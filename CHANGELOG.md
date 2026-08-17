@@ -5,6 +5,13 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.7] - 2026-08-17
+
+- Help text reworked for plain punctuation across every `--help` page; flag
+  semantics, examples, and JSON schemas unchanged.
+- Source comments are ASCII-only (enforced by the pre-commit gate); output
+  glyphs and test fixtures in string literals are unaffected.
+
 ## [0.7.6] - 2026-08-17
 
 - `search --additional-context` — opt-in scan of hook-injected

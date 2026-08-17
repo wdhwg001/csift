@@ -1,10 +1,10 @@
 [package]
 name = "csift"
-version = "0.7.6"
+version = "0.7.7"
 authors = ["Greendam <8943519+wdhwg001@users.noreply.github.com>"]
 edition = "2021"
 rust-version = "1.89"
-description = "ripgrep for Claude Code session transcripts — fast regex list/search over ~/.claude/projects/**/*.jsonl"
+description = "ripgrep for Claude Code session transcripts: fast regex list/search over ~/.claude/projects/**/*.jsonl"
 license = "MIT"
 repository = "https://github.com/wdhwg001/csift"
 readme = "README.md"
