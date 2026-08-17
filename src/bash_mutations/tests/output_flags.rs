@@ -26,7 +26,7 @@ fn output_flag_format_selector_edge_forms() {
     assert!(paths("kubectl get pods --out=wide").is_empty());
     assert!(paths("tool --logfile=none").is_empty());
     // `--output` followed by ANOTHER flag does not consume the flag as a path (and the
-    // flag is not skipped) — no phantom row, the next flag is still scannable.
+    // flag is not skipped) - no phantom row, the next flag is still scannable.
     assert!(paths("tool --output --verbose").is_empty());
     // A format word that nonetheless carries a path shape (slash/extension) is a real file.
     assert_eq!(
@@ -35,11 +35,11 @@ fn output_flag_format_selector_edge_forms() {
     );
 }
 
-// ── Fix B — curl / wget output flags ──
+// ── Fix B - curl / wget output flags ──
 
 #[test]
 fn curl_dash_o_output_caught() {
-    // `curl -s URL -o /tmp/x.json` — the dominant Smain miss (7/7).
+    // `curl -s URL -o /tmp/x.json` - the dominant Smain miss (7/7).
     assert_eq!(
         paths("curl -s https://api.example.com/d -o /tmp/x.json"),
         vec![("/tmp/x.json".to_string(), "curl")]
@@ -65,14 +65,14 @@ fn curl_long_output_flag_both_forms() {
 fn curl_capital_o_no_path_is_skipped() {
     // `curl -O URL` derives the local name from the URL → no deterministic path.
     assert!(paths("curl -O https://example.com/file.tar.gz").is_empty());
-    // `curl -sO https://… /tmp/x` — the bundled `-sO` is not our `-O`-takes-next
+    // `curl -sO https://… /tmp/x` - the bundled `-sO` is not our `-O`-takes-next
     // form (curl's -O takes no path), so no fabricated path either.
     assert!(paths("curl -sO https://example.com/x").is_empty());
 }
 
 #[test]
 fn wget_capital_o_output_caught() {
-    // `wget -O /tmp/x.bin URL` — wget's capital-O DOES take a path.
+    // `wget -O /tmp/x.bin URL` - wget's capital-O DOES take a path.
     assert_eq!(
         paths("wget -O /tmp/x.bin https://example.com/x"),
         vec![("/tmp/x.bin".to_string(), "wget")]
@@ -87,7 +87,7 @@ fn wget_output_document_caught() {
     );
 }
 
-// ── Fix C — flag-specified outputs, dd, zip ──
+// ── Fix C - flag-specified outputs, dd, zip ──
 
 #[test]
 fn junit_xml_flag_both_dashes_caught() {
@@ -126,7 +126,7 @@ fn generic_output_flags_caught() {
 
 #[test]
 fn dd_of_output_caught() {
-    // `dd if=/dev/zero of=/tmp/x.bin` — `of=` parsed specially (KEY=VALUE otherwise
+    // `dd if=/dev/zero of=/tmp/x.bin` - `of=` parsed specially (KEY=VALUE otherwise
     // rejected); `if=` (input) is NOT emitted.
     assert_eq!(
         paths("dd if=/dev/zero of=/tmp/x.bin bs=1M count=4"),
@@ -142,7 +142,7 @@ fn dd_of_dev_null_dropped() {
 
 #[test]
 fn zip_dest_is_first_operand_only() {
-    // `zip /tmp/x.zip a b` — only the archive dest, NOT the input members.
+    // `zip /tmp/x.zip a b` - only the archive dest, NOT the input members.
     assert_eq!(
         paths("zip /tmp/x.zip a b c"),
         vec![("/tmp/x.zip".to_string(), "zip")]

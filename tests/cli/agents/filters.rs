@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn agents_kind_filter_json_and_tree_json_and_multi_node_text() {
     // `--kind builtin-task --format json` hits the BuiltinTask JSON-label arm; v0.5 JSON
-    // is FLAT kind-tagged rows (no children[] nesting — the tree lives in TEXT mode and
+    // is FLAT kind-tagged rows (no children[] nesting - the tree lives in TEXT mode and
     // in parent_agent_id/depth); a multi-node text render shows every node's lifecycle.
     let h = populated_home();
     let bt = h.run(&[
@@ -145,7 +145,7 @@ fn agents_single_agent_grab_includes_returned_and_files() {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .collect();
-    // envelope v2 flat rows: header + session row + the one agent row + summary —
+    // envelope v2 flat rows: header + session row + the one agent row + summary -
     // the bare-node special case stays gone (one consumer code path).
     assert_eq!(
         lines.len(),

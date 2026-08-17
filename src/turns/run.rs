@@ -4,7 +4,7 @@ use super::*;
 
 /// Entry point for `csift verbatim`.
 pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
-    // `--turn` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
+    // `--turn` and `--since`/`--until` INTERSECT (AND) - the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
     if !(args.round_trip_fraction > 0.0 && args.round_trip_fraction < 1.0) {
@@ -47,13 +47,13 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
     }
 
     // Normalize the budget to characters. `--slices N` pins the FLEET size, so the budget is
-    // derived as N windows (the slice COUNT is the hard constraint — a fixed set of registered
+    // derived as N windows (the slice COUNT is the hard constraint - a fixed set of registered
     // hooks must never need to grow); otherwise it is the requested char/token amount.
     let budget_chars = if let Some(n) = args.slices {
         n.saturating_mul(args.window)
     } else {
-        // `--budget` is CHARS, always (the former `--budget-unit tokens` mode — which
-        // silently reinterpreted the unchanged default as 4× the output — is gone;
+        // `--budget` is CHARS, always (the former `--budget-unit tokens` mode - which
+        // silently reinterpreted the unchanged default as 4× the output - is gone;
         // ≈4 chars/token is the documented rule of thumb for sizing a token budget).
         args.budget
     };
@@ -67,7 +67,7 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
 
     // `verbatim` is single-conversation recovery and `--budget` applies PER session, so a bare
     // `csift verbatim` (0 targets ⇒ ALL projects everywhere else) would realize budget × every
-    // session of every project — an output flood that is never what the caller wants. A
+    // session of every project - an output flood that is never what the caller wants. A
     // target is REQUIRED here (the `show` precedent: name what you mean).
     if args.paths.is_empty() && args.sessions_from.is_none() {
         bail!(
@@ -123,7 +123,7 @@ pub fn run_verbatim(args: &VerbatimArgs) -> Result<()> {
     }
 
     // Misuse self-diagnosis: `verbatim` exists to restore what a compaction CLIPPED. A
-    // session with ZERO compaction summaries has nothing clipped — the caller almost
+    // session with ZERO compaction summaries has nothing clipped - the caller almost
     // certainly wants `show --turn` (full records, no budget/truncation). stderr only
     // (stdout stays the reconstruction); suppressed in --slice mode (the hook path is
     // deliberate and must stay quiet).
@@ -204,7 +204,7 @@ pub(crate) fn window_admits(
 /// mandatory (NOT head/tail): it visits every line including blanks, so the local
 /// counter == the true jsonl line (the recover discipline, reused verbatim).
 pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
-    // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
+    // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `turns` subagent unit's `session_id` is joinable to
     // `files`/`search`/`recover`/`agents` (id-form unification; a top-level uuid is
     // unaffected). See [`crate::subagent::session_id_from_path`].
@@ -229,7 +229,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
     let bytes: &[u8] = &mmap;
 
     // Parse all turn-candidate lines IN PARALLEL (newline-aligned chunks on the rayon
-    // pool). `scan_lines_parallel` visits every line — blanks included — with its exact
+    // pool). `scan_lines_parallel` visits every line - blanks included - with its exact
     // 1-based number, so the `(line_no, Record)` stream and the malformed count are
     // byte-for-byte identical to the serial `scan_lines_bytes` pass this replaces; the
     // win is that a single giant transcript (the default `turns @main` case is ONE file)
@@ -241,15 +241,15 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
         }
         match crate::parse::parse_line(line) {
             Ok(Some(rec)) => crate::parse::LineVerdict::Keep((line_no, rec)),
-            Ok(None) => crate::parse::LineVerdict::Ignore, // blank — counted in numbering
-            Err(_) => crate::parse::LineVerdict::Skip,     // malformed — counted
+            Ok(None) => crate::parse::LineVerdict::Ignore, // blank - counted in numbering
+            Err(_) => crate::parse::LineVerdict::Skip,     // malformed - counted
         }
     });
 
     // ── Transparent elicitation-sidecar merge (§3.10) ──
     // A TOP-LEVEL session's unresolved-pending elicitations (AskUserQuestion/ExitPlanMode/MCP)
     // are MISSING from the native transcript (whole-turn buffered / in-memory). Append them as
-    // native-shaped records with line_no 0 (no physical line — `from_sidecar`); `build` turns
+    // native-shaped records with line_no 0 (no physical line - `from_sidecar`); `build` turns
     // each into its own pending turn unit so the reconstruction includes it. Subagent
     // transcripts have no sidecar (it is keyed by the top-level session). Near-free when
     // nothing is pending.
@@ -271,14 +271,14 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
     })
 }
 
-/// Pre-JSON byte prefilter — a SUPERSET of recover's `line_is_recover_candidate`,
+/// Pre-JSON byte prefilter - a SUPERSET of recover's `line_is_recover_candidate`,
 /// broadened so a pure-text assistant turn (no Edit/Write/Read/Bash) is never missed.
 /// Coarse by design; the structural parse decides what each line really is.
 pub(crate) fn line_is_turn_candidate(line: &[u8]) -> bool {
     // R13: role markers matched serialization-tolerantly (whitespace around the
     // colon is the same record); the remaining needles are key-only / value
     // substrings, which survive reserialization by construction. Finders built ONCE
-    // (per-line hot path — the stateless form rebuilt its searcher every call).
+    // (per-line hot path - the stateless form rebuilt its searcher every call).
     static TYPE_ASSISTANT: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(br#""type":"assistant""#));
     static IS_COMPACT_SUMMARY: std::sync::LazyLock<memmem::Finder<'static>> =

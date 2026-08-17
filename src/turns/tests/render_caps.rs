@@ -81,7 +81,7 @@ fn single_line_user_omits_lines_elided_note() {
 
 #[test]
 fn ellipsis_cut_is_codepoint_safe_for_multibyte_token() {
-    // A multi-byte token straddling the cut must be wholly kept or wholly dropped — the
+    // A multi-byte token straddling the cut must be wholly kept or wholly dropped - the
     // rendered string must remain valid UTF-8 with no replacement char.
     // Build a body of 700 single-char 'a' then a 🛠 (4 bytes) at the boundary region.
     let mut body = String::new();
@@ -173,7 +173,7 @@ fn emit_unit_text_flags_dedup_unit() {
 #[test]
 fn render_turn_text_user_only_with_no_user_emits_nothing() {
     // Defensive: a UserOnly selection on a turn whose user is None (cannot normally
-    // happen) emits no user line — the `if let Some(u)` false arm.
+    // happen) emits no user line - the `if let Some(u)` false arm.
     let t = mk_turn(0, None, Some("only assistant"), 0, 0);
     let mut lines: Vec<String> = Vec::new();
     render_turn_text(&t, SelSides::UserOnly, &cfg(), None, &mut |s| lines.push(s));

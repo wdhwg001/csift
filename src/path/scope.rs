@@ -15,7 +15,7 @@ pub enum SubagentScope {
     TopLevelOnly,
 }
 
-/// Which subcommand is resolving session files — threaded into [`resolve_session_files`] so a
+/// Which subcommand is resolving session files - threaded into [`resolve_session_files`] so a
 /// future subcommand-aware remediation message can branch on the caller. Inert today (the body
 /// does not read it), kept for that extension point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,11 +39,11 @@ impl From<bool> for SubagentScope {
     }
 }
 
-/// Resolve the CALLING session id from the environment — the value of `CLAUDE_CODE_SESSION_ID`,
+/// Resolve the CALLING session id from the environment - the value of `CLAUDE_CODE_SESSION_ID`,
 /// which CC sets to the process-global MAIN session id even inside a subagent (verified
 /// empirically + against the cleanroom; an in-process subagent's OWN id is NOT exported to the
 /// subprocess env). Used by `@main` and as the `@trap:` search root. There is no env-based
-/// `@self` because CC withholds the per-subagent id from the Bash env — `@trap:<marker>`
+/// `@self` because CC withholds the per-subagent id from the Bash env - `@trap:<marker>`
 /// recovers it from the transcript instead.
 pub fn resolve_env_session() -> Result<String> {
     let read = |k: &str| std::env::var(k).ok().filter(|v| !v.trim().is_empty());

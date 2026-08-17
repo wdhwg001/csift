@@ -31,7 +31,7 @@ fn search_truncated_excerpt_emits_reader_caution() {
     let enc = "-Users-test-Projects-trunc";
     let sess = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff";
     // A long assistant message (well past the 400-char excerpt cap) whose OPENING contradicts
-    // the deep match — the exact "trusting the truncated head misreads the whole record" failure
+    // the deep match - the exact "trusting the truncated head misreads the whole record" failure
     // the caution guards against.
     let long = format!(
         "{}NEEDLEXYZ the real intent is the OPPOSITE of the opening {}",
@@ -240,7 +240,7 @@ fn search_siblings_fixed_policy_renders_turn_and_json_carries_array() {
 fn search_no_truncate_emits_the_untruncated_record() {
     // A message far longer than the ~400-char excerpt cap, with a token at the very TAIL.
     // The default excerpt truncates (explicit `… (+N chars)` marker) and hides the tail;
-    // `--no-truncate` emits the whole record so the tail is readable — the gap that otherwise
+    // `--no-truncate` emits the whole record so the tail is readable - the gap that otherwise
     // forces a drop to the raw jsonl.
     let h = Home::new();
     let filler = "x".repeat(900);
@@ -276,7 +276,7 @@ fn search_no_truncate_emits_the_untruncated_record() {
         full.stdout
     );
 
-    // Zero back-compat: the old `--full` spelling is GONE — it must ERROR (unknown argument),
+    // Zero back-compat: the old `--full` spelling is GONE - it must ERROR (unknown argument),
     // never silently work, so existing users are forced onto the unambiguous `--no-truncate`.
     let removed = h.run(&["search", "needle", "--no-subagents", "--full"]);
     assert!(
@@ -457,7 +457,7 @@ fn json_hits_carry_pairing_and_refetch() {
 fn siblings_hidden_count_is_exact() {
     // Mutation pin: the fixed sibling policy's capped-away remainder is COUNTED exactly
     // (thinking cap = 2; five thinking siblings -> 3 hidden), and the overflow pointer
-    // carries that number — a degraded += froze it with no test on the value.
+    // carries that number - a degraded += froze it with no test on the value.
     let h = Home::new();
     let enc = "-Users-dev-example-project";
     let sess = "778899aa-bbcc-4000-8000-00000000000c";
@@ -509,7 +509,7 @@ fn search_subagent_hit_json_marks_refeedable_parent() {
 #[test]
 fn search_surfaces_extractable_image_ids_on_a_hit() {
     // A `search` hit on a message that carries images must expose the SAME extractable ids as
-    // `turns`/`image` — so a search result feeds straight into `csift image --id` with no
+    // `turns`/`image` - so a search result feeds straight into `csift image --id` with no
     // manual L+i assembly. r2 ("two more") carries a jpeg + a png at line 3 → L3i1, L3i2.
     let h = image_home();
     let out = h.run(&["search", "two more", at(SESS).as_str(), "--no-subagents"]);

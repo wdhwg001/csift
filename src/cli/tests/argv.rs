@@ -77,7 +77,7 @@ fn search_flag_after_encoded_target_parses() {
 
 #[test]
 fn search_positional_path_like_siblings() {
-    // The fix: `csift search PATTERN .` — a POSITIONAL path, the SAME surface every
+    // The fix: `csift search PATTERN .` - a POSITIONAL path, the SAME surface every
     // sibling subcommand uses.
     let cli = parse(&["csift", "search", "carry", "."]).expect("positional PATH must parse");
     match cli.command {
@@ -123,7 +123,7 @@ fn normalize_passes_through_after_double_dash() {
             .map(String::from)
             .to_vec(),
     );
-    // After `--`, tokens are verbatim positionals (clap's escape) — untouched.
+    // After `--`, tokens are verbatim positionals (clap's escape) - untouched.
     assert_eq!(
         out,
         vec!["csift", "list", "--", "-weird-token", "--not-a-flag"]

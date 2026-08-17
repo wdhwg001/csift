@@ -13,11 +13,11 @@ pub(crate) fn render_text(
         return;
     }
     // SCOPE banner: `list` spans subagents by DEFAULT, so a bare `csift list <uuid>` can
-    // return 1 top-level + N subagent rows — surface that split up front (mirroring
+    // return 1 top-level + N subagent rows - surface that split up front (mirroring
     // `turns --subagents` + now `files`/`search`/`recover`) so the default-span
     // surprise is announced, not buried. Printed only when the resolved set actually spans
     // ≥1 subagent. ONE shared emitter / wording across every spanning surface. The counts
-    // are the PRE-CAP scope (the row flood-guard never shrinks them — R7 §2.4).
+    // are the PRE-CAP scope (the row flood-guard never shrinks them - R7 §2.4).
     crate::text::emit_scope_banner(scope_top, scope_sub);
     for (i, s) in summaries.iter().enumerate() {
         if i > 0 {
@@ -57,7 +57,7 @@ pub(crate) fn render_text(
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
 
-        // Currently-pending elicitation(s) merged from the sidecar (§3.10) — the session is
+        // Currently-pending elicitation(s) merged from the sidecar (§3.10) - the session is
         // blocked on a human; this is its LATEST activity, missing from the native transcript.
         if !s.pending_elicitations.is_empty() {
             println!("  pending  with elicitation sidecar");
@@ -70,7 +70,7 @@ pub(crate) fn render_text(
         }
 
         if s.skipped_lines > 0 {
-            // R12: scope-qualify — `list` reads head/tail windows only, so its count is a
+            // R12: scope-qualify - `list` reads head/tail windows only, so its count is a
             // window census, not a whole-file verdict (that is `stats`, a full scan).
             println!(
                 "  note     {} (among the head/tail lines read — full census: csift stats)",
@@ -114,7 +114,7 @@ pub(crate) fn render_json(
     use serde_json::json;
     // envelope v2: header (always) → kind-tagged session rows → summary (always).
     // Header scope = the PRE-CAP resolved range (the flood-guard caps ROWS, never the
-    // scope numbers — R7 §2.4); the summary's `sessions` stays the emitted-row count.
+    // scope numbers - R7 §2.4); the summary's `sessions` stays the emitted-row count.
     println!(
         "{}",
         serde_json::to_string(&crate::text::envelope_scope_header(
@@ -143,9 +143,9 @@ pub(crate) fn render_json(
             "last_user": preview_json(s.last_user.as_ref()),
             "last_agent": preview_json(s.last_agent.as_ref()),
             "skipped_lines": s.skipped_lines,
-            // The tri-state: `sidecar_present` = the sidecar FILE exists (hook installed —
+            // The tri-state: `sidecar_present` = the sidecar FILE exists (hook installed -
             // resolved pairs stay in the file), so present+no-pending genuinely means "not
-            // blocked on an elicitation", while absent means "hook unknown — cannot conclude".
+            // blocked on an elicitation", while absent means "hook unknown - cannot conclude".
             "sidecar_present": s.sidecar_present,
             // Unresolved-pending elicitations merged from the sidecar (§3.10): the one-line
             // renders + a `with_elicitation_sidecar` flag (the machine echo of the text note).

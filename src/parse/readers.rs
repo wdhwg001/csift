@@ -9,13 +9,13 @@ use super::*;
 /// The "carry" is the bytes of the line that straddles the LOW-offset edge of the
 /// current chunk: it is provisional until a lower chunk is consumed (or the start
 /// of the slice is reached, at which point it is the first line). Empty lines are
-/// yielded too — the caller filters blanks (matching [`line_payload`]).
+/// yielded too - the caller filters blanks (matching [`line_payload`]).
 pub struct RevLines<'a> {
     pub(crate) bytes: &'a [u8],
     /// Exclusive high boundary of the region not yet emitted as whole lines:
     /// everything in `bytes[..hi]` is still pending. Starts at `bytes.len()`.
     pub(crate) hi: usize,
-    /// Bytes carried from the previous (higher) chunk — the provisional partial
+    /// Bytes carried from the previous (higher) chunk - the provisional partial
     /// line at the low edge. Appended *after* freshly read lower bytes.
     pub(crate) carry: Vec<u8>,
     /// Lines split out of the current working buffer but not yet handed out, in
@@ -56,7 +56,7 @@ impl<'a> RevLines<'a> {
             }
 
             // Read a lower chunk, growing it until it contains a newline or we hit
-            // the start (guards the 400 KB single-line max — a chunk with no
+            // the start (guards the 400 KB single-line max - a chunk with no
             // newline can't split a line, so widen the window).
             let mut take = self.chunk;
             let mut lo = self.hi.saturating_sub(take);
@@ -87,7 +87,7 @@ impl<'a> RevLines<'a> {
 
             if nls.is_empty() {
                 // No newline anywhere: the whole buffer is one still-provisional
-                // line — carry it down. At BOF it is the single, complete line 0.
+                // line - carry it down. At BOF it is the single, complete line 0.
                 if at_bof {
                     if buf.is_empty() {
                         return false;
@@ -117,7 +117,7 @@ impl<'a> RevLines<'a> {
                 self.pending.push_back(buf[s..e].to_vec());
             }
 
-            // seg0 (low-edge): carry, or — at BOF — the oldest complete line.
+            // seg0 (low-edge): carry, or - at BOF - the oldest complete line.
             let seg0 = buf[..nls[0]].to_vec();
             if at_bof {
                 self.pending.push_back(seg0); // oldest → yielded last
@@ -222,7 +222,7 @@ where
 ///
 /// `floor` = the paired head scan's `consumed_end` (0 when there is no head scan):
 /// lines BELOW it are still walked for anchors when the tail region runs dry, but
-/// are never re-counted — the head scan already booked them (R12).
+/// are never re-counted - the head scan already booked them (R12).
 pub fn tail_records<F>(path: &Path, floor: usize, keep: F) -> Result<usize>
 where
     F: FnMut(&Record) -> bool,
@@ -250,7 +250,7 @@ where
     let floor = floor.min(bytes.len());
     let mut skipped = 0usize;
     let mut stopped = false;
-    // Phase 1 — the region the paired head scan did NOT examine (`bytes[floor..]`,
+    // Phase 1 - the region the paired head scan did NOT examine (`bytes[floor..]`,
     // a line boundary): parsed, anchored, and COUNTED.
     for raw in RevLines::with_chunk(&bytes[floor..], TAIL_CHUNK) {
         if !pre(&raw) {
@@ -271,7 +271,7 @@ where
             Err(_) => skipped += 1,
         }
     }
-    // Phase 2 — anchors still missing: continue into the head-examined region
+    // Phase 2 - anchors still missing: continue into the head-examined region
     // WITHOUT counting (the head scan already booked those lines; re-counting is the
     // pre-v0.6.8 double-book). Same lines, same newest-first order as the old
     // full-file walk, so anchor semantics are unchanged.

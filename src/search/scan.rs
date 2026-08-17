@@ -15,7 +15,7 @@ pub(crate) fn fetch_records(
     let args = SearchArgs::default();
     let matcher = Matcher::pure();
     // A line/uuid ADDRESS restricts to named records; a `--turn` range (address empty) selects
-    // every record of the named turns — the SAME per-file grouping `search` numbers turns by, so
+    // every record of the named turns - the SAME per-file grouping `search` numbers turns by, so
     // `show --turn N` is byte-identical to the turn `search` cites as `<tok>·tN`.
     let address = AddressSet { lines, uuids };
     let use_address = !(address.lines.is_empty() && address.uuids.is_empty());
@@ -33,7 +33,7 @@ pub(crate) fn fetch_records(
         use_address.then_some(&address),
         false,
         &spawn_map,
-        // ONE transcript — nothing else fills the pool, so the inner fan-out is free.
+        // ONE transcript - nothing else fills the pool, so the inner fan-out is free.
         true,
     )?;
     Ok((fr.exchanges, fr.skipped_lines, fr.turn_count))
@@ -63,18 +63,18 @@ pub(crate) fn search_one_file(
 
     // A GIANT transcript's per-turn match phase fans out even under a broad scan: such a
     // file is the straggler the rest of the pool ends up waiting on (only a handful of
-    // files this size exist, so the nested fan-out adds no measurable steal churn — unlike
+    // files this size exist, so the nested fan-out adds no measurable steal churn - unlike
     // enabling it for every mid-size file, which did).
     const HUGE_FILE_BYTES: usize = 64 * 1024 * 1024;
     let inner_parallel = inner_parallel || bytes.len() >= HUGE_FILE_BYTES;
 
-    // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector —
+    // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector -
     // computed up front because BOTH the whole-file gate below and the candidate scan key on it.
     let needs_compact_boundary = args
         .label_filter()
         .selected(Class::CompactionBoundary.path());
     // The `--additional-context` widening mirrors the D7 gate: only when the flag is set AND
-    // the selector can reach `harness.meta.hook` — OR when an ADDRESS names records directly
+    // the selector can reach `harness.meta.hook` - OR when an ADDRESS names records directly
     // (`show --line`/`--uuid` must render an addressed attachment record flag-free).
     let needs_hook_context = (args.additional_context
         && args.label_filter().selected(Class::MetaHook.path()))
@@ -86,14 +86,14 @@ pub(crate) fn search_one_file(
     // pattern), a cheap PARALLEL pre-scan can prove that no candidate line matches: no
     // per-line literal occurrence AND no synthesized-text marker (see [`Matcher::synth`]).
     // Every emitted exchange requires >=1 regex hit (`hits.is_empty() -> continue`), so such
-    // a file provably yields nothing — skip building records for it entirely. Mechanics:
+    // a file provably yields nothing - skip building records for it entirely. Mechanics:
     // - the pre-scan runs on the SAME newline-aligned rayon chunking as the full scan (never
-    //   a serial whole-mmap pass — that would bottleneck the single-giant-file case);
+    //   a serial whole-mmap pass - that would bottleneck the single-giant-file case);
     // - a relaxed AtomicBool short-circuits it the moment ANY line may match: the remaining
     //   lines skim (one load + return), the partial malformed count is discarded, and the
-    //   full scan below recounts exactly — a file WITH matches pays only the skim;
+    //   full scan below recounts exactly - a file WITH matches pays only the skim;
     // - the malformed-line count is a TESTED contract (no silent skip): a gated file's
-    //   candidate lines were each syntax-validated (`validate_line_syntax` — no Record
+    //   candidate lines were each syntax-validated (`validate_line_syntax` - no Record
     //   build, no allocation) before the verdict, so real corruption (torn writes) counts
     //   exactly as the full scan would;
     // - the elicitation-sidecar merges live OUTSIDE these bytes (a separate tiny file,
@@ -129,7 +129,7 @@ pub(crate) fn search_one_file(
             });
         // Stage-2: re-render each collected marker line's SYNTHESIZED texts through the
         // shared engines and regex-check them. A malformed marker line is counted here
-        // (it was deliberately NOT validated in the pre-scan — no double count).
+        // (it was deliberately NOT validated in the pre-scan - no double count).
         let mut synth_matched = force_full.load(Ordering::Relaxed);
         if !synth_matched {
             for raw in &marker_lines {
@@ -168,10 +168,10 @@ pub(crate) fn search_one_file(
 
     // Retain every TRANSCRIPT record in file order (genuine users delimit turns;
     // the rest are turn members). Two-stage prefilter (§7d):
-    //   1. CATEGORY prefilter — drop pure-noise lines (attachment/system/metadata)
+    //   1. CATEGORY prefilter - drop pure-noise lines (attachment/system/metadata)
     //      pre-JSON. This is the dominant cost win (attachment alone is 54% of
     //      records). Broad-by-design (a role substring) so no genuine turn is lost.
-    //   2. KEYWORD prefilter — a per-line `memmem` of the regex's required literal.
+    //   2. KEYWORD prefilter - a per-line `memmem` of the regex's required literal.
     //      It does NOT gate parsing (a non-matching record may still be a sibling in
     //      a matched turn's round-trip); instead it records `can_hit`, letting the
     //      match phase skip regex work on records that provably can't match.
@@ -181,7 +181,7 @@ pub(crate) fn search_one_file(
     // The D7 `compact_boundary` prefilter-widening is GATED on the active `-t` selector: only look
     // for the rare `type:"system"` boundary line when a selector can actually reach
     // `harness.compaction.boundary` (or no `-t` = match-all). A `-t user` / `-t agent.*` search can
-    // never match a boundary, so it pays ZERO for the extra check — the hard `-t` filter PRUNES the
+    // never match a boundary, so it pays ZERO for the extra check - the hard `-t` filter PRUNES the
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_transcript_candidate(line, needs_compact_boundary, needs_hook_context) {
@@ -214,7 +214,7 @@ pub(crate) fn search_one_file(
         for rec in pending {
             records.push(Kept {
                 rec,
-                can_hit: true, // no physical line to prefilter — let the matcher decide.
+                can_hit: true, // no physical line to prefilter - let the matcher decide.
                 line_no: 0,
                 from_sidecar: true,
             });
@@ -234,7 +234,7 @@ pub(crate) fn search_one_file(
         inner_parallel,
     );
 
-    // `--raw`: backfill each hit's VERBATIM source line from this file's mmap — one pass
+    // `--raw`: backfill each hit's VERBATIM source line from this file's mmap - one pass
     // over the wanted line numbers only; the render layer then emits bytes, never a
     // re-render (a re-serialization would not be verbatim).
     if args.raw {
@@ -271,7 +271,7 @@ pub(crate) fn search_one_file(
 }
 
 /// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
-/// transcript message (user/assistant role marker) — drops `attachment`,
+/// transcript message (user/assistant role marker) - drops `attachment`,
 /// `file-history-snapshot`, `queue-operation`, and metadata noise pre-JSON. Kept
 /// deliberately permissive (substring, not structural) so no genuine turn is lost.
 pub(crate) fn line_is_transcript_candidate(
@@ -281,25 +281,25 @@ pub(crate) fn line_is_transcript_candidate(
 ) -> bool {
     // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
     // marker (genuine-user string content, tool carriers, assistant blocks all do).
-    // R13: matched serialization-tolerantly — `"role": "user"` (reserialized JSON,
+    // R13: matched serialization-tolerantly - `"role": "user"` (reserialized JSON,
     // whitespace around the colon) is the same record and must not vanish silently.
     static COMPACT_BOUNDARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"compact_boundary"));
     // R13 needle law: a bare VALUE substring (the attachment payload's `type` value), never a
-    // compact `"key":"value"` byte pair — a reserialized line keeps the value intact.
+    // compact `"key":"value"` byte pair - a reserialized line keeps the value intact.
     static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"hook_additional_context"));
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
-        // inspect their `compactMetadata` — but ONLY when an active `-t` selector can reach that label
+        // inspect their `compactMetadata` - but ONLY when an active `-t` selector can reach that label
         // (`needs_compact_boundary`, derived once via `label_selected`). For every other query the
         // `&&` short-circuits BEFORE the memmem, so a non-boundary search pays ZERO. When it IS run,
         // the `||` chain still reaches this memmem only on lines that already failed both role checks,
-        // and boundary records are rare — so the §7 perf contract holds either way.
+        // and boundary records are rare - so the §7 perf contract holds either way.
         || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())
         // Opt-in hook-injected additionalContext (`search --additional-context`, or an explicit
-        // `show --line`/`--uuid` address — the refetch a search hit prints must resolve without
+        // `show --line`/`--uuid` address - the refetch a search hit prints must resolve without
         // the flag). Same `&&`-gating law as the boundary: a default scan pays ZERO.
         || (needs_hook_context && HOOK_CONTEXT_FINDER.find(line).is_some())
 }

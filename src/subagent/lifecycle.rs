@@ -7,13 +7,13 @@ use super::*;
 /// the workflow journal for an explicit `result`, then resolve a status.
 pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<SubagentLifecycle> {
     // agent_type + description were read from meta.json ONCE at discovery ([`make_subagent`])
-    // and stored on the `Subagent` — no second meta read here (FIX3: kills one redundant
+    // and stored on the `Subagent` - no second meta read here (FIX3: kills one redundant
     // meta.json read + parse per subagent). The values are identical to `read_meta`'s.
     let agent_type = subagent.agent_type.clone();
     let description = subagent.description.clone();
 
     // HEAD: first record's timestamp == start. We do not need genuine-user logic
-    // here — the very first record (isSidechain user seed) IS the start instant.
+    // here - the very first record (isSidechain user seed) IS the start instant.
     let mut started_utc: Option<String> = None;
     let (head_skipped, head_consumed) = head_records(&subagent.path, |rec| {
         if let Some(ts) = &rec.timestamp {
@@ -93,7 +93,7 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
 }
 
 /// The newest-meaningful-record frozen check: if `rec` is an assistant carrying ≥1 tool_use block,
-/// return the pending tool_use (the DANGEROUS Bash one if present, else the first) — because it is
+/// return the pending tool_use (the DANGEROUS Bash one if present, else the first) - because it is
 /// the last record, no tool_result resolved it. `None` for any non-(assistant-with-tool_use) record.
 pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
     if !rec.is_type("assistant") {
@@ -143,7 +143,7 @@ pub(crate) fn newest_pending_tool_use(rec: &Record) -> Option<PendingToolUse> {
     })
 }
 
-/// True for a record that resolves/advances the lane — a tool_result carrier, a clean assistant
+/// True for a record that resolves/advances the lane - a tool_result carrier, a clean assistant
 /// end-of-turn text, or a genuine user message. (NOT an unreturned tool_use, NOT isMeta/system
 /// metadata.) Used to find the newest MEANINGFUL record when deciding the frozen verdict.
 pub(crate) fn record_is_meaningful(rec: &Record) -> bool {
@@ -206,5 +206,5 @@ pub(crate) fn fmt_secs(total: i64) -> String {
 // recovers (a) the TRUE trigger time (the parent tool_use ts, which the child-head ts
 // lags by seconds), and (b) the RETURNED MESSAGE through a 3-way resolver. Workflow runs
 // are surfaced as `WorkflowRun` parent nodes from the unscanned top-level
-// `workflows/wf_*.json` manifests. The build is ADDITIVE — it reuses the existing
+// `workflows/wf_*.json` manifests. The build is ADDITIVE - it reuses the existing
 // discovery + lifecycle primitives, never rewrites them.

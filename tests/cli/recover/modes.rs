@@ -23,7 +23,7 @@ fn recover_subagent_input_fallback_skips_failed_edit() {
             // Write via input fallback (bare success result).
             r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw","name":"Write","input":{"file_path":"/p/g.md","content":"aa\nbb\ncc\n"}}]}}"#, "\n",
             r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:11.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw","content":"File created successfully at: /p/g.md"}]}}"#, "\n",
-            // FAILED edit (is_error) — must NOT be applied from the input.
+            // FAILED edit (is_error) - must NOT be applied from the input.
             r#"{"type":"assistant","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sbad","name":"Edit","input":{"file_path":"/p/g.md","old_string":"NOPE","new_string":"GHOST"}}]}}"#, "\n",
             r#"{"type":"user","isSidechain":true,"agentId":"deadbeef","timestamp":"2026-06-07T05:00:12.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sbad","content":"String to replace not found in file.","is_error":true}]}}"#, "\n",
             // SUCCESSFUL edit via input fallback (bare success result).
@@ -279,7 +279,7 @@ fn recover_restore_partial_file_errors_pointing_to_salvage() {
         "points at --salvage: {}",
         out.stderr
     );
-    // No external-change boundary here (just an incomplete read) — so no boundary list.
+    // No external-change boundary here (just an incomplete read) - so no boundary list.
     assert!(
         !out.stderr.contains("changed OUTSIDE"),
         "no boundary list when there was no external change: {}",
@@ -371,7 +371,7 @@ fn recover_salvage_dumps_surviving_fragment_with_gaps() {
 
 #[test]
 fn recover_restore_surfaces_fuller_pre_change_partial_state() {
-    // Scenario 2: a file NOT authored here — windowed-read lines 1-8 of a 10-line file, then a
+    // Scenario 2: a file NOT authored here - windowed-read lines 1-8 of a 10-line file, then a
     // modified-since-read boundary, then re-read only lines 1-2. Latest is 2/10; but BEFORE the
     // change 8/10 survives (fuller, still partial). Restore surfaces that + a snapshot-as-of recipe.
     let h = Home::new();
@@ -432,7 +432,7 @@ fn recover_turn_range_alone_is_accepted() {
 #[test]
 fn recover_restore_default_returns_raw_full_content() {
     // Default mode (no --salvage/--patches/--at/--coverage) RESTOREs the file's final content
-    // as RAW bytes — no SESSION banner, no line numbers, no mode footer — because this session
+    // as RAW bytes - no SESSION banner, no line numbers, no mode footer - because this session
     // saw the whole file (the post-drift full Read re-establishes all 6 lines).
     let h = recover_scenario_home();
     let out = h.run(&["recover", at(SESS).as_str(), "--file", RFILE]);
@@ -511,7 +511,7 @@ fn recover_real_reconstruction_matches_disk_on_contiguous_prefix() {
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
     // A leading {kind:"header"} scope record may precede the snapshot when the scope
-    // spans subagents — find the first snapshot object (the one carrying `lines`), not just
+    // spans subagents - find the first snapshot object (the one carrying `lines`), not just
     // the first non-empty line.
     let snap: serde_json::Value = out
         .stdout

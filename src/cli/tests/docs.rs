@@ -8,7 +8,7 @@ use super::*;
 //    these pins make that class of drift a compile-time-adjacent failure). ──
 
 /// Every `--long-flag` token any rendered help page mentions must be a DECLARED long
-/// flag of some command (clap introspection — zero-drift), or sit on the tiny
+/// flag of some command (clap introspection - zero-drift), or sit on the tiny
 /// allowlist of spellings the help deliberately names as REMOVED.
 #[test]
 fn help_mentions_only_declared_flags() {
@@ -47,7 +47,7 @@ fn help_mentions_only_declared_flags() {
 }
 
 /// Every `csift <sub> …` EXAMPLE line in any help page must use only flags that
-/// SUB actually declares (+ the global --claude-home) — the exact drift that left
+/// SUB actually declares (+ the global --claude-home) - the exact drift that left
 /// dead `search --line` examples in the v0.1 help.
 #[test]
 fn help_examples_use_the_named_subcommands_own_flags() {
@@ -78,7 +78,7 @@ fn help_examples_use_the_named_subcommands_own_flags() {
     for help in &helps {
         for line in help.lines() {
             // A line may chain several invocations through pipes or nest them in
-            // `$( … )` command substitutions — check each segment independently.
+            // `$( … )` command substitutions - check each segment independently.
             for seg in line.split('|').flat_map(|s| s.split("$(")) {
                 let Some(rest) = seg.trim_start().strip_prefix("csift ") else {
                     continue;
@@ -86,7 +86,7 @@ fn help_examples_use_the_named_subcommands_own_flags() {
                 let mut parts = rest.split_whitespace();
                 let Some(sub) = parts.next() else { continue };
                 let Some(flags) = flags_by_sub.get(sub) else {
-                    continue; // `csift --help` etc — not a subcommand example
+                    continue; // `csift --help` etc - not a subcommand example
                 };
                 for tok in parts {
                     if let Some(f) = tok.strip_prefix("--") {
@@ -109,7 +109,7 @@ fn help_examples_use_the_named_subcommands_own_flags() {
     }
 }
 
-/// SKILL.md's surface stamp must match the crate version — forces the LLM-facing
+/// SKILL.md's surface stamp must match the crate version - forces the LLM-facing
 /// skill to be (at least) OPENED on every release, so the "re-read this file on an
 /// unexpected error" recovery path always lands on current truth.
 #[test]

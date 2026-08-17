@@ -59,7 +59,7 @@ fn search_skips_non_transcript_noise_lines() {
 #[test]
 fn search_timeline_interleaves_subagents_with_top_level_by_timestamp() {
     // The combined timeline is CHRONOLOGICAL, not file-grouped: a subagent exchange whose
-    // turn began BETWEEN two parent turns must sort BETWEEN them — even though the subagent
+    // turn began BETWEEN two parent turns must sort BETWEEN them - even though the subagent
     // file is scanned after the parent file. Parent turns at T=00 and T=10, subagent turn at
     // T=05 → expected envelope order 00 (parent) · 05 (SUBAGENT) · 10 (parent).
     let h = Home::new();
@@ -125,7 +125,7 @@ fn search_timeline_interleaves_subagents_with_top_level_by_timestamp() {
 #[test]
 fn gated_no_match_still_counts_malformed_exactly() {
     // Mutation pin on the malformed law's GATE path: a no-match literal query lets the
-    // whole-file gate close every file WITHOUT building records — the gated accounting
+    // whole-file gate close every file WITHOUT building records - the gated accounting
     // must still report the exact malformed count (a degraded `+=` would drift it).
     let h = Home::new();
     let enc = "-Users-dev-example-project";

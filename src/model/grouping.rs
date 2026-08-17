@@ -39,7 +39,7 @@ impl PlanIndex {
     }
 }
 
-/// `"s"` for plural counts, `""` for exactly one — for the `N question(s)` label.
+/// `"s"` for plural counts, `""` for exactly one - for the `N question(s)` label.
 pub(crate) fn plural(n: usize) -> &'static str {
     if n == 1 {
         ""
@@ -49,7 +49,7 @@ pub(crate) fn plural(n: usize) -> &'static str {
 }
 
 /// Group records (in file order) into TURNS, returning one `Vec<usize>` of record
-/// indices per turn — the outer index IS the 0-based turn index (genuine-user order).
+/// indices per turn - the outer index IS the 0-based turn index (genuine-user order).
 ///
 /// The single source of truth for turn delimiting (§6.4), shared by `search`'s
 /// exchange reconstruction and `files`'s mutation attribution so the two never drift:
@@ -64,7 +64,7 @@ pub(crate) fn plural(n: usize) -> &'static str {
 ///
 /// `is_genuine` is a closure (rather than calling [`Record::opens_turn`] directly) only
 /// so callers can test the grouping over lightweight bool fixtures; in production it is
-/// always [`Record::opens_turn`] — which opens on a genuine human message, an answered
+/// always [`Record::opens_turn`] - which opens on a genuine human message, an answered
 /// AskUserQuestion (the answer is the user's message, §4.4), OR a tool-use
 /// rejection-with-message (§4.2.4). An AUQ answer / plan rejection becoming a turn
 /// boundary is the sanctioned correct behavior change (a previously-MISSED genuine user
@@ -76,7 +76,7 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// abandoned-draft openers an esc-cancel / edit-resend leaves behind (§6.4.1). This bare
 /// form stays for the lightweight bool-fixture tests and any caller that has no `Record`.
 // Production now routes through `group_turn_indices_deduped`, so in the bin build this bare
-// generic is reached only from `#[cfg(test)]` — kept as the documented base primitive +
+// generic is reached only from `#[cfg(test)]` - kept as the documented base primitive +
 // bool-fixture test entry (same retained-shape rationale as the `#[allow(dead_code)]` on
 // `Record`).
 #[allow(dead_code)]
@@ -85,11 +85,11 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
     group_turn_indices_core(records, is_genuine, &std::collections::HashSet::new())
 }
 
-/// Indices of turn-opening records that are SUPERSEDED DRAFTS — an earlier sibling of a
+/// Indices of turn-opening records that are SUPERSEDED DRAFTS - an earlier sibling of a
 /// later turn-opener sharing the SAME non-null `parentUuid` (§6.4.1). This is the on-disk
 /// shape of the "type a message, ESC-cancel / edit, resend" loop (and any rewind that
 /// re-opens a turn from the same point): Claude Code appends every draft as its own
-/// `type:"user"` record, yet only ONE — the last in file order — was actually delivered to
+/// `type:"user"` record, yet only ONE - the last in file order - was actually delivered to
 /// the model. The earlier siblings are abandoned drafts.
 ///
 /// WHY last-in-file is the survivor (verified on real `~/.claude/projects` data): distinct
@@ -98,7 +98,7 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 /// logical turn; and across the corpus the last sibling's subtree is the one that reaches
 /// furthest toward the leaf (the live branch). A content-similarity heuristic would miss the
 /// common case where the user *prepended/inserted* text on the edit (`look…` → `take a closer look…`),
-/// so the parent-uuid identity — not text — is the load-bearing signal.
+/// so the parent-uuid identity - not text - is the load-bearing signal.
 ///
 /// `rec` projects each element to its `Record` (works for `&Record`, `Record`, and the
 /// search `Kept` wrapper alike). Records with a null/empty `parentUuid` are NEVER grouped
@@ -108,7 +108,7 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 /// HONEST BOUND: only the superseded OPENER is reported, not the downstream of a branch
 /// abandoned AFTER it already drew replies (rewind-after-response). Those rare descendants
 /// (≤2% of turns on the measured corpus) keep their own distinct parents and survive; fully
-/// pruning them needs an active-leaf walk, which a compaction boundary severs — so we do not
+/// pruning them needs an active-leaf walk, which a compaction boundary severs - so we do not
 /// risk silently dropping a live turn to chase them.
 #[must_use]
 pub fn superseded_draft_indices<T>(
@@ -138,8 +138,8 @@ pub fn superseded_draft_indices<T>(
 }
 
 /// [`group_turn_indices`] with esc-cancel / edit-resend DRAFT SUPPRESSION (§6.4.1): a
-/// superseded draft ([`superseded_draft_indices`]) is dropped ENTIRELY — it neither opens a
-/// turn nor folds in as a member — so a message the user edited away before sending can
+/// superseded draft ([`superseded_draft_indices`]) is dropped ENTIRELY - it neither opens a
+/// turn nor folds in as a member - so a message the user edited away before sending can
 /// never resurface as a phantom turn (nor leak its abandoned text into a neighbour). This is
 /// the delimiter every session-operating surface (`turns` / `search` / `files` / `recover`)
 /// uses, so they stay byte-consistent on what counts as a turn.
@@ -153,7 +153,7 @@ pub fn group_turn_indices_deduped<T>(
 }
 
 /// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index
-/// in `skip` is omitted entirely (`continue`) — neither a turn boundary nor a member — which
+/// in `skip` is omitted entirely (`continue`) - neither a turn boundary nor a member - which
 /// is how superseded drafts are dropped. With an empty `skip` the behaviour is identical to
 /// the original file-order grouper.
 pub(crate) fn group_turn_indices_core<T>(
@@ -222,7 +222,7 @@ pub(crate) fn flatten_content_text(content: &Content) -> String {
 /// objects. We concatenate every `text` field found and, for `tool_reference`,
 /// surface the `tool_name` (so a regex like `ToolSearch` still matches). Anything
 /// else (images, unknown shapes) contributes nothing. Whitespace is NOT normalized
-/// here — callers that excerpt do their own normalization; matchers want the raw
+/// here - callers that excerpt do their own normalization; matchers want the raw
 /// text. Returns an owned `String` (possibly empty).
 #[must_use]
 pub fn tool_result_content_text(content: &serde_json::Value) -> String {

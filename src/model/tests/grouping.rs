@@ -78,7 +78,7 @@ fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
 // and resends; CC appends EACH draft as its own genuine `type:"user"` record sharing the
 // SAME `parentUuid`. Only the last in file order reached the model. `superseded_draft_indices`
 // marks the earlier siblings; `group_turn_indices_deduped` drops them so they never become
-// phantom turns. None of these patterns are reachable through bool fixtures — they need the
+// phantom turns. None of these patterns are reachable through bool fixtures - they need the
 // real uuid/parentUuid tree, so they parse genuine record JSON.
 
 #[test]
@@ -141,7 +141,7 @@ fn superseded_drafts_exact_duplicate_collapses_to_one() {
 
 #[test]
 fn superseded_drafts_distinct_parents_not_merged() {
-    // Two identical-content user records with DIFFERENT parents are two real turns —
+    // Two identical-content user records with DIFFERENT parents are two real turns -
     // distinct turns legitimately share content but never a parentUuid (each is parented
     // to the assistant message that preceded it).
     let records: Vec<Record> = [
@@ -180,7 +180,7 @@ fn superseded_drafts_null_parent_never_grouped() {
 #[test]
 fn deduped_grouping_matches_plain_when_no_drafts() {
     // With no same-parent draft siblings, deduped grouping is identical to the plain
-    // delimiter — a regression guard on the shared core.
+    // delimiter - a regression guard on the shared core.
     let records: Vec<Record> = [
             r#"{"type":"user","uuid":"u0","parentUuid":"r","message":{"role":"user","content":"q1"}}"#,
             r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"r1"}]}}"#,

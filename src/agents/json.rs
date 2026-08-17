@@ -13,7 +13,7 @@ pub(crate) fn render_json(
     // (counts only) → each workflow run as its own `kind:"run"` row followed by its
     // member `kind:"agent"` rows (tree PRE-ORDER) → the built-in agents (pre-order) →
     // summary. The tree nests in TEXT mode only; JSON consumers reconstruct it from
-    // `parent_agent_id`/`depth` — so `jq 'select(.kind=="agent")'` addresses every node,
+    // `parent_agent_id`/`depth` - so `jq 'select(.kind=="agent")'` addresses every node,
     // the uniform envelope idiom the old one-giant-session-row shape defeated.
     println!(
         "{}",
@@ -87,7 +87,7 @@ pub(crate) fn render_json(
 
 /// Tree PRE-ORDER over a node set: roots (parent absent or out-of-set) sorted by id,
 /// children sorted by id, depth-first. A node unreachable from any root (a forged
-/// parent cycle) is APPENDED at the end rather than dropped — flat rows must never
+/// parent cycle) is APPENDED at the end rather than dropped - flat rows must never
 /// lose a node (the old nested shape silently omitted such nodes).
 pub(crate) fn preorder<'a>(nodes: &[&'a SubagentNode]) -> Vec<&'a SubagentNode> {
     use std::collections::{BTreeMap, HashSet};
@@ -125,7 +125,7 @@ pub(crate) fn preorder<'a>(nodes: &[&'a SubagentNode]) -> Vec<&'a SubagentNode> 
     out
 }
 
-/// One flat `kind:"agent"` row — [`node_json`] plus the envelope discriminator.
+/// One flat `kind:"agent"` row - [`node_json`] plus the envelope discriminator.
 pub(crate) fn agent_row(n: &SubagentNode, view: &View) -> serde_json::Value {
     let mut v = node_json(n, view);
     if let Some(map) = v.as_object_mut() {
@@ -140,7 +140,7 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
     use serde_json::json;
     let mut obj = json!({
         "agent_id": n.agent_id,
-        // The TRANSCRIPT-SHAPE discriminator (builtin-task | workflow | teammate) —
+        // The TRANSCRIPT-SHAPE discriminator (builtin-task | workflow | teammate) -
         // named `shape` so `kind` stays the envelope discriminator exclusively.
         "shape": n.kind.label(),
         "parent_session_id": n.parent_session_id,
@@ -157,7 +157,7 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "started_utc": n.started_utc,
         "started_local": n.started_utc.as_deref().and_then(local_iso),
         // Status-gated: non-null ONLY when `status` is `completed` (a frozen/running
-        // lane's tail ts is NOT a completion — it lives in `last_activity_*` below,
+        // lane's tail ts is NOT a completion - it lives in `last_activity_*` below,
         // and on a frozen lane also in `pending_since_*`).
         "completed_utc": n.completed_utc,
         "completed_local": n.completed_utc.as_deref().and_then(local_iso),
@@ -212,7 +212,7 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
     obj
 }
 
-/// A workflow RUN's flat `kind:"run"` row — its member agents follow as their own
+/// A workflow RUN's flat `kind:"run"` row - its member agents follow as their own
 /// `kind:"agent"` rows (no nesting in JSON; `workflow_id` joins them back to the run).
 pub(crate) fn workflow_run_json(run: &WorkflowRun, session_id: &str) -> serde_json::Value {
     serde_json::json!({
@@ -239,7 +239,7 @@ pub(crate) fn workflow_run_json(run: &WorkflowRun, session_id: &str) -> serde_js
 pub(crate) const ONE_LINE_MAX: usize = 200;
 
 /// Collapse a (possibly multi-line) returned message to a single line for the text view, via
-/// the SHARED excerpt helper — so the elision is marked with the same explicit `… (+N
+/// the SHARED excerpt helper - so the elision is marked with the same explicit `… (+N
 /// chars)` count every other content-excerpt path emits (the never-silent-truncation
 /// contract, SPEC §0/§8.1). This previously emitted a BARE `…` with no count, the lone
 /// silent-truncation violation in the tree.

@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn search_header_tokens_are_stable_across_invocations() {
     // The header token derives from the transcript id (its leading chars), never from
-    // enumeration order — two identical invocations emit byte-identical output, so a token
+    // enumeration order - two identical invocations emit byte-identical output, so a token
     // pasted from an earlier run still names the same transcript.
     let h = populated_home();
     let a = h.run(&["search", "carry"]);
@@ -25,7 +25,7 @@ fn search_header_tokens_are_stable_across_invocations() {
 #[test]
 fn search_header_token_collision_lengthens_the_group_only() {
     // Two DISTINCT ids sharing their first 8 chars lengthen TOGETHER to their first 12 raw
-    // chars (for a uuid that spans the first dash — still a valid `@` target); the
+    // chars (for a uuid that spans the first dash - still a valid `@` target); the
     // non-colliding third id stays at 8. The bare collided 8-prefix never appears as a token.
     let h = Home::new();
     let _ = header_collision_scenario(&h);
@@ -78,7 +78,7 @@ fn search_lengthened_uuid_token_resolves_and_short_prefix_fails_loud() {
 
 #[test]
 fn search_subagent_header_carries_parent_token_on_every_exchange() {
-    // EVERY subagent exchange header carries `(parent <first-8-of-owning-uuid>)` — a
+    // EVERY subagent exchange header carries `(parent <first-8-of-owning-uuid>)` - a
     // tail-truncated read must still resolve ownership; top-level headers carry no parent.
     let h = Home::new();
     subagents_only_scenario(&h);
@@ -102,8 +102,8 @@ fn search_subagent_header_carries_parent_token_on_every_exchange() {
 
 #[test]
 fn search_and_show_resolve_an_agent_id_prefix_token() {
-    // An 8-char prefix of a subagent's bare-hex id — the exact header token `search`
-    // emits — resolves as an `@` target on every target-taking surface.
+    // An 8-char prefix of a subagent's bare-hex id - the exact header token `search`
+    // emits - resolves as an `@` target on every target-taking surface.
     let h = Home::new();
     let (_, _, gamma) = agent_prefix_scenario(&h);
     let out = h.run(&["search", "AGENTGAMMA", &format!("@{}", &gamma[..8])]);

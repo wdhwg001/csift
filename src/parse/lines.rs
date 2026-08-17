@@ -39,9 +39,9 @@ pub(crate) fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
     Ok(Some(mmap))
 }
 
-/// Serialization-tolerant role-marker test — THE stage-1 candidate needle for
+/// Serialization-tolerant role-marker test - THE stage-1 candidate needle for
 /// message records (R13). CC's own wire format is compact JSON, but a hand-authored
-/// or reserialized line may carry whitespace around the colon (`"role": "user"`) —
+/// or reserialized line may carry whitespace around the colon (`"role": "user"`) -
 /// valid JSON, the same record. The old exact-byte needles (`"role":"user"`)
 /// silently DROPPED such lines one layer BEFORE any malformed counter could see
 /// them: not skipped, not counted, simply invisible on every surface. One `memmem`
@@ -84,13 +84,13 @@ pub(crate) fn line_role_value_matches(
     false
 }
 
-/// `"role"` is `"user"` OR `"assistant"` (any JSON whitespace around the colon) —
+/// `"role"` is `"user"` OR `"assistant"` (any JSON whitespace around the colon) -
 /// the candidate test for `search`/`show`/`verbatim`/`list`/`stats` stage-1 filters.
 pub fn line_has_role_marker(line: &[u8]) -> bool {
     line_role_value_matches(line, true, true)
 }
 
-/// `"role"` is `"user"` only — the genuine-user/carrier hook `files`/`recover` use
+/// `"role"` is `"user"` only - the genuine-user/carrier hook `files`/`recover` use
 /// (their assistant-side coverage rides tool-name needles, so admitting every
 /// assistant text record here would repeal their §7 prefilter).
 pub fn line_has_user_role_marker(line: &[u8]) -> bool {
@@ -109,7 +109,7 @@ pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {
 }
 
 /// Parse one raw jsonl line into a [`Record`]. `Ok(None)` for an empty/blank line.
-/// A malformed (non-empty) line returns `Err` — the caller decides to skip+count.
+/// A malformed (non-empty) line returns `Err` - the caller decides to skip+count.
 pub fn parse_line(line: &[u8]) -> Result<Option<Record>> {
     let Some(payload) = line_payload(line) else {
         return Ok(None);
@@ -119,13 +119,13 @@ pub fn parse_line(line: &[u8]) -> Result<Option<Record>> {
 }
 
 /// Validate one raw jsonl line's JSON syntax WITHOUT building a [`Record`] (no
-/// allocation, no field processing — `IgnoredAny` drives the full lexer and nothing
+/// allocation, no field processing - `IgnoredAny` drives the full lexer and nothing
 /// else). `Ok(())` for a blank line. Used by `search`'s whole-file gate to keep the
 /// malformed-line count EXACT for a file it proved cannot match: real-world
 /// corruption (a torn tail write, garbage bytes) fails here exactly as it fails
 /// [`parse_line`]. The one divergence is deliberate and documented: a line that is
 /// VALID JSON but violates the `Record` schema (e.g. a non-string/blocks
-/// `message.content`) passes this check while `parse_line` would count it — a shape
+/// `message.content`) passes this check while `parse_line` would count it - a shape
 /// never observed in real transcripts (the model is tolerant-by-construction:
 /// every field is optional, unknown fields/blocks are ignored).
 pub fn validate_line_syntax(line: &[u8]) -> Result<()> {
@@ -139,7 +139,7 @@ pub fn validate_line_syntax(line: &[u8]) -> Result<()> {
 /// Scan every line of an already-mapped byte slice front-to-back, calling `visit`
 /// with each line's raw bytes (excluding the trailing `\n`). Unlike [`scan_lines`]
 /// this takes the slice directly (the caller owns the [`Mmap`] so it can retain
-/// records borrowed against it) and the visitor is infallible — `search` collects
+/// records borrowed against it) and the visitor is infallible - `search` collects
 /// its own errors/skips internally. A torn final fragment with no trailing newline
 /// is still visited.
 pub fn scan_lines_bytes<F>(bytes: &[u8], mut visit: F) -> Result<()>
@@ -159,10 +159,10 @@ where
 
 /// Per-line verdict from a [`scan_lines_parallel`] visitor.
 pub enum LineVerdict<T> {
-    /// A produced item — collected in exact file order.
+    /// A produced item - collected in exact file order.
     Keep(T),
-    /// A candidate line that failed to parse — counted in the returned malformed total.
+    /// A candidate line that failed to parse - counted in the returned malformed total.
     Skip,
-    /// Not a candidate (or blank) — neither kept nor counted.
+    /// Not a candidate (or blank) - neither kept nor counted.
     Ignore,
 }

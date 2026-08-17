@@ -1,8 +1,8 @@
-//! `turns` subcommand — turn-fidelity reconstruction.
+//! `turns` subcommand - turn-fidelity reconstruction.
 //!
 //! A Claude Code COMPACTION SUMMARY preserves task STATE (the 9-section synthesis:
 //! intent, file ledger, errors+fixes, plan, next step) in high fidelity, but provably
-//! LOSES turn fidelity — its "All user messages" section clips ~22 real prose turns to
+//! LOSES turn fidelity - its "All user messages" section clips ~22 real prose turns to
 //! ~17 `...`-truncated bullets, and the assistant side collapses to a SINGLE verbatim
 //! quote (the last pre-compaction message). `turns` SUPPLEMENTS (never replaces) the
 //! summary: it re-emits the clipped user phrasings + discarded assistant end-of-turn
@@ -25,34 +25,34 @@
 //! Selection walks BACKWARD from EOF (recency-first) so the budget is spent on what a
 //! resumed agent most needs; the emitted document is sorted ASCENDING so it reads as a
 //! forward transcript. The backward walk is TRANSPARENT to `isCompactSummary` records
-//! (a summary is a turn member, never a delimiter — `src/model.rs`), so it reaches back
+//! (a summary is a turn member, never a delimiter - `src/model.rs`), so it reaches back
 //! across multiple compaction boundaries by default.
 //!
 //! ## Multi-agent-message model + richness filtering (the model-expansion)
 //!
-//! A single genuine-user turn can own a LONG RUN of agent messages — a debugging/build
-//! chain the model narrates step by step — that a compaction summary clips to its single
+//! A single genuine-user turn can own a LONG RUN of agent messages - a debugging/build
+//! chain the model narrates step by step - that a compaction summary clips to its single
 //! §9 EOT quote. Each [`TurnSlice`] therefore carries `agents: Vec<AgentMsg>` (EVERY
 //! agent-text record of the turn, in file order), and a derived `assistant_eot()`
-//! accessor returns the LAST element — the EOT anchor — preserving the whole existing
+//! accessor returns the LAST element - the EOT anchor - preserving the whole existing
 //! dedup / round-trip / render call-graph with zero churn.
 //!
 //! Selection ([`select_agent_messages`]) reduces the run to a survivor set, gated by the
 //! master `--agent-msgs` mode:
-//!   - `eot-only` (DEFAULT, non-breaking) — keep only the last agent message; the output
+//!   - `eot-only` (DEFAULT, non-breaking) - keep only the last agent message; the output
 //!     is byte-identical to the pre-expansion single-EOT document.
-//!   - `rich` — on a LONG run (`agents.len() > run_threshold`, default 6): the LAST is
+//!   - `rich` - on a LONG run (`agents.len() > run_threshold`, default 6): the LAST is
 //!     always kept; the FIRST is kept by position privilege under `--keep-first`; each
 //!     MIDDLE is kept UNLESS it is a PROVEN pure declaration. Collapsed contiguous runs
 //!     fuse into one `△ L…  [X agent messages, Y tool calls, Z failed]` placeholder
 //!     carrying the fetchable jsonl line range + the per-message tool/failed attribution.
-//!   - `all` — keep every agent message (maximal fidelity, no placeholder).
+//!   - `all` - keep every agent message (maximal fidelity, no placeholder).
 //!
 //! "Rich" ([`agent_msg_is_rich`]) is a cheap single-pass OR of a LENGTH gate (kept on
 //! length alone ≥ `rich_min_chars`) and a SIGNAL test (a number-of-substance, a commit
 //! hash, a `file.rs:NNN` ref, a backtick code path, or a finding/decision lexeme).
 //! KEEP-ON-DOUBT is the spine: [`agent_msg_is_droppable`] collapses ONLY a short,
-//! signal-less, intent-verb opener — everything uncertain is kept (a wrongly-kept
+//! signal-less, intent-verb opener - everything uncertain is kept (a wrongly-kept
 //! declaration costs ≤ one capped body; a wrongly-dropped finding is unrecoverable). A
 //! FUSED finding+declaration body trips a signal → kept WHOLE; its trailing declaration
 //! is shed only by the existing within-message `ASST_CAP` char-ellipsis, never by
@@ -65,7 +65,7 @@
 //! `… [+K chars, L lines elided] …` marker that carries the exact elided counts; its
 //! `Lnnnnn` points at the full record. Dedup against the live summary is
 //! DEMOTE-AND-FLAG, never delete. A collapsed agent-message run is NEVER silently
-//! dropped either — its placeholder carries the exact counts + the line range to fetch.
+//! dropped either - its placeholder carries the exact counts + the line range to fetch.
 
 use std::path::Path;
 

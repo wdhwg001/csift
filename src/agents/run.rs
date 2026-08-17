@@ -10,15 +10,15 @@ pub(crate) struct SessionTopology {
 
 /// Entry point for `csift agents`.
 pub fn run_agents(args: &AgentsArgs) -> Result<()> {
-    // `agents` has no subagent-span flag — reject the (hidden, no-op) `--no-subagents` with a
+    // `agents` has no subagent-span flag - reject the (hidden, no-op) `--no-subagents` with a
     // pointed message instead of letting `allow_hyphen_values` swallow it as a bogus PATH value.
     if let Some(msg) = args.span_flag_error() {
         bail!(msg);
     }
 
     // Resolve the target session files from the positional target(s). With none, every
-    // project is scanned — the same target model as list/search. `agents` discovers each
-    // session's subagents itself, so it never spans subagent TRANSCRIPT files here — pass
+    // project is scanned - the same target model as list/search. `agents` discovers each
+    // session's subagents itself, so it never spans subagent TRANSCRIPT files here - pass
     // `false` (⇒ `SubagentScope::TopLevelOnly`).
     let session_files = path::resolve_targets_with_session_list(
         &args.paths,
@@ -50,7 +50,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 
     // `--agent <hex>` is a DIRECT id lookup: it BYPASSES the --since/--until/--order-by time
     // window AND the --shape filter (a known id should resolve regardless of when it ran or
-    // its shape), and a no-match is a hard error with discovery guidance — never the
+    // its shape), and a no-match is a hard error with discovery guidance - never the
     // ambiguous `no subagents found` (which a zero-subagent session also prints). The grab
     // renders a single node (a tree of one), not the whole workflow tree.
     if let Some(want_id) = args.agent.as_deref() {
@@ -82,7 +82,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
     });
 
     // A workflow dir can exist (with a journal + agents) BEFORE its top-level
-    // `workflows/wf_*.json` run-manifest is written (an in-flight run) — or after the
+    // `workflows/wf_*.json` run-manifest is written (an in-flight run) - or after the
     // manifest is pruned. Without a synthesized stand-in, the tree view drops every
     // such agent, because both tree renderers emit a workflow agent ONLY as a child of a
     // matched run. Synthesize a minimal `WorkflowRun` for any in-scope workflow_id that no
@@ -106,7 +106,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
 }
 
 /// Add a placeholder [`WorkflowRun`] for any `workflow_id` present on an (already-filtered)
-/// node but absent from `workflow_runs` (no top-level manifest — an in-flight or
+/// node but absent from `workflow_runs` (no top-level manifest - an in-flight or
 /// manifest-pruned run). The placeholder carries only the `run_id` (== `workflow_id`); its
 /// run-level fields stay `None` so the renderers print just the header + the nested agents.
 /// Without this, the tree silently drops those agents (they render only as a run's children).
@@ -182,7 +182,7 @@ pub(crate) fn kind_allowed(kind: SubagentKind, want: &[AgentKindFilter]) -> bool
 
 /// True when a node falls inside the time window on the chosen axis. An unbounded window
 /// admits everything (incl. nodes missing the axis timestamp). A bounded window NEVER
-/// admits a node whose axis timestamp is absent (same rule as `search`/`files` — no
+/// admits a node whose axis timestamp is absent (same rule as `search`/`files` - no
 /// fabricated inclusion).
 pub(crate) fn window_admits(node: &SubagentNode, window: &TimeWindow, axis: AgentTimeAxis) -> bool {
     if window.is_unbounded() {
@@ -191,12 +191,12 @@ pub(crate) fn window_admits(node: &SubagentNode, window: &TimeWindow, axis: Agen
     let ts = match axis {
         AgentTimeAxis::Trigger => node.trigger_utc.as_deref(),
         AgentTimeAxis::Start => node.started_utc.as_deref(),
-        // The completion axis windows on the lane's TERMINAL instant — the tail
+        // The completion axis windows on the lane's TERMINAL instant - the tail
         // newest-record ts (== the completion instant on a completed lane, the
         // freeze/last-activity instant otherwise), exactly the long-documented
         // "--order-by completion = the last record's ts". `completed_utc` itself is
         // status-gated (None unless Completed), which would silently drop every
-        // frozen lane from a bounded window — the one shape a monitor asks about.
+        // frozen lane from a bounded window - the one shape a monitor asks about.
         AgentTimeAxis::Completion => node.last_activity_utc.as_deref(),
     };
     window.contains(ts)
@@ -213,19 +213,19 @@ pub(crate) fn any_teammate(nodes: &[SubagentNode]) -> bool {
 
 /// Control-mechanism hint for teammates (`in_process_teammate`), surfaced in `agents` text
 /// output whenever the scope holds ≥1 teammate. csift is the LLM's only window into a session's
-/// teammates, so it is the natural place to point at the CORRECT control tool — a real session
+/// teammates, so it is the natural place to point at the CORRECT control tool - a real session
 /// burned ~30 min trying to `TaskStop` / `pkill` a runaway teammate (feeding it the name, the
 /// `Name@team` form, AND the exact `aName-<hash>` agentId csift prints) before discovering the
 /// mechanism. The ids were not wrong; the TOOL was. Stated from the verified `SendMessage`
 /// contract (address by NAME; `message:{type:"shutdown_request"}` terminates), not a guess.
-/// Read-only csift cannot act — it only names the tool that can.
+/// Read-only csift cannot act - it only names the tool that can.
 pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = "note: teammate rows are in-process Agent subagents — address one BY NAME (the `(@name)` shown) \
 via SendMessage to steer it, and `message:{\"type\":\"shutdown_request\"}` to terminate it.";
 pub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =
     "      A teammate is NOT a background task (TaskStop / a `task_id` will not find it) and has no \
 separate OS process (it shares the orchestrator PID — `pkill` won't help).";
 
-/// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2` — emitted as a teammate
+/// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2` - emitted as a teammate
 /// node's `control_hint` field so a `--format json` consumer gets the same pointer.
 pub(crate) const TEAMMATE_CONTROL_HINT_JSON: &str =
     "in-process teammate: SendMessage to `name` to steer; \

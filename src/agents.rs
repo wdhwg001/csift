@@ -1,4 +1,4 @@
-//! `agents` subcommand — a session's subagent TOPOLOGY, with time-window filters.
+//! `agents` subcommand - a session's subagent TOPOLOGY, with time-window filters.
 //!
 //! For each in-scope top-level session, build the toolUseId-linked topology (see
 //! [`crate::subagent::build_topology`]): discover its subagent transcripts (built-in

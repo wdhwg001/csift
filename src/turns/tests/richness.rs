@@ -3,31 +3,31 @@
 use super::*;
 
 // ════════════════════════════════════════════════════════════════════════════
-// Multi-agent-message model — richness function, selection, placeholder
+// Multi-agent-message model - richness function, selection, placeholder
 // ════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn agent_msg_is_rich_each_signal_arm_flips_a_short_body() {
     let c = rich_cfg();
-    // ARM 2a — number-of-substance: a count adjacent to a substance noun.
+    // ARM 2a - number-of-substance: a count adjacent to a substance noun.
     assert!(agent_msg_is_rich("12 passed 3 failed", &c));
     assert!(agent_msg_is_rich("ran 45 tests", &c));
-    // ARM 2a — an N / M ratio (no noun needed).
+    // ARM 2a - an N / M ratio (no noun needed).
     assert!(agent_msg_is_rich("now at 12/40 done", &c));
     assert!(agent_msg_is_rich("3 of 5 complete", &c));
-    // ARM 2b — commit-hash-like hex (must carry an a–f letter).
+    // ARM 2b - commit-hash-like hex (must carry an a–f letter).
     assert!(agent_msg_is_rich("fix landed in a1b2c3d", &c));
     assert!(agent_msg_is_rich("see deadbeef now", &c));
-    // ARM 2c — file:line ref and a src/ path.
+    // ARM 2c - file:line ref and a src/ path.
     assert!(agent_msg_is_rich("the bug is at src/turns.rs:402", &c));
     assert!(agent_msg_is_rich("edited src/cli.rs today", &c));
-    // ARM 2d — backtick code path.
+    // ARM 2d - backtick code path.
     assert!(agent_msg_is_rich("the `agents` vec holds it", &c));
-    // ARM 2e — finding/decision lexeme.
+    // ARM 2e - finding/decision lexeme.
     assert!(agent_msg_is_rich("root cause confirmed here", &c));
     assert!(agent_msg_is_rich("found the real issue", &c));
     assert!(agent_msg_is_rich("regression verified", &c));
-    // ARM 1 — length gate: a >=280-char signal-less body is rich on length alone.
+    // ARM 1 - length gate: a >=280-char signal-less body is rich on length alone.
     let long = "z".repeat(280);
     assert!(agent_msg_is_rich(&long, &c));
 }
@@ -44,7 +44,7 @@ fn agent_msg_is_rich_rejects_a_short_signalless_declaration() {
 
 #[test]
 fn agent_msg_is_rich_is_codepoint_safe_for_multibyte_with_a_digit() {
-    // REGRESSION: a digit adjacent to multi-byte text used to panic — the ±16-byte
+    // REGRESSION: a digit adjacent to multi-byte text used to panic - the ±16-byte
     // number-of-substance window sliced mid-codepoint. The window bounds must snap to a
     // char boundary; this must NOT panic, for a 2-digit number AND a single digit.
     let c = rich_cfg();
@@ -65,7 +65,7 @@ fn agent_msg_is_droppable_and_keep_on_doubt() {
     // Droppable: short + intent-verb opener + no signal.
     assert!(agent_msg_is_droppable("let me read the file", &c));
     assert!(agent_msg_is_droppable("now i will open this file", &c));
-    // NOT droppable — rich wins even with an intent-verb opener (fusion case).
+    // NOT droppable - rich wins even with an intent-verb opener (fusion case).
     assert!(!agent_msg_is_droppable(
         "let me note: root cause confirmed in src/x.rs:42",
         &c
@@ -170,7 +170,7 @@ fn longest_default_also_keeps_a_substantive_first() {
 
 #[test]
 fn longest_default_drops_a_non_substantive_first() {
-    // A SHORT first (below rich_min_chars, not rich) is NOT kept by position — only the
+    // A SHORT first (below rich_min_chars, not rich) is NOT kept by position - only the
     // longest survives. Distinguishes `Longest` from `Rich`'s unconditional keep-first.
     let first = "let me start"; // short + not rich → not kept
     let middle = body_chars("ONLYLONG", 600); // the longest
@@ -190,7 +190,7 @@ fn longest_default_drops_a_non_substantive_first() {
 
 #[test]
 fn longest_default_keeps_a_rich_middle_with_a_major_finding() {
-    // A MIDDLE that is RICH by SIGNAL (not length) — a file:line + ratio finding — is kept
+    // A MIDDLE that is RICH by SIGNAL (not length) - a file:line + ratio finding - is kept
     // even though it is not the longest, because major findings can live mid-run. Here the
     // longest is the final answer; the rich middle ALSO survives.
     let opener = "starting now"; // short → collapse
@@ -333,7 +333,7 @@ fn longest_default_keep_flag_tunes_the_substantive_first_gate() {
 
 #[test]
 fn richness_cfg_default_is_longest() {
-    // The default config is Longest — keep the longest agent message + the first-if-
+    // The default config is Longest - keep the longest agent message + the first-if-
     // substantive + the rich middles (NOT the old `agents.last()` single-EOT default).
     let d = RichnessCfg::default();
     assert_eq!(d.mode, AgentMsgMode::Longest);

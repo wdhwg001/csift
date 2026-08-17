@@ -134,7 +134,7 @@ fn recover_at_no_history_says_so() {
 /// PARTIAL reads anywhere (no single transcript ever holds the whole file, and each
 /// subagent's own buffer is too sparse to anchor its string edits). The union of all
 /// transcripts' edits IS the complete file. `--at` must merge the parent+subagents into one
-/// timestamp-ordered timeline and reconstruct EVERY line — including the subagents' own
+/// timestamp-ordered timeline and reconstruct EVERY line - including the subagents' own
 /// edits, which are un-anchorable in their isolated transcripts. NO external-edit
 /// attachments are present, so this isolates the merge (not Claude Code's edited_text_file
 /// reconciliation). The 8-line file ends in a newline → the trailing-newline normalisation
@@ -252,7 +252,7 @@ fn recover_at_merges_interleaved_cross_session_edits() {
 
 /// `--at <datetime>` is time-travel: the same transcript reconstructs a DIFFERENT state of
 /// the file depending on the wall-clock instant asked for. This is the canonical, efficient
-/// way to ask "what did this plan/file look like at 8pm last night" — far better than hunting
+/// way to ask "what did this plan/file look like at 8pm last night" - far better than hunting
 /// line numbers. Three cutoffs across one Write + two timestamped edits must each land on the
 /// exact intervening state: original / after-edit-1 / after-edit-2. Exercises the
 /// `resolve_cutoff` datetime branch (TimeWindow until-bound) end-to-end through reconstruction,
@@ -265,13 +265,13 @@ fn recover_at_datetime_time_travels_across_edits() {
         &format!("{ENC}/{TSESS}.jsonl"),
         concat!(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"draft plan.md"}}"#, "\n",
-            // 05:00 — Write the 3-line original.
+            // 05:00 - Write the 3-line original.
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w0","name":"Write","input":{"file_path":"/p/plan.md","content":"L1\nL2\nL3\n"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/p/plan.md","content":"L1\nL2\nL3\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w0","content":"ok"}]}}"#, "\n",
-            // 08:00 — edit L2.
+            // 08:00 - edit L2.
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T08:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/p/plan.md","old_string":"L2","new_string":"L2-edited"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T08:00:00.500Z","toolUseResult":{"filePath":"/p/plan.md","oldString":"L2","newString":"L2-edited","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":1,"lines":["-L2","+L2-edited"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#, "\n",
-            // 11:00 — edit L3.
+            // 11:00 - edit L3.
             r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T11:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e2","name":"Edit","input":{"file_path":"/p/plan.md","old_string":"L3","new_string":"L3-edited"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T11:00:00.500Z","toolUseResult":{"filePath":"/p/plan.md","oldString":"L3","newString":"L3-edited","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":3,"oldLines":1,"newStart":3,"newLines":1,"lines":["-L3","+L3-edited"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e2","content":"ok"}]}}"#, "\n",
         ),
@@ -308,19 +308,19 @@ fn recover_at_datetime_time_travels_across_edits() {
         recon.into_values().collect()
     };
 
-    // 06:00 — after the Write, before any edit → the pristine original.
+    // 06:00 - after the Write, before any edit → the pristine original.
     assert_eq!(
         recon_at("2026-06-07T06:00:00Z"),
         vec!["L1", "L2", "L3"],
         "as of 06:00 only the Write has happened"
     );
-    // 09:00 — between the two edits → L2 edited, L3 still original. THE headline time-travel.
+    // 09:00 - between the two edits → L2 edited, L3 still original. THE headline time-travel.
     assert_eq!(
         recon_at("2026-06-07T09:00:00Z"),
         vec!["L1", "L2-edited", "L3"],
         "as of 09:00 the L2 edit is applied but the 11:00 L3 edit is not"
     );
-    // 12:00 (and a bare date covering the whole day) — after both edits → fully edited.
+    // 12:00 (and a bare date covering the whole day) - after both edits → fully edited.
     assert_eq!(
         recon_at("2026-06-07T12:00:00Z"),
         vec!["L1", "L2-edited", "L3-edited"],
@@ -426,7 +426,7 @@ fn recover_at_line_range_outside_known_keeps_seen_total() {
             r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/lr.rs","content":"l5\nl6","startLine":5,"numLines":2,"totalLines":10}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
         ),
     );
-    // Restrict to lines 1-2 — OUTSIDE the known 5-6 window → known empties, seen_total stays.
+    // Restrict to lines 1-2 - OUTSIDE the known 5-6 window → known empties, seen_total stays.
     let out = h.run(&[
         "recover",
         at(SESS).as_str(),
@@ -448,7 +448,7 @@ fn recover_at_line_range_outside_known_keeps_seen_total() {
 
 #[test]
 fn recover_at_skips_failed_string_not_found_edit_top_level() {
-    // Top-level: Write 3 lines, a FAILED Edit (is_error:true, no toolUseResult carrier — so
+    // Top-level: Write 3 lines, a FAILED Edit (is_error:true, no toolUseResult carrier - so
     // its id is absent from ids_with_result and the input-side fallback would otherwise apply
     // the ghost), then a SUCCESSFUL Edit. The ghost must be absent; the good edit applied.
     let h = Home::new();
@@ -458,10 +458,10 @@ fn recover_at_skips_failed_string_not_found_edit_top_level() {
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"edit f.md"}}"#, "\n",
             r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w0","name":"Write","input":{"file_path":"/p/f.md","content":"L1\nL2\nL3\n"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:01.500Z","toolUseResult":{"type":"create","filePath":"/p/f.md","content":"L1\nL2\nL3\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w0","content":"ok"}]}}"#, "\n",
-            // FAILED edit — old_string not in the file. No toolUseResult; tool_result is_error.
+            // FAILED edit - old_string not in the file. No toolUseResult; tool_result is_error.
             r#"{"type":"assistant","uuid":"a_bad","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_bad","name":"Edit","input":{"file_path":"/p/f.md","old_string":"NONEXISTENT","new_string":"GHOST"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c_bad","timestamp":"2026-06-07T05:00:02.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_bad","content":"String to replace not found in file.","is_error":true}]}}"#, "\n",
-            // SUCCESSFUL edit — carrier with structuredPatch.
+            // SUCCESSFUL edit - carrier with structuredPatch.
             r#"{"type":"assistant","uuid":"a_ok","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"e_ok","name":"Edit","input":{"file_path":"/p/f.md","old_string":"L2","new_string":"L2-ok"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c_ok","timestamp":"2026-06-07T05:00:03.500Z","toolUseResult":{"filePath":"/p/f.md","oldString":"L2","newString":"L2-ok","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":1,"lines":["-L2","+L2-ok"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e_ok","content":"ok"}]}}"#, "\n",
         ),

@@ -27,9 +27,9 @@ fn search_tool_response_names_the_tool_it_answers() {
 #[test]
 fn turns_and_search_label_automation_triggers() {
     // A `<task-notification>` automation trigger opens a turn but must render as the
-    // parsed `[<kind> <id> …]` ATTRIBUTION label — with the TRUE kind parsed from the
+    // parsed `[<kind> <id> …]` ATTRIBUTION label - with the TRUE kind parsed from the
     // summary (a `Background command "…"` summary renders `background-command`, NOT the old
-    // blanket `workflow`) — never the raw XML blob — and `turns` reports the automation
+    // blanket `workflow`) - never the raw XML blob - and `turns` reports the automation
     // count in its header.
     let h = Home::new();
     let sess = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -76,7 +76,7 @@ fn turns_and_search_label_automation_triggers() {
 
     // search: the same attribution label is matchable; the raw blob is not surfaced. The
     // `<task-notification>` now classifies as `harness.notification.background-command` (NOT
-    // `user` — the §1 reparent), so it surfaces under that selector (or `-t harness.notification`).
+    // `user` - the §1 reparent), so it surfaces under that selector (or `-t harness.notification`).
     let s = h.run(&[
         "search",
         "background-command",
@@ -91,7 +91,7 @@ fn turns_and_search_label_automation_triggers() {
         "search must surface the attribution label under harness.notification; got: {}",
         s.stdout
     );
-    // And it must NOT surface under `-t user` anymore (the reparent — regression guard).
+    // And it must NOT surface under `-t user` anymore (the reparent - regression guard).
     let not_user = h.run(&[
         "search",
         "background-command",
@@ -116,7 +116,7 @@ fn turns_and_search_label_automation_triggers() {
 #[test]
 fn search_renders_tool_use_result_pairing() {
     // GOLD §7: a tool_use joined to its tool_result by tool_use_id renders `▹`; an unreturned
-    // tool_use renders `(no result — pending)`.
+    // tool_use renders `(no result - pending)`.
     let h = Home::new();
     let sess = "22222222-3333-4444-5555-666666666666";
     let lines = [
@@ -210,7 +210,7 @@ fn search_sendmessage_dedups_to_comm_sent_with_direction() {
 #[test]
 fn search_auq_answer_dedups_to_user_answer() {
     // GOLD §3 Q4: an AUQ answer carries BOTH `user.answer` and `agent.tool.result`; with no `-t`
-    // the richest (user.answer) view wins — ONE hit, not two.
+    // the richest (user.answer) view wins - ONE hit, not two.
     let h = Home::new();
     let sess = "44444444-5555-6666-7777-888888888888";
     let lines = [
@@ -244,7 +244,7 @@ fn search_notification_with_result_renders_inbox_child_to_self_per_section() {
     // agent's report → it classifies BOTH `harness.notification.*` (the pulse) AND
     // `agent.communication.inbox` (child ⇨ self, via the embedded `<tool-use-id>`). The render now
     // emits ONE hit PER label (per-section), the inbox hit carrying the RESOLVED child ⇨ self
-    // direction — and the owner's own uuid renders as `self`.
+    // direction - and the owner's own uuid renders as `self`.
     let enc = "-Users-x-bg";
     let sess = "12121212-3434-5656-7878-9a9a9a9a9a9a";
     let child = "c0ffee1234567890";
@@ -383,7 +383,7 @@ fn search_batched_cross_family_sections_render_per_section() {
 
 #[test]
 fn search_comm_direction_aliases_owner_to_self_both_sides() {
-    // P3a self-alias: the transcript owner's own uuid renders as `self` on EITHER side — a
+    // P3a self-alias: the transcript owner's own uuid renders as `self` on EITHER side - a
     // `SendMessage` (sent) shows `self ⇨ <peer>` (FROM aliased), an inbound `<teammate-message>`
     // (inbox) shows `<peer> ⇨ self` (TO aliased); the peer id is kept verbatim.
     let enc = "-Users-x-self";
@@ -531,7 +531,7 @@ fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
         desc.stdout
     );
     // (2) A phrase that lives ONLY in the answer's `annotations.notes` must be searchable
-    //     under `user` — it IS the user's typed message. (Regression: previously dropped,
+    //     under `user` - it IS the user's typed message. (Regression: previously dropped,
     //     so this returned "no matching exchanges".)
     let notes = h.run(&[
         "search",

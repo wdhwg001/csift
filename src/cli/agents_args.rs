@@ -12,7 +12,7 @@ pub enum AgentKindFilter {
     /// Workflow / OMC workflow-subagent transcripts
     /// (`subagents/workflows/wf_*/agent-<hex>.jsonl`).
     Workflow,
-    /// "Teammate" agents (`taskKind:"in_process_teammate"`) — Claude Code's persistent,
+    /// "Teammate" agents (`taskKind:"in_process_teammate"`): Claude Code's persistent,
     /// directly-addressable team members. They share the built-in on-disk location
     /// (`subagents/agent-<id>.jsonl`); the meta.json `taskKind` is the discriminator.
     Teammate,
@@ -28,7 +28,7 @@ pub enum AgentKindFilter {
           • builtin-task  subagents/agent-<hex>.jsonl                 (Task/Agent tool)\n  \
           • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n  \
           • teammate      subagents/agent-a<Name>-<hex>.jsonl         (in_process_teammate / FleetView; meta taskKind)\n\
-        Workflow `journal.jsonl` event logs are NOT transcripts — they are read only \
+        Workflow `journal.jsonl` event logs are NOT transcripts; they are read only \
         to corroborate completion status, never listed as agents.\n\n\
         The TARGET selects the parent session: pass `@<uuid>` for one \
         session, or a project PATH/encoded-dir to cover every session under it (each \
@@ -37,12 +37,12 @@ pub enum AgentKindFilter {
         a workflow journal carries a `result` event for the agent (or the transcript \
         terminates cleanly), else `running`/`unknown`.\n\n\
         `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
-        timezone) filter to subagents whose TRIGGER time (the parent tool_use ts — the \
+        timezone) filter to subagents whose TRIGGER time (the parent tool_use ts: the \
         true spawn instant) falls in the window by default; `--order-by start` uses the \
         transcript's first-record ts, `--order-by completion` the last (the lane's \
-        TERMINAL instant, `last_activity_utc` — so a frozen lane windows on its freeze \
+        TERMINAL instant, `last_activity_utc`, so a frozen lane windows on its freeze \
         instant rather than vanishing from a bounded window for never completing).\n\n\
-        TOPOLOGY: the TEXT output is ALWAYS the parent→child tree — workflow runs as \
+        TOPOLOGY: the TEXT output is ALWAYS the parent→child tree: workflow runs as \
         parent nodes of their agents, and a nested sub-subagent under its spawning agent \
         (indented by depth). JSON emits the SAME topology as FLAT kind-tagged rows (one \
         `kind:\"agent\"` row per node, tree pre-order; rebuild nesting from \
@@ -69,7 +69,7 @@ pub enum AgentKindFilter {
         a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
         `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow | teammate), a DIFFERENT \
         axis from the automation-trigger `kind` (background-command/agent/monitor/task) used \
-        by `verbatim`/`search -t user` — they overlap only on the token `workflow`.\n\n\
+        by `verbatim`/`search -t user`; they overlap only on the token `workflow`.\n\n\
         EXAMPLES\n  \
           csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagent tree\n  \
           csift agents .                                                   # every session under this project\n  \
@@ -89,11 +89,11 @@ pub enum AgentKindFilter {
         only); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
         workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
         default_model, started_utc, started_local} row followed by its member agent rows \
-        (a RUN row's `status` is the workflow journal's own last status VERBATIM — an OPEN \
-        set, not a csift enum; observed values include `completed` and `killed` — distinct \
+        (a RUN row's `status` is the workflow journal's own last status VERBATIM: an OPEN \
+        set, not a csift enum; observed values include `completed` and `killed`, distinct \
         from an AGENT row's csift-computed `status`); \
         every agent its OWN {kind:\"agent\", …} row in tree PRE-ORDER (a parent row precedes \
-        its children; rebuild nesting from parent_agent_id + depth — there is no \
+        its children; rebuild nesting from parent_agent_id + depth; there is no \
         children[] array in JSON, the tree renders in TEXT mode); a closing \
         {kind:\"summary\", sessions, runs, agents} terminator. Agent-row fields: {agent_id, \
         shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \
@@ -102,35 +102,35 @@ pub enum AgentKindFilter {
         depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
         pending_since_utc/_local, skipped_lines} (+ control_hint on a teammate; \
         STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \
-        abandoned — jsonl cannot tell them apart, and at corpus scale a lane pending for \
+        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \
         hours/days is overwhelmingly \"parent session ended, nobody is coming back\", not \
         in-flight work: weigh `pending_since_utc` against now yourself; \
-        completed_utc/_local and duration are non-null ONLY when status is `completed` — \
+        completed_utc/_local and duration are non-null ONLY when status is `completed`; \
         a frozen/running lane is NOT done, and its tail instant lives in \
         last_activity_utc/_local, which every timestamped lane carries (on a frozen lane \
         it equals pending_since_utc); \
         `--with-files` adds `files_changed`; `--returned-message`, implied by a single \
-        `--agent`, adds `returned_message` + `returned_message_source` — the NEWEST \
+        `--agent`, adds `returned_message` + `returned_message_source`: the NEWEST \
         message the child EVER returned, source-tagged; on a frozen/running lane it \
         PREDATES the pending call, so a lane can carry BOTH a returned_message and \
-        pending_* — the return is history, the pending_* fields are now; the TEXT render \
+        pending_*: the return is history, the pending_* fields are now; the TEXT render \
         brands a non-completed lane's message inline (`history — predates the still-open \
         lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending. \
         SEMANTICS: it answers \"what did the ORCHESTRATOR record as the return\", not \
-        \"what did the agent conclude\" — a `sync-tool-result` source faithfully reports \
+        \"what did the agent conclude\": a `sync-tool-result` source faithfully reports \
         the parent's tool_result even when the harness truncated it to a `Done. \
         agentId: …` wrapper; the child's own final words are always \
         `csift show @<agent-id> --turn -1..`). \
         `agent_type` is \
-        the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`) — \
+        the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`); \
         DISTINCT from `shape`, the on-disk transcript shape (builtin-task | workflow | \
         teammate); `kind` is the envelope discriminator exclusively. ID-DOMAIN: `agent_id` \
         IS this transcript's own id (the SAME concept other commands call `session_id`); \
         re-feed `parent_session_id`, never the bare agent id. A single `--agent <hex>` \
-        grab emits the SAME envelope (header + session + the one agent row + summary) — \
+        grab emits the SAME envelope (header + session + the one agent row + summary); \
         no bare-object exception. Every `_utc` field carries a paired `_local` \
         (system-local ISO). The malformed-line count rides on each agent row's \
-        `skipped_lines` — a head/tail WINDOW census like `list`'s (lifecycle reads only the \
+        `skipped_lines`: a head/tail WINDOW census like `list`'s (lifecycle reads only the \
         transcript's edges; full census: `csift stats @<agent-id>`). \
         Idiom: jq 'select(.kind==\"agent\")' reaches every node."
 )]
@@ -147,10 +147,10 @@ pub struct AgentsArgs {
     pub paths: Vec<PathBuf>,
 
     /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
-    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed — exactly the ids csift
+    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed, exactly the ids csift
     /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
     /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
-    /// stage that found nothing) scopes to NOTHING — honest empty, exit 0, never a silent
+    /// stage that found nothing) scopes to NOTHING: honest empty, exit 0, never a silent
     /// widening to every project. The resolved ids then follow this command's normal
     /// span rules, exactly as if they were `@` positionals: on the span-by-default
     /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
@@ -173,7 +173,7 @@ pub struct AgentsArgs {
     pub subagents: bool,
 
     /// Only show subagents of this kind (repeatable). Default: all kinds. This is the
-    /// subagent TRANSCRIPT-SHAPE filter — its values are `builtin-task` | `workflow` |
+    /// subagent TRANSCRIPT-SHAPE filter; its values are `builtin-task` | `workflow` |
     /// `teammate`. It is NOT the automation-TRIGGER taxonomy (`background-command`/`agent`/
     /// `monitor`/`task`/`workflow`) that `verbatim`/`search -t harness.notification` surface;
     /// the two axes share only the literal token `workflow` (different meaning), so
@@ -195,11 +195,11 @@ pub struct AgentsArgs {
     pub until: Option<String>,
 
     /// The ORDERING axis: which timestamp sorts the tree AND bounds `--since`/`--until`.
-    /// `trigger` (DEFAULT — the true parent-tool_use spawn instant), `start` (the
+    /// `trigger` (DEFAULT: the true parent-tool_use spawn instant), `start` (the
     /// subagent's first transcript record / child-head ts, which LAGS the trigger by
     /// seconds), or `completion` (the last record). Named `--order-by` (not `--by`, which
     /// reads like a projection) because it names the sort axis. (Sibling note: `files` uses
-    /// `--by` for a PROJECTION — a different meaning on a different subcommand.)
+    /// `--by` for a PROJECTION: a different meaning on a different subcommand.)
     #[arg(long = "order-by", value_enum, default_value_t = AgentTimeAxis::Trigger)]
     pub order_by: AgentTimeAxis,
 
@@ -207,15 +207,15 @@ pub struct AgentsArgs {
     /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
     /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--order-by` and `--shape`
     /// (a known id resolves regardless of when it ran or its shape), and just the matched
-    /// node is rendered (a tree of one — not the whole workflow tree). If the hex matches
-    /// nothing in scope, it is a hard ERROR with discovery guidance — not the ambiguous
+    /// node is rendered (a tree of one, not the whole workflow tree). If the hex matches
+    /// nothing in scope, it is a hard ERROR with discovery guidance, not the ambiguous
     /// `no subagents found`. Discover ids first with `csift agents @<uuid>` (the `agent_id`
     /// column / JSON field).
     #[arg(long, value_name = "HEX")]
     pub agent: Option<String>,
 
     /// Attach each node's files-changed list (reuses the `files` extractors over the
-    /// subagent's own transcript). Off by default — it re-scans each transcript.
+    /// subagent's own transcript). Off by default; it re-scans each transcript.
     #[arg(long = "with-files")]
     pub with_files: bool,
 
@@ -232,7 +232,7 @@ pub struct AgentsArgs {
 impl AgentsArgs {
     /// The error string when the (no-op) `--no-subagents` span flag is passed to `agents`, or
     /// `None` when it was not. `agents` has no subagent-span control (it lists subagents AS its
-    /// output), so the flag is meaningless — but accepting + rejecting it gives a pointed
+    /// output), so the flag is meaningless, but accepting + rejecting it gives a pointed
     /// message instead of the misleading `allow_hyphen_values` PATH-swallow error.
     #[must_use]
     pub fn span_flag_error(&self) -> Option<&'static str> {
@@ -250,11 +250,11 @@ impl AgentsArgs {
     }
 }
 
-/// Which lifecycle timestamp the `agents` ordering axis uses (`--order-by`) — it sorts the
+/// Which lifecycle timestamp the `agents` ordering axis uses (`--order-by`); it sorts the
 /// tree AND bounds the `--since`/`--until` window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum AgentTimeAxis {
-    /// Filter on the TRUE TRIGGER instant — the parent `Task`/`Agent` tool_use timestamp
+    /// Filter on the TRUE TRIGGER instant: the parent `Task`/`Agent` tool_use timestamp
     /// (the correct "when was it triggered" axis). The DEFAULT. Falls back to the start
     /// timestamp for a subagent whose spawn could not be located.
     #[default]
@@ -266,7 +266,7 @@ pub enum AgentTimeAxis {
     Completion,
 }
 
-/// The `--count-by <AXIS>` census axis — a CLOSED, documented set (deliberately NOT a
+/// The `--count-by <AXIS>` census axis: a CLOSED, documented set (deliberately NOT a
 /// query DSL: aggregation beyond these axes is `stats` / `files --by` / `--raw | jq`).
 /// Doubles as the clap `ValueEnum`, so the value spellings ARE the variant names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -278,7 +278,7 @@ pub enum CountAxis {
     /// Per turn, ASCENDING turn order (a histogram; keys `t<N>`, `<transcript>·t<N>` when
     /// more than one transcript is in scope).
     Turn,
-    /// Per transcript (`session_id` — a top-level uuid or a subagent agent-id).
+    /// Per transcript (`session_id`: a top-level uuid or a subagent agent-id).
     Session,
     /// Per tool pairing state: `paired` | `pending` | `orphan` (non-tool records excluded).
     Pairing,
@@ -305,14 +305,14 @@ impl CountAxis {
 /// so the value spellings (`summary`/`dir`/`file`/`timeline`) ARE the variants' value names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum FilesDetail {
-    /// Coarse TOP-LEVEL-prefix op rollup — buckets each path on its first few directory
+    /// Coarse TOP-LEVEL-prefix op rollup: buckets each path on its first few directory
     /// segments (so a whole project tree collapses to one row), the smallest output and the
     /// DEFAULT. Strictly coarser than `--by dir` (which keys on the FULL parent dir).
     #[default]
     #[value(name = "summary")]
     Summary,
     /// One row per distinct directory (the FULL parent path) with per-op + distinct-file
-    /// counts — finer than `--by summary`'s top-level-prefix rollup.
+    /// counts, finer than `--by summary`'s top-level-prefix rollup.
     #[value(name = "dir")]
     ByDir,
     /// One row per distinct file with per-op counts + first/last touch timestamps.

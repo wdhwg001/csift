@@ -15,11 +15,11 @@ pub(crate) enum AgentRender<'a> {
 /// raw range.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlaceholderSpan {
-    /// X — collapsed agent messages in this span (≥1).
+    /// X - collapsed agent messages in this span (≥1).
     pub(crate) messages: usize,
-    /// Y — `tool_use` blocks owned by the collapsed span's preceding spans.
+    /// Y - `tool_use` blocks owned by the collapsed span's preceding spans.
     pub(crate) tool_calls: usize,
-    /// Z — erroring `tool_result` blocks in that same span.
+    /// Z - erroring `tool_result` blocks in that same span.
     pub(crate) failed: usize,
     /// First / last jsonl line of the collapsed agent records (for the fetchable range).
     pub(crate) first_line: usize,
@@ -27,17 +27,17 @@ pub(crate) struct PlaceholderSpan {
 }
 
 /// Decide a turn's SURVIVING agent messages + the collapsed placeholder spans, per mode +
-/// cfg (STAGE 1 — operates on WHOLE messages, never touches `ASST_CAP`):
-///   • `Longest` (DEFAULT) — keep the LONGEST agent message (by `full_chars`) + the FIRST
+/// cfg (STAGE 1 - operates on WHOLE messages, never touches `ASST_CAP`):
+///   • `Longest` (DEFAULT) - keep the LONGEST agent message (by `full_chars`) + the FIRST
 ///     when substantive (`full_chars >= rich_min_chars`) + each RICH middle; collapse
 ///     everything else into placeholders. Applies to every multi-message turn; on a
 ///     single-message turn the sole message is kept. Tie on length → the LAST maximum.
-///   • `EotOnly` — only the last agent message (force last-only; never a placeholder).
-///   • `All` — every agent message, no filtering, no placeholder.
-///   • `Rich` — on a LONG run (`agents.len() > run_threshold`): the LAST is always kept;
+///   • `EotOnly` - only the last agent message (force last-only; never a placeholder).
+///   • `All` - every agent message, no filtering, no placeholder.
+///   • `Rich` - on a LONG run (`agents.len() > run_threshold`): the LAST is always kept;
 ///     the FIRST is kept by position privilege under `keep_first` (else decided as a
 ///     middle); each MIDDLE is kept UNLESS it is a proven pure declaration (keep-on-
-///     doubt — drop requires proof). Contiguous dropped runs fuse into one placeholder.
+///     doubt - drop requires proof). Contiguous dropped runs fuse into one placeholder.
 ///     A short run (`<= run_threshold`) keeps every agent message verbatim.
 /// Produces an ordered list of `{ Kept | Placeholder }` in ascending agent order. EMPTY
 /// for a pure tool-call turn (no agents).
@@ -58,7 +58,7 @@ pub(crate) fn select_agent_messages<'a>(
             }
             // The LONGEST agent message is ALWAYS kept (the substantive Rich Response).
             // `max_by_key` returns the LAST maximum on ties, so an all-equal run picks the
-            // same index the old `agents.last()` default did — the documented tie rule.
+            // same index the old `agents.last()` default did - the documented tie rule.
             let longest = agents
                 .iter()
                 .enumerate()
@@ -67,19 +67,19 @@ pub(crate) fn select_agent_messages<'a>(
                 .expect("non-empty");
             let last = agents.len() - 1;
             // Per-message keep decision. Additive over the longest pick:
-            //   • the LONGEST index — ALWAYS (the substantive response; may also be first/
+            //   • the LONGEST index - ALWAYS (the substantive response; may also be first/
             //     middle/last, the position privileges below merely add MORE survivors).
-            //   • the FIRST — kept when SUBSTANTIVE (`full_chars >= rich_min_chars`); an
+            //   • the FIRST - kept when SUBSTANTIVE (`full_chars >= rich_min_chars`); an
             //     opening plan / early finding worth preserving. A short "let me look"
             //     opener is below the gate → collapses.
-            //   • the LAST — kept when SUBSTANTIVE or RICH (so a real closing answer
-            //     survives, but a ~50-char throwaway wrap-up collapses — the headline
+            //   • the LAST - kept when SUBSTANTIVE or RICH (so a real closing answer
+            //     survives, but a ~50-char throwaway wrap-up collapses - the headline
             //     case). When the last IS the longest it is already kept above.
-            //   • each MIDDLE — kept when RICH (`agent_msg_is_rich`); a major finding can
+            //   • each MIDDLE - kept when RICH (`agent_msg_is_rich`); a major finding can
             //     live mid-run.
             let keep = |i: usize, a: &AgentMsg| -> bool {
                 if i == longest {
-                    return true; // The substantive Rich Response — always.
+                    return true; // The substantive Rich Response - always.
                 }
                 if i == 0 {
                     return a.unit.full_chars >= cfg.rich_min_chars; // FIRST if substantive.
@@ -92,7 +92,7 @@ pub(crate) fn select_agent_messages<'a>(
             collapse_unkept(agents, keep)
         }
         AgentMsgMode::EotOnly => {
-            // Only the last (the EOT anchor) — reproduces the pre-expansion output.
+            // Only the last (the EOT anchor) - reproduces the pre-expansion output.
             vec![AgentRender::Kept(agents.last().expect("non-empty"))]
         }
         AgentMsgMode::All => agents.iter().map(AgentRender::Kept).collect(),
@@ -104,20 +104,20 @@ pub(crate) fn select_agent_messages<'a>(
             let last = agents.len() - 1;
             // Per-message keep decision (KEEP-ON-DOUBT is the spine: collapse only PROVEN
             // pure declarations; keep everything uncertain):
-            //   • LAST  — ALWAYS kept (the outcome / EOT anchor; position overrides drop).
-            //   • FIRST — the first-matters / immediate-reply case. With `keep_first`
+            //   • LAST  - ALWAYS kept (the outcome / EOT anchor; position overrides drop).
+            //   • FIRST - the first-matters / immediate-reply case. With `keep_first`
             //     (DEFAULT) the position privilege keeps it unconditionally (the opening
             //     message often states the plan / an early finding worth preserving). With
             //     `--no-keep-first` the privilege is dropped and the first is decided
-            //     exactly as a MIDDLE (kept unless droppable — so a rich first still
+            //     exactly as a MIDDLE (kept unless droppable - so a rich first still
             //     survives, a "let me look into this" declaration first collapses).
-            //   • MIDDLE — kept unless droppable; a sudden rich middle survives whole.
+            //   • MIDDLE - kept unless droppable; a sudden rich middle survives whole.
             let keep = |i: usize, a: &AgentMsg| -> bool {
                 if i == last {
-                    return true; // LAST anchor — always (overrides the drop predicate).
+                    return true; // LAST anchor - always (overrides the drop predicate).
                 }
                 if i == 0 && cfg.keep_first {
-                    return true; // FIRST + position privilege — kept merely for being first.
+                    return true; // FIRST + position privilege - kept merely for being first.
                 }
                 // MIDDLE (and a `--no-keep-first` FIRST): keep unless proven droppable.
                 !agent_msg_is_droppable(&a.unit.text, cfg)
@@ -183,7 +183,7 @@ pub(crate) fn plural(n: usize, noun: &str) -> String {
 
 /// The EXACT placeholder line a collapsed span renders to (no trailing newline):
 ///   `△ L{first}–L{last}  [X agent message(s), Y tool call(s)[, Z failed]]`
-/// X/Y are always shown (Y even at 0 — a zero-tool reasoning span is informative); the Z
+/// X/Y are always shown (Y even at 0 - a zero-tool reasoning span is informative); the Z
 /// clause is OMITTED when Z == 0. Pluralization is INDEPENDENT per noun; "failed" is an
 /// adjective (never pluralized). A single-message span renders `L{n}` (no range dash).
 pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
@@ -204,7 +204,7 @@ pub(crate) fn agent_placeholder_line(span: &PlaceholderSpan) -> String {
 
 /// The budget cost of one placeholder line as a physical line (`chars + NEWLINE_COST`).
 /// The placeholder SUBSTITUTES the dropped bodies (they contribute zero unit cost), so
-/// only this line's own chars are charged — keeping summed-cost == summed-emitted.
+/// only this line's own chars are charged - keeping summed-cost == summed-emitted.
 pub(crate) fn agent_placeholder_cost(span: &PlaceholderSpan) -> usize {
     agent_placeholder_line(span).chars().count() + NEWLINE_COST
 }
@@ -219,7 +219,7 @@ pub(crate) fn unit_glyph(role: Role) -> &'static str {
 
 /// The EXACT header line a unit renders to in the text format (no trailing newline):
 /// `▽ L{line}  {ROLE}  ({timestamp})[   (also in summary)]`. The renderer and the cost
-/// model both call this, so the charged header length is byte-for-byte what is emitted —
+/// model both call this, so the charged header length is byte-for-byte what is emitted -
 /// the timestamp expansion (≈47 chars beyond the old flat-24 guess) is now counted, not
 /// hidden. This is the core fix for the per-unit undercharge.
 pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
@@ -228,7 +228,7 @@ pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
     } else {
         ""
     };
-    // A merged elicitation-sidecar unit (§3.10) has no physical jsonl line — render the
+    // A merged elicitation-sidecar unit (§3.10) has no physical jsonl line - render the
     // provenance locator instead of a fabricated `Lnnnn`.
     let locator = if unit.from_sidecar {
         "(elicitation sidecar)".to_string()
@@ -236,8 +236,8 @@ pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
         format!("L{}", unit.line_no)
     };
     // An inbound peer/teammate communication opener (GOLD §1) renders its comm LABEL + the
-    // `<from> ⇨ self` direction in place of the bare role word, so a reader sees a peer message —
-    // not a human turn — at a glance (parity with `search`'s inbox render). The dotted class path
+    // `<from> ⇨ self` direction in place of the bare role word, so a reader sees a peer message -
+    // not a human turn - at a glance (parity with `search`'s inbox render). The dotted class path
     // stays lowercase (the canonical selector form); an ordinary unit keeps the UPPERCASE role.
     let role_field = match &unit.inbound {
         Some(ic) => format!("{}  {} ⇨ self", ic.class.path(), ic.from),
@@ -253,7 +253,7 @@ pub(crate) fn unit_header_line(unit: &TurnUnit) -> String {
 /// The budget cost of one unit: its REAL header line + the rendered body, each as a
 /// physical line (`chars + NEWLINE_COST`). The body ALREADY includes the `… [+K …] …`
 /// elision scaffolding when truncated, so this is measured against the SAME render used
-/// for output — summed cost == summed emitted chars (the budget test relies on it). No
+/// for output - summed cost == summed emitted chars (the budget test relies on it). No
 /// separate marker term (that would double-count). The header length is the true
 /// timestamp-dependent line, not a flat estimate.
 pub(crate) fn unit_cost(unit: &TurnUnit) -> usize {
@@ -273,7 +273,7 @@ pub(crate) fn marker_cost(tool_calls: usize) -> usize {
     }
 }
 
-/// The `[N image(s): …]` marker line — shown under the user line when a turn carries images
+/// The `[N image(s): …]` marker line - shown under the user line when a turn carries images
 /// (a pasted image / tool screenshot), listing their stable `csift image` ids so a consumer
 /// can `csift image <session> --id <ID> --out <dir>` to get the bytes back.
 pub(crate) fn image_marker_line(ids: &[String]) -> String {
@@ -333,7 +333,7 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
     let turns = sr.turns.len();
     let summaries = sr.summaries.len();
     // The assistant-units count printed in the selected line can EXCEED `turns` under the
-    // richness model (a turn can keep >1 agent message — `All` mode keeps every one), so
+    // richness model (a turn can keep >1 agent message - `All` mode keeps every one), so
     // its worst case is the total agent messages across all turns. The user-units count is
     // still ≤ turns (one opener per turn).
     let max_agent_units = sr.turns.iter().map(|t| t.agents.len()).sum::<usize>();
@@ -391,7 +391,7 @@ pub(crate) fn doc_header_block_max_chars(sr: &ScanResult, budget: usize) -> usiz
 /// SURVIVING agent message's `unit_cost` + each collapsed placeholder's
 /// `agent_placeholder_cost`. This is the SAME walk the renderer + json emitter use, so
 /// summed cost == summed emitted chars. In `EotOnly` mode it equals the single-EOT
-/// `unit_cost` exactly (the lane is just `[Kept(last)]`) — the non-breaking guarantee.
+/// `unit_cost` exactly (the lane is just `[Kept(last)]`) - the non-breaking guarantee.
 pub(crate) fn assistant_lane_cost(turn: &TurnSlice, cfg: &RichnessCfg) -> usize {
     select_agent_messages(turn, cfg)
         .iter()
@@ -414,7 +414,7 @@ pub(crate) fn turn_cost(turn: &TurnSlice, sides: SelSides, cfg: &RichnessCfg) ->
         if let Some(u) = &turn.user {
             c += unit_cost(u);
             // The image marker renders directly under a SHOWN user line (so it is tied to
-            // the user side, charged whenever that side is taken — 0 when no images).
+            // the user side, charged whenever that side is taken - 0 when no images).
             c += image_marker_cost(&turn.image_ids);
         }
     }

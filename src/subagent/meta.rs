@@ -10,9 +10,9 @@ pub(crate) fn make_subagent(
     parent_session_id: &str,
     workflow_id: Option<String>,
 ) -> Subagent {
-    // The on-disk filename stem is `agent-<hex>`, but the CANONICAL agent id — the
+    // The on-disk filename stem is `agent-<hex>`, but the CANONICAL agent id - the
     // value in the transcript record's `agentId` field AND in the workflow journal's
-    // `agentId` — is the bare `<hex>` WITHOUT the `agent-` prefix (verified against
+    // `agentId` - is the bare `<hex>` WITHOUT the `agent-` prefix (verified against
     // real data). We store the bare hex so journal-completion lookup matches and the
     // id we print equals the record's own `agentId`.
     let stem = path
@@ -21,12 +21,12 @@ pub(crate) fn make_subagent(
         .unwrap_or_default();
     let agent_id = bare_agent_id(stem).to_string();
     // Read the companion `agent-<hex>.meta.json` ONCE here (its located path is used only for this
-    // read — `lifecycle` now takes agent_type/description off the struct, so the path isn't stored).
+    // read - `lifecycle` now takes agent_type/description off the struct, so the path isn't stored).
     let meta_path = path.with_extension("meta.json");
     let meta_path = meta_path.is_file().then_some(meta_path);
     let meta = read_meta(meta_path.as_deref());
     // A built-in-LOCATION agent whose meta declares `taskKind:"in_process_teammate"` is a
-    // teammate, not a plain Task subagent — the only way to tell them apart (both sit at
+    // teammate, not a plain Task subagent - the only way to tell them apart (both sit at
     // `subagents/agent-<id>.jsonl`). Workflow agents never carry this taskKind, so the upgrade
     // only ever fires from BuiltinTask.
     let kind = if kind == SubagentKind::BuiltinTask
@@ -53,7 +53,7 @@ pub(crate) fn make_subagent(
 /// The fields csift reads from a subagent's `meta.json`. A built-in meta carries
 /// `{agentType, description, toolUseId}` (+ often `name`); a workflow agent meta carries only
 /// `{agentType}`; a TEAMMATE meta carries `{agentType, description, name, taskKind, teamName,
-/// color, model, …}` and NO `toolUseId`. All are optional — a malformed / missing / key-absent
+/// color, model, …}` and NO `toolUseId`. All are optional - a malformed / missing / key-absent
 /// meta yields all-`None` (never an error; the lifecycle still resolves from the transcript).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MetaFields {
@@ -63,11 +63,11 @@ pub struct MetaFields {
     /// key). Captured here so the previously-dropped `toolUseId` reaches the topology.
     pub tool_use_id: Option<String>,
     pub name: Option<String>,
-    /// `taskKind` — `"in_process_teammate"` marks a teammate (the only way to distinguish it
+    /// `taskKind` - `"in_process_teammate"` marks a teammate (the only way to distinguish it
     /// from a built-in Task subagent, since both share the on-disk location). `None`/other for
     /// a plain built-in or workflow agent.
     pub task_kind: Option<String>,
-    /// `teamName` — the team a teammate belongs to (teammate metas only).
+    /// `teamName` - the team a teammate belongs to (teammate metas only).
     pub team_name: Option<String>,
 }
 
@@ -101,7 +101,7 @@ pub(crate) fn read_meta(meta_path: Option<&Path>) -> MetaFields {
 
 /// True iff the workflow journal alongside a workflow subagent carries a `result`
 /// event for `agent_id` (the completion signal, §C). For a built-in subagent (no
-/// journal) this is always `false` — completion is inferred from the transcript.
+/// journal) this is always `false` - completion is inferred from the transcript.
 pub(crate) fn journal_reports_completion(subagent: &Subagent, journals: &JournalCache) -> bool {
     journals
         .events_for(subagent)
@@ -111,9 +111,9 @@ pub(crate) fn journal_reports_completion(subagent: &Subagent, journals: &Journal
 /// Per-topology-build cache of every distinct `wf_<id>/journal.jsonl`, read + parsed
 /// ONCE and shared across the whole node/lifecycle fan-out. Without it each of a
 /// workflow run's N agents re-read and re-parsed the SAME journal (an O(N × journal)
-/// blowup — a 104-agent run re-parsed its 236 KB journal 104 times, and a 3.5k-agent
+/// blowup - a 104-agent run re-parsed its 236 KB journal 104 times, and a 3.5k-agent
 /// session re-parsed ~600 MB of journal JSON in aggregate). The cached view is exactly
-/// what the two former per-agent scans extracted — first `result` event per agentId —
+/// what the two former per-agent scans extracted - first `result` event per agentId -
 /// so behaviour is byte-identical, only WHEN the journal is read changes.
 #[derive(Debug, Default)]
 pub struct JournalCache {
@@ -166,7 +166,7 @@ impl JournalCache {
                     Some(other) => Some(other.to_string()),
                     None => None,
                 };
-                // FIRST event per agent wins — the former scans returned on first match.
+                // FIRST event per agent wins - the former scans returned on first match.
                 data.results.entry(agent.to_string()).or_insert(payload);
             }
             by_path.insert(journal, data);
@@ -175,7 +175,7 @@ impl JournalCache {
     }
 
     /// The journal path a workflow subagent's events live in (`None` for a built-in /
-    /// teammate — no `workflow_id` ⇒ no journal, the same guard the direct reads had).
+    /// teammate - no `workflow_id` ⇒ no journal, the same guard the direct reads had).
     pub(crate) fn journal_path(subagent: &Subagent) -> Option<PathBuf> {
         subagent.workflow_id.as_ref()?;
         Some(subagent.path.parent()?.join("journal.jsonl"))

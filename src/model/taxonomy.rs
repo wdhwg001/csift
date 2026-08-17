@@ -33,61 +33,61 @@ impl Role {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
-    /// `user.message` — genuine human prose (incl. slash-command `<command-args>`).
+    /// `user.message` - genuine human prose (incl. slash-command `<command-args>`).
     UserMessage,
-    /// `user.answer` — an AskUserQuestion answer (the Q+options+answer unit). Dual-labeled
+    /// `user.answer` - an AskUserQuestion answer (the Q+options+answer unit). Dual-labeled
     /// with [`Class::AgentToolResult`] (it rides on the answering tool_result carrier).
     UserAnswer,
-    /// `user.rejection` — a plan/tool rejection carrying a typed instruction. Dual-labeled
+    /// `user.rejection` - a plan/tool rejection carrying a typed instruction. Dual-labeled
     /// with [`Class::AgentToolResult`].
     UserRejection,
-    /// `agent.message` — the assistant's visible end-of-turn text block(s).
+    /// `agent.message` - the assistant's visible end-of-turn text block(s).
     AgentMessage,
-    /// `agent.thinking` — a thinking block (see the GOLD-gap note re `redacted_thinking`).
+    /// `agent.thinking` - a thinking block (see the GOLD-gap note re `redacted_thinking`).
     AgentThinking,
-    /// `agent.tool.use` — a tool_use block (incl. a pending elicitation sidecar marker).
+    /// `agent.tool.use` - a tool_use block (incl. a pending elicitation sidecar marker).
     AgentToolUse,
-    /// `agent.tool.result` — a tool_result block (incl. errored).
+    /// `agent.tool.result` - a tool_result block (incl. errored).
     AgentToolResult,
-    /// `agent.communication.inbox` — a received peer message / spawn prompt / subagent return.
+    /// `agent.communication.inbox` - a received peer message / spawn prompt / subagent return.
     CommInbox,
-    /// `agent.communication.sent` — a sent peer message (`SendMessage`) or a spawn.
+    /// `agent.communication.sent` - a sent peer message (`SendMessage`) or a spawn.
     CommSent,
-    /// `agent.communication.signal` — a control/status comm (idle_notification, shutdown_*).
+    /// `agent.communication.signal` - a control/status comm (idle_notification, shutdown_*).
     CommSignal,
-    /// `harness.notification.workflow` — a `<task-notification>` for a dynamic/OMC workflow.
+    /// `harness.notification.workflow` - a `<task-notification>` for a dynamic/OMC workflow.
     NotificationWorkflow,
-    /// `harness.notification.monitor` — a monitor/cron cadence completion pulse.
+    /// `harness.notification.monitor` - a monitor/cron cadence completion pulse.
     NotificationMonitor,
-    /// `harness.notification.subagent` — a spawned-subagent completion pulse (renamed from
+    /// `harness.notification.subagent` - a spawned-subagent completion pulse (renamed from
     /// [`AutomationKind::Agent`] so it never collides with the `agent` role).
     NotificationSubagent,
-    /// `harness.notification.background-command` — a `&`-detached shell command pulse.
+    /// `harness.notification.background-command` - a `&`-detached shell command pulse.
     NotificationBackgroundCommand,
-    /// `harness.notification.task` — any other / unclassified `<task-notification>`.
+    /// `harness.notification.task` - any other / unclassified `<task-notification>`.
     NotificationTask,
-    /// `harness.compaction.summary` — the `isCompactSummary` summary record.
+    /// `harness.compaction.summary` - the `isCompactSummary` summary record.
     CompactionSummary,
-    /// `harness.compaction.boundary` — the `system`/`compact_boundary` metrics record.
+    /// `harness.compaction.boundary` - the `system`/`compact_boundary` metrics record.
     CompactionBoundary,
-    /// `harness.command.invocation` — a `<command-name>…` slash-command wrapper.
+    /// `harness.command.invocation` - a `<command-name>…` slash-command wrapper.
     CommandInvocation,
-    /// `harness.command.stdout` — a `<local-command-stdout>…` local-command output.
+    /// `harness.command.stdout` - a `<local-command-stdout>…` local-command output.
     CommandStdout,
-    /// `harness.interrupt.user` — `[Request interrupted by user]`.
+    /// `harness.interrupt.user` - `[Request interrupted by user]`.
     InterruptUser,
-    /// `harness.interrupt.tool` — `[Request interrupted by user for tool use]`.
+    /// `harness.interrupt.tool` - `[Request interrupted by user for tool use]`.
     InterruptTool,
-    /// `harness.schedule.wakeup` — a fired `ScheduleWakeup` TIMER tick (its injected
+    /// `harness.schedule.wakeup` - a fired `ScheduleWakeup` TIMER tick (its injected
     /// [`SCHEDULE_WAKEUP_MARKER`] prompt). Distinct from [`Class::MetaLoop`] (the
     /// autonomous-loop driver prose); the timer is the harness scheduler firing.
     ScheduleWakeup,
-    /// `harness.schedule.continuation` — a `Continue from where you left off.` resume tick.
+    /// `harness.schedule.continuation` - a `Continue from where you left off.` resume tick.
     ScheduleContinuation,
-    /// `harness.meta.hook` — hook-injected feedback (stop-hook / `<local-command-caveat>` /
+    /// `harness.meta.hook` - hook-injected feedback (stop-hook / `<local-command-caveat>` /
     /// edit-failed-retry), not the operator.
     MetaHook,
-    /// `harness.meta.loop` — an autonomous-loop driver tick (`# Autonomous loop tick` /
+    /// `harness.meta.loop` - an autonomous-loop driver tick (`# Autonomous loop tick` /
     /// `Run the autonomous check`).
     MetaLoop,
 }
@@ -95,7 +95,7 @@ pub enum Class {
 #[allow(dead_code)]
 impl Class {
     /// Every leaf [`Class`] in taxonomy order (GOLD §2). The single source of truth for
-    /// enumerating the class space — P2 builds the `-t` selector table from it, and tests
+    /// enumerating the class space - P2 builds the `-t` selector table from it, and tests
     /// assert `path()`/`role()` exhaustively over it (a new variant added to the enum but not
     /// here is caught by the `all_classes_cover_the_enum` test). Order: user, agent (+comm),
     /// harness (notification, compaction, command, interrupt, schedule, meta).
@@ -127,7 +127,7 @@ impl Class {
         Class::MetaLoop,
     ];
 
-    /// The canonical dotted path (GOLD §2) — the `-t` selector form (P2) and render label.
+    /// The canonical dotted path (GOLD §2) - the `-t` selector form (P2) and render label.
     #[must_use]
     pub fn path(self) -> &'static str {
         match self {

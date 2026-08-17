@@ -4,7 +4,7 @@
 //! `recover`, `plan`, `verbatim`, `image`. Each carries example-rich help (`--help`) keyed off
 //! the SPEC §6 baseline invocations. `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`
 //! span each session's subagent transcripts by default (`--no-subagents` opts out); `verbatim`
-//! is the exception — a single-thread recovery tool whose per-session budget MULTIPLIES, so
+//! is the exception - a single-thread recovery tool whose per-session budget MULTIPLIES, so
 //! it defaults to the TOP-LEVEL thread only, opts INTO spanning via `--subagents`, and
 //! REQUIRES a target. `agents` reports a session's subagent lifecycle (it lists subagents as
 //! targets, so it rejects both span flags). `show` FETCHES the records of exactly ONE
@@ -17,14 +17,14 @@
 //! resolve their target through ONE shared resolver
 //! ([`crate::path::resolve_session_files`]): a positional `[PATH]...` that is a cwd / encoded
 //! dir, an `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` session token, or a `*.jsonl` file.
-//! A BARE uuid (no `@`) is not special — prefix it `@<uuid>`. (For `search` the
-//! first positional is PATTERN, so a session is targeted by an `@<uuid>` PATH positional — see
-//! [`SearchArgs::pattern`].) `whoami` is the exception (no target — it reads
+//! A BARE uuid (no `@`) is not special - prefix it `@<uuid>`. (For `search` the
+//! first positional is PATTERN, so a session is targeted by an `@<uuid>` PATH positional - see
+//! [`SearchArgs::pattern`].) `whoami` is the exception (no target - it reads
 //! `$CLAUDE_CODE_SESSION_ID`).
 //!
 //! ## argv normalization (flag-ordering fix)
 //!
-//! The real entrypoint is [`parse_argv`], NOT `Cli::parse` — it runs [`normalize_argv`]
+//! The real entrypoint is [`parse_argv`], NOT `Cli::parse` - it runs [`normalize_argv`]
 //! first so a `--format`/`--shape`/… flag works in ANY position relative to a
 //! leading-`-` encoded project target (clap's `allow_hyphen_values` otherwise lets a
 //! `Vec` positional greedily swallow the trailing flag). See [`normalize_argv`].

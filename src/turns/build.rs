@@ -82,7 +82,7 @@ pub(crate) fn build(
             if user.is_none() && rec.opens_turn() {
                 // An automation trigger (`<task-notification>`) opens a turn like a human
                 // message, but its body must render as the parsed `[workflow <id> …]
-                // <summary>` ATTRIBUTION label — never the raw `<task-id>`/`<output-file>`
+                // <summary>` ATTRIBUTION label - never the raw `<task-id>`/`<output-file>`
                 // XML wrapper. `automation_label` wins; otherwise the normal user-text
                 // reconstruction applies.
                 if let Some(label) = rec.automation_label() {
@@ -90,7 +90,7 @@ pub(crate) fn build(
                     automation = rec.automation_trigger();
                     user = Some(make_unit(line_no, Role::User, &label, rec));
                 } else if let Some(ic) = rec.inbound_comm_preview() {
-                    // An inbound PEER opener — `<teammate-message>` (GOLD §1) OR `<agent-message>`
+                    // An inbound PEER opener - `<teammate-message>` (GOLD §1) OR `<agent-message>`
                     // (FINDING-2, now an `opens_turn` boundary too): render the CLEAN body with an
                     // `agent.communication.{inbox,signal}  <from> ⇨ self` header in place of the raw
                     // XML it used to dump into the `▽ USER` lane. `inbound_comm_preview` covers BOTH
@@ -135,7 +135,7 @@ pub(crate) fn build(
 
         // `compactions_before` is keyed on the turn's CONTENT lines (its user opener /
         // agent messages), NOT on member records like a trailing summary that joins the
-        // turn — a summary that opens a NEW compacted region must sit AFTER this turn's
+        // turn - a summary that opens a NEW compacted region must sit AFTER this turn's
         // content, so count summaries strictly above the turn's latest content line.
         let content_line = user
             .as_ref()
@@ -160,7 +160,7 @@ pub(crate) fn build(
 
     // ── Elicitation-sidecar pending units (§3.10) ──
     // Each unresolved-pending elicitation becomes its OWN turn unit, appended AFTER the native
-    // turns (a pending elicitation is the LATEST activity — it is what the session is currently
+    // turns (a pending elicitation is the LATEST activity - it is what the session is currently
     // blocked on). It is rendered as the USER side (the question/plan/elicitation put TO the
     // user, awaiting the answer), with `from_sidecar` so the header shows `(elicitation
     // sidecar)` instead of a fabricated `Lnnnn`. `compactions_before` is 0 (it post-dates every
@@ -204,7 +204,7 @@ pub(crate) fn make_unit(line_no: usize, role: Role, text: &str, rec: &Record) ->
     }
 }
 
-/// Count newlines in a record's ORIGINAL message body (pre-normalization) — the basis
+/// Count newlines in a record's ORIGINAL message body (pre-normalization) - the basis
 /// for the `L lines elided` note. A bare-string body is counted as-is; a block body is
 /// the visible `text` blocks joined with `\n` (matching how they would print). Returns 0
 /// when the body is unavailable (→ note omitted).
@@ -237,7 +237,7 @@ pub(crate) fn compact_summary_body(rec: &Record) -> Option<String> {
     match content {
         Content::Text(s) => Some(s.clone()),
         // A summary always carries STRING content in real data; a block body would be
-        // a genuine surprise — return None rather than guess.
+        // a genuine surprise - return None rather than guess.
         Content::Blocks(_) => None,
     }
 }
@@ -246,7 +246,7 @@ pub(crate) fn compact_summary_body(rec: &Record) -> Option<String> {
 /// and the §9 verbatim last-assistant quote (the only verbatim turns a summary holds).
 /// Each fingerprint is `normalize_line(text).to_lowercase()` truncated to the first
 /// [`DEDUP_PREFIX`] chars. Conservative: when the structured sections are not found,
-/// every `- ` bullet line in the body is fingerprinted (a superset — still strict per
+/// every `- ` bullet line in the body is fingerprinted (a superset - still strict per
 /// line). Robust to summaries that omit the exact headers.
 pub(crate) fn summary_fingerprints(body: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();

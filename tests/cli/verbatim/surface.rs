@@ -30,11 +30,11 @@ fn turns_help_lists_the_subcommand_and_flags() {
 fn turns_command_renamed_to_verbatim() {
     let h = populated_home();
     let t = at(SESS);
-    // Zero-BC: the old `turns` verb is GONE — it hits the wall (unknown subcommand), which
+    // Zero-BC: the old `turns` verb is GONE - it hits the wall (unknown subcommand), which
     // sends a stale model back to re-read SKILL rather than silently mis-running.
     let old = h.run(&["turns", t.as_str()]);
     assert!(!old.success, "the old `turns` command must never run");
-    // v0.6.4: the wall is still a wall, but a POINTED one — the hidden tombstone names the
+    // v0.6.4: the wall is still a wall, but a POINTED one - the hidden tombstone names the
     // successor (the `-t thinking` treatment) instead of clap's generic unrecognized error.
     assert!(
         old.stderr.contains("RENAMED to `csift verbatim`"),
@@ -49,7 +49,7 @@ fn turns_command_renamed_to_verbatim() {
 #[test]
 fn turns_requires_a_target() {
     // `--budget` multiplies per session, so bare `csift turns` (= every project) is an
-    // output flood by construction — a target is REQUIRED (the `show` precedent).
+    // output flood by construction - a target is REQUIRED (the `show` precedent).
     let h = populated_home();
     let bare = h.run(&["verbatim"]);
     assert!(!bare.success, "bare turns must error: {}", bare.stdout);
@@ -82,7 +82,7 @@ fn turns_bare_uuid_positional_routes_to_session() {
 #[test]
 fn turns_old_subcommand_name_gets_the_rename_error() {
     // R8: the v0.5 `turns`→`verbatim` rename used to surface as clap's teach-nothing
-    // "unrecognized subcommand" — the one error below the tool's water line. The hidden
+    // "unrecognized subcommand" - the one error below the tool's water line. The hidden
     // tombstone now bails with the successor (and swallows any flags, so the message
     // never loses to a flag-parse error).
     let h = populated_home();
@@ -111,7 +111,7 @@ fn turns_old_subcommand_name_gets_the_rename_error() {
 #[test]
 fn turns_slice_rejects_out_json_and_zero() {
     // --slice writes the selected chunk to stdout and is verbatim-text only, so it refuses
-    // --out, --format json, and the 1-based 0 index — each with a pointed error.
+    // --out, --format json, and the 1-based 0 index - each with a pointed error.
     let h = turns_home();
 
     let bad_out = h.run(&[
@@ -163,7 +163,7 @@ fn turns_slice_rejects_out_json_and_zero() {
 
 #[test]
 fn turns_slices_requires_a_slice_index() {
-    // `--slices N` sets the fleet size; without `--slice i` there is no chunk to emit — a clear
+    // `--slices N` sets the fleet size; without `--slice i` there is no chunk to emit - a clear
     // error, not a silent full-document dump.
     let h = turns_home();
     let o = h.run(&[
@@ -244,7 +244,7 @@ fn turns_turn_range_alone_is_not_a_conflict() {
 
 #[test]
 fn turns_valid_round_trip_fraction_accepted() {
-    // A fraction strictly inside (0,1) is accepted (the L189 false arm — valid input).
+    // A fraction strictly inside (0,1) is accepted (the L189 false arm - valid input).
     let h = turns_home();
     let out = h.run(&[
         "verbatim",

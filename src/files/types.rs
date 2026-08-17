@@ -43,7 +43,7 @@ pub(crate) struct FileResult {
     pub(crate) mutations: Vec<TaggedMutation>,
     pub(crate) boundaries: Vec<TaggedBoundary>,
     pub(crate) skipped_lines: usize,
-    /// This transcript's genuine-user turn count — so a `--turn` spec resolves its
+    /// This transcript's genuine-user turn count - so a `--turn` spec resolves its
     /// open/from-end forms (`N..`, `-3..`) against THIS file's turns, not a global count.
     pub(crate) turn_count: usize,
 }

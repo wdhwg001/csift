@@ -44,13 +44,13 @@ pub(crate) struct TurnUnit {
     pub(crate) full_chars: usize,
     /// Normalized one-line text (rendered verbatim or middle-truncated later).
     pub(crate) text: String,
-    /// Newline count of the ORIGINAL (pre-normalization) text — drives the
+    /// Newline count of the ORIGINAL (pre-normalization) text - drives the
     /// `L lines elided` note (omitted when 0, i.e. a single-line message).
     pub(crate) orig_newlines: usize,
     pub(crate) ts_utc: Option<String>,
     /// True once dedup flags this unit as already present in the newest summary.
     pub(crate) also_in_summary: bool,
-    /// True when this unit was merged from the elicitation SIDECAR (§3.10) — an
+    /// True when this unit was merged from the elicitation SIDECAR (§3.10) - an
     /// unresolved-pending AskUserQuestion/ExitPlanMode/MCP missing from the native transcript.
     /// Such a unit has no physical line (`line_no` 0); its header renders `(elicitation
     /// sidecar)` instead of `Lnnnn` and the JSON carries `source:"elicitation-sidecar"`.
@@ -58,7 +58,7 @@ pub(crate) struct TurnUnit {
     /// Set when this opener is an inbound peer/teammate communication (GOLD §1): the comm class +
     /// sender, so the header renders `<label>  <from> ⇨ self` IN PLACE OF the bare role word and the
     /// JSON carries `is_inbound_comm` + `comm_*` fields. `unit.text` holds the tag/footer-stripped
-    /// body. `None` for an ordinary user/assistant unit. RENDER-ONLY — the turn count is unchanged
+    /// body. `None` for an ordinary user/assistant unit. RENDER-ONLY - the turn count is unchanged
     /// (a peer opener still opens a turn via `opens_turn`).
     pub(crate) inbound: Option<crate::model::InboundComm>,
 }
@@ -85,14 +85,14 @@ pub(crate) struct AgentMsg {
     /// First / Middle / Last within the turn's agent run (assigned after the push loop).
     pub(crate) pos: AgentPos,
     /// `tool_use` blocks in records strictly between the previous agent-text record (or
-    /// turn start) and THIS one — the per-message attribution the placeholder `Y` needs.
+    /// turn start) and THIS one - the per-message attribution the placeholder `Y` needs.
     pub(crate) preceding_tool_calls: usize,
-    /// erroring `tool_result` blocks in that same preceding span — placeholder `Z`.
+    /// erroring `tool_result` blocks in that same preceding span - placeholder `Z`.
     pub(crate) preceding_failed: usize,
 }
 
 /// One reconstructable turn: the user opener, the turn-wide tool-call count, and the
-/// ORDERED run of every agent-text message in the turn (the model-expansion — replaces
+/// ORDERED run of every agent-text message in the turn (the model-expansion - replaces
 /// the single `assistant_eot`). The derived `assistant_eot()` accessor keeps the old
 /// "last == EOT" anchor for dedup / round-trip / render compatibility.
 #[derive(Debug, Clone)]
@@ -120,7 +120,7 @@ pub(crate) struct TurnSlice {
     /// machine pulses (e.g. `selected 19 user units (3 automation triggers)`).
     pub(crate) is_automation: bool,
     /// The parsed automation trigger (kind / task-id / status / summary) when
-    /// `is_automation` — `None` for a human turn. Carried so the JSON user-segment object
+    /// `is_automation` - `None` for a human turn. Carried so the JSON user-segment object
     /// can surface the trigger CLASS as STRUCTURED fields (`is_automation` / `trigger_kind`
     /// / `task_id` / `status`), not only as the inline `[<kind> …]` text prefix a consumer
     /// would otherwise have to regex out of the prose.
@@ -129,7 +129,7 @@ pub(crate) struct TurnSlice {
 
 impl TurnSlice {
     /// A round-trip-complete turn has BOTH a user opener and at least one agent message
-    /// (the last of which is the EOT anchor). NOTE: this is the STRUCTURAL test — it counts
+    /// (the last of which is the EOT anchor). NOTE: this is the STRUCTURAL test - it counts
     /// an automation-pulse opener (`<task-notification>`) the same as a human opener; it
     /// governs Phase-2 fill (whether a `Both` selection is offered). The Phase-1 HARD FLOOR
     /// uses [`TurnSlice::is_human_round_trip`] instead, so a machine pulse never consumes the
@@ -139,7 +139,7 @@ impl TurnSlice {
     }
 
     /// A round-trip whose opener is a GENUINE HUMAN message (not an automation pulse). This
-    /// is what the `--round-trip-fraction` HARD FLOOR reserves its budget for — the help /
+    /// is what the `--round-trip-fraction` HARD FLOOR reserves its budget for - the help /
     /// SKILL define that lane as "COMPLETE round-trips (user → … → assistant EOT)", i.e.
     /// human exchanges. An automation `<task-notification>` paired with an agent ack is a
     /// structural round-trip but NOT a human one, so it is excluded from the floor (it can
@@ -179,7 +179,7 @@ pub(crate) struct SummaryInfo {
 pub(crate) struct ScanResult {
     pub(crate) session_id: String,
     /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
-    /// re-feedable `@<uuid>` target) — the r5 id-domain discriminator, now also on turns
+    /// re-feedable `@<uuid>` target) - the r5 id-domain discriminator, now also on turns
     /// JSON (the text path already brands a subagent block `(subagent transcript)`).
     pub(crate) is_subagent: bool,
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).

@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Parse one segment (with its parallel mask) — handle redirection targets anywhere, then
+/// Parse one segment (with its parallel mask) - handle redirection targets anywhere, then
 /// dispatch on the leading command verb.
 pub(crate) fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutation>) {
     let toks = masked_tokens(segment, mask);
@@ -14,7 +14,7 @@ pub(crate) fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutatio
     // ANY command; scan all tokens (operator detection reads the MASK so an in-quote `>`
     // is invisible; the emitted path is sliced from the original). The returned index set
     // is every token CONSUMED as redirect syntax (the operator AND, for a bare `> file`
-    // form, the following path token) so those tokens are dropped before verb dispatch —
+    // form, the following path token) so those tokens are dropped before verb dispatch -
     // symmetric to how `strip_input_redirects` removes `<`/`<file`. Without this drop a
     // surviving `2>&1` / `> /tmp/log` token poisons every positional-dest verb
     // (`cp`/`mv`/`ln`/`install`/`rsync`): it can BECOME the bogus `positional.last()` dest
@@ -26,7 +26,7 @@ pub(crate) fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutatio
     collect_flag_outputs(&toks, out);
 
     // Drop pure-mask tokens (a process-sub body word like `foo` from `>(grep foo)`) AND the
-    // redirect-syntax tokens recorded above BEFORE verb dispatch — neither is a real command
+    // redirect-syntax tokens recorded above BEFORE verb dispatch - neither is a real command
     // operand. The remaining tokens carry at least one unmasked byte, so their original text
     // is a genuine command/operand.
     let cmd_all: Vec<&str> = toks
@@ -97,7 +97,7 @@ pub(crate) fn is_assignment(tok: &str) -> bool {
 }
 
 /// Emit every non-flag operand as a path with the given verb, skipping an input
-/// redirect (`< file`) — its file is READ, not mutated.
+/// redirect (`< file`) - its file is READ, not mutated.
 pub(crate) fn emit_operands(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutation>) {
     let kept = strip_input_redirects(operands);
     for op in &kept {
@@ -107,7 +107,7 @@ pub(crate) fn emit_operands(operands: &[&str], verb: &'static str, out: &mut Vec
     }
 }
 
-/// `touch [opts] file…` — like [`emit_operands`] but with `touch`'s VALUE-taking flags
+/// `touch [opts] file…` - like [`emit_operands`] but with `touch`'s VALUE-taking flags
 /// stripped first. `touch -d DATE`, `--date=DATE`, `-r REFFILE`, `--reference=REFFILE`,
 /// and `-t STAMP` each consume a FOLLOWING token that is NOT a created path: `-r`'s value
 /// is a READ-ONLY reference file, `-d`/`-t`'s value is a timestamp string. Without this,
@@ -128,7 +128,7 @@ pub(crate) fn emit_touch(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// `tee [opts] file…` — every non-flag operand is a WRITTEN sink. The append form
+/// `tee [opts] file…` - every non-flag operand is a WRITTEN sink. The append form
 /// (`tee -a` / `tee --append`) does NOT truncate (the file may pre-exist), mirroring
 /// `>>` vs `>`; emit it under the `tee-a` verb so [`bash_verb_is_create`] maps it to
 /// `is_create=false` (the truncating `tee` stays a create). tee has no value-taking
@@ -192,7 +192,7 @@ pub(crate) fn strip_input_redirects<'a>(operands: &[&'a str]) -> Vec<&'a str> {
 /// The positional non-flag, non-input-redirect operand TOKENS, in order. Unlike a
 /// `filter_map(path_operand)` collapse, this preserves POSITION across a token that
 /// `path_operand` will later drop (a `$VAR` pseudo-path), so `cp`/`mv` can identify the
-/// destination POSITIONALLY (the last token) and validate THAT token — instead of
+/// destination POSITIONALLY (the last token) and validate THAT token - instead of
 /// silently promoting an earlier source to "destination" when the real dest is dropped.
 pub(crate) fn non_flag_operands<'a>(operands: &[&'a str]) -> Vec<&'a str> {
     strip_input_redirects(operands)
@@ -201,7 +201,7 @@ pub(crate) fn non_flag_operands<'a>(operands: &[&'a str]) -> Vec<&'a str> {
         .collect()
 }
 
-/// Emit only the destination of a last-operand-dest verb (`ln`, `rsync`) — the LAST
+/// Emit only the destination of a last-operand-dest verb (`ln`, `rsync`) - the LAST
 /// positional operand. Validating that specific token (not "the last token that happens
 /// to be a valid path") means a `… $DEST/x` whose real destination is an unexpandable
 /// `$VAR` emits NOTHING, rather than wrongly reporting an earlier source.
@@ -221,7 +221,7 @@ pub(crate) fn emit_last_operand(
 /// `ln` destination resolution, GNU `-t DIR` / `--target-directory` aware (the same
 /// inversion `cp`/`mv` have). The default form (`ln [-s] target… linkname`) writes the
 /// LAST positional (the link). But `ln -t DIR target…` / `--target-directory DIR` puts
-/// the destination DIRECTORY after `-t` with the link TARGETS last — so blindly taking
+/// the destination DIRECTORY after `-t` with the link TARGETS last - so blindly taking
 /// the last positional would wrongly report a read-only source target as the created link
 /// AND miss the real destination dir. When `-t` is present we emit ITS value as the
 /// destination and treat every positional as a (read) source; else the last-positional
@@ -238,7 +238,7 @@ pub(crate) fn emit_ln(operands: &[&str], out: &mut Vec<BashMutation>) {
 
 /// `cp` / `install` destination resolution, GNU `-t DIR` aware. The default form
 /// (`cp src… dest`) writes the LAST positional. But `cp -t DIR src…` / `--target-directory
-/// DIR` puts the destination right after `-t` with the SOURCES last — so blindly taking
+/// DIR` puts the destination right after `-t` with the SOURCES last - so blindly taking
 /// the last positional would wrongly report a read-only SOURCE as written. When `-t`/
 /// `--target-directory` is present we emit ITS value as the destination and treat every
 /// positional as a source (read). `-T`/`--no-target-directory` forces the plain
@@ -271,13 +271,13 @@ pub(crate) fn target_directory_value<'a>(operands: &[&'a str]) -> Option<&'a str
     None
 }
 
-/// `mv` — the LAST positional operand is the destination (created/overwritten); earlier
+/// `mv` - the LAST positional operand is the destination (created/overwritten); earlier
 /// positionals are sources (moved-from). The destination is taken POSITIONALLY then
 /// validated, so a dropped `$VAR` destination suppresses only the `mv` dest row (the
 /// real source moves are still reported as `mv-from`).
 pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
     // GNU `mv -t DIR src…`: the destination is the `-t` value, every positional is a
-    // source — the same inversion `cp -t` has. Without `-t` the last positional is the
+    // source - the same inversion `cp -t` has. Without `-t` the last positional is the
     // destination and earlier positionals are sources.
     if let Some(dir) = target_directory_value(operands) {
         if let Some(path) = path_operand(dir) {
@@ -318,14 +318,14 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
 /// `--in-place=.bak`); a `sed` without it streams to stdout and changes no file → record
 /// nothing.
 ///
-/// `sed [opts] '<script>' <file>…` — the FIRST non-option operand is the script (e.g.
+/// `sed [opts] '<script>' <file>…` - the FIRST non-option operand is the script (e.g.
 /// `s/a/b/`), NOT a file, so it is skipped; every later non-option operand is a file.
 ///
 /// Three operand-split subtleties a naive "first bare operand is the script" loop gets
 /// wrong, each fixed here:
 /// - **explicit-script flags** (`-e <expr>`, `--expression=<expr>`, `-f <file>`,
 ///   `--file=<file>`): when ANY of these is present the script is carried by the flag, so
-///   there is NO positional script — EVERY remaining bare operand is an edited file. The
+///   there is NO positional script - EVERY remaining bare operand is an edited file. The
 ///   flag VALUES are stripped first ([`strip_value_flags`]) so a multi-`-e` script
 ///   (`-e 's/a/b/' -e 's/c/d/'`) never leaks its 2nd-and-later expressions as phantom
 ///   files.
@@ -349,10 +349,10 @@ pub(crate) fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
     let mut seen_script = has_explicit_script;
     for op in &kept {
         if op.starts_with('-') {
-            continue; // an option flag (incl. the in-place flag) — not the script/file.
+            continue; // an option flag (incl. the in-place flag) - not the script/file.
         }
         if strip_quotes(op).is_empty() {
-            continue; // a BSD `-i ''` empty backup-suffix token — not script nor file.
+            continue; // a BSD `-i ''` empty backup-suffix token - not script nor file.
         }
         if !seen_script {
             seen_script = true; // the first bare operand is the sed script, not a file.

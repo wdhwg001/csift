@@ -14,15 +14,15 @@ pub(crate) struct ImageRef {
     pub(crate) line_no: usize,
     /// 1-based ordinal of this image among the record's image blocks.
     pub(crate) img_index: usize,
-    /// The session-facing `[Image #N]` number — the SAME handle the model sees and refers to
+    /// The session-facing `[Image #N]` number - the SAME handle the model sees and refers to
     /// ("re-share #32"). Extracted by positionally zipping the record's `[Image #N]` text
     /// markers with its image blocks (CC numbers pasted images per-prompt; `history.ts`).
     /// `None` when the marker count doesn't match (then only `L<line>i<n>` addresses it).
-    /// NOT globally unique — CC reuses low numbers across prompts, so a `#N` that names >1
+    /// NOT globally unique - CC reuses low numbers across prompts, so a `#N` that names >1
     /// DISTINCT image is AMBIGUOUS: `--id #N` then ERRORS with the occurrence list rather than
     /// silently guessing (disambiguate with the locator or `--since`/`--turn`/`--uuid`).
     pub(crate) seq: Option<usize>,
-    /// A cheap content fingerprint (`<len>:<head>:<tail>` of the base64) — dedups the SAME
+    /// A cheap content fingerprint (`<len>:<head>:<tail>` of the base64) - dedups the SAME
     /// image re-injected across context windows so the listing shows it once.
     pub(crate) fingerprint: String,
     /// `"base64"` | `"url"` | another source kind (kept verbatim).
@@ -36,7 +36,7 @@ pub(crate) struct ImageRef {
     pub(crate) url: Option<String>,
     pub(crate) ts_utc: Option<String>,
     pub(crate) record_uuid: Option<String>,
-    /// The base64 payload — populated ONLY in extract mode (`--out`), to bound memory in the
+    /// The base64 payload - populated ONLY in extract mode (`--out`), to bound memory in the
     /// common list path.
     pub(crate) data: Option<String>,
 }
@@ -47,7 +47,7 @@ impl ImageRef {
         format!("L{}i{}", self.line_no, self.img_index)
     }
 
-    /// The session-facing handle `#N` when known, else the locator — so output leads with the
+    /// The session-facing handle `#N` when known, else the locator - so output leads with the
     /// number the model already uses ("re-share #32" → `--id #32`).
     pub(crate) fn handle(&self) -> String {
         match self.seq {
@@ -56,7 +56,7 @@ impl ImageRef {
         }
     }
 
-    /// File extension implied by the media type (`bin` when unknown — never fabricated).
+    /// File extension implied by the media type (`bin` when unknown - never fabricated).
     pub(crate) fn ext(&self) -> &'static str {
         match self.media_type.as_str() {
             "image/png" => "png",
@@ -72,7 +72,7 @@ impl ImageRef {
         }
     }
 
-    /// `<session-short>[-img<N>]-L<line>i<n>.<ext>` — carries the `#N` when known (so the file
+    /// `<session-short>[-img<N>]-L<line>i<n>.<ext>` - carries the `#N` when known (so the file
     /// is recognizable as "image #32") and stays unique via the `L<line>i<n>` locator, so a
     /// multi-image / multi-transcript `--out` extraction never collides. `ext` is the source
     /// extension by default, or the `--out` file path's when its extension converts the format.
@@ -85,10 +85,10 @@ impl ImageRef {
     }
 }
 
-/// Pre-JSON byte prefilter: a line MIGHT carry an image block. Coarse by design — the
+/// Pre-JSON byte prefilter: a line MIGHT carry an image block. Coarse by design - the
 /// structural walk (`record_images`) decides what each line really holds.
 pub(crate) fn line_is_image_candidate(line: &[u8]) -> bool {
-    // Finders built ONCE (per-line hot path — the stateless form rebuilt its
+    // Finders built ONCE (per-line hot path - the stateless form rebuilt its
     // searcher every call).
     static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 3]> =
         std::sync::LazyLock::new(|| {
@@ -125,7 +125,7 @@ pub(crate) fn est_decoded_len(b64: &str) -> usize {
 }
 
 /// Decode standard-alphabet base64 (padding + embedded whitespace tolerated). Returns `None`
-/// on an invalid character — so a malformed image is REPORTED, never silently written wrong.
+/// on an invalid character - so a malformed image is REPORTED, never silently written wrong.
 /// Hand-rolled (~30 lines) to avoid pulling a base64 crate just for this; the `image` crate is
 /// the one heavyweight dependency, justified by the format transcoding it alone can do.
 pub(crate) fn decode_base64(s: &str) -> Option<Vec<u8>> {
@@ -272,7 +272,7 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
             _ => {}
         }
     }
-    // Assign `#N` by POSITIONAL zip — only when the marker count matches the image count
+    // Assign `#N` by POSITIONAL zip - only when the marker count matches the image count
     // (CC guarantees `[Image #N]` is unique within a prompt; a mismatch means a back-
     // reference to a compressed-out image, so we leave `seq = None` rather than misassign).
     if markers.len() == out.len() {
@@ -283,8 +283,8 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     out
 }
 
-/// The image HANDLES a record carries — `#N` (the session's own image number) when known,
-/// else the `L<line>i<n>` locator — for surfacing in `turns`. Both feed straight back into
+/// The image HANDLES a record carries - `#N` (the session's own image number) when known,
+/// else the `L<line>i<n>` locator - for surfacing in `turns`. Both feed straight back into
 /// `csift image --id`. Empty when the record has no images.
 pub(crate) fn image_ids_for_record(rec: &Record, line_no: usize) -> Vec<String> {
     record_images(rec, false)

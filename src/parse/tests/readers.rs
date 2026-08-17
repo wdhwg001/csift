@@ -278,7 +278,7 @@ fn head_tail_disjoint_windows_never_double_count() {
 fn tail_floor_still_walks_below_for_anchors_without_counting() {
     // The ONLY genuine user sits inside the head window. The tail scan (floor past
     // it) must still find it as an anchor (phase 2 of the backward walk) while
-    // counting nothing below the floor — anchor semantics are byte-identical to the
+    // counting nothing below the floor - anchor semantics are byte-identical to the
     // old full-file walk; only the double-booked count changed.
     let f = tmp_jsonl(&[
         r#"{ broken head line"#,

@@ -4,7 +4,7 @@ use super::*;
 
 /// Resolve an `--at <WHEN>` spec to a cutoff jsonl line over a session's events.
 /// Supports `@latest` (no cutoff → the file's FINAL state), `@line:<N>`, `@turn:<N>` (first line
-/// strictly after turn N), an ISO8601 / relative datetime (events with ts ≤ the bound — the bound
+/// strictly after turn N), an ISO8601 / relative datetime (events with ts ≤ the bound - the bound
 /// is INCLUSIVE), or returns `None` (no cutoff → replay everything) when `when` is empty.
 pub(crate) fn resolve_cutoff(when: &str, events: &[FileEvent]) -> Result<Option<usize>> {
     let when = when.trim();
@@ -89,7 +89,7 @@ pub(crate) fn apply_line_range(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Write the `--out` artifact ONLY when it has content. An EMPTY reconstruction (no
-/// recoverable history / over-budget) must NOT clobber the destination — a user reusing a
+/// recoverable history / over-budget) must NOT clobber the destination - a user reusing a
 /// scratch path (the advertised `--out /tmp/restored.md` idiom) would otherwise lose
 /// pre-existing content AND read a false `(wrote …)` success line. Returns `true` when a
 /// write happened (so the caller prints its `(wrote …)` line) and `false` (with a stderr
@@ -108,7 +108,7 @@ pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
 }
 
 /// SCOPE-span counts of the resolved transcript set (one `ScanResult` per resolved file,
-/// incl. empty/no-history subagents) — `(top_level, subagent)`. Drives the shared SCOPE
+/// incl. empty/no-history subagents) - `(top_level, subagent)`. Drives the shared SCOPE
 /// banner / JSON header so a bare `csift recover <uuid>` fan-out is announced like list/turns.
 pub(crate) fn scope_span(sessions: &[ScanResult]) -> (usize, usize) {
     let sub = sessions.iter().filter(|s| s.is_subagent).count();
@@ -185,7 +185,7 @@ pub(crate) fn render_text(
     sessions: &[ScanResult],
     out_path: Option<&Path>,
 ) -> Result<()> {
-    // Restore writes the RAW file to stdout (for piping) — no scope banner to pollute it.
+    // Restore writes the RAW file to stdout (for piping) - no scope banner to pollute it.
     if matches!(ctx.mode, RecoverMode::Restore) {
         return render_restore(ctx, sessions, out_path, false);
     }
@@ -201,7 +201,7 @@ pub(crate) fn render_text(
 }
 
 /// DEFAULT `recover` (no mode flag): hand back the file's FINAL content as RAW restorable bytes
-/// — but ONLY when it is fully recoverable. When the session saw just PART of the file (a
+/// -- but ONLY when it is fully recoverable. When the session saw just PART of the file (a
 /// windowed read + edits), ERROR (never a holey file), naming the recoverable + missing line
 /// ranges and pointing at the other modes. Across unrelated session groups the freshest,
 /// most-complete candidate wins. Raw content goes to STDOUT (so `recover --file X > X` restores
@@ -212,7 +212,7 @@ pub(crate) fn render_restore(
     out_path: Option<&Path>,
     json: bool,
 ) -> Result<()> {
-    /// The freshest, most-complete restore candidate so far. Newer ts — then more lines — wins.
+    /// The freshest, most-complete restore candidate so far. Newer ts - then more lines - wins.
     /// Carries the source group's events + boundaries so a partial result can re-derive the
     /// richest pre-change state and list every external-change boundary.
     struct RestoreCandidate<'a> {
@@ -225,7 +225,7 @@ pub(crate) fn render_restore(
     let file = ctx.file.as_deref().unwrap_or("(none)");
     if json {
         // envelope v2: restore too opens with the header (then one kind:"restore" row
-        // + the summary — the single stream shape every command shares).
+        // + the summary - the single stream shape every command shares).
         println!(
             "{}",
             crate::text::envelope_scope_header(
@@ -241,7 +241,7 @@ pub(crate) fn render_restore(
         if s.events.is_empty() {
             continue;
         }
-        let rep = replay(&s.events, None); // final state — no cutoff
+        let rep = replay(&s.events, None); // final state - no cutoff
         let known = rep.final_buffer.known_lines();
         if known.is_empty() {
             continue;
@@ -337,7 +337,7 @@ pub(crate) fn render_restore(
 }
 
 /// The smart "can't fully restore the LATEST state" diagnostic. Beyond the covered/missing
-/// ranges it (1) lists EVERY external-change boundary (Edit-before-Read / external edit — the
+/// ranges it (1) lists EVERY external-change boundary (Edit-before-Read / external edit - the
 /// file changed outside the tool stream), (2) when a richer state existed BEFORE the first such
 /// change, surfaces it (complete in the session-authored case, a fuller salvage otherwise) with
 /// a dump-pre-change + dump-patches-since + reconcile-by-hand recipe, and (3) ALWAYS appends the
@@ -433,7 +433,7 @@ pub(crate) fn restore_partial_message(
          the scope.",
     );
 
-    // Always-on caveat — csift does NOT hunt for hidden boundaries.
+    // Always-on caveat - csift does NOT hunt for hidden boundaries.
     m.push_str(
         "\nNote: recovery can't fully guarantee a match to disk — anything that changed this file \
          OUTSIDE the visible Read/Write/Edit stream (a formatter like prettier, a husky/pre-commit \

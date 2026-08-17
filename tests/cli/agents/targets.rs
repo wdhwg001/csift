@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn agents_bad_hex_errors_with_discovery_guidance() {
     // A typo'd / non-existent --agent hex is a HARD error (non-zero) with discovery
-    // guidance — NOT the ambiguous `no subagents found` that a zero-subagent session prints.
+    // guidance - NOT the ambiguous `no subagents found` that a zero-subagent session prints.
     let h = populated_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--agent", "deadbeefcafe"]);
     assert!(!out.success, "a bad hex must be a hard error");

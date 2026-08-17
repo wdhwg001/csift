@@ -13,8 +13,8 @@ pub(crate) struct RenderedUnit {
     pub(crate) elided_lines: usize,
 }
 
-/// Middle-truncate a unit to a cap (`cap_override` when set — the fixed-fleet `--slices` window
-/// cap that keeps whole turns — else the unit's per-role cap), keeping head+tail, with an explicit
+/// Middle-truncate a unit to a cap (`cap_override` when set - the fixed-fleet `--slices` window
+/// cap that keeps whole turns - else the unit's per-role cap), keeping head+tail, with an explicit
 /// elided marker. A unit at or below the cap renders verbatim. The cut is on `char` boundaries
 /// (never mid-codepoint). The `L lines elided` note is included only when the original text spanned
 /// ≥1 newline.
@@ -105,11 +105,11 @@ pub(crate) const INTENT_VERB_OPENERS: &[&str] = &[
 /// returns true on ANY signal; the separate [`agent_msg_is_droppable`] is what proves a
 /// message is a pure declaration safe to collapse.
 pub(crate) fn agent_msg_is_rich(text: &str, cfg: &RichnessCfg) -> bool {
-    // ARM 1 — LENGTH GATE.
+    // ARM 1 - LENGTH GATE.
     if text.chars().count() >= cfg.rich_min_chars {
         return true;
     }
-    // ARM 2 — SIGNAL TEST (first match wins; single cheap scan per arm).
+    // ARM 2 - SIGNAL TEST (first match wins; single cheap scan per arm).
     let lower = text.to_lowercase();
     signal_number_of_substance(&lower)
         || signal_commit_hash(&lower)
@@ -118,9 +118,9 @@ pub(crate) fn agent_msg_is_rich(text: &str, cfg: &RichnessCfg) -> bool {
         || signal_finding_lexeme(&lower)
 }
 
-/// Arm 2a — a NUMBER-OF-SUBSTANCE: a ≥2-digit run, or an `N / M` / `N of M` ratio, sitting
+/// Arm 2a - a NUMBER-OF-SUBSTANCE: a ≥2-digit run, or an `N / M` / `N of M` ratio, sitting
 /// within a ±16-char window of one of [`SUBSTANCE_NOUNS`]. Byte scan for ASCII digits,
-/// then a bounded-window noun check — never a full regex pass. Operates on lowercased text.
+/// then a bounded-window noun check - never a full regex pass. Operates on lowercased text.
 pub(crate) fn signal_number_of_substance(lower: &str) -> bool {
     let bytes = lower.as_bytes();
     let n = bytes.len();
@@ -140,7 +140,7 @@ pub(crate) fn signal_number_of_substance(lower: &str) -> bool {
             }
             // A ≥2-digit integer within a ±16-byte window of a substance noun. The window
             // bounds are BYTE offsets that may land mid-codepoint (CJK text), so snap `lo`
-            // DOWN and `hi` UP to the nearest char boundary before slicing — slicing a
+            // DOWN and `hi` UP to the nearest char boundary before slicing - slicing a
             // non-boundary index panics. The substance nouns are ASCII, so a slightly wider
             // (boundary-snapped) window never changes a match decision.
             if run_len >= 2 {
@@ -184,7 +184,7 @@ pub(crate) fn ratio_follows(bytes: &[u8], mut i: usize) -> bool {
     i < n && bytes[i].is_ascii_digit()
 }
 
-/// Arm 2b — a COMMIT-HASH-LIKE HEX: a maximal `[0-9a-f]` run of length 7..=40 containing
+/// Arm 2b - a COMMIT-HASH-LIKE HEX: a maximal `[0-9a-f]` run of length 7..=40 containing
 /// at least one a–f letter (excludes plain decimals already caught by Arm 2a). Operates
 /// on lowercased text.
 pub(crate) fn signal_commit_hash(lower: &str) -> bool {
@@ -219,13 +219,13 @@ pub(crate) fn signal_commit_hash(lower: &str) -> bool {
     false
 }
 
-/// Arm 2c — a FILE-AND-LINE REF: a `name.rs:NNN` shape (a token with a `.` + alpha
+/// Arm 2c - a FILE-AND-LINE REF: a `name.rs:NNN` shape (a token with a `.` + alpha
 /// extension followed by `:` + digits) OR a `src/…` / `tests/…`-rooted path token.
-/// Operates on the ORIGINAL (case-preserving) text — paths are case-sensitive.
+/// Operates on the ORIGINAL (case-preserving) text - paths are case-sensitive.
 pub(crate) fn signal_file_line_ref(text: &str) -> bool {
     for tok in text.split(|c: char| c.is_whitespace()) {
         let tok = tok.trim_matches(|c: char| matches!(c, '`' | '(' | ')' | ',' | ';' | '"'));
-        // `name.ext:NNN` — a dot, an alpha extension, a colon, then ≥1 digit.
+        // `name.ext:NNN` - a dot, an alpha extension, a colon, then ≥1 digit.
         if let Some(colon) = tok.rfind(':') {
             let (path, after) = tok.split_at(colon);
             let line_part = &after[1..];
@@ -254,7 +254,7 @@ pub(crate) fn path_has_alpha_extension(path: &str) -> bool {
     }
 }
 
-/// Arm 2d — a BACKTICK CODE PATH: at least one backtick-delimited span (`` `code` ``).
+/// Arm 2d - a BACKTICK CODE PATH: at least one backtick-delimited span (`` `code` ``).
 pub(crate) fn signal_backtick_code(text: &str) -> bool {
     let first = match text.find('`') {
         Some(i) => i,
@@ -263,7 +263,7 @@ pub(crate) fn signal_backtick_code(text: &str) -> bool {
     text[first + 1..].contains('`')
 }
 
-/// Arm 2e — a FINDING/DECISION LEXEME (case-insensitive substring against the fixed
+/// Arm 2e - a FINDING/DECISION LEXEME (case-insensitive substring against the fixed
 /// [`FINDING_LEXEMES`] set). Operates on lowercased text (the CJK lexemes are
 /// substring-matched on the same normalized String, codepoint-safe).
 pub(crate) fn signal_finding_lexeme(lower: &str) -> bool {
@@ -274,7 +274,7 @@ pub(crate) fn signal_finding_lexeme(lower: &str) -> bool {
 /// ALL of: NOT rich, AND opens with an intent verb (case-insensitive prefix on the first
 /// ~24 trimmed chars), AND short (`chars < declaration_max_chars`). A message that is
 /// neither clearly rich nor a proven declaration (no opener verb, no signal, mid-length)
-/// is KEPT — drop requires proof, keep is default.
+/// is KEPT - drop requires proof, keep is default.
 pub(crate) fn agent_msg_is_droppable(text: &str, cfg: &RichnessCfg) -> bool {
     if agent_msg_is_rich(text, cfg) {
         return false;

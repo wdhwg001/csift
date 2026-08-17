@@ -8,8 +8,8 @@ use super::*;
 /// flag-ordering bug described on [`normalize_argv`]: a project-target positional must
 /// tolerate a leading `-` (every encoded projects-dir token starts with `-`), which
 /// requires clap's `allow_hyphen_values`; but that setting makes a multi-value
-/// positional GREEDILY absorb every following token — including declared long flags
-/// like `--format json` — so `csift list <ENCODED> --format json` used to fail with
+/// positional GREEDILY absorb every following token - including declared long flags
+/// like `--format json` - so `csift list <ENCODED> --format json` used to fail with
 /// `no project dir named "--format"`. We reorder declared flags ahead of the
 /// leading-dash positionals BEFORE clap parses, so `--format` works in any position.
 #[must_use]
@@ -25,7 +25,7 @@ pub fn parse_argv() -> Cli {
 /// flag the `allow_hyphen_values` positional would otherwise swallow, surfacing the
 /// misleading `no project dir named "--xxx"` error instead of clap's clean
 /// `unexpected argument '--xxx'` + `did you mean --no-subagents?` suggestion. (The ONE
-/// legitimate `--`-leading target — a UNC-encoded `--server-…` dir — is deliberately
+/// legitimate `--`-leading target - a UNC-encoded `--server-…` dir - is deliberately
 /// routed through the `@--server-…` form instead, which the error names.) Returning `Err`
 /// here makes clap reconsider the token and emit that standard message uniformly across
 /// every scope-operating subcommand (search/whoami already did; the rest did not). A SINGLE
@@ -49,8 +49,8 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// ## Why a pre-pass (vs a value parser / `allow_hyphen_values` tweak)
 ///
 /// clap issue #3880 + empirical probing (clap 4.6): a `Vec` positional with
-/// `allow_hyphen_values=true` swallows every following token — including KNOWN long
-/// flags — once it starts consuming, and `num_args`/value parsers cannot undo that
+/// `allow_hyphen_values=true` swallows every following token - including KNOWN long
+/// flags - once it starts consuming, and `num_args`/value parsers cannot undo that
 /// (a value-parser `Err` hard-aborts rather than letting clap retry the token as a
 /// flag). The robust, well-understood fix is to normalize argv first.
 ///
@@ -58,7 +58,7 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 ///
 /// We introspect csift's OWN [`Cli::command`] for the active subcommand to learn its
 /// long flags and which take a value (action `Set`/`Append` take a value; `SetTrue`/
-/// `SetFalse`/`Count`/help/version do not). So the flag set is never duplicated — it
+/// `SetFalse`/`Count`/help/version do not). So the flag set is never duplicated - it
 /// follows the derive definitions automatically.
 ///
 /// ## Pre-subcommand global flags
@@ -79,7 +79,7 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 /// - A `-x` token whose `x` is a DECLARED short flag is hoisted ahead of the positionals
 ///   exactly like a long flag (`-t user` keeps its paired value if the flag takes one,
 ///   `-tuser`/`-i` are emitted as-is). clap does NOT resolve a trailing declared short
-///   flag ahead of an `allow_hyphen_values` positional — the positional swallows it — so
+///   flag ahead of an `allow_hyphen_values` positional - the positional swallows it - so
 ///   we reorder it here too. A leading-dash ENCODED token (a single `-` followed by
 ///   alphanumerics/dashes, whose first char is NOT a declared short flag, e.g.
 ///   `-Users-…`) is NOT a flag and stays a positional.
@@ -167,7 +167,7 @@ fn root_flag_sets(cmd: &clap::Command) -> FlagSets {
     }
 }
 
-/// Scan forward from argv[1] over DECLARED root flags to the first non-flag token — the
+/// Scan forward from argv[1] over DECLARED root flags to the first non-flag token - the
 /// subcommand candidate. `None` when the scan cannot positively classify a token (an unknown
 /// `--x`, a lone `-`, the `--` terminator) or when argv is flags-only: the caller returns
 /// argv untouched and clap reports as usual.
@@ -208,13 +208,13 @@ fn find_subcommand_index(argv: &[String], root: &FlagSets) -> Option<usize> {
     None // flags only, no subcommand -- nothing to normalize
 }
 
-/// The SUBCOMMAND's declared flags (its own args PLUS the root's GLOBAL args — e.g.
+/// The SUBCOMMAND's declared flags (its own args PLUS the root's GLOBAL args - e.g.
 /// `--claude-home <DIR>` propagates to every subcommand but may not surface in
 /// `sub.get_arguments()` at introspection time; without it a `--claude-home /path` placed
 /// AFTER the subcommand would mis-sort the path as a positional. HashSet inserts are
 /// idempotent, so double-counting is harmless). Short flags matter too: a declared `-x`
 /// must be hoisted ahead of the `allow_hyphen_values` positional exactly like a long flag
-/// — otherwise `search PATTERN . -t user` lets the positional greedily swallow `-t`. An
+/// -- otherwise `search PATTERN . -t user` lets the positional greedily swallow `-t`. An
 /// UNDECLARED `-x` (e.g. an encoded `-Users-...` token) is NOT in these sets and stays a
 /// positional.
 fn sub_flag_sets(sub: &clap::Command, cmd: &clap::Command) -> FlagSets {
@@ -255,7 +255,7 @@ fn sub_flag_sets(sub: &clap::Command, cmd: &clap::Command) -> FlagSets {
     }
 }
 
-/// Re-sort the post-subcommand tokens into (flags-with-values, positionals, passthrough) —
+/// Re-sort the post-subcommand tokens into (flags-with-values, positionals, passthrough) -
 /// the actual clap #3880 workaround: declared flags (and their value tokens) are hoisted
 /// ahead of the `allow_hyphen_values` positionals; everything after a `--` terminator is
 /// verbatim positional input.
@@ -295,7 +295,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
                 i += 1;
             } else if value_long.contains(tok) {
                 flags.push(tok.clone());
-                // A value-taking flag (arity 1) consumes its NEXT token as the value —
+                // A value-taking flag (arity 1) consumes its NEXT token as the value -
                 // INCLUDING a leading-`-` token when that flag carries `allow_hyphen_values`.
                 // The only tokens that are NOT its value: the `--` terminator, or another
                 // DECLARED long flag (a user typo such as `--format --kind`, which we leave
@@ -314,7 +314,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
                 // recovery path, e.g. `--turn-range` → `--turn`), and on every
                 // target-taking command the `allow_hyphen_values` PATH/TARGET Vec absorbs
                 // it into `parse_project_target`, which rejects it BY NAME ("did you
-                // mistype a flag?"). Correct attribution in both regimes — see
+                // mistype a flag?"). Correct attribution in both regimes - see
                 // `ShowArgs::target` for why show's TARGET must be a Vec for this.
                 flags.push(tok.clone());
                 i += 1;
@@ -325,7 +325,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
             // that takes a value consumes the NEXT token as its value (the same pairing
             // rule as a value-taking long flag); a bundled `-xVALUE` (`-tuser`) or a boolean
             // `-i` carries everything inline and is emitted as one token. A leading-`-`
-            // ENCODED token (`-Users-…`) never reaches here — its first char is not a
+            // ENCODED token (`-Users-…`) never reaches here - its first char is not a
             // declared short flag, so `declared_short_flag` returns `None` and it falls to
             // the positional arm below.
             flags.push(tok.clone());
@@ -354,7 +354,7 @@ fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, 
 /// If `tok` is a `-x…` short-flag token whose first post-dash character is a DECLARED
 /// short flag of the active subcommand, return that character; else `None`. Used by
 /// [`normalize_argv`] to distinguish a real short flag (`-t`, `-i`, a bundled `-tuser`)
-/// — which must be hoisted ahead of an `allow_hyphen_values` positional — from a
+/// -- which must be hoisted ahead of an `allow_hyphen_values` positional - from a
 /// leading-`-` ENCODED project token (`-Users-…`, whose first char is not a declared
 /// short flag) which stays a positional. A bare `-` or `--`-leading token is never a
 /// short flag here (the caller handles `--` separately; a lone `-` has no flag char).

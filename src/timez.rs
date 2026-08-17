@@ -1,16 +1,16 @@
-//! Shared timestamp rendering in the system-local timezone — ONE canonical text form.
+//! Shared timestamp rendering in the system-local timezone - ONE canonical text form.
 //!
 //! csift auto-detects the machine's local timezone via [`jiff::tz::TimeZone::system`]
 //! (powered by jiff's default `tz-system` feature: it reads `$TZ`, then
 //! `/etc/localtime` on Unix, the registry on Windows, etc.) and renders EVERY text
-//! timestamp as `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` — e.g.
+//! timestamp as `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)` - e.g.
 //! `2026-07-11 15:33:37 AEST(UTC+10)`. The marker is a FORMAT, not a value: both the
 //! abbreviation and the offset derive from the system zone AT THAT INSTANT
-//! (DST-correct — a January instant in Sydney renders `AEDT(UTC+11)`, a July one
+//! (DST-correct - a January instant in Sydney renders `AEDT(UTC+11)`, a July one
 //! `AEST(UTC+10)`; an Indian machine renders `IST(UTC+05:30)`), never hardcoded.
 //!
 //! Design intent (v0.5): an LLM reader gets the zone name AND its offset together, so
-//! the only mental step left is "shift by the given offset" — never "recall what
+//! the only mental step left is "shift by the given offset" - never "recall what
 //! offset this zone name maps to". The former dual form (`… AEST (2026-…Z)`) invited
 //! exactly the UTC-conversion arithmetic LLMs get wrong; the raw UTC lives in JSON
 //! (`ts_utc`) and in `--raw` bytes, never in text.
@@ -20,14 +20,14 @@
 use jiff::tz::TimeZone;
 
 /// The machine's local timezone, auto-detected from the OS (`$TZ` / `/etc/localtime`
-/// / platform equivalent). [`TimeZone::system`] is infallible — if detection fails
-/// it falls back to a UTC-equivalent zone — so callers never need an error branch.
+/// / platform equivalent). [`TimeZone::system`] is infallible - if detection fails
+/// it falls back to a UTC-equivalent zone - so callers never need an error branch.
 #[must_use]
 pub fn local_tz() -> TimeZone {
     TimeZone::system()
 }
 
-/// The canonical timezone marker for one zoned instant — `<TZAB>(UTC±offset)`.
+/// The canonical timezone marker for one zoned instant - `<TZAB>(UTC±offset)`.
 /// Whole-hour offsets render compact (`UTC+10`, `UTC-7`); fractional offsets carry
 /// zero-padded minutes (`UTC+05:30`, `UTC+09:30`). A zone with no usable abbreviation
 /// (jiff yields a bare numeric like `+10:00`) degrades to `(UTC±offset)` alone.
@@ -51,7 +51,7 @@ pub(crate) fn tz_marker(zoned: &jiff::Zoned) -> String {
 }
 
 /// The shared canonical renderer: `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`.
-/// Absent → `—`; present but unparseable → the raw bytes surfaced with `(unparsed)`
+/// Absent → `-`; present but unparseable → the raw bytes surfaced with `(unparsed)`
 /// (never a panic, never a fabricated time, never a silent drop).
 fn render_local(raw: Option<&str>, millis: bool) -> String {
     let Some(raw) = raw else {
@@ -73,7 +73,7 @@ fn render_local(raw: Option<&str>, millis: bool) -> String {
 
 /// Render a raw ISO8601 UTC timestamp in the canonical local form, second precision:
 /// `2026-07-11 15:33:37 AEST(UTC+10)`. (The pre-v0.5 `… <TZ> (<raw UTC>)` dual form is
-/// gone — the UTC copy invited LLM conversion errors; machine consumers read JSON
+/// gone - the UTC copy invited LLM conversion errors; machine consumers read JSON
 /// `ts_utc`.)
 #[must_use]
 pub fn format_timestamp(raw: Option<&str>) -> String {
@@ -81,7 +81,7 @@ pub fn format_timestamp(raw: Option<&str>) -> String {
 }
 
 /// Render a raw ISO8601 UTC timestamp in the canonical local form with milliseconds:
-/// `2026-07-11 15:33:37.442 AEST(UTC+10)` — the ordering-precision variant `search`/
+/// `2026-07-11 15:33:37.442 AEST(UTC+10)` - the ordering-precision variant `search`/
 /// `show` headers use. Same marker, same rules.
 #[must_use]
 pub fn format_local_compact(raw: Option<&str>) -> String {

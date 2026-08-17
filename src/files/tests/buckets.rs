@@ -12,7 +12,7 @@ fn summary_bucketing_collapses_by_parent_dir() {
     assert_eq!(tmp.write, 2, "two /tmp writes");
     assert_eq!(tmp.bash, 1, "one bash rm under /tmp");
     // /p/spec bucket: one edit (the fixture's parent dirs are ≤4 segments deep, so the
-    // coarse rollup keeps them — the collapse only fires on DEEPER paths, see below).
+    // coarse rollup keeps them - the collapse only fires on DEEPER paths, see below).
     let spec = buckets.get("/p/spec").expect("/p/spec bucket");
     assert_eq!(spec.edit, 1);
     // /p/src bucket: one multi-edit.

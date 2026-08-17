@@ -112,7 +112,7 @@ pub(crate) fn render_tree_text(nodes: &[SubagentNode], workflow_runs: &[Workflow
 }
 
 /// Print built-in agents as a tree by `parent_agent_id`. A root (parent absent, or its parent
-/// not an in-scope built-in) prints at indent 1 — identical to the pre-nesting flat layout —
+/// not an in-scope built-in) prints at indent 1 - identical to the pre-nesting flat layout -
 /// and each child one indent deeper. Pre-order DFS via an explicit stack (no recursion depth
 /// risk); siblings in stable `agent_id` order.
 pub(crate) fn print_builtin_agents_nested(builtin: &[&SubagentNode], view: &View) {
@@ -182,7 +182,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     println!("{head}");
 
     // A FROZEN lane: the status above says `running`, but it is blocked at an unreturned tool_use.
-    // Surface WHY prominently — the disambiguation a flat `running` (or, before the fix, `completed`)
+    // Surface WHY prominently - the disambiguation a flat `running` (or, before the fix, `completed`)
     // hid. escalation-blocked = waiting for a human Yes; awaiting-execution = slow-or-wedged.
     if let Some(class) = n.pending_classification {
         let tool = n.pending_tool_name.as_deref().unwrap_or("?");
@@ -218,7 +218,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         "{ind2}started    {}",
         format_timestamp(n.started_utc.as_deref())
     );
-    // Truthful terminal line: only a COMPLETED lane prints "completed" (+ duration) —
+    // Truthful terminal line: only a COMPLETED lane prints "completed" (+ duration) -
     // `completed_utc` is status-gated at the node, so presence == completion. A frozen
     // lane's tail instant is already on the PENDING line as "frozen since"; any other
     // non-completed lane (running-not-frozen / unknown) prints the tail ts as
@@ -240,7 +240,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     if view.want_returned {
         if let (Some(msg), Some(src)) = (&n.returned_message, n.returned_message_source) {
             // On a non-completed lane the newest returned/observed message PREDATES the
-            // still-open work — a "work is complete, confirming shutdown" tail reads like
+            // still-open work - a "work is complete, confirming shutdown" tail reads like
             // an outcome and has misled a real reader (R8). Brand it inline next to the
             // source tag; don't rely on the reader remembering the schema note.
             // `completed_utc` is status-gated, so absence == the lane is not completed.
@@ -269,7 +269,7 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         }
     }
     if n.skipped_lines > 0 {
-        // R12: same window census as `list` — lifecycle reads the transcript head/tail only.
+        // R12: same window census as `list` - lifecycle reads the transcript head/tail only.
         println!(
             "{ind2}note     {} (among the head/tail lines read — full census: csift stats)",
             crate::text::malformed_note(n.skipped_lines)

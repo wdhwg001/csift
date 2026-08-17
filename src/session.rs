@@ -1,8 +1,8 @@
-//! `list` subcommand — enumerate sessions with quick identity fields.
+//! `list` subcommand - enumerate sessions with quick identity fields.
 //!
 //! For each session jsonl, emit: session-id, FIRST genuine-user message, LAST
 //! genuine-user message, LAST agent message (each with its timestamp), plus the
-//! decoded cwd / version / gitBranch — the fast "which session is this?" view.
+//! decoded cwd / version / gitBranch - the fast "which session is this?" view.
 //! Uses a forward HEAD read for the first user message and a backward TAIL read
 //! for the last user/agent messages (never a full parse). Timestamps render in the
 //! system-local timezone alongside raw UTC (see [`crate::timez`]). Files are
@@ -12,10 +12,10 @@
 //! ## Scope resolution + parallelism
 //!
 //! Target resolution (positional PATH(s) / `@<uuid>` / `*.jsonl`, with subagent spanning)
-//! goes through the SHARED [`crate::path::resolve_session_files`] resolver — the SAME one
-//! `search`/`agents`/`files`/`recover`/`turns` use — so `list` is no longer a separate
+//! goes through the SHARED [`crate::path::resolve_session_files`] resolver - the SAME one
+//! `search`/`agents`/`files`/`recover`/`turns` use - so `list` is no longer a separate
 //! scope dialect: a `csift list @<uuid>` identifies that one session, exactly like its
-//! siblings. The dominant work — the per-session head+tail parse —
+//! siblings. The dominant work - the per-session head+tail parse -
 //! then runs `rayon` `par_iter()` across the resolved files on the default pool (= CPU
 //! count); results are sorted by path for deterministic output.
 

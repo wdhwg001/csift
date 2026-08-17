@@ -5,7 +5,7 @@
 /// redirect). A heredoc opens on a `<<DELIM` / `<<-DELIM` / `<<'DELIM'` / `<<"DELIM"`
 /// token (quoted or not) and closes on a line whose trimmed content equals `DELIM` (a
 /// `<<-` opener also accepts a tab-indented closer). Multiple heredocs on one line open
-/// in left-to-right order. This is a lexical best-effort — sufficient to stop the body's
+/// in left-to-right order. This is a lexical best-effort - sufficient to stop the body's
 /// `>`/quote characters from fabricating redirect rows.
 pub(crate) fn strip_heredoc_bodies(command: &str) -> String {
     if !command.contains("<<") {
@@ -27,7 +27,7 @@ pub(crate) fn strip_heredoc_bodies(command: &str) -> String {
             }
             continue; // body line (and the closer line) are not commands.
         }
-        // Not inside a body: this is a command/opener line — keep it, and queue any
+        // Not inside a body: this is a command/opener line - keep it, and queue any
         // heredoc delimiters it opens so the FOLLOWING lines are dropped as bodies.
         out.push_str(line);
         for delim in heredoc_delims(line) {
@@ -50,7 +50,7 @@ pub(crate) fn heredoc_delims(line: &str) -> Vec<String> {
     let mut i = 0usize;
     while i + 1 < bytes.len() {
         if bytes[i] == b'<' && bytes[i + 1] == b'<' {
-            // `<<<` is a here-string, not a heredoc — skip it.
+            // `<<<` is a here-string, not a heredoc - skip it.
             if bytes.get(i + 2) == Some(&b'<') {
                 i += 3;
                 continue;

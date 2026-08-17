@@ -2,12 +2,12 @@
 
 use super::*;
 
-/// Encode an absolute cwd to its Claude Code project-dir basename — the EXACT transform
+/// Encode an absolute cwd to its Claude Code project-dir basename - the EXACT transform
 /// CC applies (extracted verbatim from the 2.1.228 binary): the cwd is first
-/// NFC-normalized (every CC path rides `.normalize("NFC")` — a macOS filesystem hands out
+/// NFC-normalized (every CC path rides `.normalize("NFC")` - a macOS filesystem hands out
 /// NFD, so an accented path is re-composed before encoding), then the JS regex
 /// `replace(/[^a-zA-Z0-9]/g,"-")` runs per UTF-16 CODE UNIT: every unit outside ASCII
-/// alphanumerics becomes ONE `-` — so an astral char (two surrogate units) yields TWO
+/// alphanumerics becomes ONE `-` - so an astral char (two surrogate units) yields TWO
 /// dashes, and a Windows `C:\Users\x` yields `C--Users-x` (`:` and `\` are one unit
 /// each). No dash collapsing, no case folding. A char-wise or byte-wise replacement
 /// DIVERGES from CC on any non-ASCII cwd and resolves the wrong dir.
@@ -28,11 +28,11 @@ pub fn encode_cwd(cwd: &Path) -> String {
 
 /// The user's home directory, resolved the way Claude Code itself resolves it (Node's
 /// `os.homedir()`): `$HOME` on Unix, `%USERPROFILE%` on Windows. The per-platform split is
-/// load-bearing on Windows — CC never consults `HOME` there, but Git-Bash/MSYS shells
+/// load-bearing on Windows - CC never consults `HOME` there, but Git-Bash/MSYS shells
 /// export one (often a POSIX-style `/c/Users/...` a native process cannot use), and
 /// honoring it would point csift at a `.claude` dir CC never writes. The conventional env
 /// var is read first so a test harness can relocate home per-subprocess; `std::env::home_dir`
-/// (un-deprecated, Windows-correct since Rust 1.85 — MSRV is above both) is the fallback.
+/// (un-deprecated, Windows-correct since Rust 1.85 - MSRV is above both) is the fallback.
 pub(crate) fn home_dir() -> Result<PathBuf> {
     #[cfg(not(windows))]
     if let Some(h) = std::env::var_os("HOME") {
@@ -58,7 +58,7 @@ pub(crate) fn home_dir() -> Result<PathBuf> {
 pub(crate) static CLAUDE_HOME_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Claude Code's own config-dir relocation env var. When set, "every `~/.claude` path
-/// lives under that directory instead", so csift — which reads Claude Code's data — must
+/// lives under that directory instead", so csift - which reads Claude Code's data - must
 /// honor it to keep pointing at the same files.
 pub const CLAUDE_CONFIG_DIR_ENV: &str = "CLAUDE_CONFIG_DIR";
 
@@ -89,7 +89,7 @@ pub(crate) fn resolve_claude_home(
     home.join(".claude")
 }
 
-/// The Claude Code config dir — the `~/.claude` directory, or wherever it has been
+/// The Claude Code config dir - the `~/.claude` directory, or wherever it has been
 /// relocated. Honors, in priority order, the `--claude-home` flag, the `$CLAUDE_CONFIG_DIR`
 /// env var (Claude Code's own relocation mechanism), then `$HOME/.claude`. EVERY
 /// subcommand reaches Claude's data through here (via [`projects_root`]), so this single
@@ -123,18 +123,18 @@ pub fn projects_root() -> Result<PathBuf> {
 pub struct ProjectDir {
     /// Absolute path to the `<encoded>` directory under the projects root.
     pub dir: PathBuf,
-    /// The canonical cwd of a REAL-path target — `Some` when the user passed an actual
+    /// The canonical cwd of a REAL-path target - `Some` when the user passed an actual
     /// filesystem path, `None` for a pre-encoded `<ENCODED>` dir token (where the user
     /// explicitly named the dir) or an all-projects scan. When `Some`, session enumeration
     /// filters this dir's files to those whose recorded `cwd` IS this path, so a lossy-
     /// encoding COLLISION (a different cwd that encodes to the same dir, §2.1) never leaks a
-    /// sibling's sessions — or their subagents — into the result.
+    /// sibling's sessions - or their subagents - into the result.
     pub target_cwd: Option<PathBuf>,
 }
 
 /// True iff `token` is a plausible pre-encoded projects-dir basename, per §2.3 step 1:
 /// only `[A-Za-z0-9-]` (so no `/`), and one of the two shapes CC's encoder can emit for
-/// an absolute path — a Unix cwd leads with `-` (the leading `/` encodes to `-`; a UNC
+/// an absolute path - a Unix cwd leads with `-` (the leading `/` encodes to `-`; a UNC
 /// `\\server\…` leads with `--`), a WINDOWS cwd leads with `<drive-letter>--` (the `:`
 /// and `\` of `C:\` each encode to `-`, verbatim from the 2.1.228 binary's sanitizer).
 pub(crate) fn looks_like_encoded_token(token: &str) -> bool {
@@ -198,7 +198,7 @@ pub fn absolutize(p: &Path) -> Result<PathBuf> {
 }
 
 /// Lexically resolve `.`/`..` without touching the filesystem (used when the path
-/// does not exist so `canonicalize` can't run). Symlinks are not resolved here —
+/// does not exist so `canonicalize` can't run). Symlinks are not resolved here -
 /// acceptable, since the encoding only needs the textual absolute path.
 pub(crate) fn lexical_normalize(p: &Path) -> PathBuf {
     use std::path::Component;

@@ -8,7 +8,7 @@ pub(crate) struct RenderCtx {
     pub(crate) budget_chars: usize,
     pub(crate) rt_fraction: f64,
     pub(crate) skipped_lines: usize,
-    /// The richness configuration — the renderer walks the same `select_agent_messages`
+    /// The richness configuration - the renderer walks the same `select_agent_messages`
     /// survivor set the plan budgeted, so emitted == costed.
     pub(crate) cfg: RichnessCfg,
 }
@@ -30,15 +30,15 @@ pub(crate) fn render_text(
     slices: Option<usize>,
 ) -> Result<()> {
     // ── Chunked-output mode (--slice): emit ONLY one ≤window-char chunk of the verbatim DOCUMENT
-    // (the SAME body `--out` writes), with NO operational chrome — so a SessionStart hook can
+    // (the SAME body `--out` writes), with NO operational chrome - so a SessionStart hook can
     // inject it under the 10,000-char additionalContext cap. Two sub-modes:
     //
     //   • LEGACY (`--slice` alone): budget-driven. The document is whatever `--budget` selected,
     //     paginated into a VARIABLE number of chunks; `--slice i` emits the i-th. Concatenating
     //     1..K reproduces the document byte-for-byte. The per-role 600/900 body caps apply.
     //   • FIXED-FLEET (`--slices N`): the slice COUNT is the hard constraint (a fixed set of hooks
-    //     can't grow). Bodies render whole up to one window — a turn is ellipsized ONLY if it
-    //     ALONE exceeds a window — and only the NEWEST N chunks are kept; the oldest overflow is
+    //     can't grow). Bodies render whole up to one window - a turn is ellipsized ONLY if it
+    //     ALONE exceeds a window - and only the NEWEST N chunks are kept; the oldest overflow is
     //     DISCARDED. So the emitted count is ALWAYS ≤N regardless of turn size. slice 1 = oldest
     //     KEPT, slice N = newest.
     //
@@ -71,7 +71,7 @@ pub(crate) fn render_text(
     let mut out_blob = String::new();
 
     // Fan-out scope banner. The banner reports the TRUE scope (EVERY discovered session,
-    // split top-level/subagent) and — separately — how many rendered WITHIN budget, so the
+    // split top-level/subagent) and - separately - how many rendered WITHIN budget, so the
     // budget value can never silently rewrite "scope" and a targeted top-level uuid can never
     // read as `0 top-level`. Printed whenever more than one session is in scope OR some
     // in-scope session was skipped by the budget; a lone session that rendered cleanly stays
@@ -93,11 +93,11 @@ pub(crate) fn render_text(
     }
 
     // A TARGETED top-level session that has restorable content but does NOT fit the budget
-    // must be reported explicitly — never silently absent while unrelated subagents fill
+    // must be reported explicitly - never silently absent while unrelated subagents fill
     // stdout. Emit a per-session skip note (top-level sessions only; a skipped subagent is
     // fan-out noise the user did not ask for) carrying the budget it would need. A GENUINELY
     // EMPTY session (no restorable turns at all → `min_render_chars` is None) is left to the
-    // terminal "no turns selected (empty session set …)" fallback — that case is already
+    // terminal "no turns selected (empty session set …)" fallback - that case is already
     // honest and not a budget problem. `skipped_any` tracks only the budget-too-small notes,
     // separate from `any`, so the fallback still keys on whether a real block rendered.
     let mut skipped_any = false;
@@ -131,7 +131,7 @@ pub(crate) fn render_text(
         let n_automation = count_automation(plan);
         // Brand a spanned SUBAGENT block with the SAME shape every other session-emitting
         // surface uses (`list`/`files`/`search`): `SUBAGENT <hex>  ·  parent SESSION <uuid>`
-        // — never token a bare non-re-feedable subagent hex as `SESSION` (the id-domain
+        // - never token a bare non-re-feedable subagent hex as `SESSION` (the id-domain
         // overload r6 removed elsewhere), and surface the re-feedable parent uuid inline so a
         // turns-text reader has a re-feed path. A top-level uuid block stays `SESSION <uuid>`.
         if sr.is_subagent {
@@ -143,7 +143,7 @@ pub(crate) fn render_text(
             println!("SESSION {}", sr.session_id);
         }
         // `spanned K of N`: K = boundaries the budget-selected window crossed (a QUERY
-        // property — a small budget can read 0 on a compaction-heavy session), N = the
+        // property - a small budget can read 0 on a compaction-heavy session), N = the
         // session's true total in scope (the TRANSCRIPT property). Naming both kills the
         // R10 misread where `spanned 0` on a 4-boundary session looked like a bug until the
         // reader varied the budget (same disambiguation pattern as the automation
@@ -177,7 +177,7 @@ pub(crate) fn render_text(
             plan.rendered_chars,
             ctx.budget_chars
         );
-        // Whole-session automation composition, INDEPENDENT of budget selection — so a
+        // Whole-session automation composition, INDEPENDENT of budget selection - so a
         // monitor-heavy session isn't silently read as "no automation" when the recency
         // window selected none of its deep pulses. Shown only when MORE automation exists in
         // scope than was selected (otherwise the selected note above already tells the truth).
@@ -198,7 +198,7 @@ pub(crate) fn render_text(
             );
         }
         // Announce that ≥1 selected unit is a hook-backfilled elicitation-sidecar record (§3.10)
-        // — the consumer is reading merged records, not raw native jsonl.
+        // - the consumer is reading merged records, not raw native jsonl.
         if plan_has_sidecar(plan) {
             println!("  with elicitation sidecar");
         }
@@ -288,7 +288,7 @@ pub(crate) fn build_document_body(
 }
 
 /// Greedily pack a document's LINES into chunks of at most `window` CHARACTERS (Unicode
-/// scalars — the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy
+/// scalars - the unit Claude Code's 10,000-char additionalContext cap counts, so a CJK-heavy
 /// document is NOT 3× over-counted the way a byte budget would). A line longer than the
 /// window on its own is hard-split on a char boundary so NO emitted chunk ever exceeds
 /// `window`. Concatenating the chunks in order reproduces `text` exactly (`split_inclusive`
@@ -342,7 +342,7 @@ pub(crate) fn slice_into_windows(text: &str, window: usize) -> Vec<String> {
 /// keyed on the summary RANK from newest (newest = rank 1): moving from a turn at
 /// cb=`prev` to one at cb=`current` (`current < prev`) crosses every summary ranked
 /// `(current, prev]`, each bannered once, in ascending line order. The FIRST turn
-/// (`prev == None`) crosses NOTHING — there are no restored turns below it, so the
+/// (`prev == None`) crosses NOTHING - there are no restored turns below it, so the
 /// summaries older than it (which it predates) are not bannered.
 pub(crate) fn maybe_boundary_banner(
     prev: &mut Option<usize>,
@@ -359,7 +359,7 @@ pub(crate) fn maybe_boundary_banner(
 /// The summaries crossed when the ascending cursor moves from a turn at cb=`from` to a
 /// turn at cb=`to`. A summary's rank from newest is its 1-based position when sorted by
 /// descending line number; it is crossed when `to < rank <= from`. The FIRST turn
-/// (`from == None`) seeds the cursor at its OWN depth (crosses nothing) — a summary
+/// (`from == None`) seeds the cursor at its OWN depth (crosses nothing) - a summary
 /// older than every selected turn has no restored turn below it, so it is never
 /// bannered. Total banners across a full walk therefore equal the GREATEST cb selected
 /// (the spanned-boundary count). Returned in ascending line order so banners read
@@ -434,7 +434,7 @@ pub(crate) fn render_turn_text(
     if let Some(u) = shown_user(turn, sides) {
         emit_unit_text(u, cap_override, emit);
         // Image marker directly under the user line (charged by `image_marker_cost` in
-        // `turn_cost` on the same user-side selection — keeps summed-cost == emitted).
+        // `turn_cost` on the same user-side selection - keeps summed-cost == emitted).
         if !turn.image_ids.is_empty() {
             emit(image_marker_line(&turn.image_ids));
         }
@@ -451,7 +451,7 @@ pub(crate) fn render_turn_text(
 }
 
 /// Emit a unit's header line + rendered (possibly truncated) body. The header string is
-/// produced by [`unit_header_line`] — the SAME function the cost model charges — so the
+/// produced by [`unit_header_line`] - the SAME function the cost model charges - so the
 /// emitted line is byte-for-byte what the budget accounted.
 pub(crate) fn emit_unit_text(
     unit: &TurnUnit,

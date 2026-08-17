@@ -44,7 +44,7 @@ pub(crate) enum EventKind {
     ExternalEdit { snippet: Vec<(usize, String)> },
     /// A `file-history-snapshot` recorded a disk backup of `--file` at this time. The
     /// on-disk blob name is NOT derivable from the record (the real `backupFileName` is
-    /// frequently null), so this is a COVERAGE ANNOTATION only — never a content anchor.
+    /// frequently null), so this is a COVERAGE ANNOTATION only - never a content anchor.
     HistorySnapshotMarker,
 }
 
@@ -69,9 +69,9 @@ impl SnapSource {
 /// The two harness integrity-error shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IntegrityKind {
-    /// "File has been modified since read, …" — a HARD boundary (disk drift detected).
+    /// "File has been modified since read, …" - a HARD boundary (disk drift detected).
     ModifiedSinceRead,
-    /// "File has not been read yet. …" — the edit never landed; NOT a boundary.
+    /// "File has not been read yet. …" - the edit never landed; NOT a boundary.
     NotReadYet,
 }
 
@@ -85,7 +85,7 @@ pub(crate) struct EditHunk {
 
 /// One structured-patch hunk (`toolUseResult.structuredPatch[]`): a mirror of CC's
 /// `{oldStart, oldLines, newStart, newLines, lines:[" ","-","+", …]}`. `newStart` is not
-/// retained — replay derives the new position from `oldStart` + the running line offset.
+/// retained - replay derives the new position from `oldStart` + the running line offset.
 #[derive(Debug, Clone)]
 pub(crate) struct PatchHunk {
     pub(crate) old_start: usize,
@@ -104,7 +104,7 @@ pub(crate) struct PatchHunk {
 pub(crate) struct ScanResult {
     pub(crate) session_id: String,
     /// True when this transcript is a SUBAGENT (so `session_id` is a bare hex, NOT a
-    /// re-feedable `@<uuid>` target) — the r5 id-domain discriminator, now also on recover.
+    /// re-feedable `@<uuid>` target) - the r5 id-domain discriminator, now also on recover.
     pub(crate) is_subagent: bool,
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,

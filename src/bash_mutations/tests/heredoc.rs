@@ -3,7 +3,7 @@
 use super::*;
 
 // ── Mutation-kill pins (cargo-mutants survivors): heredoc scanning boundaries the
-//    ordinary fixtures never reached — wrong consumed-offset arithmetic corrupts the
+//    ordinary fixtures never reached - wrong consumed-offset arithmetic corrupts the
 //    SECOND delimiter on a line, and a broken closer comparison leaks body lines. ──
 
 #[test]
@@ -12,7 +12,7 @@ fn heredoc_delims_forms_and_offsets() {
     assert_eq!(heredoc_delims("cat <<-END x"), ["END"]);
     assert_eq!(heredoc_delims("cat <<'A B'"), ["A B"]);
     assert_eq!(heredoc_delims(r#"cat <<"QD" y"#), ["QD"]);
-    // Two on one line, in order — the consumed-offset arithmetic must be exact.
+    // Two on one line, in order - the consumed-offset arithmetic must be exact.
     assert_eq!(heredoc_delims("cat <<ONE <<'TWO'"), ["ONE", "TWO"]);
     // A here-STRING is not a heredoc (no body line follows).
     assert!(heredoc_delims("cat <<<word").is_empty());
@@ -42,7 +42,7 @@ fn heredoc_bodies_dropped_until_exact_closer() {
 
 #[test]
 fn heredoc_python_open_is_out_of_scope_documented() {
-    // Fix E: an inline `python3 -c "open('/tmp/x','w')…"` body is NOT parsed — a
+    // Fix E: an inline `python3 -c "open('/tmp/x','w')…"` body is NOT parsed - a
     // documented lexical-parser limitation. The precision contract still holds: the
     // miss produces NO wrong row (the `python3` verb is not in the allowlist and the
     // quoted body never resolves to a redirect/flag). This test PINS that contract:
@@ -88,7 +88,7 @@ fn heredoc_quoted_and_dash_delim_forms() {
         !got.iter().any(|p| p.contains("garbage")),
         "body leaked: {got:?}"
     );
-    // here-string `<<<` is NOT a heredoc (no body) — the command still parses normally.
+    // here-string `<<<` is NOT a heredoc (no body) - the command still parses normally.
     assert_eq!(
         just_paths("grep x <<< 'data' > /tmp/hs.txt"),
         vec!["/tmp/hs.txt".to_string()]
@@ -135,7 +135,7 @@ fn heredoc_body_then_more_commands_after_closer() {
 
 #[test]
 fn heredoc_here_string_is_not_a_heredoc() {
-    // `<<<` is a here-STRING (no body line) — heredoc_delims must skip it, so a
+    // `<<<` is a here-STRING (no body line) - heredoc_delims must skip it, so a
     // following command on the next line is NOT swallowed as a body.
     let hs = "grep x <<< 'data'\ntouch /tmp/post.txt";
     assert!(just_paths(hs).contains(&"/tmp/post.txt".to_string()));

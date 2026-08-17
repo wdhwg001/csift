@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn pinned_id_matching_nothing_bails_never_silent_empty() {
-    // AGENTS §4 fail-closed wall (T0.3): a PINNED id that resolves to no file must BAIL loud —
+    // AGENTS §4 fail-closed wall (T0.3): a PINNED id that resolves to no file must BAIL loud -
     // never a silent empty, never a widening to every project (the L56255 `--subagent` →
     // whole-corpus class). Both the full-uuid and the prefix forms are locked here so a future
     // resolver change cannot quietly reintroduce scope-widening.
@@ -119,7 +119,7 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
 
 #[test]
 fn custom_claude_home_via_env_var_and_flag() {
-    // A Claude config dir RELOCATED away from $HOME/.claude — the rare custom-home case.
+    // A Claude config dir RELOCATED away from $HOME/.claude - the rare custom-home case.
     let h = Home::new();
     let custom = h.root.join("relocated-claude");
     let jsonl = custom
@@ -140,7 +140,7 @@ fn custom_claude_home_via_env_var_and_flag() {
     let custom_s = custom.to_str().unwrap();
     let marker = "relocated home marker";
 
-    // (0) Default ($HOME/.claude) does NOT see the relocated session — it lives elsewhere.
+    // (0) Default ($HOME/.claude) does NOT see the relocated session - it lives elsewhere.
     let none = h.run(&["search", "xyzzy"]);
     assert!(none.success, "stderr: {}", none.stderr);
     assert!(
@@ -176,7 +176,7 @@ fn custom_claude_home_via_env_var_and_flag() {
         via_flag_pre.stdout
     );
 
-    // (4) Another subcommand (`list`) honors the override too — it is not search-specific.
+    // (4) Another subcommand (`list`) honors the override too - it is not search-specific.
     let list = h.run(&["list", "--claude-home", custom_s]);
     assert!(list.success, "stderr: {}", list.stderr);
     assert!(
@@ -230,7 +230,7 @@ fn sessions_from_scopes_like_at_positionals() {
         "the error names the bad token: {}",
         bad.stderr
     );
-    // An EMPTY list = an empty scope (honest empty, exit 0) — NEVER a widening to every
+    // An EMPTY list = an empty scope (honest empty, exit 0) - NEVER a widening to every
     // project (a pipeline stage that found nothing propagates nothing).
     std::fs::write(&ids, "\n").unwrap();
     let empty = h.run(&["list", "--sessions-from", ids.to_str().unwrap()]);
@@ -248,7 +248,7 @@ fn sessions_from_scopes_like_at_positionals() {
 #[test]
 fn unresolvable_target_errors_before_scope_warning() {
     // R9 §16.4: the empty-pattern "may emit a lot" advisory used to fire BEFORE target
-    // resolution — a warning about a run that was never going to happen. Resolution now
+    // resolution - a warning about a run that was never going to happen. Resolution now
     // fails first; the advisory never fires on an unreachable target.
     let h = populated_home();
     let out = h.run(&["search", "", "@abc"]);
@@ -267,7 +267,7 @@ fn unresolvable_target_errors_before_scope_warning() {
 
 #[test]
 fn sessions_from_accepts_every_id_shape() {
-    // Mutation pin: the --sessions-from token gate accepts each id shape INDEPENDENTLY —
+    // Mutation pin: the --sessions-from token gate accepts each id shape INDEPENDENTLY -
     // a full uuid, a 4-11-hex uuid prefix, and an agent id (the `||` chain must not
     // collapse into a conjunction).
     let h = populated_home();
@@ -285,7 +285,7 @@ fn sessions_from_accepts_every_id_shape() {
 #[test]
 fn resolve_long_path_uses_prefix_scan_fallback() {
     // A project whose ENCODED cwd exceeds 200 chars is stored by Claude Code as
-    // `<first-200>-<hash>` (the hash is not reconstructible — Bun vs djb2). csift must
+    // `<first-200>-<hash>` (the hash is not reconstructible - Bun vs djb2). csift must
     // PREFIX-SCAN to find it, mirroring CC's findProjectDir. Regression: csift used to look
     // up the full >200-char name (which never exists on disk) and bail.
     let h = Home::new();

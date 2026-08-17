@@ -28,7 +28,7 @@ fn files_bare_uuid_positional_routes_to_session() {
         out.stderr
     );
     // It ran the `files` summary over the real session (the synthetic top-level has no
-    // Bash/Edit mutation, so the body is the honest empty rollup — the point is it ran).
+    // Bash/Edit mutation, so the body is the honest empty rollup - the point is it ran).
     assert!(
         out.stdout.contains("detail=summary"),
         "files summary did not run; got: {}",
@@ -54,7 +54,7 @@ fn files_turn_range_excludes_later_bash() {
 #[test]
 fn files_turn_range_and_since_intersect() {
     // The ONE windowing rule: `--turn` and `--since`/`--until` AND together (the
-    // former mutual-exclusion bail was a leftover — search/recover/stats always intersected).
+    // former mutual-exclusion bail was a leftover - search/recover/stats always intersected).
     let h = files_scenario_home();
     let out = h.run(&[
         "files",
@@ -69,7 +69,7 @@ fn files_turn_range_and_since_intersect() {
         "combined windows intersect, never error: {}",
         out.stderr
     );
-    // The fixture's mutations are from 2026 — a `--since 2h` window admits nothing, and the
+    // The fixture's mutations are from 2026 - a `--since 2h` window admits nothing, and the
     // intersection propagates that honestly (exit 0).
     assert!(
         out.stdout.contains("no file mutations found") || !out.stdout.contains("L0"),
@@ -118,7 +118,7 @@ fn files_no_mutations_says_none() {
 fn files_detects_edit_before_read_boundaries() {
     // A session Writes /p/app.rs, then an Edit to it is rejected with `File has been modified
     // since read` (the file changed outside the tool stream). `files` surfaces that as an
-    // Edit-before-Read boundary attributed to the file, carrying the jsonl line number — and
+    // Edit-before-Read boundary attributed to the file, carrying the jsonl line number - and
     // every row (mutation + boundary) now carries `Lnnnn` (the line-number threading fix).
     let h = Home::new();
     h.write(

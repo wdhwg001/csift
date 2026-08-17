@@ -13,11 +13,11 @@ pub struct SpawnMeta {
     /// launch from a `Workflow`-tool launch (the kind is path-derived; this is the
     /// transcript-side corroboration).
     pub name: Option<String>,
-    /// The parent tool_use record's timestamp — the TRUE trigger instant (§4).
+    /// The parent tool_use record's timestamp - the TRUE trigger instant (§4).
     pub trigger_utc: Option<String>,
     /// `input.description` on the spawning tool_use.
     pub description: Option<String>,
-    /// `input.subagent_type` on the spawning tool_use — the richer agent-type label used
+    /// `input.subagent_type` on the spawning tool_use - the richer agent-type label used
     /// as a fallback when the built-in meta.json's `agentType` is absent.
     pub subagent_type: Option<String>,
 }
@@ -30,7 +30,7 @@ pub struct SpawnMeta {
 pub struct ParentSpawnIndex {
     pub(crate) spawns: std::collections::HashMap<String, SpawnMeta>,
     pub(crate) tool_results: std::collections::HashMap<String, String>,
-    /// `spawn tool_use_id → issuing agent` — `Some(agent_id)` when the spawn was recorded
+    /// `spawn tool_use_id → issuing agent` - `Some(agent_id)` when the spawn was recorded
     /// in a SUBAGENT's transcript (so the spawned child is a sub-subagent of that agent),
     /// `None` when issued by the main session itself. Populated only when the index is built
     /// GLOBALLY ([`build_global_spawn_index`]); a single-transcript build leaves it empty.
@@ -51,7 +51,7 @@ impl ParentSpawnIndex {
     }
 
     /// The paired tool_result text for a tool_use id, if present (the sync returned
-    /// message — may be the `Async agent launched …` sentinel).
+    /// message - may be the `Async agent launched …` sentinel).
     #[must_use]
     pub fn tool_result_text(&self, tool_use_id: &str) -> Option<&str> {
         self.tool_results.get(tool_use_id).map(String::as_str)
@@ -67,7 +67,7 @@ impl ParentSpawnIndex {
 
     /// The spawning tool_use id for a NAMED spawn (the teammate name-join, §FIX3). Among the
     /// spawns that share `name`, prefer the LATEST whose trigger ≤ `at_or_before` (the child's
-    /// head ts — the spawn always precedes the child), so a recurring name binds to the right
+    /// head ts - the spawn always precedes the child), so a recurring name binds to the right
     /// launch; fall back to the first recorded spawn when none qualifies (or no bound given).
     /// `None` when the name was never used to spawn. ISO8601-UTC strings compare chronologically.
     #[must_use]
@@ -89,12 +89,12 @@ impl ParentSpawnIndex {
         cands.first().map(|(_, id)| id.clone())
     }
 
-    /// Fold `other` INTO `self` — used by [`build_global_spawn_index`] to merge the per-subagent
+    /// Fold `other` INTO `self` - used by [`build_global_spawn_index`] to merge the per-subagent
     /// LOCAL indexes built in parallel back into the global one. The unique-keyed maps
     /// (`spawns`/`tool_results`/`issuer`, all keyed by a globally-unique tool_use id) take
-    /// `other`'s value on any collision — LATER-wins, matching the old serial accumulation where a
+    /// `other`'s value on any collision - LATER-wins, matching the old serial accumulation where a
     /// later transcript's insert overwrote an earlier one. The `by_name` lists are APPENDED (self's
-    /// entries first), so — since callers merge locals in the deterministic `subs` order — the final
+    /// entries first), so - since callers merge locals in the deterministic `subs` order - the final
     /// per-name order is byte-identical to the old serial scan (main, then each sub in order).
     pub(crate) fn merge(&mut self, other: ParentSpawnIndex) {
         self.spawns.extend(other.spawns);
@@ -118,7 +118,7 @@ pub fn index_parent_spawns(parent_jsonl: &Path) -> Result<ParentSpawnIndex> {
 }
 
 /// Build the GLOBAL spawn index: the main transcript (issuer `None`) PLUS every subagent
-/// transcript (issuer = that agent's id). This is what makes agent→agent nesting resolvable —
+/// transcript (issuer = that agent's id). This is what makes agent→agent nesting resolvable -
 /// a sub-subagent's spawn `Task`/`Agent` tool_use is recorded in its SPAWNING agent's
 /// transcript, NOT the main one, so a main-only scan ([`index_parent_spawns`]) can't see it.
 /// The union also recovers a nested agent's trigger ts / description / subagent_type (which
@@ -164,7 +164,7 @@ pub(crate) fn scan_spawns_into(
     // line carrying a `tool_use` (a spawn) or a paired `tool_result` (the sync returned-message
     // source) can contribute to the index; every other line (thinking/text/genuine-user/summary/
     // system) is skipped BEFORE the full serde parse. This also within-file-parallelizes the big
-    // 398 MB main scan. Malformed candidate lines are silently dropped (as the old scan did — the
+    // 398 MB main scan. Malformed candidate lines are silently dropped (as the old scan did - the
     // spawn index is best-effort), so the returned skip count is intentionally ignored.
     let (records, _skipped) = parse_candidates_parallel(bytes, spawn_line_candidate);
     for (_line_no, rec) in &records {
@@ -215,7 +215,7 @@ pub(crate) fn accumulate_spawns(rec: &Record, issuer: Option<&str>, idx: &mut Pa
                 );
                 idx.issuer.insert(id.clone(), issuer.map(str::to_string));
                 // Index by the spawn's `input.name` (the `Agent` tool's `name` param) so a
-                // teammate — whose meta has no `toolUseId` — can name-join to its launch.
+                // teammate - whose meta has no `toolUseId` - can name-join to its launch.
                 if let Some(spawn_name) = str_in("name") {
                     idx.by_name
                         .entry(spawn_name)
@@ -244,12 +244,12 @@ pub(crate) fn is_spawn_tool(name: &str) -> bool {
 }
 
 /// The synthesized prefix Claude Code writes into a tool_result when a subagent is
-/// launched ASYNCHRONOUSLY (run_in_background) — the real returned message is then NOT in
+/// launched ASYNCHRONOUSLY (run_in_background) - the real returned message is then NOT in
 /// the parent tool_result but in the child transcript tail. Verified 17× in session
 /// 0a1b2c3d.
 pub(crate) const ASYNC_LAUNCH_SENTINEL: &str = "Async agent launched";
 
-/// Where a subagent's returned message was resolved FROM (§3) — surfaced so a consumer
+/// Where a subagent's returned message was resolved FROM (§3) - surfaced so a consumer
 /// knows whether it read the parent tool_result, the child transcript tail, or the
 /// workflow journal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -21,7 +21,7 @@ fn turn_range_parsing() {
 //
 // Records as they appear in a real jsonl (file order). Two genuine-user turns;
 // each expands into the assistant chain + a tool round-trip. Interleaved noise:
-// an isMeta pseudo-turn and a tool_result carrier — NEITHER may start a turn.
+// an isMeta pseudo-turn and a tool_result carrier - NEITHER may start a turn.
 
 #[test]
 fn started_utc_is_none_when_opener_and_hits_lack_timestamps() {
@@ -81,7 +81,7 @@ fn label_not_excludes_and_composes_with_include() {
             .any(|h| h.class == Class::AgentThinking),
         "fixture premise: 'straddling' hits agent.thinking"
     );
-    // -T agent.thinking (no -t): ALL minus thinking — the thinking hit is gone.
+    // -T agent.thinking (no -t): ALL minus thinking - the thinking hit is gone.
     let mut a = args("straddling");
     a.labels_not = vec!["agent.thinking".to_string()];
     let ex = search(&fixture(), &a);
@@ -162,7 +162,7 @@ fn exchange_returns_full_round_trip() {
     }
     // The isMeta record belongs to NEITHER turn's body (it sits after turn 0's
     // agent but before turn 1's user; our grouping appends it to turn 0 as a
-    // member — but it is not a turn delimiter). It must be present as a member
+    // member - but it is not a turn delimiter). It must be present as a member
     // of turn 0 (a sibling record), never as its own turn.
     assert!(uuids.contains(&"meta".to_string()));
 }
@@ -212,7 +212,7 @@ fn reconstruct_synthetic_lead_records_merge_into_first_real_turn() {
     // fold into turn 0 once the first genuine user appears, and turns re-index
     // 0-based on genuine users (the synthetic_lead re-index branch).
     let lines = vec![
-        // leading non-user noise (a tool_result carrier) — synthetic lead.
+        // leading non-user noise (a tool_result carrier) - synthetic lead.
         r#"{"type":"user","uuid":"lead","timestamp":"2026-06-07T04:59:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"orphan carry note"}]}}"#,
         // first genuine user (turn 0).
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"real first about carry"}}"#,

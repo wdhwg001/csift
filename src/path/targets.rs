@@ -61,7 +61,7 @@ pub fn session_file_target(file: &Path) -> Result<(ProjectDir, String)> {
 /// Read a `--sessions-from` id list (a file path, or `-` for stdin) and append each id onto
 /// `paths` as an `@<id>` target token, so the shared resolver treats the list EXACTLY like
 /// positional `@` targets (same pin logic, same fail-loud misses). Tokens are whitespace /
-/// newline separated; each must be a session uuid, a 4-11-hex uuid prefix, or an agent id —
+/// newline separated; each must be a session uuid, a 4-11-hex uuid prefix, or an agent id -
 /// the ids csift itself emits (`search -l`, the JSON summary's `transcript_ids`, any row's
 /// `parent_session_id`). A leading `@` is tolerated: ids are DATA (csift's own outputs are
 /// bare, a hand-built list may quote them `@`-style), so both spellings of the same id work.
@@ -92,8 +92,8 @@ pub fn extend_with_session_list(paths: &mut Vec<PathBuf>, src: &Path) -> Result<
 
 /// Shared target assembly for the multi-target commands: positional `paths` ∪ the
 /// `--sessions-from` id list, resolved through [`resolve_session_files`]. An EXPLICITLY
-/// given but EMPTY id list with no positional targets resolves to an EMPTY scope — the
-/// honest-empty a pipeline stage that found nothing should propagate — never a silent
+/// given but EMPTY id list with no positional targets resolves to an EMPTY scope - the
+/// honest-empty a pipeline stage that found nothing should propagate - never a silent
 /// widening to every project (0 targets ⇒ ALL is the rule for a BARE invocation only).
 pub fn resolve_targets_with_session_list(
     positionals: &[PathBuf],

@@ -6,7 +6,7 @@
 //! - **Tolerate unknown fields.** Real records carry far more than the brief
 //!   listed (`attachment`, `file-history-snapshot`, `queue-operation`, `isMeta`,
 //!   `isSidechain`, `userType`, `toolUseResult`, `slug`, `entrypoint`, …). We
-//!   deserialize only what we use and ignore the rest — never crash on a new field.
+//!   deserialize only what we use and ignore the rest - never crash on a new field.
 //! - **Tolerate missing `timestamp`.** Metadata-only records (`last-prompt`,
 //!   `ai-title`, `permission-mode`, `file-history-snapshot`) have no timestamp;
 //!   they are skipped in time logic, never panic.
@@ -23,7 +23,7 @@
 //! ## Compaction
 //!
 //! A compaction summary is a `type:"user"` record with `isCompactSummary: true`
-//! and `isVisibleInTranscriptOnly: true`, carrying string content — it must be
+//! and `isVisibleInTranscriptOnly: true`, carrying string content - it must be
 //! excluded from "genuine user". A separate `type:"system"`
 //! `subtype:"compact_boundary"` record carries the metrics
 //! (`trigger`, `preTokens`, `postTokens`, `durationMs`).

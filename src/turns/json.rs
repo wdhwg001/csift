@@ -36,7 +36,7 @@ pub(crate) fn render_json(
         .zip(by.iter())
         .map(|(k, n)| (k.slug().to_string(), json!(n)))
         .collect();
-    // The whole-session composition, INDEPENDENT of budget selection — so a monitor-dominated
+    // The whole-session composition, INDEPENDENT of budget selection - so a monitor-dominated
     // session never reports `monitor:0` just because the recency window didn't reach the deep
     // pulses (the selected `automation_by_kind` can read 0 for a class that has dozens in
     // scope). A reader compares the two to see "much monitor activity exists, little selected".
@@ -49,12 +49,12 @@ pub(crate) fn render_json(
     // `sessions_in_scope` is the TRUE scope (every discovered session); `sessions_rendered` is
     // how many fit the budget. Keeping them distinct stops a `--budget` knob from silently
     // rewriting "scope" and keeps a targeted top-level uuid from reading as `0 top-level`.
-    // Budget-accounting aggregates (R10): the text header's per-session numbers, summed —
+    // Budget-accounting aggregates (R10): the text header's per-session numbers, summed -
     // so "did this reconstruction consume its budget / cross the compactions" is machine-
     // answerable without regex-parsing the text header (the machine format must never be
     // thinner than the human one). `boundaries_total` is the sessions' TRUE boundary count
     // in scope; `boundaries_spanned` is what the budget-selected windows crossed (a query
-    // property — see the text header's `spanned K of N`).
+    // property - see the text header's `spanned K of N`).
     let total_assistant: usize = plans
         .iter()
         .filter(|p| !p.selected.is_empty())
@@ -82,7 +82,7 @@ pub(crate) fn render_json(
         "automation_triggers": total_automation,
         "automation_by_kind": by_kind,
         "automation_in_scope_by_kind": in_scope_by_kind,
-        // True when ≥1 selected unit was merged from the elicitation sidecar (§3.10) — the
+        // True when ≥1 selected unit was merged from the elicitation sidecar (§3.10) - the
         // machine echo of the per-session `with elicitation sidecar` text note.
         "with_elicitation_sidecar": plans.iter().any(plan_has_sidecar),
     });
@@ -138,7 +138,7 @@ pub(crate) fn render_json(
     }
 
     // Trailing terminator object, emitted UNCONDITIONALLY (even when 0) so a JSONL consumer
-    // can reliably detect end-of-stream for turns — matching search/files/recover, which
+    // can reliably detect end-of-stream for turns - matching search/files/recover, which
     // always close with a trailing summary. The key is `skipped_lines` (was a one-off `count`
     // alias, emitted only when > 0; both divergences are now removed for cross-subcommand
     // consistency).
@@ -170,7 +170,7 @@ pub(crate) fn emit_unit_json(
         "is_subagent": sr.is_subagent,
         "parent_session_id": sr.parent_session_id,
         "turn_index": turn.turn_index,
-        // A merged elicitation-sidecar unit (§3.10) has NO physical line — `line` is null
+        // A merged elicitation-sidecar unit (§3.10) has NO physical line - `line` is null
         // and `source:"elicitation-sidecar"` marks the provenance; a native unit omits `source`.
         "line": if unit.from_sidecar { serde_json::Value::Null } else { json!(unit.line_no) },
         "source": if unit.from_sidecar { json!("elicitation-sidecar") } else { serde_json::Value::Null },

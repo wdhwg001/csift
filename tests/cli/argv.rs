@@ -7,7 +7,7 @@ fn pre_subcommand_global_flag_with_trailing_flags() {
     // REGRESSION (≤v0.4.1): normalize_argv assumed argv[1] was the subcommand, so a
     // GLOBAL flag placed BEFORE the subcommand disabled normalization entirely and the
     // allow_hyphen_values PATH positional swallowed every flag that followed a
-    // positional — `csift --claude-home DIR list <ENC> --max-count 1` died with a
+    // positional - `csift --claude-home DIR list <ENC> --max-count 1` died with a
     // misleading "not a project target". The subcommand is now located by SCANNING over
     // declared root flags (+ their values), so "flag order is free" and "--claude-home
     // any position" hold in combination.

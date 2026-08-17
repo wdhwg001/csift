@@ -97,7 +97,7 @@ pub(crate) fn print_footer(ctx: &RenderCtx) {
         RecoverMode::At => "at",
         RecoverMode::Salvage => "salvage",
         RecoverMode::Coverage => "coverage",
-        RecoverMode::Restore => "restore", // never reached — render_restore returns before the footer
+        RecoverMode::Restore => "restore", // never reached - render_restore returns before the footer
     };
     println!();
     println!(
@@ -116,7 +116,7 @@ impl Replay {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JSON rendering (NDJSON — one object per line, trailing summary)
+// JSON rendering (NDJSON - one object per line, trailing summary)
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub(crate) fn render_json(
@@ -278,7 +278,7 @@ pub(crate) fn render_json(
         }
     }
 
-    // envelope v2 summary (flat — the old nested {"summary":{…}} wrapper is gone).
+    // envelope v2 summary (flat - the old nested {"summary":{…}} wrapper is gone).
     let summary = crate::text::envelope_summary(json!({
         "sessions": session_count,
         "file": ctx.file,
@@ -315,7 +315,7 @@ pub(crate) fn boundary_json(b: &Boundary) -> serde_json::Value {
         "turn_index": b.turn_index,
         "ts_utc": b.timestamp_utc,
         "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
-        // WHAT invalidated the buffer (modified-since-read / external edit / bash / …) —
+        // WHAT invalidated the buffer (modified-since-read / external edit / bash / …) -
         // named `cause` so `kind` stays the envelope discriminator exclusively.
         "cause": b.kind,
         "confidence": b.confidence.json(),

@@ -20,7 +20,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
         .filter(|u| !u.is_empty())
         .collect();
     // `--turn` addresses by turn index (0-based, the `·tN` search's headers print) rather than by
-    // jsonl line — the SAME shared range grammar (`N`/`A..B`/`N..`/`-k`). Clap forbids mixing
+    // jsonl line - the SAME shared range grammar (`N`/`A..B`/`N..`/`-k`). Clap forbids mixing
     // it with `--line`/`--uuid`, so it is a self-contained addressing mode.
     let turn_spec = args
         .turn
@@ -71,7 +71,7 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
 }
 
 /// `--raw`: emit the verbatim bytes of each addressed jsonl line, ascending, exactly
-/// as stored (a blank or torn line included — that is the point).
+/// as stored (a blank or torn line included - that is the point).
 pub(crate) fn run_raw(
     file: &std::path::Path,
     specs: &LineSpecs,
@@ -94,7 +94,7 @@ pub(crate) fn run_raw(
     if let Some(spec) = turn_range {
         let (exchanges, _, turn_count) =
             fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec))?;
-        // An EXPLICIT turn (`N` / `A..B`) is an address — zero records = miss (law 1).
+        // An EXPLICIT turn (`N` / `A..B`) is an address - zero records = miss (law 1).
         if turn_spec_is_explicit(&spec) && exchanges.is_empty() {
             return Err(turn_miss_error(&spec, turn_count));
         }
@@ -196,7 +196,7 @@ pub(crate) fn run_raw(
     Ok(())
 }
 
-/// Rendered mode: fetch through search's per-record pipeline (pure matcher — every
+/// Rendered mode: fetch through search's per-record pipeline (pure matcher - every
 /// addressed record emits, FULL), then render text or the header/record/summary JSON.
 pub(crate) fn run_rendered(
     file: &std::path::Path,
@@ -209,7 +209,7 @@ pub(crate) fn run_rendered(
     let (mut exchanges, skipped, turn_count) =
         fetch_records(file, specs.all(), uuids.clone(), turn_range)?;
 
-    // Turn address-miss: an EXPLICIT `--turn N` / `--turn A..B` is an ADDRESS (law 1) —
+    // Turn address-miss: an EXPLICIT `--turn N` / `--turn A..B` is an ADDRESS (law 1) -
     // resolving to zero records is a hard error naming the transcript's turn domain,
     // exactly like a `--line` miss. Open/from-end forms clamp (tail-peek robustness).
     if let Some(spec) = &turn_range {
@@ -259,7 +259,7 @@ pub(crate) fn run_rendered(
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(file).unwrap_or_else(|| session_id.clone());
 
-    // Line-addressed RANGES may cover non-record lines (metadata/attachment — never
+    // Line-addressed RANGES may cover non-record lines (metadata/attachment - never
     // renderable, silently excluded by the pipeline). Count them so "fetched 1 unit"
     // from a 12-line range is self-explaining; explicit single-line misses already
     // errored above.

@@ -35,7 +35,7 @@ fn show_json_is_header_record_summary() {
 #[test]
 fn show_raw_emits_the_verbatim_line() {
     let h = populated_home();
-    // L8 is the fixture's MALFORMED line — raw emits its exact bytes (that is the point).
+    // L8 is the fixture's MALFORMED line - raw emits its exact bytes (that is the point).
     let out = h.run(&["show", at(SESS).as_str(), "--line", "8", "--raw"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert_eq!(
@@ -58,7 +58,7 @@ fn show_raw_emits_the_verbatim_line() {
 
 #[test]
 fn show_bad_flag_error_names_the_flag_not_the_target() {
-    // A mistyped/foreign flag on `show` must be blamed BY NAME in any position — never the
+    // A mistyped/foreign flag on `show` must be blamed BY NAME in any position - never the
     // user's perfectly valid target (the misattribution sent a real consumer down a
     // targeting-grammar rabbit hole). Same error family as every sibling command.
     let h = populated_home();
@@ -101,7 +101,7 @@ fn show_bad_flag_error_names_the_flag_not_the_target() {
 fn show_by_turn_fetches_the_whole_turn() {
     let h = populated_home();
     let t = at(SESS);
-    // Turn 0 = the first genuine-user turn AND its whole back-and-forth (unified fetch — no
+    // Turn 0 = the first genuine-user turn AND its whole back-and-forth (unified fetch - no
     // "pick the command by what address you hold"; `show` addresses by line, uuid, OR turn).
     let out = h.run(&["show", t.as_str(), "--turn", "0"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -115,7 +115,7 @@ fn show_by_turn_fetches_the_whole_turn() {
         "turn 0 agent reply: {}",
         out.stdout
     );
-    // Turn 1 is a DIFFERENT turn — the numbering matches the `·tN` in `search`'s headers.
+    // Turn 1 is a DIFFERENT turn - the numbering matches the `·tN` in `search`'s headers.
     let out1 = h.run(&["show", t.as_str(), "--turn", "1"]);
     assert!(
         out1.stdout.contains("now explain the panic path"),
@@ -196,7 +196,7 @@ fn show_line_renders_uncapped() {
 #[test]
 fn show_multiple_lines_and_ranges() {
     let h = populated_home();
-    // L1 (turn 0) + L6 (turn 1) — distinct turns, both fetched.
+    // L1 (turn 0) + L6 (turn 1) - distinct turns, both fetched.
     let list = h.run(&["show", at(SESS).as_str(), "--line", "6,1"]);
     assert!(list.success, "stderr: {}", list.stderr);
     assert!(
@@ -320,7 +320,7 @@ fn show_unknown_agent_id_fails_closed() {
 
 #[test]
 fn show_turn_oob_and_flood_guard() {
-    // v0.5.0: (a) an EXPLICIT `--turn N`/`A..B` is an ADDRESS — fully out of range is a
+    // v0.5.0: (a) an EXPLICIT `--turn N`/`A..B` is an ADDRESS - fully out of range is a
     // hard error naming the transcript's turn domain (it used to be a silent empty, the
     // one address-miss that violated law 1); (b) open ranges are capped (DEFAULT 200,
     // here forced low) with the exact continuation command reported; (c) non-record
@@ -338,7 +338,7 @@ fn show_turn_oob_and_flood_guard() {
         ));
         lines.push('\n');
     }
-    // A metadata line (never renderable) — line 7.
+    // A metadata line (never renderable) - line 7.
     lines.push_str(&format!(
         r#"{{"type":"attachment","uuid":"m1","sessionId":"{sess}"}}"#
     ));
@@ -369,7 +369,7 @@ fn show_turn_oob_and_flood_guard() {
     let out = h.run(&["show", &at, "--turn", "1..99"]);
     assert!(out.success, "partially-out clamps: {}", out.stderr);
 
-    // (3) From-end / open forms clamp — the tail-peek must stay robust.
+    // (3) From-end / open forms clamp - the tail-peek must stay robust.
     let out = h.run(&["show", &at, "--turn", "-9.."]);
     assert!(out.success, "stderr: {}", out.stderr);
 
@@ -441,7 +441,7 @@ fn show_turn_oob_and_flood_guard() {
 
 #[test]
 fn show_multi_transcript_target_errors() {
-    // A project dir holding SEVERAL sessions is ambiguous — show needs exactly one.
+    // A project dir holding SEVERAL sessions is ambiguous - show needs exactly one.
     // (A dir that unambiguously holds ONE top-level session is accepted, like the resolver
     // everywhere else: unambiguous ⇒ resolved.)
     let (h, _sess, _hex) = show_subagent_home();
@@ -460,7 +460,7 @@ fn show_multi_transcript_target_errors() {
 
 #[test]
 fn show_span_flag_is_rejected_with_the_pointed_rule() {
-    // R7 §2.3: ten sibling commands take the span pair; `show` does not — the muscle-memory
+    // R7 §2.3: ten sibling commands take the span pair; `show` does not - the muscle-memory
     // slip gets the actual rule, not the generic "did you mistype a flag?" guess.
     let h = populated_home();
     for flag in ["--no-subagents", "--subagents"] {
@@ -506,7 +506,7 @@ fn show_turn_explicit_miss_errors_and_open_forms_clamp() {
 
 #[test]
 fn addressed_show_renders_hook_attachment_without_the_flag() {
-    // The refetch a search hit prints (`csift show @<id> --line N`) carries no flag — an
+    // The refetch a search hit prints (`csift show @<id> --line N`) carries no flag - an
     // explicit line/uuid address must render the attachment record regardless.
     let h = Home::new();
     hook_context_scenario(&h);

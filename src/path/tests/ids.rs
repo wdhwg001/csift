@@ -35,7 +35,7 @@ fn is_teammate_agent_id_recognizes_name_embedded_ids() {
     assert!(is_teammate_agent_id("aVSRepro-68a2a1661c9390c1"));
     assert!(is_teammate_agent_id("aVSSpeedField-d5dab904cc98a239"));
     assert!(is_teammate_agent_id("aVSMultiRegion-06fb13dd400b53a5"));
-    // A teammate NAME may itself carry dashes (real data: teammate "P1-engine") — the
+    // A teammate NAME may itself carry dashes (real data: teammate "P1-engine") - the
     // head is dash-tolerant so the id `csift agents` prints still round-trips.
     assert!(is_teammate_agent_id("aP1-engine-9cf2f06d6235ca64"));
     // A bare hex (built-in/workflow) has no dash → NOT teammate-shaped (it routes via
@@ -97,7 +97,7 @@ fn is_uuid_prefix_covers_first_segment_not_full_or_agent() {
                                            // LITERAL layout prefixes (collision-lengthened header tokens) ARE prefixes.
     assert!(is_uuid_prefix("13d9645a-3a5")); // 12 chars, dash at template position 8
     assert!(is_uuid_prefix("13d9645a-3a5b-4a92")); // deeper into the layout
-    assert!(is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b9")); // 35 (max — one short of full)
+    assert!(is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b9")); // 35 (max - one short of full)
     assert!(!is_uuid_prefix("13d9645a-3a5b-4a92-b83d-e0f94c5a9b90")); // 36 = a FULL uuid, not a prefix
     assert!(!is_uuid_prefix("13d9645a-3a5g")); // non-hex inside the layout
 }

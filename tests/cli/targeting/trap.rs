@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn trap_resolves_a_powershell_shell_command() {
     // On Windows without Git-for-Windows bash, CC's shell tool is a SEPARATE tool named
-    // `PowerShell` (same `input.command` field — extracted from the 2.1.228 binary). A
+    // `PowerShell` (same `input.command` field - extracted from the 2.1.228 binary). A
     // marker riding a PowerShell tool_use must resolve @trap exactly like a Bash one.
     let h = Home::new();
     let enc = "C--Users-dev-winproj";
@@ -116,7 +116,7 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
 #[test]
 fn target_at_trap_rejects_lazy_markers_and_noncsift_commands() {
     let h = Home::new();
-    // 1) STRICT marker grammar — rejected at the source, BEFORE any env / file lookup. This is
+    // 1) STRICT marker grammar - rejected at the source, BEFORE any env / file lookup. This is
     //    the prompt-trick: the only way to satisfy it is a fresh, hand-invented literary token.
     let bad = [
         ("@trap:foo", "malformed"),                // too short / not the shape
@@ -134,7 +134,7 @@ fn target_at_trap_rejects_lazy_markers_and_noncsift_commands() {
             out.stderr
         );
     }
-    // The exact loophole the design calls out — an acronym + zeros — is rejected.
+    // The exact loophole the design calls out - an acronym + zeros - is rejected.
     let html = h.run(&["search", "x", "@trap:HTML0000"]);
     assert!(!html.success, "HTML0000 must be rejected: {}", html.stdout);
 

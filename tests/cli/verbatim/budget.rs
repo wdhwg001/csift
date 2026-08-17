@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn verbatim_header_carries_budget_accounting_in_json_and_spanned_of_total_in_text() {
     // R10: `spanned N compaction boundaries` read as a TRANSCRIPT property when it is a
-    // QUERY property (budget-window-relative) — the text now prints `spanned K of N … in
+    // QUERY property (budget-window-relative) - the text now prints `spanned K of N … in
     // scope`, and the JSON header carries the full budget accounting the text header
     // shows (the machine format must never be thinner than the human one).
     let h = populated_home();
@@ -68,7 +68,7 @@ fn turns_token_budget_unit_scales_by_four() {
 #[test]
 fn turns_round_trip_floor_recovers_a_user_turn() {
     // The fixture's live tail is assistant-heavy (a huge assistant EOT). The 50% floor
-    // must still recover at least one USER turn even at a modest budget — the pulse
+    // must still recover at least one USER turn even at a modest budget - the pulse
     // regression. Without the floor a naive recency walk would recover zero users.
     let h = turns_home();
     let out = h.run(&[
@@ -97,12 +97,12 @@ fn turns_budget_respected_real_emitted_chars() {
     // read the ACTUAL emitted bytes, count the WHOLE document with `.chars().count()`, and
     // assert it is <= budget at three real budgets on the multi-compaction fixture. This
     // replaces the old circular checks (the reported "chars used" number, and the JSON sum
-    // re-derived with a hardcoded `+ 24`) — neither of which measured the real document.
+    // re-derived with a hardcoded `+ 24`) - neither of which measured the real document.
     //
-    // The contract binds the default TEXT form (SPEC §6.8 — budget allocation + text output).
+    // The contract binds the default TEXT form (SPEC §6.8 - budget allocation + text output).
     // We bound BOTH the stdout document (doc-header-block + banners + units, minus the
     // operational trailers) AND the `--out` file (the documented verbatim reconstruction,
-    // which omits the stdout-only header block) — so every component the contract lists is
+    // which omits the stdout-only header block) - so every component the contract lists is
     // measured against budget.
     let h = turns_home();
     for budget in [40000usize, 15000, 8000] {
@@ -160,7 +160,7 @@ fn turns_budget_respected_real_emitted_chars() {
         );
         // The reported figure must NOT under-state the truth: the real document is <= the
         // header's claim (the fix made the accounting an honest upper bound, never an
-        // under-count — that was the original overshoot bug).
+        // under-count - that was the original overshoot bug).
         assert!(
             doc_chars <= reported,
             "header claims {reported} chars but the real document is {doc_chars} — the \
@@ -169,7 +169,7 @@ fn turns_budget_respected_real_emitted_chars() {
     }
 
     // The skipped malformed line is still surfaced, never hidden (it just is not counted
-    // against the reconstruction budget — it is operational chrome).
+    // against the reconstruction budget - it is operational chrome).
     let any = h.run(&[
         "verbatim",
         at(SESS).as_str(),
@@ -277,7 +277,7 @@ fn turns_max_compactions_caps_the_reach() {
 #[test]
 fn turns_json_single_side_units_present_under_tight_budget() {
     // A tight budget forces some single-side (user-only / assistant-only) selections in
-    // the JSON output — exercise the single-side JSON emit path.
+    // the JSON output - exercise the single-side JSON emit path.
     let h = turns_home();
     let out = h.run(&[
         "verbatim",

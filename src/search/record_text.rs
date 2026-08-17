@@ -8,7 +8,7 @@ pub(crate) fn is_comm_class(c: Class) -> bool {
 }
 
 /// Render the transcript owner's own id as the literal `self` on either side of a comm direction
-/// (GOLD §3/§4 notation: `self ⇨ to`, `from ⇨ self`) — a verbose session uuid / bare agent hex on
+/// (GOLD §3/§4 notation: `self ⇨ to`, `from ⇨ self`) - a verbose session uuid / bare agent hex on
 /// the self side becomes `self`, while a peer id/name on the OTHER side is kept verbatim (a peer
 /// never equals the owner). No-op when `owner_id` is `None`.
 pub(crate) fn alias_self(
@@ -24,7 +24,7 @@ pub(crate) fn alias_self(
     })
 }
 
-/// True for a RECORD-LEVEL text class — one classified from a record's string / text-block
+/// True for a RECORD-LEVEL text class - one classified from a record's string / text-block
 /// content (NOT a per-block agent class, and NOT the tool_result duals `user.answer`/
 /// `user.rejection`, which are handled in the ToolResult arm). Drives [`record_text_emission`].
 pub(crate) fn is_record_text_class(c: Class) -> bool {
@@ -90,11 +90,11 @@ pub(crate) fn record_text_emission(
 
 /// The raw textual body of a record for harness-marker matching: the bare string, or the text
 /// blocks joined with `\n` (mirrors the engine's `raw_message_text`). For a MESSAGE-LESS record (a
-/// `type:"system"` record — e.g. the `compact_boundary` metrics record) it falls back (D7) to the
+/// `type:"system"` record - e.g. the `compact_boundary` metrics record) it falls back (D7) to the
 /// top-level `content` plus a readable `compactMetadata` excerpt, so the boundary is BOTH matchable
 /// and rendered. `None` when there is no text anywhere.
 pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
-    // Hook-injected additionalContext attachment: its joined content IS the record's text —
+    // Hook-injected additionalContext attachment: its joined content IS the record's text -
     // both the searchable body under `--additional-context` and the `show`-addressed render.
     if let Some(text) = rec.hook_additional_context_text() {
         return Some(text);
@@ -118,7 +118,7 @@ pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
     }
 }
 
-/// D7: the searchable + renderable text of a MESSAGE-LESS system record — in practice the
+/// D7: the searchable + renderable text of a MESSAGE-LESS system record - in practice the
 /// `compact_boundary` metrics record (the only message-less system record `classify` labels).
 /// Combines the top-level `content` string (`"Conversation compacted …"`) with a readable
 /// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE
@@ -141,7 +141,7 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" "))
 }
 
-/// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt —
+/// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt -
 /// `[compaction boundary: trigger=auto preTokens=1000 postTokens=200 durationMs=50]` (only the
 /// present fields, stable order, scalars unquoted). `None` when it is not an object or carries none
 /// of the known fields.
@@ -163,7 +163,7 @@ pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<Strin
 /// The communication [`Class`] a `tool_use` block carries (GOLD §3): a `SendMessage` →
 /// `…sent`/`…signal`; a `Task`/`Agent`/`Workflow` spawn → `…sent`. `None` for any other tool.
 /// REPLICATES the engine's per-record decision per-BLOCK (so a record with mixed comm/non-comm
-/// tool_use blocks labels each correctly) — kept faithful to model.rs `classify_assistant`.
+/// tool_use blocks labels each correctly) - kept faithful to model.rs `classify_assistant`.
 pub(crate) fn tool_use_comm_class(
     name: Option<&str>,
     input: Option<&serde_json::Value>,
@@ -220,7 +220,7 @@ pub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Val
 }
 
 /// Resolve a `<persisted-output>` pointer (§4.6) to the referenced file's content.
-/// On a read failure the inline text is kept and an explicit note appended — a
+/// On a read failure the inline text is kept and an explicit note appended - a
 /// missing persisted file is reported, never fatal (SPEC §4.6).
 pub(crate) fn resolve_persisted_text(path: &str, inline: &str) -> String {
     match std::fs::read_to_string(path) {
@@ -260,17 +260,17 @@ pub(crate) fn truncate_excerpt(s: &str) -> String {
 }
 
 /// Build the inline excerpt, CENTERED on the match so a hit DEEP in a long message is
-/// actually visible — not just the message head (the old behavior, which silently hid
+/// actually visible - not just the message head (the old behavior, which silently hid
 /// any match past the first `max` chars and forced readers back to the raw jsonl).
 ///
 /// `span` is the first match's BYTE range, or `None` for the pure filter (no specific
 /// match → show the head). When the message fits in `max` chars it is shown whole.
 /// Otherwise a `max`-char window is taken around the match (a quarter of the budget as
 /// leading context), whitespace-normalized, with a leading `…` when content precedes
-/// the window and the shared `… (+N chars)` marker when content follows — so clipping
+/// the window and the shared `… (+N chars)` marker when content follows - so clipping
 /// on either side is explicit, never silent (SPEC §0).
 ///
-/// Returns `(excerpt, truncated)` — `truncated` is true iff content was CLIPPED to fit `max`
+/// Returns `(excerpt, truncated)` - `truncated` is true iff content was CLIPPED to fit `max`
 /// (the head form when the normalized text exceeds `max`, or any match-centered window). Under
 /// `--no-truncate`'s `usize::MAX` budget nothing is ever clipped, so `truncated` is always false there.
 pub(crate) fn match_excerpt(
@@ -310,7 +310,7 @@ pub(crate) fn match_excerpt(
         out.push_str(&format!("… (+{after} chars)"));
     }
     // The window form is only reached when `total > max`, so a `max`-char window necessarily
-    // dropped surrounding content — this is always a truncated fragment.
+    // dropped surrounding content - this is always a truncated fragment.
     (out, true)
 }
 

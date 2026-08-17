@@ -75,7 +75,7 @@ fn turns_slices_pins_emitted_count_to_the_fleet() {
     // `--slices N` makes the slice COUNT the hard constraint: it emits AT MOST N chunks no matter
     // how many a char budget would have produced, and each chunk stays within the window. A 2-slice
     // fleet over this multi-block fixture: slices 1-2 are within window, and any index > 2 is empty
-    // — the count can never drift to 3/4/5 as the turns grow.
+    // - the count can never drift to 3/4/5 as the turns grow.
     let h = turns_home();
     let win = 1500usize;
     for i in 1..=2 {
@@ -196,7 +196,7 @@ fn turns_slices_keeps_user_turns_whole_no_role_cap() {
         "a long user turn must be kept whole in --slices mode (it was gutted at the 600 cap?)"
     );
     // Contrast: the SAME fixture under budget mode STILL applies the 600 user cap (legacy behavior
-    // is untouched) — so the verbatim user body is NOT present and the elision marker IS.
+    // is untouched) - so the verbatim user body is NOT present and the elision marker IS.
     let budgeted = h.run(&[
         "verbatim",
         at(SESS).as_str(),

@@ -10,19 +10,19 @@ pub(crate) enum TrapSelf {
 }
 
 /// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash
-/// `tool_use` command carries the (unique, literal) marker AND the literal `csift` — i.e. the
+/// `tool_use` command carries the (unique, literal) marker AND the literal `csift` - i.e. the
 /// very command that launched this run. Mechanism + TIMING (both verified live 2026-07-12): a
-/// SUBAGENT's transcript records the launching tool_use eagerly — its own Bash can grep the
+/// SUBAGENT's transcript records the launching tool_use eagerly - its own Bash can grep the
 /// marker mid-execution, so a first try resolves; the MAIN conversation's record is flushed only
 /// AFTER the current Bash call completes (a 3s in-command sleep still saw 0 on disk), so a
 /// top-level FIRST use ALWAYS misses and only a re-run of the SAME marker (now in the previous,
 /// flushed record) resolves. @trap therefore earns its keep for subagents (which cannot name
-/// themselves); a main thread should prefer `@main` (env-based, no race) — the no-match error
+/// themselves); a main thread should prefer `@main` (env-based, no race) - the no-match error
 /// routes both. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
 /// transcripts; a subagent match → that agent (then its subtree, per scope); only the main
 /// transcript → the session. The marker grammar is enforced strictly (see
 /// [`validate_trap_marker`]) precisely so the discipline cannot be shortcut: it must be a fresh,
-/// one-shot, imaginative token the model invents on the spot — never script-generated (a
+/// one-shot, imaginative token the model invents on the spot - never script-generated (a
 /// generator would itself be a `csift`-ish Bash call carrying the marker → ambiguity). Errors on
 /// a malformed marker, no match (marker not literal / mistyped / not yet flushed, or the command
 /// did not actually run `csift`), or >1 subagent (use a fresher random marker).
@@ -67,7 +67,7 @@ pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
     }
 }
 
-/// One node in the `whoami @trap` UPSTREAM ancestry chain — a subagent (or the top-level session)
+/// One node in the `whoami @trap` UPSTREAM ancestry chain - a subagent (or the top-level session)
 /// the caller belongs to. The chain runs SELF → ancestors → top-level root, so a subagent learns
 /// its own bare hex AND the whole re-feedable session lineage above it: `agents` walks the topology
 /// DOWN, `whoami` walks it UP.
@@ -86,7 +86,7 @@ pub struct WhoNode {
 /// Resolve `@trap:<marker>` for `whoami` into the caller's UPSTREAM ancestry chain: the marker
 /// carrier FIRST (a subagent, or the top-level session itself), then each parent walked via the
 /// topology's `parent_agent_id`, ending at the top-level session. Reuses [`resolve_trap`]'s strict
-/// grammar + marker scan and [`crate::subagent::build_topology`] for the walk. Env-independent —
+/// grammar + marker scan and [`crate::subagent::build_topology`] for the walk. Env-independent -
 /// reliable for a built-in Task AND a workflow subagent (whose env id is the PARENT, not itself).
 /// The topology is flat today (every subagent is depth 0), so the chain is `subagent → top-level`;
 /// the walk is future-proof for real nesting (depth > 0).
@@ -160,15 +160,15 @@ pub fn resolve_trap_who(marker: &str) -> Result<Vec<WhoNode>> {
 /// text prints them right next to the literal `csift`, any command that quotes or greps that doc
 /// satisfies the marker-AND-`csift` scan; worse, every agent that lazily copies the example uses
 /// the SAME token, so it can never resolve to ONE transcript (it self-collides into ambiguity).
-/// They are RESERVED — [`validate_trap_marker`] always refuses them, forcing a fresh hand-invented
+/// They are RESERVED - [`validate_trap_marker`] always refuses them, forcing a fresh hand-invented
 /// marker. Keep this in lockstep with the example literal shown in every doc.
 pub(crate) const RESERVED_EXAMPLE_MARKERS: &[&str] = &["JollyShinyBrook4283"];
 
 /// Enforce the STRICT `@trap` marker grammar, rejecting every lazy shortcut at the source so the
 /// only way to satisfy it is to invent a fresh, imaginative token by hand. The marker must be
-/// EXACTLY 3 CamelCase words (each an uppercase letter + at least two lowercase letters — no single
+/// EXACTLY 3 CamelCase words (each an uppercase letter + at least two lowercase letters - no single
 /// letters, no ALLCAPS acronyms like `HTML` / `USB`) followed by EXACTLY four digits, and those four
-/// digits must NOT form a trivial run (all-equal / consecutive / simple odd / simple even — e.g.
+/// digits must NOT form a trivial run (all-equal / consecutive / simple odd / simple even - e.g.
 /// `0000` / `1234` / `9876` / `1357` / `2468`). The grammar-valid SHAPE looks like
 /// `JollyShinyBrook4283`, but that exact literal is the RESERVED doc example (see
 /// `RESERVED_EXAMPLE_MARKERS`) and is always refused, so nobody ships a copy-pasted token. The
@@ -244,7 +244,7 @@ pub(crate) fn camel_words(s: &str) -> Option<Vec<&str>> {
     (!words.is_empty()).then_some(words)
 }
 
-/// True when four ASCII digits form a trivial arithmetic run — a constant step in `-2..=2`
+/// True when four ASCII digits form a trivial arithmetic run - a constant step in `-2..=2`
 /// (all-equal `0` / consecutive `±1` / simple odd-or-even `±2`), e.g. `0000` `1234` `9876` `1357`
 /// `2468`. Such markers are too guessable / boilerplate to make a unique trap. Caller guarantees
 /// exactly four ASCII digits.
@@ -277,11 +277,11 @@ pub(crate) fn locate_session_jsonl(id: &str) -> Option<PathBuf> {
 }
 
 /// True when `path`'s transcript contains a Bash `tool_use` whose `input.command` includes BOTH
-/// the `marker` AND the literal `csift` — i.e. the actual csift invocation that embedded the
+/// the `marker` AND the literal `csift` - i.e. the actual csift invocation that embedded the
 /// trap, not some unrelated command that merely echoed the token. A byte prefilter (`memmem` on
-/// the rare marker) skips a transcript that never mentions it without parsing — so a giant main
+/// the rare marker) skips a transcript that never mentions it without parsing - so a giant main
 /// transcript is mmap-scanned, not deserialized, unless the (unique) marker is present. Matching
-/// the SHELL tool_use INPUT (`Bash`, or Windows' `PowerShell` tool — not anywhere) avoids a
+/// the SHELL tool_use INPUT (`Bash`, or Windows' `PowerShell` tool - not anywhere) avoids a
 /// false hit on a tool_result that echoed it.
 pub(crate) fn bash_command_carries_trap(path: &Path, marker: &str) -> bool {
     let Ok(Some(mmap)) = crate::parse::mmap_bytes(path) else {
@@ -308,7 +308,7 @@ pub(crate) fn bash_command_carries_trap(path: &Path, marker: &str) -> bool {
                         // Both SHELL tools carry the invocation in `input.command`: `Bash`
                         // everywhere, and Windows' SEPARATE `PowerShell` tool (CC 2.1.228:
                         // the fallback when Git-for-Windows bash is absent, or the gated
-                        // preference — same `command` field, verbatim from the binary's
+                        // preference - same `command` field, verbatim from the binary's
                         // tool registry). A Bash-only gate left @trap blind exactly on the
                         // mandatory Windows fallback.
                         if (n == "Bash" || n == "PowerShell")

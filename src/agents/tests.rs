@@ -68,7 +68,7 @@ fn window_on_trigger_axis_is_the_default() {
 #[test]
 fn trigger_and_start_can_diverge_across_the_bound() {
     // The trigger LAGS into start by seconds; a bound between them admits on one axis
-    // but not the other — proving the axis choice is load-bearing.
+    // but not the other - proving the axis choice is load-bearing.
     let w = TimeWindow::from_args(Some("2026-06-07T05:00:03Z"), None).unwrap();
     let n = node(
         Some("2026-06-07T05:00:00Z"), // triggered before the bound
@@ -108,7 +108,7 @@ fn bounded_window_excludes_missing_axis_timestamp() {
 fn one_line_collapses_and_marks_elision_count() {
     assert_eq!(one_line("a\n  b\tc"), "a b c");
     // A long multi-byte string truncated on a CHAR boundary never panics AND now marks
-    // the dropped-char count explicitly (the never-silent-truncation contract — the old
+    // the dropped-char count explicitly (the never-silent-truncation contract - the old
     // bare `…` dropped the count). 400 chars in, 200 kept → `… (+200 chars)`.
     let multibyte = "🤖🎉✅🚀".repeat(100); // 400 chars
     let out = one_line(&multibyte);

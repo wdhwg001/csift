@@ -125,7 +125,7 @@ fn files_by_dir_groups_and_counts() {
 #[test]
 fn files_timeline_op_uses_underscore_spelling() {
     // The timeline `op` value is UNDERSCORE-delimited (notebook_edit/multi_edit) so it matches
-    // the grouped per-op COUNT keys — one on-wire spelling across both files JSON modes.
+    // the grouped per-op COUNT keys - one on-wire spelling across both files JSON modes.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

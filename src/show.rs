@@ -1,12 +1,12 @@
-//! `show` subcommand — fetch specific record(s) of ONE transcript.
+//! `show` subcommand - fetch specific record(s) of ONE transcript.
 //!
 //! The reader companion to `search`: search FINDS (match-centered excerpts across a
-//! scope), `show` FETCHES the records you name — by 1-based jsonl line number (the
-//! `Lnnnn` every csift surface prints) or by record uuid — rendered FULL through the
+//! scope), `show` FETCHES the records you name - by 1-based jsonl line number (the
+//! `Lnnnn` every csift surface prints) or by record uuid - rendered FULL through the
 //! same per-record pipeline search hits use (classify → labels, plan pointers, tool
 //! pairing, elicitation-sidecar merge). `--raw` instead emits the VERBATIM raw jsonl
 //! line(s): the escape hatch for fields csift does not render (usage tokens,
-//! stop_reason, model, …) and for inspecting corruption — raw reads the transcript
+//! stop_reason, model, …) and for inspecting corruption - raw reads the transcript
 //! file only (no sidecar merge, no record parsing).
 //!
 //! Addressing discipline (SPEC §6.12): an EXPLICITLY named line/uuid that resolves to

@@ -3,7 +3,7 @@
 use super::*;
 
 /// Glyph for the ROLE a hit sits on (GOLD §6): `◂` user, `▸` agent, `⚙` harness machinery.
-/// (`⚙`/gear is the chosen distinct harness marker — visually separate from the two
+/// (`⚙`/gear is the chosen distinct harness marker - visually separate from the two
 /// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.)
 pub(crate) fn role_glyph(class: Class) -> char {
     match class.role() {
@@ -14,7 +14,7 @@ pub(crate) fn role_glyph(class: Class) -> char {
 }
 
 /// The rendered label for a hit: the dotted [`Class::path`], DECORATED with the GOLD §4/§7
-/// markers — a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
+/// markers - a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
 pub(crate) fn render_label(h: &Hit) -> String {
     // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
     match (h.class, h.pair) {
@@ -45,7 +45,7 @@ pub(crate) fn noun<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
     }
 }
 
-/// The end of the chronological stream a signed `--max-count` KEEPS — the head banner's
+/// The end of the chronological stream a signed `--max-count` KEEPS - the head banner's
 /// window word ("earliest" for `N`, "latest" for `-N`).
 pub(crate) fn window_end(args: &SearchArgs) -> &'static str {
     if args.max_count.is_some_and(|n| n < 0) {
@@ -55,7 +55,7 @@ pub(crate) fn window_end(args: &SearchArgs) -> &'static str {
     }
 }
 
-/// The side the cap DROPPED — the tail footer's drop word ("later" when the earliest are
+/// The side the cap DROPPED - the tail footer's drop word ("later" when the earliest are
 /// kept, "earlier" when the latest are).
 pub(crate) fn dropped_side(args: &SearchArgs) -> &'static str {
     if args.max_count.is_some_and(|n| n < 0) {
@@ -74,8 +74,8 @@ pub(crate) fn id_prefix(id: &str, n: usize) -> &str {
 /// Header tokens for every DISTINCT owning transcript id in the output. A hex-led id (a
 /// session uuid / a bare-hex agent id) takes its first 8 chars; when two DISTINCT in-scope ids
 /// share those 8, the COLLIDING GROUP lengthens to its first 12 raw chars (for a uuid that
-/// spans the first dash — still a valid `@` target); a still-colliding pair falls back to the
-/// full id. A non-hex id shape (a teammate id embeds its NAME, not hex) is its own token —
+/// spans the first dash - still a valid `@` target); a still-colliding pair falls back to the
+/// full id. A non-hex id shape (a teammate id embeds its NAME, not hex) is its own token -
 /// rendered in full. Deterministic and derived from the ids alone, so tokens are STABLE
 /// across invocations by construction.
 pub(crate) fn header_tokens(exchanges: &[Exchange]) -> HashMap<&str, String> {
@@ -114,7 +114,7 @@ pub(crate) fn header_tokens(exchanges: &[Exchange]) -> HashMap<&str, String> {
 
 pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // SCOPE banner FIRST (before the empty check) so a bare `csift search '' <uuid>` fan-out
-    // announces it spanned N subagents up front — same disclosure as list/files/turns.
+    // announces it spanned N subagents up front - same disclosure as list/files/turns.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     if outcome.exchanges.is_empty() {
         println!("no matching exchanges");
@@ -126,7 +126,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
 
     // ── MATCH banner (head): the TRUE totals + the emission direction, echoed BEFORE the
     //    first exchange so a `| head`-truncated read still knows what it is looking at; the
-    //    tail footer repeats the totals (the both-ends placement law — anything load-bearing
+    //    tail footer repeats the totals (the both-ends placement law - anything load-bearing
     //    must survive a consumer that amputates one end). Free: the timeline is fully
     //    materialized before the first output byte. An active cap discloses the emitted
     //    window inline; undated exchanges (sorted last) are called out only when present. ──
@@ -149,8 +149,8 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     }
     println!();
 
-    // ── Self-resolving exchange headers: each header opens with a STABLE token — the leading
-    //    chars of the owning transcript id — derived from the id alone, never from enumeration
+    // ── Self-resolving exchange headers: each header opens with a STABLE token - the leading
+    //    chars of the owning transcript id - derived from the id alone, never from enumeration
     //    order, so a token pasted from ANY previous invocation still names the same transcript.
     //    The token is a valid `@` target as-is (prefix resolution is fail-loud on ambiguity),
     //    so every row is copy-paste addressable with zero joins, and the output has no
@@ -159,12 +159,12 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
 
     for ex in &outcome.exchanges {
         println!();
-        // `<tok>·t6` — the id-prefix token + 0-based turn index (the SAME numbering
+        // `<tok>·t6` - the id-prefix token + 0-based turn index (the SAME numbering
         // `show --turn` addresses) + the single compact local instant (offset already pins it;
         // no second UTC copy). Per-hit timestamps are omitted in text (this turn time covers
         // them); the JSON envelope still carries each hit's `ts_utc`. A subagent exchange
         // carries its parent on EVERY header (a tail-truncated read must still resolve); the
-        // parent token is the plain first-8 of the owning top-level uuid — no collision
+        // parent token is the plain first-8 of the owning top-level uuid - no collision
         // machinery (the resolver's fail-loud ambiguity check is the backstop).
         let t = &tok[ex.session_id.as_str()];
         if ex.is_subagent {
@@ -187,8 +187,8 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             // it must be fetched with the SUBAGENT's own id (`session_id`), NEVER the parent
             // uuid (that would silently fetch the WRONG record). Top-level hits are safe (the
             // header token IS an `@`-targetable prefix of the fetch id), so only the hazard
-            // rows carry the explicit ready-to-run command (with the FULL id — zero ambiguity
-            // risk) — the same address JSON's per-hit `refetch` gives.
+            // rows carry the explicit ready-to-run command (with the FULL id - zero ambiguity
+            // risk) - the same address JSON's per-hit `refetch` gives.
             if ex.is_subagent && !hit.from_sidecar && hit.line > 0 {
                 println!("      ↳ csift show @{} --line {}", ex.session_id, hit.line);
             }
@@ -198,7 +198,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         for sib in &ex.siblings {
             print_record_line('·', sib);
         }
-        // The FIXED policy's capped-away remainder — explicit, with the exact fetch
+        // The FIXED policy's capped-away remainder - explicit, with the exact fetch
         // command (self-healing escape hatch; `@<session_id>` round-trips for both a
         // top-level uuid and a subagent id).
         if ex.siblings_hidden > 0 && ex.turn_lines.0 > 0 {
@@ -210,7 +210,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     }
 
     // ── Compact lowercase footer: the SAME true totals the head banner carries (the both-ends
-    //    law — `-c`/`-l` isolate a single number for piping), drop accounting, unresolved. ──
+    //    law - `-c`/`-l` isolate a single number for piping), drop accounting, unresolved. ──
     let cat = if args.labels.is_empty() {
         "all".to_string()
     } else {
@@ -240,7 +240,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
     // ── Reader-caution (LAST, only when the default cap actually CLIPPED ≥1 excerpt) ──
-    // The excerpts above are match-centered FRAGMENTS, not summaries — a consumer that trusts the
+    // The excerpts above are match-centered FRAGMENTS, not summaries - a consumer that trusts the
     // first sentences of a clipped fragment can badly misread the record's full intent. Tell it
     // exactly how to get the whole text. Auto-suppressed under --no-truncate / --line / --uuid (those
     // lift the cap, so nothing is truncated → `any_truncated_excerpt` is false).
@@ -252,7 +252,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
 /// The trailing reader-caution printed when ≥1 excerpt was truncated: what the excerpts ARE
 /// (clipped fragments, not summaries), why that matters (a fragment can misrepresent the whole),
 /// and the exact flags to read the full text. Kept as its own fn so the wording lives in one
-/// place (text only — JSON callers read the `excerpts_truncated` summary flag instead).
+/// place (text only - JSON callers read the `excerpts_truncated` summary flag instead).
 pub(crate) fn emit_truncation_caution() {
     println!();
     println!(
@@ -279,7 +279,7 @@ pub(crate) fn print_record_line(marker: char, h: &Hit) {
         .map(|n| format!(" {n}"))
         .unwrap_or_default();
     let images = image_suffix(&h.image_ids);
-    // A merged elicitation-sidecar hit has no physical jsonl line — render the provenance
+    // A merged elicitation-sidecar hit has no physical jsonl line - render the provenance
     // locator instead of a fabricated `Lnnnn` (§3.10).
     let locator = if h.from_sidecar {
         "(elicitation sidecar)".to_string()
@@ -292,7 +292,7 @@ pub(crate) fn print_record_line(marker: char, h: &Hit) {
     );
 }
 
-/// ` [N image(s): …]` suffix when the hit's record carries images — the SAME ids `turns` shows,
+/// ` [N image(s): …]` suffix when the hit's record carries images - the SAME ids `turns` shows,
 /// feedable straight to `csift image <session> --id <ID>`. Empty string when there are none.
 pub(crate) fn image_suffix(ids: &[String]) -> String {
     if ids.is_empty() {
@@ -312,9 +312,9 @@ pub(crate) fn pairing_json(p: Option<Pairing>) -> serde_json::Value {
     }
 }
 
-/// Render one `Hit` (a match OR a `--siblings` context record) to its JSON object — the
+/// Render one `Hit` (a match OR a `--siblings` context record) to its JSON object - the
 /// shared per-hit shape used by both the `hits` and `siblings` envelope arrays.
-/// The ready-to-run fetch command for a hit — `csift show` addressed at the transcript that
+/// The ready-to-run fetch command for a hit - `csift show` addressed at the transcript that
 /// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are
 /// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG
 /// record). A sidecar hit has no physical line → address by uuid; neither → null.
@@ -340,7 +340,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
     serde_json::json!({
         // The id TRIO rides EVERY hit row too (R9): bare `.hits[]` flattening is the single
         // most natural jq idiom against the most-piped command, and with the trio only on
-        // the exchange row it yielded silent nulls — two independent audits tripped on it.
+        // the exchange row it yielded silent nulls - two independent audits tripped on it.
         // jq cannot fail loud on a missing key, so the data matches the natural access
         // pattern instead. (The exchange row keeps its copy; `refetch` stays the preferred
         // single-hit path.)
@@ -369,7 +369,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "source": if h.from_sidecar { serde_json::json!("elicitation-sidecar") } else { serde_json::Value::Null },
         // Extractable image ids (`#N`/`L<line>i<n>`) the record carries; empty array when none.
         "image_ids": h.image_ids,
-        // The ready-to-run `csift show` command for this record — already addressed at the
+        // The ready-to-run `csift show` command for this record - already addressed at the
         // RIGHT transcript (this row's session_id; a parent uuid + a subagent line number
         // fetches the wrong record).
         "refetch": refetch_json(session_id, h),
@@ -411,7 +411,7 @@ pub(crate) fn render_json(
             "record_uuids": ex.record_uuids,
         });
         // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
-        // Present only when there are siblings — absent ⇒ none (keeps the common envelope lean).
+        // Present only when there are siblings - absent ⇒ none (keeps the common envelope lean).
         if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {
             let sibs: Vec<_> = ex.siblings.iter().map(|h| hit_json(ex, h)).collect();
             obj["siblings"] = json!(sibs);
@@ -421,7 +421,7 @@ pub(crate) fn render_json(
         println!("{}", serde_json::to_string(&obj)?);
     }
     // envelope v2 summary. `session_ids` = the distinct matching transcript ids (sorted,
-    // first-100 capped with an EXPLICIT truncation flag — never silent) so "WHICH sessions
+    // first-100 capped with an EXPLICIT truncation flag - never silent) so "WHICH sessions
     // matched" is one `tail -1 | jq .session_ids` away, no per-row jq pipeline.
     let mut session_ids: Vec<&str> = outcome
         .exchanges
@@ -438,24 +438,24 @@ pub(crate) fn render_json(
         "sessions": distinct_session_count(&outcome.exchanges),
         // `transcript_ids` = the distinct MATCHING-TRANSCRIPT ids (a subagent hit contributes
         // its bare agent-id, a top-level hit its uuid). DELIBERATELY named apart from `-l`,
-        // which emits the OWNING-session ids (`parent_session_id`) — the two answer different
+        // which emits the OWNING-session ids (`parent_session_id`) - the two answer different
         // "which sessions?" questions, so the wire names them differently.
         "transcript_ids": session_ids,
         "transcript_ids_truncated": ids_truncated,
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
-        // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) — the
+        // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) - the
         // machine echo of the `with elicitation sidecar` text note.
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
-        // True when ≥1 emitted excerpt was CLIPPED to the default cap — the machine echo of the
+        // True when ≥1 emitted excerpt was CLIPPED to the default cap - the machine echo of the
         // trailing reader-caution. A consumer seeing this should re-fetch the record in full
         // (per-hit `excerpt` is a match-centered fragment, not the whole text) via
         // `--no-truncate`, or one record via `csift show --line/--uuid`. Always false there.
         "excerpts_truncated": any_truncated_excerpt(&outcome.exchanges),
     });
     // Zero-match self-diagnosis (§T0.1): make the empty result machine-legible as a definitive
-    // absence (never a syntax error), echo the active filters, and — when a `-t`/`-T` filter hid
-    // otherwise-matching records — carry the excluded labels so a consumer can self-correct.
+    // absence (never a syntax error), echo the active filters, and - when a `-t`/`-T` filter hid
+    // otherwise-matching records - carry the excluded labels so a consumer can self-correct.
     if let Some(d) = diagnosis {
         summary_fields["definitive_absence"] = json!(true);
         summary_fields["active_filters"] = json!(d.active_filters);

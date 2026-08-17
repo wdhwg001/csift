@@ -3,24 +3,24 @@
 use super::*;
 
 /// A file-mutating operation kind, keyed off the tool that performed it. The
-/// structured tools (`Write`/`Edit`/`MultiEdit`/`NotebookEdit`) are AUTHORITATIVE —
+/// structured tools (`Write`/`Edit`/`MultiEdit`/`NotebookEdit`) are AUTHORITATIVE -
 /// they name an exact `file_path`/`notebook_path`. `BashMutation` is HEURISTIC: it is
 /// parsed lexically from a Bash command string (see [`crate::bash_mutations`]), which
 /// cannot be a true shell parse, so it is labelled heuristic everywhere it surfaces.
 ///
 /// Write/Edit/NotebookEdit/MultiEdit are kept DISTINCT (not collapsed to "mutation")
-/// because the acid-test question — "how many files did it create vs edit" — needs
+/// because the acid-test question - "how many files did it create vs edit" - needs
 /// create-vs-edit discrimination, and the per-op counts are a stated output of
 /// `csift files --by-file`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileOp {
-    /// `Write` tool — writes a file whole (a create when the path was new).
+    /// `Write` tool - writes a file whole (a create when the path was new).
     Write,
-    /// `Edit` tool — a single in-place string replacement in an existing file.
+    /// `Edit` tool - a single in-place string replacement in an existing file.
     Edit,
-    /// `NotebookEdit` tool — edits a Jupyter notebook cell (`notebook_path`).
+    /// `NotebookEdit` tool - edits a Jupyter notebook cell (`notebook_path`).
     NotebookEdit,
-    /// `MultiEdit` tool — multiple edits to one file in a single call.
+    /// `MultiEdit` tool - multiple edits to one file in a single call.
     MultiEdit,
     /// A file mutation inferred HEURISTICALLY from a Bash command string.
     BashMutation,
@@ -56,7 +56,7 @@ impl FileOp {
         }
     }
 
-    /// True only for [`FileOp::BashMutation`] — drives the explicit "heuristic"
+    /// True only for [`FileOp::BashMutation`] - drives the explicit "heuristic"
     /// labelling in `files` output (Bash mutations are a best-effort lexical parse,
     /// never authoritative).
     #[must_use]
@@ -67,7 +67,7 @@ impl FileOp {
 
 /// One extracted file-mutation fact, pure per-record (the turn index is assigned by
 /// the `files` module during turn reconstruction, NOT stored here). The `path` is the
-/// absolute path exactly as written in the record — never re-encoded or absolutized.
+/// absolute path exactly as written in the record - never re-encoded or absolutized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileMutation {
     /// The path as written in the record (NOT re-encoded / absolutized).
@@ -90,7 +90,7 @@ impl Record {
     /// while `toolUseResult.type` (`create`/`update`) lives on the **paired
     /// tool_result carrier**. This function extracts only what is locally present, so
     /// `is_create` here is consulted from THIS record's own `toolUseResult` first (it
-    /// is usually absent on a tool_use record, defaulting `is_create` to `false` —
+    /// is usually absent on a tool_use record, defaulting `is_create` to `false` -
     /// honestly "unknown / treat as edit"); the `files` module (Section 3) joins the
     /// two sides by `tool_use_id` within a turn via [`Record::carrier_create_paths`]
     /// so `is_create` becomes accurate. Keeping this per-record-pure mirrors how

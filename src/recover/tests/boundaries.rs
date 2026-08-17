@@ -209,7 +209,7 @@ fn buffer_disagrees_requires_partial_overlap_and_threshold() {
     // Known lines that fall OUTSIDE the original's length are skipped (the `*k <= len`
     // guard), and a single mismatch below the 25% threshold does NOT flag.
     let mut buf = SparseBuffer::default();
-    // Known lines 1,2,3,4 — original is only 4 long; one of four mismatches = 25% → flags.
+    // Known lines 1,2,3,4 - original is only 4 long; one of four mismatches = 25% → flags.
     buf.reset_to_full("a\nb\nc\nQ", 4, 1);
     assert!(
         buffer_disagrees_with_original(&buf, "a\nb\nc\nd"),

@@ -19,7 +19,7 @@ fn whoami_both_env_vars_blank_errors() {
 
 #[test]
 fn whoami_always_prints_path() {
-    // The resolved jsonl path is ALWAYS printed (no flag — `--show-path` was removed).
+    // The resolved jsonl path is ALWAYS printed (no flag - `--show-path` was removed).
     let h = populated_home();
     let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -72,7 +72,7 @@ fn whoami_fast_path_via_cwd_encoding() {
     let cwd = h.root.join("work").join("proj");
     std::fs::create_dir_all(&cwd).unwrap();
     // The child resolves symlinks in its cwd (on macOS `/var` → `/private/var`), so
-    // encode the CANONICAL path — that's what `current_dir()` reports inside the
+    // encode the CANONICAL path - that's what `current_dir()` reports inside the
     // binary, and what its fast-path `encode_cwd` will produce.
     let canon = std::fs::canonicalize(&cwd).unwrap();
     let enc: String = canon
@@ -536,7 +536,7 @@ fn plan_no_target_resolves_calling_session_from_env() {
     assert_eq!(v["plan_file"].as_str(), Some(bound_abs.as_str()));
     assert_eq!(v["session_id"].as_str(), Some(SESS));
 
-    // Without the env var AND no target, it must NOT guess — it errors with guidance.
+    // Without the env var AND no target, it must NOT guess - it errors with guidance.
     let out2 = h.run(&["plan"]);
     assert!(
         !out2.success,

@@ -114,7 +114,7 @@ fn strip_fd_qualifier_rules() {
 
 #[test]
 fn previously_caught_idioms_all_still_caught() {
-    // The verdict's CAUGHT column — a regression guard in one place.
+    // The verdict's CAUGHT column - a regression guard in one place.
     assert_eq!(just_paths("echo hi > /tmp/x"), vec!["/tmp/x"]);
     assert_eq!(just_paths("echo hi >> /tmp/x"), vec!["/tmp/x"]);
     assert_eq!(just_paths("cmd | tee /tmp/x"), vec!["/tmp/x"]);
@@ -158,7 +158,7 @@ fn trim_structural_tail_and_syntax_noise_helpers() {
 #[test]
 fn residual_noise_classes_rejected_real_relpaths_kept() {
     // `=`-led value fragments, pure numbers, and code shards (comma / trailing colon
-    // with no `/`) are rejected — the residual `by-file` garbage classes.
+    // with no `/`) are rejected - the residual `by-file` garbage classes.
     assert!(has_syntax_noise("=1.94"));
     assert!(has_syntax_noise("=2980"));
     assert!(has_syntax_noise("="));

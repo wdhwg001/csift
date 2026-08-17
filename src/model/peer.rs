@@ -25,7 +25,7 @@ impl TeammateMessage {
     }
 }
 
-/// True when `content` carries a `open` section tag at a valid section BOUNDARY (FINDING-1) — the
+/// True when `content` carries a `open` section tag at a valid section BOUNDARY (FINDING-1) - the
 /// non-allocating predicate behind [`is_teammate_message`] / [`is_agent_message`]. Returns on the
 /// FIRST [`is_section_boundary`] occurrence; a tag that only ever appears MID-PROSE yields `false`.
 /// The common no-tag case costs exactly one `memmem` (the `find` returns `None` immediately), so
@@ -42,12 +42,12 @@ pub(crate) fn has_boundary_section(content: &str, open: &str) -> bool {
     false
 }
 
-/// True when `content` is an inbound teammate/peer message (GOLD §5) — it carries a
+/// True when `content` is an inbound teammate/peer message (GOLD §5) - it carries a
 /// [`TEAMMATE_MESSAGE_OPEN`] tag at a section BOUNDARY (FINDING-1). Real data (edge-fixtures scout):
 /// the real shape is ALWAYS the relayed wrapper `Another Claude session sent a message:\n
 /// <teammate-message …>\n<BODY>\n</teammate-message>\n\n<security footer>` (126 of 126), so the
 /// boundary is the content start, just after the relay preamble, or right after a prior section's
-/// close tag. A tag merely QUOTED mid-prose (a genuine user message that mentions the literal tag —
+/// close tag. A tag merely QUOTED mid-prose (a genuine user message that mentions the literal tag -
 /// common in csift's OWN dev sessions) is NOT a boundary, so the record stays `user.message` rather
 /// than being mislabeled `agent.communication.inbox` (the FINDING-1 fix).
 #[allow(dead_code)]
@@ -57,16 +57,16 @@ pub fn is_teammate_message(content: &str) -> bool {
 }
 
 /// True when `content` is an inbound `<agent-message from="…">` peer message (P1c M1 / FINDING-2) at
-/// a section BOUNDARY — the DISTINCT peer form from [`is_teammate_message`]. Like a teammate message
+/// a section BOUNDARY - the DISTINCT peer form from [`is_teammate_message`]. Like a teammate message
 /// it classifies `agent.communication.inbox`, is excluded from [`Record::is_genuine_user`], yet
-/// still opens a turn. Boundary-anchored (FINDING-1) for the same reason — a quoted tag is not it.
+/// still opens a turn. Boundary-anchored (FINDING-1) for the same reason - a quoted tag is not it.
 #[allow(dead_code)]
 #[must_use]
 pub fn is_agent_message(content: &str) -> bool {
     has_boundary_section(content, AGENT_MESSAGE_OPEN)
 }
 
-/// True when `content` is ANY inbound peer message — a `<teammate-message>` OR an `<agent-message>`
+/// True when `content` is ANY inbound peer message - a `<teammate-message>` OR an `<agent-message>`
 /// at a section boundary (GOLD §1 + P1c M1 + FINDING-2). Both are PEER-agent messages, never the
 /// operator: excluded from [`Record::is_genuine_user`] yet still turn-opening ([`Record::opens_turn`]).
 #[must_use]
@@ -88,7 +88,7 @@ pub fn parse_teammate_message(content: &str) -> Option<TeammateMessage> {
 
 /// Parse ALL `<teammate-message …>` sections in `content` (edge-fixtures G4/G5 batching): one
 /// `type:"user"` record can carry SEVERAL sections of MIXED kind (prose + idle_notification +
-/// teammate_terminated + …). Returns one [`TeammateMessage`] per section, in file order — the
+/// teammate_terminated + …). Returns one [`TeammateMessage`] per section, in file order - the
 /// caller unions their labels. Each section's body/signal is scoped to its own close tag (so a
 /// later section, the trailing security footer, and inter-section text never bleed in). Empty
 /// when `content` has no tag. CODEPOINT-SAFE: ASCII-offset slicing only.
@@ -114,8 +114,8 @@ pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
 /// BOUNDARY (FINDING-1): the content start (only whitespace precedes), immediately after the
 /// relayed peer preamble ([`PEER_MESSAGE_PREAMBLE`]), or right after a prior section's CLOSE tag
 /// (`</task-notification>` / `</teammate-message>` / `</agent-message>`, modulo trailing
-/// whitespace). A tag that appears MID-PROSE — a genuine user message merely QUOTING the literal
-/// tag, common in csift's own dev sessions — is NOT a boundary, so it does not start a section and
+/// whitespace). A tag that appears MID-PROSE - a genuine user message merely QUOTING the literal
+/// tag, common in csift's own dev sessions - is NOT a boundary, so it does not start a section and
 /// the record stays `user.message`. Codepoint-safe: pure suffix tests on `trim_end`, no slicing.
 pub(crate) fn is_section_boundary(prefix: &str) -> bool {
     let t = prefix.trim_end();
@@ -128,7 +128,7 @@ pub(crate) fn is_section_boundary(prefix: &str) -> bool {
 
 /// Invoke `emit(offset, section)` for each BOUNDARY-anchored `<open …>…</close>` section in
 /// `content`, in file order. `offset` is the byte offset of the section's open tag; `section` is the
-/// slice from the open tag through (inclusive) its close tag — or to end-of-string if the close tag
+/// slice from the open tag through (inclusive) its close tag - or to end-of-string if the close tag
 /// is absent (malformed). Only an open tag at an [`is_section_boundary`] starts a section
 /// (FINDING-1); a tag quoted mid-prose is skipped (advance past it and keep scanning for a later
 /// boundary-anchored one). The scan advances past each section's close tag (or, if absent, to end so
@@ -144,7 +144,7 @@ pub(crate) fn scan_tag_sections<F: FnMut(usize, &str)>(
     while let Some(rel) = content[idx..].find(open) {
         let start = idx + rel;
         if !is_section_boundary(&content[..start]) {
-            // A tag QUOTED mid-prose — not a section start; step past it and keep scanning.
+            // A tag QUOTED mid-prose - not a section start; step past it and keep scanning.
             idx = start + open.len();
             continue;
         }
@@ -158,14 +158,14 @@ pub(crate) fn scan_tag_sections<F: FnMut(usize, &str)>(
 /// One inbound peer-message section located in a `type:"user"` record's text (GOLD §5 + P1c M1):
 /// a `<teammate-message …>` OR the distinct `<agent-message from="…">` peer form. Carries the
 /// SENDER id (the comm FROM), whether the body is a control SIGNAL (a teammate `{"type":…}`
-/// payload — an `<agent-message>` is always prose → inbox), and the byte OFFSET of its open tag
+/// payload - an `<agent-message>` is always prose → inbox), and the byte OFFSET of its open tag
 /// (so a batched scan can MASK a peer tag quoted inside a `<task-notification>` span).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PeerSection {
     pub(crate) from: Option<String>,
     pub(crate) is_signal: bool,
     pub(crate) offset: usize,
-    /// The raw section slice (open tag through close tag) — the per-section render body (GOLD
+    /// The raw section slice (open tag through close tag) - the per-section render body (GOLD
     /// §3 G4/G5). Excludes the relay preamble and the trailing security footer (both fall
     /// OUTSIDE the tag span), so a batched record renders each peer message on its own.
     pub(crate) text: String,
@@ -208,7 +208,7 @@ pub(crate) fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
 
 /// The inner BODY of a single peer-message section slice (`<teammate-message …>BODY</teammate-message>`
 /// or `<agent-message …>BODY</agent-message>`): the prose between the open tag's `>` and the close
-/// tag, trimmed — the wrapper tags stripped so a render shows only the peer's own words (the trailing
+/// tag, trimmed - the wrapper tags stripped so a render shows only the peer's own words (the trailing
 /// harness security footer already sits OUTSIDE the section slice). Falls back to the whole slice when
 /// the tag bounds are absent (malformed). Codepoint-safe: ASCII-offset slicing only.
 pub(crate) fn peer_section_body(section: &str) -> &str {
@@ -238,7 +238,7 @@ pub(crate) fn extract_xml_attr(s: &str, attr: &str) -> Option<String> {
 
 /// The control-signal `type` of a `<teammate-message …>{"type":"<sig>"}</teammate-message>`
 /// body (GOLD §5), or `None` for a prose body. Extracts the body between the opening tag's
-/// `>` and `</teammate-message>`, and — only when it is a JSON object — reads its `type`.
+/// `>` and `</teammate-message>`, and - only when it is a JSON object - reads its `type`.
 pub(crate) fn teammate_signal_type(after_open: &str) -> Option<String> {
     let gt = after_open.find('>')?;
     let body_start = gt + 1;
@@ -257,7 +257,7 @@ pub(crate) fn teammate_signal_type(after_open: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// True for a spawn tool (GOLD §5): `Task` / `Agent` / `Workflow` — a tool_use that spawns a
+/// True for a spawn tool (GOLD §5): `Task` / `Agent` / `Workflow` - a tool_use that spawns a
 /// subagent (the `self ⇨ child` comm). Kept local so `model.rs` stays dependency-free.
 pub(crate) fn is_spawn_tool_name(name: &str) -> bool {
     matches!(name, "Task" | "Agent" | "Workflow")
@@ -284,7 +284,7 @@ pub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool 
     false
 }
 
-/// The recipient id of a `SendMessage` (the comm TO) — `input.to` preferred, else
+/// The recipient id of a `SendMessage` (the comm TO) - `input.to` preferred, else
 /// `input.recipient`. `None` when neither is a non-empty string.
 pub(crate) fn send_message_recipient(input: Option<&serde_json::Value>) -> Option<String> {
     let input = input?;
@@ -299,7 +299,7 @@ pub(crate) fn send_message_recipient(input: Option<&serde_json::Value>) -> Optio
 }
 
 /// The spawn target NAME of a spawn tool_use (`input.name` for a teammate/named spawn, else
-/// `input.subagent_type`) — used to resolve the spawned child id (the comm TO). `None` when
+/// `input.subagent_type`) - used to resolve the spawned child id (the comm TO). `None` when
 /// neither is present.
 pub(crate) fn spawn_target_name(input: Option<&serde_json::Value>) -> Option<String> {
     let input = input?;

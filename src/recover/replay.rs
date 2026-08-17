@@ -24,7 +24,7 @@ impl Confidence {
     }
 }
 
-/// A detected integrity boundary — a point where reconstruction across it is invalid.
+/// A detected integrity boundary - a point where reconstruction across it is invalid.
 #[derive(Debug, Clone)]
 pub(crate) struct Boundary {
     pub(crate) line_no: usize,
@@ -227,7 +227,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                         pre_state_known = false;
                         had_full_anchor = false;
                         anchor_source = None;
-                        // The file changed out from under us — the harness rejected the edit and
+                        // The file changed out from under us - the harness rejected the edit and
                         // demanded a fresh Read. Everything known so far is now SUSPECT, so
                         // invalidate the buffer: only content RE-READ / re-written after this
                         // point counts toward the final state. Pre-boundary lines become explicit
@@ -306,7 +306,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
             }
             EventKind::HistorySnapshotMarker => {
                 out.counts.history_snapshot += 1;
-                // A coverage annotation only — not an anchor, not a boundary.
+                // A coverage annotation only - not an anchor, not a boundary.
             }
         }
     }
@@ -345,7 +345,7 @@ pub(crate) fn buffer_disagrees_with_original(buf: &SparseBuffer, original_file: 
             }
         }
     }
-    // Require a reasonable comparison base (≥1 line) and ANY mismatch to flag — but only
+    // Require a reasonable comparison base (≥1 line) and ANY mismatch to flag - but only
     // when we compared enough to be meaningful (avoid a single fluke). A mismatch ratio
     // over a small threshold is a real disagreement.
     compared > 0 && mismatches > 0 && (mismatches * 4 >= compared)

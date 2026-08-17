@@ -1,6 +1,6 @@
 //! Unit tests for `recover`: per-arm branch-completeness over lightweight fixtures, in
 //! the style of `files.rs` / `parse.rs`. Locale-neutral multi-byte tokens only
-//! (accented Latin / emoji — `café🛠`), the house fixture style.
+//! (accented Latin / emoji - `café🛠`), the house fixture style.
 
 use super::*;
 

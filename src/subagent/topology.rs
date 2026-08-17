@@ -5,7 +5,7 @@ use super::*;
 /// One fully-linked subagent node in the topology (§new-model). Carries the flat
 /// lifecycle facts PLUS the toolUseId-linked spawn linkage (trigger time, parent agent,
 /// returned message) and the per-node files-changed list. `children` is the tool_use-graph
-/// nesting (empty on all current data — depth is uniformly 1, a platform constraint).
+/// nesting (empty on all current data - depth is uniformly 1, a platform constraint).
 #[derive(Debug, Clone)]
 pub struct SubagentNode {
     /// Bare-hex canonical agent id (== record `agentId`).
@@ -22,7 +22,7 @@ pub struct SubagentNode {
     pub spawn_tool: Option<String>,
     pub workflow_id: Option<String>,
     pub agent_type: Option<String>,
-    /// The agent's `name` (meta.json `name` = the `Agent` tool's `name` param) — a teammate
+    /// The agent's `name` (meta.json `name` = the `Agent` tool's `name` param) - a teammate
     /// handle (`VSRepro`) or an OMC lane name (`LaneDONE`). `None` when unnamed.
     pub name: Option<String>,
     /// The `teamName` for a teammate (`kind == Teammate`); `None` otherwise.
@@ -33,13 +33,13 @@ pub struct SubagentNode {
     pub trigger_utc: Option<String>,
     /// Child transcript HEAD ts (the lagging secondary "when").
     pub started_utc: Option<String>,
-    /// The COMPLETION instant — populated ONLY when `status == Completed`. A frozen /
+    /// The COMPLETION instant - populated ONLY when `status == Completed`. A frozen /
     /// running / unknown lane carries `None` here: its tail ts is a freeze or
     /// last-activity instant, NOT a completion, and a consumer doing the name-driven
     /// thing (`if completed_utc: treat as done`) must not get a false positive (the
     /// text tree suppressed the misleading "completed" line long before the JSON did).
     pub completed_utc: Option<String>,
-    /// Tail newest-record ts — the lane's LAST-ACTIVITY instant, present whenever the
+    /// Tail newest-record ts - the lane's LAST-ACTIVITY instant, present whenever the
     /// transcript has any timestamp regardless of status. Equals `completed_utc` on a
     /// completed lane; on a frozen lane it equals `pending_since_utc`.
     pub last_activity_utc: Option<String>,
@@ -134,7 +134,7 @@ pub(crate) fn child_tail_text(path: &Path) -> Option<String> {
 #[derive(Debug, Clone)]
 pub struct WorkflowRun {
     /// `runId` (== the `wf_<id>` stem, which matches the `subagents/workflows/wf_<id>/`
-    /// dir name — the join key to the workflow agents).
+    /// dir name - the join key to the workflow agents).
     pub run_id: String,
     pub task_id: Option<String>,
     pub workflow_name: Option<String>,
@@ -208,7 +208,7 @@ pub fn discover_workflow_runs(session_jsonl: &Path) -> Result<Vec<WorkflowRun>> 
 /// subagents, index the parent spawns, then for each subagent join the spawn meta (true
 /// trigger time + returned message) and, when `with_files`, extract its files-changed.
 ///
-/// `with_files` gates the (heavier) per-node transcript re-scan for mutations — off by
+/// `with_files` gates the (heavier) per-node transcript re-scan for mutations - off by
 /// default so a plain `agents` listing stays cheap. The nodes come back flat (depth 0);
 /// the tool_use-graph nesting is a no-op on current data (depth uniformly 1).
 pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<SubagentNode>> {
@@ -216,8 +216,8 @@ pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<Suba
     if subs.is_empty() {
         return Ok(Vec::new());
     }
-    // GLOBAL spawn index (main + every subagent transcript) so a nested agent's spawn —
-    // recorded in its spawning agent's transcript — links the child to that agent. On-disk
+    // GLOBAL spawn index (main + every subagent transcript) so a nested agent's spawn -
+    // recorded in its spawning agent's transcript - links the child to that agent. On-disk
     // layout is flat, so `subs` already holds every agent at any depth; this recovers the
     // LOGICAL parent + the nested agent's spawn metadata the flat layout drops.
     let index = build_global_spawn_index(session_jsonl, &subs)?;
@@ -269,8 +269,8 @@ pub(crate) fn node_for(
     with_files: bool,
 ) -> Result<SubagentNode> {
     let lc = lifecycle(subagent, journals)?;
-    // Effective spawn id: the meta `toolUseId` for a built-in/workflow agent, OR — for a
-    // TEAMMATE, whose meta carries none — the NAME-join to its spawning `Agent` tool_use. This
+    // Effective spawn id: the meta `toolUseId` for a built-in/workflow agent, OR - for a
+    // TEAMMATE, whose meta carries none - the NAME-join to its spawning `Agent` tool_use. This
     // single resolution lights up the whole spawn linkage below (trigger, parent, tool, type).
     let effective_spawn_id = subagent.spawn_tool_use_id.clone().or_else(|| {
         if subagent.kind == SubagentKind::Teammate {
@@ -353,7 +353,7 @@ pub(crate) fn node_for(
         trigger_utc,
         started_utc: lc.started_utc.clone(),
         // The lifecycle's `completed_utc` is the raw tail ts; it is a COMPLETION only
-        // when the status resolved Completed — otherwise it is last-activity.
+        // when the status resolved Completed - otherwise it is last-activity.
         completed_utc: (lc.status == SubagentStatus::Completed)
             .then(|| lc.completed_utc.clone())
             .flatten(),

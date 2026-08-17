@@ -40,7 +40,7 @@ fn fixture() -> Vec<Record> {
         rec(
             r#"{"type":"user","uuid":"c2","toolUseResult":{"type":"update","filePath":"/p/spec/gaps.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#,
         ),
-        // isMeta pseudo-turn — NOT a delimiter.
+        // isMeta pseudo-turn - NOT a delimiter.
         rec(
             r#"{"type":"user","uuid":"meta","isMeta":true,"timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"Continue from where you left off."}}"#,
         ),

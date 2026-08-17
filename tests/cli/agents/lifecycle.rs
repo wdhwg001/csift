@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     // A background built-in subagent whose teardown Bash (dangerous `rm` of `$VAR/$f`) CC HOISTED
-    // to a human approval prompt EVEN under bypass — its transcript freezes at the unreturned
+    // to a human approval prompt EVEN under bypass - its transcript freezes at the unreturned
     // tool_use, PRECEDED by assistant text (the L629→L630 shape that made the old walk-back
     // mis-report `completed`). csift must report it running + escalation-blocked, then NOT pending
     // once the result lands (Yes clicked). Mirrors the real fixture agent-ab8a4c5868015a8be.
@@ -61,7 +61,7 @@ fn agents_frozen_lane_reports_escalation_blocked_not_completed() {
     );
     assert_eq!(node["last_activity_utc"], "2026-06-26T10:43:31.906Z");
     assert_eq!(node["last_activity_utc"], node["pending_since_utc"]);
-    // Text surfaces the disambiguation prominently — and no "completed"/"last-seen" line
+    // Text surfaces the disambiguation prominently - and no "completed"/"last-seen" line
     // (the PENDING line already carries the freeze instant).
     let txt = h.run(&["agents", &format!("@{sess}")]);
     assert!(
@@ -164,7 +164,7 @@ fn agents_returned_message_on_open_lane_carries_history_caution() {
 #[test]
 fn agents_running_not_frozen_prints_last_seen_not_completed() {
     // A lane whose NEWEST meaningful record is a returned tool_result with NO closing
-    // assistant text: not frozen (nothing pending), not completed (no terminal message) —
+    // assistant text: not frozen (nothing pending), not completed (no terminal message) -
     // the honest middle. Its tail instant must surface as last_activity/"last-seen",
     // NEVER as a fabricated completion.
     let enc = "-Users-testuser-Projects-midflight";
@@ -242,7 +242,7 @@ fn agents_row_without_timestamps_omits_duration() {
 fn agents_true_trigger_time_is_the_parent_tool_use_ts() {
     // The default axis is TRIGGER: the built-in's `trigger_utc` is the parent Agent
     // tool_use ts (04:59:58), which DIVERGES from its child-head `started_utc`
-    // (05:00:00) — proving the topology recovered the true spawn instant.
+    // (05:00:00) - proving the topology recovered the true spawn instant.
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -347,7 +347,7 @@ fn agents_returned_message_three_way_resolution() {
 #[test]
 fn agents_returned_message_omitted_by_default() {
     // Without --returned-message (and without --agent), the returned message is NOT in
-    // the JSON — keeping a plain listing compact.
+    // the JSON - keeping a plain listing compact.
     let h = topology_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);

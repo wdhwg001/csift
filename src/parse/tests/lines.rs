@@ -23,7 +23,7 @@ fn validate_line_syntax_counts_corruption_like_parse_line() {
     let ok = br#"{"type":"user","message":{"role":"user","content":"x"}}"#;
     assert!(validate_line_syntax(ok).is_ok());
     assert!(parse_line(ok).unwrap().is_some());
-    // Real-world corruption (a torn tail write) fails BOTH the same way — the
+    // Real-world corruption (a torn tail write) fails BOTH the same way - the
     // parity `search`'s whole-file gate relies on for its malformed count.
     for torn in [
         br#"{"type":"user","message":{"role":"user","content":"tor"#.as_slice(),
@@ -98,7 +98,7 @@ fn scan_lines_bytes_visits_every_line_including_torn_tail() {
 fn scan_lines_parallel_chunked_matches_serial_for_any_chunk_count() {
     // A mix of candidate lines, blank lines (counted in line numbering, never kept) and a
     // malformed candidate (parsed → skipped). The (kept line_no list, skip count) must be
-    // IDENTICAL across every chunk split — that is the contract that lets recover/search/
+    // IDENTICAL across every chunk split - that is the contract that lets recover/search/
     // files swap in the parallel scan with zero behaviour change.
     let mut raw = String::new();
     for i in 0..60 {
@@ -152,7 +152,7 @@ fn scan_lines_bytes_empty_slice_visits_nothing() {
 #[test]
 fn role_marker_is_serialization_tolerant() {
     // R13: the compact wire form and every JSON-whitespace variant are the SAME
-    // record — all must be candidates.
+    // record - all must be candidates.
     for ok in [
         br#"{"message":{"role":"user","content":"x"}}"#.as_slice(),
         br#"{"message":{"role": "user","content":"x"}}"#.as_slice(),

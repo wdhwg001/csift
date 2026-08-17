@@ -13,7 +13,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
         crate::path::Caller::Other,
     )?;
 
-    // Scan across files (rayon — each is an independent mmap + prefilter scan).
+    // Scan across files (rayon - each is an independent mmap + prefilter scan).
     use rayon::prelude::*;
     let per_file: Vec<(Vec<ImageRef>, usize)> = session_files
         .par_iter()
@@ -38,7 +38,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     });
 
     // ── Scope filters: each NARROWS the image set, so an ambiguous `#N` can resolve in a
-    //    window / turn / uuid where it is unique — the disambiguators the ambiguity error
+    //    window / turn / uuid where it is unique - the disambiguators the ambiguity error
     //    names, and pre-applyable up front (`--since 1h` so `#N` is unique in the last hour). ──
     let time_window =
         crate::time_window::TimeWindow::from_args(args.since.as_deref(), args.until.as_deref())?;
@@ -82,7 +82,7 @@ pub fn run_image(args: &ImageArgs) -> Result<()> {
     let selected: Vec<&ImageRef> = if selection.is_empty() {
         // List/extract ALL → dedup the SAME image re-injected across context windows (by
         // content fingerprint). Two DISTINCT-content images that share a `#N` both survive, so
-        // the listing shows the reuse — and an `--id #N` against it ERRORS (never silent-picks).
+        // the listing shows the reuse - and an `--id #N` against it ERRORS (never silent-picks).
         dedup_latest(&images)
     } else {
         if distinct_transcripts > 1 {

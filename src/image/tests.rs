@@ -100,7 +100,7 @@ fn parse_id_selection_forms() {
         vec![Sel::Loc(6812, 2), Sel::Loc(99, 1), Sel::Loc(1, 1)]
     );
     // The '#'-form is REJECTED with a pointed fix (unquoted `--id #32` becomes a
-    // shell comment — bare digits are the one input form; display stays `#N`).
+    // shell comment - bare digits are the one input form; display stays `#N`).
     let err = parse_id_selection(&["#32".into()]).unwrap_err();
     assert!(err.to_string().contains("drop the '#'"), "{err}");
     assert_eq!(
@@ -132,7 +132,7 @@ fn seq_extracted_by_positional_zip_of_image_markers() {
     assert_eq!(imgs[0].seq, Some(2));
     assert_eq!(imgs[1].seq, Some(3));
     assert_eq!(imgs[1].media_type, "image/jpeg"); // NOT assumed PNG
-                                                  // A count mismatch (1 marker, 2 images) leaves seq unassigned — no misattribution.
+                                                  // A count mismatch (1 marker, 2 images) leaves seq unassigned - no misattribution.
     let r2: Record = serde_json::from_str(
             r#"{"type":"user","message":{"role":"user","content":[
                 {"type":"text","text":"only [Image #9] referenced"},

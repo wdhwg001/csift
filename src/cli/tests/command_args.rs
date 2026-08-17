@@ -18,7 +18,7 @@ fn image_out_format_ext_and_media_type_pinned() {
     }
 }
 
-/// clap's own internal consistency check — catches duplicate flags, bad
+/// clap's own internal consistency check - catches duplicate flags, bad
 /// `overrides_with` targets, malformed value parsers at build time.
 #[test]
 fn command_definition_is_valid() {
@@ -206,7 +206,7 @@ fn no_subagents_excludes_on_every_default_on_command() {
 #[test]
 fn turns_include_then_no_subagents_cancels_the_opt_in() {
     // `verbatim` defaults to top-level-only; `--subagents` opts in. A LATER
-    // `--no-subagents` cancels it — the field's `overrides_with` makes the last flag win,
+    // `--no-subagents` cancels it - the field's `overrides_with` makes the last flag win,
     // and `want_subagents()` ANDs `include && !no_subagents`. (Bare opt-in spans; the
     // trailing `--no-subagents` here suppresses it.)
     let cli = parse(&[

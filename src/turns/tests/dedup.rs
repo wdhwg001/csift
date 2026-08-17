@@ -186,7 +186,7 @@ fn dedup_demoted_turn_sorts_after_non_dup_in_phase1() {
     let dup_text = "the duplicate ask the summary already has verbatim in full here";
     let dup_turn = mk_turn(0, Some(dup_text), Some("dup reply"), 0, 0);
     // The unique turn carries a LARGE (capped) user body so a single unique pair dominates
-    // the cheap dup pair — this lets the budget sit cleanly between "one unique pair + the
+    // the cheap dup pair - this lets the budget sit cleanly between "one unique pair + the
     // header-block reservation" and "both pairs", isolating the dedup-ORDER decision.
     let big_ask = format!("a unique fresh ask {}", "q".repeat(700));
     let uniq_turn = mk_turn(1, Some(&big_ask), Some("unique reply"), 0, 0);
@@ -268,7 +268,7 @@ fn dedup_flagged_middle_still_richness_gated() {
         agent_msg(70, "let me e", 0, 0),
         agent_msg(80, "final", 0, 0),
     ];
-    // Flag the rich middle as also_in_summary — richness must still keep it.
+    // Flag the rich middle as also_in_summary - richness must still keep it.
     agents[1].unit.also_in_summary = true;
     assign_positions(&mut agents);
     let t = TurnSlice {

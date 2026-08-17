@@ -75,7 +75,7 @@ fn recover_batch_reconstructs_many_files_in_one_scan() {
             "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":uid,"content":"ok"}]}
         }).to_string()
     };
-    // Session 1 holds two files; a SECOND session holds a third — all recovered in ONE scan.
+    // Session 1 holds two files; a SECOND session holds a third - all recovered in ONE scan.
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
         &format!(

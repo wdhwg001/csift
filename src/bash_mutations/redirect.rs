@@ -7,7 +7,7 @@ use super::*;
 /// (`cmd 2> file`) and attached (`cmd 2>file`) shapes. The token FOLLOWING a bare
 /// operator, or the suffix of an attached `OP file`, is the written path.
 ///
-/// A token's optional leading fd qualifier — `&` or a run of ASCII digits — is stripped
+/// A token's optional leading fd qualifier - `&` or a run of ASCII digits - is stripped
 /// BEFORE the `>`/`>>` test, so `2>`, `1>`, `12>`, `&>` all match. A bare `2>&1`-style
 /// fd-DUP (the redirect target is another fd, not a path) and the `/dev/null`-class
 /// sinks carry no real path and emit nothing (handled by [`path_operand`] +
@@ -28,7 +28,7 @@ pub(crate) fn collect_redirections(
         // disables noclobber): `>|` reads as `>`, `>|file` as `>file`.
         if body == ">|" {
             // Bare operator: it AND its following path token are both redirect syntax, not
-            // command operands — record both indices so the verb dispatch never sees them.
+            // command operands - record both indices so the verb dispatch never sees them.
             consumed.insert(i);
             if let Some(next) = tokens.get(i + 1) {
                 push_redirect_target(next.orig, ">", out);
@@ -45,7 +45,7 @@ pub(crate) fn collect_redirections(
         } else if body == ">>" || body == ">" {
             // A bare (mask-confirmed) operator: its path is the NEXT token. BOTH the operator
             // and its path token are consumed redirect syntax (even when the target is an
-            // fd-dup `&1` / `/dev/null` sink that emits no path — it is still NOT a command
+            // fd-dup `&1` / `/dev/null` sink that emits no path - it is still NOT a command
             // operand and must not poison a positional-dest verb like `cp`/`mv`/`ln`).
             let verb = if body == ">>" { ">>" } else { ">" };
             consumed.insert(i);
@@ -87,7 +87,7 @@ pub(crate) fn collect_redirections(
             i += 1;
         } else if body.starts_with('>') {
             // An attached truncate `…>file` (incl. `2>file`, `&>file`). A bare `2>&1` fd-dup
-            // leaves the rest = `&1`, which `push_redirect_target` rejects — but the WHOLE
+            // leaves the rest = `&1`, which `push_redirect_target` rejects - but the WHOLE
             // attached token (`2>&1`, `2>/dev/null`) is still redirect syntax, so consume it.
             let off = tok.masked.len() - body.len() + 1;
             push_redirect_target(&tok.orig[off..], ">", out);
@@ -125,7 +125,7 @@ pub(crate) fn strip_fd_qualifier(tok: &str) -> &str {
 }
 
 /// True when a `>&` redirect target is a bare file-DESCRIPTOR number (`>&1`, `>&2`, `>& 2`)
-/// — an fd-dup that writes NO file — rather than a filename. A `-` close (`>&-`) is also an
+/// -- an fd-dup that writes NO file - rather than a filename. A `-` close (`>&-`) is also an
 /// fd op, not a path. Only an all-ASCII-digit (or `-`) target is an fd-dup; any other word
 /// is a file (`make >& build.log`).
 pub(crate) fn is_fd_number(tail: &str) -> bool {
@@ -133,7 +133,7 @@ pub(crate) fn is_fd_number(tail: &str) -> bool {
     t == "-" || (!t.is_empty() && t.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// Emit a redirect target if it resolves to a concrete path — dropping a `/dev/null`-
+/// Emit a redirect target if it resolves to a concrete path - dropping a `/dev/null`-
 /// class sink and any fd-dup remnant (`&1`) that `path_operand` rejects.
 pub(crate) fn push_redirect_target(tail: &str, verb: &'static str, out: &mut Vec<BashMutation>) {
     if is_dev_sink(tail) || tail.starts_with('&') {
@@ -156,9 +156,9 @@ pub(crate) fn is_dev_sink(tail: &str) -> bool {
 /// Normalize a single operand to a reported path, or `None` when it is not a path:
 /// strip surrounding quotes; reject options (`-…`), `KEY=VALUE` operands, an empty
 /// token, a bare `-` (stdin/stdout), and an UNRESOLVED-variable pseudo-path (any token
-/// bearing a `$`, e.g. `$OUT`, `${DIR}/x`, `/tmp/$run.log` — we cannot expand it, so a
+/// bearing a `$`, e.g. `$OUT`, `${DIR}/x`, `/tmp/$run.log` - we cannot expand it, so a
 /// row would fabricate a path; precision rule, dropped). A glob we cannot expand
-/// (`*.tmp`) is KEPT verbatim — it still names a real touched set and the heuristic
+/// (`*.tmp`) is KEPT verbatim - it still names a real touched set and the heuristic
 /// label makes that clear.
 pub(crate) fn path_operand(token: &str) -> Option<String> {
     let stripped = strip_quotes(token);
@@ -177,7 +177,7 @@ pub(crate) fn path_operand(token: &str) -> Option<String> {
         return None; // a KEY=VALUE operand, not a path.
     }
     if has_unresolved_var(stripped) {
-        return None; // an unexpandable `$VAR`/`~` pseudo-path — never fabricate it.
+        return None; // an unexpandable `$VAR`/`~` pseudo-path - never fabricate it.
     }
     // After the trailing-tail trim, the sink test must run AGAIN: `2>/dev/null)` trims to
     // `/dev/null`, the dominant fabricated-path class (a `)` glued on by a command
@@ -185,7 +185,7 @@ pub(crate) fn path_operand(token: &str) -> Option<String> {
     if is_dev_sink(stripped) || stripped.starts_with('&') {
         return None;
     }
-    // Reject a token still carrying shell SYNTAX NOISE that no real path contains — an
+    // Reject a token still carrying shell SYNTAX NOISE that no real path contains - an
     // unbalanced quote/paren (a quote-unaware split severed a quoted operand), an
     // embedded redirect operator (`/1>`, `2>&1`), a process-substitution head (`>(`,
     // `<(`), or a regex/escape metachar. These are parse artifacts, never files.
@@ -218,23 +218,23 @@ pub(crate) fn trim_structural_tail(token: &str) -> &str {
 }
 
 /// True when a candidate path still carries shell SYNTAX a real filesystem path never
-/// has — proof the token is a lexer artifact, not a file:
+/// has - proof the token is a lexer artifact, not a file:
 /// - an unbalanced surrounding quote (`'/tmp/x` from a severed quoted operand);
 /// - an embedded redirect operator (`>` / a `<(`/`>(` process-substitution head);
 /// - a regex/escape metachar (`\`, `(?`, `|`, `^`, a stray `?`/`*` mixed with `)` or `]`);
 /// - a comparison/value fragment (`=1.94`, a `=`-led token), a pure number (`7000`), or an
 ///   embedded-code shard (a `,` or a trailing `:` inside a token with no `/` separator).
 ///
-/// Conservative: a plain glob (`*.tmp`, `?.bin`) is NOT noise — it is still a real
+/// Conservative: a plain glob (`*.tmp`, `?.bin`) is NOT noise - it is still a real
 /// touched set and is kept verbatim by `path_operand` (only `concrete_path` drops it). A
-/// genuine RELATIVE path (`src/main.rs`, `Cargo.toml`, `paper.pdf`) is NOT noise either —
+/// genuine RELATIVE path (`src/main.rs`, `Cargo.toml`, `paper.pdf`) is NOT noise either -
 /// the code-shard tests only fire on tokens with NO `/` (a bare relative FILE is allowed).
 pub(crate) fn has_syntax_noise(token: &str) -> bool {
     // An unbalanced single/double quote anywhere (the quote-split tell).
     if token.matches('"').count() % 2 == 1 || token.matches('\'').count() % 2 == 1 {
         return true;
     }
-    // A process-substitution head (`>(` / `<(`) or a bare `(` — each maps to a distinct
+    // A process-substitution head (`>(` / `<(`) or a bare `(` - each maps to a distinct
     // precision-contract bullet, so keep them explicit (1:1 with the doc above).
     if token.starts_with(">(") || token.starts_with("<(") || token.starts_with('(') {
         return true;
@@ -250,7 +250,7 @@ pub(crate) fn has_syntax_noise(token: &str) -> bool {
     // A BACKTICK command substitution used as a redirect/operand target (`> `mktemp``, a
     // `cmd 2> `mktemp -t err``): `shell_mask` masks the backtick BODY but leaves the
     // structural backticks in the original slice, so the verbatim `` `mktemp` `` token can
-    // reach here. A command substitution is never a literal on-disk path — reject any token
+    // reach here. A command substitution is never a literal on-disk path - reject any token
     // bearing a backtick (the verb-dispatch path already drops a FULLY-masked token, but a
     // redirect target is sliced from the original and never passes through that guard).
     if token.contains('`') {
@@ -273,7 +273,7 @@ pub(crate) fn has_syntax_noise(token: &str) -> bool {
         return true;
     }
     // An embedded-CODE shard: a `,` (function-call arg list) or a trailing `:` (a dict /
-    // label) inside a token that has NO `/` separator — a real bare relative FILE never
+    // label) inside a token that has NO `/` separator - a real bare relative FILE never
     // carries these. Tokens WITH a `/` are paths and are left alone (a path may legally
     // contain a `,` or `:` in rare cases).
     if !token.contains('/') && (token.contains(',') || token.ends_with(':')) {
@@ -284,7 +284,7 @@ pub(crate) fn has_syntax_noise(token: &str) -> bool {
 
 /// Stricter sibling of [`path_operand`] for the precision-sensitive NEW emitters
 /// (`--flag=<path>`, `dd of=`, `curl -o`): in addition to every [`path_operand`]
-/// rejection, it ALSO drops a glob (`*`/`?`/`[`) — those output paths are written by a
+/// rejection, it ALSO drops a glob (`*`/`?`/`[`) - those output paths are written by a
 /// single tool to ONE concrete destination, so a wildcard there is a parse artifact,
 /// not a real touched set. Returns only a concrete, resolvable path.
 pub(crate) fn concrete_path(token: &str) -> Option<String> {
@@ -295,7 +295,7 @@ pub(crate) fn concrete_path(token: &str) -> Option<String> {
     Some(path)
 }
 
-/// True when a token carries an UNRESOLVED shell expansion we cannot perform — a variable
+/// True when a token carries an UNRESOLVED shell expansion we cannot perform - a variable
 /// reference (`$NAME`, `${NAME}`, `$1`, …) OR a leading `~`/`~user` home expansion (`~/x`,
 /// `~`). Such a token can never be turned into the real on-disk path without the runtime
 /// environment, so emitting it verbatim would fabricate a path that does not exist as

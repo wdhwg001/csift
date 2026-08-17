@@ -115,7 +115,7 @@ fn prefilter_drops_lines_without_literal() {
 fn prefilter_whitespace_literal_is_ineligible() {
     // `normalize_line` collapses whitespace in several render paths (genuine-user
     // text, peer bodies, notification reports), so a rendered "hello world" can be
-    // raw "hello\nworld" — a space-carrying literal must NOT anchor a byte
+    // raw "hello\nworld" - a space-carrying literal must NOT anchor a byte
     // prefilter in EITHER case mode.
     let m = build_matcher(&args("hello world")).unwrap();
     assert!(m.prefilter.is_none());
@@ -137,7 +137,7 @@ fn synth_marker_keeps_line_and_file_matchable_without_literal() {
     assert!(m.line_may_match(line));
     assert!(m.file_may_match(line));
     // The rejection reconstruction appends a `[plan: …]` pointer resolved from a
-    // DIFFERENT record — its marker keeps the carrier matchable too.
+    // DIFFERENT record - its marker keeps the carrier matchable too.
     let rej = br#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"To tell you how to proceed, the user said:\ngo"}]}}"#;
     let m_plan = build_matcher(&args("plan")).unwrap();
     assert!(m_plan.line_may_match(rej));

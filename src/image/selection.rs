@@ -6,11 +6,11 @@ use super::*;
 /// locator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Sel {
-    /// `#N` / bare `N` — the `[Image #N]` handle the model uses. Resolves to the unique image
+    /// `#N` / bare `N` - the `[Image #N]` handle the model uses. Resolves to the unique image
     /// with that handle in scope; if it names >1 DISTINCT image (CC reuses `#N` across prompts)
     /// it is AMBIGUOUS and ERRORS with the occurrence list rather than silently picking one.
     Seq(usize),
-    /// `L<line>i<n>` — the exact per-occurrence locator.
+    /// `L<line>i<n>` - the exact per-occurrence locator.
     Loc(usize, usize),
 }
 
@@ -26,7 +26,7 @@ pub(crate) fn parse_id_selection(ids: &[String]) -> Result<Vec<Sel>> {
             }
             if let Some(n) = tok.strip_prefix('#') {
                 // A '#'-form would need shell quoting (`--id #32` unquoted becomes a shell
-                // comment and silently drops the argument) — bare digits are the ONE input
+                // comment and silently drops the argument) - bare digits are the ONE input
                 // form; the DISPLAY stays `#N` (what the model sees in `[Image #N]`).
                 bail!(
                     "--id: drop the '#' — pass the bare number (`--id {n}`); the listing \
@@ -76,7 +76,7 @@ pub(crate) fn dedup_latest(images: &[ImageRef]) -> Vec<&ImageRef> {
     v
 }
 
-/// Number of distinct transcripts (session ids) the image set spans — the per-transcript guard
+/// Number of distinct transcripts (session ids) the image set spans - the per-transcript guard
 /// for `--id` / `--turn` (line numbers + `#N` + turn indices are all per-transcript).
 pub(crate) fn count_distinct_transcripts(images: &[ImageRef]) -> usize {
     let mut ids: Vec<&str> = images.iter().map(|i| i.session_id.as_str()).collect();
@@ -85,7 +85,7 @@ pub(crate) fn count_distinct_transcripts(images: &[ImageRef]) -> usize {
     ids.len()
 }
 
-/// The transcript file backing a single-transcript image set (by matching session id) — used to
+/// The transcript file backing a single-transcript image set (by matching session id) - used to
 /// re-parse it for turn indices / excerpts on the `--turn` and ambiguity paths.
 pub(crate) fn pinned_path<'a>(
     session_files: &'a [PathBuf],
@@ -115,7 +115,7 @@ pub(crate) fn distinct_by_fingerprint<'a>(cands: &[&'a ImageRef]) -> Vec<&'a Ima
 
 /// Resolve the `--id` selectors against the (scope-filtered, single-transcript) image set. A
 /// `#N` resolves only when it names ONE distinct image; if it names several it ERRORS with the
-/// occurrence list (turn / locator / uuid / time / excerpt) — never silently picks one.
+/// occurrence list (turn / locator / uuid / time / excerpt) - never silently picks one.
 pub(crate) fn resolve_selection<'a>(
     selection: &[Sel],
     images: &'a [ImageRef],
@@ -153,7 +153,7 @@ pub(crate) fn resolve_selection<'a>(
     if !unresolved.is_empty() {
         // Name the handles that DO exist: `#N` is inherited from CC's paste-time
         // `[Image #N]` numbering, so a transcript's handles can start past #1 and carry
-        // holes — a bare "matched no image" reads like a csift drop when it is a source gap.
+        // holes - a bare "matched no image" reads like a csift drop when it is a source gap.
         let mut present: Vec<usize> = images.iter().filter_map(|i| i.seq).collect();
         present.sort_unstable();
         present.dedup();
@@ -193,7 +193,7 @@ pub(crate) fn resolve_selection<'a>(
     Ok(sel)
 }
 
-/// Per-line turn index + concatenated text for one transcript — a full parse (the `--id`/
+/// Per-line turn index + concatenated text for one transcript - a full parse (the `--id`/
 /// `--turn` paths already pin a single transcript, so this is one file) used to attach
 /// `t<turn>` + an excerpt to each occurrence in an ambiguity error.
 pub(crate) struct LineInfo {
@@ -245,7 +245,7 @@ pub(crate) fn short_uuid(u: &str) -> String {
 }
 
 /// A whitespace-normalized excerpt of `text` centered on `needle` (`[Image #N]`), `radius` chars
-/// each side — char-boundary safe. Falls back to the head when the needle isn't found.
+/// each side - char-boundary safe. Falls back to the head when the needle isn't found.
 pub(crate) fn excerpt_around(text: &str, needle: &str, radius: usize) -> String {
     let norm: Vec<char> = text
         .split_whitespace()
@@ -266,7 +266,7 @@ pub(crate) fn excerpt_around(text: &str, needle: &str, radius: usize) -> String 
 }
 
 /// Build the `#N is ambiguous` error: for each reused `#N`, list every distinct occurrence with
-/// its turn, `L<line>i<n>` locator, uuid, time, and an excerpt around the `[Image #N]` marker —
+/// its turn, `L<line>i<n>` locator, uuid, time, and an excerpt around the `[Image #N]` marker -
 /// everything the consumer needs to disambiguate (by locator, or `--since`/`--turn`/`--uuid`).
 pub(crate) fn ambiguity_error(
     ambiguous: &[(usize, Vec<&ImageRef>)],

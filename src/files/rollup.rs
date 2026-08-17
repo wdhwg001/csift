@@ -14,7 +14,7 @@ pub(crate) struct Outcome {
     pub(crate) turn_range: Option<String>,
     pub(crate) time_window_bounded: bool,
     /// SCOPE-span counts of the RESOLVED transcript set (top-level + subagent files),
-    /// computed from `resolve_session_files` BEFORE the mutation scan — so a subagent
+    /// computed from `resolve_session_files` BEFORE the mutation scan - so a subagent
     /// transcript with zero mutations still counts toward the announced fan-out. Drives the
     /// shared SCOPE banner / JSON `session_header`, suppressed when `scope_sub == 0`.
     pub(crate) scope_top: usize,
@@ -102,14 +102,14 @@ impl OpCounts {
 
 /// How many leading path SEGMENTS the `--summary` rollup keeps. Depth 4 keeps an absolute
 /// path's project-root level distinct (`/Users/testuser/Projects/widget_app_prototype`)
-/// while COLLAPSING everything deeper into that one bucket — so `--summary` is a genuine
+/// while COLLAPSING everything deeper into that one bucket - so `--summary` is a genuine
 /// coarse rollup, strictly smaller than `--by-dir` (which keys on the full parent dir). A
 /// shallower path (e.g. `/tmp/x`) keeps all the segments it has.
 pub(crate) const SUMMARY_BUCKET_SEGMENTS: usize = 4;
 
 /// The `--summary` rollup BUCKET key for a path: a COARSE top-level prefix (the first
 /// [`SUMMARY_BUCKET_SEGMENTS`] path segments), NOT the full parent dir. This is what makes
-/// `--summary` the smallest output and a real rollup — distinct from `--by-dir`, which keys
+/// `--summary` the smallest output and a real rollup - distinct from `--by-dir`, which keys
 /// on the full parent. Examples (depth 4): `/Users/testuser/Projects/p/spec/gaps.md` and
 /// `/Users/testuser/Projects/p/src/main.rs` BOTH bucket to `/Users/testuser/Projects/p`;
 /// `/tmp/x.md` → `/tmp`. A `git:<sub>` pseudo-path keeps its own `git:` bucket (it is not a
@@ -140,7 +140,7 @@ pub(crate) fn bucket_key(path: &str) -> String {
     }
 }
 
-/// The parent directory of a path string (lexical only — never touches the
+/// The parent directory of a path string (lexical only - never touches the
 /// filesystem). Returns `None` for a bare filename with no `/`.
 pub(crate) fn parent_dir(path: &str) -> Option<String> {
     let trimmed = path.strip_suffix('/').unwrap_or(path);

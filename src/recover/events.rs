@@ -33,12 +33,12 @@ pub(crate) fn collect_tool_use_paths(blocks: Option<&[Block]>, out: &mut BTreeMa
 ///
 /// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the
 /// tool RESULT as a bare `tool_result` string (`"File created successfully at: …"`) with
-/// NO structured `toolUseResult` echo — unlike a top-level session, whose carrier carries
+/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries
 /// `{type:create, filePath, content, …}`. `extract_from_tool_use_result` reads that echo,
 /// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`
 /// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use
-/// input directly). The authoritative content IS in the input — `Write.content`,
-/// `Edit.{old_string,new_string,replace_all}`, `MultiEdit.edits[]` — present in EVERY
+/// input directly). The authoritative content IS in the input - `Write.content`,
+/// `Edit.{old_string,new_string,replace_all}`, `MultiEdit.edits[]` - present in EVERY
 /// transcript. An Edit reconstructs via `apply_string_edit` (old→new), so the missing
 /// `structuredPatch` is not needed.
 ///
@@ -65,7 +65,7 @@ pub(crate) fn extract_input_fallback(
         };
         // Skip when this op already has a `toolUseResult` carrier to reconstruct from, OR
         // when its result was an ERROR (a failed Edit/Write never mutated the file, so its
-        // input is a phantom — `is_error:true` covers both "String to replace not found"
+        // input is a phantom - `is_error:true` covers both "String to replace not found"
         // and the Edit-before-Read "File has not been read yet" wall, incl. the
         // Bash-created-then-directly-Edited and the must-re-Read-a-plan cases).
         if let Some(id) = id {
@@ -540,5 +540,5 @@ pub(crate) fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Ve
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reconstruction — the sparse line-keyed buffer
+// Reconstruction - the sparse line-keyed buffer
 // ─────────────────────────────────────────────────────────────────────────────

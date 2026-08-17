@@ -12,7 +12,7 @@ fn is_round_trip_requires_both_sides() {
 #[test]
 fn is_human_round_trip_excludes_automation_notifications() {
     // A HUMAN round-trip qualifies for the HARD FLOOR; an automation-pulse round-trip is a
-    // structural round-trip (is_round_trip true) but NOT a human one — so it is excluded
+    // structural round-trip (is_round_trip true) but NOT a human one - so it is excluded
     // from the protected `--round-trip-fraction` lane (the budget-floor consumer).
     let human = mk_turn(0, Some("a"), Some("b"), 0, 0);
     assert!(human.is_round_trip() && human.is_human_round_trip());
@@ -156,7 +156,7 @@ fn determinism_identical_plan_for_identical_input() {
 #[test]
 fn phase1_giant_first_round_trip_is_clamped_in() {
     // The most-recent complete turn is larger than the WHOLE rt reservation. It must
-    // still be selected (the most-recent exchange is load-bearing), clamped — the
+    // still be selected (the most-recent exchange is load-bearing), clamped - the
     // `spent_rt == 0 && c <= rt_budget` / `> rt_budget` arms of Phase 1.
     let huge_u = "u".repeat(5000);
     let huge_a = "a".repeat(5000);
@@ -265,7 +265,7 @@ fn partial_assistant_only_turn_is_selected_as_assistant_only() {
 
 #[test]
 fn count_sides_counts_each_selection_kind() {
-    // Each selected turn must exist in `plan.turns` (the count walks the real agent lane —
+    // Each selected turn must exist in `plan.turns` (the count walks the real agent lane -
     // a single-agent turn contributes one assistant unit). Both → +1 user +1 asst;
     // UserOnly → +1 user; AssistantOnly → +1 asst.
     let plan = SessionPlan {
@@ -310,7 +310,7 @@ fn empty_session_plans_to_nothing() {
 #[test]
 fn giant_round_trip_bigger_than_unit_budget_is_not_force_included_both() {
     // A single complete turn whose CAPPED cost exceeds even the whole UNIT budget must
-    // NOT be force-included as a both-sides pair — doing so would overshoot the budget,
+    // NOT be force-included as a both-sides pair - doing so would overshoot the budget,
     // which is the exact bug this fix removes. Phase 2 instead takes the cheaper single
     // (user-first) side that DOES fit, preserving the ≤-budget guarantee.
     let huge_u = "u".repeat(5000);
@@ -355,7 +355,7 @@ fn giant_round_trip_fits_full_budget_not_rt_half_is_force_included() {
     let both = turn_cost(&pair, SelSides::Both, &cfg());
     let sr = scan_with_turns(vec![pair], Vec::new());
     // Budget that, after the (tiny, no-summary) header-block reservation, admits the whole
-    // pair — but whose 50% rt reservation does NOT (so the rt-half branch is skipped and
+    // pair - but whose 50% rt reservation does NOT (so the rt-half branch is skipped and
     // the force-include arm fires). A generous +1000 covers the header block reservation.
     let budget = both + 1000;
     assert!(

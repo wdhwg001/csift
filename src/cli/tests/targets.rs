@@ -36,7 +36,7 @@ fn parse_project_target_accepts_real_targets_rejects_double_dash() {
     assert!(parse_project_target("C--Users-dev-proj").is_ok()); // Windows drive shape
                                                                 // A bare `--`-leading token is rejected as a probable mistyped flag → clap reports
                                                                 // "unexpected argument" instead of the misleading "no project dir named --xxx"
-                                                                // (the one real `--`-led target, a UNC-encoded dir, goes through the `@` form —
+                                                                // (the one real `--`-led target, a UNC-encoded dir, goes through the `@` form -
                                                                 // the error says so). A single `-` token still parses (encoded target).
     let err = parse_project_target("--by-fil").unwrap_err();
     assert!(err.contains("unexpected argument"), "got: {err}");
@@ -76,7 +76,7 @@ fn list_routes_at_uuid_and_bare_uuid_as_positional() {
         }
         _ => panic!("expected list"),
     }
-    // A BARE uuid (no `@`) is NOT special — it is just a positional (the
+    // A BARE uuid (no `@`) is NOT special - it is just a positional (the
     // resolver later fails it as "no project dir named <uuid>", by design).
     let cli = parse(&["csift", "list", SESS_UUID]).unwrap();
     match cli.command {

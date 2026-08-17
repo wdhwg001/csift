@@ -49,7 +49,7 @@ fn select_rich_first_kept_and_sudden_rich_middle_survives() {
         0,
         Some("ask"),
         &[
-            "found the root cause already",     // first — rich → kept
+            "found the root cause already",     // first - rich → kept
             "let me try the next thing",        // middle decl → collapse
             "now i will check another",         // middle decl → collapse
             "12 passed 3 failed in src/x.rs:9", // sudden rich middle → kept
@@ -190,7 +190,7 @@ fn select_fusion_message_kept_whole_and_char_capped_later() {
         kept.contains(&fused),
         "the fused finding survives Stage 1: {kept:?}"
     );
-    // Stage 2 char-cap is the existing render_unit_body path — verbatim under the cap here.
+    // Stage 2 char-cap is the existing render_unit_body path - verbatim under the cap here.
     let u = unit(Role::Assistant, 1, fused, 0);
     let r = render_unit_body(&u, None);
     assert!(

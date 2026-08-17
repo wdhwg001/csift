@@ -6,17 +6,17 @@
 //! directory `<ENCODED>/<session-uuid>/` holding its subagent transcripts in THREE
 //! distinct shapes:
 //!
-//! - **(A) built-in Task/Agent-tool subagent** —
+//! - **(A) built-in Task/Agent-tool subagent** -
 //!   `subagents/agent-<hex>.jsonl` (+ companion `agent-<hex>.meta.json`). The `.jsonl`
 //!   uses the identical [`crate::model::Record`] model; its first record has `isSidechain:true`, an
 //!   `agentId` field (== the `agent-<hex>` filename stem), and `sessionId` == the
 //!   enclosing `<session-uuid>`. meta.json = `{agentType, description, name?, toolUseId}`.
-//! - **(B) workflow / OMC workflow-subagent** —
+//! - **(B) workflow / OMC workflow-subagent** -
 //!   `subagents/workflows/wf_<id>/agent-<hex>.jsonl` (+ `.meta.json`, the dominant
 //!   kind). Same record model + `isSidechain:true` + `agentId`. meta.json = `{agentType}`.
-//!   Its `cwd` is often a DEEPER in-session path — never re-encode a subagent cwd to
+//!   Its `cwd` is often a DEEPER in-session path - never re-encode a subagent cwd to
 //!   find its project dir.
-//! - **(C) workflow journal** — `subagents/workflows/wf_<id>/journal.jsonl`. **NOT a
+//! - **(C) workflow journal** - `subagents/workflows/wf_<id>/journal.jsonl`. **NOT a
 //!   transcript**: records are workflow events `{agentId, key, type}` (`type` ∈
 //!   {`started`, `result`}) with no `message`/role. Excluded from every transcript
 //!   list/search; read ONLY to corroborate completion status.
@@ -26,8 +26,8 @@
 //! `agentType` is NOT a reliable kind discriminator: both (A) and (B) carry the same
 //! spread of values (`Explore`, `general-purpose`, `oh-my-claudecode:*`); only the
 //! special `workflow-subagent` value is workflow-exclusive. So the authoritative kind
-//! is the on-disk location — directly under `subagents/` ⇒ [`SubagentKind::BuiltinTask`];
-//! under `subagents/workflows/wf_*/` ⇒ [`SubagentKind::Workflow`] — with `agentType`
+//! is the on-disk location - directly under `subagents/` ⇒ [`SubagentKind::BuiltinTask`];
+//! under `subagents/workflows/wf_*/` ⇒ [`SubagentKind::Workflow`] - with `agentType`
 //! retained as a descriptive per-row sub-label.
 //!
 //! ## Linkage back to the parent session

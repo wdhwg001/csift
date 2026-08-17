@@ -4,7 +4,7 @@ use super::*;
 
 /// Scan EVERY line of a jsonl byte slice IN PARALLEL, calling `visit(line_bytes, line_no)` with
 /// each line's exact 1-based number (blank/noise lines are visited and counted too, 1:1 with
-/// the file — identical numbering to a serial [`scan_lines_bytes`] pass). Each `Keep(T)` is
+/// the file - identical numbering to a serial [`scan_lines_bytes`] pass). Each `Keep(T)` is
 /// collected in file order; each `Skip` increments the returned malformed count. The slice is
 /// split into newline-aligned chunks run on the `rayon` pool, so a single GIANT transcript
 /// (SPEC §7's "200MB+" case) is no longer bottlenecked on one core the way the across-files
@@ -35,7 +35,7 @@ where
         if !prefilter(line) {
             // R10: a NON-candidate line still gets the O(1) shape check, so obviously-
             // corrupt lines (free-text garbage, crash-truncation) are COUNTED, never
-            // invisible — the byte prefilter must not exempt them from the malformed law.
+            // invisible - the byte prefilter must not exempt them from the malformed law.
             return non_candidate_verdict(line);
         }
         match parse_line(line) {
@@ -61,11 +61,11 @@ pub fn non_candidate_verdict<T>(line: &[u8]) -> LineVerdict<T> {
 /// True when a line is OBVIOUSLY not a JSON object record: non-blank but not brace-framed
 /// (`{…}`). This is the O(1) malformed-shape check every non-candidate prefilter path runs
 /// so the "a skipped malformed line is COUNTED, never hidden" law (AGENTS §4) survives the
-/// §7 byte prefilters — free-text garbage has no leading `{`, and a crash-truncated record
+/// §7 byte prefilters - free-text garbage has no leading `{`, and a crash-truncated record
 /// loses its trailing `}` (the two realistic corruption shapes; R10 found them silently
 /// invisible to every `skipped_lines` counter). The documented residual boundary: a
 /// brace-framed line whose INTERIOR is invalid JSON is only detected when it is a parse
-/// CANDIDATE — validating every non-candidate line would repeal the §7 perf contract.
+/// CANDIDATE - validating every non-candidate line would repeal the §7 perf contract.
 #[must_use]
 pub fn line_shape_malformed(line: &[u8]) -> bool {
     let t = line.trim_ascii();
@@ -111,7 +111,7 @@ where
     // start_line[i] = 1 + (newlines strictly before chunk i's first byte) = the serial scan's
     // line number for that chunk's first visited line. Only the PREFIX sums are consumed
     // (chunk 0 always starts at line 1), so a single-chunk scan skips the counting pass
-    // entirely, and a multi-chunk scan counts in PARALLEL and never counts the last chunk —
+    // entirely, and a multi-chunk scan counts in PARALLEL and never counts the last chunk -
     // the serial whole-slice count here used to be a full extra pass over every byte before
     // any parallel work began (idle workers on the single-giant-file case).
     let mut start_line = Vec::with_capacity(chunks.len());

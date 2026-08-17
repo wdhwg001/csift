@@ -26,7 +26,7 @@ fn compaction_summary_is_not_genuine_user() {
 
 #[test]
 fn is_meta_user_is_not_genuine_user() {
-    // §4.2 TRAP: looks human, is system-injected — must be excluded.
+    // §4.2 TRAP: looks human, is system-injected - must be excluded.
     let r = parse(
         r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"Continue from where you left off."}}"#,
     );
@@ -112,7 +112,7 @@ fn interrupt_marker_for_tool_use_is_not_genuine_user() {
 
 #[test]
 fn interrupt_marker_as_string_content_is_not_genuine_user() {
-    // The same marker can arrive as bare-string content too — still excluded.
+    // The same marker can arrive as bare-string content too - still excluded.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"[Request interrupted by user]"}}"#,
     );
@@ -160,7 +160,7 @@ fn command_name_wrapper_is_not_genuine_user() {
 
 #[test]
 fn command_name_wrapper_with_args_recovers_prose() {
-    // Real shape: `/compact Just shipped spec-batch-14 …` — the typed prose lives in
+    // Real shape: `/compact Just shipped spec-batch-14 …` - the typed prose lives in
     // <command-args>; it is recovered (and is the reconstructed user text), but the
     // wrapper itself is still not a standalone genuine-user record.
     let r = parse(
@@ -171,7 +171,7 @@ fn command_name_wrapper_with_args_recovers_prose() {
         r.slash_command_args().as_deref(),
         Some("Just shipped spec-batch-14, summarize")
     );
-    // v0.5: rendered as `/name args` — the prose keeps its command context, and the
+    // v0.5: rendered as `/name args` - the prose keeps its command context, and the
     // wrapper XML never masquerades as the body.
     assert_eq!(
         r.reconstructed_user_text(None).as_deref(),
@@ -181,7 +181,7 @@ fn command_name_wrapper_with_args_recovers_prose() {
 
 #[test]
 fn command_message_first_wrapper_detected_and_recovered() {
-    // The NEWER CC tag order (`<command-message>` FIRST — both orders coexist in real
+    // The NEWER CC tag order (`<command-message>` FIRST - both orders coexist in real
     // corpora). Detection anchored on `<command-name>` alone used to misclassify this
     // as GENUINE user prose (raw XML as `user.message`, and it opened a turn).
     let r = parse(
@@ -215,7 +215,7 @@ fn command_message_first_wrapper_detected_and_recovered() {
 #[test]
 fn command_name_wrapper_with_multibyte_args_is_codepoint_safe() {
     // A multi-byte args body must be recovered whole (codepoint-safe slice on the ASCII
-    // tags only) — the live panic class.
+    // tags only) - the live panic class.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-args>🤖 just shipped the batch, summarize 🎉</command-args>"}}"#,
     );

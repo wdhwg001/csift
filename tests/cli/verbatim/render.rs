@@ -4,10 +4,10 @@ use crate::harness::*;
 
 #[test]
 fn turns_teammate_opener_renders_clean_inbound_comm() {
-    // #14 / GOLD §1: an inbound `<teammate-message>` opener (it still OPENS a turn — count
+    // #14 / GOLD §1: an inbound `<teammate-message>` opener (it still OPENS a turn - count
     // unchanged) must render as `agent.communication.inbox  <from> ⇨ self` with a CLEAN body
     // (the relay preamble, the `<teammate-message …>` wrapper tags, and the trailing harness
-    // security footer all stripped) — NOT the raw XML blob dumped into the `▽ USER` lane.
+    // security footer all stripped) - NOT the raw XML blob dumped into the `▽ USER` lane.
     let h = Home::new();
     let sess = "dddddddd-eeee-ffff-0000-111111111111";
     let lines = [
@@ -133,7 +133,7 @@ fn turns_single_automation_trigger_uses_singular_header() {
 fn turns_json_emits_session_header_and_structured_automation() {
     // JSON consumers get (a) a leading {kind:"header",…} object carrying the
     // human/automation split + budget fan-out, and (b) STRUCTURED automation attribution on
-    // the user-segment object (is_automation + trigger_kind + task_id + status) — not just a
+    // the user-segment object (is_automation + trigger_kind + task_id + status) - not just a
     // text prefix to regex. A monitor-tick pulse renders trigger_kind "monitor".
     let h = Home::new();
     let sess = "22222222-3333-4444-5555-666666666666";
@@ -193,7 +193,7 @@ fn interrupt_does_not_split_a_turn() {
         "interrupt must not be a genuine-user hit:\n{}",
         out.stdout
     );
-    // And `list` must NOT pick the interrupt as the last-user preview — the real last
+    // And `list` must NOT pick the interrupt as the last-user preview - the real last
     // user message is the plan-rejection instruction.
     let lst = h.run(&["list"]);
     assert!(lst.success, "stderr: {}", lst.stderr);
@@ -277,7 +277,7 @@ fn turns_ellipsis_role_asymmetry_and_counts() {
         .expect("huge assistant unit present");
     assert!(huge_user["truncated"].as_bool().unwrap());
     assert!(huge_asst["truncated"].as_bool().unwrap());
-    // The assistant rendered_chars (900) is strictly larger than the user's (600) — the
+    // The assistant rendered_chars (900) is strictly larger than the user's (600) - the
     // role-asymmetric caps drive a larger assistant head.
     assert_eq!(huge_user["rendered_chars"].as_u64().unwrap(), 600);
     assert_eq!(huge_asst["rendered_chars"].as_u64().unwrap(), 900);
@@ -294,7 +294,7 @@ fn turns_ellipsis_role_asymmetry_and_counts() {
         huge_asst["elided_chars"].as_u64().unwrap(),
         huge_asst["full_chars"].as_u64().unwrap() - 900
     );
-    // The JSON `text` field is the FULL verbatim message (un-truncated) — longer than
+    // The JSON `text` field is the FULL verbatim message (un-truncated) - longer than
     // the rendered cap.
     assert!(huge_user["text"].as_str().unwrap().chars().count() > 600);
 }
@@ -319,7 +319,7 @@ fn turns_tool_call_markers_present_with_correct_counts() {
         text.stdout.contains("[3 tool calls]"),
         "3-tool marker present"
     );
-    // A 0-tool turn omits the marker — "third reply" turn had 0 tools, so there is no
+    // A 0-tool turn omits the marker - "third reply" turn had 0 tools, so there is no
     // "[0 tool calls]" anywhere.
     assert!(
         !text.stdout.contains("[0 tool calls]"),
@@ -461,7 +461,7 @@ fn turns_reconstructs_auq_exchange_and_plan_rejection_with_pointer() {
         "AUQ options missing:\n{}",
         out.stdout
     );
-    // Each option's DESCRIPTION (supplementary note) must survive — not just the label.
+    // Each option's DESCRIPTION (supplementary note) must survive - not just the label.
     assert!(
         out.stdout
             .contains("the conservative path that reuses existing state"),

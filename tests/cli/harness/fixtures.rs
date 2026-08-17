@@ -18,13 +18,13 @@ pub(crate) fn recover_empty_reconstruction_home() -> Home {
 }
 
 /// Build the `turns` integration fixture: a realistic multi-compaction transcript
-/// authored with LOCALE-NEUTRAL tokens only (accented-Latin + emoji — the
+/// authored with LOCALE-NEUTRAL tokens only (accented-Latin + emoji - the
 /// same house charset style as the recover fixtures).
 ///
 /// Shape (all on the SINGLE top-level session jsonl so the spanning walk is exercised
 /// without subagent noise; tests pass `--no-subagents`):
 ///   • 3 genuine round-trip turns, then a compaction SUMMARY #1 (its §6 quotes turn 0's
-///     user verbatim + §9 quotes the last assistant — drives the dedup test),
+///     user verbatim + §9 quotes the last assistant - drives the dedup test),
 ///   • 3 more round-trips, then SUMMARY #2,
 ///   • 3 more round-trips, then SUMMARY #3,
 ///   • a final live block: one HUGE round-trip (user > 600 chars, assistant > 900 chars
@@ -158,11 +158,11 @@ pub(crate) fn turns_fixture_jsonl() -> String {
     // ── Block D (live region, after the newest summary) ──
     // A LONG agent-message run in ONE turn (8 agent messages > the default >6 threshold):
     // a rich first, pure-declaration middles, a sudden rich middle, a FUSED finding+decl
-    // body, and the EOT — drives the richness selection + placeholder integration tests.
+    // body, and the EOT - drives the richness selection + placeholder integration tests.
     b.long_agent_run(
         "kick off the long debugging chain",
         &[
-            "found the AGENTRICHFIRST root cause already", // first — rich (lexeme) → kept
+            "found the AGENTRICHFIRST root cause already", // first - rich (lexeme) → kept
             "let me try the LETMEDECL one next",           // middle decl → collapse
             "now i will check LETMEDECL another",          // middle decl → collapse
             // A declaration with a digit adjacent to multi-byte chars (the exact
@@ -173,7 +173,7 @@ pub(crate) fn turns_fixture_jsonl() -> String {
             "let me write LETMEDECL it up",              // middle decl → collapse
             "now let me LETMEDECL finalize",             // middle decl → collapse
             "root cause confirmed in src/y.rs:42 — now let me FUSEDTAIL write the fix", // fused → kept
-            "the AGENTEOT final committed answer", // last — always kept
+            "the AGENTEOT final committed answer", // last - always kept
         ],
     );
     // A HUGE round-trip: user > 600 chars, assistant > 900 chars → role-asymmetric ellipsis.
@@ -258,7 +258,7 @@ pub(crate) fn turns_dedup_home() -> Home {
     h
 }
 
-/// A SECOND clean session (no malformed lines) under the same project — exercises the
+/// A SECOND clean session (no malformed lines) under the same project - exercises the
 /// multi-session render path (blank separator) + the no-skipped-lines branch.
 pub(crate) fn turns_two_sessions_home() -> Home {
     let h = Home::new();
@@ -307,7 +307,7 @@ pub(crate) fn holes_home() -> Home {
             r#"{"type":"assistant","uuid":"a1","parentUuid":"ans","timestamp":"2026-06-07T05:11:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_PLAN1","name":"ExitPlanMode","input":{"plan":"the plan body here","planFilePath":"/Users/testuser/.claude/plans/elegant-scribbling-dream.md"}}]}}"#, "\n",
             // turn 2: the user REJECTS the plan with a typed message → boundary + pointer.
             r#"{"type":"user","uuid":"rej","parentUuid":"a1","timestamp":"2026-06-07T05:20:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_PLAN1","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:\nplease run the smoke tests once before calling it done"}]}}"#, "\n",
-            // an interrupt marker — a turn MEMBER of turn 2, NOT a new boundary.
+            // an interrupt marker - a turn MEMBER of turn 2, NOT a new boundary.
             r#"{"type":"user","uuid":"int","parentUuid":"rej","timestamp":"2026-06-07T05:20:30.000Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a2","parentUuid":"int","timestamp":"2026-06-07T05:21:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"ok, adding the smoke-test check"}]}}"#, "\n",
         ),
@@ -341,7 +341,7 @@ pub(crate) fn write_planning_session(h: &Home, sess: &str, bound_abs: &str, othe
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#, "\n",
         // plan_mode attachment → the AUTHORITATIVE binding.
         r#"{"type":"attachment","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"__BOUND__","planExists":true},"uuid":"att0","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
-        // An Edit of SOMEONE ELSE's plan file — a red herring for the resolver.
+        // An Edit of SOMEONE ELSE's plan file - a red herring for the resolver.
         r#"{"type":"assistant","uuid":"ax","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ex","name":"Edit","input":{"file_path":"__OTHER__","old_string":"x","new_string":"y"}}]}}"#, "\n",
         r#"{"type":"user","uuid":"cx","timestamp":"2026-06-07T05:00:02.500Z","toolUseResult":{"filePath":"__OTHER__","oldString":"x","newString":"y","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-x","+y"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ex","content":"ok"}]}}"#, "\n",
         // The bound plan's own Write + Edit history.
@@ -355,12 +355,12 @@ pub(crate) fn write_planning_session(h: &Home, sess: &str, bound_abs: &str, othe
     h.write(&format!("{ENC}/{sess}.jsonl"), &jsonl);
 }
 
-/// A synthetic 1×1 transparent PNG (base64) — a REAL valid PNG (correct chunk CRCs, so the
+/// A synthetic 1×1 transparent PNG (base64) - a REAL valid PNG (correct chunk CRCs, so the
 /// strict `image` decoder accepts it for `--as` transcoding, not just the magic-byte checks).
 pub(crate) const PNG_1X1: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
 
-/// Three more DISTINCT valid 1×1 PNGs (red / green / blue) — distinct content fingerprints, so
+/// Three more DISTINCT valid 1×1 PNGs (red / green / blue) - distinct content fingerprints, so
 /// the listing's content-dedup treats them as separate screenshots (not one re-injected image).
 pub(crate) const PNG_RED: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
@@ -529,7 +529,7 @@ pub(crate) fn acc(h: &Home, pattern: &str, selector: &str) -> Output {
 pub(crate) const HOOKCTX_SESS: &str = "5c1d9e02-4b7a-4f3c-9d21-6e8a0b4c7d15";
 
 /// One session: a genuine user turn, a `hook_additional_context` attachment record
-/// (content ARRAY — two blocks, joined with `\n`), and the agent's reply.
+/// (content ARRAY - two blocks, joined with `\n`), and the agent's reply.
 pub(crate) fn hook_context_scenario(h: &Home) {
     let enc = "-Users-dev-example-project";
     let body = concat!(

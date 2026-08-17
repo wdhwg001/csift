@@ -146,7 +146,7 @@ fn classify_async_launch_ack_is_tool_result_only_not_inbox() {
     // Smoke-found bug: an ASYNC/background `Agent` spawn's tool_result is the LAUNCH ack
     // (`toolUseResult.{isAsync:true,status:"async_launched"}`, content begins "Async agent
     // launched successfully…"). It shares the spawn tool_use_id (so the lookup WOULD
-    // resolve it), but it is NOT the child's return — the report arrives LATER via the
+    // resolve it), but it is NOT the child's return - the report arrives LATER via the
     // <task-notification> <result> (G1 → inbox). So agent.tool.result ONLY, no …inbox.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"ad8012462a52f5c25","description":"draft the fold"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":[{"type":"text","text":"Async agent launched successfully.\nagentId: ad8012462a52f5c25 (internal ID - do not mention to user.)"}]}]}}"#,
@@ -173,7 +173,7 @@ fn classify_async_launch_ack_is_tool_result_only_not_inbox() {
 #[test]
 fn classify_async_launch_ack_detected_by_content_prefix_fallback() {
     // A record lacking the structured `toolUseResult` still detects the ack from the
-    // tool_result content prefix alone — and still resolves to tool.result-only.
+    // tool_result content prefix alone - and still resolves to tool.result-only.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"Async agent launched successfully.\nagentId: ad80 (internal ID)"}]}}"#,
     );
@@ -190,7 +190,7 @@ fn classify_async_launch_ack_detected_by_content_prefix_fallback() {
 fn classify_sync_task_return_still_tool_result_plus_inbox_vs_async_ack() {
     // Contrast guard: a SYNC one-shot Task tool_result IS the child's reply (no ack shape,
     // no launch-ack prefix) → [agent.tool.result, agent.communication.inbox] with a child ⇨
-    // self direction — the async-launch ACK fix must NOT regress this.
+    // self direction - the async-launch ACK fix must NOT regress this.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_spawn","content":"subagent done: 3 files changed"}]}}"#,
     );
@@ -293,7 +293,7 @@ fn classify_subagent_opener_is_inbox_via_ctx() {
 #[test]
 fn classify_agent_message_peer_form_is_inbox() {
     // Real shape: an isMeta type:user string carrying an <agent-message from="…"> peer reply
-    // relayed into this session. Must classify agent.communication.inbox, NOT user.message —
+    // relayed into this session. Must classify agent.communication.inbox, NOT user.message -
     // and the isMeta guard (M2b) must NOT suppress it (the peer marker is matched first).
     let r = parse(
         r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<agent-message from=\"oh-my-claudecode:architect\">\n[Reply intended for the executor peer]\nuse the shared resolver.\n</agent-message>"}}"#,

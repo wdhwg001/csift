@@ -68,7 +68,7 @@ fn recover_coverage_no_boundaries_says_none() {
 #[test]
 fn recover_coverage_heuristic_boundary_uses_soft_symbol() {
     // A coverage run over a session with a HEURISTIC (bash) boundary drives the coverage
-    // renderer's `~` (soft) boundary symbol arm — distinct from the `⚠` authoritative one.
+    // renderer's `~` (soft) boundary symbol arm - distinct from the `⚠` authoritative one.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
@@ -250,7 +250,7 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
     // The user's explicit case: Bash CREATES a file, then a direct Edit (no Read) FAILS with
     // "File has not been read yet" (Bash doesn't satisfy CC's Read gate). When coverage
     // measures "how much can be recovered", that failed Edit must NOT be counted as a
-    // recoverable edit — only the (content-less) Bash touch + the integrity boundary show.
+    // recoverable edit - only the (content-less) Bash touch + the integrity boundary show.
     let h = Home::new();
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),

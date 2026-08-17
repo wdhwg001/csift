@@ -1,4 +1,4 @@
-//! Shared text helpers — the ONE implementation of "show an excerpt, mark the elision
+//! Shared text helpers - the ONE implementation of "show an excerpt, mark the elision
 //! explicitly" and the inclusive `START..END` range parser, both shared
 //! across `list`/`search`/`recover`/`files`/`turns`/`agents`.
 //!
@@ -8,7 +8,7 @@
 //! mark dropped characters with an explicit `… (+N chars)` count. That algorithm lived in
 //! three byte-identical `truncate_excerpt` copies (differing only by a per-file cap) plus a
 //! DIVERGENT fourth in `agents::one_line` that omitted the count (a real contract
-//! violation). Folding them here keeps the algorithm — and the marker — singular; callers
+//! violation). Folding them here keeps the algorithm - and the marker - singular; callers
 //! still pass their own cap (200 for the scannable `list`/`agents` previews, 400 for the
 //! context-rich `search`/`recover` excerpts), so the legitimately-different caps stay.
 
@@ -30,7 +30,7 @@ pub fn truncate_excerpt(s: &str, max: usize) -> String {
 /// CODEPOINT-SAFE (collapses + truncates on char boundaries). Used by the `agents`
 /// one-line returned-message preview, which both flattens multi-line content AND must mark
 /// its elision with the same `… (+N chars)` count as every other excerpt path (the old
-/// `agents::one_line` dropped the count — a silent-truncation contract violation).
+/// `agents::one_line` dropped the count - a silent-truncation contract violation).
 #[must_use]
 pub fn collapse_and_truncate(s: &str, max: usize) -> String {
     let collapsed = s.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -64,7 +64,7 @@ pub fn scope_span_fragment(top: usize, sub: usize) -> String {
 }
 
 /// Emit the `scope  N sessions in scope (X top-level + Y subagent)` banner + a trailing blank
-/// line to stdout — but ONLY when the resolved set actually spans ≥1 subagent (`sub > 0`).
+/// line to stdout - but ONLY when the resolved set actually spans ≥1 subagent (`sub > 0`).
 /// This is the ONE emit site for the four non-turns spanning subcommands
 /// (`list`/`files`/`search`/`recover`): a bare `csift <cmd> <uuid>` that silently balloons
 /// from 1 transcript to N must announce the fan-out up front, identically across surfaces,
@@ -78,11 +78,11 @@ pub fn emit_scope_banner(top: usize, sub: usize) {
     }
 }
 
-/// envelope v2 (SPEC §8) — EVERY `--format json` stream is exactly three parts:
+/// envelope v2 (SPEC §8) - EVERY `--format json` stream is exactly three parts:
 ///   `{"kind":"header","command":"<cmd>", …}`   the FIRST line, ALWAYS emitted;
 ///   `{"kind":"<row-kind>", …}` × N             command-specific kind-tagged rows;
 ///   `{"kind":"summary", …}`                    the LAST line, ALWAYS emitted (even all-zero).
-/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="…")'` — no
+/// ONE reading idiom therefore serves every command: `jq 'select(.kind=="…")'` - no
 /// per-command envelope knowledge, no conditional first line, no shape-varied trailer.
 /// These two builders are the ONLY way a module makes its header/summary line, so the
 /// invariant cannot drift per command.
@@ -122,7 +122,7 @@ pub fn envelope_summary(extra: serde_json::Value) -> serde_json::Value {
     merge_into(serde_json::json!({"kind": "summary"}), extra)
 }
 
-/// Merge `extra`'s object fields into `base` (base keys win are-not — extra never
+/// Merge `extra`'s object fields into `base` (base keys win are-not - extra never
 /// overrides the `kind`/`command` discriminators by construction of the callers).
 fn merge_into(mut base: serde_json::Value, extra: serde_json::Value) -> serde_json::Value {
     if let (Some(b), serde_json::Value::Object(e)) = (base.as_object_mut(), extra) {
@@ -142,7 +142,7 @@ pub enum Endpoint {
     /// `k`-th index counting from the END, 1-based: `FromEnd(1)` = the last element,
     /// `FromEnd(3)` = third-from-last. Written `-k` (`-1`, `-3`).
     FromEnd(usize),
-    /// Open — the natural extreme: a START endpoint resolves to the first index, an END
+    /// Open - the natural extreme: a START endpoint resolves to the first index, an END
     /// endpoint to the last. Written by omitting the side (`N..`, `..N`, `..`).
     Open,
 }
@@ -218,7 +218,7 @@ pub fn parse_range_spec(s: &str, label: &str, one_based: bool) -> anyhow::Result
             anyhow::bail!("{label} end must be ≥ 1 (this domain is 1-based)");
         }
     }
-    // Statically-detectable reversal (both endpoints explicit) errors up front — the common
+    // Statically-detectable reversal (both endpoints explicit) errors up front - the common
     // `9..3` mistake. A len-dependent reversal (from-end / open) can only be judged after
     // resolution, where it resolves to an empty range that simply matches nothing.
     if let (Endpoint::At(lo), Endpoint::At(hi)) = (spec.start, spec.end) {
@@ -230,13 +230,13 @@ pub fn parse_range_spec(s: &str, label: &str, one_based: bool) -> anyhow::Result
 }
 
 impl RangeSpec {
-    /// Resolve to a concrete inclusive `(lo, hi)` in a domain of `len` elements — `one_based`
+    /// Resolve to a concrete inclusive `(lo, hi)` in a domain of `len` elements - `one_based`
     /// ⇒ indices 1..=len, else 0..=len-1. Open/from-end endpoints materialize against `len`
     /// (a from-end index past the start clamps to the first index, so `-100..` of 5 = all 5);
     /// an explicit `At` is returned as-written (the caller clamps/validates a bare
     /// out-of-range index, matching each flag's existing behavior). Infallible: a
-    /// len-dependent reversal (`hi < lo`) is returned as-is — an empty range that matches
-    /// nothing — since the statically-detectable reversal is already caught at parse time.
+    /// len-dependent reversal (`hi < lo`) is returned as-is - an empty range that matches
+    /// nothing - since the statically-detectable reversal is already caught at parse time.
     #[must_use]
     pub fn resolve(&self, len: usize, one_based: bool) -> (usize, usize) {
         let first = usize::from(one_based);
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn truncate_counts_chars_not_bytes() {
-        // A 4-byte emoji repeated past the cap — the count is CHARS, not bytes.
+        // A 4-byte emoji repeated past the cap - the count is CHARS, not bytes.
         let s = "🛠".repeat(202);
         let out = truncate_excerpt(&s, 200);
         assert!(out.ends_with("… (+2 chars)"), "got: {out}");
@@ -322,7 +322,7 @@ mod tests {
     fn malformed_note_is_canonical() {
         assert_eq!(malformed_note(3), "3 malformed line(s) skipped");
         assert_eq!(malformed_note(0), "0 malformed line(s) skipped");
-        // No SURROUNDING parens / `note` prefix / `jsonl` token — callers frame it. (The
+        // No SURROUNDING parens / `note` prefix / `jsonl` token - callers frame it. (The
         // `(s)` plural-marker parens ARE part of the canonical wording.)
         assert!(!malformed_note(1).starts_with('('));
         assert!(!malformed_note(1).contains("jsonl"));
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn range_dash_form_teaches_the_dotdot_grammar() {
-        // `A-B` is the removed spelling — the error hands back both correct forms.
+        // `A-B` is the removed spelling - the error hands back both correct forms.
         let err = parse_range_spec("495-500", "--line", true).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("START..END"), "got: {msg}");

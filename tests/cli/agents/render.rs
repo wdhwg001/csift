@@ -66,7 +66,7 @@ fn agents_json_rows() {
     let h = populated_home();
     let out = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // v0.5 FLAT rows: every node is its own `kind:"agent"` row — the uniform envelope
+    // v0.5 FLAT rows: every node is its own `kind:"agent"` row - the uniform envelope
     // idiom (`jq 'select(.kind=="agent")'`) reaches all shapes directly.
     let kinds: Vec<String> = json_rows(&out.stdout, "agent")
         .iter()

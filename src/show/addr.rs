@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Parsed `--line` tokens: the EXPLICIT singletons (each must resolve — a miss is a
+/// Parsed `--line` tokens: the EXPLICIT singletons (each must resolve - a miss is a
 /// hard error) and the inclusive ranges (each clamps, but must yield ≥1 record).
 #[derive(Debug, Default)]
 pub(crate) struct LineSpecs {
@@ -25,7 +25,7 @@ impl LineSpecs {
 /// via the shared [`crate::text::parse_range_spec`] grammar (`N` · `A..B` · `N..` · `..N` ·
 /// `-k` from the end). A single token (no `..`) is an EXPLICIT address (miss = hard error); a
 /// `..` token is a clamping range. Open/from-end forms resolve against the file's line count in
-/// [`resolve_line_specs`]. No subagent prefix — the TARGET names the transcript.
+/// [`resolve_line_specs`]. No subagent prefix - the TARGET names the transcript.
 pub(crate) fn parse_line_specs(tokens: &[String]) -> Result<Vec<(bool, crate::text::RangeSpec)>> {
     let mut out = Vec::new();
     for tok in tokens {
@@ -92,7 +92,7 @@ pub(crate) fn resolve_single_transcript(target: &std::path::Path) -> Result<Path
     }
 }
 
-/// The default cap on emitted record units — `show`'s context-flood guard (law 4: any
+/// The default cap on emitted record units - `show`'s context-flood guard (law 4: any
 /// cap reports its drop, here with the exact continuation command). `--max-count N`
 /// overrides; `0` = uncapped (the crate-wide `--max-count 0` convention).
 pub(crate) const DEFAULT_SHOW_CAP: usize = 200;
@@ -106,16 +106,16 @@ pub(crate) fn effective_cap(max_count: Option<usize>) -> usize {
     }
 }
 
-/// True when a `--turn` spec is fully EXPLICIT (`N` / `A..B` — both endpoints written as
+/// True when a `--turn` spec is fully EXPLICIT (`N` / `A..B` - both endpoints written as
 /// absolute indices): an ADDRESS by law 1, so resolving to zero records is a miss (hard
 /// error), never an honest-empty. Open / from-the-end forms (`N..`, `..N`, `-k`, `..`)
-/// clamp — the tail-peek (`--turn -3..`) must stay robust on short sessions.
+/// clamp - the tail-peek (`--turn -3..`) must stay robust on short sessions.
 pub(crate) fn turn_spec_is_explicit(spec: &crate::text::RangeSpec) -> bool {
     matches!(spec.start, crate::text::Endpoint::At(_))
         && matches!(spec.end, crate::text::Endpoint::At(_))
 }
 
-/// The turn address-miss error — names the missed turn(s) AND the transcript's actual
+/// The turn address-miss error - names the missed turn(s) AND the transcript's actual
 /// turn domain, mirroring the `--line` miss's self-teaching shape.
 pub(crate) fn turn_miss_error(spec: &crate::text::RangeSpec, turn_count: usize) -> anyhow::Error {
     use crate::text::Endpoint;

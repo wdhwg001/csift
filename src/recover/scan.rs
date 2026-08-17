@@ -55,7 +55,7 @@ pub(crate) fn scan_one_file_multi(
     Ok(out)
 }
 
-/// Reconstruct a target's FINAL content (or its `--at`/window snapshot) as RAW bytes — the
+/// Reconstruct a target's FINAL content (or its `--at`/window snapshot) as RAW bytes - the
 /// restorable file, not the line-numbered diff view. Cross-session writes are merged per
 /// top-level group; when unrelated sessions each hold a version, the FRESHEST (latest-write)
 /// candidate wins. Returns `(content, known_lines, total_lines)`, or `None` when nothing is
@@ -163,7 +163,7 @@ pub(crate) fn window_admits(
 pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<ScanResult> {
     // Bare-hex canonical id for a subagent transcript (strip the `agent-` filename
     // prefix) so a recovered subagent row's `session_id` matches the `agents` topology id
-    // — id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
+    // - id-form unification (a top-level session uuid is unaffected: no `agent-` prefix).
     let session_id = crate::subagent::session_id_from_path(path);
     // Id-domain discriminator (the r5 shape, now on recover): a subagent transcript's
     // `session_id` is a non-re-feedable bare hex; carry `is_subagent` + the re-feedable
@@ -186,7 +186,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
     // ── File-level prefilter (the dominant cost of an UNSCOPED recover). A transcript that
     //    never mentions the target's BASENAME holds no events for it: every Read/Edit/Write/Bash
     //    op and result `extract` replays carries the path literal somewhere in that transcript,
-    //    and `extract` matches by full path OR basename-suffix — so the basename is the correct
+    //    and `extract` matches by full path OR basename-suffix - so the basename is the correct
     //    SUPERSET gate. One SIMD `memmem` over the mmap lets us skip PARSING the file entirely,
     //    turning an unscoped recover from a whole-corpus JSON parse into a parse of only the few
     //    transcripts that touched the file. (No target ⇒ no gate; behaviour unchanged.)
@@ -205,7 +205,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
 
     // Parse all recover-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool),
     // preserving each record's exact 1-based line number (counts EVERY visited line, 1:1 with
-    // jsonl) — a single giant transcript is no longer scanned on one core.
+    // jsonl) - a single giant transcript is no longer scanned on one core.
     let (records, skipped) =
         crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
 
@@ -219,12 +219,12 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
     })
 }
 
-/// Pre-JSON byte prefilter — a SUPERSET of `files`' (we need Reads, tool_result bodies,
-/// integrity errors, attachments, history snapshots — not just mutations).
+/// Pre-JSON byte prefilter - a SUPERSET of `files`' (we need Reads, tool_result bodies,
+/// integrity errors, attachments, history snapshots - not just mutations).
 /// Coarse by design; the structural parse decides what each line really is.
 pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
     // R13: the genuine-user hook is serialization-tolerant (user-only, like files').
-    // Finders built ONCE (per-line hot path — the stateless form rebuilt its searcher
+    // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher
     // every call).
     static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 10]> =
         std::sync::LazyLock::new(|| {
@@ -250,7 +250,7 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
 
 /// Extract `--file` events from a session's line-numbered records.
 ///
-/// Intent↔result is joined by `tool_use_id` WITHIN a turn (never by adjacency — an
+/// Intent↔result is joined by `tool_use_id` WITHIN a turn (never by adjacency - an
 /// integrity error can precede its own tool_use line). We build, per turn, two maps:
 /// `tool_use_id → file_path` (from the originating Read/Edit/Write tool_use) so an
 /// integrity-error carrier with no inline path can be attributed to `--file`.
@@ -277,18 +277,18 @@ pub(crate) fn extract_with_turns(
     for (turn_index, idxs) in turns.iter().enumerate() {
         // tool_use_id → file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.
         let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();
-        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo —
+        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -
         // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and
         // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a
         // `"File created successfully…"` string), so those ids are absent here and the
         // input-side fallback below supplies their content (§ subagent recover).
         let mut ids_with_result: std::collections::HashSet<String> =
             std::collections::HashSet::new();
-        // tool_use_ids whose RESULT was an error (`is_error:true`) — e.g. a failed Edit
+        // tool_use_ids whose RESULT was an error (`is_error:true`) - e.g. a failed Edit
         // ("String to replace not found in file", "File has not been read yet"). The op did
         // NOT mutate the file, so its tool_use INPUT must never be replayed as if it landed.
         // A failed Edit also has NO `toolUseResult` echo, so its id is absent from
-        // `ids_with_result` — without this set the input-side fallback below would apply the
+        // `ids_with_result` - without this set the input-side fallback below would apply the
         // ghost edit. Captured per-turn; the result block sits in the same turn as its call.
         let mut failed_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
         for &i in idxs {
@@ -326,8 +326,8 @@ pub(crate) fn extract_with_turns(
             );
             // Carrier-less ops (subagent/workflow): reconstruct content from the tool_use
             // INPUT. Gated on `ids_with_result` so it NEVER double-emits in a top-level
-            // session (whose carriers always carry `toolUseResult`) — main-session
-            // reconstruction stays byte-identical — and on `failed_ids` so a failed Edit's
+            // session (whose carriers always carry `toolUseResult`) - main-session
+            // reconstruction stays byte-identical - and on `failed_ids` so a failed Edit's
             // input is never applied as a phantom mutation.
             extract_input_fallback(
                 *line_no,

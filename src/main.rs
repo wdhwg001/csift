@@ -1,4 +1,4 @@
-//! csift — "ripgrep for Claude Code session transcripts".
+//! csift - "ripgrep for Claude Code session transcripts".
 //!
 //! Fast regex `list` / `search` / `agents` / `whoami` / `files` / `recover` over
 //! `~/.claude/projects/**/*.jsonl`. This file is the thin binary entrypoint: parse
@@ -37,7 +37,7 @@ use crate::cli::{parse_argv, Cli, Command};
 /// Global allocator: mimalloc. The scan paths (search/turns/files/recover) allocate
 /// per-record Strings from many rayon workers at once; macOS's default libmalloc
 /// serializes under that load (nanov2/tiny-malloc lock contention shows up directly
-/// in profiles). mimalloc's per-thread heaps remove the contention — a measured
+/// in profiles). mimalloc's per-thread heaps remove the contention - a measured
 /// multi-subcommand win with zero behaviour change (SPEC §7 performance contract).
 #[global_allocator]
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -45,7 +45,7 @@ static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 fn main() -> ExitCode {
     // `parse_argv` wraps clap with an argv-normalization pass so a `--format`/`--kind`
     // flag works in ANY position relative to a leading-`-` encoded project target
-    // (see cli::normalize_argv — fixes the allow_hyphen_values greedy-absorb bug).
+    // (see cli::normalize_argv - fixes the allow_hyphen_values greedy-absorb bug).
     let cli = parse_argv();
     // Install the `--claude-home` override (if any) BEFORE dispatch, so every subcommand's
     // path resolution honors it. `$CLAUDE_CONFIG_DIR` is read directly by `path::claude_home`

@@ -4,7 +4,7 @@ use crate::harness::*;
 
 /// `--no-subagents` is the only span flag on the default-ON commands and suppresses the
 /// fan-out the user asked to drop. The former no-op `--include-subagents` is GONE there, so the
-/// only way to restrict span is `--no-subagents` — and it always restricts.
+/// only way to restrict span is `--no-subagents` - and it always restricts.
 #[test]
 fn no_subagents_restricts_span_end_to_end() {
     let h = populated_home();
@@ -39,7 +39,7 @@ fn no_subagents_restricts_span_end_to_end() {
 
 /// `--subagents-only` is GONE crate-wide (no user-facing flag, no hidden migration no-op). On
 /// every span-aware subcommand it now falls through to the generic clap "unexpected argument"
-/// rejection — the acceptable outcome once the pointed-migration machinery was removed.
+/// rejection - the acceptable outcome once the pointed-migration machinery was removed.
 #[test]
 fn subagents_only_is_an_unknown_argument_everywhere() {
     let h = populated_home();
@@ -83,7 +83,7 @@ fn subagents_only_is_an_unknown_argument_everywhere() {
 #[test]
 fn list_and_stats_max_count_cap_and_report() {
     let h = populated_home(); // 1 top-level + 2 subagent = 3 rows
-                              // list: cap to 2, drop 1 — reported in the JSON summary AND the text footer (never silent).
+                              // list: cap to 2, drop 1 - reported in the JSON summary AND the text footer (never silent).
     let lj = h.run(&["list", "--max-count", "2", "--format", "json"]);
     assert!(lj.success, "stderr: {}", lj.stderr);
     assert_eq!(

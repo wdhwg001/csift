@@ -22,7 +22,7 @@ pub(crate) fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usiz
     (u, a)
 }
 
-/// True when this plan SELECTED ≥1 elicitation-sidecar unit (§3.10) — drives the per-session
+/// True when this plan SELECTED ≥1 elicitation-sidecar unit (§3.10) - drives the per-session
 /// `with elicitation sidecar` note (text) / the JSON header flag, so a consumer knows the
 /// output includes hook-backfilled records.
 pub(crate) fn plan_has_sidecar(plan: &SessionPlan) -> bool {
@@ -35,8 +35,8 @@ pub(crate) fn plan_has_sidecar(plan: &SessionPlan) -> bool {
 
 /// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a
 /// `--subagents` query that spans S subagents realizes up to `budget × (1 + S)`
-/// chars. The banner must report the TRUE scope (every discovered session) — NOT only what
-/// fit in the budget — so a rendering knob (`--budget`) can never silently rewrite "scope"
+/// chars. The banner must report the TRUE scope (every discovered session) - NOT only what
+/// fit in the budget - so a rendering knob (`--budget`) can never silently rewrite "scope"
 /// and a targeted top-level uuid can never read as `0 top-level`. Returns the full
 /// breakdown: how many sessions are in scope (split top-level vs subagent over ALL of them)
 /// and how many actually rendered within budget.
@@ -59,7 +59,7 @@ pub(crate) fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> S
     for (sr, plan) in sessions.iter().zip(plans.iter()) {
         in_scope += 1;
         // Discriminate via the AUTHORITATIVE path-derived `is_subagent` field (set from
-        // subagent::is_subagent_path at scan time) — NOT a re-derived id-shape heuristic. This
+        // subagent::is_subagent_path at scan time) - NOT a re-derived id-shape heuristic. This
         // is the same signal turns' own JSON, and every other surface, already brands on.
         if !sr.is_subagent {
             in_scope_top += 1;
@@ -79,7 +79,7 @@ pub(crate) fn scope_summary(sessions: &[ScanResult], plans: &[SessionPlan]) -> S
 /// The minimum char cost to render a targeted session's FIRST (most-recent) complete
 /// round-trip, used to tell a user how much to raise `--budget` when their targeted session
 /// was skipped (its plan came back empty). Returns `None` when the session has no turn at
-/// all (an empty session — a different, honest "nothing to restore" case). The estimate is
+/// all (an empty session - a different, honest "nothing to restore" case). The estimate is
 /// the doc-header reservation + the cheapest single side of the most-recent turn, a true
 /// lower bound on what any non-empty plan for this session would cost.
 pub(crate) fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg) -> Option<usize> {
@@ -105,7 +105,7 @@ pub(crate) fn min_render_chars(sr: &ScanResult, budget: usize, cfg: &RichnessCfg
 }
 
 /// How many of the SELECTED user-showing units are MACHINE automation triggers
-/// (`<task-notification>` openers) rather than human messages — the header's
+/// (`<task-notification>` openers) rather than human messages - the header's
 /// human/automation split (`N user (M automation triggers)`).
 pub(crate) fn count_automation(plan: &SessionPlan) -> usize {
     plan.selected
@@ -120,7 +120,7 @@ pub(crate) fn count_automation(plan: &SessionPlan) -> usize {
 
 /// The fixed automation-trigger classes, in stable render order, paired with their slug. The
 /// per-class breakdown (text + JSON) iterates THIS so a reader sees the composition of the
-/// lumped `(N automation triggers)` total — the lens demands segments be labeled by trigger
+/// lumped `(N automation triggers)` total - the lens demands segments be labeled by trigger
 /// attribution at the SUMMARY level, not just per-unit.
 pub(crate) const AUTOMATION_KINDS: [crate::model::AutomationKind; 5] = [
     crate::model::AutomationKind::BackgroundCommand,
@@ -160,14 +160,14 @@ pub(crate) fn automation_by_kind(plans: &[SessionPlan]) -> [usize; 5] {
     by
 }
 
-/// Per-class counts of EVERY in-scope automation trigger — the whole-session composition,
+/// Per-class counts of EVERY in-scope automation trigger - the whole-session composition,
 /// INDEPENDENT of which turns the budget selected. This is the honest denominator behind the
 /// selected [`automation_by_kind`]: at a realistic budget the recency window often selects
 /// ZERO of a monitor-heavy session's deep monitor pulses, so the SELECTED breakdown reads
 /// `monitor:0` and misleads a reader into thinking there was no monitor activity. The header
 /// emits this IN-SCOPE count alongside the selected one so the whole-session truth is never
-/// reported as zero. (NOTE: isMeta ScheduleWakeup wakeup-TICKS do not open turns yet — that
-/// segmentation is a separate deferred item — so they are not yet counted here either; this
+/// reported as zero. (NOTE: isMeta ScheduleWakeup wakeup-TICKS do not open turns yet - that
+/// segmentation is a separate deferred item - so they are not yet counted here either; this
 /// captures every turn-OPENING automation pulse, e.g. the monitor `<task-notification>`s.)
 pub(crate) fn automation_in_scope_by_kind(plans: &[SessionPlan]) -> [usize; 5] {
     let mut by = [0usize; 5];

@@ -1,4 +1,4 @@
-//! `whoami` subcommand — identify the CALLING Claude Code session, false-positive-safe.
+//! `whoami` subcommand - identify the CALLING Claude Code session, false-positive-safe.
 //!
 //! ## Detection (verified empirically inside a live Claude Code Bash tool, 2026-06-07)
 //!
@@ -16,7 +16,7 @@
 //! plugin) before giving up.
 //!
 //! When NEITHER var is set (e.g. invoked outside Claude Code/Codex, or a future
-//! CC build that drops it) we DO NOT GUESS — multiple CC sessions may run
+//! CC build that drops it) we DO NOT GUESS - multiple CC sessions may run
 //! concurrently with different binaries, and most-recent-mtime is a false-positive
 //! trap. We error with actionable guidance instead. It is acceptable for whoami to
 //! often say "ambiguous, pass `@<uuid>`".
@@ -33,7 +33,7 @@ use crate::path;
 const SESSION_ID_ENV: &str = "CLAUDE_CODE_SESSION_ID";
 
 /// Secondary alias mirrored by the Codex companion plugin. Accepted only when the
-/// canonical var is absent (SPEC §6.3 — prefer the canonical var).
+/// canonical var is absent (SPEC §6.3 - prefer the canonical var).
 const SESSION_ID_ENV_ALIAS: &str = "CODEX_COMPANION_SESSION_ID";
 
 /// The guidance shown when no definitive signal exists. Kept as a const so the
@@ -45,7 +45,7 @@ explicit `@<uuid>` target: your id is the basename of your own transcript jsonl,
 or grep a unique recent line you wrote to disambiguate.";
 
 /// Read the definitive session id from the environment, if present and non-empty.
-/// Matches the EXACT canonical var name first (never a loose `/session/i` regex —
+/// Matches the EXACT canonical var name first (never a loose `/session/i` regex -
 /// `SECURITYSESSIONID` is a false-positive trap), then the Codex alias.
 #[must_use]
 pub fn detect_session_id() -> Option<String> {
@@ -89,7 +89,7 @@ pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
 /// `whoami` (env form): the calling session id from `$CLAUDE_CODE_SESSION_ID` + its jsonl path.
 fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
     let Some(session_id) = detect_session_id() else {
-        // SPEC §6.3 step 3: never guess — error with actionable guidance.
+        // SPEC §6.3 step 3: never guess - error with actionable guidance.
         bail!("{AMBIGUOUS_GUIDANCE}");
     };
 
@@ -106,7 +106,7 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
 /// `whoami @trap:<marker>`: resolve the caller's UPSTREAM ancestry chain from the unique literal
 /// marker it embedded in THIS very command, and report it self → ancestors → top-level root. This
 /// is the walk-UP mirror of `agents` (walk-DOWN): a subagent learns its own bare hex AND the whole
-/// re-feedable lineage above it. Env-independent — reliable for a built-in Task AND a workflow
+/// re-feedable lineage above it. Env-independent - reliable for a built-in Task AND a workflow
 /// subagent (whose env id is the PARENT, not itself).
 fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
     use serde_json::json;
@@ -127,7 +127,7 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
                 };
                 println!("{role:8} {}{annot}", n.session_id);
             }
-            // The self transcript path — the most useful "where am I".
+            // The self transcript path - the most useful "where am I".
             match chain.first().and_then(|n| n.path.as_ref()) {
                 Some(p) => println!("path     {}", p.display()),
                 None => println!("path     <transcript not found under projects root>"),
@@ -135,7 +135,7 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
         }
         OutputFormat::Json => {
             // envelope v2: one kind:"identity" row per ancestry node, self first (depth 0)
-            // → top-level root last. The former single `{chain:[…]}` wrapper is gone —
+            // → top-level root last. The former single `{chain:[…]}` wrapper is gone -
             // the SAME stream shape as the env form, just more rows.
             println!("{}", crate::text::envelope_header("whoami", json!({})));
             for n in &chain {
@@ -159,8 +159,8 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
 }
 
 /// Locate `<id>.jsonl` under the projects root. First try the current cwd's encoded
-/// dir (the common case — a session's cwd is its start cwd); if that misses, scan
-/// every project dir for a file named `<id>.jsonl`. Returns `None` if not found —
+/// dir (the common case - a session's cwd is its start cwd); if that misses, scan
+/// every project dir for a file named `<id>.jsonl`. Returns `None` if not found -
 /// the id is still authoritative (it came from the env var); the path is a bonus.
 fn locate_transcript(session_id: &str) -> Option<PathBuf> {
     let root = path::projects_root().ok()?;
@@ -175,7 +175,7 @@ fn locate_transcript(session_id: &str) -> Option<PathBuf> {
         }
     }
 
-    // Fallback: scan every project dir for the file (cheap — a stat per dir).
+    // Fallback: scan every project dir for the file (cheap - a stat per dir).
     let dirs = path::all_project_dirs().ok()?;
     for pd in dirs {
         let candidate = pd.dir.join(&filename);
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn exact_env_name_is_canonical_not_a_loose_regex() {
-        // The constant must be the EXACT name — a loose /session/i match would
+        // The constant must be the EXACT name - a loose /session/i match would
         // false-positive on SECURITYSESSIONID (macOS login session).
         assert_eq!(SESSION_ID_ENV, "CLAUDE_CODE_SESSION_ID");
         assert_ne!(SESSION_ID_ENV, "SECURITYSESSIONID");

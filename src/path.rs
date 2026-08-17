@@ -11,7 +11,7 @@
 //! - `/Users/testuser/Projects/Acme/widget_factory-worktrees/main`
 //!   -> `-Users-testuser-Projects-Acme-widget-factory-worktrees-main`
 //! - a source segment `/.claude/` -> `--claude-` (the `.` and the two `/`
-//!   each become their own `-`, so a literal `--` double-dash appears — proves
+//!   each become their own `-`, so a literal `--` double-dash appears - proves
 //!   NO consecutive-dash collapse, and `.` -> `-`).
 //!
 //! Forward (cwd -> encoded) is therefore deterministic. Reverse (encoded -> cwd)
@@ -20,8 +20,8 @@
 //!
 //! ## Target resolution (§2.3)
 //!
-//! A user-supplied target is EITHER (a) an actual filesystem cwd — encode it and
-//! locate the matching dir under `~/.claude/projects` — OR (b) a pre-encoded
+//! A user-supplied target is EITHER (a) an actual filesystem cwd - encode it and
+//! locate the matching dir under `~/.claude/projects` - OR (b) a pre-encoded
 //! `<ENCODED>` dir (optionally under `~/.claude/projects/`). We treat the arg as a
 //! pre-encoded token only when, after stripping a leading `~/.claude/projects/`,
 //! the remainder has no `/`, matches `^-[A-Za-z0-9-]*$`, AND resolves to a dir.

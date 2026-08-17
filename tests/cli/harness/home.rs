@@ -7,7 +7,7 @@
 //! exit-code mapping + `cli::parse_argv` (which reads `std::env::args`).
 //!
 //! Isolation: every invocation points `$HOME` at a per-test temp dir via
-//! `Command::env("HOME", …)` (child-process scope only — no shared-state race with
+//! `Command::env("HOME", …)` (child-process scope only - no shared-state race with
 //! the in-crate threaded unit tests). The binary path comes from cargo's
 //! `CARGO_BIN_EXE_csift`, so the build under test is exactly the one cargo produced.
 
@@ -68,7 +68,7 @@ impl Home {
         let mut child = Command::new(exe)
             .args(args)
             .env("HOME", &self.root)
-            .env("USERPROFILE", &self.root) // the Windows home var — same relocation there
+            .env("USERPROFILE", &self.root) // the Windows home var - same relocation there
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_COMPANION_SESSION_ID")
             .stdin(std::process::Stdio::piped())
@@ -100,7 +100,7 @@ impl Home {
         let mut cmd = Command::new(exe);
         cmd.args(args)
             .env("HOME", &self.root)
-            .env("USERPROFILE", &self.root) // the Windows home var — same relocation there
+            .env("USERPROFILE", &self.root) // the Windows home var - same relocation there
             // Make whoami deterministic: clear the session env unless a test sets it.
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CODEX_COMPANION_SESSION_ID");
@@ -271,7 +271,7 @@ pub(crate) fn header_collision_scenario(h: &Home) -> (&'static str, &'static str
 }
 
 /// A session owning two subagents whose 16-hex ids share their first 8 chars, plus one
-/// distinct-prefix subagent — the agent-side prefix-resolution fixtures.
+/// distinct-prefix subagent - the agent-side prefix-resolution fixtures.
 pub(crate) fn agent_prefix_scenario(h: &Home) -> (&'static str, &'static str, &'static str) {
     let enc = "-Users-dev-example-project";
     let sess = "11112222-3333-4000-8000-000000000004";
@@ -303,8 +303,8 @@ pub(crate) fn agent_prefix_scenario(h: &Home) -> (&'static str, &'static str, &'
 }
 
 /// A session whose PARENT transcript carries the spawn linkage: an `Agent` tool_use
-/// (`toolu_x`, == the built-in meta's `toolUseId`) at 04:59:58 — the TRUE trigger,
-/// ~2s before the child-head ts — whose paired SYNC tool_result is the built-in's
+/// (`toolu_x`, == the built-in meta's `toolUseId`) at 04:59:58 - the TRUE trigger,
+/// ~2s before the child-head ts - whose paired SYNC tool_result is the built-in's
 /// returned message; a built-in subagent that EDITS a file (for `--with-files`); a
 /// workflow agent whose journal carries a `result` payload; and a top-level
 /// `workflows/wf_topo.json` manifest (the WorkflowRun source).
@@ -393,7 +393,7 @@ pub(crate) fn files_scenario_home() -> Home {
 }
 
 /// Fixture with three distinct mutated full paths (a `.rs` under `src/`, a `.md` under
-/// `docs/`, a top-level `.txt`) plus an Edit-before-Read boundary on the `.rs` file — so the
+/// `docs/`, a top-level `.txt`) plus an Edit-before-Read boundary on the `.rs` file - so the
 /// `--regex`/`--glob` full-path filters can be exercised against a varied set, including the
 /// boundary section.
 pub(crate) fn path_filter_scenario(h: &Home) {
@@ -415,7 +415,7 @@ pub(crate) fn path_filter_scenario(h: &Home) {
 }
 
 /// A session whose TOP-LEVEL turn writes `/parent/p.md` and whose SUBAGENT writes
-/// `/sub/s.md` — the fixture for span-scope tests: the default spans both files, while
+/// `/sub/s.md` - the fixture for span-scope tests: the default spans both files, while
 /// `--no-subagents` keeps only the parent file.
 pub(crate) fn subagents_only_scenario(h: &Home) {
     h.write(
@@ -481,7 +481,7 @@ pub(crate) fn recover_scenario_home() -> Home {
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.500Z","toolUseResult":{"filePath":"/Users/testuser/Projects/foo/app.py","oldString":"raw = open(src).read()","newString":"with open(src) as fh:\n    raw = fh.read()","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":2,"lines":["-raw = open(src).read()","+with open(src) as fh:","+    raw = fh.read()"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
             // ── turn 1: a modified-since-read integrity error (HARD boundary) ──
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"continue"}}"#, "\n",
-            // The error carrier (no inline path) — attributed to app.py via the tool_use_id join.
+            // The error carrier (no inline path) - attributed to app.py via the tool_use_id join.
             r#"{"type":"user","uuid":"err1","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed1","is_error":true,"content":"<tool_use_error>File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.</tool_use_error>"}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:01.500Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ed1","name":"Edit","input":{"file_path":"/Users/testuser/Projects/foo/app.py","old_string":"use(raw)","new_string":"USE(raw)"}}]}}"#, "\n",
             // A fresh full Read of the post-drift file (6 lines now).
@@ -538,7 +538,7 @@ pub(crate) fn recover_hole_home() -> Home {
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"peek"}}"#, "\n",
             // A windowed read of lines 1-2 of a 100-line file (lines 3-100 stay gaps).
             r#"{"type":"user","uuid":"r0","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/big.rs","content":"a\nb","startLine":1,"numLines":2,"totalLines":100}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"rd0","content":"ok"}]}}"#, "\n",
-            // An edit at line 60 — deep in the gap, no adjacent known line → un-anchorable.
+            // An edit at line 60 - deep in the gap, no adjacent known line → un-anchorable.
             r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"filePath":"/p/big.rs","oldString":"zzz","newString":"Z","structuredPatch":[{"oldStart":60,"oldLines":1,"newStart":60,"newLines":1,"lines":["-zzz","+Z"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ed0","content":"ok"}]}}"#, "\n",
         ),
     );

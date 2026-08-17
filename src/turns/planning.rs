@@ -27,12 +27,12 @@ pub(crate) struct Selected {
 pub(crate) struct SessionPlan {
     pub(crate) selected: Vec<Selected>,
     /// The dedup-flagged + max-compaction-filtered turns the plan selected FROM. The
-    /// renderer reads units (incl. the `also_in_summary` flag) from HERE — never from the
-    /// un-flagged `ScanResult.turns` — so the dedup demote-flag reaches the output.
+    /// renderer reads units (incl. the `also_in_summary` flag) from HERE - never from the
+    /// un-flagged `ScanResult.turns` - so the dedup demote-flag reaches the output.
     pub(crate) turns: Vec<TurnSlice>,
     pub(crate) spanned_boundaries: usize,
     pub(crate) rendered_chars: usize,
-    /// The newest summary line (if any) — for the dedup-note + banners.
+    /// The newest summary line (if any) - for the dedup-note + banners.
     pub(crate) newest_summary_line: Option<usize>,
     pub(crate) dedup_demoted: usize,
 }
@@ -41,7 +41,7 @@ pub(crate) struct SessionPlan {
 /// recency-first budget allocation, then sort ascending for render.
 /// Demote-flag (`also_in_summary`) every LIVE-region turn anchor the newest compaction
 /// summary already quotes. Dedup is keyed on the live (compactions_before == 0) region
-/// primarily — turns predating an OLDER boundary are genuinely gone from context and are
+/// primarily - turns predating an OLDER boundary are genuinely gone from context and are
 /// pure restoration, never deduped. It keys on the SAME two anchors as before the
 /// expansion: the user opener and the EOT (last) agent message. Middle agent messages are
 /// not deduped (a summary never quotes them verbatim), so demote-flag scope is unchanged.
@@ -88,8 +88,8 @@ pub(crate) fn plan_session(
     }
 
     // ── Reserve the document HEADER BLOCK up front (a fixed framing the render always
-    // emits to stdout) so the chars left for the reconstruction body — boundary banners +
-    // selected units — fit `available`. The header block is bounded by a provable
+    // emits to stdout) so the chars left for the reconstruction body - boundary banners +
+    // selected units - fit `available`. The header block is bounded by a provable
     // worst-case (§ doc_header_block_max_chars); the BANNERS are NOT pre-reserved in bulk
     // (that wasted ~½ a small budget on summary-heavy sessions) but charged INCREMENTALLY
     // as selection deepens the spanned count, so the banner budget is exact. Invariant
@@ -116,7 +116,7 @@ pub(crate) fn plan_session(
     let mut spanned_depth = 0usize;
     let mut chosen: Vec<Option<SelSides>> = vec![None; turns.len()];
 
-    // ── Phase 1: ROUND-TRIP GUARANTEE — spend rt_budget (unit chars) on complete pairs,
+    // ── Phase 1: ROUND-TRIP GUARANTEE - spend rt_budget (unit chars) on complete pairs,
     // while the banner charge for the deepened span still keeps the WHOLE doc ≤ budget. ──
     // Non-dup complete turns first, then dup complete turns (demote, don't drop).
     for dedup_pass in [false, true] {
@@ -125,7 +125,7 @@ pub(crate) fn plan_session(
                 continue;
             }
             let t = &turns[ti];
-            // The HARD FLOOR reserves its lane for HUMAN round-trips only — a machine
+            // The HARD FLOOR reserves its lane for HUMAN round-trips only - a machine
             // automation pulse is left for Phase-2 fill, so the protected budget the help
             // documents for "user → … → assistant EOT" is never silently spent on a
             // pulse→ack pair (which the header already reports as an automation trigger).
@@ -147,7 +147,7 @@ pub(crate) fn plan_session(
             } else if spent_units == 0 && !dedup_pass && doc_fits {
                 // The first (most-recent, non-dup) complete turn exceeds the round-trip
                 // reservation but the WHOLE document (its cost + its banners + header
-                // block) still fits `budget`: include it anyway — the most-recent exchange
+                // block) still fits `budget`: include it anyway - the most-recent exchange
                 // is load-bearing and already ellipsis-capped by the role caps. Stop
                 // Phase 1; Phase 2 fills the remainder. A round-trip that does NOT satisfy
                 // `doc_fits` is left for Phase 2 to take a cheaper single side, so the
@@ -161,7 +161,7 @@ pub(crate) fn plan_session(
         }
     }
 
-    // ── Phase 2: FILL — spend the rest of `available` (incl. unused rt reservation). ──
+    // ── Phase 2: FILL - spend the rest of `available` (incl. unused rt reservation). ──
     for dedup_pass in [false, true] {
         for &ti in &order {
             if chosen[ti].is_some() {
@@ -219,7 +219,7 @@ pub(crate) fn plan_session(
     // budget - doc_header_reservation`, this figure is ≤ budget by construction, and it is
     // ≥ the true emitted length (the real header block ≤ its reservation), so the header
     // line never UNDER-states the cost. `spanned == spanned_depth` here. An EMPTY selection
-    // emits NO document at all (the renderer skips empty sessions), so it reports 0 — the
+    // emits NO document at all (the renderer skips empty sessions), so it reports 0 - the
     // header-block reservation is only "spent" when a document is actually written.
     let rendered_chars = if selected.is_empty() {
         0
@@ -242,7 +242,7 @@ pub(crate) fn plan_session(
 /// which is the highest agent line by construction), 0 if neither.
 pub(crate) fn turn_latest_line(t: &TurnSlice) -> usize {
     // A pending elicitation-sidecar unit (§3.10) has no physical line (line_no 0) yet IS the
-    // latest activity — what the session is currently blocked on — so it ranks as most-recent
+    // latest activity - what the session is currently blocked on - so it ranks as most-recent
     // (usize::MAX) for recency-first selection rather than sorting as the oldest.
     if t.user.as_ref().is_some_and(|u| u.from_sidecar) {
         return usize::MAX;
@@ -253,7 +253,7 @@ pub(crate) fn turn_latest_line(t: &TurnSlice) -> usize {
 }
 
 /// True when EITHER dedup anchor of a turn is flagged (the user opener or the EOT agent
-/// message — the only two sides dedup ever marks).
+/// message - the only two sides dedup ever marks).
 pub(crate) fn turn_is_dup(t: &TurnSlice) -> bool {
     t.user.as_ref().is_some_and(|u| u.also_in_summary)
         || t.assistant_eot().is_some_and(|a| a.also_in_summary)

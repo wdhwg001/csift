@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn trivial_digit_runs_pinned() {
-    // Mutation pin: constant-step runs in -2..=2 are trivial; anything else is not —
+    // Mutation pin: constant-step runs in -2..=2 are trivial; anything else is not -
     // including runs where only the FIRST step matches (the conjunction must hold
     // across all three steps).
     for t in ["0000", "1234", "9876", "1357", "2468", "4321"] {
@@ -31,7 +31,7 @@ fn validate_trap_marker_enforces_the_strict_grammar() {
     ] {
         assert!(validate_trap_marker(ok).is_ok(), "should accept {ok}");
     }
-    // Rejected — every lazy shortcut fails loudly.
+    // Rejected - every lazy shortcut fails loudly.
     for bad in [
         "",                         // empty
         "foo",                      // too short / not the shape
@@ -56,7 +56,7 @@ fn validate_trap_marker_enforces_the_strict_grammar() {
 fn validate_trap_marker_refuses_the_reserved_doc_example() {
     // The literal printed in the SKILL / --help / SPEC is reserved: the doc shows it next to
     // `csift` (so quoting the doc self-matches) and every copy-paste collides, so csift refuses
-    // it even though it passes the grammar — forcing a fresh hand-invented marker.
+    // it even though it passes the grammar - forcing a fresh hand-invented marker.
     for reserved in RESERVED_EXAMPLE_MARKERS {
         let err = validate_trap_marker(reserved)
             .expect_err("the documented example must be refused")

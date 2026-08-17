@@ -10,7 +10,7 @@ pub(crate) struct LineCell {
 }
 
 /// The "in the LLM's eyes" model: a SPARSE map of known file lines. A line absent from
-/// `known` is an EXPLICIT gap (unknown — never fabricated).
+/// `known` is an EXPLICIT gap (unknown - never fabricated).
 #[derive(Debug, Default, Clone)]
 pub(crate) struct SparseBuffer {
     pub(crate) known: BTreeMap<usize, LineCell>,
@@ -42,9 +42,9 @@ impl SparseBuffer {
         // normalise later windowed reads' separator-counted totals).
         self.content_ends_with_newline = content.ends_with('\n');
         // CC's Read / file-attachment `totalLines` is a SEPARATOR count: a newline-terminated
-        // file reports `split_lines + 1` (a phantom empty last line — e.g. a 96-line file ending
+        // file reports `split_lines + 1` (a phantom empty last line - e.g. a 96-line file ending
         // in `\n` reports 97). We hold the FULL content here, so `split_lines` (== `known.len()`)
-        // is authoritative — normalise the reported total down by that phantom before recording
+        // is authoritative - normalise the reported total down by that phantom before recording
         // it, else a fully-recovered newline-terminated file is mis-reported as missing its
         // trailing line (restore HARD-FAILS as "partial"; --salvage/--at show a spurious
         // `??? line N+1 unknown`; --coverage shows N/N+1). A Write already passes a terminator
@@ -147,8 +147,8 @@ pub(crate) fn apply_edit(
 ///
 /// A patch hunk replaces `oldLines` source lines starting at `oldStart` with `newLines`
 /// lines starting at `newStart`. We process hunks high-to-low so earlier hunks' indices
-/// stay valid, rebuilding the dense line vector each time (the file is small enough — a
-/// single tool result — that an O(n) rebuild per hunk is fine and keeps the logic exact).
+/// stay valid, rebuilding the dense line vector each time (the file is small enough - a
+/// single tool result - that an O(n) rebuild per hunk is fine and keeps the logic exact).
 pub(crate) fn apply_structured_patch(
     buf: &mut SparseBuffer,
     patches: &[PatchHunk],
@@ -199,14 +199,14 @@ pub(crate) fn apply_structured_patch(
                                        // Defensive grow: `dense` is pre-sized to `span + 1` (≥ every hunk's
                                        // `old_start + old_lines`) and each splice grows it by the running offset, so with
                                        // well-formed ascending hunks `end` never exceeds `dense.len()`. We keep the guard
-                                       // anyway because the hunk stream is untrusted transcript data — a pathological
+                                       // anyway because the hunk stream is untrusted transcript data - a pathological
                                        // (e.g. non-ascending) `structuredPatch` must not index out of bounds below.
         if end > dense.len() {
             dense.resize(end, None);
         }
         // ANCHOR CHECK (anti-fabrication): an edit's absolute `oldStart` is only
         // trustworthy if it lands ON or ADJACENT TO currently-known content. A hunk
-        // whose entire neighbourhood is an unknown gap is position-drifted — applying it
+        // whose entire neighbourhood is an unknown gap is position-drifted - applying it
         // would fabricate island lines at a wrong absolute number (the heavily-edited
         // file built without a clean full anchor is the real-data failure mode). Refuse
         // it as un-anchorable rather than asserting a wrong "known" line.
@@ -224,7 +224,7 @@ pub(crate) fn apply_structured_patch(
         // CONTEXT VERIFICATION (anti-fabrication): the patch's old-region lines must
         // match what the buffer currently holds at the anchored position. If they
         // DISAGREE, the edit is mis-anchored (the buffer drifted out of sync with the
-        // real file — e.g. an earlier un-anchorable edit), so applying it would corrupt
+        // real file - e.g. an earlier un-anchorable edit), so applying it would corrupt
         // known lines. Refuse: report un-anchorable rather than assert a wrong line.
         if h.old_lines > 0 && old_region.len() == h.old_lines {
             let matches = (0..h.old_lines).all(|k| {

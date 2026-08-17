@@ -15,14 +15,14 @@ fn marker_cost_zero_for_no_tool_calls() {
 #[test]
 fn unit_cost_charges_real_header_line_plus_newlines() {
     // The cost is the EXACT rendered header line + its newline + the rendered body + its
-    // newline — the SAME chars the renderer emits, so summed cost == summed emitted chars.
+    // newline - the SAME chars the renderer emits, so summed cost == summed emitted chars.
     // This is the core of the overshoot fix: the header is the true timestamp-dependent
     // line, NOT a flat-24 guess (which undercharged every unit by ~47 chars).
     let small = unit(Role::User, 1, "hi", 0);
     let hdr = unit_header_line(&small).chars().count();
     assert_eq!(unit_cost(&small), hdr + NEWLINE_COST + 2 + NEWLINE_COST);
     // The real header is far longer than the old flat 24 (glyph + L + role + the full
-    // `YYYY-MM-DD HH:MM:SS TZ (RAW_UTC)` timestamp expansion) — proving the old undercharge.
+    // `YYYY-MM-DD HH:MM:SS TZ (RAW_UTC)` timestamp expansion) - proving the old undercharge.
     assert!(
         hdr > 24,
         "real header line is {hdr} chars, the removed flat HEADER_COST=24 undercharged it"

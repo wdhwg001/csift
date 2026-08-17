@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn line_is_turn_candidate_superset_of_assistant_text() {
-    // A pure-text assistant record (no Edit/Write/Read/Bash) must pass — the broadened
+    // A pure-text assistant record (no Edit/Write/Read/Bash) must pass - the broadened
     // prefilter is the design's required deviation.
     let pure_asst = br#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"just prose, no tools"}]}}"#;
     assert!(line_is_turn_candidate(pure_asst));
@@ -140,7 +140,7 @@ fn scope_summary_counts_top_level_and_subagents() {
 #[test]
 fn scope_summary_reports_true_scope_not_rendered() {
     // CRITICAL: a session whose plan selects nothing (budget too small) is STILL counted in
-    // the TRUE scope and its top-level/subagent split — only `rendered` shrinks. This is what
+    // the TRUE scope and its top-level/subagent split - only `rendered` shrinks. This is what
     // stops a targeted top-level uuid from reading as `0 top-level` and a budget knob from
     // silently rewriting "scope".
     let mut empty = scan_named("0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d");
@@ -178,8 +178,8 @@ fn slice_windows_concatenate_back_to_the_source() {
 #[test]
 fn slice_windows_count_chars_not_bytes() {
     // Each `🛠` is 4 BYTES but 1 CHARACTER. A 6-char window fits 5 wrenches + newline
-    // (21 bytes), proving the window counts Unicode scalars — the unit Claude Code's
-    // additionalContext cap uses — not bytes (a byte budget would split after the first).
+    // (21 bytes), proving the window counts Unicode scalars - the unit Claude Code's
+    // additionalContext cap uses - not bytes (a byte budget would split after the first).
     let line = "🛠🛠🛠🛠🛠\n"; // 6 chars, 21 bytes
     let chunks = slice_into_windows(line, 6);
     assert_eq!(
@@ -192,7 +192,7 @@ fn slice_windows_count_chars_not_bytes() {
 
 #[test]
 fn slice_windows_hard_split_an_oversized_line_on_char_boundaries() {
-    // A single line longer than the window is hard-split so NO chunk exceeds it — and never
+    // A single line longer than the window is hard-split so NO chunk exceeds it - and never
     // mid-`🛠` (char boundary). Window 2, line of 5 wrenches (no trailing newline).
     let line = "🛠🛠🛠🛠🛠";
     let chunks = slice_into_windows(line, 2);

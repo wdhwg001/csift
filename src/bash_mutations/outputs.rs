@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// `git <sub> …` — record a single coarse `git:<sub>` pseudo-path ONLY when `<sub>` is
+/// `git <sub> …` - record a single coarse `git:<sub>` pseudo-path ONLY when `<sub>` is
 /// in the mutating allowlist. Git does not name a clean per-file list lexically, so we
 /// never try to enumerate files; the entry is flagged heuristic like everything here.
 pub(crate) fn emit_git(operands: &[&str], out: &mut Vec<BashMutation>) {
@@ -37,7 +37,7 @@ pub(crate) fn git_subcommand<'a>(operands: &[&'a str]) -> Option<&'a str> {
 /// The output-flag NAMES (without the leading `--`) whose value is a written path. Matched
 /// both as `--name=<path>` and `--name <path>`. The value is run through
 /// [`flag_output_path`], which drops a FORMAT-SELECTOR value (`--output json`,
-/// `--output=yaml`, `kubectl/gh/docker/aws/jq` idioms) — a bare format word is a render
+/// `--output=yaml`, `kubectl/gh/docker/aws/jq` idioms) - a bare format word is a render
 /// mode, not a file. A path-shaped value (`report.json`, `/tmp/out`, `build/x`) passes.
 pub(crate) const OUTPUT_FLAGS: &[&str] = &[
     "junit-xml",
@@ -53,7 +53,7 @@ pub(crate) const OUTPUT_FLAGS: &[&str] = &[
 
 /// Well-known FORMAT-SELECTOR values an `--output`/`--out`/`--logfile` flag commonly takes
 /// instead of a path (`kubectl -o`, `gh`, `docker`, `aws`, `jq` idioms). A bare one of
-/// these — with no `/` and no `.extension` to mark it path-shaped — is a render mode, never
+/// these - with no `/` and no `.extension` to mark it path-shaped - is a render mode, never
 /// a created file, so it must not fabricate a phantom-file row.
 pub(crate) const FORMAT_SELECTORS: &[&str] = &[
     "json",
@@ -76,7 +76,7 @@ pub(crate) const FORMAT_SELECTORS: &[&str] = &[
 ];
 
 /// Resolve an output-flag VALUE to a written path, rejecting a bare FORMAT-SELECTOR
-/// (`json`/`yaml`/`summary`/…) that carries no `/` and no `.extension` — such a value is a
+/// (`json`/`yaml`/`summary`/…) that carries no `/` and no `.extension` - such a value is a
 /// render mode, not a file (the doc-comment claim on [`OUTPUT_FLAGS`] that a format name is
 /// "never misread" was only true once this guard existed). A path-shaped value
 /// (`report.json` has a `.`, `/tmp/out` has a `/`) is NOT a format selector and passes.
@@ -90,7 +90,7 @@ pub(crate) fn flag_output_path(value: &str) -> Option<String> {
 
 /// `curl`/`wget` write to a LOCAL path only via an explicit output flag: `-o <path>`,
 /// `--output <path>`/`--output=<path>` (curl + wget), or `wget -O <path>`. A `curl -O`
-/// (uppercase, no path arg — the name is derived from the URL) has NO deterministic
+/// (uppercase, no path arg - the name is derived from the URL) has NO deterministic
 /// local path, so it is intentionally skipped. The destination is emitted under the
 /// download verb (`curl`/`wget`), is_create true.
 pub(crate) fn emit_download_output(
@@ -121,7 +121,7 @@ pub(crate) fn emit_download_output(
     }
 }
 
-/// `dd … of=<path>` — the output file is named by the `of=` operand. `path_operand`
+/// `dd … of=<path>` - the output file is named by the `of=` operand. `path_operand`
 /// rejects a `KEY=VALUE` token, so `of=` is parsed specially here (its value after the
 /// `=` is the path). `of=/dev/null`-class sinks are dropped.
 pub(crate) fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
@@ -130,7 +130,7 @@ pub(crate) fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
             if is_dev_sink(rest) {
                 continue;
             }
-            // `rest` is a bare path (no KEY=VALUE wrapper now) — concrete-path filter.
+            // `rest` is a bare path (no KEY=VALUE wrapper now) - concrete-path filter.
             if let Some(path) = concrete_path(rest) {
                 out.push(BashMutation { path, verb: "dd" });
             }
@@ -138,7 +138,7 @@ pub(crate) fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
     }
 }
 
-/// `zip [opts] <dest.zip> <input…>` — the FIRST non-flag operand is the archive being
+/// `zip [opts] <dest.zip> <input…>` - the FIRST non-flag operand is the archive being
 /// created/updated (the only path `zip` writes). Later operands are inputs (read), so
 /// only the destination is emitted.
 pub(crate) fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
@@ -154,11 +154,11 @@ pub(crate) fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
 }
 
 /// `tar` with a CREATE flag writes an archive; emit that archive path (the inputs that
-/// follow are READ, never mutated, so only the destination is reported — symmetric with
+/// follow are READ, never mutated, so only the destination is reported - symmetric with
 /// `zip`). Three idioms are handled:
-/// - bundled short flags WITHOUT a dash: `tar czf <archive> …` — a create+file token like
+/// - bundled short flags WITHOUT a dash: `tar czf <archive> …` - a create+file token like
 ///   `czf`/`cJf`/`tzf`(no `c`→skip). The archive is the NEXT operand;
-/// - bundled short flags WITH a dash: `tar -czf <archive> …` — same, the archive is next;
+/// - bundled short flags WITH a dash: `tar -czf <archive> …` - same, the archive is next;
 /// - long flags: `tar --create --file=<archive>` (inline) or `--create --file <archive>`
 ///   (spaced).
 ///
@@ -212,7 +212,7 @@ pub(crate) fn emit_tar(operands: &[&str], out: &mut Vec<BashMutation>) {
                 glued_file = Some(tail);
             }
         } else if bundle.chars().all(|c| c.is_ascii_alphabetic()) && bundle.contains('c') {
-            // A create bundle with no `f` (archive goes to stdout) — nothing to emit, but
+            // A create bundle with no `f` (archive goes to stdout) - nothing to emit, but
             // record the create so a separate `--file` could still apply.
             has_create = true;
         }
@@ -243,7 +243,7 @@ pub(crate) fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutat
         if let Some(name_eq) = tok.masked.strip_prefix("--") {
             if let Some((name, _)) = name_eq.split_once('=') {
                 // `--name=<path>` inline form. The `--name=` prefix is unmasked ASCII, so
-                // its byte length is the same in the original — slice the value from there.
+                // its byte length is the same in the original - slice the value from there.
                 if OUTPUT_FLAGS.contains(&name) {
                     let value = &tok.orig[name.len() + 3..]; // `--` + name + `=`
                     if let Some(path) = flag_output_path(value) {
@@ -256,7 +256,7 @@ pub(crate) fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutat
                 i += 1;
                 continue;
             }
-            // `--name <path>` spaced form: the value is the NEXT token — but only when
+            // `--name <path>` spaced form: the value is the NEXT token - but only when
             // that token is NOT itself a flag (so `--output --verbose` does not consume
             // `--verbose` as a fabricated path and skip a real flag).
             if OUTPUT_FLAGS.contains(&name_eq) {

@@ -149,7 +149,7 @@ fn turns_multi_session_json_runs_both() {
     );
 }
 
-/// The executable re-capture procedure for the baseline above — NOT a behavioral test
+/// The executable re-capture procedure for the baseline above - NOT a behavioral test
 /// (ignored by default; the fixture is a temp Home, so no hand-run command can reproduce
 /// it). Writes the current eot-only output to tests/turns_pre_feature_baseline.txt.
 #[test]

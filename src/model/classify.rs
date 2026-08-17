@@ -4,7 +4,7 @@ use super::*;
 
 #[allow(dead_code)]
 impl Record {
-    /// True when this is the `system`/`compact_boundary` metrics record (GOLD §5) —
+    /// True when this is the `system`/`compact_boundary` metrics record (GOLD §5) -
     /// `harness.compaction.boundary`.
     #[must_use]
     pub fn is_compact_boundary(&self) -> bool {
@@ -23,14 +23,14 @@ impl Record {
         parse_teammate_message(&text)
     }
 
-    /// True when this record is an inbound TEAMMATE message specifically (GOLD §1) — a
+    /// True when this record is an inbound TEAMMATE message specifically (GOLD §1) - a
     /// `<teammate-message>` at a section boundary. Used by the `list`/`turns` clean-preview gate.
     #[must_use]
     pub fn is_teammate_message_record(&self) -> bool {
         self.teammate_message().is_some()
     }
 
-    /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2) — a
+    /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2) - a
     /// `<teammate-message>` OR `<agent-message>` at a section boundary. The predicate
     /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is
     /// not the operator, but it still delimits a turn). Reads the raw (un-normalized) message text so
@@ -48,7 +48,7 @@ impl Record {
         }
     }
 
-    /// The raw textual body of this message for MARKER detection — the bare string, or text
+    /// The raw textual body of this message for MARKER detection - the bare string, or text
     /// blocks joined with `\n` (NOT whitespace-normalized, so `\n`-bearing markers survive).
     /// `None` when there is no message / no text. (Distinct from [`flatten_content_text`],
     /// which normalizes whitespace for display.)
@@ -75,7 +75,7 @@ impl Record {
 
     /// True when this carrier is a TEAMMATE-SPAWN ACK, not a child return (edge-fixtures
     /// correction): a persistent teammate `Agent` spawn's tool_result is an immediate
-    /// `toolUseResult.status == "teammate_spawned"` acknowledgement — the teammate's actual
+    /// `toolUseResult.status == "teammate_spawned"` acknowledgement - the teammate's actual
     /// work returns LATER as inbound `<teammate-message>`s, never via this tool_result. So an
     /// ACK is `agent.tool.result` ONLY, never `…inbox` (unlike a one-shot Task return).
     pub(crate) fn is_teammate_spawn_ack(&self) -> bool {
@@ -90,7 +90,7 @@ impl Record {
     /// ASYNC/background `Agent` spawn's tool_result is the immediate launch confirmation
     /// (`"Async agent launched successfully.\nagentId: …"`), shaped on disk as
     /// `toolUseResult.{isAsync:true, status:"async_launched"}`. It shares the spawn
-    /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it — but it is the LAUNCH ack, not
+    /// `tool_use_id`, so the [`SpawnLookup`] WOULD resolve it - but it is the LAUNCH ack, not
     /// the work product. The async child's real report arrives LATER via the
     /// `<task-notification>` `<result>` pulse (G1 → `agent.communication.inbox`), never via this
     /// tool_result. So a launch ack is `agent.tool.result` ONLY (unlike a SYNC one-shot Task
@@ -115,7 +115,7 @@ impl Record {
         })
     }
 
-    /// True when this carrier is a spawn LAUNCH ACK rather than a child RETURN — either a
+    /// True when this carrier is a spawn LAUNCH ACK rather than a child RETURN - either a
     /// persistent teammate spawn ([`Record::is_teammate_spawn_ack`]) or an async/background
     /// `Agent` launch ([`Record::is_async_launch_ack`]). Both share the spawn `tool_use_id`
     /// (so the [`SpawnLookup`] would resolve them) yet are the launch confirmation, not the
@@ -124,11 +124,11 @@ impl Record {
         self.is_teammate_spawn_ack() || self.is_async_launch_ack()
     }
 
-    /// True when this record is a SUBAGENT RETURN (GOLD §3) — a tool_result whose
+    /// True when this record is a SUBAGENT RETURN (GOLD §3) - a tool_result whose
     /// `tool_use_id` the spawn lookup resolves to a spawned child (the Task tool_result of a
     /// ONE-SHOT spawn = the child's return, child ⇨ self). `false` without a [`SpawnLookup`]
-    /// in `ctx`, AND `false` for a spawn LAUNCH ACK ([`Record::is_spawn_launch_ack`] — teammate
-    /// or async) — the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it
+    /// in `ctx`, AND `false` for a spawn LAUNCH ACK ([`Record::is_spawn_launch_ack`] - teammate
+    /// or async) - the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it
     /// is not a return.
     pub(crate) fn is_subagent_return(&self, ctx: &ClassifyCtx) -> bool {
         let Some(spawn) = ctx.spawn else {
@@ -150,7 +150,7 @@ impl Record {
     }
 
     /// Classify this record into ALL applicable leaf [`Class`]es (GOLD §3, multi-label,
-    /// deduped, richest-first order). Pure + tolerant + no `unwrap` — an unmodeled record
+    /// deduped, richest-first order). Pure + tolerant + no `unwrap` - an unmodeled record
     /// yields an empty `Vec`. Cross-record facts come from `ctx` (see [`ClassifyCtx`]).
     #[must_use]
     pub fn classify(&self, ctx: &ClassifyCtx) -> Vec<Class> {
@@ -167,7 +167,7 @@ impl Record {
         }
 
         // Hook-injected additionalContext (a `type:"attachment"` record): harness machinery,
-        // not a message — labeled `harness.meta.hook`. Only `search --additional-context`
+        // not a message - labeled `harness.meta.hook`. Only `search --additional-context`
         // (or an explicit `show --line`/`--uuid` address) ever parses these lines, so the
         // label is unreachable elsewhere; the record never opens a turn.
         if self.hook_additional_context_text().is_some() {
@@ -229,7 +229,7 @@ impl Record {
     }
 
     /// Classify a `user` record (GOLD §2/§3): compaction summary (by the `isCompactSummary`
-    /// FLAG, not text — G9); BATCHED mixed-family sections — `<task-notification>` pulse(s) and/or
+    /// FLAG, not text - G9); BATCHED mixed-family sections - `<task-notification>` pulse(s) and/or
     /// inbound peer message(s) `<teammate-message>` / `<agent-message>` (the §1 fix, the G4/G5
     /// union, and P1c M1/M3 cross-family/precedence, via [`classify_batched_sections`]); then the
     /// string-content vs block-content sub-cases.
@@ -256,7 +256,7 @@ impl Record {
 
     /// Classify the string body of a `user` record (also reused for the joined text of a
     /// no-tool_result block record): the harness markers (interrupts, `<local-command-stdout>`,
-    /// `<command-name>`, schedule ticks, meta hook/loop), else genuine prose — or
+    /// `<command-name>`, schedule ticks, meta hook/loop), else genuine prose - or
     /// `agent.communication.inbox` when this is a subagent transcript opener (parent ⇨ self).
     /// (Batched `<task-notification>` / peer-message sections are handled UPSTREAM by
     /// [`classify_batched_sections`], so they never reach here.)
@@ -275,7 +275,7 @@ impl Record {
         }
         if is_slash_command_wrapper(s) {
             // Prose typed after the slash command (`<command-args>`) IS genuine user
-            // input — and the RICHER view (richest-view law: the prose beats the
+            // input - and the RICHER view (richest-view law: the prose beats the
             // wrapper), so it is pushed FIRST: the unfiltered record-text emission
             // renders `/name args`, never the wrapper XML. An explicit
             // `-t harness.command.invocation` still reaches the wrapper form.
@@ -292,7 +292,7 @@ impl Record {
         // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three
         // fixed markers (P1c M2a): the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous
         // loop check` header, and the `You're being invoked on a timer` body sentence. Matched
-        // BEFORE the meta.loop arm — `check` ≠ `tick`, so the loop-DRIVER prefix never collides.
+        // BEFORE the meta.loop arm - `check` ≠ `tick`, so the loop-DRIVER prefix never collides.
         if s.contains(SCHEDULE_WAKEUP_MARKER)
             || s.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)
             || s.contains(SCHEDULE_WAKEUP_TIMER_MARKER)
@@ -300,7 +300,7 @@ impl Record {
             push_unique(out, Class::ScheduleWakeup);
             return;
         }
-        // harness.meta.hook (G2): hook-injected feedback — stop-hook, <local-command-caveat>,
+        // harness.meta.hook (G2): hook-injected feedback - stop-hook, <local-command-caveat>,
         // or the edit-failed-retry notice. (These are isMeta records that would otherwise fall
         // through to user.message.)
         if s.starts_with(STOP_HOOK_FEEDBACK_PREFIX)
@@ -316,20 +316,20 @@ impl Record {
             push_unique(out, Class::MetaLoop);
             return;
         }
-        // isMeta "[Image: source:…]" pseudo-record (G2): EXCLUDED — emit no label rather than
+        // isMeta "[Image: source:…]" pseudo-record (G2): EXCLUDED - emit no label rather than
         // mislabel it user.message.
         if s.starts_with(IMAGE_SOURCE_PREFIX) {
             return;
         }
         // The spawn-prompt seed of a subagent transcript is an inbound comm (parent ⇨ self),
-        // not the operator (GOLD §3) — unchanged, regardless of isMeta.
+        // not the operator (GOLD §3) - unchanged, regardless of isMeta.
         if ctx.is_subagent && ctx.is_transcript_opener {
             push_unique(out, Class::CommInbox);
             return;
         }
         // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched
         // no marker above is a harness-injected pseudo-turn (a generic cron/monitor tick, a
-        // novel hook wrapper), NOT the operator — emit NOTHING rather than mislabel it
+        // novel hook wrapper), NOT the operator - emit NOTHING rather than mislabel it
         // `user.message` (the role-level isMeta gate `is_genuine_user` already applies). Only
         // genuine, non-isMeta unmarked prose is `user.message`.
         if !self.is_meta.unwrap_or(false) {
@@ -383,7 +383,7 @@ impl Record {
     }
 
     /// The FROM id of the FIRST inbound peer section (a `<teammate-message>` or `<agent-message>`)
-    /// in this `type:"user"` record — the comm FROM for [`Record::direction`] (GOLD §4 + P1c M1).
+    /// in this `type:"user"` record - the comm FROM for [`Record::direction`] (GOLD §4 + P1c M1).
     /// `None` when this is not a peer record; a section with no sender attribute degrades to the
     /// literal `"peer"`. Reads the raw (un-normalized) text so the relay preamble's `\n` survives.
     pub(crate) fn first_peer_from(&self) -> Option<String> {
@@ -396,7 +396,7 @@ impl Record {
     }
 
     /// The CLEAN inbound-comm preview of this record when it is (or leads with) an inbound peer
-    /// message — a `<teammate-message …>` or `<agent-message from="…">` (GOLD §1/§5). Returns the
+    /// message - a `<teammate-message …>` or `<agent-message from="…">` (GOLD §1/§5). Returns the
     /// FIRST inbound peer section's class + sender + tag/footer-stripped body, so `turns` / `list`
     /// render `agent.communication.inbox  <from> ⇨ self  <body>` instead of the raw `<teammate-message
     /// …>` XML blob a peer opener used to show. `None` for a non-peer record. RENDER-ONLY (does not
@@ -420,14 +420,14 @@ impl Record {
 
     /// The per-section record-level text emissions of a BATCHED `type:"user"` record (≥1
     /// `<task-notification>` and/or inbound peer `<teammate-message>` / `<agent-message>` section)
-    /// — GOLD §3 G4/G5 per-section render. One [`RecordTextSection`] per section's label, MIRRORING
+    /// -- GOLD §3 G4/G5 per-section render. One [`RecordTextSection`] per section's label, MIRRORING
     /// [`classify_batched_sections`] EXACTLY (same notification-span precedence/masking) so the text
     /// render never drifts from the classification: each `<task-notification>` yields its
     /// `harness.notification.<kind>` (text = the per-section automation label) PLUS, when it carries
     /// a `<result>` (G1), an `agent.communication.inbox` section (child ⇨ self via the embedded
     /// `<tool-use-id>`, degrading to `?` without a [`SpawnLookup`]); each inbound peer section
     /// outside every notification span yields `agent.communication.{inbox,signal}` (sender ⇨ self).
-    /// EMPTY when the record carries no such section — the caller then falls back to the single
+    /// EMPTY when the record carries no such section - the caller then falls back to the single
     /// richest-label record-text emission.
     #[must_use]
     pub fn record_text_sections(&self, ctx: &ClassifyCtx) -> Vec<RecordTextSection> {
@@ -503,7 +503,7 @@ impl Record {
     pub fn direction(&self, ctx: &ClassifyCtx) -> Option<(String, String)> {
         let owner = || ctx.owner_id.unwrap_or("self").to_string();
 
-        // M3 precedence: a <task-notification> record is resolved FIRST — BEFORE the peer scan —
+        // M3 precedence: a <task-notification> record is resolved FIRST - BEFORE the peer scan -
         // so a notification whose <result> merely QUOTES a "<teammate-message" tag never takes
         // the peer direction. A G1 <result>-bearing pulse is the bg-agent's report (child ⇨
         // self), the child resolved via the embedded <tool-use-id> spawn id (degrading to "?"
@@ -560,7 +560,7 @@ impl Record {
                     }
                     // Subagent return: child ⇨ self (the Task tool_result of a one-shot spawn).
                     // A spawn LAUNCH ACK (teammate OR async/background Agent) shares the spawn id
-                    // but is NOT a return → no direction (the real reply comes later — a teammate
+                    // but is NOT a return → no direction (the real reply comes later - a teammate
                     // via a teammate-message, an async agent via the <task-notification> result).
                     Block::ToolResult {
                         tool_use_id: Some(tid),

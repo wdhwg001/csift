@@ -44,7 +44,7 @@ fn acceptance_communication_sent_spawn_and_subagent_opener() {
 #[test]
 fn slash_command_wrapper_extracted_in_both_tag_orders() {
     // The slash-command wrapper appears in TWO tag orders in real corpora: OLD
-    // (`<command-name>` first) and NEW (`<command-message>` first — current CC).
+    // (`<command-name>` first) and NEW (`<command-message>` first - current CC).
     // Detection must catch both; the rendered body is `/name args` (never wrapper XML),
     // and a pattern INSIDE the args matches through the literal prefilter + whole-file
     // gate (args are verbatim raw substrings).
@@ -118,7 +118,7 @@ fn slash_command_wrapper_extracted_in_both_tag_orders() {
     assert_eq!(invocations, 3, "all three wrappers: {rows:?}");
 
     // The explicit harness lens still reaches the wrapper form. (`-c` counts EXCHANGES,
-    // and no wrapper opens a turn, so all three fold into the single turn-0 lead — the
+    // and no wrapper opens a turn, so all three fold into the single turn-0 lead - the
     // per-RECORD count is the census assertion above.)
     let out = h.run(&["search", "", &at, "-t", "harness.command.invocation", "-c"]);
     assert_eq!(out.stdout.trim(), "1", "{}", out.stdout);
@@ -132,7 +132,7 @@ fn slash_command_wrapper_extracted_in_both_tag_orders() {
 
 #[test]
 fn acceptance_user_role_message_shapes() {
-    // §A1 string · §A2 text-block array · §A3 recovered <command-args> prose — all `user.message`.
+    // §A1 string · §A2 text-block array · §A3 recovered <command-args> prose - all `user.message`.
     let h = acceptance_home();
     for (oracle, token) in [
         ("A1 string", "zzgenuine"),
@@ -152,7 +152,7 @@ fn acceptance_user_role_message_shapes() {
 #[test]
 fn acceptance_communication_signals_render_direction() {
     // §C2 bare-lead inbox · §C3 idle_notification · §C4 teammate_terminated · §C5 shutdown_approved
-    // · §C7 SendMessage shutdown_request — each renders `from ⇨ to` (the owner side is `self`).
+    // · §C7 SendMessage shutdown_request - each renders `from ⇨ to` (the owner side is `self`).
     let h = acceptance_home();
     let cases = [
         (
@@ -204,7 +204,7 @@ fn acceptance_communication_signals_render_direction() {
 
 #[test]
 fn acceptance_harness_notification_monitor() {
-    // §D4 / §G6 — a Monitor `<task-notification>` pulse (UNATTESTED in the corpus → synthetic) →
+    // §D4 / §G6 - a Monitor `<task-notification>` pulse (UNATTESTED in the corpus → synthetic) →
     // `harness.notification.monitor`, rendered as the `[monitor <id> <status>] <summary>` label.
     let h = acceptance_home();
     let out = acc(&h, "zzmonitor", "harness.notification.monitor");
@@ -312,7 +312,7 @@ fn search_teammate_message_is_inbox_not_user_regression() {
         inbox.stdout
     );
 
-    // Under `-t user` it must NOT appear (the §1 bug fix) — the human turn does, the peer does not.
+    // Under `-t user` it must NOT appear (the §1 bug fix) - the human turn does, the peer does not.
     let user = h.run(&[
         "search",
         "rate limit",
@@ -335,7 +335,7 @@ fn search_redacted_thinking_is_agent_thinking() {
     // text) is UNATTESTED in the corpus, so this SYNTHETIC fixture exercises it. It must classify
     // `agent.thinking` and surface under `-t agent.thinking` as a `[redacted thinking]` placeholder
     // (never the opaque `data` blob). The search pattern `redacted` is present BOTH in the raw line
-    // (the `redacted_thinking` type) — so the literal prefilter keeps the line — AND in the rendered
+    // (the `redacted_thinking` type) - so the literal prefilter keeps the line - AND in the rendered
     // placeholder, so the regex locates a match on the emitted text.
     let h = Home::new();
     let sess = "abababab-cdcd-efef-0101-232323232323";
@@ -377,7 +377,7 @@ fn search_redacted_thinking_is_agent_thinking() {
 #[test]
 fn search_quoted_tags_mid_prose_stay_user_message() {
     // FINDING-1: a genuine user message that merely QUOTES `<task-notification>` /
-    // `<teammate-message>` mid-prose stays `user.message` — it is NOT reclassified
+    // `<teammate-message>` mid-prose stays `user.message` - it is NOT reclassified
     // `harness.notification` / `agent.communication.inbox` (this bit csift's OWN dev sessions,
     // which quote these tags constantly).
     let h = Home::new();
@@ -439,7 +439,7 @@ fn search_quoted_tags_mid_prose_stay_user_message() {
 fn acceptance_compaction_summary_and_boundary_searchable() {
     // §D6 the isCompactSummary record is a `type:"user"` record → searchable as
     // `harness.compaction.summary`. §D7 (user-reversed): the `compact_boundary` is a `type:"system"`
-    // record NOW ALSO search-surfaced — the §7 prefilter keeps it (one memmem on `compact_boundary`)
+    // record NOW ALSO search-surfaced - the §7 prefilter keeps it (one memmem on `compact_boundary`)
     // and `record_raw_text` renders its top-level content + compactMetadata as the match/excerpt, so
     // compaction points can be enumerated + inspected.
     let h = acceptance_home();

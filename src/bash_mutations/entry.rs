@@ -13,7 +13,7 @@ pub struct BashMutation {
 
 /// Git subcommands that mutate the working tree / index / refs (the conservative
 /// mutating set). A `git <sub>` not in this set (e.g. `status`, `log`, `diff`) records
-/// nothing — git does not name a clean file list lexically, so a mutating subcommand
+/// nothing - git does not name a clean file list lexically, so a mutating subcommand
 /// is recorded coarsely as a single `git:<sub>` pseudo-path, flagged heuristic.
 pub(crate) const GIT_MUTATING: &[&str] = &[
     "add", "commit", "checkout", "reset", "rm", "mv", "restore", "stash", "merge", "rebase",
@@ -30,7 +30,7 @@ pub(crate) const GIT_MUTATING: &[&str] = &[
 #[must_use]
 pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
     // Strip heredoc BODY lines first: a `<<DELIM` body is opaque TEXT (often containing a
-    // `>` or quote that a lexer would mis-read as a redirect, fabricating a path — a
+    // `>` or quote that a lexer would mis-read as a redirect, fabricating a path - a
     // DOUBLE failure since the real write inside the body is still missed). The opener
     // LINE is kept (a `… <<DELIM > file` carries a real redirect on the opener itself).
     let command = strip_heredoc_bodies(command);
@@ -48,7 +48,7 @@ pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
     out
 }
 
-/// True when every byte of a token's mask is [`MASK_CHAR`] — i.e. the whole token
+/// True when every byte of a token's mask is [`MASK_CHAR`] - i.e. the whole token
 /// originated inside a quoted span or a process-sub body, so it is not a real operand.
 pub(crate) fn is_fully_masked(masked: &str) -> bool {
     !masked.is_empty() && masked.chars().all(|c| c == MASK_CHAR)

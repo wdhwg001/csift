@@ -9,7 +9,7 @@ fn automation_trigger_parses_task_notification() {
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>wh1it9jlj</task-id>\n<tool-use-id>toolu_x</tool-use-id>\n<output-file>/tmp/x.output</output-file>\n<status>completed</status>\n<summary>Dynamic workflow \"READ-ONLY: verify csift files\" completed</summary>\n</task-notification>"}}"#,
     );
-    // It STILL opens a turn (it is a real boundary) — but is now classified.
+    // It STILL opens a turn (it is a real boundary) - but is now classified.
     assert!(
         r.is_genuine_user(),
         "a task-notification passes the genuine-user gate"
@@ -63,7 +63,7 @@ fn automation_trigger_none_for_human_and_partial_graceful() {
 #[test]
 fn automation_kind_classifies_background_command_and_agent() {
     // The mislabel fix: a `Background command "…"` summary renders `background-command`,
-    // an `Agent …` summary renders `agent` — NOT the old blanket `workflow`.
+    // an `Agent …` summary renders `agent` - NOT the old blanket `workflow`.
     let bg = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b497m4ncp</task-id>\n<status>completed</status>\n<summary>Background command \"build venvs\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
     );
@@ -98,7 +98,7 @@ fn automation_kind_classifies_background_command_and_agent() {
 fn monitor_cadence_event_replaces_fabricated_completed_status() {
     // A real-captured monitor shape: a Monitor pulse with NO <status> but a real
     // <event> outcome. The label must surface the EVENT (STAGE2_OUTPUT_READY), not fabricate
-    // `completed` — which would invert a timed-out monitor's attribution.
+    // `completed` - which would invert a timed-out monitor's attribution.
     let mon = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b718g3gqq</task-id>\n<summary>Monitor event: \"full test suite re-run completion\"</summary>\n<event>STAGE2_OUTPUT_READY</event>\n</task-notification>"}}"#,
     );
@@ -116,7 +116,7 @@ fn monitor_cadence_event_replaces_fabricated_completed_status() {
         "no fabricated `completed` when an event is present: {label}"
     );
 
-    // A timed-out monitor carries the timeout notice in <event> — also surfaced, never
+    // A timed-out monitor carries the timeout notice in <event> - also surfaced, never
     // inverted to `completed`.
     let timeout = parse(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>q9</task-id>\n<summary>Monitor tick</summary>\n<event>[Monitor timed out — re-arm if needed.]</event>\n</task-notification>"}}"#,
@@ -165,7 +165,7 @@ fn automation_kind_from_summary_direct() {
         BackgroundCommand
     );
     // A monitor-COMPLETION `<task-notification>` (summary opens Monitor/Scheduled/cron)
-    // is its own labeled class — the real `Monitor event: "…"` pulse (seen many times
+    // is its own labeled class - the real `Monitor event: "…"` pulse (seen many times
     // across captures) must NOT fall to `task`. (This is NOT the isMeta ScheduleWakeup tick
     // PROMPT, which never reaches this summary classifier; see AutomationKind::Monitor docs.)
     assert_eq!(
@@ -200,7 +200,7 @@ fn automation_kind_from_summary_direct() {
         Monitor
     );
     // PRECISION: a background command that merely mentions monitoring in PROSE (outside the
-    // quoted name) or names an unrelated command stays BackgroundCommand — no over-capture.
+    // quoted name) or names an unrelated command stays BackgroundCommand - no over-capture.
     assert_eq!(
         AutomationKind::from_summary(Some(
             "Background command \"Run pre-commit gate\" completed (monitor it for failures)"
@@ -277,7 +277,7 @@ fn monitor_cadence_tokens_route_each_disjunct() {
         AutomationKind::BackgroundCommand,
         "a plain quoted name stays background-command"
     );
-    // The word must be STANDALONE — a substring inside a larger word is not the signal.
+    // The word must be STANDALONE - a substring inside a larger word is not the signal.
     assert_eq!(
         AutomationKind::from_summary(Some(
             r#"Background command "monitoring-dashboard build" completed"#

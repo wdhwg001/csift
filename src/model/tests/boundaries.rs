@@ -10,7 +10,7 @@ fn auq_answer_carrier_detected() {
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"Q\"=\"A\". You can now continue."}]}}"#,
     );
     assert!(r.is_auq_answer());
-    // It is NOT a genuine user (it's a carrier) but IS an AUQ answer — and, per the
+    // It is NOT a genuine user (it's a carrier) but IS an AUQ answer - and, per the
     // §6.4 behavior change, it DOES open a turn (the answer is the user's message).
     assert!(!r.is_genuine_user());
     assert!(r.is_auq_answer_boundary());
@@ -20,7 +20,7 @@ fn auq_answer_carrier_detected() {
 #[test]
 fn auq_answer_alternate_phrasing_detected() {
     // The DOMINANT real-data phrasing the single hardcoded marker used to miss:
-    // "Your questions have been answered: …" (verified across real sessions —
+    // "Your questions have been answered: …" (verified across real sessions -
     // 16 sessions use this form vs 13 the other, 4 contain BOTH). Must be
     // recognised under the `user` category exactly like the other phrasing.
     let r = parse(
@@ -65,8 +65,8 @@ fn is_auq_answer_text_is_start_anchored_not_contains() {
 fn auq_answer_no_false_positive_on_file_quoting_marker() {
     // A Read/grep tool_result whose content QUOTES the marker mid-text (the csift
     // dev-session failure): NOT an AUQ answer, NOT a boundary, and classify yields a
-    // plain `agent.tool.result` — never `user.answer` dumping the whole file.
-    // NB: `r##"…"##` delimiter — the JSON `"content":"# SPEC.md` has `"#`, which would
+    // plain `agent.tool.result` - never `user.answer` dumping the whole file.
+    // NB: `r##"…"##` delimiter - the JSON `"content":"# SPEC.md` has `"#`, which would
     // close a plain `r#"…"#` raw string early.
     let r = parse(
         r##"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"# SPEC.md (10000 chars)\n...the marker is \"User has answered your questions:\" which CC emits to synthesize the answer record. Lots more file content follows here."}]}}"##,
@@ -97,7 +97,7 @@ fn auq_answer_genuine_marker_lead_still_classifies_as_user_answer() {
 
 #[test]
 fn auq_answer_structured_path_independent_of_marker_text() {
-    // The PRIMARY (modern) path — a non-empty structured `toolUseResult.answers` —
+    // The PRIMARY (modern) path - a non-empty structured `toolUseResult.answers` -
     // is start-anchor-independent: it classifies `user.answer` even when the carrier's
     // content does NOT lead with the marker.
     let r = parse(
@@ -174,7 +174,7 @@ fn auq_answer_with_structured_answers_is_a_boundary() {
 
 #[test]
 fn auq_answer_multibyte_is_codepoint_safe_boundary() {
-    // A multi-byte answer prose — must reconstruct whole, no mid-codepoint slice.
+    // A multi-byte answer prose - must reconstruct whole, no mid-codepoint slice.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"question":"which option for step two? 🤖","header":"STEP TWO","options":[{"label":"option A (recommended)"}]}],"answers":{"which option for step two? 🤖":"🤖 option A is fine, the scope is broader than stated"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"which option for step two? 🤖\"=\"🤖 option A is fine\"."}]}}"#,
     );
@@ -188,7 +188,7 @@ fn auq_answer_multibyte_is_codepoint_safe_boundary() {
 #[test]
 fn auq_exchange_surfaces_each_option_description() {
     // Real-captured shape: every option carries a `description` (supplementary note)
-    // alongside its `label`. BOTH must survive into the reconstructed unit — the
+    // alongside its `label`. BOTH must survive into the reconstructed unit - the
     // description was previously dropped (only labels rendered).
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"header":"EXIF tool","multiSelect":false,"options":[{"description":"standard route, ~10MB download, one-liner","label":"brew install exiftool (Recommended)"},{"description":"pure python, pip install piexif","label":"pip install piexif"}],"question":"which tool re-attaches EXIF?"}],"answers":{"which tool re-attaches EXIF?":"brew install exiftool (Recommended)"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which tool re-attaches EXIF?\"=\"brew install exiftool (Recommended)\". You can now continue."}]}}"#,
@@ -211,14 +211,14 @@ fn auq_exchange_surfaces_each_option_description() {
 fn auq_exchange_surfaces_notes_when_answer_is_notes_only() {
     // Real-captured shape: the user answered by typing prose into the
     // notes field; the answer value is the literal "(notes only)" placeholder and the
-    // ACTUAL message lives in `annotations[question].notes`. It must be surfaced —
+    // ACTUAL message lives in `annotations[question].notes`. It must be surfaced -
     // previously the whole user message was silently dropped.
     let r = parse(
         r#"{"type":"user","toolUseResult":{"questions":[{"header":"Routing","multiSelect":false,"options":[{"description":"the inbound path","label":"Route A"},{"description":"the outbound path","label":"Route B"}],"question":"which route for the queue?"}],"answers":{"which route for the queue?":"(notes only)"},"annotations":{"which route for the queue?":{"notes":"never conflate the two — Route A is inbound only, Route B is outbound only"}}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"User has answered your questions: \"which route for the queue?\"=\"(notes only)\". You can now continue."}]}}"#,
     );
     let unit = r.auq_exchange().expect("auq exchange");
     // The placeholder answer is shown, but the real message (the notes) is what the
-    // user actually said — it MUST be present and searchable.
+    // user actually said - it MUST be present and searchable.
     assert!(
         unit.contains("never conflate the two"),
         "notes (the user's real message) must surface: {unit}"
@@ -322,7 +322,7 @@ fn plan_rejection_without_message_is_not_a_boundary() {
 
 #[test]
 fn plan_approval_is_not_a_boundary() {
-    // The approval path is the harness greenlight (no typed message, no is_error) —
+    // The approval path is the harness greenlight (no typed message, no is_error) -
     // must NOT become a turn boundary.
     let r = parse(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"User has approved your plan. You can now start coding. Your plan has been saved to: /Users/testuser/.claude/plans/elegant-scribbling-dream.md"}]}}"#,

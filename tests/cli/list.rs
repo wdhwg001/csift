@@ -212,7 +212,7 @@ fn list_session_with_only_version_no_branch() {
 
 #[test]
 fn list_window_admits_by_span_intersection() {
-    // A session whose [first, last] span STRADDLES the window is still active in it — the
+    // A session whose [first, last] span STRADDLES the window is still active in it - the
     // span-intersect rule, not a point rule (no single record needs to fall inside).
     let h = Home::new();
     let enc = "-Users-testuser-Projects-windowy";
@@ -251,7 +251,7 @@ fn list_window_admits_by_span_intersection() {
 #[test]
 fn list_renders_clean_automation_and_inbound_previews() {
     // #14: `list`'s first/last previews must render a `<task-notification>` as its automation
-    // attribution label and an inbound `<teammate-message>` as a clean inbound-comm line — never
+    // attribution label and an inbound `<teammate-message>` as a clean inbound-comm line - never
     // the raw XML blobs they used to dump under `first ◂` / `last ◂`.
     let h = Home::new();
     let sess = "cccccccc-dddd-eeee-ffff-000000000000";
@@ -293,7 +293,7 @@ fn list_renders_clean_automation_and_inbound_previews() {
 #[test]
 fn list_all_garbage_counts_each_line_once_not_twice() {
     // R12 §1.4: the head scan and the tail scan each walked the whole file (nothing
-    // genuine to stop at) and each booked the same malformed lines — an all-garbage
+    // genuine to stop at) and each booked the same malformed lines - an all-garbage
     // file reported exactly 2× at every size. The tail scan now floors at the head
     // scan's consumed-end offset, so the two windows are disjoint.
     let h = Home::new();
@@ -334,7 +334,7 @@ fn list_encoded_token_after_flag_ordering() {
 
 #[test]
 fn list_at_uuid_filters_like_siblings() {
-    // `list @<uuid>` is the SAME session filter every other subcommand carries — the `@<uuid>`
+    // `list @<uuid>` is the SAME session filter every other subcommand carries - the `@<uuid>`
     // POSITIONAL must resolve to that one session and scope (no `--session` flag exists).
     let h = populated_home();
     let out = h.run(&["list", at(SESS).as_str(), "--no-subagents"]);
@@ -354,7 +354,7 @@ fn list_at_uuid_filters_like_siblings() {
 
 #[test]
 fn list_scope_banner_reports_pre_cap_scope() {
-    // R7 §2.4: the scope banner / JSON header answer "how big is the covered range" — the
+    // R7 §2.4: the scope banner / JSON header answer "how big is the covered range" - the
     // row flood-guard (`--max-count` / the unscoped default cap) must never shrink them.
     let h = populated_home(); // 1 top-level + 2 subagent = 3 in scope
     let lj = h.run(&["list", "--max-count", "2", "--format", "json"]);
@@ -383,7 +383,7 @@ fn list_scope_banner_reports_pre_cap_scope() {
 #[test]
 fn list_skipped_lines_is_a_window_census_stats_is_the_authority() {
     // R12 §1 disclosure pin: a malformed line OUTSIDE list's head/tail windows is
-    // invisible to `list` BY DESIGN (§7: list never scans the middle — full coverage
+    // invisible to `list` BY DESIGN (§7: list never scans the middle - full coverage
     // measured ~4× its unscoped runtime), while `stats` (a full scan) is the
     // corruption-census authority over the same bytes. Pinning BOTH numbers keeps the
     // divergence a documented contract instead of silent drift.

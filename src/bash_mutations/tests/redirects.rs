@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn redirect_combined_stream_amp_after_gt() {
     // `>&file` / `>& file` is the combined stdout+stderr file redirect (equivalent to
-    // `&>file`) — a real write. Both spacings, asymmetric-no-longer with `&>`.
+    // `&>file`) - a real write. Both spacings, asymmetric-no-longer with `&>`.
     assert_eq!(
         paths("make >& /real/a.log"),
         vec![("/real/a.log".to_string(), ">")]
@@ -18,7 +18,7 @@ fn redirect_combined_stream_amp_after_gt() {
     assert!(paths("cmd >&1").is_empty());
     assert!(paths("cmd >&2").is_empty());
     assert!(paths("cmd >& 2").is_empty());
-    // `>&-` closes an fd — also not a file.
+    // `>&-` closes an fd - also not a file.
     assert!(paths("cmd >&-").is_empty());
     assert!(paths("cmd >& -").is_empty());
     // A bare `>&` with NO following token emits nothing (degenerate, no panic).
@@ -92,7 +92,7 @@ fn input_redirect_file_is_not_a_target() {
 // caught; the precision cases (Fix D) must stay DROPPED.
 // ────────────────────────────────────────────────────────────────────────────
 
-// ── Fix A — fd-qualified redirects (the dominant previously-missed class) ──
+// ── Fix A - fd-qualified redirects (the dominant previously-missed class) ──
 
 #[test]
 fn fd_stderr_redirect_attached_and_spaced() {
@@ -109,7 +109,7 @@ fn fd_stderr_redirect_attached_and_spaced() {
 
 #[test]
 fn fd_stdout_redirect_one_caught() {
-    // `1>/tmp/x.log` — the stdout fd-redirect form.
+    // `1>/tmp/x.log` - the stdout fd-redirect form.
     assert_eq!(
         paths("pytest 1>/tmp/x.log"),
         vec![("/tmp/x.log".to_string(), ">")]
@@ -122,7 +122,7 @@ fn fd_stdout_redirect_one_caught() {
 
 #[test]
 fn fd_ampersand_redirect_caught() {
-    // `&>/tmp/x.log` — both-streams redirect (attached + spaced).
+    // `&>/tmp/x.log` - both-streams redirect (attached + spaced).
     assert_eq!(
         paths("make &>/tmp/x.log"),
         vec![("/tmp/x.log".to_string(), ">")]
@@ -144,7 +144,7 @@ fn fd_both_streams_to_two_paths() {
 
 #[test]
 fn fd_append_redirects_caught() {
-    // `2>>/tmp/e.err` and `&>>/tmp/x.log` — the fd-qualified APPEND forms, verb ">>".
+    // `2>>/tmp/e.err` and `&>>/tmp/x.log` - the fd-qualified APPEND forms, verb ">>".
     assert_eq!(
         paths("svc 2>>/tmp/e.err"),
         vec![("/tmp/e.err".to_string(), ">>")]
@@ -185,17 +185,17 @@ fn plain_redirect_still_caught_after_fd_generalization() {
     );
 }
 
-// ── Fix D — PRECISION: noisy pseudo-paths are DROPPED, never fabricated ──
+// ── Fix D - PRECISION: noisy pseudo-paths are DROPPED, never fabricated ──
 
 #[test]
 fn unresolved_var_redirect_is_dropped() {
-    // `> $OUT` / `>${DIR}/x` — an unexpandable variable pseudo-path is dropped.
+    // `> $OUT` / `>${DIR}/x` - an unexpandable variable pseudo-path is dropped.
     assert!(paths("echo hi > $OUT").is_empty());
     assert!(paths("echo hi >${DIR}/x.log").is_empty());
     assert!(paths("svc 2>/tmp/$run.err").is_empty());
 }
 
-// ── R1: the DOMINANT garbage class — fd-redirect close-paren / process-sub leaks ──
+// ── R1: the DOMINANT garbage class - fd-redirect close-paren / process-sub leaks ──
 
 #[test]
 fn devnull_with_glued_close_paren_is_dropped() {

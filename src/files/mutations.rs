@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Extract the bare file mutations carried by a record slice — the SAME structured +
+/// Extract the bare file mutations carried by a record slice - the SAME structured +
 /// carrier-join + Bash-heuristic logic [`extract_mutations`] uses, but WITHOUT turn
 /// tagging (no session id, no turn index). Reused by the subagent topology to compute a
 /// node's files-changed over its own transcript ([`crate::subagent::build_topology`]),
@@ -13,7 +13,7 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
     // Build the carrier join map once over the whole slice: tool_use_id → (filePath,
     // is_create). A subagent transcript is a single scope, so a global join is correct.
     let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
-    // tool_use_ids whose RESULT errored / was cancelled (`is_error:true`) — those ops never
+    // tool_use_ids whose RESULT errored / was cancelled (`is_error:true`) - those ops never
     // landed, so they are not real mutations (mirrors `extract_mutations` + `recover::extract`).
     let mut failed_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for rec in records {
@@ -35,7 +35,7 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
     }
     let mut out = Vec::new();
     for rec in records {
-        // A record whose tool op errored / was cancelled mutated nothing — skip it.
+        // A record whose tool op errored / was cancelled mutated nothing - skip it.
         if tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id)) {
             continue;
         }
@@ -109,7 +109,7 @@ pub(crate) fn extract_mutations(
     for (turn_index, idxs) in index_turns.iter().enumerate() {
         // Build the carrier join map for this turn: tool_use_id → (filePath, is_create).
         let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
-        // tool_use_ids whose RESULT was an error (`is_error:true`) — a failed Edit/Write, or a
+        // tool_use_ids whose RESULT was an error (`is_error:true`) - a failed Edit/Write, or a
         // Write `Cancelled: parallel tool call … errored` when a sibling op in the same batch
         // failed. The op NEVER landed, so it must NOT be counted as a real mutation: a `files`
         // `write:1` on a cancelled Write contradicts `recover` (which correctly finds no
@@ -138,7 +138,7 @@ pub(crate) fn extract_mutations(
         for &i in idxs {
             let rec = &records[i];
 
-            // A record whose tool op errored / was cancelled never mutated anything — skip its
+            // A record whose tool op errored / was cancelled never mutated anything - skip its
             // structured AND heuristic-Bash mutations (the op's INPUT is a phantom, not a write).
             if tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id)) {
                 continue;
@@ -183,7 +183,7 @@ pub(crate) fn extract_mutations(
                             path: bm.path,
                             op: FileOp::BashMutation,
                             timestamp_utc: rec.timestamp.clone(),
-                            // Bash create-vs-overwrite is NOT knowable lexically — this is
+                            // Bash create-vs-overwrite is NOT knowable lexically - this is
                             // a heuristic flag; the op's is_heuristic() gates the label.
                             is_create: bash_verb_is_create(bm.verb),
                         },
@@ -196,7 +196,7 @@ pub(crate) fn extract_mutations(
 }
 
 /// True when a `tool_result` body is the `File has been modified since read` harness error
-/// (the file changed OUTSIDE the tool stream — prettier/linter/git/etc. — and a fresh Read is
+/// (the file changed OUTSIDE the tool stream - prettier/linter/git/etc. - and a fresh Read is
 /// demanded). Mirrors `recover::classify_integrity_error`'s `ModifiedSinceRead` arm; kept local
 /// so `files` doesn't depend on `recover`'s internals.
 pub(crate) fn is_modified_since_read(content: &serde_json::Value) -> bool {
@@ -207,7 +207,7 @@ pub(crate) fn is_modified_since_read(content: &serde_json::Value) -> bool {
 /// Extract the Edit-before-Read boundaries a session hit on each file: an Edit/Write rejected
 /// with `File has been modified since read` (the file changed outside the Read/Write/Edit
 /// stream). Attribution: the error `tool_result`'s `tool_use_id` matches the rejected op, whose
-/// `file_path` lives on its tool_use record (even though the op never landed) — so a per-turn
+/// `file_path` lives on its tool_use record (even though the op never landed) - so a per-turn
 /// `id → path` map (built from EVERY edit/write tool_use, failed or not) names the file. The
 /// jsonl line is taken from `line_nos` (aligned with `records` by index).
 pub(crate) fn extract_boundaries(
@@ -218,7 +218,7 @@ pub(crate) fn extract_boundaries(
     let index_turns = group_turn_indices_deduped(records, |r| r);
     let mut out = Vec::new();
     for (turn_index, idxs) in index_turns.iter().enumerate() {
-        // id → file_path for every Edit/Write tool_use in this turn (incl. failed ones — the
+        // id → file_path for every Edit/Write tool_use in this turn (incl. failed ones - the
         // rejected edit's INPUT still carries its file_path).
         let mut tool_use_path: BTreeMap<String, String> = BTreeMap::new();
         for &i in idxs {

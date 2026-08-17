@@ -1,4 +1,4 @@
-//! `recover` subcommand — reconstruct a single file's history from a transcript.
+//! `recover` subcommand - reconstruct a single file's history from a transcript.
 //!
 //! Where `files` only rolls up THAT a file was touched, `recover` rebuilds the file's
 //! CONTENT, line by line, by replaying the transcript's Reads / Writes / Edits in

@@ -6,7 +6,7 @@ use super::*;
 /// `*.jsonl` files to operate on, with the subagent span governed by `scope`.
 ///
 /// This is the SINGLE shared target resolver for `list` / `search` / `agents` / `files` /
-/// `recover` / `turns` / `image`. There is NO `--session` flag — a session is targeted by a
+/// `recover` / `turns` / `image`. There is NO `--session` flag - a session is targeted by a
 /// positional `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` token or a `*.jsonl` file; a real
 /// path / encoded-dir token / `~/.claude/projects/<enc>` scopes to project dir(s). 0 `paths` ⇒
 /// every project under the projects root. The subagent transcripts of a selected session
@@ -14,8 +14,8 @@ use super::*;
 /// the already-id-filtered top-level set; workflow `journal.jsonl` event logs are never
 /// transcripts and are excluded (see [`crate::subagent::subagent_transcript_files`]). Per
 /// [`SubagentScope`]:
-/// - `WithSubagents` — top-level session(s) + their subagents (the default).
-/// - `TopLevelOnly` — only the top-level `<uuid>.jsonl` session(s).
+/// - `WithSubagents` - top-level session(s) + their subagents (the default).
+/// - `TopLevelOnly` - only the top-level `<uuid>.jsonl` session(s).
 ///
 /// Bails (never returns an empty silent result) when a session id was pinned but no matching
 /// file exists under the resolved target(s). With no id pin, an empty result is allowed (the
@@ -50,7 +50,7 @@ pub fn resolve_session_files(
 
     // ── SESSION path: the top-level `<uuid>.jsonl` session files (+ subagents per scope).
     // Skipped for an AGENT-ONLY invocation (no session target), so `@<agent-hex>` alone does
-    // not list every session — only the agent subtree below runs.
+    // not list every session - only the agent subtree below runs.
     let session_path_active = session_target || agent_hexes.is_empty();
     if session_path_active {
         let (mut top_level, prefix_hits, prefix_agent_hits) =
@@ -98,18 +98,18 @@ pub fn resolve_session_files(
     Ok(files)
 }
 
-/// The classified positional targets — one pass over the raw tokens.
+/// The classified positional targets - one pass over the raw tokens.
 ///
-/// Target grammar (no `--session` flag — a session is an `@<uuid>` / `@main` / `@trap:<marker>`
+/// Target grammar (no `--session` flag - a session is an `@<uuid>` / `@main` / `@trap:<marker>`
 /// positional, or a `*.jsonl` file). A token is one of: an `@`-prefixed IDENTIFIER (env /
 /// session-id / encoded-dir), a `*.jsonl` session file, or a PATH (real cwd, encoded-dir
-/// token, or `~/.claude/projects/<enc>`). A BARE uuid is NOT special — it falls to the path
+/// token, or `~/.claude/projects/<enc>`). A BARE uuid is NOT special - it falls to the path
 /// branch and fails as "no project dir named <uuid>" (forced-unique: a folder literally named
 /// like a uuid would otherwise be ambiguous). The result selects sessions whose basename
 /// matches ANY collected id.
 struct Targets {
     session_ids: Vec<String>,
-    /// Session-UUID PREFIXES (`@13d9645a` — the leading hex of a uuid, e.g. its first
+    /// Session-UUID PREFIXES (`@13d9645a` - the leading hex of a uuid, e.g. its first
     /// segment): resolved by prefix-match against the enumerated sessions, UNIQUE or an
     /// ambiguity error.
     session_prefixes: Vec<String>,
@@ -117,7 +117,7 @@ struct Targets {
     /// resolves to that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
     agent_hexes: Vec<String>,
     project_paths: Vec<std::path::PathBuf>,
-    /// Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) — kept
+    /// Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) - kept
     /// apart from `project_paths` so they don't trigger the all-projects scan.
     explicit_dirs: Vec<ProjectDir>,
     /// True once any SESSION/PROJECT target is seen, so the all-session enumeration runs. An
@@ -145,7 +145,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     session_ids.push(resolve_env_session()?);
                     session_target = true;
                 }
-                // `@trap:<marker>` — the SELF identifier. The caller (an in-process subagent
+                // `@trap:<marker>` - the SELF identifier. The caller (an in-process subagent
                 // whose own id CC withholds from the env) puts a unique, LITERAL marker in this
                 // very command; csift finds the transcript whose Bash tool_use carries it. A
                 // subagent match → that agent's subtree; a main-thread match → the session.
@@ -164,7 +164,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                 }
                 _ if is_subagent_id(id) => agent_hexes.push(id.to_string()),
                 // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
-                // never a full uuid (32+dashes) or an agent hex (≥12) — resolve it uniquely.
+                // never a full uuid (32+dashes) or an agent hex (≥12) - resolve it uniquely.
                 _ if is_uuid_prefix(id) => {
                     session_prefixes.push(id.to_string());
                     session_target = true;
@@ -176,7 +176,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     session_target = true;
                 }
                 // Any other `@`-token is an UNRECOGNIZED id shape: fail loud naming the
-                // @-grammar. It must NEVER fall through to path resolution — a stripped
+                // @-grammar. It must NEVER fall through to path resolution - a stripped
                 // `@a` used to become the cwd-relative path `a` and report a misleading
                 // "no Claude Code project dir", sending the caller down a filesystem
                 // debugging trail for what is an ID typo (the one spot the fail-loud
@@ -206,7 +206,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         if t.ends_with(".jsonl") {
             let file = Path::new(t);
             // An elicitation SIDECAR (hook-written backfill, csift-elicitation marker records
-            // only) is not a Claude Code transcript — it is read AUTOMATICALLY when you target
+            // only) is not a Claude Code transcript - it is read AUTOMATICALLY when you target
             // its session and cannot be searched directly. Reject it loudly so a stray target is
             // never silently scanned as a session (the merge is the only supported access).
             if crate::elicitation::is_sidecar_path(file) {
@@ -263,7 +263,7 @@ type PrefixHits = std::collections::BTreeMap<String, std::collections::BTreeSet<
 
 /// Enumerate top-level `<uuid>.jsonl` files under `dirs`, honoring the id/prefix filter and
 /// the SPEC 2.1 cwd collision guard, and collect the prefix-match hits over the UNION domain
-/// (top-level uuids + subagent agent ids — `search` emits an id-prefix header token for
+/// (top-level uuids + subagent agent ids - `search` emits an id-prefix header token for
 /// subagent exchanges too, and every emitted token must round-trip as an `@` target).
 fn scan_top_level(
     dirs: &[ProjectDir],
@@ -299,11 +299,11 @@ fn scan_top_level(
     (top_level, prefix_hits, prefix_agent_hits)
 }
 
-/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 — a dir resolved
+/// Admit one candidate `<stem>.jsonl`: the cwd COLLISION GUARD (SPEC 2.1 - a dir resolved
 /// from a REAL path may be shared by a DIFFERENT cwd under the lossy encoding, so keep only
 /// files whose recorded `cwd` IS this target; a file whose `cwd` is absent is kept), then the
 /// UNION-DOMAIN prefix collection (a prefix may name a subagent of a session that itself does
-/// NOT match — cost paid only on a prefix-targeted invocation), then the exact-id / prefix
+/// NOT match - cost paid only on a prefix-targeted invocation), then the exact-id / prefix
 /// keep decision.
 #[allow(clippy::too_many_arguments)]
 fn admit_entry(
@@ -360,7 +360,7 @@ fn admit_entry(
     top_level.push(p);
 }
 
-/// A PREFIX must resolve to EXACTLY ONE id across the union domain — else error (never
+/// A PREFIX must resolve to EXACTLY ONE id across the union domain - else error (never
 /// silently pick). A unique SUBAGENT match dispatches exactly like a full `@<agent-id>`
 /// target; the top-level scan kept no file for it, so only the agent path emits.
 fn resolve_prefix_uniqueness(
@@ -424,7 +424,7 @@ pub(crate) fn resolve_agent_subtree(
             }
             // Found the owning session. The descendants come from the agent→agent topology
             // (`parent_agent_id`); on flat real data an agent has none, so the result is just
-            // the agent itself — correct, and it nests automatically once CC nests subagents.
+            // the agent itself - correct, and it nests automatically once CC nests subagents.
             let nodes = crate::subagent::build_topology(&top, false)?;
             let descendants = subtree_agent_ids(&nodes, hex);
             let mut out: Vec<PathBuf> = Vec::new();
@@ -444,7 +444,7 @@ pub(crate) fn resolve_agent_subtree(
     }
     // Exact id matched nothing. A collision-lengthened `search` header token is a PREFIX of a
     // bare-hex agent id (12 hex chars routes here as an exact-id shape), so before giving up,
-    // try a unique literal-prefix match over the in-scope agent ids — fail-loud on ambiguity,
+    // try a unique literal-prefix match over the in-scope agent ids - fail-loud on ambiguity,
     // a unique hit resolves exactly like the full id.
     if hex.len() >= 12 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
         let mut hits: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();

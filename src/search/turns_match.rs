@@ -18,12 +18,12 @@ pub(crate) fn reconstruct_and_match(
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
 ) -> (Vec<Exchange>, usize) {
-    // Canonical bare-hex id (subagent `agent-` prefix stripped) — the SAME derivation
+    // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
     // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
     // unaffected). See [`crate::subagent::session_id_from_path`].
     let session_id = crate::subagent::session_id_from_path(path);
-    // A subagent transcript's owner is the parent uuid (the dir before `subagents/`) — the
+    // A subagent transcript's owner is the parent uuid (the dir before `subagents/`) - the
     // scope-token for re-targeting the whole session. For a top-level file there is no
     // parent, so the parent IS the session id.
     let is_subagent = crate::subagent::is_subagent_path(path);
@@ -34,7 +34,7 @@ pub(crate) fn reconstruct_and_match(
     // is the single source of truth, used identically by `files`). The outer index is
     // the 0-based turn index; map each index group back to its `Kept` borrows.
     let index_turns = group_turn_indices_deduped(records, |k| &k.rec);
-    // ExitPlanMode plan pointers for this session (§4.2.4) — a rejection-with-message
+    // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
 
@@ -49,7 +49,7 @@ pub(crate) fn reconstruct_and_match(
     // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
     // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is HOISTED
     // (GOLD §3): `run_search` built one `DiscoveredSpawns` per DISTINCT discovery-root up front, so
-    // here we just BORROW this file's root's entry from the shared map — never re-run the (formerly
+    // here we just BORROW this file's root's entry from the shared map - never re-run the (formerly
     // O(N²) per-file) `discover_subagents` dir+meta scan.
     let spawn_lookup = spawn_map
         .get(&discovery_root_for(path))
@@ -76,7 +76,7 @@ pub(crate) fn reconstruct_and_match(
     // open/from-end forms (`N..`, `-3..` = the last 3) materialize per-file.
     let turn_bounds = turn_range.map(|spec| spec.resolve(index_turns.len(), false));
 
-    // Build one turn's Exchange (or None when range-filtered / hit-free) — ONE closure
+    // Build one turn's Exchange (or None when range-filtered / hit-free) - ONE closure
     // shared verbatim by the serial and parallel walks below, so the two paths cannot
     // drift apart.
     let build_exchange = |turn_index: usize, idxs: &[usize]| -> Option<Exchange> {
@@ -111,7 +111,7 @@ pub(crate) fn reconstruct_and_match(
         }
 
         // `--siblings`: render the turn's NON-matched records (the rest of the
-        // back-and-forth) so a matched user question surfaces with the agent's reply —
+        // back-and-forth) so a matched user question surfaces with the agent's reply -
         // fixed policy (see [`sibling_cap`]), the capped-away remainder counted.
         let (mut siblings, siblings_hidden) = if want_siblings {
             collect_turn_siblings(
@@ -172,11 +172,11 @@ pub(crate) fn reconstruct_and_match(
         })
     };
 
-    // Per-turn match+render is INDEPENDENT work, and it used to run serially per file —
+    // Per-turn match+render is INDEPENDENT work, and it used to run serially per file -
     // on a scoped query against a single giant transcript the whole phase sat on one
     // worker while the pool idled (the dominant `cvwait` in a real-corpus profile).
     // The fan-out is DOUBLE-GATED: `inner_parallel` (the caller's scope is too small to
-    // fill the pool from the outside — a broad scan keeps the serial walk: nested
+    // fill the pool from the outside - a broad scan keeps the serial walk: nested
     // fan-out under a saturated pool measurably ADDS steal churn) and a size threshold
     // (a small file's join overhead isn't worth it). An ordered collect keeps the
     // output byte-identical to the serial walk.
@@ -199,13 +199,13 @@ pub(crate) fn reconstruct_and_match(
     (out, index_turns.len())
 }
 
-/// The FIXED `--siblings` policy (the former per-selector cap DSL is gone — one
+/// The FIXED `--siblings` policy (the former per-selector cap DSL is gone - one
 /// zero-argument flag, one predictable behavior): within a matched turn's non-matched
 /// records, MESSAGE-class units always render (user.*, agent.message,
-/// agent.communication.*); the chattier machinery is capped per LEAF —
+/// agent.communication.*); the chattier machinery is capped per LEAF -
 /// agent.thinking ≤ 2, agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2.
 /// Anything capped away is counted and surfaced as an explicit
-/// `(+N more · csift show …)` pointer — self-healing, never silent.
+/// `(+N more · csift show …)` pointer - self-healing, never silent.
 pub(crate) fn sibling_cap(class: Class) -> Option<usize> {
     let path = class.path();
     if path.starts_with("agent.thinking") {
@@ -215,7 +215,7 @@ pub(crate) fn sibling_cap(class: Class) -> Option<usize> {
     } else if path.starts_with("harness") {
         Some(2)
     } else {
-        None // user.* / agent.message / agent.communication.* — always rendered
+        None // user.* / agent.message / agent.communication.* - always rendered
     }
 }
 
@@ -227,7 +227,7 @@ pub(crate) struct Turn<'a> {
 }
 
 /// A [`SpawnLookup`] for one session, built from its discovered subagents (a cheap
-/// `discover_subagents` dir+meta scan — NOT a transcript re-read). Maps the spawn `tool_use_id`
+/// `discover_subagents` dir+meta scan - NOT a transcript re-read). Maps the spawn `tool_use_id`
 /// → the spawned child's agent id (the id-join) and the spawn NAME → child (the teammate
 /// name-join, GOLD §4). Powers comm direction (`self ⇨ child`) + subagent-return detection in
 /// [`Record::classify`]/[`Record::direction`]. Absent ⇒ those degrade to the raw name / `?`.
@@ -261,11 +261,11 @@ pub(crate) fn parent_session_jsonl(path: &Path) -> Option<PathBuf> {
     None
 }
 
-/// The DISCOVERY-ROOT for a session file — the transcript whose sidecar holds the FLAT set of
+/// The DISCOVERY-ROOT for a session file - the transcript whose sidecar holds the FLAT set of
 /// subagents that `classify()`/`direction()` must resolve. For a SUBAGENT transcript that is its
 /// PARENT top-level `.jsonl` (ALL of a session's subagents share ONE root); for a TOP-LEVEL file
 /// it is the file itself. Because the spawn lookup is IDENTICAL for every file sharing a root,
-/// `run_search` builds it ONCE per distinct root and shares it — the O(N²)→O(N) hoist (GOLD §3).
+/// `run_search` builds it ONCE per distinct root and shares it - the O(N²)→O(N) hoist (GOLD §3).
 /// (The `parent_session_jsonl` fallback is unreachable: `is_subagent_path` true ⇒ a `subagents/`
 /// ancestor exists ⇒ `parent_session_jsonl` returns `Some`; the `unwrap_or_else` only satisfies
 /// the type and, even if hit, `discover_subagents` on a subagent path yields no spawns ⇒ `None`.)
@@ -280,8 +280,8 @@ pub(crate) fn discovery_root_for(path: &Path) -> PathBuf {
 /// Build the [`DiscoveredSpawns`] lookup powering comm direction (`self ⇨ child`) + subagent-return
 /// detection, from an already-resolved DISCOVERY-ROOT (see [`discovery_root_for`]). A failed /
 /// empty discovery yields `None` (the engine degrades gracefully). Cheap: dir-listing + small
-/// `meta.json` reads, bounded by the subagent count — never a transcript content scan. Called ONCE
-/// per distinct root (not per file) — the GOLD §3 hoist.
+/// `meta.json` reads, bounded by the subagent count - never a transcript content scan. Called ONCE
+/// per distinct root (not per file) - the GOLD §3 hoist.
 pub(crate) fn build_spawn_lookup(discovery_root: &Path) -> Option<DiscoveredSpawns> {
     let subs = discover_subagents(discovery_root).ok()?;
     if subs.is_empty() {
@@ -310,7 +310,7 @@ pub(crate) struct ClassifyEnv<'a> {
     pub(crate) owner_id: &'a str,
     pub(crate) is_subagent: bool,
     pub(crate) parent_id: &'a str,
-    /// The physical line of the first record that `opens_turn()` — the subagent spawn-prompt seed
+    /// The physical line of the first record that `opens_turn()` - the subagent spawn-prompt seed
     /// (flips it from `user.message` to `agent.communication.inbox`). `None` ⇒ no opener.
     pub(crate) first_opener_line: Option<usize>,
     pub(crate) spawn: Option<&'a (dyn SpawnLookup + Sync)>,
@@ -333,7 +333,7 @@ impl ClassifyEnv<'_> {
 }
 
 /// Gather the label-eligible, time-windowed, regex-matching hits inside a turn, plus the
-/// indices (into `turn.records`) of the records that produced at least one hit — so
+/// indices (into `turn.records`) of the records that produced at least one hit - so
 /// `--siblings` can exclude an already-matched record from the sibling rendering.
 /// Build the `tool_use_id → tool name` index for a file's records: every `tool_use` block's
 /// `{id, name}`. A later `tool_result` (which carries only the `tool_use_id`) looks its tool up
@@ -386,15 +386,15 @@ pub(crate) fn tool_pair_ids(records: &[Kept]) -> (HashSet<String>, HashSet<Strin
 
 /// Resolve a tool hit's [`Pairing`] against the file-level id sets (GOLD §7). Pairing is a
 /// property of the underlying tool_use/tool_result BLOCK, so it rides EVERY view of that
-/// block — the plain `agent.tool.*` views AND the communication views that supersede them
+/// block - the plain `agent.tool.*` views AND the communication views that supersede them
 /// under the richest-view law (a SendMessage/spawn `agent.communication.sent`/`.signal`
 /// rides a tool_use block; a subagent-return `agent.communication.inbox` rides a
 /// tool_result block). Without this, a FROZEN SendMessage (the dominant stuck-lane shape
 /// in a teams session) fell outside the `pairing` census whenever its comm view won the
-/// dedup. A use-side hit is paired iff its result-id is present (else pending — frozen /
+/// dedup. A use-side hit is paired iff its result-id is present (else pending - frozen /
 /// elicitation / unreturned); a result-side hit is paired iff its use-id is present (else
-/// orphan — compacted / sliced away). A hit with no `tool_use_id` (a record-text unit:
-/// an inbound teammate-message, an idle signal section) stays `None` — outside the axis.
+/// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit:
+/// an inbound teammate-message, an idle signal section) stays `None` - outside the axis.
 pub(crate) fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &HashSet<String>) {
     let Some(id) = h.tool_use_id.as_deref() else {
         return;

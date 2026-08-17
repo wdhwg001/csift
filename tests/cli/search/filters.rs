@@ -25,11 +25,11 @@ fn search_category_filter_and_max_count() {
     let h = populated_home();
     // "carry" matches the top-level session AND both subagents (each is one exchange), so
     // --max-count 1 caps to one and DROPS the rest (the drop note appears only when something is
-    // actually dropped — the footer no longer prints "0 dropped"). (No `-t`: the subagent "carry"
+    // actually dropped - the footer no longer prints "0 dropped"). (No `-t`: the subagent "carry"
     // records are spawn-prompt openers, now `agent.communication.inbox`, not `user`.)
     let out = h.run(&["search", "carry", "--max-count", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The footer reports the TRUE match total (both-ends law) — the cap only windows the
+    // The footer reports the TRUE match total (both-ends law) - the cap only windows the
     // emitted exchanges, and the drop is disclosed at BOTH ends.
     assert!(out.stdout.contains("matched 3"), "{}", out.stdout);
     assert!(
@@ -78,7 +78,7 @@ fn search_short_i_after_positional_parses() {
 
 #[test]
 fn search_with_positional_path_target_like_siblings() {
-    // `csift search PATTERN <encoded>` — a POSITIONAL path, exactly like
+    // `csift search PATTERN <encoded>` - a POSITIONAL path, exactly like
     // `files`/`recover`/`turns`; exercises the explicit-paths branch (`paths.is_empty()` FALSE).
     let h = populated_home();
     let out = h.run(&["search", "carry", ENC, "--no-subagents"]);
@@ -94,7 +94,7 @@ fn search_with_positional_path_target_like_siblings() {
 fn label_not_flag_surface_and_empty_set_guard() {
     // `-T` mirrors `-t` (rg's -t/-T duality): same selector grammar, exclusion semantics.
     let (h, sess, _hex) = show_subagent_home();
-    // The main transcript's L2 is an Agent tool_use — `-T agent.tool` must drop it while a
+    // The main transcript's L2 is an Agent tool_use - `-T agent.tool` must drop it while a
     // plain filter still finds it.
     let plain = h.run(&[
         "search",
@@ -242,7 +242,7 @@ fn search_session_filter_and_turn_range() {
 
 #[test]
 fn search_turn_range_intersects_with_time_window() {
-    // --turn ∧ --since/--until INTERSECT (both filters AND) — the old
+    // --turn ∧ --since/--until INTERSECT (both filters AND) - the old
     // mutual-exclusion interface law is gone. An impossible intersection (turns exist,
     // but none inside the window) is an honest empty result, exit 0.
     let h = populated_home();

@@ -1,4 +1,4 @@
-//! `search` subcommand — regex over transcripts, returning complete round-trip
+//! `search` subcommand - regex over transcripts, returning complete round-trip
 //! exchanges.
 //!
 //! Behavior (SPEC.md §6.2, §6.4):
@@ -13,7 +13,7 @@
 //!   WITH its `tool_result`; a matched user turn WITH the agent response; etc. The
 //!   exchange is the whole turn (opening genuine-user + every record chained under
 //!   it until the next genuine-user), so every form of completeness in §6.4 holds.
-//! - `--max-count` caps results but NEVER silently — the dropped count is reported.
+//! - `--max-count` caps results but NEVER silently - the dropped count is reported.
 //! - rayon parallelizes across files; lazy parse keeps it fast on 200 MB+ inputs.
 //!
 //! ## Scan strategy

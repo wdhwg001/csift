@@ -1,8 +1,8 @@
-//! `stats` subcommand — one-scan aggregates per session (and a scope total).
+//! `stats` subcommand - one-scan aggregates per session (and a scope total).
 //!
 //! Absorbs the questions that otherwise force hand-rolled jsonl parsing: "how many
 //! tokens did this session burn (per model)?", "which tools ran, how often?", "how
-//! many turns / compactions?", "when did it start/stop?". One fixed, rich shape —
+//! many turns / compactions?", "when did it start/stop?". One fixed, rich shape -
 //! no view modes, no tuning flags; `--since`/`--until` bound the counted records by
 //! timestamp (a record with no timestamp never falls inside a bounded window).
 
@@ -68,7 +68,7 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
     rows.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
     // Context-safety cap (T2.1, opt-in): bound an unscoped run's per-session rows. NEVER
-    // silent — the drop is reported. Keep the MOST RECENTLY active, then restore the
+    // silent - the drop is reported. Keep the MOST RECENTLY active, then restore the
     // deterministic id order for display (the scope TOTAL then covers the shown subset).
     let mut dropped = 0usize;
     // `--max-count 0` = uncapped (the crate-wide convention).
@@ -92,7 +92,7 @@ pub fn run_stats(args: &StatsArgs) -> Result<()> {
 
 /// Broad candidate prefilter: every countable record is a `role:user`/`role:assistant`
 /// message line or an `isCompactSummary` carrier (itself role:user, so the role probes
-/// cover it too — kept explicit for clarity, not reach).
+/// cover it too - kept explicit for clarity, not reach).
 fn line_is_stats_candidate(line: &[u8]) -> bool {
     // R13: serialization-tolerant (whitespace around the colon is the same record).
     crate::parse::line_has_role_marker(line)
@@ -279,7 +279,7 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
             }
         }
         if !r.tools.is_empty() {
-            // Descending by count, then name — the "what ran here" glance.
+            // Descending by count, then name - the "what ran here" glance.
             let mut tools: Vec<(&String, &usize)> = r.tools.iter().collect();
             tools.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
             let line: Vec<String> = tools.iter().map(|(k, v)| format!("{k}×{v}")).collect();
@@ -290,7 +290,7 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
         }
         println!();
     }
-    // Scope TOTAL block (only when >1 session — a single session IS its own total).
+    // Scope TOTAL block (only when >1 session - a single session IS its own total).
     if rows.len() > 1 {
         let tokens = merged_tokens(rows);
         let tools = merged_tools(rows);

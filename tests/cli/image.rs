@@ -147,7 +147,7 @@ fn image_converts_by_out_path_extension() {
         many.stderr
     );
 
-    // A directory path (no image extension) keeps the SOURCE format, auto-named — no conversion.
+    // A directory path (no image extension) keeps the SOURCE format, auto-named - no conversion.
     let dir = h.root.join("imgs");
     let d = h.run(&[
         "image",
@@ -200,7 +200,7 @@ fn image_animated_gif_to_still_takes_first_frame() {
         &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
     );
 
-    // A .gif out path (same format as source) is a raw passthrough — animation preserved, no warning.
+    // A .gif out path (same format as source) is a raw passthrough - animation preserved, no warning.
     let g = h.root.join("keep.gif");
     let keep = h.run(&[
         "image",
@@ -254,7 +254,7 @@ fn image_id_selection_json_and_unresolved() {
     ]);
     assert!(!miss.success);
     assert!(miss.stderr.contains("L999i9"), "stderr: {}", miss.stderr);
-    // v0.6.2: the miss explains itself — inventory (this fixture's images carry no
+    // v0.6.2: the miss explains itself - inventory (this fixture's images carry no
     // [Image #N] markers, so all are unnumbered) + the paste-time numbering provenance.
     assert!(
         miss.stderr.contains("unnumbered image(s)"),
@@ -269,7 +269,7 @@ fn image_id_selection_json_and_unresolved() {
 }
 
 // A `#N` miss on a transcript whose handles carry HOLES (inherited paste-time numbers
-// starting past #1) must name the handles that DO exist and call the miss a source gap —
+// starting past #1) must name the handles that DO exist and call the miss a source gap -
 // never a bare "matched no image" that reads like a csift drop.
 #[test]
 fn image_id_miss_names_present_handles_and_explains_holes() {

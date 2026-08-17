@@ -55,7 +55,7 @@ fn all_classes_cover_the_enum() {
     // Class::ALL must list EVERY variant (the local table here is the independent oracle);
     // a variant added to the enum but missing from ALL is caught by the path/role coverage.
     for &c in Class::ALL {
-        // path() is total + role()'s as_str() is the path head — exercised for every leaf.
+        // path() is total + role()'s as_str() is the path head - exercised for every leaf.
         let head = c.path().split('.').next().unwrap();
         assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
     }

@@ -4,7 +4,7 @@ use super::*;
 
 /// Entry point for `csift files`.
 pub fn run_files(args: &FilesArgs) -> Result<()> {
-    // `--turn` and `--since`/`--until` INTERSECT (AND) — the one windowing rule every
+    // `--turn` and `--since`/`--until` INTERSECT (AND) - the one windowing rule every
     // command shares (the former mutual-exclusion bail was a leftover; search/recover/stats
     // already intersected).
     let turn_range = args
@@ -129,7 +129,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
     // malformed lines are counted, never hidden.
     // Parse all files-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool) so a
     // single giant transcript is not scanned on one core. KEEP the parallel scan's exact jsonl
-    // line numbers (aligned with `records` by index) — every `files` row + Edit-before-Read
+    // line numbers (aligned with `records` by index) - every `files` row + Edit-before-Read
     // boundary carries its `Lnnnn` so it joins back to the raw transcript like recover/search.
     let (recs, skipped) = crate::parse::parse_candidates_parallel(bytes, line_is_files_candidate);
     let line_nos: Vec<usize> = recs.iter().map(|(ln, _)| *ln).collect();
@@ -170,10 +170,10 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
 /// no mutation in it). Broad-by-design (substring, not structural) so no mutation is
 /// lost. Like `search`'s prefilter, this only gates the parse.
 pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {
-    // R13: the genuine-user hook is serialization-tolerant (user-only — assistant
+    // R13: the genuine-user hook is serialization-tolerant (user-only - assistant
     // coverage rides the tool-name needles below, so admitting every assistant
     // text record here would repeal this prefilter). Finders built ONCE (per-line
-    // hot path — the stateless form rebuilt its searcher every call).
+    // hot path - the stateless form rebuilt its searcher every call).
     static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 5]> =
         std::sync::LazyLock::new(|| {
             [
@@ -181,7 +181,7 @@ pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {
                 memmem::Finder::new(b"Write"),
                 memmem::Finder::new(b"Bash"),
                 memmem::Finder::new(b"filePath"),
-                // Keep tool_result ERROR carriers — they carry the Edit-before-Read boundaries
+                // Keep tool_result ERROR carriers - they carry the Edit-before-Read boundaries
                 // (and drive `failed_ids`, so a cancelled/errored op is never miscounted as a
                 // real mutation), and an error carrier may not otherwise match (its
                 // `"role":"user"` is its only hook).

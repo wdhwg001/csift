@@ -15,7 +15,7 @@ fn classifies_teammate_and_recovers_spawn_via_name_join() {
     assert_eq!(s.agent_id, "aVSRepro-68a2a1661c9390c1");
     assert_eq!(s.name.as_deref(), Some("VSRepro"));
     assert_eq!(s.team_name.as_deref(), Some("session-25f56dee"));
-    // The teammate meta carries NO toolUseId — the id-join would find nothing.
+    // The teammate meta carries NO toolUseId - the id-join would find nothing.
     assert_eq!(s.spawn_tool_use_id, None);
 
     // The full node: the NAME-join recovers the spawn linkage the id-join can't.
@@ -39,7 +39,7 @@ fn classifies_teammate_and_recovers_spawn_via_name_join() {
 
 #[test]
 fn defensive_recursion_catches_a_hypothetical_nested_sub_sub_agent() {
-    // The REAL layout is flat (no sub-sub-agents exist on disk — verified across 2348
+    // The REAL layout is flat (no sub-sub-agents exist on disk - verified across 2348
     // transcripts). This test fabricates the FUTURE nested layout the defensive walk
     // insures against: a child transcript under
     // `subagents/agent-<hex>/subagents/agent-<hex>.jsonl`. (A)/(B) alone would drop it;
@@ -56,7 +56,7 @@ fn defensive_recursion_catches_a_hypothetical_nested_sub_sub_agent() {
             ),
         );
     let subs = discover_subagents(&session).unwrap();
-    // The two original transcripts PLUS the nested one — none dropped, none duplicated.
+    // The two original transcripts PLUS the nested one - none dropped, none duplicated.
     assert_eq!(
         subs.len(),
         3,
@@ -159,7 +159,7 @@ fn build_topology_links_trigger_time_and_sync_returned_message() {
         .find(|n| n.kind == SubagentKind::BuiltinTask)
         .unwrap();
     // TRUE trigger = the parent Agent tool_use ts (04:59:58), NOT the child-head ts
-    // (05:00:00) — they DIVERGE, proving the trigger axis is real.
+    // (05:00:00) - they DIVERGE, proving the trigger axis is real.
     assert_eq!(
         builtin.trigger_utc.as_deref(),
         Some("2026-06-07T04:59:58.000Z")

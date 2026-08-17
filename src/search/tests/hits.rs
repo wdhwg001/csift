@@ -72,7 +72,7 @@ fn collect_hits_tool_use_matches_name_and_input() {
 #[test]
 fn collect_hits_mcp_elicitation_system_marker() {
     // §3.10: an MCP-elicitation pending marker is a `system` record with NO tool_use
-    // block — `search` must still find it via its top-level `content` string (the gap the
+    // block - `search` must still find it via its top-level `content` string (the gap the
     // §3.10 arm closes), tagged `Tool` and named by `csiftKind`.
     let r = rec(
         r#"{"type":"system","subtype":"mcp_elicitation","timestamp":"2026-06-27T02:00:00.000Z","content":"MCP elicitation [gdrive] (url): authorize wibblewobble access","csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"mcp-elicitation","csiftKey":"el-1","csiftMcpServer":"gdrive"}"#,
@@ -198,8 +198,8 @@ fn auq_answer_surfaces_under_user_category_end_to_end() {
     let mut a = args("bold option");
     a.labels = vec!["user".to_string()];
     let ex = search(&lines, &a);
-    // The AUQ answer is surfaced under `user` (it rides on a carrier) AND — the
-    // sanctioned behavior change (§6.4) — it now OPENS a new turn (the answer is a
+    // The AUQ answer is surfaced under `user` (it rides on a carrier) AND - the
+    // sanctioned behavior change (§6.4) - it now OPENS a new turn (the answer is a
     // genuine user message that was previously missed as a boundary). So the hit
     // lands in turn 1 (the genuine "pick one" opener is turn 0).
     assert_eq!(ex.len(), 1);
@@ -448,7 +448,7 @@ fn agent_text_block_only_from_assistant_not_user_text_block() {
 #[test]
 fn auq_answer_still_surfaces_under_tool_response_alone() {
     // The de-dup must NOT hide the AUQ answer from a `-t agent.tool.result` filter
-    // that does not also name `user` — it is genuinely a tool_result.
+    // that does not also name `user` - it is genuinely a tool_result.
     let lines = vec![
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick one"}}"#,
         r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"which?"}]}}]}}"#,

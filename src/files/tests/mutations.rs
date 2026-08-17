@@ -52,7 +52,7 @@ fn mutations_in_records_excludes_cancelled_and_errored_writes() {
         rec(
             r#"{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"type":"create","filePath":"/tmp/good.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"wok","content":"ok"}]}}"#,
         ),
-        // turn 1: a CANCELLED Write — its result is_error:true.
+        // turn 1: a CANCELLED Write - its result is_error:true.
         rec(
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"go"}}"#,
         ),

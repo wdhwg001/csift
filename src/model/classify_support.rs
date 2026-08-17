@@ -3,7 +3,7 @@
 use super::*;
 
 /// Map a parsed `<task-notification>` [`AutomationKind`] to its `harness.notification.*`
-/// [`Class`] (GOLD §2 — `Agent` becomes `subagent` to avoid the `agent` role collision).
+/// [`Class`] (GOLD §2 - `Agent` becomes `subagent` to avoid the `agent` role collision).
 pub(crate) fn notification_class(kind: AutomationKind) -> Class {
     match kind {
         AutomationKind::BackgroundCommand => Class::NotificationBackgroundCommand,
@@ -57,7 +57,7 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
 ///
 /// PRECEDENCE (M3a): notification spans are matched FIRST and a peer tag whose open falls INSIDE
 /// any notification span (e.g. a `<result>` body that merely QUOTES "<teammate-message") is
-/// IGNORED — so a notification never leaks a spurious comm label. CROSS-FAMILY (M3b): a record
+/// IGNORED - so a notification never leaks a spurious comm label. CROSS-FAMILY (M3b): a record
 /// carrying a real notification section AND a real peer section (outside any notification span)
 /// unions both families' labels.
 ///
@@ -65,7 +65,7 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
 /// leaves the record to the plain marker/prose classifier.
 pub(crate) fn classify_batched_sections(raw: &str, out: &mut Vec<Class>) -> bool {
     let mut matched = false;
-    // (a) <task-notification> sections — classify each, recording its byte span to mask the
+    // (a) <task-notification> sections - classify each, recording its byte span to mask the
     //     peer scan against tags quoted inside it.
     let mut notif_spans: Vec<(usize, usize)> = Vec::new();
     scan_tag_sections(
@@ -121,7 +121,7 @@ pub struct RecordTextSection {
 
 /// A CLEAN inbound-communication preview of a peer/teammate turn-opener, for the `turns` / `list`
 /// render surfaces (the GOLD §1 inbound-comm presentation). RENDER-ONLY: it does NOT affect
-/// [`Record::classify`] / [`Record::opens_turn`] — a peer opener still opens a turn and classifies
+/// [`Record::classify`] / [`Record::opens_turn`] - a peer opener still opens a turn and classifies
 /// `agent.communication.{inbox,signal}` through the engine; this is only the human-facing render of
 /// that opener so the previews no longer dump the raw `<teammate-message …>` XML blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,12 +130,12 @@ pub struct InboundComm {
     pub class: Class,
     /// The sender id (the comm FROM); the comm TO is always the transcript owner (`self`).
     pub from: String,
-    /// The peer's own message body — the `<teammate-message …>` / `<agent-message …>` wrapper tags
+    /// The peer's own message body - the `<teammate-message …>` / `<agent-message …>` wrapper tags
     /// AND the trailing harness security footer stripped, normalized to one line (only the prose).
     pub body: String,
 }
 
-/// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) — preserves
+/// Push `c` into `out` only if not already present (multi-label dedup, GOLD §3) - preserves
 /// first-seen order so the richest/most-salient label leads.
 pub(crate) fn push_unique(out: &mut Vec<Class>, c: Class) {
     if !out.contains(&c) {
@@ -152,7 +152,7 @@ pub(crate) fn push_unique(out: &mut Vec<Class>, c: Class) {
 pub trait SpawnLookup {
     /// The spawned child's agent id for a spawn `tool_use_id` (the `id` of a Task/Agent/
     /// Workflow tool_use; equivalently the `tool_use_id` of its returning tool_result).
-    /// `Some` ⇒ that id spawned a subagent — used for the spawn TO and the return FROM.
+    /// `Some` ⇒ that id spawned a subagent - used for the spawn TO and the return FROM.
     fn child_for_spawn_tool_use_id(&self, tool_use_id: &str) -> Option<String>;
     /// The spawned child's agent id for a spawn by NAME / `subagent_type` (the teammate
     /// name-join, where the meta carries no `toolUseId`). The fallback when the id-join misses.
@@ -162,15 +162,15 @@ pub trait SpawnLookup {
 /// Cross-record context [`Record::classify`] / [`Record::direction`] need that a single record
 /// cannot supply (GOLD §6). Construct with [`ClassifyCtx::top_level`] and set the relevant
 /// fields. **What P2 must populate per record:**
-/// - `owner_id`: the transcript owner's re-feedable id — the session uuid for a top-level
+/// - `owner_id`: the transcript owner's re-feedable id - the session uuid for a top-level
 ///   transcript, or the bare agent id for a subagent (the `self` of every comm direction).
 /// - `owner_name`: the owner's teammate/agent NAME when known (display only; optional).
 /// - `is_subagent`: whether THIS transcript lives under `subagents/`
 ///   (`subagent::is_subagent_path`).
-/// - `parent_id`: the owning/parent session-or-agent id (the FROM of a subagent opener) —
+/// - `parent_id`: the owning/parent session-or-agent id (the FROM of a subagent opener) -
 ///   `subagent::parent_session_id_from_path` / the topology `parent_agent_id`.
 /// - `is_transcript_opener`: `true` ONLY for the positional FIRST turn-opener of a subagent
-///   transcript (the spawn-prompt seed) — flips that genuine-user-shaped record from
+///   transcript (the spawn-prompt seed) - flips that genuine-user-shaped record from
 ///   `user.message` to `agent.communication.inbox` (parent ⇨ self). P2 sets it positionally.
 /// - `spawn`: the [`SpawnLookup`] (the global spawn index) for comm direction + subagent-return
 ///   detection. `None` ⇒ direction degrades gracefully (spawn TO / return falls back to the

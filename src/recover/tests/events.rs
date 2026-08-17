@@ -112,7 +112,7 @@ fn extract_edit_with_originalfile_present() {
 
 #[test]
 fn extract_integrity_errors_both_kinds_attributed_by_id() {
-    // The error carrier has NO inline path — it is attributed via the tool_use_id join to
+    // The error carrier has NO inline path - it is attributed via the tool_use_id join to
     // a same-turn Edit tool_use naming /p/a.rs. Both phrasings classified correctly.
     let modified = numbered(&[
         r#"{"type":"user","message":{"role":"user","content":"go"}}"#,

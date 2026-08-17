@@ -3,7 +3,7 @@
 /// The TRUE class of a `<task-notification>` automation trigger, parsed from the leading
 /// classifier of its `<summary>` (verified against real sessions: the summary opens with
 /// `Background command "…"`, `Dynamic workflow "…"`, or `Agent …`). This is the attribution
-/// the P2 turn-segmentation lens demands — the old code hardcoded the literal `workflow` for
+/// the P2 turn-segmentation lens demands - the old code hardcoded the literal `workflow` for
 /// EVERY trigger, mislabeling background-command + agent pulses (81% on a captured session).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutomationKind {
@@ -20,12 +20,12 @@ pub enum AutomationKind {
     /// `nightly monitor tick (25min)`). The captured session's monitor loop is implemented as `&`-detached
     /// background commands, so without the quoted-name scan it ALL read as `background-command`
     /// and this class matched zero of it. NOTE: this still matches only `<task-notification>`
-    /// pulses — the `ScheduleWakeup` wakeup-tick PROMPTS that drive a monitor/cron cadence are
+    /// pulses - the `ScheduleWakeup` wakeup-tick PROMPTS that drive a monitor/cron cadence are
     /// `isMeta:true` user records (not `<task-notification>`s) and are NOT segmented here (they
     /// bypass [`Record::automation_trigger`] entirely via the isMeta gate in
     /// [`Record::is_genuine_user`]); attributing those is a deferred enhancement.
     Monitor,
-    /// Any other / unrecognized classifier — the safe fallback (renders `task`).
+    /// Any other / unrecognized classifier - the safe fallback (renders `task`).
     Task,
 }
 
@@ -35,7 +35,7 @@ impl AutomationKind {
     /// LEADING prefixes route a monitor-COMPLETION `<task-notification>` to
     /// [`AutomationKind::Monitor`] (the captured-monitor `Monitor event:` shape). ADDITIONALLY, a
     /// `Background command "…"` pulse whose QUOTED NAME carries a monitor-cadence token
-    /// (`monitor`/`re-arm`/`relaunch monitor`/`liveness`) routes to `Monitor` too — the
+    /// (`monitor`/`re-arm`/`relaunch monitor`/`liveness`) routes to `Monitor` too - the
     /// captured-monitor shape, where the monitor loop is a `&`-detached background command (a pure
     /// leading-prefix check disguised ALL of it as `background-command`). This does NOT cover
     /// `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach this classifier).
@@ -87,14 +87,14 @@ impl AutomationKind {
 }
 
 /// True when a `Background command "<name>" …` summary's QUOTED command name names a
-/// monitor / cron cadence — so the pulse is attributed to [`AutomationKind::Monitor`] rather
+/// monitor / cron cadence - so the pulse is attributed to [`AutomationKind::Monitor`] rather
 /// than the generic [`AutomationKind::BackgroundCommand`]. Extracts the substring between the
 /// FIRST pair of double quotes (the command name) and matches a conservative set of
 /// monitor-cadence tokens against it (case-insensitive): the standalone word `monitor`, or
 /// `re-arm`, `relaunch monitor`, `liveness`. The match is restricted to the quoted NAME (never
 /// the whole summary) so a background command that merely mentions "monitor" in trailing prose
 /// is not over-captured; absent quotes, nothing matches (stays `BackgroundCommand`). Tokens
-/// chosen to be strongly monitor-specific — `tick`/`cadence` alone are too broad and excluded.
+/// chosen to be strongly monitor-specific - `tick`/`cadence` alone are too broad and excluded.
 pub(crate) fn quoted_name_is_monitor_cadence(summary: &str) -> bool {
     let Some(open) = summary.find('"') else {
         return false;
@@ -112,13 +112,13 @@ pub(crate) fn quoted_name_is_monitor_cadence(summary: &str) -> bool {
         || name.contains("relaunch monitor")
 }
 
-/// A parsed `<task-notification>` automation trigger — the stable inner tags of a
+/// A parsed `<task-notification>` automation trigger - the stable inner tags of a
 /// machine-injected background-command / workflow / spawned-task completion notice. Every
 /// field is `Option` because a malformed / partial notification must degrade gracefully
 /// (the label still renders with `?`/`completed` fallbacks) rather than be dropped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutomationTrigger {
-    /// The TRUE trigger class (parsed from the `<summary>` classifier) — the attribution the
+    /// The TRUE trigger class (parsed from the `<summary>` classifier) - the attribution the
     /// label renders, replacing the prior hardcoded `workflow`.
     pub kind: AutomationKind,
     /// The `<task-id>` (the workflow / background-command id), if present.
@@ -127,8 +127,8 @@ pub struct AutomationTrigger {
     pub status: Option<String>,
     /// The `<summary>` (the human-readable "what completed" line), if present.
     pub summary: Option<String>,
-    /// The `<event>` payload, if present — where a Monitor / ScheduleWakeup pulse carries its
-    /// real outcome (`STAGE2_OUTPUT_READY`, `[Monitor timed out — re-arm if needed.]`). Often
+    /// The `<event>` payload, if present - where a Monitor / ScheduleWakeup pulse carries its
+    /// real outcome (`STAGE2_OUTPUT_READY`, `[Monitor timed out - re-arm if needed.]`). Often
     /// the only outcome signal on a Monitor pulse (which usually has no `<status>`), so the
     /// label falls back to it instead of fabricating `completed`.
     pub event: Option<String>,
@@ -136,7 +136,7 @@ pub struct AutomationTrigger {
 
 /// Extract the text between `<tag>` and `</tag>` in `s`, trimmed, or `None` when the tag
 /// is absent or empty. Codepoint-safe: `str::find` returns ASCII byte offsets of the
-/// (ASCII) tag delimiters, and the slice is taken on those offsets only — never inside the
+/// (ASCII) tag delimiters, and the slice is taken on those offsets only - never inside the
 /// (possibly CJK) body. A missing close tag yields `None` (never a runaway slice).
 pub(crate) fn extract_xml_tag(s: &str, tag: &str) -> Option<String> {
     let open = format!("<{tag}>");
@@ -152,7 +152,7 @@ pub(crate) fn extract_xml_tag(s: &str, tag: &str) -> Option<String> {
 }
 
 /// Collapse all runs of ASCII whitespace (incl. newlines/tabs) to single spaces
-/// and trim the ends, so an excerpt renders on one line. Does NOT truncate —
+/// and trim the ends, so an excerpt renders on one line. Does NOT truncate -
 /// length capping with an explicit `… (+N chars)` marker is the caller's job.
 pub(crate) fn normalize_line(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -176,7 +176,7 @@ pub(crate) fn normalize_line(s: &str) -> String {
 }
 
 // ============================================================================
-// role.class.sub classification engine (GOLD plan §2–§6) — ADDITIVE, P1.
+// role.class.sub classification engine (GOLD plan §2–§6) - ADDITIVE, P1.
 //
 // This is the NEW taxonomy core, testable in isolation. It is NOT yet wired into any
 // consumer (the legacy `cli::Category` + `-t` selector still drive output); P2 cuts the

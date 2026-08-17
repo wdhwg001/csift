@@ -7,7 +7,7 @@ impl Record {
     /// `[AskUserQuestion · N questions]` followed by, per question, the header, the
     /// question, each option WITH its description (supplementary note), the user's answer, and any
     /// free-text `annotations.notes` attached to that answer (the `"(notes only)"` path,
-    /// where the user's real message lives — never dropped). Built from the structured
+    /// where the user's real message lives - never dropped). Built from the structured
     /// `toolUseResult.questions[]` zipped with `toolUseResult.answers{}` + `.annotations{}`;
     /// falls back to the synthesized `tool_result` string (parsed for `"<q>"="<a>"`) when
     /// `toolUseResult` is absent. Returns `None` when this is not an answered AUQ carrier.
@@ -34,7 +34,7 @@ impl Record {
                 .as_ref()
                 .and_then(|t| t.get("questions"))
                 .and_then(serde_json::Value::as_array);
-            // `annotations` map (§4.4) — per-question `{notes?, preview?}`; when the answer
+            // `annotations` map (§4.4) - per-question `{notes?, preview?}`; when the answer
             // is the `"(notes only)"` placeholder the user's ENTIRE real message lives here.
             let annotations = tur
                 .as_ref()
@@ -51,7 +51,7 @@ impl Record {
                         .get("question")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or_default();
-                    // Each option is a (label, description) pair — BOTH surfaced; the
+                    // Each option is a (label, description) pair - BOTH surfaced; the
                     // description (supplementary note) is the per-option detail the user wants kept,
                     // and is what was being dropped (only the label survived).
                     let opts: Vec<(String, Option<String>)> = q
@@ -78,7 +78,7 @@ impl Record {
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or("");
                     // Free-text notes the user attached to THIS answer. When the answer is
-                    // the `"(notes only)"` placeholder, the notes ARE the user's message —
+                    // the `"(notes only)"` placeholder, the notes ARE the user's message -
                     // dropping them silently swallowed the whole turn (the common path,
                     // since the user routinely answers AUQs with typed prose, not a click).
                     let note = annotations
@@ -130,7 +130,7 @@ impl Record {
             .map(|t| format!("[AskUserQuestion] {}", normalize_line(&t)))
     }
 
-    /// The synthesized AUQ-answer string from this carrier's `tool_result` (§4.4) — the
+    /// The synthesized AUQ-answer string from this carrier's `tool_result` (§4.4) - the
     /// fallback content when `toolUseResult.answers` is absent. `None` if no AUQ marker.
     pub(crate) fn auq_answer_marker_text(&self) -> Option<String> {
         let blocks = self.blocks()?;
@@ -153,7 +153,7 @@ impl Record {
     /// is everything AFTER the fixed [`PLAN_REJECTION_USER_PREFIX`] delimiter.
     ///
     /// `None` when this is not a rejection, or it is a rejection WITHOUT a typed message
-    /// (the `STOP what you are doing and wait…` form — the user clicked reject but typed
+    /// (the `STOP what you are doing and wait…` form - the user clicked reject but typed
     /// nothing, so there is no user turn).
     ///
     /// CODEPOINT-SAFE: the tail is taken with `str::split_once` on the ASCII delimiter
@@ -206,7 +206,7 @@ impl Record {
     ///
     /// GOLD §1 + FINDING-2: an inbound PEER message (`<teammate-message>` OR `<agent-message>`) is
     /// no longer [`Record::is_genuine_user`] (it is a peer, not the operator), but it MUST still
-    /// delimit a turn — so the dedicated [`Record::is_peer_message_record`] clause keeps `opens_turn`
+    /// delimit a turn - so the dedicated [`Record::is_peer_message_record`] clause keeps `opens_turn`
     /// firing for peer records (true before and after the fix for the non-isMeta teammate/agent
     /// forms), leaving turn grouping byte-identical where peers already opened turns while the `user`
     /// mislabel is removed.
@@ -219,7 +219,7 @@ impl Record {
     }
 
     /// The rendered genuine-user text for any boundary-opening record, normalized to a
-    /// single line — the unified opener body used by `turns` / `search` / `list` /
+    /// single line - the unified opener body used by `turns` / `search` / `list` /
     /// `recover`:
     /// - a plain genuine user → its text (same as [`Record::genuine_user_text`]);
     /// - an answered AskUserQuestion → the full Q+options+answer unit
@@ -250,7 +250,7 @@ impl Record {
         }
         // A slash-command wrapper is NOT a turn boundary (§4.2.3), but when the user
         // typed prose after the command (`/compact <prose>`) that prose IS genuine user
-        // input — surface it as `/name args` so `search -t user` still finds it within
+        // input - surface it as `/name args` so `search -t user` still finds it within
         // its turn and the wrapper XML never masquerades as prose. Prefilter/gate note:
         // both the name and the args are VERBATIM raw-line substrings, and the seam
         // between them is a space (a whitespace-bearing pattern is never
@@ -263,12 +263,12 @@ impl Record {
         }
         // GOLD §1: an inbound TEAMMATE message opens a turn but is NOT genuine-user, so the
         // genuine-user arm above no longer yields its body. Render the message text here so a
-        // teammate-opened turn is not BLANK — preserving the exact text `turns`/`search`/`list`
+        // teammate-opened turn is not BLANK - preserving the exact text `turns`/`search`/`list`
         // produced before the `is_genuine_user` fix. This stays TEAMMATE-specific on purpose: the
         // `<agent-message>` peer form (FINDING-2) opens a turn too, but every surface that renders an
         // opener body catches it FIRST via [`Record::inbound_comm_preview`] (`turns`/`list`) or
         // `record_text_sections` (`search`), and `list` deliberately keeps an `<agent-message>`
-        // INELIGIBLE to front a preview (session.rs `preview_text`) — so widening this arm would only
+        // INELIGIBLE to front a preview (session.rs `preview_text`) - so widening this arm would only
         // change that decision, never prevent a blank.
         if self.is_teammate_message_record() {
             if let Some(content) = self.message.as_ref().and_then(|m| m.content.as_ref()) {
@@ -279,7 +279,7 @@ impl Record {
     }
 
     /// The ExitPlanMode tool_use blocks carried by this (assistant) record, as
-    /// `(tool_use_id, plan_file_path)` pairs — the raw material a [`PlanIndex`] is built
+    /// `(tool_use_id, plan_file_path)` pairs - the raw material a [`PlanIndex`] is built
     /// from. `plan_file_path` prefers `input.planFilePath`; a block with no path yields
     /// an empty string (still indexed so the id is known to be an ExitPlanMode). Empty
     /// for any record carrying no ExitPlanMode tool_use.
@@ -311,7 +311,7 @@ impl Record {
     }
 
     /// The persisted-output file path for this carrier (§4.6), preferring the
-    /// structured `toolUseResult.persistedOutputPath` (exact — no regex) and falling
+    /// structured `toolUseResult.persistedOutputPath` (exact - no regex) and falling
     /// back to scraping the inline `Full output saved to: <path>` marker from a
     /// `tool_result` block. Returns `None` when there is no persisted pointer.
     #[must_use]
@@ -344,7 +344,7 @@ impl Record {
         None
     }
 
-    /// Plain-text rendering of the assistant's VISIBLE end-of-turn message — the
+    /// Plain-text rendering of the assistant's VISIBLE end-of-turn message - the
     /// concatenation of its `text` blocks (`thinking`/`tool_use` excluded). Returns
     /// `None` unless this is an `assistant` record carrying at least one non-empty
     /// `text` block. This is the "last agent message" target for `list`.
@@ -356,7 +356,7 @@ impl Record {
         let content = self.message.as_ref()?.content.as_ref()?;
         let Content::Blocks(blocks) = content else {
             // Assistant content is always a block array in CC 2.1.x; a bare string
-            // would be a genuine surprise — surface it rather than silently drop.
+            // would be a genuine surprise - surface it rather than silently drop.
             if let Content::Text(s) = content {
                 let t = normalize_line(s);
                 return if t.is_empty() { None } else { Some(t) };

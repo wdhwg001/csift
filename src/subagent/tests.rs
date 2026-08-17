@@ -10,7 +10,7 @@ impl Fixture {
     fn new() -> Self {
         // A process-wide atomic sequence guarantees a unique root per instance even
         // when two `Fixture::new()` calls on parallel test threads land on the same
-        // PID + nanosecond — otherwise their `Drop` `remove_dir_all` could wipe a
+        // PID + nanosecond - otherwise their `Drop` `remove_dir_all` could wipe a
         // sibling test's tree mid-run (a ~8% flake on the default parallel runner).
         static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -54,7 +54,7 @@ fn layout(fx: &Fixture) -> PathBuf {
             &format!("{enc}/{SESS}.jsonl"),
             concat!(
                 "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"hi\"}}\n",
-                // Agent tool_use that spawned aaa111 — its ts is the TRUE trigger time
+                // Agent tool_use that spawned aaa111 - its ts is the TRUE trigger time
                 // (~2s BEFORE the child-head ts of 05:00:00).
                 "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T04:59:58.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_x\",\"name\":\"Agent\",\"input\":{\"description\":\"run it\",\"subagent_type\":\"oh-my-claudecode:executor\"}}]}}\n",
                 // The SYNC tool_result carrying aaa111's returned message.
@@ -97,7 +97,7 @@ fn layout(fx: &Fixture) -> PathBuf {
             ),
         );
 
-    // Top-level workflow RUN manifest (NOT under subagents/) — the WorkflowRun source.
+    // Top-level workflow RUN manifest (NOT under subagents/) - the WorkflowRun source.
     fx.write(
             &format!("{enc}/{SESS}/workflows/wf_abc.json"),
             "{\"runId\":\"wf_abc\",\"taskId\":\"t9\",\"workflowName\":\"demo-wf\",\"status\":\"completed\",\"agentCount\":1,\"durationMs\":62000,\"totalTokens\":12345,\"totalToolCalls\":7,\"defaultModel\":\"claude-opus-4-8[1m]\",\"startTime\":\"2026-06-07T05:59:55.000Z\"}",

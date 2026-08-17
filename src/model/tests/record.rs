@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn unknown_top_level_fields_are_ignored() {
-    // Real records carry attachment/isMeta/slug/etc. — must not break parsing.
+    // Real records carry attachment/isMeta/slug/etc. - must not break parsing.
     let r = parse(
         r#"{"type":"assistant","attachment":{"x":1},"isMeta":true,"slug":"s","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
     );
@@ -132,7 +132,7 @@ fn blocks_none_when_no_message() {
 
 #[test]
 fn persisted_output_path_empty_structured_falls_through_to_inline() {
-    // An empty structured persistedOutputPath must NOT win — the inline marker
+    // An empty structured persistedOutputPath must NOT win - the inline marker
     // is used instead (the `!p.is_empty()` false arm).
     let r = parse(
         r#"{"type":"user","toolUseResult":{"persistedOutputPath":""},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"<persisted-output>\nFull output saved to: /tmp/real/inline.txt\n</persisted-output>"}]}}"#,

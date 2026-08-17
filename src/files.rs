@@ -1,4 +1,4 @@
-//! `files` subcommand — which files/dirs a session modified, and when.
+//! `files` subcommand - which files/dirs a session modified, and when.
 //!
 //! Extracts file mutations from a session's transcript (spanning subagents by
 //! default), attributes each to its genuine-user turn (the same §6.4 delimiter
@@ -7,12 +7,12 @@
 //!
 //! ## Extraction split (AUTHORITATIVE vs HEURISTIC)
 //!
-//! - **Authoritative** — `Write`/`Edit`/`MultiEdit` (`input.file_path`) +
+//! - **Authoritative** - `Write`/`Edit`/`MultiEdit` (`input.file_path`) +
 //!   `NotebookEdit` (`input.notebook_path`). create-vs-edit is resolved by JOINING the
 //!   structured tool_use to its paired tool_result carrier
 //!   (`toolUseResult.type == "create"`) by `tool_use_id` within the turn (see
 //!   [`crate::model::Record::carrier_create_paths`]).
-//! - **Heuristic** — Bash file mutations, parsed lexically from `input.command` by
+//! - **Heuristic** - Bash file mutations, parsed lexically from `input.command` by
 //!   [`crate::bash_mutations`] (Bash carries no path field in its result). These are
 //!   ALWAYS labelled `(heuristic)` and their `is_create` is itself a heuristic guess.
 //!
@@ -20,12 +20,12 @@
 //!
 //! Like `search`, `files` does a SINGLE forward pass per file (mmap, SIMD newline
 //! scan, a pre-JSON mutation byte-prefilter), with full `serde_json` parse only on
-//! candidate lines. It must NOT retain large blobs — it extracts a few small owned
+//! candidate lines. It must NOT retain large blobs - it extracts a few small owned
 //! strings per mutation ([`crate::model::FileMutation`]) and drops the record, never
 //! holding `originalFile`/`content`/`structuredPatch` bodies from `toolUseResult`.
 //!
 //! Per-file fan-out uses the default `rayon` pool, which sizes to
-//! `std::thread::available_parallelism()` (= CPU count) — the same pool `search` and
+//! `std::thread::available_parallelism()` (= CPU count) - the same pool `search` and
 //! `agents` use. No explicit `available_parallelism()` call is added: rayon already
 //! consults it implicitly, so an explicit call would be dead code (stated here so a
 //! future reader does not "fix" it by adding one).

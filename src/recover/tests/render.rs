@@ -2,7 +2,7 @@
 
 use super::*;
 
-// ── (1b) gutter strip — BOTH tab and arrow forms ──
+// ── (1b) gutter strip - BOTH tab and arrow forms ──
 
 #[test]
 fn strip_gutter_handles_tab_and_arrow_and_skips_unguttered() {

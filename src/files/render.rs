@@ -4,7 +4,7 @@ use super::*;
 
 pub(crate) fn render_text(outcome: &Outcome) {
     // SCOPE banner FIRST (before the empty check) so a fan-out that touched no files still
-    // announces it spanned N subagents — the same up-front disclosure `list`/`turns` give.
+    // announces it spanned N subagents - the same up-front disclosure `list`/`turns` give.
     crate::text::emit_scope_banner(outcome.scope_top, outcome.scope_sub);
     if outcome.mutations.is_empty() && outcome.boundaries.is_empty() {
         println!("no file mutations found");
@@ -24,7 +24,7 @@ pub(crate) fn render_text(outcome: &Outcome) {
     print_footer(outcome);
 }
 
-/// The Edit-before-Read boundary section — orthogonal to the mutation rollup, shown in every
+/// The Edit-before-Read boundary section - orthogonal to the mutation rollup, shown in every
 /// detail mode (and on its own when a session ONLY hit boundaries, no mutations). Each row
 /// carries the file, the jsonl line, turn, time, and kind so it joins back to the transcript
 /// and feeds `recover --file <path> --coverage` for the precise per-boundary breakdown.
@@ -234,7 +234,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
                     "path": m.mutation.path,
                     // UNDERSCORE-delimited op token (json_key, NOT the hyphenated text label)
                     // so the timeline `op` spelling matches the grouped per-op COUNT keys
-                    // (`notebook_edit`/`multi_edit`) — one on-wire spelling across both modes.
+                    // (`notebook_edit`/`multi_edit`) - one on-wire spelling across both modes.
                     "op": m.mutation.op.json_key(),
                     "ts_utc": m.mutation.timestamp_utc,
                     "ts_local": m.mutation.timestamp_utc.as_deref().and_then(local_iso),
@@ -261,7 +261,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             "path": b.path,
             "line": b.line_no,
             "turn_index": b.turn_index,
-            // WHAT changed the file out of band (formatter/git/external-editor/…) —
+            // WHAT changed the file out of band (formatter/git/external-editor/…) -
             // named `cause` so `kind` stays the envelope discriminator exclusively.
             "cause": b.kind,
             "ts_utc": b.timestamp_utc,
@@ -270,7 +270,7 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
         println!("{}", serde_json::to_string(&obj)?);
     }
     // envelope v2 summary. `detail_level` values equal the `--by` flag values verbatim.
-    // `sessions` = distinct OWNING sessions among the emitted mutations/boundaries —
+    // `sessions` = distinct OWNING sessions among the emitted mutations/boundaries -
     // the summary core trio (`sessions`/`skipped_lines`[/`dropped_by_cap`]) every other
     // spanning command carries; files has no cap, so `dropped_by_cap` is deliberately
     // absent rather than a constant 0 implying one exists.
@@ -317,7 +317,7 @@ pub(crate) fn json_grouped<F: Fn(&FileMutation) -> String>(
     for (sid, ms) in by_session {
         // All mutations in this group share the id-domain (same transcript); the discriminator
         // (`is_subagent` + the re-feedable `parent_session_id`) brands every grouped row, the
-        // SAME r5 shape the --timeline arm carries — so a grouped subagent row is now
+        // SAME r5 shape the --timeline arm carries - so a grouped subagent row is now
         // distinguishable + re-feedable, not a bare hex on `session_id` alone.
         let (is_subagent, parent_session_id) = ms
             .first()
@@ -331,7 +331,7 @@ pub(crate) fn json_grouped<F: Fn(&FileMutation) -> String>(
                 "session_id": sid,
                 "is_subagent": is_subagent,
                 "parent_session_id": parent_session_id,
-                // The grouping key is ALWAYS `path` (a bucket prefix / a dir / a file) —
+                // The grouping key is ALWAYS `path` (a bucket prefix / a dir / a file) -
                 // one on-wire key across every `--by` mode, discriminated by `kind`.
                 "path": k,
                 "write": counts.write,

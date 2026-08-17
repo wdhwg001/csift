@@ -26,7 +26,7 @@ fn replay_full_snapshot_resets_then_partial_splices_without_padding() {
 #[test]
 fn reset_to_full_drops_phantom_trailing_line_from_separator_count_total() {
     // CC's Read / file-attachment `totalLines` is a SEPARATOR count: a 2-line file ending in
-    // `\n` reports totalLines=3. We hold the full content, so split_lines (2) is authoritative —
+    // `\n` reports totalLines=3. We hold the full content, so split_lines (2) is authoritative -
     // the phantom 3rd line must NOT inflate seen_total (else restore/salvage/at/coverage report a
     // spurious unknown trailing line). Regression for the node24-migrate.sh 96/97 (98%) bug.
     let mut buf = SparseBuffer::default();
@@ -48,7 +48,7 @@ fn replay_full_read_after_write_does_not_invent_trailing_gap() {
     // The real node24-migrate.sh sequence: a Write creates the file (terminator count), then a
     // later full READ / file-attachment re-observes it with a SEPARATOR-count `totalLines` (N+1
     // for a newline-terminated file). The read is the LAST event, so it sets the final
-    // seen_total — which must stay N, not N+1, so `recover` (restore) sees a COMPLETE file.
+    // seen_total - which must stay N, not N+1, so `recover` (restore) sees a COMPLETE file.
     let events = vec![
         FileEvent {
             line_no: 1,
@@ -219,9 +219,9 @@ fn replay_string_edit_fallback_when_no_structured_patch() {
 #[test]
 fn replay_edit_into_already_open_segment_does_not_reopen() {
     // When an Edit arrives with a segment already open (a windowed read opened it, no full
-    // anchor yet), the `seg_open.is_none()` guard takes its FALSE side — the edit extends
+    // anchor yet), the `seg_open.is_none()` guard takes its FALSE side - the edit extends
     // the open segment instead of opening a new one. With no full anchor, the string-edit
-    // fallback cannot anchor a non-contiguous-from-1 buffer, so it is a hole — but the
+    // fallback cannot anchor a non-contiguous-from-1 buffer, so it is a hole - but the
     // single-segment shape proves the open segment was reused, not reopened.
     let events = vec![
         FileEvent {

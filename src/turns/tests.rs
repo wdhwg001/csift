@@ -47,7 +47,7 @@ fn assign_positions(agents: &mut [AgentMsg]) {
     }
 }
 
-/// The crate-DEFAULT richness config — `Longest` mode (keep the longest agent message + the
+/// The crate-DEFAULT richness config - `Longest` mode (keep the longest agent message + the
 /// first-if-substantive + the rich middles). Drives the default-selection tests.
 fn longest_cfg() -> RichnessCfg {
     RichnessCfg::default()
@@ -140,7 +140,7 @@ fn summary(line_no: usize, fps: Vec<&str>, body_chars: usize) -> SummaryInfo {
 /// An EXPLICIT `EotOnly` (single-EOT) richness config. Every cost / plan / render test that
 /// predates the multi-agent-message model runs against this so its assertions stay byte-
 /// identical to the single-EOT behavior, INDEPENDENT of what the crate default mode is
-/// (the default is now `Longest` — see [`longest_cfg`] / `richness_cfg_default_is_longest`).
+/// (the default is now `Longest` - see [`longest_cfg`] / `richness_cfg_default_is_longest`).
 fn cfg() -> RichnessCfg {
     RichnessCfg {
         mode: AgentMsgMode::EotOnly,

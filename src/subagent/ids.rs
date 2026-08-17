@@ -4,7 +4,7 @@ use super::*;
 
 /// Strip the on-disk `agent-` filename prefix to the bare-hex canonical agent id (the
 /// value the transcript record's `agentId` field AND the workflow journal carry). The
-/// single source of truth for this rule — used by `make_subagent` and by the
+/// single source of truth for this rule - used by `make_subagent` and by the
 /// `recover` / `session` / `files` subcommands so a subagent row's printed `session_id`
 /// is the SAME bare hex `agents` prints, hence joinable across surfaces.
 #[must_use]
@@ -17,7 +17,7 @@ pub fn bare_agent_id(stem: &str) -> &str {
 ///
 /// This is the SINGLE derivation used by every per-file `session_id` emission
 /// (`list` / `search` / `files` / `recover` / `turns`) so the SAME subagent transcript
-/// always reports the SAME id, whichever subcommand prints it — id-form unification.
+/// always reports the SAME id, whichever subcommand prints it - id-form unification.
 /// A top-level session uuid has no `agent-` prefix and passes through unchanged. An
 /// empty / stem-less path yields an empty string (never panics).
 #[must_use]

@@ -12,7 +12,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     let mode = args.mode();
 
     // ── `--out` is a no-op in `--coverage` mode (coverage is a scoping summary, not an
-    //    artifact) — make the no-op VISIBLE at runtime so a "save the coverage report" call
+    //    artifact) - make the no-op VISIBLE at runtime so a "save the coverage report" call
     //    is not silently swallowed. The other three modes honor `--out` in render_text/json.
     if matches!(mode, RecoverMode::Coverage) && args.out.is_some() {
         eprintln!(
@@ -47,7 +47,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     )?;
 
     // ── `--file @plan`: substitute the session-bound plan file (the `plan_mode` attachment's
-    //    `planFilePath`) as the real target, then reconstruct it exactly like any file — every
+    //    `planFilePath`) as the real target, then reconstruct it exactly like any file - every
     //    Write/Edit on it counts, not just the latest Write. Owns the plan-locating concern so
     //    a deleted plan is recoverable from the transcript alone. ──
     let plan_target: Option<String> = match args.file.as_deref() {
@@ -111,10 +111,10 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     // ── Cross-session reconstruction merge (At / Coverage) ──
     // A file's history spans a top-level session AND its own subagents, interleaved by
     // wall-clock: main edits a few lines, a subagent edits some, main edits again, a
-    // subagent edits again. Per-session replay sees only fragments — a subagent that
+    // subagent edits again. Per-session replay sees only fragments - a subagent that
     // partial-reads then edits is un-anchorable in its OWN transcript (sparse buffer), and
     // no single transcript holds the whole file. Merge each top-level GROUP (keyed by
-    // parent_session_id — a top-level's own id, shared by its subagents) into one
+    // parent_session_id - a top-level's own id, shared by its subagents) into one
     // timestamp-ordered timeline so the file reconstructs as a single COMPLETE artifact.
     // UNRELATED top-level sessions (different parents) are never merged: separate histories.
     // Patches stays per-session (per-transcript diff-history provenance is the right view).
@@ -148,7 +148,7 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
 // Batch reconstruction (`--files-from` / `--out-dir`)
 //
 // The dominant cost of recovering MANY files one-by-one is re-parsing the same huge
-// transcripts on every `recover --file` call (a session that wrote — or merely mentions —
+// transcripts on every `recover --file` call (a session that wrote - or merely mentions -
 // hundreds of files is re-parsed hundreds of times). Batch mode parses + turn-groups each
 // transcript ONCE and extracts every listed file it touched, so the corpus is walked a
 // single time regardless of manifest size.
@@ -163,7 +163,7 @@ pub(crate) struct BatchOutcome {
     pub(crate) written: Option<std::path::PathBuf>,
 }
 
-/// The last path component (the filename) — the distinctive token a transcript carries for
+/// The last path component (the filename) - the distinctive token a transcript carries for
 /// every op on the file, and the [`aho_corasick`] pattern that gates parsing.
 pub(crate) fn basename_of(p: &str) -> &str {
     p.rsplit('/').next().unwrap_or(p)

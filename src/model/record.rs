@@ -6,7 +6,7 @@ use super::*;
 ///
 /// Several fields below are deserialized for completeness of the documented record
 /// model (SPEC §3.2) and to keep parsing tolerant, but are not (yet) read by any
-/// handler — e.g. `parent_uuid` (the §6.4 round-trip reconstruction keys on file
+/// handler - e.g. `parent_uuid` (the §6.4 round-trip reconstruction keys on file
 /// order + genuine-user delimiting, not the uuid tree), `is_sidechain`,
 /// `is_visible_in_transcript_only`, `subtype`, `content`. They are part of the
 /// data contract, intentionally retained, hence the targeted allow rather than
@@ -15,7 +15,7 @@ use super::*;
 #[derive(Debug, Clone, Deserialize)]
 pub struct Record {
     /// Record discriminator: "user", "assistant", "system", "summary",
-    /// "last-prompt", "attachment", … (open set — keep as String, never enum-panic).
+    /// "last-prompt", "attachment", … (open set - keep as String, never enum-panic).
     #[serde(default)]
     pub r#type: Option<String>,
 
@@ -45,14 +45,14 @@ pub struct Record {
     #[serde(default, rename = "isSidechain")]
     pub is_sidechain: Option<bool>,
 
-    /// Compaction summary marker — when true, this user record is NOT a human turn.
+    /// Compaction summary marker - when true, this user record is NOT a human turn.
     #[serde(default, rename = "isCompactSummary")]
     pub is_compact_summary: Option<bool>,
 
     /// System-injected pseudo-turn marker (§4.2). `true` ⇒ a `type:"user"` record
     /// whose string/text content LOOKS human ("Continue from where you left off.",
     /// loop ticks, stop-hook feedback, `<local-command-caveat>…`) but is machine-
-    /// generated — must be excluded from genuine-user and from turn-delimiting.
+    /// generated - must be excluded from genuine-user and from turn-delimiting.
     #[serde(default, rename = "isMeta")]
     pub is_meta: Option<bool>,
 
@@ -86,7 +86,7 @@ pub struct Record {
     /// the full file/output content a tool returned (≈20-25% of a candidate line's
     /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost
     /// of every scanning subcommand. The hot paths consult only a handful of small
-    /// fields — read them via the [`Record::tur_probe`] typed probe (skips the huge
+    /// fields - read them via the [`Record::tur_probe`] typed probe (skips the huge
     /// values without allocating); the one deep consumer (`recover`) parses the full
     /// tree on demand via [`Record::tool_use_result_value`].
     #[serde(default, rename = "toolUseResult")]
@@ -95,7 +95,7 @@ pub struct Record {
     /// Top-level `attachment` payload (a sibling of `message`, not a content block).
     /// Real records carry attachments for hook output, `edited_text_file` external
     /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as
-    /// `tool_use_result` — attachments embed whole file snapshots) and read only by
+    /// `tool_use_result` - attachments embed whole file snapshots) and read only by
     /// `recover`/`plan` via [`Record::attachment_value`]; additive + tolerant, so no
     /// other subcommand changes behaviour.
     #[serde(default)]
@@ -117,18 +117,18 @@ pub struct Record {
     #[serde(default)]
     pub csift: Option<String>,
 
-    /// The sidecar record's pairing PHASE — `"pending"` (an unanswered elicitation,
+    /// The sidecar record's pairing PHASE - `"pending"` (an unanswered elicitation,
     /// missing from the native transcript) or `"resolved"` (a lightweight close marker
     /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.
     #[serde(default, rename = "csiftPhase")]
     pub csift_phase: Option<String>,
 
-    /// The sidecar elicitation KIND — `"AskUserQuestion"` / `"ExitPlanMode"` /
+    /// The sidecar elicitation KIND - `"AskUserQuestion"` / `"ExitPlanMode"` /
     /// `"mcp-elicitation"`. `None` on a native record.
     #[serde(default, rename = "csiftKind")]
     pub csift_kind: Option<String>,
 
-    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) — groups a
+    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a
     /// `pending` with its later `resolved`. `None` on a native record.
     #[serde(default, rename = "csiftKey")]
     pub csift_key: Option<String>,
@@ -161,7 +161,7 @@ pub struct Message {
     pub usage: Option<Box<serde_json::value::RawValue>>,
 }
 
-/// The token-usage fields `stats` sums (each optional + tolerant — a missing/odd
+/// The token-usage fields `stats` sums (each optional + tolerant - a missing/odd
 /// field reads as absent, never an error).
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(default)]
@@ -174,7 +174,7 @@ pub struct TokenUsage {
 
 impl Message {
     /// Parse the raw `usage` blob into the typed probe on demand (`None` when absent
-    /// or shaped unexpectedly — tolerant, never an error).
+    /// or shaped unexpectedly - tolerant, never an error).
     #[must_use]
     pub fn token_usage(&self) -> Option<TokenUsage> {
         let raw = self.usage.as_ref()?;
@@ -189,10 +189,10 @@ impl Message {
 }
 
 /// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see
-/// [`Record::tur_probe`]). Every field is an `Option<Value>` — a tiny scalar/map tree
+/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree
 /// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe
 /// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the
-/// former `.get(…)` chains did — byte-identical semantics). Crucially, the blob's HUGE
+/// former `.get(…)` chains did - byte-identical semantics). Crucially, the blob's HUGE
 /// unlisted values (file bodies, stdout echoes, structured patches) are skipped by
 /// serde's ignore path without ever being allocated.
 #[derive(Debug, Default, Deserialize)]
@@ -241,7 +241,7 @@ pub enum Block {
         #[serde(default)]
         signature: Option<String>,
     },
-    /// A `redacted_thinking` block — encrypted/opaque reasoning CC emits in place of a visible
+    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible
     /// `thinking` block (no readable text, only an opaque `data` payload). Classified
     /// `agent.thinking` exactly like a normal thinking block (GOLD §2 / oracle B3); the opaque
     /// `data` is captured for shape-completeness but never rendered.
@@ -260,7 +260,7 @@ pub enum Block {
     ToolResult {
         #[serde(default, rename = "tool_use_id")]
         tool_use_id: Option<String>,
-        /// String OR array of {type:text,text}/{type:image} — keep raw.
+        /// String OR array of {type:text,text}/{type:image} - keep raw.
         #[serde(default)]
         content: Option<serde_json::Value>,
         #[serde(default)]
@@ -270,7 +270,7 @@ pub enum Block {
         #[serde(default)]
         source: Option<serde_json::Value>,
     },
-    /// Any block type not modeled above — never a parse failure.
+    /// Any block type not modeled above - never a parse failure.
     #[serde(other)]
     Unknown,
 }

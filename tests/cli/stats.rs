@@ -181,7 +181,7 @@ fn stats_turn_range_windows_the_aggregates() {
             r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{}}]}}"#, "\n",
         ),
     );
-    // Bare-N shorthand: turn 1 only — Edit counted, Read not, turns == 1.
+    // Bare-N shorthand: turn 1 only - Edit counted, Read not, turns == 1.
     let out = h.run(&["stats", enc, "--turn", "1", "--format", "json"]);
     assert!(out.success, "stderr: {}", out.stderr);
     let rows = json_rows(&out.stdout, "session");
@@ -197,7 +197,7 @@ fn stats_turn_range_windows_the_aggregates() {
 #[test]
 fn stats_aggregates_are_exact() {
     // Mutation pin on the stats aggregation core: token sums per model, tool CALL
-    // counts, the span label, and the JSON id trio must carry REAL values — an emptied
+    // counts, the span label, and the JSON id trio must carry REAL values - an emptied
     // merge map or a += degraded to *= zeroed them with no test on the numbers.
     let h = Home::new();
     let enc = "-Users-dev-example-project";
@@ -211,7 +211,7 @@ fn stats_aggregates_are_exact() {
             r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","model":"relay-model-x","usage":{"input_tokens":222,"output_tokens":55},"content":[{"type":"text","text":"done"}]}}"#, "\n",
         ),
     );
-    // A subagent transcript so the MERGED (multi-transcript) rollup path renders too —
+    // A subagent transcript so the MERGED (multi-transcript) rollup path renders too -
     // the scoped --iterate verification showed merged_tools/merged_tokens survived a
     // single-transcript fixture (the merge path was never invoked).
     h.write(
@@ -257,7 +257,7 @@ fn stats_aggregates_are_exact() {
         "MERGED tool calls across the two transcripts: {}",
         js.stdout
     );
-    // The asserted merged values are UNIQUE to the merged object (5+7 / 4+3 — no single
+    // The asserted merged values are UNIQUE to the merged object (5+7 / 4+3 - no single
     // row carries them): a per-row field must never be able to satisfy the merge pin.
     assert!(
         js.stdout.contains(r#""cache_read":12"#) && js.stdout.contains(r#""cache_creation":7"#),

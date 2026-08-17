@@ -3,7 +3,7 @@
 use super::*;
 
 /// A source `media_type` → an [`ImageOutFormat`]. `None` for a media type outside the four
-/// Claude-API image types (shouldn't occur — CC only stores those).
+/// Claude-API image types (shouldn't occur - CC only stores those).
 pub(crate) fn format_of_media_type(mt: &str) -> Option<ImageOutFormat> {
     match mt {
         "image/png" => Some(ImageOutFormat::Png),
@@ -101,7 +101,7 @@ pub(crate) fn convert_image(
             );
         }
         ImageOutFormat::Webp => {
-            // libwebp (the `webp` crate) — proper lossy quality-90, not a lossless-only fallback.
+            // libwebp (the `webp` crate) - proper lossy quality-90, not a lossless-only fallback.
             let rgba = img.to_rgba8();
             let (w, h) = (rgba.width(), rgba.height());
             out = webp::Encoder::from_rgba(rgba.as_raw(), w, h)
@@ -158,7 +158,7 @@ pub(crate) fn extract(
     let mut skipped_url = 0usize;
     for img in selected {
         if img.source_kind == "url" {
-            // No inline bytes to write — report the URL, never fabricate a file.
+            // No inline bytes to write - report the URL, never fabricate a file.
             eprintln!(
                 "csift: note: {} is a URL image ({}) — not extracted: {}",
                 img.id(),

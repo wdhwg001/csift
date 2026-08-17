@@ -42,7 +42,7 @@ impl TimeWindow {
     }
 
     /// True if the inclusive activity span `[first, last]` (raw UTC ISO timestamps)
-    /// INTERSECTS the window — the `list` rule: a session is admitted when ANY part of its
+    /// INTERSECTS the window - the `list` rule: a session is admitted when ANY part of its
     /// [first-activity, last-activity] span falls inside `[since, until]` (a long-running
     /// session that straddles the whole window still matches). One missing/unparseable
     /// endpoint degrades the span to a point; both missing ⇒ a bounded window never admits
@@ -146,7 +146,7 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
 }
 
 /// Absolute ISO8601: a full instant (`2026-06-01T05:00:00Z` / `…+10:00`), a bare civil
-/// DATETIME (`2026-06-01T05:00:00` — system-LOCAL wall-clock time, the same local
+/// DATETIME (`2026-06-01T05:00:00` - system-LOCAL wall-clock time, the same local
 /// convention as a bare date), or a bare date (`2026-06-01`, system-local midnight).
 fn parse_absolute(s: &str) -> Result<Timestamp> {
     if let Ok(ts) = s.parse::<Timestamp>() {
@@ -155,7 +155,7 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
     // Bare civil DATETIME (no offset / `Z`) → system-local wall clock → UTC. This arm MUST
     // precede the Date arm: jiff's civil-Date parser ACCEPTS a full datetime string and
     // keeps only its date part, so with Date tried first a bare "2026-07-13T20:00:00"
-    // silently collapsed to local MIDNIGHT — a bounded window that looked exactly like a
+    // silently collapsed to local MIDNIGHT - a bounded window that looked exactly like a
     // quiet time period (the R9 silent-wrong-answer bug; the worst failure shape a
     // time-window flag can produce). The offset guard keeps this arm honest: jiff's civil
     // parsers also IGNORE a trailing offset, so a string that CARRIES one but failed the
@@ -185,7 +185,7 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
 }
 
 /// True when the TIME part of an ISO8601-ish string carries a zone indicator (`Z`/`z`, `+`,
-/// or a `-` AFTER the date/time separator — the date part's own dashes don't count).
+/// or a `-` AFTER the date/time separator - the date part's own dashes don't count).
 fn has_offset_indicator(s: &str) -> bool {
     match s.find(['T', 't', ' ']) {
         Some(sep) => s[sep + 1..].contains(['Z', 'z', '+', '-']),
@@ -216,7 +216,7 @@ mod tests {
         // R9: jiff's civil-Date parser accepts a full datetime string (keeping only the
         // date), so a bare datetime used to collapse silently to local midnight. The
         // DateTime arm must yield date-midnight + the stated time-of-day, in the SAME
-        // local zone — assert the delta, which is TZ-independent (no DST transition on
+        // local zone - assert the delta, which is TZ-independent (no DST transition on
         // 2026-06-01 in any mainstream zone between 00:00 and 05:00).
         let midnight = parse_bound("2026-06-01").unwrap();
         let five_am = parse_bound("2026-06-01T05:00:00").unwrap();
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn bare_date_is_system_local_midnight() {
         // A bare date resolves to local midnight. Derive the expected UTC instant
-        // from jiff for the SYSTEM zone (tz-agnostic — holds on any machine / CI),
+        // from jiff for the SYSTEM zone (tz-agnostic - holds on any machine / CI),
         // rather than hardcoding a single zone's offset.
         let midnight_utc = "2026-06-01"
             .parse::<jiff::civil::Date>()
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn relative_form_resolves_to_past() {
         // "1h" ago must be in the past relative to "now"; a far-future ts is out of
-        // a [since=1h-ago, ∞) window only if it's BEFORE the bound — future is in.
+        // a [since=1h-ago, ∞) window only if it's BEFORE the bound - future is in.
         let w = TimeWindow::from_args(Some("1h"), None).unwrap();
         assert!(!w.is_unbounded());
         // A timestamp from the distant past is before "1 hour ago" → excluded.
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn relative_unrecognized_unit_falls_through_to_absolute() {
-        // `5y` — digits + an unrecognized unit letter → parse_relative returns None
+        // `5y` - digits + an unrecognized unit letter → parse_relative returns None
         // (the `_ => return Ok(None)` arm) and absolute parsing then fails.
         assert!(TimeWindow::from_args(Some("5y"), None).is_err());
     }

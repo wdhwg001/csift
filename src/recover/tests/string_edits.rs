@@ -51,7 +51,7 @@ fn noop_edit_does_not_change_buffer_or_inflate_diff() {
         "a matching no-op is anchorable, not a hole"
     );
     // The single segment was opened by the Write anchor (pre-state empty), so its diff is
-    // the file CREATION (empty → a,b) — the no-op added no further change on top of it.
+    // the file CREATION (empty → a,b) - the no-op added no further change on top of it.
     let seg = &rep.segments[0];
     let diff = unified_diff(
         &filter_lines(&seg.start_buffer, None),

@@ -50,7 +50,7 @@ fn automation_by_kind_breaks_down_per_class_not_lumped() {
 #[test]
 fn automation_by_kind_covers_workflow_task_and_unparsed_fallback() {
     use crate::model::AutomationKind::*;
-    // Exercise the remaining classes (Workflow, Task) AND the `automation == None` fallback —
+    // Exercise the remaining classes (Workflow, Task) AND the `automation == None` fallback -
     // an `is_automation` turn whose trigger failed to parse is attributed to `task`.
     let mut unparsed = mk_turn(3, Some("mystery pulse"), Some("ack"), 0, 0);
     unparsed.is_automation = true; // flagged, but .automation stays None
@@ -65,7 +65,7 @@ fn automation_by_kind_covers_workflow_task_and_unparsed_fallback() {
     );
     let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
     let by = automation_by_kind(std::slice::from_ref(&plan));
-    // [BackgroundCommand, Agent, Workflow, Monitor, Task] — 2 workflow, 1 task (parsed) + 1
+    // [BackgroundCommand, Agent, Workflow, Monitor, Task] - 2 workflow, 1 task (parsed) + 1
     // task (the None-fallback) = 2 task.
     assert_eq!(by, [0, 0, 2, 0, 2]);
     assert_eq!(automation_breakdown_text(&by), "2 workflow, 2 task");

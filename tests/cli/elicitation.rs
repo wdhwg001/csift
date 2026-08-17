@@ -4,7 +4,7 @@ use crate::harness::*;
 fn sidecar_schema_skewed_marker_is_counted_never_invisible() {
     // R12 §2: a sentinel-bearing sidecar line the CURRENT schema cannot read (a
     // pre-release fossil: `phase`/`kind`/`key` instead of `csiftPhase`/…) used to be
-    // fully invisible — correctly never merged, but not counted either. It now moves
+    // fully invisible - correctly never merged, but not counted either. It now moves
     // `skipped_lines` on every sidecar-merging surface (valid-JSON-ness ≠ silence).
     let h = Home::new();
     let enc = "-Users-test-Projects-fossil";
@@ -175,7 +175,7 @@ fn epm_pending_renders_kind_and_plan_body() {
 #[test]
 fn elicitation_ghost_pending_dropped_when_natively_closed() {
     // R7 §3 (the ghost-pending guard): Claude Code fires NO PostToolUse for a REJECTED
-    // AUQ/ExitPlanMode, so the hook never writes its `resolved` marker — sidecar-internal
+    // AUQ/ExitPlanMode, so the hook never writes its `resolved` marker - sidecar-internal
     // pairing alone would report the elicitation pending FOREVER while the native transcript
     // long since holds the flushed tool_use + rejection tool_result. The native record
     // outranks the sidecar: the ghost is dropped like a resolved pair (and never duplicated
@@ -237,7 +237,7 @@ fn elicitation_ghost_pending_dropped_when_natively_closed() {
 #[test]
 fn elicitation_pending_kept_when_key_only_quoted_in_prose() {
     // The ghost guard is STRUCTURAL: the key appearing inside another record's TEXT (a Bash
-    // command grepping for it) is not closure evidence — a genuinely-open elicitation whose
+    // command grepping for it) is not closure evidence - a genuinely-open elicitation whose
     // id someone merely quoted must stay pending.
     let h = Home::new();
     h.write(
@@ -349,7 +349,7 @@ fn mcp_pending_is_merged_into_turns() {
 #[test]
 fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
     // W2-8: `verbatim` on a session with ZERO compactions self-diagnoses (stderr) and
-    // points at `show --turn` — the tail-peek misuse correction; --slice (the hook path)
+    // points at `show --turn` - the tail-peek misuse correction; --slice (the hook path)
     // stays quiet. W2-9: list rows carry the sidecar TRI-STATE (`sidecar_present`).
     let h = populated_home();
     let at = format!("@{SESS}");
@@ -375,7 +375,7 @@ fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
         out.stderr
     );
 
-    // Tri-state ①: no sidecar file → present:false (hook unknown — cannot conclude).
+    // Tri-state ①: no sidecar file → present:false (hook unknown - cannot conclude).
     let out = h.run(&["list", &at, "--format", "json"]);
     let rows = json_rows(&out.stdout, "session");
     assert!(
@@ -384,7 +384,7 @@ fn verbatim_no_compaction_note_and_list_sidecar_tristate() {
     );
 
     // Tri-state ②: a sidecar with only a RESOLVED pair (nothing pending) → present:true,
-    // with_elicitation_sidecar:false — "hook installed AND not blocked" is now assertable.
+    // with_elicitation_sidecar:false - "hook installed AND not blocked" is now assertable.
     h.write(
         &format!("{ENC}/{SESS}/elicitations.jsonl"),
         concat!(
@@ -420,7 +420,7 @@ fn search_finds_unresolved_askuserquestion_via_sidecar() {
         ),
     );
 
-    // TEXT — the pending AUQ is found and marked `(elicitation sidecar)` (no fake Lnnnn).
+    // TEXT - the pending AUQ is found and marked `(elicitation sidecar)` (no fake Lnnnn).
     let out = h.run(&["search", "Which branch should I target", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
@@ -434,7 +434,7 @@ fn search_finds_unresolved_askuserquestion_via_sidecar() {
         out.stdout
     );
 
-    // JSON — the hit carries source:"elicitation-sidecar", null line; summary flags it.
+    // JSON - the hit carries source:"elicitation-sidecar", null line; summary flags it.
     let j = h.run(&[
         "search",
         "Which branch should I target",
@@ -494,7 +494,7 @@ fn malformed_sidecar_line_is_skipped_and_counted_in_search() {
 
 #[test]
 fn acceptance_mcp_elicitation_searchable_under_tool_use() {
-    // §G8 — an MCP elicitation (UNATTESTED in the corpus → synthetic sidecar). The pending marker is a
+    // §G8 - an MCP elicitation (UNATTESTED in the corpus → synthetic sidecar). The pending marker is a
     // `type:"system"` record with no tool_use block; the guarded §3.10 arm classifies it
     // `agent.tool.use` and matches its content, so `-t agent.tool.use` finds it, rendered
     // `(elicitation sidecar)` (no fabricated L) with the `with elicitation sidecar` note.

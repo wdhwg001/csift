@@ -4,7 +4,7 @@
 //!
 //! Claude Code stores Plan-Mode plans flat under `~/.claude/plans/` with a random
 //! three-word name (`nested-prancing-popcorn.md`); a subagent's plan gets an
-//! `-agent-<hex>` suffix. The name is NOT derivable from the session id — it is bound
+//! `-agent-<hex>` suffix. The name is NOT derivable from the session id - it is bound
 //! to the session by a record the transcript writes on entering Plan Mode:
 //!
 //! ```text
@@ -17,7 +17,7 @@
 //! reliable one: a session may freely `Edit`/`Write` OTHER sessions' plan files (they
 //! show up as ordinary tool calls on a `~/.claude/plans/…` path), so "any plans/ path the
 //! session touched" is NOT the session's own plan. The bound plan is the one named in the
-//! `plan_mode` attachment, full stop — no path heuristics.
+//! `plan_mode` attachment, full stop - no path heuristics.
 //!
 //! Within one transcript every `plan_mode` attachment carries the same `planFilePath`
 //! (only `planExists` flips `false→true` once the plan is first written); we take the
@@ -50,7 +50,7 @@ pub struct PlanRef {
     pub parent_session_id: String,
     /// Absolute path to the bound plan file, verbatim from `planFilePath`.
     pub plan_file: String,
-    /// Whether that plan file currently exists on disk (a recover target need NOT exist —
+    /// Whether that plan file currently exists on disk (a recover target need NOT exist -
     /// recovering a deleted plan from the transcript is the whole point).
     pub plan_exists: bool,
     /// JSONL line number of the (latest) `plan_mode` attachment, for provenance.
@@ -61,7 +61,7 @@ pub struct PlanRef {
 /// a giant transcript parses only its handful of attachment lines (the scan still splits
 /// newlines over the whole file, but `serde_json` runs on almost nothing).
 fn line_is_plan_candidate(line: &[u8]) -> bool {
-    // Built ONCE (per-line hot path — the stateless form rebuilt its searcher every call).
+    // Built ONCE (per-line hot path - the stateless form rebuilt its searcher every call).
     static PLAN_MODE: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"plan_mode"));
     PLAN_MODE.find(line).is_some()
@@ -173,7 +173,7 @@ fn run_plan_reverse(args: &PlanArgs, plan_file: &Path) -> Result<()> {
     // so the old serial `for` loop read them one at a time on a single core (measured 12.7s on a
     // multi-GB corpus). par_iter overlaps the reads+parses across cores; the explicit sort below is
     // a total order, so output is BYTE-IDENTICAL regardless of completion order. Mirrors the forward
-    // path + recover/search/files. (`want` is borrowed read-only — Sync across the pool.)
+    // path + recover/search/files. (`want` is borrowed read-only - Sync across the pool.)
     let mut hits: Vec<PlanRef> = session_files
         .par_iter()
         .map(|p| -> Result<Option<PlanRef>> {
@@ -248,13 +248,13 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
         return run_plan_reverse(args, plan_file);
     }
     // With NO target at all (no positional, no --sessions-from), resolve the CALLING session
-    // (like `whoami`) — `csift plan` inside a Claude Code session answers "what is MY plan
+    // (like `whoami`) - `csift plan` inside a Claude Code session answers "what is MY plan
     // file". Never scan every project (ambiguous + expensive); error with guidance when the
     // env signal is absent. A positional target (`@<uuid>` / `*.jsonl` / a project path) or a
     // `--sessions-from` list flows through the shared resolver's grammar instead.
     let session_paths: Vec<PathBuf> = if args.paths.is_empty() && args.sessions_from.is_none() {
         match crate::whoami::detect_session_id() {
-            // The env id becomes an `@<uuid>` positional — the same path every other
+            // The env id becomes an `@<uuid>` positional - the same path every other
             // session is reached by now that `--session` is gone.
             Some(id) => vec![PathBuf::from(format!("@{id}"))],
             None => bail!("{}", crate::whoami::AMBIGUOUS_GUIDANCE),
@@ -270,11 +270,11 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
         path::Caller::Other,
     )?;
 
-    // Resolve each transcript's plan binding IN PARALLEL (rayon pool = CPU count) — mirrors
+    // Resolve each transcript's plan binding IN PARALLEL (rayon pool = CPU count) - mirrors
     // recover/search/files. A big session's plan lives in its 300MB+ top-level transcript, and a
     // `.`/multi-session target adds many more; scanning them serially (the old `for` loop) left one
     // core idle on the dominant file. The explicit sort below makes the output order deterministic
-    // regardless of completion order, so this is byte-identical — pure execution strategy.
+    // regardless of completion order, so this is byte-identical - pure execution strategy.
     let mut refs: Vec<PlanRef> = session_files
         .par_iter()
         .map(|p| resolve_session_plan(p))
@@ -365,7 +365,7 @@ mod tests {
         ));
     }
 
-    /// `resolve_session_plan` must bind ONLY on a real `plan_mode` attachment — an empty
+    /// `resolve_session_plan` must bind ONLY on a real `plan_mode` attachment - an empty
     /// file, a mere mention of the word, a different attachment type, and a `plan_mode`
     /// with no `planFilePath` all resolve to `None` (never a false binding).
     #[test]

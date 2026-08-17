@@ -103,8 +103,8 @@ fn search_empty_pattern_with_category_does_not_warn() {
 #[test]
 fn search_empty_pattern_with_uuid_positional_does_not_warn() {
     // A bare-uuid POSITIONAL routes to the SAME session filter as `--session` (via
-    // resolve_session_files), so the empty-pattern warning — which claims "no session
-    // filter" — must be SUPPRESSED. Previously the gate only inspected `--session` and
+    // resolve_session_files), so the empty-pattern warning - which claims "no session
+    // filter" - must be SUPPRESSED. Previously the gate only inspected `--session` and
     // printed the misleading warning here.
     let h = populated_home();
     let out = h.run(&["search", "", at(SESS).as_str(), "--no-subagents"]);
@@ -146,7 +146,7 @@ fn search_text_output_is_token_lean() {
     let h = populated_home();
     let out = h.run(&["search", "carry", at(SESS).as_str(), "--no-subagents"]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // Every exchange header opens with the STABLE id-prefix token (`<first-8>·t<n>`) — no
+    // Every exchange header opens with the STABLE id-prefix token (`<first-8>·t<n>`) - no
     // per-invocation `sN` ordinal, no `sN = <uuid>` legend block anywhere in the output.
     assert!(
         out.stdout.contains(&format!("{}·t", &SESS[..8])),
@@ -174,7 +174,7 @@ fn search_text_output_is_token_lean() {
         "no uppercase TURN: {}",
         out.stdout
     );
-    // The FULL uuid never repeats per exchange — the 8-char prefix token carries each header.
+    // The FULL uuid never repeats per exchange - the 8-char prefix token carries each header.
     assert_eq!(
         out.stdout.matches(SESS).count(),
         0,

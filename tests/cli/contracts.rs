@@ -79,7 +79,7 @@ fn range_grammar_is_n_or_dotdot_everywhere() {
 fn turn_range_old_spelling_hard_errors() {
     // v0.5.0 renamed `--turn-range` → `--turn` on every windowing command (zero-BC
     // policy: no alias). The old spelling must be an unknown argument, and clap's
-    // similarity tip must point at the new one — the stale-knowledge recovery path.
+    // similarity tip must point at the new one - the stale-knowledge recovery path.
     let h = populated_home();
     let out = h.run(&["search", "go", ENC, "--turn-range", "0"]);
     assert!(
@@ -102,7 +102,7 @@ fn turn_range_old_spelling_hard_errors() {
 #[test]
 fn timestamps_canonical_local_marker_everywhere() {
     // v0.5 W1-7: every TEXT timestamp is `YYYY-MM-DD HH:MM:SS[.mmm] <TZAB>(UTC±offset)`
-    // — name AND offset together (zero conversion arithmetic left to the reader), the
+    // - name AND offset together (zero conversion arithmetic left to the reader), the
     // raw-UTC parenthetical copy is GONE, and the marker is a FORMAT derived from the
     // system zone per instant, never a hardcoded value.
     let h = populated_home();
@@ -130,7 +130,7 @@ fn timestamps_canonical_local_marker_everywhere() {
         );
     }
 
-    // DST correctness: a JANUARY instant under the SAME zone renders AEDT(UTC+11) —
+    // DST correctness: a JANUARY instant under the SAME zone renders AEDT(UTC+11) -
     // the offset is computed per instant, not per process.
     let jan = "77777777-8888-4999-8aaa-bbbbccccdddd";
     h.write(
@@ -166,7 +166,7 @@ fn timestamps_canonical_local_marker_everywhere() {
 fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
     // R9 §18a: jiff's civil-Date parser accepts a full datetime string (keeping only the
     // date part), so `--since "…T20:00:00"` (bare, no offset) silently collapsed to local
-    // MIDNIGHT — a bounded window that read exactly like a quiet time period. Bare
+    // MIDNIGHT - a bounded window that read exactly like a quiet time period. Bare
     // datetimes are now system-LOCAL wall-clock time (the bare-date convention extended).
     let h = Home::new();
     let enc = "-Users-test-Projects-tw";
@@ -216,7 +216,7 @@ fn time_window_bare_datetime_is_local_wall_clock_not_midnight() {
 #[test]
 fn malformed_non_candidate_lines_are_counted_never_invisible() {
     // R10: a syntactically-invalid line carries no role marker, so the §7 byte prefilter
-    // routed it to the silent Ignore branch — `skipped_lines` reported 0 on a corrupted
+    // routed it to the silent Ignore branch - `skipped_lines` reported 0 on a corrupted
     // file, indistinguishable from a clean one (the exact failure the malformed law
     // exists to rule out). The O(1) shape check now counts the two realistic corruption
     // shapes: free-text garbage (no leading '{') and crash-truncation (no trailing '}').
@@ -233,7 +233,7 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
         // pre-R10) while the garbage line above exercises the new shape path.
         r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"te"#,
         "\n",
-        "\n", // blank — NOT malformed, never counted
+        "\n", // blank - NOT malformed, never counted
     );
     h.write(&format!("{enc}/{sess}.jsonl"), body);
     let at = format!("@{sess}");
@@ -267,9 +267,9 @@ fn malformed_non_candidate_lines_are_counted_never_invisible() {
 #[test]
 fn reserialized_spaced_json_records_are_full_citizens() {
     // R13: a valid-JSON record whose serialization differs from CC's compact wire
-    // format by one space (`"role": "user"` — python json.dumps defaults, a jq /
+    // format by one space (`"role": "user"` - python json.dumps defaults, a jq /
     // editor round-trip) used to vanish one layer BEFORE any malformed counter
-    // could see it: no preview, no record count, no search match, skipped_lines 0 —
+    // could see it: no preview, no record count, no search match, skipped_lines 0 -
     // invisible on every surface with zero disclosure. Stage-1 candidate detection
     // is now serialization-tolerant (`parse::line_has_role_marker`), so such
     // records are full citizens everywhere.

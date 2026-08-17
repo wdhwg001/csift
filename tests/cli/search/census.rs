@@ -5,7 +5,7 @@ use crate::harness::*;
 #[test]
 fn search_count_by_label_censuses_the_scope() {
     let h = populated_home();
-    // Empty pattern + --count-by label = "what record-types are here?" — the exploration
+    // Empty pattern + --count-by label = "what record-types are here?" - the exploration
     // on-ramp so an empty `-t <leaf>` result is never mistaken for a typo.
     let out = h.run(&["search", "", "--no-subagents", "--count-by", "label"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -60,10 +60,10 @@ fn search_count_by_label_censuses_the_scope() {
 fn search_census_counts_records_not_sections_and_pairing_rides_comm_views() {
     // Two census laws in one fixture. (1) A record that emits SEVERAL section hits (here an
     // assistant record carrying a text block AND a tool_use block) is ONE record to every
-    // census — a leaf's tally must equal what `-t <leaf>` surfaces, never drift above it by
+    // census - a leaf's tally must equal what `-t <leaf>` surfaces, never drift above it by
     // the multi-section overlap. (2) Pairing is a property of the underlying tool block, so
     // it rides the communication view too: a SendMessage with no tool_result is `pending`
-    // even though its richest view is agent.communication.sent — the "anything stuck?"
+    // even though its richest view is agent.communication.sent - the "anything stuck?"
     // census needs no `-t` at all.
     let enc = "-Users-testuser-Projects-census";
     let sess = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
@@ -102,7 +102,7 @@ fn search_census_counts_records_not_sections_and_pairing_rides_comm_views() {
     // The text+tool record AND the SendMessage record both carry agent.tool.use.
     assert_eq!(count("agent.tool.use"), 2, "rows: {rows:?}");
     assert_eq!(count("agent.communication.sent"), 1, "rows: {rows:?}");
-    // 4 RECORDS in scope (opener, text+tool, result, send) — the multi-section record
+    // 4 RECORDS in scope (opener, text+tool, result, send) - the multi-section record
     // must not inflate the total.
     assert_eq!(summary["matched_records"], 4, "summary: {summary}");
 
@@ -118,7 +118,7 @@ fn search_census_counts_records_not_sections_and_pairing_rides_comm_views() {
     assert_eq!(count("pending"), 1, "the frozen SendMessage: {rows:?}");
     assert_eq!(summary["excluded_records"], 1, "the opener: {summary}");
 
-    // The comm selector agrees — the send is IN the pairing domain now, not excluded.
+    // The comm selector agrees - the send is IN the pairing domain now, not excluded.
     let (rows, summary) = census(&["-t", "agent.communication.sent", "--count-by", "pairing"]);
     assert_eq!(rows.len(), 1, "rows: {rows:?}");
     assert_eq!(rows[0]["key"], "pending");
@@ -225,7 +225,7 @@ fn search_count_by_other_axes() {
 fn search_empty_diagnosis_names_the_excluding_label() {
     let h = populated_home();
     // "low-edge" occurs ONLY under agent.tool.result (record c0). Searching it under
-    // `-t user.message` yields zero — the exact L74681 trap. The zero-result diagnosis must
+    // `-t user.message` yields zero - the exact L74681 trap. The zero-result diagnosis must
     // NAME the excluding label so a model self-corrects instead of assuming a syntax error.
     let out = h.run(&["search", "low-edge", "--no-subagents", "-t", "user.message"]);
     assert!(out.success, "stderr: {}", out.stderr);
@@ -301,7 +301,7 @@ fn search_empty_diagnosis_reports_genuine_absence() {
 
 #[test]
 fn search_count_prints_only_the_match_total() {
-    // `-c`/--count: just the integer, no headers — and it must equal the footer `matched`
+    // `-c`/--count: just the integer, no headers - and it must equal the footer `matched`
     // (the ripgrep `-c` contract). Compare against the JSON summary so the assertion tracks
     // whatever the fixture actually yields.
     let h = populated_home();
@@ -358,7 +358,7 @@ fn search_count_reports_true_total_despite_max_count() {
 #[test]
 fn sessions_with_matches_pipes_into_sessions_from_and_refetch_round_trips() {
     let h = populated_home();
-    // `-l`: bare ids, one per line — WHICH sessions matched.
+    // `-l`: bare ids, one per line - WHICH sessions matched.
     let l = h.run(&["search", "", "-l"]);
     assert!(l.success, "stderr: {}", l.stderr);
     assert!(
@@ -367,7 +367,7 @@ fn sessions_with_matches_pipes_into_sessions_from_and_refetch_round_trips() {
         l.stdout
     );
     // The id stream pipes STRAIGHT into `--sessions-from -` (the composition loop closes
-    // inside csift — no jq/sed re-quoting).
+    // inside csift - no jq/sed re-quoting).
     let piped = h.run_with_stdin(
         &["stats", "--sessions-from", "-", "--format", "json"],
         &l.stdout,
@@ -381,8 +381,8 @@ fn sessions_with_matches_pipes_into_sessions_from_and_refetch_round_trips() {
     // `-l --format json` is a pointed error (JSON readers use the summary's transcript_ids).
     let j = h.run(&["search", "", "-l", "--format", "json"]);
     assert!(!j.success);
-    // Every JSON hit carries `refetch` — a ready-to-run `csift show` addressed at the hit's
-    // OWN transcript — and the command actually round-trips.
+    // Every JSON hit carries `refetch` - a ready-to-run `csift show` addressed at the hit's
+    // OWN transcript - and the command actually round-trips.
     let js = h.run(&["search", "", &format!("@{SESS}"), "--format", "json"]);
     assert!(js.success, "stderr: {}", js.stderr);
     let ex_rows = json_rows(&js.stdout, "exchange");
@@ -418,7 +418,7 @@ fn search_zero_match_diagnosis_discloses_skipped_lines() {
 #[test]
 fn count_by_label_census_respects_label_filters() {
     // R7 §2.3: `-t`/`-T` decide which records ENTER the census, and the label-axis KEYS pass
-    // the same predicate — a dual-labeled record (an AUQ answer = user.answer +
+    // the same predicate - a dual-labeled record (an AUQ answer = user.answer +
     // agent.tool.result) must not leak its filtered-out twin into the census keys.
     let h = Home::new();
     let sess = "44444444-5555-6666-7777-888888888888";
@@ -485,7 +485,7 @@ fn count_by_label_census_respects_label_filters() {
 #[test]
 fn count_by_tool_reports_exact_record_counts() {
     // Mutation pin: the per-axis counters must actually COUNT (a `+=` degraded to a
-    // no-op leaves every tally at zero and the excluded total frozen) — pin exact
+    // no-op leaves every tally at zero and the excluded total frozen) - pin exact
     // numbers on a fixed fixture: parent Write (tool_use + result carrier = 2 records)
     // + subagent Write (tool_use only = 1 record).
     let h = Home::new();

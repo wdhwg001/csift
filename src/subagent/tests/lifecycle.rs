@@ -62,7 +62,7 @@ fn journal_cache_first_result_event_wins_and_renders_nonstring() {
     fx.write(
         &format!("{wf_dir}/journal.jsonl"),
         concat!(
-            // FIRST result event for aaa111 carries NO payload — and first wins
+            // FIRST result event for aaa111 carries NO payload - and first wins
             // (the former per-agent scan returned on its first match), so the
             // later "late" payload must never surface.
             "{\"type\":\"result\",\"agentId\":\"aaa111\"}\n",
@@ -349,7 +349,7 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
         &format!("{enc}/{SESS}.jsonl"),
         "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}\n",
     );
-    // (1) FROZEN at a dangerous-rm Bash (unreturned), PRECEDED by assistant TEXT — the exact
+    // (1) FROZEN at a dangerous-rm Bash (unreturned), PRECEDED by assistant TEXT - the exact
     // L629→L630 shape that made the old walk-back mis-report `completed`. → escalation-blocked.
     fx.write(
             &format!("{enc}/{SESS}/subagents/agent-aesc111.jsonl"),
@@ -380,7 +380,7 @@ fn frozen_lane_classifies_escalation_blocked_vs_awaiting_execution() {
 
     let nodes = build_topology(&session, false).unwrap();
     let esc = nodes.iter().find(|n| n.agent_id == "aesc111").unwrap();
-    // The frozen escalation lane is RUNNING (not completed — the bug) + escalation-blocked.
+    // The frozen escalation lane is RUNNING (not completed - the bug) + escalation-blocked.
     assert_eq!(esc.status, SubagentStatus::Running);
     assert_eq!(
         esc.pending_classification,

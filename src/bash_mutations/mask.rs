@@ -11,14 +11,14 @@
 /// redirect and the next quoted word fabricated as a file; likewise a process-sub body
 /// `tee >(grep foo) /real.log` leaked `foo` as a file. Masking the INTERIOR (not the bytes
 /// length, so positions still line up with the original) lets operator/redirect detection
-/// run on the mask — where those inner `>`/words are now [`MASK_CHAR`], invisible — while
+/// run on the mask - where those inner `>`/words are now [`MASK_CHAR`], invisible - while
 /// the ORIGINAL bytes are still sliced for the emitted path (so a genuinely-quoted single
 /// redirect target `> "/tmp/a.txt"` still resolves via `strip_quotes`). This kills the
 /// quoted-`>` fabrication class without rewriting the whitespace tokenizer.
 pub(crate) const MASK_CHAR: char = '\u{1}';
 
 /// The masked byte: `0x01` (the `MASK_CHAR` codepoint, one ASCII byte). Used so the mask is
-/// built byte-for-byte (BYTE-LENGTH-PRESERVING vs the input — critical for the parallel
+/// built byte-for-byte (BYTE-LENGTH-PRESERVING vs the input - critical for the parallel
 /// offsets used by `masked_tokens` / `split_segments`).
 pub(crate) const MASK_BYTE: u8 = 0x01;
 
@@ -34,7 +34,7 @@ pub(crate) const MASK_BYTE: u8 = 0x01;
 ///   `(( a > b ))` / `[[ a > b ]]` neither fabricate a file nor read a redirect).
 ///
 /// Inside ANY span, EVERY byte is masked to [`MASK_BYTE`] (so a multi-byte UTF-8 char inside
-/// a span masks to N mask-bytes — the span boundaries are ASCII delimiters, which sit on
+/// a span masks to N mask-bytes - the span boundaries are ASCII delimiters, which sit on
 /// char boundaries, so the result is still valid UTF-8). Outside spans, the ORIGINAL bytes
 /// are copied verbatim (the whole multi-byte char, never `byte as char` which would corrupt
 /// the length). A single-paren subshell / `$(…)` command substitution is intentionally NOT
@@ -54,7 +54,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
             // Inside a quoted / backtick-command-substitution span: mask every interior byte;
             // the matching close (same byte) ends it. A backtick command substitution
             // (`` `date > f` ``) is masked exactly like a quote, so an embedded `>` redirect
-            // INSIDE it never reaches `collect_redirections` — and the closing backtick never
+            // INSIDE it never reaches `collect_redirections` - and the closing backtick never
             // survives glued onto a path (the `/tmp/bt.log\`` corruption class).
             if c == q {
                 quote = None;
@@ -69,7 +69,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
             // Inside a process-sub body: mask EVERY interior byte (incl. the matching close
             // `)`), tracking `(`/`)` nesting so the outermost close ends the span. Masking the
             // closing `)` too means a body token like `foo)` from `>(grep foo)` becomes fully
-            // masked and is dropped — without it, the surviving `)` would let
+            // masked and is dropped - without it, the surviving `)` would let
             // `trim_structural_tail` peel back to `foo` and fabricate a file.
             match c {
                 b'(' => procsub_depth += 1,
@@ -112,7 +112,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
         // runs to end-of-line: mask the whole `# … \n` tail so the comment words never
         // become tokens (an in-comment `>`/`>>` redirect, a `;`/`|` operator, and every
         // comment word are all masked, exactly like a heredoc body). `#` is a comment ONLY
-        // at a word start — preceded by start-of-input, whitespace, or a command separator
+        // at a word start - preceded by start-of-input, whitespace, or a command separator
         // (`;` `|` `&` `(` `\n`); guarding on that keeps an IN-PATH `#` (`/tmp/a#b`,
         // `file#1`, where the prev byte is a path char) intact. The boundary set excludes
         // `<`/`>` so a literal redirect target `> #file` is not mistaken for a comment.
@@ -140,7 +140,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
             i += 2;
             continue;
         }
-        // A `((` opens an arithmetic span (NOT a `$((` — but the leading `$` is copied
+        // A `((` opens an arithmetic span (NOT a `$((` - but the leading `$` is copied
         // verbatim above this and the `((` still opens here, which is correct: the interior
         // is masked either way). The two parens are kept structural; the body is masked.
         if c == b'(' && bytes.get(i + 1) == Some(&b'(') {
@@ -175,7 +175,7 @@ pub(crate) fn shell_mask(command: &str) -> String {
 
 /// Split a command into segments on the shell sequencing/pipe operators and newlines,
 /// QUOTE/PROCSUB-AWARE via `mask` (a parallel string where in-quote / in-procsub bytes are
-/// [`MASK_CHAR`]). An operator is honored only where the mask still shows it — a `;`/`|`
+/// [`MASK_CHAR`]). An operator is honored only where the mask still shows it - a `;`/`|`
 /// inside a quoted string is masked, so it no longer splits (fixing the prior "a `;` inside
 /// a quote splits" limitation as a side benefit). Each returned slice is taken from the
 /// ORIGINAL `command` (so the segment text is verbatim).
@@ -186,7 +186,7 @@ pub(crate) fn split_segments<'a>(command: &'a str, mask: &str) -> Vec<&'a str> {
     let mut i = 0usize;
     while i < mbytes.len() {
         let two = mbytes.get(i..i + 2);
-        // `>|` is bash's noclobber-OVERRIDE truncate redirect, NOT a pipe — the `|` must
+        // `>|` is bash's noclobber-OVERRIDE truncate redirect, NOT a pipe - the `|` must
         // not split the segment (else the redirect path is orphaned). Skip both bytes so
         // the `>|<path>` stays intact for `collect_redirections` to read.
         if matches!(two, Some(b">|")) {
@@ -225,7 +225,7 @@ pub(crate) struct MaskedTok<'a> {
 /// Tokenize a segment (and its parallel mask) on whitespace as the MASK sees it, returning
 /// `(orig, masked)` token pairs. Whitespace is detected on the MASK bytes (NOT the original):
 /// an interior space inside a quoted / backtick / procsub span is [`MASK_BYTE`] (`0x01`) in
-/// the mask — a non-whitespace byte — so a quoted `"a b"` / `'/dest dir/x'` stays ONE token,
+/// the mask - a non-whitespace byte - so a quoted `"a b"` / `'/dest dir/x'` stays ONE token,
 /// and the ORIGINAL (verbatim, with its real space) is sliced for the emitted path. Reading
 /// the boundary off the ORIGINAL bytes here was the bug that severed a quoted space-bearing
 /// path mid-filename (`"…/Application Support/…"` → fabricated `Support/…`); the mask is the

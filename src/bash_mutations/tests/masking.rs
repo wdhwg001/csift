@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn trailing_comment_words_are_not_fabricated_paths() {
     // A `# words` comment after a real mutation must NOT leak its words (nor the bare
-    // `#`) as touched paths — only the genuine operand survives.
+    // `#`) as touched paths - only the genuine operand survives.
     assert_eq!(
         paths("touch /tmp/real.txt  # create the marker file"),
         vec![("/tmp/real.txt".to_string(), "touch")]
@@ -22,7 +22,7 @@ fn trailing_comment_words_are_not_fabricated_paths() {
 #[test]
 fn in_comment_redirect_does_not_fabricate_a_path() {
     // A `>`/`>>` that appears INSIDE a trailing comment is masked with the comment, so
-    // it is not read as a real redirect — only the genuine `mkdir` dir survives.
+    // it is not read as a real redirect - only the genuine `mkdir` dir survives.
     assert_eq!(
         paths("mkdir -p /tmp/d # comment > /tmp/fabricated-by-comment-redirect.txt"),
         vec![("/tmp/d".to_string(), "mkdir")]
@@ -101,7 +101,7 @@ fn strip_quotes_unmatched_left_intact() {
 #[test]
 fn process_substitution_redirect_emits_no_fragment() {
     // `> >(tee /tmp/x)` must NOT leak `>(tee` / `(tee` rows (the real inner path is a
-    // documented recall miss, but precision is preserved — no garbage).
+    // documented recall miss, but precision is preserved - no garbage).
     let got = just_paths("cmd > >(tee /tmp/ps.log)");
     assert!(
         !got.iter()
@@ -136,7 +136,7 @@ fn quoted_path_with_metachar_or_space_does_not_leak_fragment() {
 #[test]
 fn quoted_space_bearing_path_stays_one_token_not_a_partial() {
     // CRITICAL precision fix: a quoted redirect/operand path CONTAINING A SPACE (the most
-    // common macOS path shape — Library/Application Support, Google Drive, My Documents)
+    // common macOS path shape - Library/Application Support, Google Drive, My Documents)
     // must stay ONE token and be emitted WHOLE, never split mid-filename into a fabricated
     // partial (the prior `"…/Application Support/x"` → `Support/x` bug). Whitespace is now
     // read off the MASK, where an in-quote space is `0x01` (non-whitespace).
@@ -204,7 +204,7 @@ fn quoted_inline_redirect_does_not_fabricate_a_file() {
         just_paths(r#"grep -rnE "...|> *dt|interval" file.txt"#).is_empty(),
         "in-quote regex `> *dt` must not fabricate `*dt`"
     );
-    // printf prose with a `>` (`café > cover`) — the non-ASCII-bearing class.
+    // printf prose with a `>` (`café > cover`) - the non-ASCII-bearing class.
     assert!(
         just_paths(r#"printf 'layout café > cover scaled déjà'"#).is_empty(),
         "in-quote prose `>` must not fabricate a file"
@@ -298,7 +298,7 @@ fn shell_mask_nested_procsub_and_fd_qualified_forms() {
 #[test]
 fn shell_mask_is_byte_length_preserving_with_multibyte_utf8() {
     // REGRESSION: the mask must be BYTE-length-identical to the input even with
-    // accented-Latin / 3-byte / 4-byte-emoji chars inside (and outside) quotes — else
+    // accented-Latin / 3-byte / 4-byte-emoji chars inside (and outside) quotes - else
     // `masked_tokens` slices on a non-char boundary and panics (a dense-multibyte oracle).
     for cmd in [
         r#"echo "café € région > cover résumé" > /tmp/out.txt"#,
@@ -391,7 +391,7 @@ fn backtick_does_not_swallow_a_real_following_redirect() {
 
 #[test]
 fn arithmetic_comparison_does_not_fabricate_identifier() {
-    // `(( a > b ))` is a comparison — the `>` is NOT a redirect, so the bare identifier
+    // `(( a > b ))` is a comparison - the `>` is NOT a redirect, so the bare identifier
     // `b` must NOT be fabricated as a written file. (Before the arith-mask the `>` was
     // read as a redirect and `b` emitted.) The masked span emits NOTHING.
     assert!(

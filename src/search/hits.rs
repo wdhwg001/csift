@@ -21,7 +21,7 @@ pub(crate) fn collect_turn_hits(
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
-        // Addressing (`--line`/`--uuid`): only the ADDRESSED records are eligible to hit — the
+        // Addressing (`--line`/`--uuid`): only the ADDRESSED records are eligible to hit - the
         // selector that turns `search` into the message-getter. (Applied before the keyword
         // prefilter so an addressed record is fetched regardless of the pattern literal.)
         if let Some(addr) = address {
@@ -30,7 +30,7 @@ pub(crate) fn collect_turn_hits(
             }
         }
         // §7d keyword prefilter: if the raw line provably lacks the required
-        // literal, this record can't be a hit — skip the regex work. (It still
+        // literal, this record can't be a hit - skip the regex work. (It still
         // stays a member of this turn for the complete round-trip; we just don't
         // emit a hit for it.)
         if !kept.can_hit {
@@ -63,7 +63,7 @@ pub(crate) fn collect_turn_hits(
     (hits, hit_idxs)
 }
 
-/// Stamp the source record's line number + uuid onto each hit just appended for it — the
+/// Stamp the source record's line number + uuid onto each hit just appended for it - the
 /// `csift show --line/--uuid` address. Done by the turn collector (not `make_hit`) because the line number
 /// lives on the `Kept`, not the `Record`. Also attaches the record's image ids to its FIRST
 /// hit (so an image-bearing message exposes the extractable `#N`/`L<line>i<n>` id once, not
@@ -98,7 +98,7 @@ pub(crate) fn collect_turn_siblings(
     env: &ClassifyEnv<'_>,
 ) -> (Vec<Hit>, usize) {
     let pure = Matcher::pure();
-    let all = LabelFilter::all(); // every label is eligible — siblings ignore -t/-T
+    let all = LabelFilter::all(); // every label is eligible - siblings ignore -t/-T
     let mut sibs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
         if hit_idxs.contains(&i) {
@@ -119,7 +119,7 @@ pub(crate) fn collect_turn_siblings(
         backfill_address(&mut sibs[before..], kept);
     }
     // FIXED policy (see [`sibling_cap`]): message classes always render; chattier
-    // machinery keeps the FIRST N per leaf. The remainder is COUNTED (never silent) —
+    // machinery keeps the FIRST N per leaf. The remainder is COUNTED (never silent) -
     // the caller renders an explicit `(+N more · csift show …)` pointer.
     let mut kept_per_leaf: HashMap<&'static str, usize> = HashMap::new();
     let mut hidden = 0usize;
@@ -139,7 +139,7 @@ pub(crate) fn collect_turn_siblings(
     (sibs, hidden)
 }
 
-/// Emit hits for every label-eligible UNIT of `rec` that matches the regex (the P2 cutover —
+/// Emit hits for every label-eligible UNIT of `rec` that matches the regex (the P2 cutover -
 /// GOLD §6). The record is classified ONCE via [`Record::classify`]; each emission UNIT (the
 /// record-level user/comm/harness text, the user-facing tool_result dual, or a block) picks the
 /// RICHEST selected [`Class`] among its candidate labels (GOLD §3 Q4 dedup) and emits ONE hit.
@@ -163,7 +163,7 @@ pub(crate) fn collect_record_hits(
 ) {
     let labels = rec.classify(ctx);
     if labels.is_empty() {
-        return; // unmodeled / excluded record — carries no role.class.sub label
+        return; // unmodeled / excluded record - carries no role.class.sub label
     }
     let ts = rec.timestamp.clone();
     let model = rec
@@ -215,7 +215,7 @@ pub(crate) fn collect_record_hits(
 
     // ── 1. Record-level TEXT unit(s). A BATCHED record (≥1 `<task-notification>` / inbound-peer
     //    section) renders ONE hit PER section (GOLD §3 G4/G5), each with its own label + direction
-    //    — so a notification-with-`<result>` ALSO surfaces its `agent.communication.inbox`
+    //    - so a notification-with-`<result>` ALSO surfaces its `agent.communication.inbox`
     //    (child ⇨ self, G1), and several mixed-kind sections no longer collapse to one. Any other
     //    record-text class (user.message, harness markers, compaction, a subagent-opener inbox)
     //    renders ONE richest-label hit. The §1 fix (teammate → inbox) + the `<task-notification>`
@@ -307,7 +307,7 @@ pub(crate) fn collect_record_hits(
 type EmitHit<'a> =
     dyn FnMut(Class, &str, Option<String>, Option<(String, String)>, Option<String>) + 'a;
 
-/// The block loop of [`collect_record_hits`]: one emission per selected block-bearing unit —
+/// The block loop of [`collect_record_hits`]: one emission per selected block-bearing unit -
 /// thinking (incl. the opaque redacted placeholder), assistant text, tool_use (richest comm
 /// view first), tool_result (inbox > plain result; the user-facing dual, when SELECTED, was
 /// already emitted as the richest view and suppresses the duplicate).
@@ -335,7 +335,7 @@ fn collect_block_hits(
                 Block::RedactedThinking { .. }
                     if has(Class::AgentThinking) && sel(Class::AgentThinking) =>
                 {
-                    // Opaque/encrypted reasoning — no readable text; surface a placeholder so
+                    // Opaque/encrypted reasoning - no readable text; surface a placeholder so
                     // `-t agent.thinking` still finds the block (GOLD §2 / oracle B3).
                     emit(
                         Class::AgentThinking,
@@ -380,8 +380,8 @@ fn collect_block_hits(
                     ..
                 } => {
                     // The user-facing dual was SELECTED + emitted as the richest view (§3 Q4) → skip
-                    // the agent.tool.result duplicate. (When the dual is present but NOT selected —
-                    // e.g. `-t agent.tool.result` alone — `user_dual` is None, so the plain result
+                    // the agent.tool.result duplicate. (When the dual is present but NOT selected -
+                    // e.g. `-t agent.tool.result` alone - `user_dual` is None, so the plain result
                     // still surfaces and the answer is never lost.)
                     if user_dual.is_some() {
                         continue;

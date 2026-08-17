@@ -115,7 +115,7 @@ fn unified_diff_pure_deletion_uses_zero_length_new_header() {
 #[test]
 fn unified_diff_caps_leading_context_at_three_lines() {
     // A change far into the file (preceded by many identical lines) must show AT MOST 3
-    // lines of leading context — driving the `ctx_back < CONTEXT` cap of the back-context
+    // lines of leading context - driving the `ctx_back < CONTEXT` cap of the back-context
     // walk. Lines 1-6 are identical; line 7 changes. The hunk's first context line is line
     // 4 (7 minus 3), never line 1.
     let old: Vec<String> = (1..=8).map(|n| format!("line{n}")).collect();
@@ -139,7 +139,7 @@ fn unified_diff_caps_leading_context_at_three_lines() {
 
 #[test]
 fn unified_diff_full_context_shows_every_line() {
-    // usize::MAX context (what --patches passes) reproduces the WHOLE file as context — a
+    // usize::MAX context (what --patches passes) reproduces the WHOLE file as context - a
     // far-away change still drags every read line into one spanning hunk. This is what makes
     // `--patches` of a fully-read, one-line-edited file contain all lines (CC's Read-before-Edit
     // guarantees those context lines were genuinely observed, so they are valid to include).
@@ -147,7 +147,7 @@ fn unified_diff_full_context_shows_every_line() {
     let mut new = old.clone();
     new[6] = "line7-CHANGED".to_string();
     let d = unified_diff(&old, &new, usize::MAX);
-    // Every distant line appears as context — line1 and line3 are NOT excluded here.
+    // Every distant line appears as context - line1 and line3 are NOT excluded here.
     for n in [1, 2, 3, 4, 5, 6, 8] {
         assert!(
             d.contains(&format!(" line{n}\n")),

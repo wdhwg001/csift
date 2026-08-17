@@ -12,7 +12,7 @@ pub enum OutputFormat {
     Json,
 }
 
-/// The four image formats the Claude API accepts — the only `image --out <file.ext>` conversion
+/// The four image formats the Claude API accepts - the only `image --out <file.ext>` conversion
 /// targets, and the only formats a transcript's inline images are ever stored in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageOutFormat {

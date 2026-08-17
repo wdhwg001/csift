@@ -6,7 +6,7 @@ use crate::harness::*;
 fn dashed_teammate_name_id_round_trips_as_target() {
     // A teammate NAME may carry dashes (real data: teammate "P1-engine" → agent id
     // `aP1-engine-9cf2f06d6235ca64`). The id `csift agents` prints must round-trip as an
-    // `@<agent-id>` target — it used to fall through to the project-dir branch and fail.
+    // `@<agent-id>` target - it used to fall through to the project-dir branch and fail.
     let enc = "-Users-testuser-Projects-dashmate";
     let sess = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let id = "aP1-engine-9cf2f06d6235ca64";
@@ -210,7 +210,7 @@ fn at_agent_hex_scopes_to_the_subtree() {
 
 #[test]
 fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
-    // Mutation pin: the 12+-hex exact-miss prefix FALLBACK has its own ambiguity guard —
+    // Mutation pin: the 12+-hex exact-miss prefix FALLBACK has its own ambiguity guard -
     // two agents sharing 12 leading hex chars must produce the AMBIGUOUS error naming
     // both ids, never the generic no-subagent miss (and never a silent pick).
     let h = Home::new();
@@ -247,7 +247,7 @@ fn agent_twelve_hex_fallback_ambiguity_fails_loud() {
     );
 }
 
-// An UNRECOGNIZED `@`-shape must fail loud naming the @-grammar — never strip the `@` and
+// An UNRECOGNIZED `@`-shape must fail loud naming the @-grammar - never strip the `@` and
 // fall through to cwd-relative path resolution (the old behavior sent an ID typo down a
 // misleading "no Claude Code project dir" filesystem trail).
 #[test]
@@ -291,7 +291,7 @@ fn at_token_unrecognized_shapes_fail_loud_never_path_fallthrough() {
 #[test]
 fn windows_drive_encoded_dir_targets_resolve() {
     // A Windows cwd (`C:\Users\dev\winproj`) encodes to a DRIVE-LETTER-led projects dir
-    // (`C--Users-dev-winproj` — verbatim from CC's sanitizer), which leads with a letter,
+    // (`C--Users-dev-winproj` - verbatim from CC's sanitizer), which leads with a letter,
     // not `-`. Both target forms must resolve it: the bare positional token and the
     // `@`-prefixed form.
     let h = Home::new();

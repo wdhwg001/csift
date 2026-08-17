@@ -7,7 +7,7 @@ use super::*;
 #[test]
 fn class_path_and_role_glyph_cover_every_leaf() {
     // Every Class::ALL leaf round-trips through path() (the rendered/JSON label) and maps to a
-    // role glyph (◂ user, ▸ agent, ⚙ harness) — the cutover replacement for the old flat
+    // role glyph (◂ user, ▸ agent, ⚙ harness) - the cutover replacement for the old flat
     // category_label/glyph table.
     for &c in Class::ALL {
         assert!(!c.path().is_empty());
@@ -97,7 +97,7 @@ fn truncate_excerpt_long_and_short() {
 
 #[test]
 fn match_excerpt_centers_on_a_deep_match() {
-    // The needle sits ~800 chars in — far past EXCERPT_MAX. The OLD head-only
+    // The needle sits ~800 chars in - far past EXCERPT_MAX. The OLD head-only
     // excerpt hid it entirely (the bug that forced raw-jsonl reads); centering
     // must surface it, with explicit clipping markers on both sides.
     // Synthetic multi-byte placeholder (neutral emoji) + neutral padding.
@@ -154,7 +154,7 @@ fn match_excerpt_pure_filter_falls_back_to_head() {
 #[test]
 fn match_excerpt_full_budget_emits_whole_message() {
     // `--no-truncate` passes `usize::MAX` as the budget: a message longer than EXCERPT_MAX is
-    // emitted whole, with NO truncation marker — whereas the default budget truncates.
+    // emitted whole, with NO truncation marker - whereas the default budget truncates.
     let n = EXCERPT_MAX + 200;
     let text = "🤖".repeat(n);
     let (capped, capped_truncated) = match_excerpt(&text, None, EXCERPT_MAX);

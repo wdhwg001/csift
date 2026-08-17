@@ -17,6 +17,8 @@ set -euo pipefail
 # 4. No more than 5 subfolder levels below src/ or tests/ (those roots count 0).
 # 5. No `mod.rs` anywhere: module roots are path-named (`src/<m>.rs` beside
 #    `src/<m>/`). Clippy's `mod_module_files` enforces the same rule in-build.
+# 6. No em dash (U+2014) in any .rs comment: comments stay ASCII; use `-`.
+#    String literals are exempt (output glyphs and fixtures are deliberate).
 # Per-function complexity is enforced by clippy (cognitive_complexity, threshold
 # in clippy.toml) inside the clippy step below.
 echo "[csift pre-commit] structure gate (file/folder limits)"
@@ -38,9 +40,14 @@ done < <(find src tests -name '*.rs' | while IFS= read -r f; do
     dirname "$f"
 done | sort | uniq -c | awk '{print $1" "$2}')
 while IFS= read -r f; do
-    echo "  LEGACY mod.rs: $f — use a path-named module root (name.rs beside name/)"
+    echo "  LEGACY mod.rs: $f - use a path-named module root (name.rs beside name/)"
     fail=1
 done < <(find src tests -name mod.rs)
+EMD=$(printf '\342\200\224')
+while IFS= read -r hit; do
+    echo "  EM DASH in a comment: $hit"
+    fail=1
+done < <(grep -rnE "^[[:space:]]*//.*${EMD}|[^:\"]//[^\"]*${EMD}" src tests --include='*.rs' || true)
 while IFS= read -r d; do
     n=$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
     if [ "$n" -gt 15 ]; then

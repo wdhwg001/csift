@@ -29,7 +29,7 @@ fn touch_and_tee() {
 
 #[test]
 fn touch_value_flags_skip_their_arguments() {
-    // `-r REFFILE`: the reference file is READ-ONLY — only the real target is created.
+    // `-r REFFILE`: the reference file is READ-ONLY - only the real target is created.
     assert_eq!(
         paths("touch -r /ref/file /tmp/out.txt"),
         vec![("/tmp/out.txt".to_string(), "touch")],
@@ -196,7 +196,7 @@ fn sed_multiple_expression_flags() {
 #[test]
 fn sed_in_place_equals_suffix() {
     // GNU `--in-place=SUFFIX` long backup form must be recognized as in-place (was a
-    // recall miss — the helper only matched `--in-place` / `-i…`).
+    // recall miss - the helper only matched `--in-place` / `-i…`).
     assert_eq!(
         paths("sed --in-place=.bak 's/a/b/' /real/s.txt"),
         vec![("/real/s.txt".to_string(), "sed-i")]
@@ -306,7 +306,7 @@ fn mv_target_directory_flag_dest_and_sources() {
     );
 }
 
-// ── R1: recall — ln / install / rsync / >| ──
+// ── R1: recall - ln / install / rsync / >| ──
 
 #[test]
 fn ln_install_rsync_destinations_caught() {
@@ -326,7 +326,7 @@ fn ln_install_rsync_destinations_caught() {
 
 // ── R7: a trailing OUTPUT redirect must not poison a positional-dest verb ──
 // collect_redirections now REMOVES the redirect tokens (operator + its spaced path) from
-// the operand stream before verb dispatch — symmetric to strip_input_redirects for `<`.
+// the operand stream before verb dispatch - symmetric to strip_input_redirects for `<`.
 // Without this, the surviving `2>&1` / `2>/dev/null` / spaced `> file` token displaced the
 // real cp/mv/ln/install/rsync destination (RECALL MISS), got mislabeled as a source
 // (SEMANTIC LEAK), or double-emitted the redirect path (DOUBLE-EMIT).
@@ -380,7 +380,7 @@ fn mv_into_dir_not_leaked_as_source_by_trailing_redirect() {
 fn cp_dest_survives_trailing_append_redirect_no_double_emit() {
     // `cp a b /tmp/CDEST/ >> /tmp/log.txt`: the `>>` and its spaced path are both consumed,
     // so /tmp/log.txt is emitted ONCE (by the redirect collector, verb `>>`) and the real
-    // dest /tmp/CDEST/ stays cp's last positional — no double-emit, no dropped dest.
+    // dest /tmp/CDEST/ stays cp's last positional - no double-emit, no dropped dest.
     assert_eq!(
         paths("cp a b /tmp/CDEST/ >> /tmp/log.txt"),
         vec![

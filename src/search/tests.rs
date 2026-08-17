@@ -33,7 +33,7 @@ fn rec(line: &str) -> Record {
 }
 
 /// A neutral top-level [`ClassifyEnv`] for the `collect_turn_hits` unit tests (no subagent,
-/// no spawn lookup) — the per-record ctx degrades to [`ClassifyCtx::top_level`]'s behavior.
+/// no spawn lookup) - the per-record ctx degrades to [`ClassifyCtx::top_level`]'s behavior.
 fn test_env() -> ClassifyEnv<'static> {
     ClassifyEnv {
         owner_id: "0a1b2c3d-0000-0000-0000-000000000000",
@@ -53,7 +53,7 @@ fn fixture() -> Vec<&'static str> {
         r#"{"type":"assistant","uuid":"a0u","parentUuid":"a0t","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"call0","name":"Read","input":{"file":"parse.rs"}}]}}"#,
         r#"{"type":"user","uuid":"c0","parentUuid":"a0u","timestamp":"2026-06-07T05:00:07.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call0","content":"the carry is the partial line at the low edge"}]}}"#,
         r#"{"type":"assistant","uuid":"a0f","parentUuid":"c0","timestamp":"2026-06-07T05:00:40.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The carry is the partial line at the low-offset edge of each chunk."}]}}"#,
-        // An isMeta pseudo-turn — looks human, must NOT open a turn.
+        // An isMeta pseudo-turn - looks human, must NOT open a turn.
         r#"{"type":"user","uuid":"meta","isMeta":true,"parentUuid":"a0f","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"Continue from where you left off."}}"#,
         // ── turn 1 ──
         r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"now explain the panic path"}}"#,
@@ -72,7 +72,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         .unwrap();
     let tw = TimeWindow::from_args(a.since.as_deref(), a.until.as_deref()).unwrap();
     // The fixture path is a non-existent top-level transcript, so its discovery-root resolves
-    // no subagents — an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
+    // no subagents - an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
     // former per-file `build_spawn_lookup` returned here.
     let spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
     let (exchanges, _turn_count) = reconstruct_and_match(

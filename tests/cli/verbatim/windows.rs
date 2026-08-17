@@ -4,7 +4,7 @@ use crate::harness::*;
 
 #[test]
 fn turns_defaults_to_top_level_only_no_subagent_span() {
-    // FOOTGUN FIX: `turns <uuid>` with NO flags must reconstruct ONLY the top-level thread —
+    // FOOTGUN FIX: `turns <uuid>` with NO flags must reconstruct ONLY the top-level thread -
     // it must NOT span the session's subagents (unlike files/search). So a bare run prints no
     // `(subagent transcript)` blocks and no scope banner (one session in scope, rendered).
     let h = populated_home();
@@ -213,7 +213,7 @@ fn turns_turn_range_and_since_intersect() {
 #[test]
 fn turns_project_path_target_scans_the_project() {
     // A project-dir target (the encoded token) resolves every session under it. (A bare
-    // `csift turns` with NO target at all is a hard error — budget × everything; see
+    // `csift turns` with NO target at all is a hard error - budget × everything; see
     // `turns_requires_a_target`.)
     let h = turns_home();
     let out = h.run(&["verbatim", ENC, "--no-subagents", "--budget", "40000"]);
@@ -243,7 +243,7 @@ fn turns_since_window_filters_turns() {
 fn turns_targeted_top_level_skipped_at_tiny_budget_is_reported_not_silent() {
     // CRITICAL: at a budget too small for the targeted top-level session's first round-trip,
     // the session must be reported with an explicit skip note (never silently absent), and the
-    // scope banner must still count it as `1 top-level` in scope — not `0`.
+    // scope banner must still count it as `1 top-level` in scope - not `0`.
     let h = populated_home();
     let out = h.run(&[
         "verbatim",
@@ -301,7 +301,7 @@ fn turns_clean_session_reports_no_skipped_lines() {
 #[test]
 fn turns_json_clean_session_emits_zero_skipped_terminator() {
     // JSON: a clean session now ALWAYS closes with a {"kind":"skipped_lines",
-    // "skipped_lines":0} terminator (so a consumer can detect end-of-stream) — the record is
+    // "skipped_lines":0} terminator (so a consumer can detect end-of-stream) - the record is
     // unconditional, mirroring search/files/recover.
     let h = Home::new();
     let sess = "00000000-0000-4000-8000-000000000004";

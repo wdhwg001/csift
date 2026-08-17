@@ -67,7 +67,7 @@ pub fn discover_subagents(session_jsonl: &Path) -> Result<Vec<Subagent>> {
     }
 
     // (C) DEFENSIVE recursion (insurance, not a present-data fix). Verified 2026-06-07:
-    // across all 2348 subagent transcripts on disk there are ZERO sub-sub-agents — the
+    // across all 2348 subagent transcripts on disk there are ZERO sub-sub-agents - the
     // real layout is single-level FLAT (a child of a general-purpose subagent would land
     // flat in this SAME `subagents/` dir, already covered by (A)). But if a FUTURE Claude
     // Code layout nests a child under `subagents/agent-<hex>/subagents/agent-<hex>.jsonl`,
@@ -118,7 +118,7 @@ pub(crate) fn discover_nested_defensive(
     for entry in read {
         let Ok(entry) = entry else { continue };
         let p = entry.path();
-        // Skip symlinks entirely (no follow) — cycle + escape safety. `symlink_metadata`
+        // Skip symlinks entirely (no follow) - cycle + escape safety. `symlink_metadata`
         // does NOT traverse the link, so a symlinked dir is classified as a symlink here.
         let Ok(meta) = std::fs::symlink_metadata(&p) else {
             continue;
@@ -151,7 +151,7 @@ pub(crate) fn discover_nested_defensive(
     Ok(())
 }
 
-/// Just the subagent transcript file paths for a session — the surface `list` /
+/// Just the subagent transcript file paths for a session - the surface `list` /
 /// `search` need to span subagent work (no lifecycle parse). Excludes journals.
 pub fn subagent_transcript_files(session_jsonl: &Path) -> Result<Vec<PathBuf>> {
     Ok(discover_subagents(session_jsonl)?
@@ -161,7 +161,7 @@ pub fn subagent_transcript_files(session_jsonl: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// `agent-<hex>.jsonl` files directly inside `dir` (NOT recursing into `workflows/`,
-/// and explicitly NOT `journal.jsonl` — only the `agent-` prefix qualifies).
+/// and explicitly NOT `journal.jsonl` - only the `agent-` prefix qualifies).
 pub(crate) fn agent_jsonls_in(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     let read = std::fs::read_dir(dir)

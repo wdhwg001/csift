@@ -3,10 +3,10 @@
 use super::*;
 
 /// Compute a unified diff between two line vectors, emitting `@@ -a,b +c,d @@` hunks with
-/// ` `/`-`/`+` prefixes. A compact LCS-based diff (O(n·m) DP) — fine for single-file
+/// ` `/`-`/`+` prefixes. A compact LCS-based diff (O(n·m) DP) - fine for single-file
 /// reconstruction sizes and fully unit-testable. Returns an empty string when identical.
 /// `context` = number of equal lines to keep around each change. `usize::MAX` ⇒ FULL context:
-/// every line of `old`/`new` is shown. `--patches` passes MAX on purpose — `old`/`new` are the
+/// every line of `old`/`new` is shown. `--patches` passes MAX on purpose - `old`/`new` are the
 /// segment's READ-covered lines, and CC's strict Read-before-Edit means each of those lines was
 /// genuinely observed, so showing them all is valid, high-quality context (a fully-read,
 /// barely-edited file then reproduces in full, not just a 3-line window around the one change).

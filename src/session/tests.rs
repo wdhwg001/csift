@@ -126,15 +126,15 @@ fn summarize_head_first_user_captures_identity() {
 #[test]
 fn summarize_backfills_identity_from_tail_when_head_user_lacks_it() {
     // The head's FIRST genuine user carries NO identity fields (cwd/version/branch
-    // all absent), but the LAST genuine user at the tail DOES — so the tail's
+    // all absent), but the LAST genuine user at the tail DOES - so the tail's
     // `capture_identity_if_empty` backfills them (only the still-None fields).
     let p = tmp_session(
         "tailfill",
         &[
-            // head genuine user — no identity fields at all.
+            // head genuine user - no identity fields at all.
             r#"{"type":"user","message":{"role":"user","content":"first q, no identity"}}"#,
             r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"a"}]}}"#,
-            // tail genuine user — carries the identity fields.
+            // tail genuine user - carries the identity fields.
             r#"{"type":"user","cwd":"/tail/cwd","version":"3.0","gitBranch":"dev","sessionId":"sid-tail","message":{"role":"user","content":"last q, has identity"}}"#,
         ],
     );
@@ -168,7 +168,7 @@ fn summarize_session_id_from_data_when_filename_has_no_stem() {
     );
     let s = summarize_session(&p).unwrap();
     std::fs::remove_file(&p).ok();
-    // Filename stem wins (non-empty) — the documented precedence.
+    // Filename stem wins (non-empty) - the documented precedence.
     assert!(!s.session_id.is_empty());
 }
 

@@ -7,7 +7,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
     // `--agent-msgs rich` over the long-run turn: the rich first / sudden-rich middle /
     // fused body survive verbatim; the pure-declaration middles collapse into a
     // placeholder carrying a fetchable L{a}–L{b} range. The default (eot-only) shows ONLY
-    // the EOT — proving the flag changes behavior.
+    // the EOT - proving the flag changes behavior.
     let h = turns_home();
     let rich = h.run(&[
         "verbatim",
@@ -34,7 +34,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
         "fused finding+decl body kept whole"
     );
     assert!(rich.stdout.contains("AGENTEOT"), "the EOT is always kept");
-    // The pure declarations are collapsed — their unique token must NOT appear verbatim.
+    // The pure declarations are collapsed - their unique token must NOT appear verbatim.
     assert!(
         !rich.stdout.contains("LETMEDECL"),
         "pure declarations must be collapsed, not emitted: {}",
@@ -46,7 +46,7 @@ fn turns_agent_msgs_rich_restores_middles_and_collapses_declarations() {
         "a collapsed-agents placeholder is present: {}",
         rich.stdout
     );
-    // The `eot-only` ESCAPE keeps only the EOT — the intermediate rich members are absent.
+    // The `eot-only` ESCAPE keeps only the EOT - the intermediate rich members are absent.
     let eot = h.run(&[
         "verbatim",
         at(SESS).as_str(),
@@ -69,12 +69,12 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
     // The NEW DEFAULT (`longest`, no flag) over the long-run fixture turn. The agent run's
     // char lengths are: AGENTRICHFIRST=43, decls 26–34, AGENTRICHMID=45, FUSEDTAIL=72
     // (the LONGEST), AGENTEOT=35. So the default keeps:
-    //   • FUSEDTAIL — the LONGEST (72 chars) → the substantive Rich Response.
-    //   • AGENTRICHMID — a RICH middle (file:line + ratio) → a mid-run major finding.
+    //   • FUSEDTAIL - the LONGEST (72 chars) → the substantive Rich Response.
+    //   • AGENTRICHMID - a RICH middle (file:line + ratio) → a mid-run major finding.
     // and COLLAPSES everything else into placeholders, INCLUDING:
-    //   • AGENTRICHFIRST — a SHORT first (43 < 280 rich-min) and not the longest → dropped
+    //   • AGENTRICHFIRST - a SHORT first (43 < 280 rich-min) and not the longest → dropped
     //     (proves the first is kept only when SUBSTANTIVE, not merely rich/present).
-    //   • AGENTEOT — a SHORT, non-rich LAST (the ~35-char throwaway wrap-up) → dropped
+    //   • AGENTEOT - a SHORT, non-rich LAST (the ~35-char throwaway wrap-up) → dropped
     //     (THE headline: the last is no longer unconditionally kept; the substance is).
     //   • the pure LETMEDECL declarations.
     // This is exactly the substance the OLD `agents.last()` default silently dropped, plus
@@ -100,7 +100,7 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
         dflt.stdout
     );
     // The throwaway last (AGENTEOT) and the short first (AGENTRICHFIRST) are NOT kept by
-    // the default — they fall below the substantive/rich bar and are not the longest.
+    // the default - they fall below the substantive/rich bar and are not the longest.
     assert!(
         !dflt.stdout.contains("AGENTEOT"),
         "default drops the non-rich throwaway LAST (the headline case): {}",
@@ -111,7 +111,7 @@ fn turns_default_longest_restores_substance_and_drops_declarations() {
         "default drops a SHORT (non-substantive) first: {}",
         dflt.stdout
     );
-    // The pure declarations still collapse — the default is NOT `all`.
+    // The pure declarations still collapse - the default is NOT `all`.
     assert!(
         !dflt.stdout.contains("LETMEDECL"),
         "default collapses pure declarations into a placeholder: {}",
@@ -130,7 +130,7 @@ fn turns_dedup_demotes_summary_match_never_drops() {
     // BUT turn 0 sits BEFORE older boundaries (compactions_before > 0), so it is NOT
     // deduped (older summary content is gone from context). To exercise live-region
     // dedup we check the NEWEST summary's quotes against live turns; the fixture's live
-    // turns are unique, so dedup count may be 0 here — assert the mechanism via the
+    // turns are unique, so dedup count may be 0 here - assert the mechanism via the
     // header only when it fires, and always assert nothing is dropped.
     let h = turns_home();
     let out = h.run(&[
@@ -149,7 +149,7 @@ fn turns_dedup_demotes_summary_match_never_drops() {
         assert!(o["also_in_summary"].is_boolean());
     }
     // Turn 0's verbatim user text is still present (not dropped) even though SUMMARY #1
-    // quotes it — pre-boundary turns are pure restoration.
+    // quotes it - pre-boundary turns are pure restoration.
     assert!(
         objs.iter().any(|o| o["role"] == "user"
             && o["text"]
@@ -164,7 +164,7 @@ fn turns_dedup_demotes_summary_match_never_drops() {
 fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
     // The round-trip HARD FLOOR is reserved for HUMAN exchanges. A session whose RECENT
     // turns are machine automation pulses (each with an agent ack) plus ONE older human
-    // round-trip, at a small budget, must still recover the human turn — the pulses must NOT
+    // round-trip, at a small budget, must still recover the human turn - the pulses must NOT
     // crowd it out of the protected floor (the prior `is_round_trip` ignored is_automation).
     let h = Home::new();
     let sess = "22222222-3333-4444-5555-666666666666";
@@ -173,7 +173,7 @@ fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
         r#"{"type":"user","uuid":"u0","cwd":"/Users/x/r","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"HUMAN-QUESTION-MARKER please explain the carry-propagation bug in detail"}}"#.to_string(),
         r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The carry is the partial line held across a chunk boundary; here is the full explanation of the propagation path and the fix."}]}}"#.to_string(),
     ];
-    // SEVEN newer automation pulses (each a round-trip pulse→ack) — recency-first, these
+    // SEVEN newer automation pulses (each a round-trip pulse→ack) - recency-first, these
     // would be picked before the human turn and (under the bug) consume the floor.
     for i in 0..7 {
         lines.push(format!(
@@ -188,7 +188,7 @@ fn turns_automation_notification_does_not_consume_human_round_trip_floor() {
         &(lines.join("\n") + "\n"),
     );
     // A budget small enough that, if the floor were spent on pulses, the human turn would be
-    // crowded out — but large enough to fit the human round-trip in its protected lane.
+    // crowded out - but large enough to fit the human round-trip in its protected lane.
     let t = h.run(&[
         "verbatim",
         at(sess).as_str(),
@@ -349,9 +349,9 @@ fn turns_agent_msgs_all_keeps_every_message_no_placeholder() {
 fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
     // The `eot-only` ESCAPE reproduces the pre-feature single-EOT document byte-for-byte
     // (the "force last-only" guarantee), asserted TWO ways:
-    //   (1) `--agent-msgs eot-only` is byte-identical to a CAPTURED pre-feature baseline —
+    //   (1) `--agent-msgs eot-only` is byte-identical to a CAPTURED pre-feature baseline -
     //       catches a drift in the last-only path even if the default moved with it;
-    //   (2) the IMPLICIT default now DIFFERS — it restores intermediate substance (the
+    //   (2) the IMPLICIT default now DIFFERS - it restores intermediate substance (the
     //       longest + rich members) the old single-EOT default silently dropped.
     // `TZ=UTC` pins the system-local timestamp render so the captured baseline is portable.
     let h = turns_home();
@@ -376,7 +376,7 @@ fn turns_eot_only_escape_is_byte_identical_to_pre_feature_baseline() {
          tests/turns_pre_feature_baseline.txt under TZ=UTC --agent-msgs eot-only"
     );
 
-    // The implicit default (Longest) is DIFFERENT — it restores the substance the
+    // The implicit default (Longest) is DIFFERENT - it restores the substance the
     // single-EOT default dropped (proving the default changed, not just a flag alias).
     let implicit = h.run_with_env(
         &[

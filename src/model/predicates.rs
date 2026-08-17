@@ -9,7 +9,7 @@ impl Record {
         self.r#type.as_deref() == Some(t)
     }
 
-    /// True when this record is a csift ELICITATION-SIDECAR marker (§3.10) — it carries
+    /// True when this record is a csift ELICITATION-SIDECAR marker (§3.10) - it carries
     /// `csift:"elicitation-marker-v1"`. Distinguishes a hook-backfilled record (merged
     /// into search/turns/list) from a native CC transcript record.
     #[must_use]
@@ -46,7 +46,7 @@ impl Record {
             return false;
         }
         // NOTE on `isSidechain`: a subagent transcript's FIRST record is an
-        // `isSidechain:true` user seed. It is NOT gated out here on purpose — `list`'s
+        // `isSidechain:true` user seed. It is NOT gated out here on purpose - `list`'s
         // per-subagent preview legitimately treats that seed as the subagent's "first
         // user message", and in TOP-LEVEL transcripts a sidechain seed does not occur in
         // any real corpus. Gating it would silently blank the subagent preview for zero
@@ -57,10 +57,10 @@ impl Record {
         if msg.role.as_deref() != Some("user") {
             return false;
         }
-        // GOLD §1 BUG FIX + FINDING-2: an inbound PEER message — `<teammate-message>` OR
-        // `<agent-message from="…">` — is `type:user`/`role:user`/string content and matches no
+        // GOLD §1 BUG FIX + FINDING-2: an inbound PEER message - `<teammate-message>` OR
+        // `<agent-message from="…">` - is `type:user`/`role:user`/string content and matches no
         // synthetic marker, so it used to slip through as a GENUINE HUMAN turn (106 peer messages
-        // mislabeled as the user in one real session). Both are PEER-AGENT messages — never the
+        // mislabeled as the user in one real session). Both are PEER-AGENT messages - never the
         // operator. Excluded here via [`is_peer_message`] (each still OPENS a turn via
         // [`Record::opens_turn`], but classifies `agent.communication.inbox`, not `user`). The check
         // is on the borrowed content (no allocation on the common path) and is BOUNDARY-anchored
@@ -74,7 +74,7 @@ impl Record {
                     return false;
                 }
                 // §4.2.1: an interrupt marker arrives as a single `text` block whose text
-                // is EXACTLY the marker — exclude it (exact match, codepoint-safe).
+                // is EXACTLY the marker - exclude it (exact match, codepoint-safe).
                 let joined = flatten_content_text(msg.content.as_ref().unwrap());
                 !is_synthetic_user_marker(&joined) && !is_peer_message(&joined)
             }
@@ -110,7 +110,7 @@ impl Record {
     }
 
     /// The invoked slash command's name (e.g. `/csift`) from the wrapper's
-    /// `<command-name>…</command-name>` tag — EITHER tag order. `None` when the record
+    /// `<command-name>…</command-name>` tag - EITHER tag order. `None` when the record
     /// is not a slash-command wrapper or the tag is absent/empty. Same codepoint-safety
     /// as [`Record::slash_command_args`] (slices only on ASCII tag offsets).
     #[must_use]
@@ -135,7 +135,7 @@ impl Record {
     /// A `<task-notification>` record is a `type:"user"`, non-`isMeta`, STRING-content
     /// record CC inserts when a background command / spawned task / workflow completes. It
     /// passes every [`Record::is_genuine_user`] gate (so it opens a turn like a human
-    /// message), but it is an automation pulse — surfacing its raw `<task-id>` /
+    /// message), but it is an automation pulse - surfacing its raw `<task-id>` /
     /// `<output-file>` / `<status>` XML as "user prose" is noise. This parser extracts the
     /// stable inner tags so a surface can render `[workflow <task-id> completed] <summary>`
     /// instead. Returns `None` for any non-`<task-notification>` record.
@@ -155,7 +155,7 @@ impl Record {
         let status = extract_xml_tag(s, "status");
         let summary = extract_xml_tag(s, "summary");
         // Monitor-class pulses carry their real outcome in `<event>` (e.g.
-        // `STAGE2_OUTPUT_READY`, `[Monitor timed out — re-arm if needed.]`) and frequently have
+        // `STAGE2_OUTPUT_READY`, `[Monitor timed out - re-arm if needed.]`) and frequently have
         // NO `<status>` tag, so the label must read the event rather than defaulting status to
         // a fabricated `completed`.
         let event = extract_xml_tag(s, "event");
@@ -172,7 +172,7 @@ impl Record {
     /// The one-line ATTRIBUTION label for an automation-trigger opener, or `None` when this
     /// record is not one: `[<kind> <task-id> <status>] <summary>` where `<kind>` is the TRUE
     /// trigger class parsed from the summary's leading classifier (`background-command` /
-    /// `workflow` / `agent` / fallback `task`) — NOT the hardcoded literal `workflow` that
+    /// `workflow` / `agent` / fallback `task`) - NOT the hardcoded literal `workflow` that
     /// mislabeled 81% of triggers on a captured session (85 background-command + 2 agent). A missing
     /// field is elided gracefully. This is what `turns` / `search` render as the segment
     /// opener in place of the raw `<task-notification>` XML blob.
@@ -191,7 +191,7 @@ impl Record {
     /// Plain-text rendering of a GENUINE user message for the `list`/`search`
     /// excerpt: the raw string, or the concatenation of all `text` blocks. Returns
     /// `None` for non-user / non-genuine records. Whitespace-normalized to a single
-    /// line (callers truncate explicitly — never silently).
+    /// line (callers truncate explicitly - never silently).
     #[must_use]
     pub fn genuine_user_text(&self) -> Option<String> {
         if !self.is_genuine_user() {
@@ -213,7 +213,7 @@ impl Record {
 
     /// True when this is an AUQ-answer carrier: a `type:"user"` record carrying a
     /// `tool_result` block whose textual content is a synthesized AUQ-answer string
-    /// (any known marker, §4.4 — both `"User has answered your questions: …"` and
+    /// (any known marker, §4.4 - both `"User has answered your questions: …"` and
     /// `"Your questions have been answered: …"`). Such a record is surfaced under the
     /// `user` category even though it rides on a carrier.
     #[must_use]
@@ -235,14 +235,14 @@ impl Record {
 
     /// True when this record is an ANSWERED AskUserQuestion carrier that should open a
     /// turn (§4.4 / §6.4): a `type:"user"` record carrying a `tool_result` block whose
-    /// `is_error` is not true, AND it is a real answer — signalled by a non-empty
+    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty
     /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback
     /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in
     /// the tool_result content. The answer is a genuine USER message (the user's
     /// selection + prose reasoning), so it is a turn boundary.
     ///
     /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,
-    /// or a `Cancelled…` / `<tool_use_error>…` body) is NOT a boundary — those carry no
+    /// or a `Cancelled…` / `<tool_use_error>…` body) is NOT a boundary - those carry no
     /// typed user message. Verified on real data: all 81 answered carriers have
     /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the
     /// rejection/cancel carriers have none of the three.
@@ -275,12 +275,12 @@ impl Record {
         self.is_auq_answer()
     }
 
-    /// Parse the raw `toolUseResult` blob into a full `Value` tree ON DEMAND — for the
+    /// Parse the raw `toolUseResult` blob into a full `Value` tree ON DEMAND - for the
     /// few DEEP consumers (`recover`'s event extraction, the AUQ exchange
     /// reconstruction). Each call re-parses, so a caller needing several reads parses
     /// once and shares the local value. `None` when absent or unparseable (the raw text
     /// was validated as part of the line's JSON, so unparseable never happens in
-    /// practice — the guard is tolerance, not control flow).
+    /// practice - the guard is tolerance, not control flow).
     #[must_use]
     pub fn tool_use_result_value(&self) -> Option<serde_json::Value> {
         let raw = self.tool_use_result.as_ref()?;
@@ -296,7 +296,7 @@ impl Record {
     }
 
     /// Hook-injected `additionalContext` text: a `type:"attachment"` record whose payload is
-    /// `{"type":"hook_additional_context","content":[…],…}` — the context a SessionStart /
+    /// `{"type":"hook_additional_context","content":[…],…}` - the context a SessionStart /
     /// UserPromptSubmit / … hook injected into the turn. `content` is a string ARRAY in real
     /// data (one element per injected block; joined with `\n`), tolerated as a bare string.
     /// `None` for every other record shape. Cheap for non-attachment records (one type
@@ -324,10 +324,10 @@ impl Record {
         }
     }
 
-    /// Cheap typed probe of the SMALL `toolUseResult` fields the hot paths consult —
+    /// Cheap typed probe of the SMALL `toolUseResult` fields the hot paths consult -
     /// deserializing it skips the huge content values (file bodies, stdout echoes)
     /// without allocating them. `None` when there is no `toolUseResult` or it is not a
-    /// JSON object (e.g. a subagent's bare-string echo) — exactly the cases where every
+    /// JSON object (e.g. a subagent's bare-string echo) - exactly the cases where every
     /// former `.get(…)` probe answered `None` too.
     pub(crate) fn tur_probe(&self) -> Option<TurProbe> {
         let raw = self.tool_use_result.as_ref()?;

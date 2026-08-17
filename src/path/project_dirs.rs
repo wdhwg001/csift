@@ -32,7 +32,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         }
     }
 
-    // §2.3 step 2: treat as a real filesystem path — absolutize + encode + look up.
+    // §2.3 step 2: treat as a real filesystem path - absolutize + encode + look up.
     let abs = absolutize(target)?;
     let encoded = encode_cwd(&abs);
     let dir = root.join(&encoded);
@@ -44,10 +44,10 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
     }
 
     // §2.3 step 3: LONG-PATH fallback. Claude Code caps the encoded dir name at
-    // MAX_SANITIZED_LENGTH (200) chars and appends a hash suffix for anything longer —
-    // `<first-200>-<hash>` — so the full encoding above does not exist on disk for a
+    // MAX_SANITIZED_LENGTH (200) chars and appends a hash suffix for anything longer -
+    // `<first-200>-<hash>` - so the full encoding above does not exist on disk for a
     // deeply-nested project. The suffix is NOT reconstructible (the CLI uses Bun.hash,
-    // the SDK djb2 — different digests for the same path), which is why CC's own
+    // the SDK djb2 - different digests for the same path), which is why CC's own
     // `findProjectDir` PREFIX-SCANS rather than recomputing it. We mirror that exactly.
     if encoded.len() > MAX_SANITIZED_LENGTH {
         let prefix = format!("{}-", &encoded[..MAX_SANITIZED_LENGTH]);
@@ -59,7 +59,7 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
         }
     }
 
-    // §2.3 step 4: neither resolved — surface the attempted path, no empty result.
+    // §2.3 step 4: neither resolved - surface the attempted path, no empty result.
     bail!(
         "no Claude Code project dir for {} (looked for {})",
         abs.display(),
@@ -73,8 +73,8 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
 pub(crate) const MAX_SANITIZED_LENGTH: usize = 200;
 
 /// Resolve a >200-char encoded path to its on-disk dir by prefix-scanning the projects
-/// root for `<first-200>-<hash>` (the hash is not reconstructible — see [`resolve_target`]).
-/// Among multiple matches (two paths identical for the first 200 encoded chars — vanishingly
+/// root for `<first-200>-<hash>` (the hash is not reconstructible - see [`resolve_target`]).
+/// Among multiple matches (two paths identical for the first 200 encoded chars - vanishingly
 /// rare), prefer the dir whose first session's recorded `cwd` equals the target; otherwise
 /// fall back to the sole / first match. Returns `None` when nothing matches.
 pub(crate) fn find_dir_by_prefix(root: &Path, prefix: &str, abs: &Path) -> Result<Option<PathBuf>> {
@@ -102,10 +102,10 @@ pub(crate) fn find_dir_by_prefix(root: &Path, prefix: &str, abs: &Path) -> Resul
     Ok(matches.into_iter().next())
 }
 
-/// Cheaply read the `cwd` of ONE session file from its first record — a BOUNDED head read
+/// Cheaply read the `cwd` of ONE session file from its first record - a BOUNDED head read
 /// (≤64 KiB; the `cwd` field sits in the first record's first ~200 bytes), so a first line
 /// that is huge (an image record on line 1) never forces a full-line load. No full JSON
-/// parse — mirrors CC's `extractJsonStringField`.
+/// parse - mirrors CC's `extractJsonStringField`.
 pub(crate) fn read_first_cwd(path: &Path) -> Option<String> {
     use std::io::Read;
     let mut buf = Vec::new();
