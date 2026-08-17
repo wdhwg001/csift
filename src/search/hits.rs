@@ -290,6 +290,40 @@ pub(crate) fn collect_record_hits(
     }
 
     // ── 4. Block-bearing units: thinking / agent text / tool_use (+comm) / tool_result (+comm). ──
+    collect_block_hits(
+        rec,
+        &labels,
+        filter,
+        user_dual,
+        &direction,
+        resolve_persisted,
+        tool_names,
+        &mut emit,
+    );
+}
+
+/// The hit-emission sink shared by [`collect_record_hits`] and its block loop:
+/// (class, text, tool_name, direction, tool_use_id).
+type EmitHit<'a> =
+    dyn FnMut(Class, &str, Option<String>, Option<(String, String)>, Option<String>) + 'a;
+
+/// The block loop of [`collect_record_hits`]: one emission per selected block-bearing unit —
+/// thinking (incl. the opaque redacted placeholder), assistant text, tool_use (richest comm
+/// view first), tool_result (inbox > plain result; the user-facing dual, when SELECTED, was
+/// already emitted as the richest view and suppresses the duplicate).
+#[allow(clippy::too_many_arguments)]
+fn collect_block_hits(
+    rec: &Record,
+    labels: &[Class],
+    filter: LabelFilter<'_>,
+    user_dual: Option<Class>,
+    direction: &Option<(String, String)>,
+    resolve_persisted: bool,
+    tool_names: &HashMap<String, String>,
+    emit: &mut EmitHit<'_>,
+) {
+    let sel = |c: Class| filter.selected(c.path());
+    let has = |c: Class| labels.contains(&c);
     if let Some(blocks) = rec.blocks() {
         for block in blocks {
             match block {

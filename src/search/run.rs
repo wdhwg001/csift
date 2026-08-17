@@ -2,6 +2,86 @@
 
 use super::*;
 
+/// Pre-scan advisory notes (stderr only): a uuid-shaped PATTERN with no session target, and
+/// the truly-unbounded-search warning (empty pattern + no category/time/turn/session filter).
+fn emit_advisory_notes(
+    args: &SearchArgs,
+    matcher: &Matcher,
+    has_turn_range: bool,
+    time_window: &TimeWindow,
+    has_session_filter: bool,
+) {
+    if path::is_uuid(&args.pattern) && !has_session_filter {
+        eprintln!(
+            "csift: note: searching for this uuid as TEXT across the scope; to scope the \
+             search TO that session, pass it as a target: `csift search <PATTERN> @{}`",
+            args.pattern
+        );
+    }
+    if matcher.is_pure_filter()
+        && args.labels.is_empty()
+        && args.labels_not.is_empty()
+        && !has_turn_range
+        && time_window.is_unbounded()
+        && !has_session_filter
+    {
+        eprintln!(
+            "csift: warning: empty pattern with no category/time/turn/session filter \
+             matches every exchange in scope — this may emit a lot."
+        );
+    }
+}
+
+/// `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
+/// `--max-count`), the ripgrep `-c` idiom — no per-exchange output.
+fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> {
+    let total = outcome.exchanges.len() + outcome.dropped_by_cap;
+    match format {
+        OutputFormat::Text => println!("{total}"),
+        OutputFormat::Json => {
+            // envelope v2 even here: header + summary (no rows) — one reading idiom.
+            let header = crate::text::envelope_scope_header(
+                "search",
+                outcome.scope_top,
+                outcome.scope_sub,
+                serde_json::json!({}),
+            );
+            println!("{}", serde_json::to_string(&header)?);
+            let summary = crate::text::envelope_summary(serde_json::json!({ "matched": total }));
+            println!("{}", serde_json::to_string(&summary)?);
+        }
+    }
+    Ok(())
+}
+
+/// `-l`: only WHICH sessions matched, one OWNING id (`parent_session_id`) per line — sorted,
+/// deduped, UNCAPPED (the grep idiom, built to pipe into `--sessions-from -`). A
+/// `--max-count` drop could hide sessions, so it is disclosed on stderr (stdout stays a pure
+/// id stream) — no silent truncation.
+fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> {
+    if format == OutputFormat::Json {
+        bail!("-l prints a plain id stream; with --format json read the summary's `transcript_ids` instead");
+    }
+    let mut ids: Vec<&str> = outcome
+        .exchanges
+        .iter()
+        .map(|e| e.parent_session_id.as_str())
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    for id in &ids {
+        println!("{id}");
+    }
+    if outcome.dropped_by_cap > 0 {
+        eprintln!(
+            "csift: note: {} exchange(s) dropped by --max-count — this session listing \
+             may be incomplete; raise --max-count",
+            outcome.dropped_by_cap
+        );
+    }
+    Ok(())
+}
+
 pub fn run_search(args: &SearchArgs) -> Result<()> {
     // ── PATTERN-position traps (the ONE place csift's positional grammar differs:
     //    search's first positional is the PATTERN, not a target) ──
@@ -59,25 +139,13 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         path::Caller::Other,
     )?;
 
-    if path::is_uuid(&args.pattern) && !has_session_filter {
-        eprintln!(
-            "csift: note: searching for this uuid as TEXT across the scope; to scope the \
-             search TO that session, pass it as a target: `csift search <PATTERN> @{}`",
-            args.pattern
-        );
-    }
-    if matcher.is_pure_filter()
-        && args.labels.is_empty()
-        && args.labels_not.is_empty()
-        && turn_range.is_none()
-        && time_window.is_unbounded()
-        && !has_session_filter
-    {
-        eprintln!(
-            "csift: warning: empty pattern with no category/time/turn/session filter \
-             matches every exchange in scope — this may emit a lot."
-        );
-    }
+    emit_advisory_notes(
+        args,
+        &matcher,
+        turn_range.is_some(),
+        &time_window,
+        has_session_filter,
+    );
 
     // `--siblings <SPEC>`: parse the repeatable caps ONCE here (a malformed spec is a hard
     // error, surfaced before any scan). `None` ⇒ siblings off. Parsed up front so the per-file
@@ -178,24 +246,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
     // `--max-count`), the ripgrep `-c` idiom — no per-exchange output.
     if args.count_only {
-        let total = outcome.exchanges.len() + outcome.dropped_by_cap;
-        match args.format {
-            OutputFormat::Text => println!("{total}"),
-            OutputFormat::Json => {
-                // envelope v2 even here: header + summary (no rows) — one reading idiom.
-                let header = crate::text::envelope_scope_header(
-                    "search",
-                    outcome.scope_top,
-                    outcome.scope_sub,
-                    serde_json::json!({}),
-                );
-                println!("{}", serde_json::to_string(&header)?);
-                let summary =
-                    crate::text::envelope_summary(serde_json::json!({ "matched": total }));
-                println!("{}", serde_json::to_string(&summary)?);
-            }
-        }
-        return Ok(());
+        return emit_count_only(&outcome, args.format);
     }
 
     // `-l`: only WHICH sessions matched, one id per line — sorted, deduped, UNCAPPED (the
@@ -206,27 +257,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     // sessions, so it is disclosed on stderr (stdout stays a pure id stream) — no silent
     // truncation.
     if args.sessions_with_matches {
-        if args.format == OutputFormat::Json {
-            bail!("-l prints a plain id stream; with --format json read the summary's `transcript_ids` instead");
-        }
-        let mut ids: Vec<&str> = outcome
-            .exchanges
-            .iter()
-            .map(|e| e.parent_session_id.as_str())
-            .collect();
-        ids.sort_unstable();
-        ids.dedup();
-        for id in &ids {
-            println!("{id}");
-        }
-        if outcome.dropped_by_cap > 0 {
-            eprintln!(
-                "csift: note: {} exchange(s) dropped by --max-count — this session listing \
-                 may be incomplete; raise --max-count",
-                outcome.dropped_by_cap
-            );
-        }
-        return Ok(());
+        return emit_sessions_with_matches(&outcome, args.format);
     }
 
     // `--count-by <axis>`: a per-KEY census of the matched records along ONE closed axis

@@ -91,15 +91,50 @@ pub(crate) fn parse_project_target(s: &str) -> Result<PathBuf, String> {
 #[must_use]
 pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
     // argv[0] = program. The subcommand is NOT necessarily argv[1]: a root-level GLOBAL
-    // flag may precede it (`csift --claude-home DIR list …`). Scan forward from argv[1],
+    // flag may precede it (`csift --claude-home DIR list ...`). Scan forward from argv[1],
     // stepping over DECLARED root flags (and the value token of a value-taking one),
-    // until the first non-flag token — the subcommand candidate. Any token we cannot
+    // until the first non-flag token -- the subcommand candidate. Any token we cannot
     // positively classify (an unknown `--x`, a lone `-`) aborts the scan: argv is
     // returned untouched and clap reports as usual.
     if argv.len() < 2 {
         return argv;
     }
     let cmd = Cli::command();
+    let root = root_flag_sets(&cmd);
+    let Some(sub_idx) = find_subcommand_index(&argv, &root) else {
+        return argv; // no positively-classified subcommand -- leave argv for clap
+    };
+    let sub_name = &argv[sub_idx];
+    let Some(sub) = cmd
+        .get_subcommands()
+        .find(|s| s.get_name() == sub_name || s.get_all_aliases().any(|a| a == sub_name))
+    else {
+        // Not a recognized subcommand (a typo) -- leave argv untouched and let clap
+        // produce its normal message.
+        return argv;
+    };
+    let sets = sub_flag_sets(sub, &cmd);
+
+    let head = argv[..=sub_idx].to_vec(); // program (+ any root flags) + subcommand
+    let rest = &argv[sub_idx + 1..];
+    let (flags, positionals, passthrough) = reorder_tail(rest, &sets);
+
+    let mut out = head;
+    out.extend(flags);
+    out.extend(positionals);
+    out.extend(passthrough);
+    out
+}
+
+/// The ROOT command's declared flags: every long/short spelling, and which take a value.
+struct FlagSets {
+    value_long: std::collections::HashSet<String>,
+    all_long: std::collections::HashSet<String>,
+    value_short: std::collections::HashSet<char>,
+    all_short: std::collections::HashSet<char>,
+}
+
+fn root_flag_sets(cmd: &clap::Command) -> FlagSets {
     let mut root_value_long: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut root_all_long: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut root_value_short: std::collections::HashSet<char> = std::collections::HashSet::new();
@@ -124,74 +159,69 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
             }
         }
     }
-    let mut sub_idx = None;
+    FlagSets {
+        value_long: root_value_long,
+        all_long: root_all_long,
+        value_short: root_value_short,
+        all_short: root_all_short,
+    }
+}
+
+/// Scan forward from argv[1] over DECLARED root flags to the first non-flag token — the
+/// subcommand candidate. `None` when the scan cannot positively classify a token (an unknown
+/// `--x`, a lone `-`, the `--` terminator) or when argv is flags-only: the caller returns
+/// argv untouched and clap reports as usual.
+fn find_subcommand_index(argv: &[String], root: &FlagSets) -> Option<usize> {
     let mut scan = 1;
     while scan < argv.len() {
         let tok = &argv[scan];
         if let Some(name) = tok.strip_prefix("--") {
             if name.is_empty() {
-                return argv; // `--` terminator before any subcommand — nothing to do
+                return None; // `--` terminator before any subcommand -- nothing to do
             }
             let base = name.split_once('=').map_or(name, |(n, _)| n);
             let flag = format!("--{base}");
-            if !root_all_long.contains(&flag) {
-                return argv; // unknown root flag / typo — leave for clap to report
+            if !root.all_long.contains(&flag) {
+                return None; // unknown root flag / typo -- leave for clap to report
             }
             // Inline `--flag=value` and boolean flags span one token; a bare
             // value-taking flag also consumes its following token as the value.
-            if name.contains('=') || !root_value_long.contains(&flag) {
+            if name.contains('=') || !root.value_long.contains(&flag) {
                 scan += 1;
             } else {
                 scan += 2;
             }
         } else if let Some(short) = tok.strip_prefix('-') {
-            let Some(first) = short.chars().next() else {
-                return argv; // a lone `-` is never a root flag
-            };
-            if !root_all_short.contains(&first) {
-                return argv;
+            let first = short.chars().next()?; // a lone `-` is never a root flag
+            if !root.all_short.contains(&first) {
+                return None;
             }
-            if tok.len() == 2 && root_value_short.contains(&first) {
+            if tok.len() == 2 && root.value_short.contains(&first) {
                 scan += 2;
             } else {
                 scan += 1;
             }
         } else {
-            sub_idx = Some(scan);
-            break;
+            return Some(scan);
         }
     }
-    let Some(sub_idx) = sub_idx else {
-        return argv; // flags only, no subcommand — nothing to normalize
-    };
-    let sub_name = &argv[sub_idx];
-    let Some(sub) = cmd
-        .get_subcommands()
-        .find(|s| s.get_name() == sub_name || s.get_all_aliases().any(|a| a == sub_name))
-    else {
-        // Not a recognized subcommand (a typo) — leave argv untouched and let clap
-        // produce its normal message.
-        return argv;
-    };
+    None // flags only, no subcommand -- nothing to normalize
+}
 
-    // Long flags of this subcommand that TAKE a value (need their following token),
-    // and the full set of declared long flags (to detect a value that is actually the
-    // NEXT flag, e.g. a user typo `--max-count --format`).
+/// The SUBCOMMAND's declared flags (its own args PLUS the root's GLOBAL args — e.g.
+/// `--claude-home <DIR>` propagates to every subcommand but may not surface in
+/// `sub.get_arguments()` at introspection time; without it a `--claude-home /path` placed
+/// AFTER the subcommand would mis-sort the path as a positional. HashSet inserts are
+/// idempotent, so double-counting is harmless). Short flags matter too: a declared `-x`
+/// must be hoisted ahead of the `allow_hyphen_values` positional exactly like a long flag
+/// — otherwise `search PATTERN . -t user` lets the positional greedily swallow `-t`. An
+/// UNDECLARED `-x` (e.g. an encoded `-Users-...` token) is NOT in these sets and stays a
+/// positional.
+fn sub_flag_sets(sub: &clap::Command, cmd: &clap::Command) -> FlagSets {
     let mut value_long: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut all_long: std::collections::HashSet<String> = std::collections::HashSet::new();
-    // The declared SHORT flags of this subcommand, and which take a value. A `-x` short
-    // token that is a DECLARED short flag must be hoisted ahead of the `allow_hyphen_values`
-    // positional EXACTLY like a long flag — otherwise `search PATTERN . -t user` lets the
-    // positional greedily swallow `-t` (and `-i`), surfacing the misleading "no project dir
-    // named -t" error. An UNDECLARED `-x` (e.g. an encoded `-Users-…` token, which is a
-    // single dash + alnum/dash) is NOT in this set, so it stays a positional.
     let mut short_value: std::collections::HashSet<char> = std::collections::HashSet::new();
     let mut short_all: std::collections::HashSet<char> = std::collections::HashSet::new();
-    // Enumerate the subcommand's own args PLUS the root command's GLOBAL args (e.g.
-    // `--claude-home <DIR>`): a global value-flag propagates to every subcommand but may
-    // not surface in `sub.get_arguments()` at introspection time, and if it isn't known to
-    // take a value, a `--claude-home /path` placed AFTER the subcommand would mis-sort the
-    // path as a positional. HashSet inserts are idempotent, so double-counting is harmless.
     for a in sub
         .get_arguments()
         .chain(cmd.get_arguments().filter(|a| a.is_global_set()))
@@ -217,9 +247,25 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
         }
     }
 
-    let head = argv[..=sub_idx].to_vec(); // program (+ any root flags) + subcommand
-    let rest = &argv[sub_idx + 1..];
+    FlagSets {
+        value_long,
+        all_long,
+        value_short: short_value,
+        all_short: short_all,
+    }
+}
 
+/// Re-sort the post-subcommand tokens into (flags-with-values, positionals, passthrough) —
+/// the actual clap #3880 workaround: declared flags (and their value tokens) are hoisted
+/// ahead of the `allow_hyphen_values` positionals; everything after a `--` terminator is
+/// verbatim positional input.
+fn reorder_tail(rest: &[String], sets: &FlagSets) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let FlagSets {
+        value_long,
+        all_long,
+        value_short: short_value,
+        all_short: short_all,
+    } = sets;
     let mut flags: Vec<String> = Vec::new();
     let mut positionals: Vec<String> = Vec::new();
     let mut passthrough: Vec<String> = Vec::new();
@@ -273,7 +319,7 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
                 flags.push(tok.clone());
                 i += 1;
             }
-        } else if let Some(short_c) = declared_short_flag(tok, &short_all) {
+        } else if let Some(short_c) = declared_short_flag(tok, short_all) {
             // A `-x…` token whose first post-dash char `x` is a DECLARED short flag. Hoist
             // it ahead of the positionals like a long flag. A BARE `-x` (exactly two chars)
             // that takes a value consumes the NEXT token as its value (the same pairing
@@ -302,11 +348,7 @@ pub fn normalize_argv(argv: Vec<String>) -> Vec<String> {
         }
     }
 
-    let mut out = head;
-    out.extend(flags);
-    out.extend(positionals);
-    out.extend(passthrough);
-    out
+    (flags, positionals, passthrough)
 }
 
 /// If `tok` is a `-x…` short-flag token whose first post-dash character is a DECLARED

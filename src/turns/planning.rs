@@ -39,6 +39,36 @@ pub(crate) struct SessionPlan {
 
 /// Plan one session: dedup-flag turns against the newest summary, then run the 2-phase
 /// recency-first budget allocation, then sort ascending for render.
+/// Demote-flag (`also_in_summary`) every LIVE-region turn anchor the newest compaction
+/// summary already quotes. Dedup is keyed on the live (compactions_before == 0) region
+/// primarily — turns predating an OLDER boundary are genuinely gone from context and are
+/// pure restoration, never deduped. It keys on the SAME two anchors as before the
+/// expansion: the user opener and the EOT (last) agent message. Middle agent messages are
+/// not deduped (a summary never quotes them verbatim), so demote-flag scope is unchanged.
+/// Returns the demoted-anchor count.
+fn flag_summary_dups(turns: &mut [TurnSlice], summary: &SummaryInfo) -> usize {
+    let mut dedup_demoted = 0usize;
+    for t in turns {
+        if t.compactions_before != 0 {
+            continue;
+        }
+        // Borrow each anchor separately (the accessor borrows the slice).
+        if let Some(u) = t.user.as_mut() {
+            if unit_matches_summary(u, &summary.fingerprints) {
+                u.also_in_summary = true;
+                dedup_demoted += 1;
+            }
+        }
+        if let Some(a) = t.assistant_eot_mut() {
+            if unit_matches_summary(a, &summary.fingerprints) {
+                a.also_in_summary = true;
+                dedup_demoted += 1;
+            }
+        }
+    }
+    dedup_demoted
+}
+
 pub(crate) fn plan_session(
     sr: &ScanResult,
     budget: usize,
@@ -50,33 +80,7 @@ pub(crate) fn plan_session(
     let newest = sr.summaries.iter().max_by_key(|s| s.line_no);
     let newest_summary_line = newest.map(|s| s.line_no);
     let mut turns: Vec<TurnSlice> = sr.turns.clone();
-    let mut dedup_demoted = 0usize;
-    if let Some(summary) = newest {
-        for t in &mut turns {
-            // Dedup is keyed on the live (compactions_before == 0) region primarily —
-            // turns predating an OLDER boundary are genuinely gone from context and are
-            // pure restoration, never deduped.
-            if t.compactions_before != 0 {
-                continue;
-            }
-            // Dedup keys on the SAME two anchors as before the expansion: the user
-            // opener and the EOT (last) agent message. Middle agent messages are not
-            // deduped (a summary never quotes them verbatim), so demote-flag scope is
-            // unchanged. Borrow each anchor separately (the accessor borrows the slice).
-            if let Some(u) = t.user.as_mut() {
-                if unit_matches_summary(u, &summary.fingerprints) {
-                    u.also_in_summary = true;
-                    dedup_demoted += 1;
-                }
-            }
-            if let Some(a) = t.assistant_eot_mut() {
-                if unit_matches_summary(a, &summary.fingerprints) {
-                    a.also_in_summary = true;
-                    dedup_demoted += 1;
-                }
-            }
-        }
-    }
+    let dedup_demoted = newest.map_or(0, |summary| flag_summary_dups(&mut turns, summary));
 
     // ── Apply --max-compactions: drop turns beyond the cap (0 = unlimited) ──
     if max_compactions > 0 {
