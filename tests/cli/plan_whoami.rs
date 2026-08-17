@@ -347,7 +347,7 @@ fn plan_surfaces_subagent_bound_plan() {
         r#"{"type":"user","isSidechain":true,"agentId":"feed01","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"plan the thing"}}"#, "\n",
         r#"{"type":"attachment","isSidechain":true,"agentId":"feed01","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"__SUBPLAN__","planExists":false},"uuid":"satt","timestamp":"2026-06-07T05:00:11.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
     )
-    .replace("__SUBPLAN__", &sub_plan);
+    .replace("__SUBPLAN__", &jpath(&sub_plan));
     h.write(
         &format!("{ENC}/{PSESS}/subagents/agent-feed01.jsonl"),
         &sub_jsonl,
@@ -395,13 +395,13 @@ fn plan_text_lists_top_level_then_subagent_plans() {
         r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan"}}"#, "\n",
         r#"{"type":"attachment","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"__TOP__","planExists":false},"uuid":"att0","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
     )
-    .replace("__TOP__", &top);
+    .replace("__TOP__", &jpath(&top));
     h.write(&format!("{ENC}/{PSESS}.jsonl"), &top_jsonl);
     let sub_jsonl = concat!(
         r#"{"type":"user","isSidechain":true,"agentId":"bbbb01","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"plan the subtask"}}"#, "\n",
         r#"{"type":"attachment","isSidechain":true,"agentId":"bbbb01","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"__SUB__","planExists":false},"uuid":"satt","timestamp":"2026-06-07T05:00:11.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
     )
-    .replace("__SUB__", &sub);
+    .replace("__SUB__", &jpath(&sub));
     h.write(
         &format!("{ENC}/{PSESS}/subagents/agent-bbbb01.jsonl"),
         &sub_jsonl,

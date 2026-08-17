@@ -29,7 +29,7 @@ fn recover_file_plan_resolves_subagent_only_plan() {
         r#"{"type":"assistant","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"se","name":"Edit","input":{"file_path":"__SUB__","old_string":"D2","new_string":"D2-final"}}]}}"#, "\n",
         r#"{"type":"user","isSidechain":true,"agentId":"cccc01","timestamp":"2026-06-07T05:00:13.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"se","content":"The file __SUB__ has been updated successfully."}]}}"#, "\n",
     )
-    .replace("__SUB__", &sub_plan);
+    .replace("__SUB__", &jpath(&sub_plan));
     h.write(
         &format!("{ENC}/{PSESS}/subagents/agent-cccc01.jsonl"),
         &sub_jsonl,

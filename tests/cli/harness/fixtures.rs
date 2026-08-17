@@ -350,8 +350,8 @@ pub(crate) fn write_planning_session(h: &Home, sess: &str, bound_abs: &str, othe
         r#"{"type":"assistant","uuid":"ap","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"pe","name":"Edit","input":{"file_path":"__BOUND__","old_string":"P2","new_string":"P2-revised"}}]}}"#, "\n",
         r#"{"type":"user","uuid":"cp","timestamp":"2026-06-07T05:00:04.500Z","toolUseResult":{"filePath":"__BOUND__","oldString":"P2","newString":"P2-revised","originalFile":null,"replaceAll":false,"structuredPatch":[{"oldStart":2,"oldLines":1,"newStart":2,"newLines":1,"lines":["-P2","+P2-revised"]}]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"pe","content":"ok"}]}}"#, "\n",
     )
-    .replace("__BOUND__", bound_abs)
-    .replace("__OTHER__", other_abs);
+    .replace("__BOUND__", &jpath(bound_abs))
+    .replace("__OTHER__", &jpath(other_abs));
     h.write(&format!("{ENC}/{sess}.jsonl"), &jsonl);
 }
 

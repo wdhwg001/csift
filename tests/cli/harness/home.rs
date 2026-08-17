@@ -133,6 +133,11 @@ pub(crate) struct Output {
 
 pub(crate) const ENC: &str = "-Users-testuser-Projects-foo";
 
+/// A filesystem path as a JSON-string-safe fragment (Windows backslashes escaped).
+pub(crate) fn jpath(s: &str) -> String {
+    s.replace('\\', "\\\\")
+}
+
 pub(crate) const SESS: &str = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
 /// envelope v2: parse a JSON stream and keep the rows of one `kind`.

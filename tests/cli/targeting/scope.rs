@@ -38,7 +38,13 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
     // both → -Users-testuser-Projects-foo-bar. CC stores both projects' sessions there;
     // csift must NOT leak the sibling's sessions (or its subagents) when you target one path.
     let h = Home::new();
-    let enc = "-Users-testuser-Projects-foo-bar";
+    // The runtime encodes the REAL arg path, so the dir carries the drive head on
+    // Windows (the arg resolves drive-relative there).
+    let enc = if cfg!(windows) {
+        "C--Users-testuser-Projects-foo-bar"
+    } else {
+        "-Users-testuser-Projects-foo-bar"
+    };
     let sess_a = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let sess_b = "0b1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     let rec = |sess: &str, cwd: &str, body: &str| {
@@ -295,6 +301,11 @@ fn resolve_long_path_uses_prefix_scan_fallback() {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
+    let encoded = if cfg!(windows) {
+        format!("C-{encoded}") // the arg resolves drive-relative on Windows
+    } else {
+        encoded
+    };
     assert!(encoded.len() > 200);
     let dir_name = format!("{}-deadbeef", &encoded[..200]); // CC's truncate+hash form
     let rec = serde_json::json!({

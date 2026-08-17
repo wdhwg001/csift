@@ -387,7 +387,7 @@ fn search_resolve_persisted_reads_pointed_file() {
 {{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"call0","name":"Bash","input":{{}}}}]}}}}
 {{"type":"user","uuid":"c0","parentUuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"call0","content":"<persisted-output>\nOutput too large. Full output saved to: {}\n\nPreview (first 2KB):\n(no token in preview)\n</persisted-output>"}}]}}}}
 "#,
-        target.display()
+        jpath(&target.to_string_lossy())
     );
     h.write(&format!("{ENC}/{SESS}.jsonl"), &session_line);
 
