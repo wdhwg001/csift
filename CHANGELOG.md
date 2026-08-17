@@ -5,6 +5,16 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.7.8] - 2026-08-17
+
+- `recover` finds windows-shaped paths (drive letters, backslashes) again: the
+  file-level basename prefilter split on `/` only, so such targets silently
+  reported no history; the basename-suffix match also accepts a backslash
+  boundary now.
+- First release validated on all three platforms: the full test suite passes
+  on macOS (arm64/x64), Linux (glibc and musl, x64/arm64), and Windows (MSVC
+  arm64/x64).
+
 ## [0.7.7] - 2026-08-17
 
 - Help text reworked for plain punctuation across every `--help` page; flag

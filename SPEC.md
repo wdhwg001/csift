@@ -377,6 +377,16 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.7.8 CHANGE LEDGER (non-breaking; windows-path recover fix + the first cross-platform validation -- `csift 0.7.8`).**
+> `recover`'s file-level basename prefilter split on `/` only, so a windows-shaped
+> target (drive letter, backslashes) became a raw-byte needle that JSON escaping can
+> never contain: every recover of such a path silently reported no history. The gate
+> now splits on both separators, refuses a basename JSON could rewrite (7d law), the
+> batch scan exempts such targets instead of dropping them, and `path_matches`'
+> basename-suffix arm accepts a backslash boundary. Found by the first test-suite
+> runs on real Windows; the full suite now passes on macOS (arm64, x64), Linux
+> (gnu/musl x x64/arm64), and Windows (MSVC arm64/x64).
+
 > **v0.7.7 CHANGE LEDGER (non-breaking; help prose pass -- `csift 0.7.7`).**
 > Every `--help` page reworked for plain punctuation (em dashes replaced by commas,
 > colons, semicolons, parentheses; one flag-list restructure, zero content loss --
