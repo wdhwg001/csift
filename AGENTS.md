@@ -246,6 +246,7 @@ cargo test                                   # unit + integration tests (also in
 
 - `PascalCase` types, `snake_case` items, one module per concern.
 - Comments capture WHY / a non-obvious constraint, not what the code already says.
+- **Commit messages follow Conventional Commits**: `type(scope): subject` — types in use: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`, `style`; `!` after the type/scope marks a BREAKING surface change (pairs with the §7 version policy: pre-1.0, breaking ⇒ MINOR). Subject in the imperative mood; the body says what changed and why in plain engineering terms; messages are pure ASCII.
 - `Cargo.toml` lints: `unsafe_code = "deny"`, `missing_debug_implementations = "warn"`, clippy `all = warn` with a few pedantic allows. Deps pinned by `^`-range + `Cargo.lock`.
 - Output discipline: errors -> stderr (`csift: error:` + full chain); data -> stdout; `--format json` is the machine contract (one object per line where it makes sense).
 - ASCII-only source/docs unless a test fixture intentionally exercises multi-byte (then keep it neutral: emoji / accented Latin).

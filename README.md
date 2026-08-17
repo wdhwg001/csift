@@ -5,6 +5,8 @@
 
   <p><strong>ripgrep for Claude Code session transcripts.</strong></p>
 
+  <p><sub>Pronounced <strong>"c-sift"</strong> (<em>see-sift</em>), in the <code>csplit</code>/<code>ctags</code> naming tradition: <strong>c</strong> for Claude Code, <strong>sift</strong> for what it does.</sub></p>
+
   <p>
     Your AI coding agent writes down <em>everything</em> it does.<br/>
     <code>csift</code> is how you read it back — <strong>search</strong>, <strong>recover</strong>, and <strong>audit</strong> any Claude Code session straight from the <code>.jsonl</code> logs.
@@ -38,65 +40,41 @@ One regex, the **complete round-trip**, token-efficient output — no embeddings
 ## Why csift
 
 Every Claude Code session is a dense `~/.claude/projects/<cwd>/<uuid>.jsonl` — every prompt,
-thought, tool call, file edit, and subagent it spawned. That log is the ground truth of what your
-agent actually did… and it's also a 200 MB wall of JSON. When you (or your agent) need to know:
+thought, tool call, file edit, pasted image, and subagent it spawned. That log is the ground
+truth of what your agent actually did… and it's also a wall of JSON nobody can read. Sooner or
+later you hit one of these:
 
-- *what did that session decide about X — and where's the code?*
-- *which files did it touch, and did any change behind the tool stream's back?*
-- *recover the file it rewrote five times — or the plan it deleted.*
-- *what's the verbatim exchange a compaction summary compressed to a single line?*
-- *which subagent ran what, and how did the fan-out nest?*
+- **"It deleted my project files and apologized."** Every file the agent read or wrote is still
+  in the transcript — spread across subagents, five rewrites deep. `csift recover` replays the
+  stream and restores the exact bytes, or fails honestly and salvages fragments with gaps marked.
+- **"It lost my design images after a compaction — then asked me to re-send them."** Pasted
+  images are base64 inside the jsonl. `csift image` lists and extracts them.
+- **"Which session does `jazzy-twilight-sparkle.md` belong to?"** Plan files get invented names
+  and outlive their sessions. `csift plan --reverse` names the owning session; `csift plan`
+  finds a session's plan.
+- **"The machine crashed with three sessions open — which was which?"** `csift list` identifies
+  every session by its first/last messages — the completion `claude --resume` never had.
+- **"I literally just said that."** Compaction keeps the *task*, not the *conversation*.
+  `csift verbatim` reconstructs the verbatim turns the summary clipped.
+- **"I DID tell you — in the question dialog."** Answers to `AskUserQuestion` are recorded as
+  tool results, so naive greps miss them. `csift search -t user.answer` knows.
+- **"The orchestrator can't tell which session is stuck waiting on a human."** A pending
+  `AskUserQuestion` is never written to disk at all. csift ships a hook that records it to a
+  sidecar, and every csift surface merges it in.
 
-…`csift` answers it in one command. It's `grep` that understands the transcript: it returns the
-**complete exchange** (a matched tool call *with* its result; a user turn *with* the agent's reply),
-reconstructs files and plans from the Read/Write/Edit stream, and restores the verbatim turns a
-context compaction clipped.
-
-## The name
-
-Pronounced **"c-sift"** (*see-sift*), in the `csplit`/`ctags` naming tradition: **c** for Claude
-Code, **sift** for what it does — sifting gigabytes of transcript for the few lines that matter.
+`csift` answers each of these in one command — it's `grep` that understands the transcript.
 
 ## ✨ Highlights
 
 - 🔎 **Round-trips, not lines.** A hit returns the whole exchange — the matched tool call with its result, the user turn with the agent's reply — rebuilt from the `uuid`/`parentUuid` graph.
-- ⏪ **Recover files & deleted plans.** Replay the Read/Write/Edit stream to restore a file's exact final bytes — or, when the session saw only part of it, fail honestly and salvage what survived with gaps marked.
-- 🧵 **Un-clip a compaction.** A summary keeps task *state* but drops *turn* fidelity (~239 assistant turns → one quote). `verbatim` restores the verbatim back-and-forth within a `--budget`.
-- 🌳 **Subagent topology.** Every built-in Task and workflow/OMC agent — kind, trigger/start/finish, status, and the parent→child tree (reconstructed even though they sit flat on disk).
-- 🗂 **File forensics.** What each session changed and when, with edits made *outside* the tool stream flagged — the risky-to-reconstruct signal.
-- ⚡ **Fast on huge logs.** mmap + SIMD newline scan + a regex prefilter, full JSON only on candidate lines; 200 MB transcripts without a full read.
-- 🤖 **The user is a model.** Terse, parseable output, re-feedable `Lnnnn`/`@<uuid>` handles, errors instead of silent guesses — a zero-match `search` even *self-diagnoses* (a definitive absence, not a syntax slip, naming the label that hid your hits) so a model never bails to hand-parsing — and `@trap:<marker>`, so a subagent can identify *itself*.
-- 🧩 **No magic, no index.** Pure regex — no embeddings, no BM25, no semantic search, no database, no daemon. It reads the files that are already there.
-
-## Built for an AI consumer
-
-Most CLIs are read by a human at a terminal. `csift`'s primary user is **the AI agent itself** — a
-Claude Code session searching its own or a peer session's history. That one constraint shapes
-everything: output is terse and parseable, every record carries a re-feedable `Lnnnn` locator and
-`@<uuid>` handle, ambiguity is an explicit error rather than a silent guess, and a running session
-can even ask *"which subagent am I?"* with `whoami @trap:<marker>`. It's the rare tool whose UX is tuned
-for a model, not a person.
-
-## The summary is a selection. csift keeps the conversation.
-
-When Claude Code compacts, it regenerates a dense summary — kilobytes standing in for dozens of
-compactions of history. It's a *good* selection: it keeps the key findings (what changed, with
-file:line) and often your standing directives verbatim. But it is a selection, re-abstracted every
-time, and the axis it optimizes is **task continuation** — not the conversation.
-
-`csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange** — what you actually said,
-and what the agent actually reported back when it finished — with the hundreds of tool calls in
-between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue the
-summary compressed to a line or two: not just your directive, but the agent's *"validated against
-HEAD — the premise holds, here's the evidence"* report-back, the kind of thing a task-findings
-selection simply doesn't carry.
-
-So it doesn't replace the summary — it's **orthogonal** to it, and it **extends** the
-post-compaction context with the recent conversation at full fidelity. It's budget-bounded and
-newest-first (it won't reach the oldest turns, and your never-compacted Plan file still owns the
-plan), but filling the dialogue the summary abstracted away is exactly the point: *better, not
-complete.* Wire it into a `SessionStart(compact)` hook — see [SKILL.md](SKILL.md) — and every
-compaction arrives with the recent verbatim conversation attached.
+- 🏷 **Typed search.** Every record carries a `role.class.sub` label — `user.answer`, `agent.thinking`, `harness.notification.monitor`, 25 in all — so `-t`/`-T` filters cut straight through the machinery that rides on `"user"` records.
+- ⏪ **Recover files & deleted plans.** Replay the Read/Write/Edit stream to restore a file's exact final bytes — the backup you didn't know you had — or fail honestly and salvage what survived, gaps marked.
+- 🧵 **Un-clip a compaction.** A summary keeps task *state* but drops *turn* fidelity. `verbatim` restores the verbatim back-and-forth within a `--budget` — wire it into a hook and every compaction arrives with the recent dialogue attached.
+- 🖼 **Images back out.** Pasted screenshots live as base64 in the jsonl; `image` lists, dedups, and extracts them by the same `#N` handle the session uses.
+- 🌳 **Subagent topology.** Kind, lifecycle, and the parent→child tree of every spawned agent — plus detection of lanes frozen on a pending permission approval.
+- 🤖 **The user is a model.** Terse, re-feedable output; a zero-match `search` *self-diagnoses* (a definitive absence, not a syntax slip, naming the label that hid your hits) so an agent never bails to hand-parsing; `@trap:<marker>` lets a subagent identify *itself*; a SKILL.md ships in the box.
+- 🔒 **Local, read-only, no magic.** Pure regex — no embeddings, no index, no database, no daemon, no network, no telemetry. It reads files already on your disk and never modifies them.
+- ⚡ **Fast on huge logs.** mmap + SIMD newline scan + byte prefilters + rayon; 200 MB transcripts and multi-GB corpora in about a second.
 
 ## Install
 
@@ -114,10 +92,15 @@ cargo install --path .        # builds the optimized binary and puts `csift` on 
 ```
 
 `csift` reads `~/.claude` by default; point it elsewhere with `--claude-home <DIR>` or Claude
-Code's own `$CLAUDE_CONFIG_DIR`. Then:
+Code's own `$CLAUDE_CONFIG_DIR`. `csift <command> --help` is the full manual.
+
+### Teach it to your agent
+
+`csift`'s primary user is **the agent itself** — output is terse, parseable, and every record
+carries a re-feedable handle. The skill teaches Claude Code when and how to reach for it:
 
 ```bash
-csift --help
+npx skills add wdhwg001/csift
 ```
 
 ## Quickstart
@@ -158,6 +141,27 @@ Run `csift <command> --help` for the full flag set and examples.
 | **`plan`** | locate the Plan-Mode plan file bound to a session (and reverse: which session owns a plan) |
 | **`verbatim`** | restore the verbatim turns a compaction summary clipped, within a budget (the live-tail peek is `show --turn`) |
 | **`image`** | list + extract images pasted into a transcript (handle/locator addressing, format transcode) |
+
+## The summary is a selection. csift keeps the conversation.
+
+When Claude Code compacts, it regenerates a dense summary — kilobytes standing in for dozens of
+compactions of history. It's a *good* selection: it keeps the key findings (what changed, with
+file:line) and often your standing directives verbatim. But it is a selection, re-abstracted every
+time, and the axis it optimizes is **task continuation** — not the conversation.
+
+`csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange** — what you actually said,
+and what the agent actually reported back when it finished — with the hundreds of tool calls in
+between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue the
+summary compressed to a line or two: not just your directive, but the agent's *"validated against
+HEAD — the premise holds, here's the evidence"* report-back, the kind of thing a task-findings
+selection simply doesn't carry.
+
+So it doesn't replace the summary — it's **orthogonal** to it, and it **extends** the
+post-compaction context with the recent conversation at full fidelity. It's budget-bounded and
+newest-first (it won't reach the oldest turns, and your never-compacted Plan file still owns the
+plan), but filling the dialogue the summary abstracted away is exactly the point: *better, not
+complete.* Wire it into a `SessionStart(compact)` hook — see [SKILL.md](SKILL.md) — and every
+compaction arrives with the recent verbatim conversation attached.
 
 ## How it works
 
