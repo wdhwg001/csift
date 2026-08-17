@@ -253,3 +253,41 @@ fn plan_no_binding_is_honest_not_an_error() {
         out.stderr
     );
 }
+
+#[test]
+fn whoami_at_trap_walks_the_upstream_ancestry_chain() {
+    // `whoami @trap:<marker>` resolves the calling SUBAGENT env-independently (its own id is
+    // withheld from its env) and prints the full upstream chain self -> ... -> top-level root.
+    let enc = "-Users-testuser-Projects-whotrap";
+    let hex = "ddd444eee555fff66";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sp1","name":"Agent","input":{"description":"child","subagent_type":"general"}}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{SESS}/subagents/agent-{hex}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"ddd444eee555fff66","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"child task"}}"#, "\n",
+            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"bw","name":"Bash","input":{"command":"csift whoami @trap:VelvetOtterGlade8412"}}]}}"#, "\n",
+        ),
+    );
+    let o = h.run_with_env(
+        &["whoami", "@trap:VelvetOtterGlade8412"],
+        &[("CLAUDE_CODE_SESSION_ID", SESS)],
+    );
+    assert!(o.success, "stderr: {}", o.stderr);
+    assert!(
+        o.stdout.contains(hex),
+        "chain names the subagent: {}",
+        o.stdout
+    );
+    assert!(
+        o.stdout.contains(SESS),
+        "chain reaches the root: {}",
+        o.stdout
+    );
+}

@@ -319,3 +319,24 @@ fn image_extract_single_by_id() {
     let n = std::fs::read_dir(&out_dir).unwrap().count();
     assert_eq!(n, 1, "only the selected image should be written");
 }
+
+#[test]
+fn image_out_extension_transcodes_png_source() {
+    // Extension-driven transcode on extract: the SAME source png written as webp / jpg /
+    // gif / png (identity), exercising each convert arm the strict decoder allows.
+    let h = image_home();
+    for ext in ["webp", "jpg", "gif", "png"] {
+        let out = h.root.join(format!("conv.{ext}"));
+        let o = h.run(&[
+            "image",
+            &at(SESS),
+            "--id",
+            "L1i1",
+            "--out",
+            out.to_str().unwrap(),
+        ]);
+        assert!(o.success, "{ext}: {}", o.stderr);
+        let len = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+        assert!(len > 0, "{ext} written and non-empty");
+    }
+}
