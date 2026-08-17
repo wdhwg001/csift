@@ -69,6 +69,9 @@ missing_debug_implementations = "warn"
 # pedantic/nursery noise that is not useful for a CLI of this shape is quieted.
 # Real correctness lints stay loud.
 all = { level = "warn", priority = -1 }
+# Per-function complexity gate (C901-style): threshold lives in clippy.toml;
+# the -D warnings gate turns any crossing into a hard failure.
+cognitive_complexity = "warn"
 # Pedantic is intentionally NOT enabled wholesale (too noisy for a CLI). The
 # allows below pre-empt the most common false positives so a future pedantic
 # opt-in stays low-friction.

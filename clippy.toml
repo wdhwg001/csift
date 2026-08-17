@@ -1,0 +1,5 @@
+# Per-function complexity gate (the Rust analogue of Python's C901): clippy's
+# cognitive_complexity lint is enabled as a warning in Cargo.toml [lints.clippy],
+# and the gate runs clippy with -D warnings, so crossing this threshold fails the
+# pre-commit hook. 25 is clippy's default and the codebase-wide ceiling.
+cognitive-complexity-threshold = 25

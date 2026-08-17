@@ -8,6 +8,46 @@
 # Bypass for a genuine WIP commit only: `git commit --no-verify`.
 set -euo pipefail
 
+# ── Structure gate (hard limits; Markdown is exempt) ──────────────────────────
+# 1. No .rs file over 600 lines (sweet spot 200-400).
+# 2. No folder with more than 20 .rs files.
+# 3. No folder with more than 15 direct subfolders.
+# 4. No more than 5 subfolder levels below src/ or tests/ (those roots count 0).
+# Per-function complexity is enforced by clippy (cognitive_complexity, threshold
+# in clippy.toml) inside the clippy step below.
+echo "[csift pre-commit] structure gate (file/folder limits)"
+fail=0
+while read -r n f; do
+    [ "$f" = "total" ] && continue
+    if [ "$n" -gt 600 ]; then
+        echo "  OVER 600 LINES: $f ($n) — split it (200-400 is the sweet spot)"
+        fail=1
+    fi
+done < <(find src tests -name '*.rs' -print0 | xargs -0 wc -l)
+while read -r n d; do
+    if [ "$n" -gt 20 ]; then
+        echo "  OVER 20 .rs FILES in $d ($n) — group into subfolders"
+        fail=1
+    fi
+done < <(find src tests -name '*.rs' -print0 | xargs -0 -n1 dirname | sort | uniq -c | awk '{print $1" "$2}')
+while IFS= read -r d; do
+    n=$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+    if [ "$n" -gt 15 ]; then
+        echo "  OVER 15 SUBFOLDERS in $d ($n)"
+        fail=1
+    fi
+done < <(find src tests -type d)
+deep=$(find src tests -type d | awk -F/ 'NF>6 {print}')
+if [ -n "$deep" ]; then
+    echo "  DEEPER THAN 5 LEVELS below src/tests:"
+    echo "$deep" | sed 's/^/    /'
+    fail=1
+fi
+if [ "$fail" -ne 0 ]; then
+    echo "[csift pre-commit] STRUCTURE GATE FAILED"
+    exit 1
+fi
+
 echo "[csift pre-commit] cargo fmt --check"
 cargo fmt --all -- --check
 
