@@ -56,18 +56,26 @@ fn path_collision_does_not_leak_sibling_sessions_or_subagents() {
         .to_string()
             + "\n"
     };
-    // session A: cwd .../foo-bar ; session B (the colliding sibling): cwd .../foo_bar
+    // session A: cwd .../foo-bar ; session B (the colliding sibling): cwd .../foo_bar.
+    // The RECORDED cwd is what Claude Code would store on this platform (the collision
+    // guard compares it against the resolved target, drive-qualified on Windows).
+    let cwd_a = if cfg!(windows) {
+        r"C:\Users\testuser\Projects\foo-bar"
+    } else {
+        "/Users/testuser/Projects/foo-bar"
+    };
+    let cwd_b = if cfg!(windows) {
+        r"C:\Users\testuser\Projects\foo_bar"
+    } else {
+        "/Users/testuser/Projects/foo_bar"
+    };
     h.write(
         &format!("{enc}/{sess_a}.jsonl"),
-        &rec(sess_a, "/Users/testuser/Projects/foo-bar", "i am session A"),
+        &rec(sess_a, cwd_a, "i am session A"),
     );
     h.write(
         &format!("{enc}/{sess_b}.jsonl"),
-        &rec(
-            sess_b,
-            "/Users/testuser/Projects/foo_bar",
-            "i am session B sibling",
-        ),
+        &rec(sess_b, cwd_b, "i am session B sibling"),
     );
     // B also spawned a subagent (lives under B's sidecar in the SAME shared dir).
     h.write(
@@ -308,8 +316,13 @@ fn resolve_long_path_uses_prefix_scan_fallback() {
     };
     assert!(encoded.len() > 200);
     let dir_name = format!("{}-deadbeef", &encoded[..200]); // CC's truncate+hash form
+    let rec_cwd = if cfg!(windows) {
+        format!(r"C:\Users\testuser\Projects\{seg}")
+    } else {
+        long_cwd.clone()
+    };
     let rec = serde_json::json!({
-        "type":"user","uuid":"u0","sessionId":SESS,"cwd":long_cwd,
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":rec_cwd,
         "version":"2.1.0","gitBranch":"main","timestamp":"2026-06-07T05:00:00.000Z",
         "message":{"role":"user","content":"hello from a deeply nested project"}
     });

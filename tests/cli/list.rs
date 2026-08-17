@@ -122,17 +122,13 @@ fn list_real_path_target_is_encoded_and_resolved() {
     // short-circuits and the arg is treated as a real path (the `!s.contains('/')`
     // false arm).
     // On Windows the same arg resolves drive-relative and encodes with the drive
-    // letter, so the expected project dir carries the `C-` head there.
+    // letter, so the expected project dir carries the `C-` head there. The twin
+    // session carries no `cwd`, which the collision guard keeps.
     #[cfg(windows)]
-    {
-        let dst = h.projects().join(format!("C-{ENC}"));
-        std::fs::create_dir_all(&dst).unwrap();
-        std::fs::copy(
-            h.projects().join(ENC).join(format!("{SESS}.jsonl")),
-            dst.join(format!("{SESS}.jsonl")),
-        )
-        .unwrap();
-    }
+    h.write(
+        &format!("C-{ENC}/{SESS}.jsonl"),
+        "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"windows twin\"}}\n",
+    );
     let out = h.run(&["list", "/Users/testuser/Projects/foo"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(out.stdout.contains(SESS), "stdout: {}", out.stdout);
