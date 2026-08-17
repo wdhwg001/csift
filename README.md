@@ -9,7 +9,7 @@
 
   <p>
     Your AI coding agent writes down <em>everything</em> it does.<br/>
-    <code>csift</code> is how you read it back — <strong>search</strong>, <strong>recover</strong>, and <strong>audit</strong> any Claude Code session straight from the <code>.jsonl</code> logs.
+    <code>csift</code> is how you read it back: <strong>search</strong>, <strong>recover</strong>, and <strong>audit</strong> any Claude Code session straight from the <code>.jsonl</code> logs.
   </p>
 
   <p>
@@ -35,74 +35,80 @@ matches  1 exchange · 1 session · oldest first
 matched 1 exchange · 1 session · label=agent
 ```
 
-One regex, the **complete round-trip**, token-efficient output — no embeddings, no database, no daemon.
+One regex, the **complete round-trip**, token-efficient output. No embeddings, no database, no daemon.
 
 ## Why csift
 
-Every Claude Code session is a dense `~/.claude/projects/<cwd>/<uuid>.jsonl` — every prompt,
-thought, tool call, file edit, pasted image, and subagent it spawned. It's plain text, so you
-might reasonably think this tool doesn't need to exist: any `grep` can scan it, and Claude Code
+Every Claude Code session is a dense `~/.claude/projects/<cwd>/<uuid>.jsonl`: every prompt,
+thought, tool call, file edit, pasted image, and subagent it spawned. It's plain text. You might
+reasonably think this tool doesn't need to exist, since any `grep` can scan it and Claude Code
 knows how to search its own session. Then one of these happens to you:
 
-- **"It deleted my project files — and apologized."** Running `--dangerously-skip-permissions`,
+- **"It deleted my project files, then apologized."** Running `--dangerously-skip-permissions`,
   it wiped the files it had built, said sorry, and froze. Asked to dig them back out of its own
-  session, it fumbled around — the edits spanned subagents, every restore came back partial —
-  and then it quietly started *rewriting* them from memory.
-- **"It lost my design images after a compaction — then asked me to re-send them."** The images
-  were right there in the conversation. One compaction later, the agent acts like they never
+  session, it fumbled around (the edits spanned subagents, every restore came back partial) and
+  then quietly started *rewriting* them from memory.
+- **"It lost my design images after a compaction, then asked me to re-send them."** The images
+  were right there in the conversation. One compaction later the agent acts like they never
   existed.
 - **"Which session does `jazzy-twilight-sparkle.md` belong to?"** The plan file carries the
-  architecture that matters; its invented name says nothing about which session wrote it.
-- **"The machine crashed with three sessions open — which was which?"** Frontend, backend,
-  debugging — and `claude --resume` gives you a lineup with no faces.
+  architecture that matters. Its invented name says nothing about which session wrote it.
+- **"The machine crashed with three sessions open. Which was which?"** Frontend, backend,
+  debugging, and `claude --resume` gives you a lineup with no faces.
 - **"I literally just said that."** A few compactions into a long run, the agent still knows its
-  *task* — and has forgotten everything you actually *said*. Nothing mechanically keeps the last
-  few turns the way codex or pi do.
-- **"I DID tell you — in the question dialog."** It searched its own session, found nothing, and
+  *task*. Everything you actually *said* is gone, and nothing keeps the last few turns
+  mechanically the way codex or pi do.
+- **"I DID tell you. In the question dialog."** It searched its own session, found nothing, and
   concluded you never said it. You said it in `AskUserQuestion`.
 - **"You're the orchestrator. Why can't you see which session is stuck?"** Because, it explains,
-  an unanswered `AskUserQuestion` is never written to disk at all — "so there's nothing I can
+  an unanswered `AskUserQuestion` is never written to disk at all, "so there's nothing I can
   watch."
 
 Each of these ends the same way: the agent says *You are absolutely right.*, then stumbles
 through a one-off script over raw JSON and gets it subtly wrong. csift is the tool it should
-have had — `grep` that understands the transcript, with every trap already stepped in. The
-seven numbered highlights below close the seven pits above, **in order**.
+have had. `grep` that understands the transcript, every trap already stepped in. The first seven
+highlights below close the seven pits above, in order.
 
 ## ✨ Highlights
 
 1. ⏪ **Recover files & deleted plans.** Every byte the agent read or wrote is still in the
-   transcript — spread across subagents, five rewrites deep. `csift recover` replays the whole
-   stream and restores a file's exact bytes, at any point in time (`--at`), with diffs
-   exportable as patches and Claude Code's file-modified markers honored — or fails honestly
-   and salvages what survived, gaps marked. Never a silent partial restore.
+   transcript, spread across subagents, five rewrites deep. `csift recover` replays the stream
+   and restores a file's exact bytes at any point in time (`--at`), exports diffs as patches,
+   and honors Claude Code's file-modified markers. When it can't recover everything, it says
+   so, and salvages what survived with the gaps marked.
 2. 🖼 **Images back out.** Pasted screenshots live as base64 in the jsonl. `csift image` lists,
-   dedups, and extracts them — addressable by the same `#N` handle the session uses, even
-   though `#N` was never a unique id.
-3. 🧭 **Plan ↔ session, both directions.** `csift plan` finds the plan a session wrote;
-   `csift plan --reverse jazzy-twilight-sparkle.md` names the session that owns it.
+   dedups, and extracts them, addressable by the same `#N` handle the session uses. (`#N` was
+   never a unique id. csift copes.)
+3. 🧭 `csift plan` finds the plan a session wrote; `csift plan --reverse
+   jazzy-twilight-sparkle.md` names the session that owns a file. Both directions.
 4. 📇 **Sessions you can tell apart.** `csift list` identifies every session by its first and
-   last messages — the completion `claude --resume` never had.
-5. 🧵 **Un-clip a compaction.** A summary keeps task *state*; what you *said* is a different
-   job, and csift treats the two as orthogonal. `csift verbatim` reconstructs the clipped
-   back-and-forth within a `--budget` — wire it into a hook and every compaction arrives with
-   the recent dialogue attached.
+   last messages. The completion `claude --resume` never had.
+5. 🧵 **Un-clip a compaction.** A summary keeps task state; the conversation is a different
+   axis, and `csift verbatim` reconstructs the clipped back-and-forth within a `--budget`. Wire
+   it into a hook and every compaction arrives with the recent dialogue attached.
 6. 🏷 **Typed search.** A background task's completion notice is a `"user"` record. A
    subagent's return: also `"user"`. Your `AskUserQuestion` answer: a *tool result*. csift
-   already stepped in every one of these traps — 25 `role.class.sub` labels, so
-   `csift search -t user.answer` finds exactly what a naive grep swears was never said.
+   stepped in every one of these traps already, so `csift search -t user.answer` (one of 25
+   `role.class.sub` labels) finds exactly what a naive grep swears was never said.
 7. 🛎 **Pending questions, on the record.** csift ships a hook that records AskUserQuestion /
-   ExitPlanMode / MCP elicitations to a sidecar file, and every csift surface transparently
-   merges the unresolved ones — an orchestrator can finally see which session is stuck waiting
-   on a human, and on what.
-
-And under the hood:
-
-- 🔎 **Round-trips, not lines.** A hit returns the whole exchange — the matched tool call with its result, the user turn with the agent's reply — rebuilt from the `uuid`/`parentUuid` graph.
-- 🌳 **Subagent topology.** Kind, lifecycle, and the parent→child tree of every spawned agent — plus detection of lanes frozen on a pending permission approval.
-- 🤖 **The user is a model.** Terse, re-feedable output; a zero-match `search` *self-diagnoses* (a definitive absence, not a syntax slip, naming the label that hid your hits) so an agent never bails to hand-parsing; `@trap:<marker>` lets a subagent identify *itself* — the only way one can; a SKILL.md ships in the box.
-- 🔒 **Local, read-only, no magic.** Pure regex — no embeddings, no index, no database, no daemon, no network, no telemetry. It reads files already on your disk and never modifies them.
-- ⚡ **Fast on huge logs.** mmap + SIMD newline scan + byte prefilters + rayon; 200 MB transcripts and multi-GB corpora in about a second.
+   ExitPlanMode / MCP elicitations to a sidecar file, and every csift surface merges the
+   unresolved ones in transparently. An orchestrator can finally see which session is stuck
+   waiting on a human, and on what.
+8. 🔎 **Round-trips, not lines.** A hit returns the whole exchange, rebuilt from the
+   `uuid`/`parentUuid` graph: the matched tool call with its result, the user turn with the
+   agent's reply.
+9. 🌳 **Subagent topology.** Kind, lifecycle, and the parent→child tree of every spawned agent,
+   plus detection of lanes frozen on a pending permission approval.
+10. 🤖 **The user is a model.** Output is terse and re-feedable. A zero-match `search`
+    self-diagnoses on stderr, naming the label filter that hid your hits, so an agent reads
+    absence as absence instead of bailing to hand-parsing. `@trap:<marker>` lets a subagent
+    identify itself, which nothing else can do. And csift is the query engine for your own
+    automation: a hook that needs "when was the previous prompt?" asks the transcript instead
+    of keeping a shadow state file.
+11. 🔒 **Local, read-only, no magic.** Pure regex. No embeddings, no index, no database, no
+    daemon, no network, no telemetry. It reads files already on your disk and never writes them.
+12. ⚡ mmap + SIMD newline scan + byte prefilters + rayon. 200 MB transcripts and multi-GB
+    corpora in about a second, quick enough to call from inside a hook without noticing.
 
 ## Install
 
@@ -124,7 +130,7 @@ Code's own `$CLAUDE_CONFIG_DIR`. `csift <command> --help` is the full manual.
 
 ### Teach it to your agent
 
-`csift`'s primary user is **the agent itself** — output is terse, parseable, and every record
+`csift`'s primary user is **the agent itself**: output is terse, parseable, and every record
 carries a re-feedable handle. The skill teaches Claude Code when and how to reach for it:
 
 ```bash
@@ -134,7 +140,7 @@ npx skills add wdhwg001/csift
 ## Quickstart
 
 `csift <command> [TARGET] [flags]`. A **target** is a positional `@<uuid>` (a session), an
-`@<agent-hex>` (a subagent), a project path, or `.` (this cwd) — omit it to scan every project.
+`@<agent-hex>` (a subagent), a project path, or `.` (this cwd); omit it to scan every project.
 
 | You want to… | Run |
 |---|---|
@@ -158,54 +164,53 @@ Run `csift <command> --help` for the full flag set and examples.
 
 | | |
 |---|---|
-| **`list`** | fast "which session is this?" index — first/last user + last agent, per session |
+| **`list`** | fast "which session is this?" index: first/last user + last agent, per session |
 | **`search`** | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `-l` matching sessions, `--raw` verbatim lines) |
-| **`show`** | fetch the exact record(s) you name — `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes |
+| **`show`** | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes |
 | **`stats`** | one-scan aggregates per session: tokens by model, tool calls, turns, span, compactions |
 | **`agents`** | a session's subagents: kind, lifecycle, status, and the parent→child topology |
 | **`whoami`** | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe |
-| **`files`** | which files/dirs a session changed, when — plus edits made outside the tool stream |
-| **`recover`** | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream — byte-exact or honest gaps |
+| **`files`** | which files/dirs a session changed, when, plus edits made outside the tool stream |
+| **`recover`** | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream: byte-exact or honest gaps |
 | **`plan`** | locate the Plan-Mode plan file bound to a session (and reverse: which session owns a plan) |
 | **`verbatim`** | restore the verbatim turns a compaction summary clipped, within a budget (the live-tail peek is `show --turn`) |
 | **`image`** | list + extract images pasted into a transcript (handle/locator addressing, format transcode) |
 
 ## The summary is a selection. csift keeps the conversation.
 
-When Claude Code compacts, it regenerates a dense summary — kilobytes standing in for dozens of
-compactions of history. It's a *good* selection: it keeps the key findings (what changed, with
-file:line) and often your standing directives verbatim. But it is a selection, re-abstracted every
-time, and the axis it optimizes is **task continuation** — not the conversation.
+When Claude Code compacts, it regenerates a dense summary: kilobytes standing in for dozens of
+compactions of history. It's a *good* selection. It keeps the key findings (what changed, with
+file:line) and often your standing directives verbatim. But it is a selection, re-abstracted
+every time, and the axis it optimizes is **task continuation**, not the conversation.
 
-`csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange** — what you actually said,
-and what the agent actually reported back when it finished — with the hundreds of tool calls in
-between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue the
-summary compressed to a line or two: not just your directive, but the agent's *"validated against
-HEAD — the premise holds, here's the evidence"* report-back, the kind of thing a task-findings
-selection simply doesn't carry.
+`csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange**, what you actually
+said and what the agent actually reported back when it finished, with the hundreds of tool calls
+in between collapsed to a count. For the recent window that's tens of KB of full-fidelity
+dialogue where the summary kept a line or two. Not just your directive, but the agent's
+*"validated against HEAD, the premise holds, here's the evidence"* report-back, which a
+task-findings selection simply doesn't carry.
 
-So it doesn't replace the summary — it's **orthogonal** to it, and it **extends** the
-post-compaction context with the recent conversation at full fidelity. It's budget-bounded and
-newest-first (it won't reach the oldest turns, and your never-compacted Plan file still owns the
-plan), but filling the dialogue the summary abstracted away is exactly the point: *better, not
-complete.* Wire it into a `SessionStart(compact)` hook — see [SKILL.md](SKILL.md) — and every
-compaction arrives with the recent verbatim conversation attached.
+It doesn't replace the summary. It extends the post-compaction context with the recent
+conversation at full fidelity, budget-bounded and newest-first: it won't reach the oldest turns,
+and your never-compacted Plan file still owns the plan. Wire it into a `SessionStart(compact)`
+hook (see [SKILL.md](SKILL.md)) and every compaction arrives with the recent verbatim
+conversation attached.
 
 ## How it works
 
 csift never loads a whole transcript when it doesn't have to: it **mmaps** each `.jsonl`, scans
 newlines with SIMD (`memchr`), runs a cheap byte/regex **prefilter**, and only `serde_json`-parses
-candidate lines; `list` reads just the head and tail; `rayon` fans out across files. The hard part
-isn't speed — it's the *semantics* of Claude Code's log: a `role:"user"` record is usually a tool
-result, not a human turn; a pending question is never written to disk; compaction has a specific
-shape; subagents sit flat on disk and their topology is reconstructed from the spawning tool call.
-All of it is documented, with the empirical grounding, in **[SPEC.md](SPEC.md)**.
+candidate lines; `list` reads just the head and tail; `rayon` fans out across files. The hard
+part isn't speed. It's the *semantics* of Claude Code's log: a `role:"user"` record is usually a
+tool result, not a human turn; a pending question is never written to disk; compaction has a
+specific shape; subagents sit flat on disk and their topology is reconstructed from the spawning
+tool call. All of it is documented, with the empirical grounding, in **[SPEC.md](SPEC.md)**.
 
 ## Documentation
 
-- **[SPEC.md](SPEC.md)** — the design + the justification: the record model, per-subcommand spec, and the measurements behind the deep features.
-- **[SKILL.md](SKILL.md)** — dense, recipe-first usage reference (the agent-facing skill).
-- **[AGENTS.md](AGENTS.md)** — repo orientation: architecture, the jsonl domain knowledge, conventions, and the quality gate.
+- **[SPEC.md](SPEC.md)**: the design and its justification. The record model, per-subcommand specs, and the measurements behind the deep features.
+- **[SKILL.md](SKILL.md)**: dense, recipe-first usage reference (the agent-facing skill).
+- **[AGENTS.md](AGENTS.md)**: repo orientation. Architecture, jsonl domain knowledge, conventions, the quality gate.
 
 ## Contributing
 
