@@ -72,6 +72,10 @@ all = { level = "warn", priority = -1 }
 # Per-function complexity gate (C901-style): threshold lives in clippy.toml;
 # the -D warnings gate turns any crossing into a hard failure.
 cognitive_complexity = "warn"
+# Module roots are path-named (`src/<m>.rs` beside `src/<m>/`); the legacy
+# `mod.rs` layout is rejected. The structure gate in the pre-commit hook
+# mirrors this so the failure names the offending file even without clippy.
+mod_module_files = "warn"
 # Pedantic is intentionally NOT enabled wholesale (too noisy for a CLI). The
 # allows below pre-empt the most common false positives so a future pedantic
 # opt-in stays low-friction.

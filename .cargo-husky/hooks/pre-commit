@@ -10,9 +10,13 @@ set -euo pipefail
 
 # ── Structure gate (hard limits; Markdown is exempt) ──────────────────────────
 # 1. No .rs file over 600 lines (sweet spot 200-400).
-# 2. No folder with more than 20 .rs files.
+# 2. No folder with more than 20 .rs files. A path-named module root (`name.rs`
+#    with a sibling `name/` dir) belongs to its directory and does not count
+#    against the parent folder.
 # 3. No folder with more than 15 direct subfolders.
 # 4. No more than 5 subfolder levels below src/ or tests/ (those roots count 0).
+# 5. No `mod.rs` anywhere: module roots are path-named (`src/<m>.rs` beside
+#    `src/<m>/`). Clippy's `mod_module_files` enforces the same rule in-build.
 # Per-function complexity is enforced by clippy (cognitive_complexity, threshold
 # in clippy.toml) inside the clippy step below.
 echo "[csift pre-commit] structure gate (file/folder limits)"
@@ -29,7 +33,14 @@ while read -r n d; do
         echo "  OVER 20 .rs FILES in $d ($n) — group into subfolders"
         fail=1
     fi
-done < <(find src tests -name '*.rs' -print0 | xargs -0 -n1 dirname | sort | uniq -c | awk '{print $1" "$2}')
+done < <(find src tests -name '*.rs' | while IFS= read -r f; do
+    [ -d "${f%.rs}" ] && continue # a paired module root counts with its directory
+    dirname "$f"
+done | sort | uniq -c | awk '{print $1" "$2}')
+while IFS= read -r f; do
+    echo "  LEGACY mod.rs: $f — use a path-named module root (name.rs beside name/)"
+    fail=1
+done < <(find src tests -name mod.rs)
 while IFS= read -r d; do
     n=$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
     if [ "$n" -gt 15 ]; then
