@@ -15,8 +15,9 @@
     <img alt="Rust 1.89+" src="https://img.shields.io/badge/Rust-1.89%2B-dea584?logo=rust&logoColor=white" />
     <img alt="search: pure regex" src="https://img.shields.io/badge/search-pure%20regex-7c9cff" />
     <img alt="embeddings: none" src="https://img.shields.io/badge/embeddings-none-22d3ee" />
-    <img alt="coverage: 94.8%" src="https://img.shields.io/badge/coverage-94.9%25-4ade80" />
+    <img alt="coverage: 94.9%" src="https://img.shields.io/badge/coverage-94.9%25-4ade80" />
     <img alt="built for Claude Code" src="https://img.shields.io/badge/built%20for-Claude%20Code-d97757" />
+    <img alt="written by Claude Code" src="https://img.shields.io/badge/written%20by-Claude%20Code-d97757" />
     <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-a78bfa" />
   </p>
 </div>
@@ -210,13 +211,19 @@ csift never loads a whole transcript when it doesn't have to: it **mmaps** each 
 
 ## Documentation
 
-- **[SPEC.md](SPEC.md)**: the design and its justification. The record model, per-subcommand specs, and the measurements behind the deep features.
-- **[SKILL.md](SKILL.md)**: dense, recipe-first usage reference (the agent-facing skill).
-- **[AGENTS.md](AGENTS.md)**: repo orientation. Architecture, jsonl domain knowledge, conventions, the quality gate.
+There is none, in the human sense. This repository is written and maintained entirely by Claude Code, and the three reference files are the corpus the maintaining agent works from:
+
+- **[SKILL.md](SKILL.md)**: the usage reference an agent loads to operate csift.
+- **[SPEC.md](SPEC.md)**: design intent, record-model semantics, and the measurements behind the deep features.
+- **[AGENTS.md](AGENTS.md)**: the repo operating manual. Architecture, jsonl domain knowledge, the quality gate.
+
+They are dense, cross-referenced, and written for a model's attention, not yours. The practical way to understand this codebase as a human is to hand the repo to your own agent and ask for the tour: it reads these files well.
 
 ## Contributing
 
-Issues and PRs welcome. The entire quality gate is one pre-commit hook (installed on your first `cargo test`): `cargo fmt --check` → `cargo clippy --all-targets -D warnings` → `cargo test`. Keep those green and you're set. New to the code? **[AGENTS.md](AGENTS.md)** is the orientation.
+An honest note first: csift's potholes are Claude's own, and I don't think fixing them should be a human's job. The intended path is to have Claude clone the repo and clean up after itself, then open the PR. From the PR onward, though, I expect a human who has read the code; if reviewing your PR would mean chatting with an AI, it should have been an Issue instead. Issues are genuinely welcome: describe the problem clearly and I'm happy to point my Claude at it.
+
+The entire quality gate is one pre-commit hook (installed on your first `cargo test`): `cargo fmt --check` → `cargo clippy --all-targets -D warnings` → `cargo test`. Keep those green and you're set.
 
 ## License
 
