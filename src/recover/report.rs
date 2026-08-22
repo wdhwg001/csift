@@ -119,7 +119,7 @@ pub(crate) fn print_boundary_lines(s: &ScanResult, boundaries: &[Boundary]) {
             boundary_loc(s, b.line_no),
             b.turn_index,
             format_timestamp(b.timestamp_utc.as_deref()),
-            b.detail,
+            boundary_detail_with_clue(s, b),
             b.confidence.label()
         );
     }
@@ -231,7 +231,7 @@ pub(crate) fn render_patches_text(
                         boundary_loc(s, b.line_no),
                         b.turn_index,
                         format_timestamp(b.timestamp_utc.as_deref()),
-                        b.detail,
+                        boundary_detail_with_clue(s, b),
                         b.confidence.label()
                     );
                 }

@@ -198,7 +198,7 @@ pub(crate) fn render_restore(
                     boundary_loc(source, b.line_no),
                     b.turn_index,
                     format_timestamp(b.timestamp_utc.as_deref()),
-                    b.detail,
+                    boundary_detail_with_clue(source, b),
                     b.confidence.label()
                 );
             }
@@ -293,7 +293,11 @@ pub(crate) fn restore_partial_message(
         .filter(|b| {
             matches!(
                 b.kind,
-                "modified_since_read" | "external_edit" | "original_file_disagreement"
+                "modified_since_read"
+                    | "external_edit"
+                    | "original_file_disagreement"
+                    | "hint_modified"
+                    | "stale_recovered"
             )
         })
         .collect();

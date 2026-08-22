@@ -305,6 +305,37 @@ pub(crate) fn boundary_source(s: &ScanResult, line_no: usize) -> (&str, usize) {
     }
 }
 
+/// A boundary's detail, extended with the FORMATTER-CLASS clue when it applies: an
+/// `external_edit` (an `edited_text_file` attachment) is idiom-independent, so when a
+/// formatter or interpreter class command ran in this window at or before the boundary
+/// (same source transcript), the external change may well be that command's rewrite.
+/// The clue names the command's marker and real line; without one in scope, the detail
+/// is returned unchanged (the insertion never speculates).
+pub(crate) fn boundary_detail_with_clue(s: &ScanResult, b: &Boundary) -> String {
+    if b.kind != "external_edit" {
+        return b.detail.clone();
+    }
+    let (sid, real) = boundary_source(s, b.line_no);
+    let clue = s
+        .opaque
+        .iter()
+        .filter(|o| {
+            (o.marker.starts_with("fmt:") || o.marker.starts_with("interp:"))
+                && o.session_id == sid
+                && o.line_no <= real
+        })
+        .max_by_key(|o| o.line_no);
+    match clue {
+        Some(o) => format!(
+            "{}; this can be an external edit, the project's formatter, or a hook: a \
+             formatter-class command ({}) ran at L{} in this window, so check the \
+             project's conventions",
+            b.detail, o.marker, o.line_no
+        ),
+        None => b.detail.clone(),
+    }
+}
+
 /// The ready-to-run `csift search` command that lists every record touching `basename`
 /// inside the disclosed window: pattern = the regex-escaped basename, scope = the
 /// owning (re-feedable) session, label = `agent.tool.use` (every tool call, shell or

@@ -47,6 +47,10 @@ pub(crate) struct EventCounts {
     pub(crate) external_edit: usize,
     pub(crate) history_snapshot: usize,
     pub(crate) integrity_error: usize,
+    /// Claude Code `staleReadFileStateHint` attributions naming this file.
+    pub(crate) stale_hint: usize,
+    /// Successful Edits flagged `staleRecovered` (disk had drifted; edit applied).
+    pub(crate) stale_recovered: usize,
 }
 
 /// One reconstructed segment (a maximal run of events with no hard boundary inside).
@@ -236,6 +240,9 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                         buf.seen_total_lines = None;
                     }
                     IntegrityKind::NotReadYet => { /* not a boundary; the edit never landed */ }
+                    // Counted annotations: the op never landed, nothing invalidated,
+                    // but the failed attempt is part of the honest event ledger.
+                    IntegrityKind::StringNotFound | IntegrityKind::FileDoesNotExist => {}
                 }
             }
             EventKind::ExternalEdit { snippet } => {
@@ -250,14 +257,21 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     pre_state_known,
                     anchor_source,
                 );
+                // An EMPTY snippet is the attachment's over-budget degraded form: the
+                // change exceeded the 16KB budget, so the signal arrives content-less.
+                let detail = if snippet.is_empty() {
+                    "edited_text_file attachment (file changed outside the tool stream; \
+                     no snippet: the change exceeded the attachment budget)"
+                } else {
+                    "edited_text_file attachment (file changed outside the tool stream)"
+                };
                 out.boundaries.push(Boundary {
                     line_no: e.line_no,
                     turn_index: e.turn_index,
                     timestamp_utc: e.timestamp_utc.clone(),
                     kind: "external_edit",
                     confidence: Confidence::Authoritative,
-                    detail: "edited_text_file attachment (file changed outside the tool stream)"
-                        .to_string(),
+                    detail: detail.to_string(),
                 });
                 for (n, text) in snippet {
                     buf.known.insert(
@@ -306,8 +320,62 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 seg_open = None;
                 seg_last = None;
                 pre_state_known = false;
+                // `had_full_anchor` survives a SOFT boundary on purpose: originalFile
+                // is disk ground truth, so if the bash touch really changed the file,
+                // the next Edit's originalFile-vs-buffer cross-check is exactly the
+                // detector that catches it. Disarming here silenced that check for
+                // the rest of the session after any single bash touch.
+                anchor_source = None;
+            }
+            EventKind::StaleReadHint { path } => {
+                out.counts.stale_hint += 1;
+                // HARD boundary: Claude Code itself stat'd the read set and named this
+                // file as modified by a shell command. Content-less (nothing to
+                // splice), so the buffer stays, but reconstruction across the point no
+                // longer matches disk and a fresh anchor is required.
+                close_segment(
+                    &mut out,
+                    &seg_start,
+                    &buf,
+                    &seg_open,
+                    &seg_last,
+                    pre_state_known,
+                    anchor_source,
+                );
+                out.boundaries.push(Boundary {
+                    line_no: e.line_no,
+                    turn_index: e.turn_index,
+                    timestamp_utc: e.timestamp_utc.clone(),
+                    kind: "hint_modified",
+                    confidence: Confidence::Authoritative,
+                    detail: format!(
+                        "Claude Code reported {path} modified by this shell command \
+                         (staleReadFileStateHint)"
+                    ),
+                });
+                seg_open = None;
+                seg_last = None;
+                pre_state_known = false;
                 had_full_anchor = false;
                 anchor_source = None;
+            }
+            EventKind::StaleRecovered => {
+                out.counts.stale_recovered += 1;
+                // Authoritative ANNOTATION: the edit applied cleanly, but the disk had
+                // drifted since the last read - other changes exist outside this
+                // stream. Nothing is invalidated (the edited span is right), so no
+                // segment close and no state reset.
+                out.boundaries.push(Boundary {
+                    line_no: e.line_no,
+                    turn_index: e.turn_index,
+                    timestamp_utc: e.timestamp_utc.clone(),
+                    kind: "stale_recovered",
+                    confidence: Confidence::Authoritative,
+                    detail: "the edit applied cleanly, but the file had been modified \
+                             on disk since the last read (changes outside this stream \
+                             exist)"
+                        .to_string(),
+                });
             }
             EventKind::HistorySnapshotMarker => {
                 out.counts.history_snapshot += 1;

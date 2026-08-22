@@ -84,6 +84,12 @@ pub(crate) fn fmt_counts(c: &EventCounts) -> String {
     if c.integrity_error > 0 {
         parts.push(format!("{} integrity-error", c.integrity_error));
     }
+    if c.stale_hint > 0 {
+        parts.push(format!("{} modified-file-hint", c.stale_hint));
+    }
+    if c.stale_recovered > 0 {
+        parts.push(format!("{} stale-recovered", c.stale_recovered));
+    }
     if parts.is_empty() {
         "0".to_string()
     } else {
@@ -110,20 +116,26 @@ pub(crate) fn print_footer(ctx: &RenderCtx) {
 
 impl Replay {
     /// Boundaries that INVALIDATED reconstruction state (content across them cannot be
-    /// stitched): a modified-since-read (the replayed buffer is cleared) and an
-    /// external edit (disk changed outside the tool stream). An originalFile
-    /// disagreement is an authoritative ANNOTATION (nothing is invalidated), and a
-    /// bash mutation is a soft heuristic split; neither belongs in the hard count, so
-    /// the coverage `fragments` figure no longer inflates on soft signals.
+    /// stitched): a modified-since-read (the replayed buffer is cleared), an external
+    /// edit (disk changed outside the tool stream), and a hint_modified (Claude Code's
+    /// own modified-file attribution). An originalFile disagreement and a
+    /// stale_recovered are authoritative ANNOTATIONS (nothing is invalidated), and a
+    /// bash mutation is a soft heuristic split; none of those belong in the hard
+    /// count, so the coverage `fragments` figure never inflates on soft signals.
     pub(crate) fn boundaries_hard_count(&self) -> usize {
         self.boundaries
             .iter()
-            .filter(|b| matches!(b.kind, "modified_since_read" | "external_edit"))
+            .filter(|b| {
+                matches!(
+                    b.kind,
+                    "modified_since_read" | "external_edit" | "hint_modified"
+                )
+            })
             .count()
     }
 
     /// The complement of [`Replay::boundaries_hard_count`]: annotation + heuristic
-    /// boundaries (originalFile disagreement, bash mutation).
+    /// boundaries (originalFile disagreement, stale_recovered, bash mutation).
     pub(crate) fn boundaries_soft_count(&self) -> usize {
         self.boundaries.len() - self.boundaries_hard_count()
     }
@@ -331,6 +343,8 @@ pub(crate) fn counts_json(c: &EventCounts) -> serde_json::Value {
         "external_edit": c.external_edit,
         "history_snapshot": c.history_snapshot,
         "integrity_error": c.integrity_error,
+        "stale_hint": c.stale_hint,
+        "stale_recovered": c.stale_recovered,
     })
 }
 
@@ -354,10 +368,11 @@ pub(crate) fn boundary_json(b: &Boundary) -> serde_json::Value {
 /// the pre-merge truth while `line` stays the `--at @line:` cutoff coordinate of the
 /// merged stream.
 pub(crate) fn boundary_json_sourced(s: &ScanResult, b: &Boundary) -> serde_json::Value {
-    let (sid, real) = boundary_source(s, b.line_no);
     let mut obj = boundary_json(b);
+    let (sid, real) = boundary_source(s, b.line_no);
     obj["source_session_id"] = serde_json::json!(sid);
     obj["source_line"] = serde_json::json!(real);
+    obj["detail"] = serde_json::json!(boundary_detail_with_clue(s, b));
     obj
 }
 

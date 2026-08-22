@@ -50,6 +50,7 @@ const EXCERPT_MAX: usize = 400;
 // ─────────────────────────────────────────────────────────────────────────────
 
 mod buffer;
+mod carriers;
 mod diff;
 mod events;
 mod render;
@@ -62,6 +63,7 @@ mod timeline;
 mod types;
 
 pub(crate) use buffer::*;
+pub(crate) use carriers::*;
 pub(crate) use diff::*;
 pub(crate) use events::*;
 pub(crate) use render::*;

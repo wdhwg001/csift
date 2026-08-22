@@ -326,6 +326,19 @@ pub enum RecoverMode {
         FROM THE TOOL STREAM; only a clean window note implies nothing else ran. A \
         `--turn`/`--since`/`--until` window that excludes integrity-relevant events \
         prints a note naming how many fell outside.\n\n\
+        FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\n  \
+          A Bash result's `staleReadFileStateHint` is Claude Code itself reporting \
+        that the command modified files in its read set, BY NAME (paths relative to \
+        the shell cwd, resolved before matching): an authoritative HARD \
+        `hint_modified` boundary, and the one signal that attributes a formatter-class \
+        rewrite to concrete files. A successful Edit flagged `staleRecovered` means \
+        the disk had drifted since the last read but the edit still applied: an \
+        authoritative `stale_recovered` annotation (nothing invalidated, other \
+        changes exist outside the stream). An `edited_text_file` external-edit \
+        boundary whose window also ran a formatter-class command names that command \
+        in its detail (the change may be the formatter's rewrite; check the \
+        project's conventions). Failed ops (`String to replace not found`, `File \
+        does not exist`) are counted in the event ledger, never replayed.\n\n\
         JSON SCHEMA (per --format json)\n  \
           EVERY mode (restore included) emits the envelope: one `{kind:\"header\",…}` \
         line first, one `{kind:\"summary\", file, mode, sessions, skipped_lines}` line \
