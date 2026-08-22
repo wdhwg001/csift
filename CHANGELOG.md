@@ -5,6 +5,65 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.8.0] - 2026-08-22
+
+Bash file mutations now resolve against the shell cwd Claude Code itself
+records, and every `recover` output accounts for what the replay could not
+include. Grounded in a full-corpus investigation: 22,410 real Bash commands
+joined against csift's own output, and the cwd + freshness mechanisms
+extracted from the Claude Code 2.1.237 binary and validated on 18,185
+commands (SPEC 4.9).
+
+How much improved, measured on that corpus: 19.4% of Bash calls mutate a
+persistent file; csift's full-target attribution of those mutations rises
+from 27.1% to a measured 77.0% ceiling; `recover`'s relative-operand vs
+absolute `--file` join closes from 95.84% to 99.65%.
+
+How it stays deterministic: nothing is guessed. Every resolved path carries
+an explicit resolution class - `absolute` (typed absolute), `cwd-joined`
+(joined to the record's own `cwd` field, data Claude Code wrote, zero
+inference), `cd-tracked` (literal in-command cds, a lexical inference
+validated at 99.65% against Claude Code's own modified-file hints), or
+`unresolved` (kept verbatim and disclosed, never fabricated into a path).
+Commands whose file sets are not in the command text are counted and
+disclosed, never attributed.
+
+- `files`: a bash row's `path` is the resolved spelling, so relative and
+  absolute spellings of one file share every bucket; timeline JSON rows gain
+  `resolution`, `path_verbatim`, `command_errored`. Mutations from a
+  partially failed bash chain are kept and flagged instead of dropped;
+  `git apply --check` / `git clean -n` dry runs and rsync remote
+  destinations no longer emit rows.
+- Parser increments: `perl -i` (the `sed -i` twin); interpreter write idioms
+  (python/node/ruby heredoc and inline scripts) with literal and
+  one-hop-constant targets as real rows and an `interp:<lang>` marker
+  otherwise; leading-`~` operands kept verbatim as `unresolved` instead of
+  dropped; mutating-class markers `fmt:<tool>`, `pkg:<manager>`,
+  `extract:<tool>` in the `git:<sub>` style (dry runs emit nothing; a
+  formatter with named operands emits real rows).
+- `recover` joins bash events on resolved paths (verbatim kept as a belt)
+  and discloses, per window and in every mode: integrity boundaries with a
+  hard/soft split, opaque mutating-class and PowerShell command counts and
+  rows, and a ready-to-run time-bounded `csift search` command. Restore's
+  status states a clean window positively, or says "complete from the tool
+  stream; NOT verified against disk" and lists what was not replayed.
+- Claude Code's own freshness signals are adopted: `staleReadFileStateHint`
+  (Claude Code names the files a shell command modified) becomes a hard
+  `hint_modified` boundary; `staleRecovered` on a successful Edit becomes a
+  `stale_recovered` annotation; the over-budget `edited_text_file` form is
+  named; an external-edit boundary names a formatter-class command that ran
+  in its window. `String to replace not found` and `File does not exist`
+  are counted annotations; a soft bash boundary no longer disarms the
+  originalFile cross-check.
+- Breaking: the batch `recovery-report.tsv` gains `boundaries`, `bash_file`,
+  `bash_opaque` columns; restore's status lines and failure diagnostics are
+  reworded (an invalidated history no longer claims "never Read/Written/
+  Edited"; an empty salvage names "at the latest state"); restore's JSON
+  error paths emit their row and summary before the non-zero exit; boundary
+  JSON rows gain `source_session_id`/`source_line`; coverage rows gain
+  `hard_boundaries`/`soft_boundaries`/`opaque_commands`/
+  `powershell_commands`/`suggested_search`.
+
 ## [0.7.8] - 2026-08-17
 
 - `recover` finds windows-shaped paths (drive letters, backslashes) again: the
