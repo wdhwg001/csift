@@ -220,7 +220,7 @@ impl FilesArgs {
 pub enum RecoverMode {
     /// DEFAULT (no mode flag): hand back the file's FINAL content as RAW restorable bytes;
     /// but ONLY when it is fully recoverable. If the session saw just PART of the file (a
-    /// windowed read + a few edits), restore ERRORS rather than emit a holey file, naming what
+    /// windowed read + a few edits), restore ERRORS instead of emitting a holey file, naming what
     /// it can/can't recover and pointing at `--salvage`.
     Restore,
     /// Best-effort, line-numbered FINAL-state fragment of `--file`. Explicit (`--salvage`).
@@ -313,20 +313,41 @@ pub enum RecoverMode {
           csift recover @<uuid> --file /abs/app.py --at @turn:42    # partial snapshot as the LLM saw it at turn 42\n  \
           csift recover @<uuid> --file @plan --out /tmp/plan.md     # reconstruct the session's bound plan (even if deleted)\n  \
           csift recover @<uuid> --file /abs/x.rs --file-lines 100..200 --patches   # only patches touching FILE lines 100-200\n\n\
+        WINDOW ACCOUNTING (every mode)\n  \
+          Recover never pretends a window is clean. Beside the replayed events it \
+        counts, per window: parsed bash mutations OF the file (each disclosed as a \
+        boundary), OPAQUE mutating-class commands (a formatter run, a package-manager \
+        install, an archive/patch extraction, an interpreter write with an \
+        unextractable target: commands that mutate files they never name, shown as \
+        `fmt:`/`pkg:`/`extract:`/`interp:` markers), and PowerShell commands (their \
+        command text is never lexically parsed). When any are present the output says \
+        so and prints a ready-to-run, time-bounded `csift search` that lists the \
+        window's tool calls touching the file. `complete` therefore means complete \
+        FROM THE TOOL STREAM; only a clean window note implies nothing else ran. A \
+        `--turn`/`--since`/`--until` window that excludes integrity-relevant events \
+        prints a note naming how many fell outside.\n\n\
         JSON SCHEMA (per --format json)\n  \
-          The default RESTORE mode emits a SINGLE object and no trailer; \
-        `{file, complete:true, lines, content}` on success (or, with `--out`, \
-        `{file, complete:true, lines, path, wrote}`); a partial file is an ERROR (a stderr \
-        message + non-zero exit), never a JSON record. The other four modes emit per-MODE \
-        record objects (each tagged by a `type`/`mode`-specific shape; \
-        `--patches` emits `{type:\"segment\",…}` + `{type:\"boundary\",…}`; `--coverage` emits \
-        a `{covered_ranges, boundaries, events, fragments, recoverable_lines, …}` object; \
-        `--at` and `--salvage` emit line/gap records). For those four, EVERY per-record \
-        object carries the id-domain discriminators `{session_id, is_subagent, \
-        parent_session_id}` (is_subagent flags a bare-hex subagent record; re-feed \
-        parent_session_id, never the bare session_id). Records are followed by a UNIFORM \
-        trailer `{summary:{file, mode, sessions, skipped_lines}}` that closes every run \
-        regardless of mode."
+          EVERY mode (restore included) emits the envelope: one `{kind:\"header\",…}` \
+        line first, one `{kind:\"summary\", file, mode, sessions, skipped_lines}` line \
+        last. RESTORE emits one `{kind:\"restore\", file, complete, lines, \
+        boundaries, bash_events, opaque_commands, powershell_commands, \
+        suggested_search}` row carrying `content` (or `path` + `wrote` with `--out`); \
+        a partial or no-history run still emits its `{kind:\"restore\", complete:false, \
+        reason}` row + the summary, then errors on stderr with a non-zero exit. \
+        `--patches` emits `{kind:\"segment\",…}` + `{kind:\"boundary\",…}` rows; \
+        `--coverage` emits `{kind:\"coverage\", covered_ranges, boundaries, \
+        hard_boundaries, soft_boundaries, events, fragments, recoverable_lines, \
+        opaque_commands, powershell_commands, suggested_search, …}`; `--at` and \
+        `--salvage` emit `{kind:\"snapshot\", lines, gaps, seen_total_lines, \
+        boundaries, opaque_commands, powershell_commands, suggested_search, …}`. A \
+        boundary object is `{line, source_session_id, source_line, turn_index, \
+        ts_utc, ts_local, cause, confidence, detail}`: `line` is the replay/cutoff \
+        coordinate (feed it to `--at @line:<N>`), `source_line` the REAL jsonl line in \
+        `source_session_id` (feed those to `csift show`); the two pairs differ only \
+        after a cross-transcript merge. Every per-session row carries the id-domain \
+        discriminators `{session_id, is_subagent, parent_session_id}` (is_subagent \
+        flags a bare-hex subagent record; re-feed parent_session_id, never the bare \
+        session_id)."
 )]
 pub struct RecoverArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to reconstruct
@@ -385,7 +406,7 @@ pub struct RecoverArgs {
     /// Segmented unified-diff history of `--file`: the CHANGES view (rewind a still-present
     /// file over a `--since`/`--until` window; best when only this session touched it and did
     /// not read it whole). NOT the default: with no mode flag, `recover` RESTOREs the final
-    /// content instead (and fails loudly rather than emit a partial file).
+    /// content instead (and fails loudly, never emitting a partial file).
     #[arg(long, group = "mode")]
     pub patches: bool,
 

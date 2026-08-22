@@ -39,7 +39,14 @@ pub(crate) enum EventKind {
     /// An integrity violation the harness surfaced.
     IntegrityError { kind: IntegrityKind, raw: String },
     /// A heuristic external mutation (Bash redirect/sed -i/tee/...). SOFT signal only.
-    BashTouch { verb: String },
+    /// `path` is the RESOLVED spelling that matched `--file` (the operand joined to the
+    /// recording shell's cwd; see `bash_mutations::cwd`), `resolution` its class wire
+    /// spelling (`absolute`/`cwd-joined`/`cd-tracked`/`unresolved`).
+    BashTouch {
+        verb: String,
+        path: String,
+        resolution: &'static str,
+    },
     /// An external/user edit captured as an `edited_text_file` attachment snippet.
     ExternalEdit { snippet: Vec<(usize, String)> },
     /// A `file-history-snapshot` recorded a disk backup of `--file` at this time. The
@@ -99,6 +106,26 @@ pub(crate) struct PatchHunk {
 // Per-file scan
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// One shell command in a scanned transcript whose touched-file set the lexical layer
+/// cannot name: a mutating-CLASS marker (`fmt:cargo`, `interp:python`, `pkg:npm`,
+/// `extract:tar`, `git:<sub>`), or a `PowerShell` tool call (never parsed lexically,
+/// marker `powershell`). These are SCOPE accounting, not `--file` events: they cannot
+/// be joined to a target, so recover COUNTS and discloses them per window instead of
+/// pretending the window is clean.
+#[derive(Debug, Clone)]
+pub(crate) struct OpaqueCommand {
+    /// The transcript the command ran in (its own id, so a merged group's rows stay
+    /// attributable) and the record's REAL 1-based jsonl line there. Opaque rows are
+    /// never re-stamped by the reconstruction merge: they are pointers for
+    /// inspection, not replay coordinates.
+    pub(crate) session_id: String,
+    pub(crate) line_no: usize,
+    pub(crate) turn_index: usize,
+    pub(crate) timestamp_utc: Option<String>,
+    /// The class marker (`fmt:cargo`, `interp:python`, ...) or `powershell`.
+    pub(crate) marker: String,
+}
+
 /// Per-session scan result before global merge.
 #[derive(Debug)]
 pub(crate) struct ScanResult {
@@ -109,5 +136,14 @@ pub(crate) struct ScanResult {
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,
     pub(crate) events: Vec<FileEvent>,
+    /// Commands in THIS transcript whose file set is not lexically knowable (class
+    /// markers + PowerShell calls) - per-window disclosure input, never content.
+    pub(crate) opaque: Vec<OpaqueCommand>,
+    /// Set ONLY by `merge_groups_for_reconstruction`: the re-stamped synthetic event
+    /// line (1..N over the merged stream, the `--at @line:` cutoff coordinate) mapped
+    /// back to (source transcript id, its REAL jsonl line). Empty on an un-merged
+    /// result, where `line_no` IS the real line. Renderers use it so a boundary's
+    /// displayed location stays a real, inspectable transcript line.
+    pub(crate) merged_line_origin: std::collections::BTreeMap<usize, (String, usize)>,
     pub(crate) skipped_lines: usize,
 }

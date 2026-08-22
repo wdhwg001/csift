@@ -252,7 +252,13 @@ pub(crate) fn extract_from_record(
                     }
                 }
             }
-            // (6) Bash heuristic mutation touching `--file`.
+            // (6) Bash heuristic mutation touching `--file`. The operand is RESOLVED
+            // against the recording shell's cwd (the record's own `cwd` field, see
+            // `bash_mutations::cwd`) BEFORE matching, so an absolute `--file` now joins
+            // the dominant real shape `cd <proj> && sed -i rel/path`; the verbatim
+            // spelling stays as a belt so a relative `--file` keeps matching exactly
+            // what the command typed. A class-marker pseudo-path is never a file: it is
+            // accounted per scope in `ScanResult::opaque`, not here.
             Block::ToolUse {
                 name: Some(name),
                 input: Some(input),
@@ -260,13 +266,21 @@ pub(crate) fn extract_from_record(
             } if name == "Bash" => {
                 if let Some(cmd) = input.get("command").and_then(serde_json::Value::as_str) {
                     for bm in crate::bash_mutations::parse_bash_mutations(cmd) {
-                        if path_matches(target_file, &bm.path) {
+                        if crate::bash_mutations::is_class_marker(&bm.path) {
+                            continue;
+                        }
+                        let (resolved, resolution) = bm.resolve(rec.cwd.as_deref());
+                        if path_matches(target_file, &resolved)
+                            || path_matches(target_file, &bm.path)
+                        {
                             events.push(FileEvent {
                                 line_no,
                                 turn_index,
                                 timestamp_utc: ts.clone(),
                                 kind: EventKind::BashTouch {
                                     verb: bm.verb.to_string(),
+                                    path: resolved,
+                                    resolution: resolution.as_str(),
                                 },
                             });
                         }

@@ -37,6 +37,8 @@ pub(crate) fn scan_one_file_multi(
         crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
     let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
     let turns = group_turn_indices_deduped(&recs, |r| *r);
+    // Scope accounting is per TRANSCRIPT (target-independent): collect once, share.
+    let opaque = collect_opaque_commands(&session_id, &records, &turns);
 
     let mut out = Vec::new();
     for ti in present {
@@ -49,6 +51,8 @@ pub(crate) fn scan_one_file_multi(
                     is_subagent,
                     parent_session_id: parent_session_id.clone(),
                     events,
+                    opaque: opaque.clone(),
+                    merged_line_origin: std::collections::BTreeMap::new(),
                     skipped_lines: skipped,
                 },
             ));
@@ -57,17 +61,31 @@ pub(crate) fn scan_one_file_multi(
     Ok(out)
 }
 
+/// The winning candidate of [`reconstruct_best`], with the per-window accounting the
+/// batch report discloses beside every recovered file.
+pub(crate) struct BestReconstruction {
+    pub(crate) content: String,
+    pub(crate) known: usize,
+    pub(crate) total: usize,
+    /// Integrity boundaries in the winning group's replay.
+    pub(crate) boundaries: usize,
+    /// Parsed bash mutations OF THIS FILE (disclosed as boundaries above).
+    pub(crate) bash_file: usize,
+    /// Opaque commands in the winning group's window (class markers + PowerShell).
+    pub(crate) bash_opaque: usize,
+}
+
 /// Reconstruct a target's FINAL content (or its `--at`/window snapshot) as RAW bytes - the
 /// restorable file, not the line-numbered diff view. Cross-session writes are merged per
 /// top-level group; when unrelated sessions each hold a version, the FRESHEST (latest-write)
-/// candidate wins. Returns `(content, known_lines, total_lines)`, or `None` when nothing is
-/// recoverable. A partial reconstruction (`known < total`) joins the known lines in order.
+/// candidate wins. `None` when nothing is recoverable. A partial reconstruction
+/// (`known < total`) joins the known lines in order.
 pub(crate) fn reconstruct_best(
     scans: Vec<ScanResult>,
     when: &str,
-) -> Result<Option<(String, usize, usize)>> {
+) -> Result<Option<BestReconstruction>> {
     let merged = merge_groups_for_reconstruction(scans);
-    let mut best: Option<(String, usize, usize, Option<String>)> = None;
+    let mut best: Option<(BestReconstruction, Option<String>)> = None;
     for s in &merged {
         if s.events.is_empty() {
             continue;
@@ -97,21 +115,39 @@ pub(crate) fn reconstruct_best(
         }
         let fresher = match &best {
             None => true,
-            Some((_, bk, _, bts)) => (&latest_ts, known.len()) > (bts, *bk),
+            Some((b, bts)) => (&latest_ts, known.len()) > (bts, b.known),
         };
         if fresher {
-            best = Some((content, known.len(), total, latest_ts));
+            best = Some((
+                BestReconstruction {
+                    content,
+                    known: known.len(),
+                    total,
+                    boundaries: rep.boundaries.len(),
+                    bash_file: rep.counts.bash,
+                    bash_opaque: s.opaque.len(),
+                },
+                latest_ts,
+            ));
         }
     }
-    Ok(best.map(|(c, k, t, _)| (c, k, t)))
+    Ok(best.map(|(b, _)| b))
 }
 
-/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary.
+/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The
+/// three accounting columns disclose what each recovered file's window held beyond
+/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash
+/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose
+/// file set is unknowable). A `complete` row with non-zero columns is complete FROM
+/// THE TOOL STREAM, not verified against disk.
 pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> Result<()> {
     std::fs::create_dir_all(out_dir)
         .with_context(|| format!("cannot create {}", out_dir.display()))?;
-    let mut body = String::from("status\tknown_lines\ttotal_lines\ttarget\twritten_to\n");
+    let mut body = String::from(
+        "status\tknown_lines\ttotal_lines\tboundaries\tbash_file\tbash_opaque\ttarget\twritten_to\n",
+    );
     let (mut complete, mut partial, mut none, mut skipped) = (0usize, 0usize, 0usize, 0usize);
+    let mut flagged = 0usize;
     for o in outcomes {
         match o.status {
             "complete" => complete += 1,
@@ -120,11 +156,17 @@ pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> R
             "skipped-exists" => skipped += 1,
             _ => {}
         }
+        if o.boundaries + o.bash_file + o.bash_opaque > 0 {
+            flagged += 1;
+        }
         body.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             o.status,
             o.known,
             o.total,
+            o.boundaries,
+            o.bash_file,
+            o.bash_opaque,
             o.target,
             o.written
                 .as_ref()
@@ -139,6 +181,13 @@ pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> R
          {skipped} skipped (already present)",
         outcomes.len()
     );
+    if flagged > 0 {
+        println!(
+            "{flagged} file(s) had integrity boundaries or unparsed mutating bash in their \
+             window (boundaries/bash_file/bash_opaque columns): complete means complete from \
+             the tool stream, not verified against disk"
+        );
+    }
     println!("report: {}", report.display());
     Ok(())
 }
@@ -180,6 +229,8 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
             is_subagent,
             parent_session_id,
             events: Vec::new(),
+            opaque: Vec::new(),
+            merged_line_origin: std::collections::BTreeMap::new(),
             skipped_lines: 0,
         });
     };
@@ -202,6 +253,8 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
                 is_subagent,
                 parent_session_id,
                 events: Vec::new(),
+                opaque: Vec::new(),
+                merged_line_origin: std::collections::BTreeMap::new(),
                 skipped_lines: 0,
             });
         }
@@ -213,12 +266,17 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
     let (records, skipped) =
         crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
 
-    let events = extract(&records, target_file);
+    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
+    let turns = group_turn_indices_deduped(&recs, |r| *r);
+    let events = extract_with_turns(&records, &turns, target_file);
+    let opaque = collect_opaque_commands(&session_id, &records, &turns);
     Ok(ScanResult {
         session_id,
         is_subagent,
         parent_session_id,
         events,
+        opaque,
+        merged_line_origin: std::collections::BTreeMap::new(),
         skipped_lines: skipped,
     })
 }
@@ -252,25 +310,75 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
 // Extraction: (line_no, Record) → FileEvent
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Extract `--file` events from a session's line-numbered records.
-///
-/// Intent↔result is joined by `tool_use_id` WITHIN a turn (never by adjacency - an
-/// integrity error can precede its own tool_use line). We build, per turn, two maps:
-/// `tool_use_id → file_path` (from the originating Read/Edit/Write tool_use) so an
-/// integrity-error carrier with no inline path can be attributed to `--file`.
-pub(crate) fn extract(records: &[(usize, Record)], target_file: Option<&str>) -> Vec<FileEvent> {
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    // Turn delimiting keys on the shared boundary predicate (§6.4) so file-event
-    // attribution lines up with `turns`/`search`: an answered AskUserQuestion / a
-    // tool-use rejection-with-message opens a turn, an interrupt / local-command-stdout
-    // does not.
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
-    extract_with_turns(records, &turns, target_file)
+/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS
+/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,
+/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus
+/// every `PowerShell` tool call (its command text is never lexically parsed, so any
+/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these
+/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and
+/// disclosed per window instead of silently ignored.
+pub(crate) fn collect_opaque_commands(
+    session_id: &str,
+    records: &[(usize, Record)],
+    turns: &[Vec<usize>],
+) -> Vec<OpaqueCommand> {
+    let mut out: Vec<OpaqueCommand> = Vec::new();
+    for (turn_index, idxs) in turns.iter().enumerate() {
+        for &i in idxs {
+            let (line_no, rec) = (records[i].0, &records[i].1);
+            let Some(blocks) = rec.blocks() else { continue };
+            for b in blocks {
+                let Block::ToolUse {
+                    name: Some(name),
+                    input: Some(input),
+                    ..
+                } = b
+                else {
+                    continue;
+                };
+                let cmd = input.get("command").and_then(serde_json::Value::as_str);
+                if name == "Bash" {
+                    let Some(cmd) = cmd else { continue };
+                    for bm in crate::bash_mutations::parse_bash_mutations(cmd) {
+                        // `git:add`/`git:commit` mutate the index and refs, never
+                        // tracked WORKTREE content, so they cannot rewrite the file
+                        // being reconstructed; every other marker class can.
+                        if crate::bash_mutations::is_class_marker(&bm.path)
+                            && !matches!(bm.path.as_str(), "git:add" | "git:commit")
+                        {
+                            out.push(OpaqueCommand {
+                                session_id: session_id.to_string(),
+                                line_no,
+                                turn_index,
+                                timestamp_utc: rec.timestamp.clone(),
+                                marker: bm.path,
+                            });
+                        }
+                    }
+                } else if name == "PowerShell" && cmd.is_some() {
+                    out.push(OpaqueCommand {
+                        session_id: session_id.to_string(),
+                        line_no,
+                        turn_index,
+                        timestamp_utc: rec.timestamp.clone(),
+                        marker: "powershell".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Extract `--file` events given PRE-COMPUTED turn groups. Batch reconstruction groups each
 /// transcript ONCE and calls this per target, so a transcript mentioning many manifest files
 /// is grouped a single time rather than once per file.
+///
+/// Turn delimiting keys on the shared boundary predicate (SPEC 6.4) so file-event
+/// attribution lines up with `verbatim`/`search`. Intent<->result is joined by
+/// `tool_use_id` WITHIN a turn (never by adjacency - an integrity error can precede its
+/// own tool_use line): per turn, `tool_use_id -> file_path` maps let an integrity-error
+/// carrier with no inline path be attributed to `--file`.
 pub(crate) fn extract_with_turns(
     records: &[(usize, Record)],
     turns: &[Vec<usize>],

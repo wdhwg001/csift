@@ -276,7 +276,11 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 had_full_anchor = false;
                 anchor_source = None;
             }
-            EventKind::BashTouch { verb } => {
+            EventKind::BashTouch {
+                verb,
+                path,
+                resolution,
+            } => {
                 out.counts.bash += 1;
                 // SOFT boundary: close current segment + flag heuristic.
                 close_segment(
@@ -295,7 +299,8 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     kind: "bash_mutation",
                     confidence: Confidence::Heuristic,
                     detail: format!(
-                        "bash `{verb}` (reconstruction across this point may be invalid)"
+                        "bash `{verb}` on {path} [{resolution}] (reconstruction across \
+                         this point may be invalid)"
                     ),
                 });
                 seg_open = None;

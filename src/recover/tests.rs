@@ -9,7 +9,9 @@ fn rec(line: &str) -> Record {
 }
 
 fn extract_events(records: &[(usize, Record)], file: &str) -> Vec<FileEvent> {
-    extract(records, Some(file))
+    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
+    let turns = group_turn_indices_deduped(&recs, |r| *r);
+    extract_with_turns(records, &turns, Some(file))
 }
 
 fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
@@ -23,6 +25,7 @@ fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
 mod boundaries;
 mod coverage;
 mod diff;
+mod disclosure;
 mod events;
 mod patching;
 mod render;

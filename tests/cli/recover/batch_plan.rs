@@ -127,11 +127,17 @@ fn recover_batch_reconstructs_many_files_in_one_scan() {
     assert!(!out_dir.join("tmp/absent.md").exists());
     let report = std::fs::read_to_string(out_dir.join("recovery-report.tsv")).unwrap();
     assert!(
-        report.contains("complete\t3\t3\t/tmp/alpha.md"),
+        report.starts_with(
+            "status\tknown_lines\ttotal_lines\tboundaries\tbash_file\tbash_opaque\ttarget\twritten_to\n"
+        ),
+        "report header carries the window-accounting columns:\n{report}"
+    );
+    assert!(
+        report.contains("complete\t3\t3\t0\t0\t0\t/tmp/alpha.md"),
         "report:\n{report}"
     );
     assert!(
-        report.contains("no-history\t0\t0\t/tmp/absent.md"),
+        report.contains("no-history\t0\t0\t0\t0\t0\t/tmp/absent.md"),
         "report:\n{report}"
     );
     assert!(out.stdout.contains("3 complete"), "summary: {}", out.stdout);

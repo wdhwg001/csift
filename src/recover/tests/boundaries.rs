@@ -126,6 +126,8 @@ fn boundary_bash_is_heuristic_soft() {
             timestamp_utc: None,
             kind: EventKind::BashTouch {
                 verb: "sed -i".into(),
+                path: "/p/a.rs".into(),
+                resolution: "absolute",
             },
         },
     ];

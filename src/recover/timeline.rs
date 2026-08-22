@@ -101,7 +101,7 @@ pub(crate) fn print_footer(ctx: &RenderCtx) {
     };
     println!();
     println!(
-        "mode={mode}  (reconstruction is partial — unknown lines are explicit, never fabricated)"
+        "mode={mode}  (reconstruction is partial: unknown lines are explicit, never fabricated)"
     );
     if ctx.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(ctx.skipped_lines));
@@ -109,9 +109,23 @@ pub(crate) fn print_footer(ctx: &RenderCtx) {
 }
 
 impl Replay {
-    /// Count of HARD (authoritative + heuristic-promoted) boundaries for fragment math.
+    /// Boundaries that INVALIDATED reconstruction state (content across them cannot be
+    /// stitched): a modified-since-read (the replayed buffer is cleared) and an
+    /// external edit (disk changed outside the tool stream). An originalFile
+    /// disagreement is an authoritative ANNOTATION (nothing is invalidated), and a
+    /// bash mutation is a soft heuristic split; neither belongs in the hard count, so
+    /// the coverage `fragments` figure no longer inflates on soft signals.
     pub(crate) fn boundaries_hard_count(&self) -> usize {
-        self.boundaries.len()
+        self.boundaries
+            .iter()
+            .filter(|b| matches!(b.kind, "modified_since_read" | "external_edit"))
+            .count()
+    }
+
+    /// The complement of [`Replay::boundaries_hard_count`]: annotation + heuristic
+    /// boundaries (originalFile disagreement, bash mutation).
+    pub(crate) fn boundaries_soft_count(&self) -> usize {
+        self.boundaries.len() - self.boundaries_hard_count()
     }
 }
 
@@ -152,6 +166,7 @@ pub(crate) fn render_json(
                 let rep = replay(&s.events, None);
                 let known = apply_line_range(rep.final_buffer.known_lines(), ctx.line_range);
                 let spans = covered_spans(&known);
+                let d = window_disclosure(s, ctx.file.as_deref());
                 let obj = json!({
                     "kind": "coverage",
                     "session_id": s.session_id,
@@ -162,8 +177,13 @@ pub(crate) fn render_json(
                     "seen_total_lines": rep.final_buffer.seen_total_lines,
                     "covered_ranges": spans.iter().map(|(a,b)| [*a,*b]).collect::<Vec<_>>(),
                     "fragments": rep.boundaries_hard_count() + 1,
+                    "hard_boundaries": rep.boundaries_hard_count(),
+                    "soft_boundaries": rep.boundaries_soft_count(),
                     "events": counts_json(&rep.counts),
-                    "boundaries": rep.boundaries.iter().map(boundary_json).collect::<Vec<_>>(),
+                    "boundaries": rep.boundaries.iter().map(|b| boundary_json_sourced(s, b)).collect::<Vec<_>>(),
+                    "opaque_commands": d.opaque_classes,
+                    "powershell_commands": d.powershell,
+                    "suggested_search": d.suggested,
                 });
                 println!("{}", serde_json::to_string(&obj)?);
             }
@@ -214,7 +234,7 @@ pub(crate) fn render_json(
                             println!("{}", serde_json::to_string(&obj)?);
                         }
                         TimelineItem::Bound(b) => {
-                            let mut obj = boundary_json(b);
+                            let mut obj = boundary_json_sourced(s, b);
                             obj["kind"] = json!("boundary");
                             obj["session_id"] = json!(s.session_id);
                             obj["is_subagent"] = json!(s.is_subagent);
@@ -252,6 +272,7 @@ pub(crate) fn render_json(
                     .into_iter()
                     .map(|(n, _, set_at)| (n, set_at))
                     .collect();
+                let d = window_disclosure(s, ctx.file.as_deref());
                 let obj = json!({
                     "kind": "snapshot",
                     "session_id": s.session_id,
@@ -267,6 +288,10 @@ pub(crate) fn render_json(
                     })).collect::<Vec<_>>(),
                     "gaps": gaps.iter().map(|(a,b)| [*a,*b]).collect::<Vec<_>>(),
                     "seen_total_lines": total,
+                    "boundaries": rep.boundaries.iter().map(|b| boundary_json_sourced(s, b)).collect::<Vec<_>>(),
+                    "opaque_commands": d.opaque_classes,
+                    "powershell_commands": d.powershell,
+                    "suggested_search": d.suggested,
                 });
                 println!("{}", serde_json::to_string(&obj)?);
                 out_blob.push_str(&render_snapshot_body(&known, total.unwrap_or(0), false));
@@ -321,6 +346,19 @@ pub(crate) fn boundary_json(b: &Boundary) -> serde_json::Value {
         "confidence": b.confidence.json(),
         "detail": b.detail,
     })
+}
+
+/// [`boundary_json`] plus the boundary's REAL source location: `source_session_id` +
+/// `source_line` name the transcript and its actual jsonl line. On an un-merged result
+/// they mirror the row's own id and `line`; after a cross-transcript merge they carry
+/// the pre-merge truth while `line` stays the `--at @line:` cutoff coordinate of the
+/// merged stream.
+pub(crate) fn boundary_json_sourced(s: &ScanResult, b: &Boundary) -> serde_json::Value {
+    let (sid, real) = boundary_source(s, b.line_no);
+    let mut obj = boundary_json(b);
+    obj["source_session_id"] = serde_json::json!(sid);
+    obj["source_line"] = serde_json::json!(real);
+    obj
 }
 
 /// The explicit gap ranges of a known-line vector up to `total` (1-based, inclusive).

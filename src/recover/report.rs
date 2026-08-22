@@ -82,22 +82,13 @@ pub(crate) fn render_coverage_text(ctx: &RenderCtx, sessions: &[ScanResult]) -> 
         if rep.boundaries.is_empty() {
             println!("  integrity boundaries: (none)");
         } else {
-            println!("  integrity boundaries:");
-            for b in &rep.boundaries {
-                let sym = if b.confidence == Confidence::Authoritative {
-                    "⚠"
-                } else {
-                    "~"
-                };
-                println!(
-                    "    {sym} L{}  turn {}  {}  {} ({})",
-                    b.line_no,
-                    b.turn_index,
-                    format_timestamp(b.timestamp_utc.as_deref()),
-                    b.detail,
-                    b.confidence.label()
-                );
-            }
+            println!(
+                "  integrity boundaries: {} ({} hard · {} soft)",
+                rep.boundaries.len(),
+                rep.boundaries_hard_count(),
+                rep.boundaries_soft_count()
+            );
+            print_boundary_lines(s, &rep.boundaries);
         }
         if rep.counts.edit_unanchorable > 0 {
             println!(
@@ -105,12 +96,66 @@ pub(crate) fn render_coverage_text(ctx: &RenderCtx, sessions: &[ScanResult]) -> 
                 rep.counts.edit_unanchorable
             );
         }
+        print_window_disclosure(s, ctx);
     }
     if !any {
         println!("no recoverable history for {file} in range");
     }
     print_footer(ctx);
     Ok(())
+}
+
+/// The shared per-boundary text lines (coverage / at / salvage), locations routed
+/// through [`boundary_loc`] so a merged group shows real transcript lines.
+pub(crate) fn print_boundary_lines(s: &ScanResult, boundaries: &[Boundary]) {
+    for b in boundaries {
+        let sym = if b.confidence == Confidence::Authoritative {
+            "⚠"
+        } else {
+            "~"
+        };
+        println!(
+            "    {sym} {}  turn {}  {}  {} ({})",
+            boundary_loc(s, b.line_no),
+            b.turn_index,
+            format_timestamp(b.timestamp_utc.as_deref()),
+            b.detail,
+            b.confidence.label()
+        );
+    }
+}
+
+/// The shared per-session window-disclosure text (coverage / at / salvage / patches):
+/// the opaque command counts, the first few commands themselves (real transcript
+/// lines, capped with an explicit remainder), and the paste-runnable inspection
+/// search. Prints nothing when the window is clean of opaque commands.
+pub(crate) fn print_window_disclosure(s: &ScanResult, ctx: &RenderCtx) {
+    let d = window_disclosure(s, ctx.file.as_deref());
+    if let Some(note) = opaque_note(&d) {
+        println!("  opaque in window: {note}");
+        const CAP: usize = 5;
+        for o in s.opaque.iter().take(CAP) {
+            // An opaque row keeps its REAL transcript line; name the transcript when
+            // it is not the row's own (a merged group).
+            let loc = if o.session_id == s.session_id {
+                format!("L{}", o.line_no)
+            } else {
+                format!("L{} in {}", o.line_no, o.session_id)
+            };
+            println!(
+                "    · {loc}  turn {}  {}  {}",
+                o.turn_index,
+                format_timestamp(o.timestamp_utc.as_deref()),
+                o.marker
+            );
+        }
+        if s.opaque.len() > CAP {
+            println!("    (+{} more; use the search below)", s.opaque.len() - CAP);
+        }
+        if let Some(cmd) = &d.suggested {
+            println!("  inspect the window: {cmd}");
+        }
+    }
 }
 
 pub(crate) fn render_patches_text(
@@ -182,8 +227,8 @@ pub(crate) fn render_patches_text(
                         "~"
                     };
                     println!(
-                        "  {sym} INTEGRITY BOUNDARY  L{}  turn {}  {}  {} ({})",
-                        b.line_no,
+                        "  {sym} INTEGRITY BOUNDARY  {}  turn {}  {}  {} ({})",
+                        boundary_loc(s, b.line_no),
                         b.turn_index,
                         format_timestamp(b.timestamp_utc.as_deref()),
                         b.detail,
@@ -192,6 +237,7 @@ pub(crate) fn render_patches_text(
                 }
             }
         }
+        print_window_disclosure(s, ctx);
     }
 
     if !any {
@@ -239,13 +285,30 @@ pub(crate) fn render_at_text(
         for line in rendered.lines() {
             println!("  {line}");
         }
+        // The snapshot's integrity context: what invalidated or may have touched the
+        // replayed content up to the cutoff, plus the window's opaque commands.
+        if !rep.boundaries.is_empty() {
+            println!(
+                "  integrity boundaries: {} ({} hard · {} soft)",
+                rep.boundaries.len(),
+                rep.boundaries_hard_count(),
+                rep.boundaries_soft_count()
+            );
+            print_boundary_lines(s, &rep.boundaries);
+        }
+        print_window_disclosure(s, ctx);
         // The --out artifact: known lines + explicit gap markers (honest).
         out_blob.push_str(&render_snapshot_body(&known, total, false));
         out_blob.push('\n');
     }
 
     if !any {
-        println!("no recoverable history for {file} as of {when}");
+        // Salvage runs with an empty `when` (no cutoff): name the state it asked for.
+        if when.is_empty() {
+            println!("no recoverable history for {file} at the latest state");
+        } else {
+            println!("no recoverable history for {file} as of {when}");
+        }
     }
     if let Some(p) = out_path {
         if write_out_guarded(p, &out_blob)? {

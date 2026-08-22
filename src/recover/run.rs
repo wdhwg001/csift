@@ -83,7 +83,10 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
     sessions.sort_by(|a, b| a.session_id.cmp(&b.session_id));
 
     // ── Apply the turn / time window to events per session. The `--turn` spec resolves
-    //    its open/from-end forms against THIS session's own turns (max event turn + 1). ──
+    //    its open/from-end forms against THIS session's own turns (max event turn + 1).
+    //    Integrity-relevant events the window excludes are COUNTED, never silently
+    //    dropped: a boundary outside the window still happened to the file. ──
+    let mut windowed_out_integrity = 0usize;
     for sr in &mut sessions {
         let bounds = turn_range.map(|spec| {
             let tc = sr
@@ -95,13 +98,40 @@ pub fn run_recover(args: &RecoverArgs) -> Result<()> {
             spec.resolve(tc, false)
         });
         sr.events.retain(|e| {
-            window_admits(
+            let keep = window_admits(
                 e.turn_index,
                 e.timestamp_utc.as_deref(),
                 bounds,
                 &time_window,
+            );
+            if !keep
+                && matches!(
+                    e.kind,
+                    EventKind::IntegrityError { .. }
+                        | EventKind::ExternalEdit { .. }
+                        | EventKind::BashTouch { .. }
+                )
+            {
+                windowed_out_integrity += 1;
+            }
+            keep
+        });
+        // The opaque scope accounting obeys the same window as the events it discloses.
+        sr.opaque.retain(|o| {
+            window_admits(
+                o.turn_index,
+                o.timestamp_utc.as_deref(),
+                bounds,
+                &time_window,
             )
         });
+    }
+    if windowed_out_integrity > 0 {
+        eprintln!(
+            "note: the --turn/--since/--until window excluded {windowed_out_integrity} \
+             integrity-relevant event(s) (bash mutations, external edits, integrity errors); \
+             boundaries outside the window are not shown"
+        );
     }
 
     // Scope banner reflects the TRUE in-scope transcript set, captured BEFORE the
@@ -160,6 +190,12 @@ pub(crate) struct BatchOutcome {
     pub(crate) status: &'static str, // "complete" | "partial" | "no-history" | "skipped-exists"
     pub(crate) known: usize,
     pub(crate) total: usize,
+    /// Integrity boundaries in the recovered window (0 for no-history).
+    pub(crate) boundaries: usize,
+    /// Parsed bash mutations of this file in the window.
+    pub(crate) bash_file: usize,
+    /// Opaque mutating-class + PowerShell commands in the window.
+    pub(crate) bash_opaque: usize,
     pub(crate) written: Option<std::path::PathBuf>,
 }
 
@@ -252,6 +288,7 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
 
     // ── Reconstruct + write each target (the file's final state, honoring any window). ──
     let mut outcomes: Vec<BatchOutcome> = Vec::with_capacity(targets.len());
+    let mut windowed_out_integrity = 0usize;
     for (ti, mut scans) in by_target.into_iter().enumerate() {
         let target = targets[ti].clone();
         for sr in &mut scans {
@@ -265,21 +302,43 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
                 spec.resolve(tc, false)
             });
             sr.events.retain(|e| {
-                window_admits(
+                let keep = window_admits(
                     e.turn_index,
                     e.timestamp_utc.as_deref(),
+                    bounds,
+                    &time_window,
+                );
+                if !keep
+                    && matches!(
+                        e.kind,
+                        EventKind::IntegrityError { .. }
+                            | EventKind::ExternalEdit { .. }
+                            | EventKind::BashTouch { .. }
+                    )
+                {
+                    windowed_out_integrity += 1;
+                }
+                keep
+            });
+            sr.opaque.retain(|o| {
+                window_admits(
+                    o.turn_index,
+                    o.timestamp_utc.as_deref(),
                     bounds,
                     &time_window,
                 )
             });
         }
         scans.retain(|s| !s.events.is_empty());
-        let Some((content, known, total)) = reconstruct_best(scans, &when)? else {
+        let Some(best) = reconstruct_best(scans, &when)? else {
             outcomes.push(BatchOutcome {
                 target,
                 status: "no-history",
                 known: 0,
                 total: 0,
+                boundaries: 0,
+                bash_file: 0,
+                bash_opaque: 0,
                 written: None,
             });
             continue;
@@ -290,8 +349,11 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
             outcomes.push(BatchOutcome {
                 target,
                 status: "skipped-exists",
-                known,
-                total,
+                known: best.known,
+                total: best.total,
+                boundaries: best.boundaries,
+                bash_file: best.bash_file,
+                bash_opaque: best.bash_opaque,
                 written: None,
             });
             continue;
@@ -300,9 +362,9 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("cannot create {}", parent.display()))?;
         }
-        std::fs::write(&dest, &content)
+        std::fs::write(&dest, &best.content)
             .with_context(|| format!("cannot write {}", dest.display()))?;
-        let status = if total > 0 && known >= total {
+        let status = if best.total > 0 && best.known >= best.total {
             "complete"
         } else {
             "partial"
@@ -310,11 +372,21 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs) -> Result<()> {
         outcomes.push(BatchOutcome {
             target,
             status,
-            known,
-            total,
+            known: best.known,
+            total: best.total,
+            boundaries: best.boundaries,
+            bash_file: best.bash_file,
+            bash_opaque: best.bash_opaque,
             written: Some(dest),
         });
     }
 
+    if windowed_out_integrity > 0 {
+        eprintln!(
+            "note: the --turn/--since/--until window excluded {windowed_out_integrity} \
+             integrity-relevant event(s) (bash mutations, external edits, integrity errors); \
+             the report's boundary columns cover the window only"
+        );
+    }
     write_batch_report(out_dir, &outcomes)
 }

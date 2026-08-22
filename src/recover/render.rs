@@ -98,7 +98,7 @@ pub(crate) fn apply_line_range(
 pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
     if blob.is_empty() {
         eprintln!(
-            "note: nothing reconstructed in range — --out file {} left untouched",
+            "note: nothing reconstructed in range; --out file {} left untouched",
             p.display()
         );
         return Ok(false);
@@ -161,23 +161,172 @@ pub(crate) fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<
             .find(|s| !s.is_subagent)
             .map(|s| s.session_id.clone())
             .unwrap_or_else(|| parent_key.clone());
-        let mut events: Vec<FileEvent> = group
+        let mut tagged: Vec<(String, FileEvent)> = group
             .iter()
-            .flat_map(|s| s.events.iter().cloned())
+            .flat_map(|s| s.events.iter().cloned().map(|e| (s.session_id.clone(), e)))
             .collect();
-        events.sort_by(|a, b| cmp_ts(&a.timestamp_utc, &b.timestamp_utc));
-        for (i, e) in events.iter_mut().enumerate() {
+        tagged.sort_by(|a, b| cmp_ts(&a.1.timestamp_utc, &b.1.timestamp_utc));
+        // Re-stamp to the synthetic 1..N cutoff coordinate, remembering each event's
+        // REAL home (transcript id + jsonl line) so display never loses the truth.
+        let mut merged_line_origin: BTreeMap<usize, (String, usize)> = BTreeMap::new();
+        let mut events: Vec<FileEvent> = Vec::with_capacity(tagged.len());
+        for (i, (sid, mut e)) in tagged.into_iter().enumerate() {
+            merged_line_origin.insert(i + 1, (sid, e.line_no));
             e.line_no = i + 1;
+            events.push(e);
         }
+        // Scope accounting merges too (ts-sorted; line numbers stay each transcript's
+        // own real jsonl line - they are pointers for a follow-up search, never
+        // cutoff coordinates like the re-stamped event line numbers above).
+        let mut opaque: Vec<OpaqueCommand> = group
+            .iter()
+            .flat_map(|s| s.opaque.iter().cloned())
+            .collect();
+        opaque.sort_by(|a, b| cmp_ts(&a.timestamp_utc, &b.timestamp_utc));
         out.push(ScanResult {
             session_id: merged_id.clone(),
             is_subagent: false,
             parent_session_id: merged_id,
             events,
+            opaque,
+            merged_line_origin,
             skipped_lines: 0,
         });
     }
     out
+}
+
+/// Per-window accounting of what a replay could NOT include: the opaque
+/// mutating-class commands (formatter/interpreter/pkg/extract/git-worktree markers,
+/// whose touched files are not in the command text) and PowerShell commands (never
+/// lexically parsed), plus the paste-runnable search that lists the window's tool
+/// calls touching the file.
+pub(crate) struct WindowDisclosure {
+    /// marker -> count histogram of the class-marker commands in the window.
+    pub(crate) classes: BTreeMap<String, usize>,
+    /// Total class-marker commands (PowerShell excluded).
+    pub(crate) opaque_classes: usize,
+    /// PowerShell command count.
+    pub(crate) powershell: usize,
+    /// The ready-to-run, time-bounded `csift search` for the window.
+    pub(crate) suggested: Option<String>,
+}
+
+impl WindowDisclosure {
+    pub(crate) fn is_clean(&self) -> bool {
+        self.opaque_classes == 0 && self.powershell == 0
+    }
+}
+
+/// Build the disclosure for one (already windowed) scan result. The search bounds are
+/// the session's own event span, so the command surfaces exactly the replayed window.
+pub(crate) fn window_disclosure(s: &ScanResult, file: Option<&str>) -> WindowDisclosure {
+    let mut classes: BTreeMap<String, usize> = BTreeMap::new();
+    let mut powershell = 0usize;
+    for o in &s.opaque {
+        if o.marker == "powershell" {
+            powershell += 1;
+        } else {
+            *classes.entry(o.marker.clone()).or_default() += 1;
+        }
+    }
+    let opaque_classes = classes.values().sum();
+    let first = s
+        .events
+        .iter()
+        .filter_map(|e| e.timestamp_utc.as_deref())
+        .min();
+    let last = s
+        .events
+        .iter()
+        .filter_map(|e| e.timestamp_utc.as_deref())
+        .max();
+    let suggested =
+        file.map(|f| suggested_search(basename_of(f), &s.parent_session_id, first, last));
+    WindowDisclosure {
+        classes,
+        opaque_classes,
+        powershell,
+        suggested,
+    }
+}
+
+/// The one-line text fragment for non-zero opaque counts, `None` when the window is
+/// clean: `2 mutating-class command(s) whose file set is not in the command text
+/// (fmt:cargo x2) and 1 PowerShell command(s), never parsed`.
+pub(crate) fn opaque_note(d: &WindowDisclosure) -> Option<String> {
+    if d.is_clean() {
+        return None;
+    }
+    let mut parts: Vec<String> = Vec::new();
+    if d.opaque_classes > 0 {
+        let list = d
+            .classes
+            .iter()
+            .map(|(m, n)| {
+                if *n > 1 {
+                    format!("{m} x{n}")
+                } else {
+                    m.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        parts.push(format!(
+            "{} mutating-class command(s) whose file set is not in the command text ({list})",
+            d.opaque_classes
+        ));
+    }
+    if d.powershell > 0 {
+        parts.push(format!(
+            "{} PowerShell command(s), never parsed",
+            d.powershell
+        ));
+    }
+    Some(parts.join(" and "))
+}
+
+/// A boundary's display location: the real transcript line, named with its source
+/// transcript when a cross-transcript merge re-stamped the event coordinates
+/// (`merged_line_origin`); the bare replay line otherwise (then it IS the jsonl line).
+pub(crate) fn boundary_loc(s: &ScanResult, line_no: usize) -> String {
+    match s.merged_line_origin.get(&line_no) {
+        Some((sid, real)) => format!("L{real} in {sid}"),
+        None => format!("L{line_no}"),
+    }
+}
+
+/// The JSON source-location pair of a boundary: `(source_session_id, source_line)` -
+/// the merge origin when re-stamped, else the row's own transcript + the line as-is.
+pub(crate) fn boundary_source(s: &ScanResult, line_no: usize) -> (&str, usize) {
+    match s.merged_line_origin.get(&line_no) {
+        Some((sid, real)) => (sid.as_str(), *real),
+        None => (s.session_id.as_str(), line_no),
+    }
+}
+
+/// The ready-to-run `csift search` command that lists every record touching `basename`
+/// inside the disclosed window: pattern = the regex-escaped basename, scope = the
+/// owning (re-feedable) session, label = `agent.tool.use` (every tool call, shell or
+/// structured), bounds = the window's first/last instants when known. Raw record
+/// timestamps are full ISO8601 instants, which `--since`/`--until` parse directly, so
+/// the emitted command is paste-runnable.
+pub(crate) fn suggested_search(
+    basename: &str,
+    parent_session_id: &str,
+    first_utc: Option<&str>,
+    last_utc: Option<&str>,
+) -> String {
+    // Shell-single-quote the pattern; a `'` inside becomes the standard '\'' splice.
+    let pattern = regex::escape(basename).replace('\'', "'\\''");
+    let mut cmd = format!("csift search '{pattern}' @{parent_session_id} -t agent.tool.use");
+    if let Some(t) = first_utc {
+        cmd.push_str(&format!(" --since {t}"));
+    }
+    if let Some(t) = last_utc {
+        cmd.push_str(&format!(" --until {t}"));
+    }
+    cmd
 }
 
 pub(crate) fn render_text(
@@ -198,259 +347,4 @@ pub(crate) fn render_text(
         RecoverMode::At | RecoverMode::Salvage => render_at_text(ctx, sessions, out_path),
         RecoverMode::Patches => render_patches_text(ctx, sessions, out_path),
     }
-}
-
-/// DEFAULT `recover` (no mode flag): hand back the file's FINAL content as RAW restorable bytes
-/// -- but ONLY when it is fully recoverable. When the session saw just PART of the file (a
-/// windowed read + edits), ERROR (never a holey file), naming the recoverable + missing line
-/// ranges and pointing at the other modes. Across unrelated session groups the freshest,
-/// most-complete candidate wins. Raw content goes to STDOUT (so `recover --file X > X` restores
-/// it); the status note goes to STDERR.
-pub(crate) fn render_restore(
-    ctx: &RenderCtx,
-    sessions: &[ScanResult],
-    out_path: Option<&Path>,
-    json: bool,
-) -> Result<()> {
-    /// The freshest, most-complete restore candidate so far. Newer ts - then more lines - wins.
-    /// Carries the source group's events + boundaries so a partial result can re-derive the
-    /// richest pre-change state and list every external-change boundary.
-    struct RestoreCandidate<'a> {
-        known: Vec<(usize, String)>,
-        total: usize,
-        ts: Option<String>,
-        events: &'a [FileEvent],
-        boundaries: Vec<Boundary>,
-    }
-    let file = ctx.file.as_deref().unwrap_or("(none)");
-    if json {
-        // envelope v2: restore too opens with the header (then one kind:"restore" row
-        // + the summary - the single stream shape every command shares).
-        println!(
-            "{}",
-            crate::text::envelope_scope_header(
-                "recover",
-                ctx.scope_top,
-                ctx.scope_sub,
-                serde_json::json!({})
-            )
-        );
-    }
-    let mut best: Option<RestoreCandidate> = None;
-    for s in sessions {
-        if s.events.is_empty() {
-            continue;
-        }
-        let rep = replay(&s.events, None); // final state - no cutoff
-        let known = rep.final_buffer.known_lines();
-        if known.is_empty() {
-            continue;
-        }
-        let total = rep
-            .final_buffer
-            .seen_total_lines
-            .unwrap_or_else(|| known.last().map(|(n, _)| *n).unwrap_or(0));
-        let ts = s
-            .events
-            .iter()
-            .filter_map(|e| e.timestamp_utc.clone())
-            .max();
-        let better = match &best {
-            None => true,
-            Some(b) => (&ts, known.len()) > (&b.ts, b.known.len()),
-        };
-        if better {
-            best = Some(RestoreCandidate {
-                known,
-                total,
-                ts,
-                events: &s.events,
-                boundaries: rep.boundaries,
-            });
-        }
-    }
-    let Some(cand) = best else {
-        bail!(
-            "no recoverable history for {file} in this scope — it was never Read/Written/Edited \
-             here. Widen the scope (more sessions/transcripts) or check the path."
-        );
-    };
-    let RestoreCandidate {
-        known,
-        total,
-        events,
-        boundaries,
-        ..
-    } = cand;
-    // Every line_no is ≤ total, so knowing `total` distinct lines ⇒ the whole 1..=total is known.
-    let complete = total > 0 && known.len() == total;
-    if !complete {
-        bail!(
-            "{}",
-            restore_partial_message(file, &known, total, &boundaries, events)
-        );
-    }
-    let mut content = known
-        .iter()
-        .map(|(_, t)| t.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    if !content.is_empty() {
-        content.push('\n');
-    }
-    if let Some(p) = out_path {
-        let wrote = write_out_guarded(p, &content)?;
-        if json {
-            println!(
-                "{}",
-                serde_json::json!({"kind": "restore", "file": file, "complete": true, "lines": known.len(), "path": p.to_string_lossy(), "wrote": wrote})
-            );
-            println!(
-                "{}",
-                crate::text::envelope_summary(
-                    serde_json::json!({"sessions": 1, "file": file, "mode": "restore"})
-                )
-            );
-        } else if wrote {
-            eprintln!(
-                "(recovered {file} → {}, {} lines)",
-                p.display(),
-                known.len()
-            );
-        }
-    } else if json {
-        println!(
-            "{}",
-            serde_json::json!({"kind": "restore", "file": file, "complete": true, "lines": known.len(), "content": content})
-        );
-        println!(
-            "{}",
-            crate::text::envelope_summary(
-                serde_json::json!({"sessions": 1, "file": file, "mode": "restore"})
-            )
-        );
-    } else {
-        print!("{content}");
-        eprintln!("(recovered {file}: {} lines, complete)", known.len());
-    }
-    Ok(())
-}
-
-/// The smart "can't fully restore the LATEST state" diagnostic. Beyond the covered/missing
-/// ranges it (1) lists EVERY external-change boundary (Edit-before-Read / external edit - the
-/// file changed outside the tool stream), (2) when a richer state existed BEFORE the first such
-/// change, surfaces it (complete in the session-authored case, a fuller salvage otherwise) with
-/// a dump-pre-change + dump-patches-since + reconcile-by-hand recipe, and (3) ALWAYS appends the
-/// caveat that csift cannot see changes made outside the visible Read/Write/Edit stream and does
-/// NOT hunt for hidden boundaries (escalated when a bash mutation may have touched the file).
-pub(crate) fn restore_partial_message(
-    file: &str,
-    known: &[(usize, String)],
-    total: usize,
-    boundaries: &[Boundary],
-    events: &[FileEvent],
-) -> String {
-    let covered = ranges_str(&known.iter().map(|(n, _)| *n).collect::<Vec<_>>());
-    let missing = missing_ranges_str(known, total);
-    let mut m = format!(
-        "cannot fully recover the LATEST {file} from this scope: recovered {}/{} line(s) \
-         [{covered}], MISSING [{missing}].",
-        known.len(),
-        total
-    );
-
-    // External-change boundaries: the file changed OUTSIDE the tool stream and a fresh Read was
-    // forced. Across these, pre-change content is no longer part of "latest".
-    let ext: Vec<&Boundary> = boundaries
-        .iter()
-        .filter(|b| {
-            matches!(
-                b.kind,
-                "modified_since_read" | "external_edit" | "original_file_disagreement"
-            )
-        })
-        .collect();
-    if let Some(first) = ext.iter().min_by_key(|b| b.line_no) {
-        m.push_str(&format!(
-            " The file changed OUTSIDE the Read/Write/Edit stream at {} point(s) (so latest can't \
-             include the pre-change lines):",
-            ext.len()
-        ));
-        for b in &ext {
-            m.push_str(&format!(
-                "\n  - jsonl L{} · turn {} · {} · {}",
-                b.line_no,
-                b.turn_index,
-                format_timestamp(b.timestamp_utc.as_deref()),
-                b.kind
-            ));
-        }
-        // Richest pre-change state = just before the FIRST external boundary (before any
-        // invalidation). A second replay with a cutoff there never trips the invalidation.
-        let cutoff = first.line_no.saturating_sub(1);
-        let pre = replay(events, Some(cutoff));
-        let pre_known = pre.final_buffer.known_lines();
-        let pre_total = pre
-            .final_buffer
-            .seen_total_lines
-            .unwrap_or_else(|| pre_known.last().map(|(n, _)| *n).unwrap_or(0));
-        if pre_known.len() > known.len() {
-            let pre_complete = pre_total > 0 && pre_known.len() == pre_total;
-            let since = first
-                .timestamp_utc
-                .as_deref()
-                .map(|t| format!("--since '{t}'"))
-                .unwrap_or_else(|| format!("(events after L{})", first.line_no));
-            if pre_complete {
-                m.push_str(&format!(
-                    "\nBUT BEFORE that first change the file is COMPLETELY recoverable ({} lines, \
-                     as of {}). Recommended (reconcile by hand): dump the pre-change version with \
-                     `recover --file {file} --at @line:{cutoff}`, then the changes since with \
-                     `recover --file {file} --patches {since}`.",
-                    pre_known.len(),
-                    format_timestamp(first.timestamp_utc.as_deref())
-                ));
-            } else {
-                m.push_str(&format!(
-                    "\nBUT BEFORE that first change MORE survives ({}/{} lines, vs {}/{} at \
-                     latest). Recommended (reconcile by hand): dump that fuller fragment with \
-                     `recover --file {file} --at @line:{cutoff}` (line-numbered, gaps explicit), \
-                     then the changes since with `recover --file {file} --patches {since}`.",
-                    pre_known.len(),
-                    pre_total,
-                    known.len(),
-                    total
-                ));
-            }
-        }
-    } else {
-        m.push_str(" This session only observed PART of the file, so a complete file can't be rebuilt here.");
-    }
-
-    m.push_str(
-        " For the best-effort LATEST fragment (survivors numbered, gaps explicit) use `--salvage`; \
-         for the changes use `--patches`; to scope what's recoverable use `--coverage`; or widen \
-         the scope.",
-    );
-
-    // Always-on caveat - csift does NOT hunt for hidden boundaries.
-    m.push_str(
-        "\nNote: recovery can't fully guarantee a match to disk — anything that changed this file \
-         OUTSIDE the visible Read/Write/Edit stream (a formatter like prettier, a husky/pre-commit \
-         hook, git, an external editor, a bash mutation) may be invisible here; csift does not hunt \
-         for hidden changes.",
-    );
-    let bash: Vec<&Boundary> = boundaries
-        .iter()
-        .filter(|b| b.kind == "bash_mutation")
-        .collect();
-    if let Some(b0) = bash.first() {
-        m.push_str(&format!(
-            " In fact this session ran {} bash command(s) that may have touched the file (first at \
-             L{}) — treat the result as suspect.",
-            bash.len(),
-            b0.line_no
-        ));
-    }
-    m
 }
