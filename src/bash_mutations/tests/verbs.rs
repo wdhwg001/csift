@@ -486,9 +486,12 @@ fn tar_create_emits_archive_dest() {
 }
 
 #[test]
-fn tar_extract_or_list_writes_nothing() {
-    // No create flag → no archive is written, so nothing is emitted.
-    assert!(just_paths("tar -xzf /tmp/arch.tar.gz").is_empty());
+fn tar_extract_is_a_marker_and_list_writes_nothing() {
+    // Extraction writes the archive MEMBERS, whose names live inside the archive:
+    // an `extract:tar` class marker, never invented member paths.
+    assert_eq!(just_paths("tar -xzf /tmp/arch.tar.gz"), ["extract:tar"]);
+    assert_eq!(just_paths("tar xf archive.tar"), ["extract:tar"]);
+    // A pure LIST/test run extracts nothing and emits nothing.
     assert!(just_paths("tar -tzf /tmp/arch.tar.gz").is_empty());
     assert!(just_paths("tar tf archive.tar").is_empty());
 }
@@ -508,4 +511,41 @@ fn tar_file_without_create_writes_nothing() {
     assert!(just_paths("tar -rf /tmp/x.tar extra").is_empty());
     // A spaced `--file <archive>` with no `--create` likewise emits nothing.
     assert!(just_paths("tar --list --file /tmp/x.tar").is_empty());
+}
+
+#[test]
+fn perl_in_place_is_the_sed_twin() {
+    // `perl -pi -e '<script>' file…` edits each file operand in place.
+    assert_eq!(
+        paths("perl -pi -e 's/a/b/' notes.md src/x.rs"),
+        vec![
+            ("notes.md".to_string(), "perl-i"),
+            ("src/x.rs".to_string(), "perl-i"),
+        ]
+    );
+    // The backup-suffix cluster (`-pi.bak`) still carries the in-place `i`.
+    assert_eq!(
+        paths("perl -pi.bak -e 's/a/b/' f.txt"),
+        vec![("f.txt".to_string(), "perl-i")]
+    );
+    // `-E` is the modern-features sibling of `-e`.
+    assert_eq!(
+        paths("perl -i -E 's/x/y/' cfg.ini"),
+        vec![("cfg.ini".to_string(), "perl-i")]
+    );
+}
+
+#[test]
+fn perl_without_in_place_or_explicit_script_emits_nothing() {
+    // No in-place cluster: a stream filter, no file written.
+    assert!(paths("perl -pe 's/a/b/' f.txt").is_empty());
+    // No `-e`: the first positional is a script FILE and the layout is ambiguous.
+    assert!(paths("perl -pi prog.pl data.txt").is_empty());
+    // A plain script run is not an in-place edit.
+    assert!(paths("perl build.pl").is_empty());
+    // The `-e` VALUE is a script, never leaked as a file.
+    assert_eq!(
+        paths("perl -pi -e 's|old/path|new/path|' one.md"),
+        vec![("one.md".to_string(), "perl-i")]
+    );
 }

@@ -3,8 +3,15 @@
 use super::*;
 
 /// Parse one segment (with its parallel mask) - handle redirection targets anywhere, then
-/// dispatch on the leading command verb.
-pub(crate) fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutation>) {
+/// dispatch on the leading command verb. `bodies` are the heredoc payloads this segment
+/// opened (stripped from the command stream by [`strip_heredoc_bodies_keeping`]), used
+/// only when the verb is an interpreter.
+pub(crate) fn parse_segment(
+    segment: &str,
+    mask: &str,
+    bodies: &[String],
+    out: &mut Vec<BashMutation>,
+) {
     let toks = masked_tokens(segment, mask);
     if toks.is_empty() {
         return;
@@ -58,9 +65,66 @@ pub(crate) fn parse_segment(segment: &str, mask: &str, out: &mut Vec<BashMutatio
         "wget" => emit_download_output(operands, "wget", out),
         "dd" => emit_dd(operands, out),
         "zip" => emit_zip(operands, out),
-        "tar" => emit_tar(operands, out),
-        _ => {}
+        "tar" => {
+            emit_tar(operands, out); // the create side names its archive
+            tar_extract_marker(operands, out); // the extract side is a class marker
+        }
+        "perl" => emit_perl(operands, out),
+        other => {
+            if let Some(lang) = interp_lang(other) {
+                emit_interp(lang, operands, bodies, out);
+            } else {
+                emit_class(other, operands, out);
+            }
+        }
     }
+}
+
+/// `perl -i` is the in-place twin of `sed -i`: `perl -pi -e 's/a/b/' file…` edits each
+/// file operand in place. Two gates keep precision: an in-place cluster must be present
+/// (`-i`, `-pi`, `-i.bak`, …), AND the script must ride an explicit `-e`/`-E` flag.
+/// Without `-e` the first positional is a script FILE (`perl -pi prog.pl data`) and the
+/// operand layout is ambiguous, so nothing is emitted. With `-e`, the flag values are
+/// stripped ([`strip_value_flags`]) and EVERY remaining positional is an edited file.
+pub(crate) fn emit_perl(operands: &[&str], out: &mut Vec<BashMutation>) {
+    if !operands.iter().any(|t| is_perl_in_place_flag(t)) {
+        return;
+    }
+    /// perl flags whose VALUE is a script expression, never an edited file.
+    const SCRIPT_FLAGS: &[&str] = &["-e", "-E"];
+    if !operands.iter().any(|t| SCRIPT_FLAGS.contains(t)) {
+        return;
+    }
+    let kept = strip_value_flags(strip_input_redirects(operands), SCRIPT_FLAGS);
+    for op in &kept {
+        if op.starts_with('-') {
+            continue; // an option flag (incl. the in-place cluster) - not a file.
+        }
+        if let Some(path) = path_operand(op) {
+            out.push(BashMutation {
+                path,
+                verb: "perl-i",
+                cwd_at: CwdAt::Spawn,
+            });
+        }
+    }
+}
+
+/// True for a perl in-place flag cluster: a short-flag run containing `i` before any
+/// backup-suffix dot (`-i`, `-pi`, `-i.bak`, `-pi.bak`). A long flag (`--version`) is
+/// not a cluster, and a cluster is only letters/digits (so a quoted script token that
+/// happens to start with `-` never matches).
+pub(crate) fn is_perl_in_place_flag(tok: &str) -> bool {
+    let Some(body) = tok.strip_prefix('-') else {
+        return false;
+    };
+    if body.starts_with('-') {
+        return false;
+    }
+    let cluster = body.split('.').next().unwrap_or(body);
+    !cluster.is_empty()
+        && cluster.contains('i')
+        && cluster.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
 /// Drop leading `sudo` and `env VAR=value` prefix tokens (best-effort). `env` consumes

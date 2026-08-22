@@ -161,9 +161,10 @@ pub(crate) fn is_dev_sink(tail: &str) -> bool {
 /// strip surrounding quotes; reject options (`-…`), `KEY=VALUE` operands, an empty
 /// token, a bare `-` (stdin/stdout), and an UNRESOLVED-variable pseudo-path (any token
 /// bearing a `$`, e.g. `$OUT`, `${DIR}/x`, `/tmp/$run.log` - we cannot expand it, so a
-/// row would fabricate a path; precision rule, dropped). A glob we cannot expand
-/// (`*.tmp`) is KEPT verbatim - it still names a real touched set and the heuristic
-/// label makes that clear.
+/// row would fabricate a path; precision rule, dropped). Two non-concrete shapes are
+/// KEPT verbatim because each still names a real touched target and the heuristic
+/// label makes that clear: a glob (`*.tmp`), and a leading-`~` home path (`~/x.md`,
+/// resolution-classed `unresolved` downstream, never joined to the cwd).
 pub(crate) fn path_operand(token: &str) -> Option<String> {
     let stripped = strip_quotes(token);
     // Peel trailing shell-structural punctuation glued on by a command/process
@@ -181,7 +182,7 @@ pub(crate) fn path_operand(token: &str) -> Option<String> {
         return None; // a KEY=VALUE operand, not a path.
     }
     if has_unresolved_var(stripped) {
-        return None; // an unexpandable `$VAR`/`~` pseudo-path - never fabricate it.
+        return None; // an unexpandable `$VAR` pseudo-path - never fabricate it.
     }
     // After the trailing-tail trim, the sink test must run AGAIN: `2>/dev/null)` trims to
     // `/dev/null`, the dominant fabricated-path class (a `)` glued on by a command
@@ -300,13 +301,15 @@ pub(crate) fn concrete_path(token: &str) -> Option<String> {
 }
 
 /// True when a token carries an UNRESOLVED shell expansion we cannot perform - a variable
-/// reference (`$NAME`, `${NAME}`, `$1`, …) OR a leading `~`/`~user` home expansion (`~/x`,
-/// `~`). Such a token can never be turned into the real on-disk path without the runtime
-/// environment, so emitting it verbatim would fabricate a path that does not exist as
-/// written (the module doc's precision contract, line 39). The `~` test fires only on a
-/// LEADING `~` (a mid-path `~` like `/tmp/a~b` is a literal backup-file char, kept).
+/// reference (`$NAME`, `${NAME}`, `$1`, …). Such a token can never be turned into the
+/// real on-disk path without the runtime environment, so emitting it verbatim would
+/// fabricate a path that does not exist as written (the module doc's precision
+/// contract). A leading-`~` home path is NOT rejected here: `~/notes.md` names one real
+/// file in a self-describing spelling, so it is kept verbatim; the resolver classes it
+/// `unresolved` (never joined to the cwd, never expanded - `~` is the shell's home, not
+/// a cwd-relative segment).
 pub(crate) fn has_unresolved_var(token: &str) -> bool {
-    token.contains('$') || token.starts_with('~')
+    token.contains('$')
 }
 
 /// Strip a single matched pair of surrounding single or double quotes.

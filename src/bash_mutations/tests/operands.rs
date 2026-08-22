@@ -216,15 +216,30 @@ fn trim_structural_tail_brace_and_balanced_cases() {
 }
 
 #[test]
-fn tilde_home_path_is_dropped_per_contract() {
-    // The module-doc (line 39) precision contract: a `~`-bearing token yields nothing
-    // (the shell would have expanded `~`; the literal `~/x` is not the real on-disk
-    // path). Previously `has_unresolved_var` checked only `$`, so these leaked.
-    assert!(paths("echo x > ~/notes.txt").is_empty());
-    assert!(paths("cp a.txt ~/dest.txt").is_empty());
-    assert!(paths("touch ~/scratch").is_empty());
-    assert!(paths("dd if=/dev/zero of=~/img.bin").is_empty());
-    // A LEADING `~` only: a mid-path literal `~` (a backup-file char) is still a path.
+fn tilde_home_path_is_kept_verbatim_and_unresolved() {
+    // A leading-`~` target names one real home-relative file, so it is emitted
+    // VERBATIM (the precision contract's second informative non-concrete exception,
+    // beside globs). The resolver classes it `unresolved`: never joined to the cwd,
+    // never expanded (`~` is the shell's home, not a cwd-relative segment).
+    assert_eq!(
+        paths("echo x > ~/notes.txt"),
+        vec![("~/notes.txt".to_string(), ">")]
+    );
+    assert_eq!(
+        paths("cp a.txt ~/dest.txt"),
+        vec![("~/dest.txt".to_string(), "cp")]
+    );
+    assert_eq!(
+        paths("dd if=/dev/zero of=~/img.bin"),
+        vec![("~/img.bin".to_string(), "dd")]
+    );
+    let m = parse_bash_mutations("touch ~/scratch");
+    assert_eq!(m.len(), 1);
+    assert_eq!(
+        m[0].resolve(Some("/base")),
+        ("~/scratch".to_string(), Resolution::Unresolved)
+    );
+    // A mid-path literal `~` (a backup-file char) stays a plain resolvable path.
     assert_eq!(
         paths("rm /tmp/file~"),
         vec![("/tmp/file~".to_string(), "rm")]

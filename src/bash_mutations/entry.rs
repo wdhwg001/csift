@@ -32,11 +32,12 @@ pub(crate) const GIT_MUTATING: &[&str] = &[
 /// in-place flag, `git status`, …) contribute nothing.
 #[must_use]
 pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
-    // Strip heredoc BODY lines first: a `<<DELIM` body is opaque TEXT (often containing a
-    // `>` or quote that a lexer would mis-read as a redirect, fabricating a path - a
-    // DOUBLE failure since the real write inside the body is still missed). The opener
-    // LINE is kept (a `… <<DELIM > file` carries a real redirect on the opener itself).
-    let command = strip_heredoc_bodies(command);
+    // Strip heredoc BODY lines first: a `<<DELIM` body is opaque TEXT to the SHELL
+    // lexer (often containing a `>` or quote that would be mis-read as a redirect,
+    // fabricating a path). The opener LINE is kept (a `… <<DELIM > file` carries a real
+    // redirect on the opener itself), and the stripped bodies are kept ASIDE so an
+    // interpreter segment can hand its payload to the write-idiom analyzer.
+    let (command, bodies) = strip_heredoc_bodies_keeping(command);
     // Build a parallel QUOTE/PROCSUB mask once, then split + tokenize against it so an
     // in-quote / in-procsub `>`/`<`/word can never be read as a redirect operator or
     // fabricated as a file (the dominant remaining precision leak). See [`shell_mask`].
@@ -46,12 +47,18 @@ pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
     // the checkpoint BEFORE its own segment's effect (a `cd` takes effect only for
     // the segments after it), matching how the shell itself sequences them.
     let mut tracker = CwdTracker::new();
+    // Bodies are consumed in opener order; each segment claims as many as it opened
+    // (counted by re-reading its `<<DELIM` tokens - the same tokens the strip pass
+    // read, so the running total can never overrun; the `min` is a belt).
+    let mut body_cursor = 0usize;
     for (segment, seg_mask) in split_segments(&command, &mask)
         .into_iter()
         .zip(split_segments(&mask, &mask))
     {
         let before = out.len();
-        parse_segment(segment, seg_mask, &mut out);
+        let body_end = (body_cursor + heredoc_delims(segment).len()).min(bodies.len());
+        parse_segment(segment, seg_mask, &bodies[body_cursor..body_end], &mut out);
+        body_cursor = body_end;
         let at = tracker.checkpoint();
         for m in &mut out[before..] {
             m.cwd_at = at.clone();

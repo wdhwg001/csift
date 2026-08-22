@@ -274,3 +274,63 @@ fn files_keeps_and_flags_mutations_from_a_partially_failed_bash_chain() {
         .expect("mutation row");
     assert_eq!(row["command_errored"], true);
 }
+
+#[test]
+fn files_surfaces_interpreter_writes_perl_and_class_markers() {
+    // C3 parser increments through the files surface: a python-heredoc literal write
+    // resolves against the record cwd, `perl -i` rows join like sed, and a formatter
+    // run lands as an `fmt:` class marker with no resolution class.
+    let h = Home::new();
+    let py = "python3 - <<'PY'\\nfrom pathlib import Path\\nPath('report.md').write_text(s)\\nPY";
+    let lines = format!(
+        concat!(
+            r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"work"}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/work/proj","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":"{py}"}}}}]}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/work/proj","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b2","name":"Bash","input":{{"command":"perl -pi -e 's/a/b/' src/lib.rs"}}}}]}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"a3","timestamp":"2026-06-07T05:00:03.000Z","cwd":"/work/proj","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b3","name":"Bash","input":{{"command":"cargo fmt"}}}}]}}}}"#,
+            "\n",
+        ),
+        py = py
+    );
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &lines);
+
+    let out = h.run(&[
+        "files",
+        &format!("@{SESS}"),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .filter(|o: &serde_json::Value| o["kind"] == "mutation")
+        .collect();
+
+    let interp = rows
+        .iter()
+        .find(|o| o["path"] == "/work/proj/report.md")
+        .expect("interp heredoc write resolved against the record cwd");
+    assert_eq!(interp["resolution"], "cwd-joined");
+    assert_eq!(interp["path_verbatim"], "report.md");
+
+    let perl = rows
+        .iter()
+        .find(|o| o["path"] == "/work/proj/src/lib.rs")
+        .expect("perl -i row resolved like sed -i");
+    assert_eq!(perl["resolution"], "cwd-joined");
+
+    let marker = rows
+        .iter()
+        .find(|o| o["path"] == "fmt:cargo")
+        .expect("formatter class marker row");
+    assert_eq!(marker["resolution"], serde_json::Value::Null);
+    assert_eq!(marker["path_verbatim"], serde_json::Value::Null);
+}

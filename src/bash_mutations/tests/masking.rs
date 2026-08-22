@@ -358,8 +358,9 @@ fn shell_mask_and_helpers_direct_coverage() {
     assert!(is_fully_masked(&body[2..]), "body after `>(` is all mask");
     assert!(!is_fully_masked("abc"));
     assert!(!is_fully_masked(""), "empty is not fully-masked");
-    // has_unresolved_var now rejects a leading `~` as well as `$`.
-    assert!(has_unresolved_var("~/x"));
+    // has_unresolved_var rejects `$` only; a leading `~` is KEPT (verbatim policy -
+    // the resolver classes it `unresolved` instead of dropping the row).
+    assert!(!has_unresolved_var("~/x"));
     assert!(has_unresolved_var("$VAR"));
     assert!(!has_unresolved_var("/tmp/a~b")); // mid-path `~` is a literal
     assert!(!has_unresolved_var("/tmp/clean"));

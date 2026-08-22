@@ -7,23 +7,41 @@
 /// `<<-` opener also accepts a tab-indented closer). Multiple heredocs on one line open
 /// in left-to-right order. This is a lexical best-effort - sufficient to stop the body's
 /// `>`/quote characters from fabricating redirect rows.
-pub(crate) fn strip_heredoc_bodies(command: &str) -> String {
+///
+/// Besides the stripped command, the dropped body TEXTS are returned, one per heredoc
+/// in OPENER order (the same left-to-right, line-by-line order in which the `<<DELIM`
+/// tokens appear). The closer line belongs to neither the command stream nor the body.
+/// Callers pair the bodies back to segments by counting each stripped segment's openers
+/// with [`heredoc_delims`] - the two passes read the same tokens, so the counts agree
+/// by construction.
+pub(crate) fn strip_heredoc_bodies_keeping(command: &str) -> (String, Vec<String>) {
     if !command.contains("<<") {
-        return command.to_string(); // fast path: no heredoc at all.
+        return (command.to_string(), Vec::new()); // fast path: no heredoc at all.
     }
     let mut out = String::with_capacity(command.len());
-    let mut pending: std::collections::VecDeque<String> = std::collections::VecDeque::new();
-    let mut active: Option<String> = None;
+    let mut bodies: Vec<String> = Vec::new();
+    // Each queued opener carries its body's slot index, assigned at OPEN time so the
+    // returned order is opener order even when heredocs nest their body ranges.
+    let mut pending: std::collections::VecDeque<(String, usize)> =
+        std::collections::VecDeque::new();
+    let mut active: Option<(String, usize)> = None;
     let mut first = true;
     for line in command.split('\n') {
         if !first {
             out.push('\n');
         }
         first = false;
-        if let Some(delim) = &active {
-            // Inside a heredoc body: drop the line; the closer (trimmed == delim) ends it.
+        if let Some((delim, slot)) = active.as_ref() {
+            // Inside a heredoc body: collect the line; the closer (trimmed == delim)
+            // ends it.
             if line.trim() == delim.as_str() {
                 active = pending.pop_front();
+            } else {
+                let body = &mut bodies[*slot];
+                if !body.is_empty() {
+                    body.push('\n');
+                }
+                body.push_str(line);
             }
             continue; // body line (and the closer line) are not commands.
         }
@@ -31,13 +49,15 @@ pub(crate) fn strip_heredoc_bodies(command: &str) -> String {
         // heredoc delimiters it opens so the FOLLOWING lines are dropped as bodies.
         out.push_str(line);
         for delim in heredoc_delims(line) {
-            pending.push_back(delim);
+            let slot = bodies.len();
+            bodies.push(String::new());
+            pending.push_back((delim, slot));
         }
         if active.is_none() {
             active = pending.pop_front();
         }
     }
-    out
+    (out, bodies)
 }
 
 /// The heredoc delimiters opened on one line, in order. Recognizes `<<WORD`, `<<-WORD`,

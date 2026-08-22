@@ -67,12 +67,14 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
 
 /// Heuristic create-vs-touch guess for a Bash mutation verb. A verb that names a fresh
 /// output target (`>` truncate, `mkdir`/`touch`/`tee`/`cp`/`mv`/`install`/`ln`/`rsync`
-/// dest, a download to a path, a `dd`/`zip`/`tar`-create/flag-specified output) is treated
-/// as a create; an append (`>>`, `tee-a`), `rm`, `sed -i`, `mv-from`, and `git` are NOT.
-/// (`emit_tar` only emits on a `-c`/`--create` flag, so the `tar` verb is unconditionally a
-/// create; `tee-a` is `tee --append`, the non-truncating sibling of `tee`, mirroring `>>`
-/// vs `>`.) Lexical-only, so it is just a heuristic (its `FileOp::BashMutation`
-/// is_heuristic() gates the label everywhere).
+/// dest, a download to a path, a `dd`/`zip`/`tar`-create/flag-specified output, an
+/// interpreter write - `open('w')` truncates like `>`) is treated as a create; an append
+/// (`>>`, `tee-a`), `rm`, `sed -i`, `perl -i`, `fmt` (a formatter rewrites an existing
+/// file), `mv-from`, `git`, and the class-marker verbs (`interp`/`pkg`/`extract`) are
+/// NOT. (`emit_tar` only emits on a `-c`/`--create` flag, so the `tar` verb is
+/// unconditionally a create; `tee-a` is `tee --append`, the non-truncating sibling of
+/// `tee`, mirroring `>>` vs `>`.) Lexical-only, so it is just a heuristic (its
+/// `FileOp::BashMutation` is_heuristic() gates the label everywhere).
 pub(crate) fn bash_verb_is_create(verb: &str) -> bool {
     matches!(
         verb,
@@ -91,6 +93,7 @@ pub(crate) fn bash_verb_is_create(verb: &str) -> bool {
             | "zip"
             | "tar"
             | "flag-output"
+            | "interp-write"
     )
 }
 

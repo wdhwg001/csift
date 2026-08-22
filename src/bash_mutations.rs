@@ -31,28 +31,42 @@
 //! - **flag-specified outputs** - `--<name>=<path>` / `--<name> <path>` for a small
 //!   allowlist (`junit-xml`, `junitxml`, `report-path`, `output`, `out-file`, …),
 //!   `dd of=<path>`, and a `zip <dest>` archive.
+//! - **`perl -i`** - the in-place twin of `sed -i` (`perl -pi -e 's/a/b/' file…`), verb
+//!   `perl-i` ([`emit_perl`]).
+//! - **interpreter write idioms** ([`interp`]) - a `python3 - <<'PY' … PY` / `node -e …`
+//!   payload whose write target is provably literal (a direct literal argument, or a
+//!   ONE-HOP constant bound exactly once) emits a real `interp-write` row; a write whose
+//!   target the guards cannot extract emits an `interp:<lang>` class marker instead.
+//! - **mutating-CLASS markers** ([`classes`]) - a formatter (`cargo fmt`, `prettier
+//!   --write`), package manager (`npm install`), or archive extraction (`tar -xf`)
+//!   mutates files it never names; those commands emit a `fmt:`/`pkg:`/`extract:`
+//!   pseudo-path in the `git:<sub>` style, flagging the class without inventing paths.
 //!
 //! ## Precision contract (no fabricated rows)
 //!
-//! Only a **concrete, resolvable** path is ever emitted. A token that does not name a
-//! real path is DROPPED, never surfaced as a noisy pseudo-row: an unresolved `$VAR` /
-//! `${VAR}` / `~`-or-`$()`-bearing token (we cannot expand it, so a row would be a
+//! Only a path that names a real touched target is ever emitted. A token that cannot be
+//! resolved to one is DROPPED, never surfaced as a noisy pseudo-row: an unresolved
+//! `$VAR` / `${VAR}` / `$()`-bearing token (we cannot expand it, so a row would be a
 //! fabricated path), a `/dev/null`-class sink, and a mis-parsed redirect tail all yield
-//! nothing. (Globs like `*.tmp` remain the one informative non-concrete exception, kept
-//! verbatim, because they still name a real touched set and the heuristic label is
-//! explicit.) The `git:<sub>` coarse pseudo-path is intentional and unaffected.
+//! nothing. Two informative non-concrete exceptions are kept verbatim because they
+//! still name a real touched set and the heuristic label is explicit: a glob
+//! (`*.tmp`), and a leading-`~` home path (`~/notes.md` - reported verbatim and
+//! resolution-classed `unresolved`, never joined to the cwd and never expanded). The
+//! coarse class-marker pseudo-paths (`git:<sub>`, `fmt:`/`interp:`/`pkg:`/`extract:`)
+//! are intentional and are never treated as paths ([`is_class_marker`]).
 //!
 //! ## Out of scope (documented limitation)
 //!
-//! Write calls inside an EMBEDDED-LANGUAGE body are NOT parsed - a heredoc
-//! (`python3 - <<'PY' … PY`), an inline `python3 -c "open('/tmp/x','w')…"`, a `Path(…)
-//! .write_text(…)`, etc. This is a deliberate limit of a lexical (non-shell, non-Python)
-//! parser: the body is opaque command TEXT, and reliably parsing arbitrary embedded code
-//! is out of scope. Such writes are missed (a recall gap), but the precision contract
-//! above guarantees they never produce a WRONG row - heredoc BODY lines are lexically
-//! skipped ([`strip_heredoc_bodies`]) BEFORE redirect/verb scanning, so a `>` or quote
-//! inside the body can no longer be mis-read as a redirect (only the opener LINE, which
-//! may carry a real trailing `> file`, is scanned).
+//! Heredoc BODY lines are lexically skipped ([`strip_heredoc_bodies_keeping`]) BEFORE
+//! redirect/verb scanning, so a `>` or quote inside the body can never be mis-read as a
+//! redirect (only the opener LINE, which may carry a real trailing `> file`, is
+//! scanned). The stripped bodies are not discarded: when the segment's verb is an
+//! interpreter, the body text is handed to [`interp`]'s write-idiom analyzer. That
+//! analyzer is deliberately narrow - it extracts a target only when the target is
+//! provably literal, and reports any other write as the opaque `interp:<lang>` class.
+//! Arbitrary embedded-code dataflow (f-strings, argv, env, concatenation, reassigned
+//! names) stays out of scope: such writes surface as the class marker, never as a
+//! guessed path.
 //!
 //! A trailing `# …` SHELL COMMENT is likewise lexically masked ([`shell_mask`]) before any
 //! token/redirect scan: an unquoted `#` at a word boundary opens a comment to end-of-line,
@@ -61,18 +75,22 @@
 //! reports `dst`, not `note`). An IN-PATH `#` (`/tmp/a#b`) is preserved - `#` masks only when
 //! it starts a token.
 
+mod classes;
 mod commands;
 mod cwd;
 mod entry;
 mod heredoc;
+mod interp;
 mod mask;
 mod outputs;
 mod redirect;
 
+pub(crate) use classes::*;
 pub(crate) use commands::*;
 pub(crate) use cwd::*;
 pub(crate) use entry::*;
 pub(crate) use heredoc::*;
+pub(crate) use interp::*;
 pub(crate) use mask::*;
 pub(crate) use outputs::*;
 pub(crate) use redirect::*;

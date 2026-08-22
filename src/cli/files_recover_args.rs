@@ -83,7 +83,14 @@ use super::*;
                        lexical inference; unresolved = kept exactly as typed, `~`/`$VAR`/an\n             \
                        unknowable cwd, never joined). `path_verbatim` keeps the typed spelling\n             \
                        when it differs from `path`; both are null on structured tools and on\n             \
-                       `git:<sub>` class markers. `command_errored=true` flags a mutation kept\n             \
+                       class markers. A CLASS MARKER is a pseudo-path, not a file: it flags\n             \
+                       what kind of mutation ran when the file set is not in the command\n             \
+                       text. `git:<sub>` = a mutating git subcommand; `fmt:<tool>` = a\n             \
+                       formatter run naming no files (cargo fmt, a prettier write run, ...);\n             \
+                       `interp:<lang>` = an interpreter payload with a write whose target\n             \
+                       could not be extracted; `pkg:<manager>` = a package-manager\n             \
+                       install/update; `extract:<tool>` = an archive or patch extraction.\n             \
+                       `command_errored=true` flags a mutation kept\n             \
                        from a bash chain whose tool_result errored: part of the chain failed\n             \
                        and which arms ran is unknowable, so it is disclosed instead of\n             \
                        dropped.)\n  \

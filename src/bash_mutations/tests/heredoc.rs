@@ -23,7 +23,12 @@ fn heredoc_delims_forms_and_offsets() {
 #[test]
 fn heredoc_bodies_dropped_until_exact_closer() {
     let cmd = "cat <<EOF > $OUT\nline one\nline two\nEOF\necho after";
-    let stripped = strip_heredoc_bodies(cmd);
+    let (stripped, bodies) = strip_heredoc_bodies_keeping(cmd);
+    assert_eq!(
+        bodies,
+        ["line one\nline two"],
+        "the body text is kept aside"
+    );
     assert!(
         !stripped.contains("line one") && !stripped.contains("line two"),
         "body lines must drop: {stripped}"
@@ -33,7 +38,7 @@ fn heredoc_bodies_dropped_until_exact_closer() {
         "post-closer line kept: {stripped}"
     );
     // A body line that merely CONTAINS the delimiter is not the closer.
-    let s2 = strip_heredoc_bodies("cat <<EOF\nnot EOF here\nEOF\necho tail");
+    let (s2, _) = strip_heredoc_bodies_keeping("cat <<EOF\nnot EOF here\nEOF\necho tail");
     assert!(
         !s2.contains("not EOF here") && s2.contains("echo tail"),
         "closer is exact-trimmed-match only: {s2}"
@@ -41,15 +46,14 @@ fn heredoc_bodies_dropped_until_exact_closer() {
 }
 
 #[test]
-fn heredoc_python_open_is_out_of_scope_documented() {
-    // Fix E: an inline `python3 -c "open('/tmp/x','w')…"` body is NOT parsed - a
-    // documented lexical-parser limitation. The precision contract still holds: the
-    // miss produces NO wrong row (the `python3` verb is not in the allowlist and the
-    // quoted body never resolves to a redirect/flag). This test PINS that contract:
-    // a recall miss, never a precision violation.
-    assert!(
-        paths(r#"python3 -c "open('/tmp/out.json','w').write('x')""#).is_empty(),
-        "heredoc/python body is out of scope — and must not fabricate a row"
+fn inline_python_literal_write_is_extracted() {
+    // An inline `python3 -c "open('/tmp/x','w')…"` script with a LITERAL first
+    // argument and a write mode is a provable write: the target is a real row now
+    // (the former out-of-scope contract moved to the interp analyzer, which still
+    // never fabricates - see the interp tests for the opaque cases).
+    assert_eq!(
+        paths(r#"python3 -c "open('/tmp/out.json','w').write('x')""#),
+        [("/tmp/out.json".to_string(), "interp-write")]
     );
 }
 
@@ -58,14 +62,18 @@ fn heredoc_python_open_is_out_of_scope_documented() {
 #[test]
 fn heredoc_body_redirect_char_does_not_fabricate_a_row() {
     // A `>` inside a heredoc body must NOT become a redirect row, and the opener's own
-    // real trailing redirect (if any) IS still caught.
+    // real trailing redirect (if any) IS still caught. The body is not a SHELL stream:
+    // its only legitimate surface is the interpreter write-idiom analyzer, whose
+    // literal extraction here names exactly the one real write.
     let body_only = "python3 - <<'PY'\nprint('a > b')\nopen('/tmp/real.json','w')\nPY";
     let got = just_paths(body_only);
-    assert!(
-        !got.iter()
-            .any(|p| p.contains("b'") || p.contains('>') || p == "/tmp/real.json"),
-        "heredoc body leaked a row: {got:?}"
+    assert_eq!(
+        got,
+        vec!["/tmp/real.json".to_string()],
+        "the body's shell-looking bytes must not fabricate rows; the interpreter \
+         write is the only row"
     );
+    assert_eq!(paths(body_only)[0].1, "interp-write");
     // Opener-line redirect survives heredoc-body stripping.
     let with_redirect = "cat <<EOF > /tmp/out.txt\nbody > not a redirect\nEOF";
     assert_eq!(
@@ -155,6 +163,8 @@ fn heredoc_delims_direct_coverage() {
     // An unterminated quote has no closing `'`, so it falls through to the bare-word
     // scan, which keeps the leading `'` and runs to the end (no metachar).
     assert_eq!(read_heredoc_word("'unterminated").0, "'unterminated");
-    // A command with NO `<<` at all → strip_heredoc_bodies fast path (no change).
-    assert_eq!(strip_heredoc_bodies("echo hi > /tmp/x"), "echo hi > /tmp/x");
+    // A command with NO `<<` at all → the strip fast path (no change, no bodies).
+    let (unchanged, none) = strip_heredoc_bodies_keeping("echo hi > /tmp/x");
+    assert_eq!(unchanged, "echo hi > /tmp/x");
+    assert!(none.is_empty());
 }
