@@ -7,10 +7,17 @@ use super::*;
 /// never try to enumerate files; the entry is flagged heuristic like everything here.
 pub(crate) fn emit_git(operands: &[&str], out: &mut Vec<BashMutation>) {
     if let Some(sub) = git_subcommand(operands) {
-        if GIT_MUTATING.contains(&sub) {
+        // A dry run verifies and writes nothing: `git apply --check` and
+        // `git clean -n/--dry-run` must not emit a mutation row.
+        let dry = operands.iter().any(|t| {
+            matches!(*t, "--check" | "--dry-run" | "--summary" | "--stat")
+                || (sub == "clean" && *t == "-n")
+        });
+        if GIT_MUTATING.contains(&sub) && !dry {
             out.push(BashMutation {
                 path: format!("git:{sub}"),
                 verb: "git",
+                cwd_at: CwdAt::Spawn,
             });
         }
     }
@@ -111,7 +118,11 @@ pub(crate) fn emit_download_output(
         if takes_next {
             if let Some(next) = operands.get(i + 1) {
                 if let Some(path) = path_operand(next) {
-                    out.push(BashMutation { path, verb });
+                    out.push(BashMutation {
+                        path,
+                        verb,
+                        cwd_at: CwdAt::Spawn,
+                    });
                 }
                 i += 2;
                 continue;
@@ -132,7 +143,11 @@ pub(crate) fn emit_dd(operands: &[&str], out: &mut Vec<BashMutation>) {
             }
             // `rest` is a bare path (no KEY=VALUE wrapper now) - concrete-path filter.
             if let Some(path) = concrete_path(rest) {
-                out.push(BashMutation { path, verb: "dd" });
+                out.push(BashMutation {
+                    path,
+                    verb: "dd",
+                    cwd_at: CwdAt::Spawn,
+                });
             }
         }
     }
@@ -147,7 +162,11 @@ pub(crate) fn emit_zip(operands: &[&str], out: &mut Vec<BashMutation>) {
             continue; // a zip option flag (`-r`, `-9`, …).
         }
         if let Some(path) = path_operand(op) {
-            out.push(BashMutation { path, verb: "zip" });
+            out.push(BashMutation {
+                path,
+                verb: "zip",
+                cwd_at: CwdAt::Spawn,
+            });
         }
         return; // only the first non-flag operand (the archive dest).
     }
@@ -224,7 +243,11 @@ pub(crate) fn emit_tar(operands: &[&str], out: &mut Vec<BashMutation>) {
     let dest = archive.or(glued_file).or(file_long_inline);
     if let Some(d) = dest {
         if let Some(path) = concrete_path(d) {
-            out.push(BashMutation { path, verb: "tar" });
+            out.push(BashMutation {
+                path,
+                verb: "tar",
+                cwd_at: CwdAt::Spawn,
+            });
         }
     }
 }
@@ -250,6 +273,7 @@ pub(crate) fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutat
                         out.push(BashMutation {
                             path,
                             verb: "flag-output",
+                            cwd_at: CwdAt::Spawn,
                         });
                     }
                 }
@@ -266,6 +290,7 @@ pub(crate) fn collect_flag_outputs(tokens: &[MaskedTok], out: &mut Vec<BashMutat
                             out.push(BashMutation {
                                 path,
                                 verb: "flag-output",
+                                cwd_at: CwdAt::Spawn,
                             });
                         }
                         i += 2;

@@ -16,6 +16,7 @@ fn just_paths(cmd: &str) -> Vec<String> {
         .collect()
 }
 
+mod cwd;
 mod heredoc;
 mod masking;
 mod operands;

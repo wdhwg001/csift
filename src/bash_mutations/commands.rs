@@ -102,7 +102,11 @@ pub(crate) fn emit_operands(operands: &[&str], verb: &'static str, out: &mut Vec
     let kept = strip_input_redirects(operands);
     for op in &kept {
         if let Some(path) = path_operand(op) {
-            out.push(BashMutation { path, verb });
+            out.push(BashMutation {
+                path,
+                verb,
+                cwd_at: CwdAt::Spawn,
+            });
         }
     }
 }
@@ -123,6 +127,7 @@ pub(crate) fn emit_touch(operands: &[&str], out: &mut Vec<BashMutation>) {
             out.push(BashMutation {
                 path,
                 verb: "touch",
+                cwd_at: CwdAt::Spawn,
             });
         }
     }
@@ -139,7 +144,11 @@ pub(crate) fn emit_tee(operands: &[&str], out: &mut Vec<BashMutation>) {
     let kept = strip_input_redirects(operands);
     for op in &kept {
         if let Some(path) = path_operand(op) {
-            out.push(BashMutation { path, verb });
+            out.push(BashMutation {
+                path,
+                verb,
+                cwd_at: CwdAt::Spawn,
+            });
         }
     }
 }
@@ -213,8 +222,27 @@ pub(crate) fn emit_last_operand(
     let positional = non_flag_operands(operands);
     if let Some(dest_tok) = positional.last() {
         if let Some(path) = path_operand(dest_tok) {
-            out.push(BashMutation { path, verb });
+            // An rsync/scp REMOTE destination (`user@host:dir/`, `host:path`) is not a
+            // local filesystem path; reporting it as one is a false attribution.
+            if is_remote_spec(&path) {
+                return;
+            }
+            out.push(BashMutation {
+                path,
+                verb,
+                cwd_at: CwdAt::Spawn,
+            });
         }
+    }
+}
+
+/// True for a remote transfer spec: a `:` before any separator whose head is not a
+/// single drive letter (`C:\x` stays local). `user@host:dir` and `host:path` match.
+pub(crate) fn is_remote_spec(path: &str) -> bool {
+    let head = path.split(['/', '\\']).next().unwrap_or(path);
+    match head.split_once(':') {
+        Some((h, _)) => h.len() > 1 || h.chars().next().is_none_or(|c| !c.is_ascii_alphabetic()),
+        None => false,
     }
 }
 
@@ -229,7 +257,11 @@ pub(crate) fn emit_last_operand(
 pub(crate) fn emit_ln(operands: &[&str], out: &mut Vec<BashMutation>) {
     if let Some(dir) = target_directory_value(operands) {
         if let Some(path) = path_operand(dir) {
-            out.push(BashMutation { path, verb: "ln" });
+            out.push(BashMutation {
+                path,
+                verb: "ln",
+                cwd_at: CwdAt::Spawn,
+            });
         }
         return; // sources are reads; the `-t` DIR is the sole written destination.
     }
@@ -246,7 +278,11 @@ pub(crate) fn emit_ln(operands: &[&str], out: &mut Vec<BashMutation>) {
 pub(crate) fn emit_copy_like(operands: &[&str], verb: &'static str, out: &mut Vec<BashMutation>) {
     if let Some(dir) = target_directory_value(operands) {
         if let Some(path) = path_operand(dir) {
-            out.push(BashMutation { path, verb });
+            out.push(BashMutation {
+                path,
+                verb,
+                cwd_at: CwdAt::Spawn,
+            });
         }
         return; // sources are reads; the `-t` DIR is the sole written destination.
     }
@@ -281,7 +317,11 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
     // destination and earlier positionals are sources.
     if let Some(dir) = target_directory_value(operands) {
         if let Some(path) = path_operand(dir) {
-            out.push(BashMutation { path, verb: "mv" });
+            out.push(BashMutation {
+                path,
+                verb: "mv",
+                cwd_at: CwdAt::Spawn,
+            });
         }
         // The `-t DIR` value is also a non-flag positional; exclude it from the sources.
         for src in non_flag_operands(operands) {
@@ -292,6 +332,7 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
                 out.push(BashMutation {
                     path,
                     verb: "mv-from",
+                    cwd_at: CwdAt::Spawn,
                 });
             }
         }
@@ -302,13 +343,18 @@ pub(crate) fn emit_mv(operands: &[&str], out: &mut Vec<BashMutation>) {
         return;
     };
     if let Some(path) = path_operand(dest_tok) {
-        out.push(BashMutation { path, verb: "mv" });
+        out.push(BashMutation {
+            path,
+            verb: "mv",
+            cwd_at: CwdAt::Spawn,
+        });
     }
     for src in source_toks {
         if let Some(path) = path_operand(src) {
             out.push(BashMutation {
                 path,
                 verb: "mv-from",
+                cwd_at: CwdAt::Spawn,
             });
         }
     }
@@ -362,6 +408,7 @@ pub(crate) fn emit_sed(operands: &[&str], out: &mut Vec<BashMutation>) {
             out.push(BashMutation {
                 path,
                 verb: "sed-i",
+                cwd_at: CwdAt::Spawn,
             });
         }
     }

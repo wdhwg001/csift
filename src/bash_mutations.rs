@@ -62,6 +62,7 @@
 //! it starts a token.
 
 mod commands;
+mod cwd;
 mod entry;
 mod heredoc;
 mod mask;
@@ -69,6 +70,7 @@ mod outputs;
 mod redirect;
 
 pub(crate) use commands::*;
+pub(crate) use cwd::*;
 pub(crate) use entry::*;
 pub(crate) use heredoc::*;
 pub(crate) use mask::*;

@@ -67,14 +67,26 @@ use super::*;
          `--by timeline` to test create-vs-edit or filter by op.)\n\n\
         JSON SCHEMAS (per --format json)\n  \
           --by timeline : one object per mutation: {session_id, is_subagent, parent_session_id,\n             \
-                       path, op, ts_utc, ts_local, turn_index, is_create, heuristic} + a\n             \
+                       path, op, ts_utc, ts_local, turn_index, is_create, heuristic,\n             \
+                       resolution, path_verbatim, command_errored} + a\n             \
                        trailing summary object. (session_id is the transcript's own id: a\n             \
                        top-level uuid, or a bare SUBAGENT hex when is_subagent=true, which is\n             \
                        NOT a re-feedable @<uuid> target; re-feed parent_session_id, always the\n             \
                        owning top-level uuid. heuristic=true ONLY for a bash-derived mutation: a\n             \
                        guessed path/op lexically parsed from a shell command, lower confidence;\n             \
                        false = a definitive Edit/Write/Notebook/MultiEdit tool call with an\n             \
-                       exact file_path. Filter heuristic==false for confirmed mutations only.)\n  \
+                       exact file_path. Filter heuristic==false for confirmed mutations only.\n             \
+                       A bash row's `path` is RESOLVED against the recording shell's cwd, the\n             \
+                       record's own top-level `cwd` field: `resolution` names the class\n             \
+                       (absolute = typed absolute; cwd-joined = joined to the record cwd, no\n             \
+                       inference; cd-tracked = joined through literal in-command `cd`s, a\n             \
+                       lexical inference; unresolved = kept exactly as typed, `~`/`$VAR`/an\n             \
+                       unknowable cwd, never joined). `path_verbatim` keeps the typed spelling\n             \
+                       when it differs from `path`; both are null on structured tools and on\n             \
+                       `git:<sub>` class markers. `command_errored=true` flags a mutation kept\n             \
+                       from a bash chain whose tool_result errored: part of the chain failed\n             \
+                       and which arms ran is unknowable, so it is disclosed instead of\n             \
+                       dropped.)\n  \
           --by file  : one object per file: {session_id, is_subagent, parent_session_id,\n             \
                        file, write, edit, bash, multi_edit, notebook_edit, total,\n             \
                        distinct_files, first_utc, first_local, last_utc, last_local} + a\n             \

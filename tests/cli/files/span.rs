@@ -139,3 +139,138 @@ fn files_grouped_json_and_text_discriminate_subagent_id_domain() {
         t.stdout
     );
 }
+
+#[test]
+fn files_resolves_relative_bash_operands_against_the_record_cwd() {
+    // A record-level `cwd` is the recording shell's own working directory, so a
+    // relative bash operand joins it deterministically (cwd-joined), an in-command
+    // `cd` tracks lexically (cd-tracked), and the resolved spelling merges with the
+    // absolute structured spelling of the same file in every rollup.
+    let h = Home::new();
+    let lines = concat!(
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#,
+        "\n",
+        // Structured Edit under the ABSOLUTE path.
+        r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/work/proj","message":{"role":"assistant","content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/work/proj/notes.md","old_string":"a","new_string":"b"}}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/work/proj","toolUseResult":{"filePath":"/work/proj/notes.md"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#,
+        "\n",
+        // Relative bash append to the SAME file: must resolve to the absolute spelling.
+        r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","cwd":"/work/proj","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"echo x >> notes.md"}}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:04.000Z","cwd":"/work/proj","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"ok"}]}}"#,
+        "\n",
+        // cd-tracked: the operand sits after an in-command cd.
+        r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:05.000Z","cwd":"/work/proj","message":{"role":"assistant","content":[{"type":"tool_use","id":"b2","name":"Bash","input":{"command":"cd sub && touch made.txt"}}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:06.000Z","cwd":"/work/proj","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b2","content":"ok"}]}}"#,
+        "\n",
+    );
+    h.write(&format!("{ENC}/{SESS}.jsonl"), lines);
+
+    let out = h.run(&[
+        "files",
+        &format!("@{SESS}"),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let rows: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .filter(|o: &serde_json::Value| o["kind"] == "mutation")
+        .collect();
+
+    let joined = rows
+        .iter()
+        .find(|o| o["op"] == "bash" && o["path"] == "/work/proj/notes.md")
+        .expect("cwd-joined bash row under the resolved absolute path");
+    assert_eq!(joined["resolution"], "cwd-joined");
+    assert_eq!(joined["path_verbatim"], "notes.md");
+    assert_eq!(joined["command_errored"], false);
+
+    let tracked = rows
+        .iter()
+        .find(|o| o["path"] == "/work/proj/sub/made.txt")
+        .expect("cd-tracked row");
+    assert_eq!(tracked["resolution"], "cd-tracked");
+
+    let edit = rows.iter().find(|o| o["op"] == "edit").expect("edit row");
+    assert_eq!(edit["resolution"], serde_json::Value::Null);
+    assert_eq!(edit["path_verbatim"], serde_json::Value::Null);
+
+    // The per-file rollup buckets the bash append WITH the structured edit.
+    let byfile = h.run(&[
+        "files",
+        &format!("@{SESS}"),
+        "--by",
+        "file",
+        "--no-subagents",
+    ]);
+    assert!(byfile.success);
+    let block: Vec<&str> = byfile
+        .stdout
+        .lines()
+        .skip_while(|l| !l.contains("/work/proj/notes.md"))
+        .take(2)
+        .collect();
+    assert!(
+        block
+            .get(1)
+            .is_some_and(|l| l.contains("1 edit") && l.contains("1 bash (heuristic)")),
+        "merged bucket: {:?}\nfull: {}",
+        block,
+        byfile.stdout
+    );
+}
+
+#[test]
+fn files_keeps_and_flags_mutations_from_a_partially_failed_bash_chain() {
+    // `A && B; C` can mutate in A before C fails. The old behavior dropped every
+    // mutation of an is_error command silently; now they are kept and flagged.
+    let h = Home::new();
+    let lines = concat!(
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/p","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"touch made.txt && grep -q missing made.txt"}}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"c0","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/p","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"exit 1","is_error":true}]}}"#,
+        "\n",
+    );
+    h.write(&format!("{ENC}/{SESS}.jsonl"), lines);
+
+    let out = h.run(&[
+        "files",
+        &format!("@{SESS}"),
+        "--by",
+        "timeline",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("/p/made.txt") && out.stdout.contains("(command errored)"),
+        "kept and flagged: {}",
+        out.stdout
+    );
+
+    let json = h.run(&[
+        "files",
+        &format!("@{SESS}"),
+        "--by",
+        "timeline",
+        "--format",
+        "json",
+        "--no-subagents",
+    ]);
+    let row: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "mutation")
+        .expect("mutation row");
+    assert_eq!(row["command_errored"], true);
+}

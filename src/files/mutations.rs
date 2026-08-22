@@ -35,8 +35,11 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
     }
     let mut out = Vec::new();
     for rec in records {
-        // A record whose tool op errored / was cancelled mutated nothing - skip it.
-        if tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id)) {
+        // A STRUCTURED op whose result errored / was cancelled never landed - skip it.
+        // Bash is different: a chain can mutate before its failing step, so bash
+        // mutations are kept and flagged `command_errored` further down.
+        let errored = tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id));
+        if errored && rec.bash_command().is_none() {
             continue;
         }
         for mut m in rec.structured_tool_mutations() {
@@ -55,12 +58,7 @@ pub fn mutations_in_records(records: &[Record]) -> Vec<FileMutation> {
         }
         if let Some(cmd) = rec.bash_command() {
             for bm in parse_bash_mutations(cmd) {
-                out.push(FileMutation {
-                    path: bm.path,
-                    op: FileOp::BashMutation,
-                    timestamp_utc: rec.timestamp.clone(),
-                    is_create: bash_verb_is_create(bm.verb),
-                });
+                out.push(bash_file_mutation(bm, rec, errored));
             }
         }
     }
@@ -94,6 +92,33 @@ pub(crate) fn bash_verb_is_create(verb: &str) -> bool {
             | "tar"
             | "flag-output"
     )
+}
+
+/// Build one bash-heuristic [`FileMutation`], resolving the operand against the
+/// recording shell's cwd (the record's own top-level `cwd` field; see
+/// [`crate::bash_mutations::cwd`] for the mechanism and the class semantics). The
+/// RESOLVED path becomes the primary `path` so relative and absolute spellings of one
+/// file land in one bucket; the typed form is kept in `path_verbatim` when different.
+/// A class-marker pseudo-path (`git:add`) is never resolved and carries no class.
+pub(crate) fn bash_file_mutation(
+    bm: crate::bash_mutations::BashMutation,
+    rec: &Record,
+    command_errored: bool,
+) -> FileMutation {
+    let (resolved, class) = bm.resolve(rec.cwd.as_deref());
+    let marker = crate::bash_mutations::is_class_marker(&bm.path);
+    let path_verbatim = (resolved != bm.path).then(|| bm.path.clone());
+    FileMutation {
+        path: resolved,
+        op: FileOp::BashMutation,
+        timestamp_utc: rec.timestamp.clone(),
+        // Bash create-vs-overwrite is NOT knowable lexically - this is a heuristic
+        // flag; the op's is_heuristic() gates the label.
+        is_create: bash_verb_is_create(bm.verb),
+        path_verbatim,
+        resolution: (!marker).then(|| class.as_str()),
+        command_errored,
+    }
 }
 
 /// Delimit turns over the parsed records, then for each turn extract structured + Bash
@@ -138,9 +163,11 @@ pub(crate) fn extract_mutations(
         for &i in idxs {
             let rec = &records[i];
 
-            // A record whose tool op errored / was cancelled never mutated anything - skip its
-            // structured AND heuristic-Bash mutations (the op's INPUT is a phantom, not a write).
-            if tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id)) {
+            // A STRUCTURED op whose result errored / was cancelled never landed - its input
+            // is a phantom, not a write. A Bash chain is different: `A && B; C` can mutate
+            // in A before C fails, so bash mutations are kept and flagged instead.
+            let errored = tool_use_id_for(rec).is_some_and(|id| failed_ids.contains(&id));
+            if errored && rec.bash_command().is_none() {
                 continue;
             }
 
@@ -170,7 +197,7 @@ pub(crate) fn extract_mutations(
                 });
             }
 
-            // Bash (heuristic) mutations.
+            // Bash (heuristic) mutations, cwd-resolved (see `bash_file_mutation`).
             if let Some(cmd) = rec.bash_command() {
                 for bm in parse_bash_mutations(cmd) {
                     out.push(TaggedMutation {
@@ -179,14 +206,7 @@ pub(crate) fn extract_mutations(
                         parent_session_id: session_id.to_string(),
                         turn_index,
                         line_no: line_nos.get(i).copied().unwrap_or(0),
-                        mutation: FileMutation {
-                            path: bm.path,
-                            op: FileOp::BashMutation,
-                            timestamp_utc: rec.timestamp.clone(),
-                            // Bash create-vs-overwrite is NOT knowable lexically - this is
-                            // a heuristic flag; the op's is_heuristic() gates the label.
-                            is_create: bash_verb_is_create(bm.verb),
-                        },
+                        mutation: bash_file_mutation(bm, rec, errored),
                     });
                 }
             }

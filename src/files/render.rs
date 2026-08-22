@@ -147,14 +147,20 @@ pub(crate) fn render_timeline(outcome: &Outcome) {
             } else {
                 ""
             };
+            let errored = if m.mutation.command_errored {
+                " (command errored)"
+            } else {
+                ""
+            };
             println!(
-                "  L{}  {}  turn {}  {}{}  {}",
+                "  L{}  {}  turn {}  {}{}  {}{}",
                 m.line_no,
                 format_timestamp(m.mutation.timestamp_utc.as_deref()),
                 m.turn_index,
                 m.mutation.op.label(),
                 heuristic,
-                m.mutation.path
+                m.mutation.path,
+                errored
             );
         }
     });
@@ -242,6 +248,14 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
                     "line": m.line_no,
                     "is_create": m.mutation.is_create,
                     "heuristic": m.mutation.op.is_heuristic(),
+                    // Bash-resolution provenance: `resolution` names how `path` was
+                    // obtained (absolute / cwd-joined / cd-tracked / unresolved; null
+                    // for structured tools and class markers), `path_verbatim` keeps
+                    // the typed spelling when it differs, and `command_errored` flags
+                    // a mutation kept from a partially-failed bash chain.
+                    "resolution": m.mutation.resolution,
+                    "path_verbatim": m.mutation.path_verbatim,
+                    "command_errored": m.mutation.command_errored,
                 });
                 println!("{}", serde_json::to_string(&obj)?);
             }

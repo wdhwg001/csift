@@ -127,12 +127,18 @@ fn ops_label_omits_zeroes_and_flags_bash() {
         op: FileOp::Write,
         timestamp_utc: None,
         is_create: true,
+        path_verbatim: None,
+        resolution: None,
+        command_errored: false,
     });
     c.add(&FileMutation {
         path: "/tmp/b".into(),
         op: FileOp::BashMutation,
         timestamp_utc: None,
         is_create: false,
+        path_verbatim: None,
+        resolution: None,
+        command_errored: false,
     });
     let label = c.ops_label();
     assert!(label.contains("1 write"), "got: {label}");
@@ -151,6 +157,9 @@ fn op_counts_and_label_cover_notebook_and_multiedit() {
             op,
             timestamp_utc: Some("2026-06-07T05:00:00.000Z".into()),
             is_create: false,
+            path_verbatim: None,
+            resolution: None,
+            command_errored: false,
         });
     }
     let label = c.ops_label();

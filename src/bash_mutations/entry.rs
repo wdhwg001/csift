@@ -9,6 +9,9 @@ use super::*;
 pub struct BashMutation {
     pub path: String,
     pub verb: &'static str,
+    /// The shell cwd in effect at this operand's segment (see [`cwd`] for the
+    /// tracked-cwd mechanism and the resolution classes built on it).
+    pub cwd_at: CwdAt,
 }
 
 /// Git subcommands that mutate the working tree / index / refs (the conservative
@@ -39,11 +42,21 @@ pub fn parse_bash_mutations(command: &str) -> Vec<BashMutation> {
     // fabricated as a file (the dominant remaining precision leak). See [`shell_mask`].
     let mask = shell_mask(&command);
     let mut out = Vec::new();
+    // Track the in-command shell cwd segment by segment: a mutation is stamped with
+    // the checkpoint BEFORE its own segment's effect (a `cd` takes effect only for
+    // the segments after it), matching how the shell itself sequences them.
+    let mut tracker = CwdTracker::new();
     for (segment, seg_mask) in split_segments(&command, &mask)
         .into_iter()
         .zip(split_segments(&mask, &mask))
     {
+        let before = out.len();
         parse_segment(segment, seg_mask, &mut out);
+        let at = tracker.checkpoint();
+        for m in &mut out[before..] {
+            m.cwd_at = at.clone();
+        }
+        tracker.observe_segment(segment, seg_mask);
     }
     out
 }

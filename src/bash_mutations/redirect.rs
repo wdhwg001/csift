@@ -140,7 +140,11 @@ pub(crate) fn push_redirect_target(tail: &str, verb: &'static str, out: &mut Vec
         return; // a discard sink or an fd-dup (`>&1`/`2>&1`): no real path written.
     }
     if let Some(path) = path_operand(tail) {
-        out.push(BashMutation { path, verb });
+        out.push(BashMutation {
+            path,
+            verb,
+            cwd_at: CwdAt::Spawn,
+        });
     }
 }
 

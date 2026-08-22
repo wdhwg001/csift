@@ -79,6 +79,18 @@ pub struct FileMutation {
     /// file). On a bare tool_use record the carrier field is usually absent, so this
     /// defaults `false` ("unknown / treat as edit"); the joiner in `files` enriches it.
     pub is_create: bool,
+    /// The operand exactly as typed, kept when `path` was RESOLVED from a different
+    /// spelling (a relative bash operand joined to the recording shell's cwd). `None`
+    /// when `path` is already the typed form. Structured tools never set it.
+    pub path_verbatim: Option<String>,
+    /// The bash resolution class wire string (`absolute` / `cwd-joined` / `cd-tracked`
+    /// / `unresolved`, see `bash_mutations`). `None` for structured tools and for
+    /// class-marker pseudo-paths (`git:add`), which are flags, not files.
+    pub resolution: Option<&'static str>,
+    /// True when the Bash command's tool_result carried `is_error`: part of the chain
+    /// failed and which arms ran is unknowable, so the mutation is KEPT and flagged
+    /// instead of silently dropped (a chain often mutates before its failing step).
+    pub command_errored: bool,
 }
 
 impl Record {
@@ -138,6 +150,9 @@ impl Record {
                 op,
                 timestamp_utc: self.timestamp.clone(),
                 is_create: self_is_create,
+                path_verbatim: None,
+                resolution: None,
+                command_errored: false,
             });
         }
         out
