@@ -339,3 +339,58 @@ fn recover_coverage_groups_multiple_sessions_with_separator() {
         out.stdout
     );
 }
+
+#[test]
+fn coverage_splits_full_and_windowed_read_counts() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"read it"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/rw.md","content":"a\nb\nc","startLine":1,"numLines":3,"totalLines":3}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"file":{"filePath":"/p/rw.md","content":"b","startLine":2,"numLines":1,"totalLines":3}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r2","content":"ok"}]}}"#, "\n",
+            // A Write and a `file` ATTACHMENT read: each has its own count arm.
+            r#"{"type":"user","uuid":"c3","timestamp":"2026-06-07T05:00:03.000Z","toolUseResult":{"type":"update","filePath":"/p/rw.md","content":"a\nb\nc"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"attachment","uuid":"att1","timestamp":"2026-06-07T05:00:04.000Z","attachment":{"file":{"filePath":"/p/rw.md","content":"a\nb\nc","startLine":1,"numLines":3,"totalLines":3}}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/rw.md",
+        "--coverage",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("3 read (2 full, 1 windowed)"),
+        "read split incl. the file attachment: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("1 write"),
+        "the write is counted: {}",
+        out.stdout
+    );
+
+    // The fully-covered snapshot has NO gaps in JSON (no phantom inverted range).
+    let json = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/rw.md",
+        "--at",
+        "@latest",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let snap: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "snapshot")
+        .expect("snapshot row");
+    assert_eq!(snap["gaps"], serde_json::json!([]));
+}

@@ -107,3 +107,16 @@ fn bash_join_resolves_against_the_record_cwd_with_verbatim_belt() {
     let rel = extract_events(&records, "notes.md");
     assert_eq!(rel.len(), 1, "verbatim belt: {rel:?}");
 }
+
+#[test]
+fn collect_opaque_ignores_other_tools_with_a_command_field() {
+    // Only the PowerShell tool's command text is un-parsed shell; another tool
+    // carrying an `input.command` is not shell at all and must not count.
+    let records = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"Sandbox","input":{"command":"ls"}}]}}"#,
+    ]);
+    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
+    let turns = group_turn_indices_deduped(&recs, |r| *r);
+    assert!(collect_opaque_commands("s", &records, &turns).is_empty());
+}

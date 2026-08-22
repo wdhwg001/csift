@@ -367,3 +367,159 @@ fn window_excluding_integrity_events_is_noted() {
         out.stdout
     );
 }
+
+// ── Mutation-kill pins: disclosure counts, note shapes, and candidate selection ──
+
+#[test]
+fn powershell_only_window_prints_the_exact_note_and_counts() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/w.md","content":"one\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"type":"create","filePath":"/p/w.md","content":"one\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"File created successfully at: /p/w.md"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"PowerShell","input":{"command":"Set-Content -Path a.txt -Value x"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p2","name":"PowerShell","input":{"command":"Add-Content -Path a.txt -Value y"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/w.md",
+        "--coverage",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // No classes in scope: the note is the PowerShell part alone, never a
+    // fabricated "0 mutating-class" head.
+    assert!(
+        out.stdout
+            .contains("opaque in window: 2 PowerShell command(s), never parsed"),
+        "exact PS-only note: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("0 mutating-class"),
+        "no empty classes fragment: {}",
+        out.stdout
+    );
+    // A clean parse also means NO malformed-line note anywhere.
+    assert!(
+        !out.stdout.contains("malformed"),
+        "clean run prints no malformed note: {}",
+        out.stdout
+    );
+    let json = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/w.md",
+        "--coverage",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let cov: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "coverage")
+        .expect("coverage row");
+    assert_eq!(cov["powershell_commands"], 2);
+    assert_eq!(cov["opaque_commands"], 0);
+}
+
+#[test]
+fn repeated_marker_renders_the_multiplicity_suffix() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/w.md","content":"one\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"type":"create","filePath":"/p/w.md","content":"one\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"File created successfully at: /p/w.md"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"cargo fmt"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b2","name":"Bash","input":{"command":"cargo fmt"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/w.md",
+        "--coverage",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("(fmt:cargo x2)"),
+        "multiplicity suffix: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn restore_prefers_the_freshest_candidate_across_unrelated_sessions() {
+    // Two UNRELATED sessions each hold a complete version: the newer write wins.
+    const OLD_SESS: &str = "0a1b2c3d-1111-4a6b-8c7d-9e0f1a2b3c4d";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{OLD_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T04:00:00.000Z","message":{"role":"user","content":"old"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T04:00:01.000Z","toolUseResult":{"type":"create","filePath":"/p/twin.md","content":"stale version\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"new"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"type":"create","filePath":"/p/twin.md","content":"fresh version\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["recover", "--file", "/p/twin.md", "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, "fresh version\n", "the newer write wins");
+}
+
+#[test]
+fn merged_group_keeps_the_parent_uuid_as_its_id() {
+    // A parent + its own subagent both touch the file: the merged row's id must be
+    // the re-feedable parent uuid, never the subagent's bare hex (the r5 id law).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"type":"create","filePath":"/p/shared.md","content":"alpha\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-subaa11.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"subaa11","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"sub work"}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"subaa11","timestamp":"2026-06-07T05:00:11.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"sw","name":"Write","input":{"file_path":"/p/shared.md","content":"alpha\nbeta\n"}}]}}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"subaa11","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"sw","content":"File created successfully at: /p/shared.md"}]}}"#, "\n",
+        ),
+    );
+    let json = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/shared.md",
+        "--coverage",
+        "--format",
+        "json",
+    ]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let cov: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "coverage")
+        .expect("coverage row");
+    assert_eq!(cov["session_id"], SESS, "merged id is the parent uuid");
+    assert_eq!(cov["is_subagent"], false);
+}

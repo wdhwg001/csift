@@ -440,3 +440,54 @@ fn recover_json_patches_skips_empty_event_session() {
     );
     assert_eq!(objs.last().unwrap()["sessions"].as_u64(), Some(0));
 }
+
+#[test]
+fn patches_interleaves_segments_and_boundaries_in_stream_order() {
+    // Write -> bash touch (soft boundary closes segment 1) -> Edit (segment 2):
+    // the text stream must read SEGMENT 1, then the boundary, then SEGMENT 2.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/p","toolUseResult":{"type":"create","filePath":"/p/seq.md","content":"one\ntwo\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/p","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"sed -i 's/one/uno/' seq.md"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:03.000Z","cwd":"/p","toolUseResult":{"filePath":"/p/seq.md","oldString":"two","newString":"dos"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"e1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/seq.md",
+        "--patches",
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let seg1 = out.stdout.find("SEGMENT 1").expect("segment 1");
+    let bound = out
+        .stdout
+        .find("INTEGRITY BOUNDARY")
+        .expect("boundary line");
+    let seg2 = out.stdout.find("SEGMENT 2").expect("segment 2");
+    assert!(
+        seg1 < bound && bound < seg2,
+        "stream order seg1 < boundary < seg2: {}",
+        out.stdout
+    );
+
+    // The JSON twin counts exactly one contributing session in its summary.
+    let json = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/seq.md",
+        "--patches",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let summary: serde_json::Value =
+        serde_json::from_str(json.stdout.lines().last().unwrap()).unwrap();
+    assert_eq!(summary["sessions"], 1);
+}

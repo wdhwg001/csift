@@ -271,3 +271,52 @@ fn recover_file_plan_errors_when_ambiguous_across_sessions() {
         out.stderr
     );
 }
+
+#[test]
+fn batch_summary_counts_partial_and_flagged_windows() {
+    // One complete file whose window holds a bash boundary (flagged), one file the
+    // session only ever saw through a windowed read (partial), one absent.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/p","toolUseResult":{"type":"create","filePath":"/p/whole.md","content":"a\nb\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/p","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"echo x >> whole.md"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:03.000Z","cwd":"/p","toolUseResult":{"file":{"filePath":"/p/partial.md","content":"ten\neleven","startLine":10,"numLines":2,"totalLines":40}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let manifest = h.root.join("manifest.txt");
+    std::fs::write(&manifest, "/p/whole.md\n/p/partial.md\n/p/absent.md\n").unwrap();
+    let out_dir = h.root.join("recovered");
+    let out = h.run(&[
+        "recover",
+        "--files-from",
+        manifest.to_str().unwrap(),
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+        "--no-subagents",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("1 complete · 1 partial · 1 no-history · 0 skipped"),
+        "summary tallies each status: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("1 file(s) had integrity boundaries or unparsed mutating bash"),
+        "flagged-window line: {}",
+        out.stdout
+    );
+    let report = std::fs::read_to_string(out_dir.join("recovery-report.tsv")).unwrap();
+    assert!(
+        report.contains("complete\t2\t2\t1\t1\t0\t/p/whole.md"),
+        "boundary + bash_file columns on the flagged row:\n{report}"
+    );
+    assert!(
+        report.contains("partial\t2\t40\t0\t0\t0\t/p/partial.md"),
+        "partial row:\n{report}"
+    );
+}

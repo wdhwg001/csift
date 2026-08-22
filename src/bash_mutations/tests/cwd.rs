@@ -209,3 +209,29 @@ fn git_dry_runs_emit_no_mutation_row() {
     assert_eq!(real.len(), 1);
     assert_eq!(real[0].path, "git:apply");
 }
+
+#[test]
+fn subshell_depth_machinery_tracks_across_segments() {
+    // A bare subshell opened on its own segment suppresses cd tracking inside it.
+    let v = parse_bash_mutations("(\ncd /tmp\n)\ntouch after.txt");
+    let after = v.iter().find(|m| m.path == "after.txt").expect("after");
+    assert_eq!(
+        after.resolve(Some("/spawn")),
+        ("/spawn/after.txt".to_string(), Resolution::CwdJoined)
+    );
+    // The close paren restores tracking for what follows.
+    let v2 = parse_bash_mutations("(\nls\n)\ncd /w\ntouch f.txt");
+    let f2 = v2.iter().find(|m| m.path == "f.txt").expect("f");
+    assert_eq!(
+        f2.resolve(Some("/spawn")),
+        ("/w/f.txt".to_string(), Resolution::CdTracked)
+    );
+    // A command-substitution head is NOT a subshell open: an unclosed `$(` on one
+    // segment must not depth-suppress the cd on a later one.
+    let v3 = parse_bash_mutations("echo $(ls\ncd /w\ntouch g.txt");
+    let g = v3.iter().find(|m| m.path == "g.txt").expect("g");
+    assert_eq!(
+        g.resolve(Some("/spawn")),
+        ("/w/g.txt".to_string(), Resolution::CdTracked)
+    );
+}

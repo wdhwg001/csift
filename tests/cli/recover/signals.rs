@@ -142,4 +142,9 @@ fn external_edit_carries_the_formatter_clue_when_one_ran() {
         "clue closes with the pointer: {}",
         out.stdout
     );
+    assert!(
+        out.stdout.contains("1 external-edit"),
+        "the external edit is counted in the event ledger: {}",
+        out.stdout
+    );
 }

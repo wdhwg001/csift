@@ -120,3 +120,34 @@ fn class_markers_survive_resolution_verbatim() {
         ("fmt:cargo".to_string(), Resolution::Unresolved)
     );
 }
+
+// ── Mutation-kill pins: marker verbs, positive formatter runs, and the audit gate ──
+
+#[test]
+fn marker_rows_carry_their_class_verbs() {
+    // The verb is part of the wire row (files JSON `op` derives from it): pin the
+    // class -> verb map per marker family, not just the pseudo-path.
+    assert_eq!(paths("cargo fmt"), vec![("fmt:cargo".to_string(), "fmt")]);
+    assert_eq!(paths("npm install"), vec![("pkg:npm".to_string(), "pkg")]);
+    assert_eq!(
+        paths("unzip bundle.zip"),
+        vec![("extract:unzip".to_string(), "extract")]
+    );
+}
+
+#[test]
+fn black_and_ruff_positive_runs_emit_rows() {
+    // The write-mode runs (no --check/--diff) emit real fmt rows.
+    assert_eq!(paths("black app.py"), vec![("app.py".to_string(), "fmt")]);
+    assert_eq!(
+        paths("ruff --fix lint.py"),
+        vec![("lint.py".to_string(), "fmt")]
+    );
+    // The `check` subcommand word is peeled, never emitted as a file.
+    assert_eq!(
+        paths("ruff check --fix srv/api.py"),
+        vec![("srv/api.py".to_string(), "fmt")]
+    );
+    // `npm audit` WITHOUT `fix` is read-only.
+    assert!(just_paths("npm audit").is_empty());
+}

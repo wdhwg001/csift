@@ -288,7 +288,7 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
     // R13: the genuine-user hook is serialization-tolerant (user-only, like files').
     // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher
     // every call).
-    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 10]> =
+    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> =
         std::sync::LazyLock::new(|| {
             [
                 memmem::Finder::new(b"toolUseResult"),
@@ -296,6 +296,10 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
                 memmem::Finder::new(b"Write"),
                 memmem::Finder::new(b"Read"),
                 memmem::Finder::new(b"Bash"),
+                // The opaque accounting counts PowerShell tool calls; an assistant
+                // record carrying one matches no other needle, so without this the
+                // P count silently missed the assistant-side records.
+                memmem::Finder::new(b"PowerShell"),
                 memmem::Finder::new(b"filePath"),
                 memmem::Finder::new(b"file_path"),
                 memmem::Finder::new(b"file-history-snapshot"),

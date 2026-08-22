@@ -120,3 +120,26 @@ fn interp_marker_is_a_class_marker_never_resolved() {
         ("interp:python".to_string(), Resolution::Unresolved)
     );
 }
+
+#[test]
+fn argument_splitting_respects_strings_and_empties() {
+    // A comma INSIDE the quoted first argument is not a delimiter.
+    assert_eq!(
+        paths(r#"python3 -c "open('a,b.md', 'w').write(x)""#),
+        [("a,b.md".to_string(), "interp-write")]
+    );
+    // An empty literal is never a target: the write stays opaque, and no empty
+    // path row is fabricated.
+    assert_eq!(
+        paths(r#"python3 -c "open('', 'w').write(x)""#),
+        [("interp:python".to_string(), "interp")]
+    );
+}
+
+#[test]
+fn one_hop_survives_an_unrelated_loop_binder() {
+    // Only a `for` line that binds THE looked-up name disqualifies it; an unrelated
+    // binder must not poison the constant.
+    let cmd = "python3 - <<'PY'\nfor i in range(3):\n    step(i)\np = 'out.md'\nopen(p, 'w').write(s)\nPY";
+    assert_eq!(paths(cmd), [("out.md".to_string(), "interp-write")]);
+}
