@@ -94,6 +94,13 @@ pub struct Record {
     #[serde(default, rename = "compactMetadata")]
     pub compact_metadata: Option<serde_json::Value>,
 
+    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE
+    /// predecessor record the compaction re-links to (`parentUuid` is null on a
+    /// boundary) - harness ground truth for the post-compaction chain. Additive +
+    /// tolerant.
+    #[serde(default, rename = "logicalParentUuid")]
+    pub logical_parent_uuid: Option<String>,
+
     /// The role-bearing message payload (present on user/assistant records).
     #[serde(default)]
     pub message: Option<Message>,

@@ -44,6 +44,9 @@ pub fn run_show(args: &ShowArgs) -> Result<()> {
         ),
     };
     let file = resolve_single_transcript(target)?;
+    if args.branch_points {
+        return run_branch_points(&file, args.format);
+    }
     if parsed.is_empty() && uuids.is_empty() && turn_spec.is_none() {
         bail!(
             "show needs an address: `--line <N|A..B|N..|-k>` (1-based jsonl lines, the `Lnnnn` \

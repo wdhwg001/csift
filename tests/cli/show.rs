@@ -524,3 +524,5 @@ fn addressed_show_renders_hook_attachment_without_the_flag() {
         out2.stdout
     );
 }
+
+mod branching;

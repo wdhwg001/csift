@@ -6,19 +6,26 @@ use super::*;
 #[derive(Args, Debug)]
 #[command(
     about = "Fetch specific record(s) of ONE transcript by line / turn index / record uuid \
-            , rendered full, or verbatim raw jsonl with `--raw`",
+            , rendered full, or verbatim raw jsonl with `--raw`; `--branch-points` reports \
+            where the conversation forked",
     long_about = "Fetch the record(s) at specific 1-based jsonl line number(s) (the `Lnnnn` \
         every csift surface prints) and/or record uuid(s), from exactly ONE transcript. \
         Default output renders each record FULL (label + timestamp + complete text: the \
         permission-friendly alternative to `Read`-ing the raw jsonl). `--raw` emits the \
         VERBATIM raw jsonl line(s) instead: the escape hatch for inspecting fields csift \
-        does not render (usage tokens, stop_reason, model, …).",
+        does not render (usage tokens, stop_reason, model, …). `--branch-points` instead \
+        reports the transcript's conversation FORK facts: every record with more than one \
+        conversation child (a later parentUuid re-attach: a rewind, a retry, or a \
+        parallel lane), ranked by the widest inter-child time gap (a rewind usually shows \
+        a wide gap, a parallel lane near zero). Facts only: which side is live is not \
+        computable from the jsonl, so csift does not guess.",
     after_help = "EXAMPLES\n  \
           csift show @<uuid> --line 46550                # the record at line 46550, full\n  \
           csift show @<uuid> --line 87,495..500,992      # several lines + ranges\n  \
           csift show @<agent-id> --line 88               # a SUBAGENT transcript (id from `csift agents`)\n  \
           csift show @<uuid> --uuid <record-uuid>        # by record uuid\n  \
-          csift show @<uuid> --line 46550 --raw          # the verbatim raw jsonl line\n\n\
+          csift show @<uuid> --line 46550 --raw          # the verbatim raw jsonl line\n  \
+          csift show @<uuid> --branch-points             # where did this conversation fork (rewind / retry / parallel)?\n\n\
         TARGET, exactly ONE transcript\n  \
           `@<uuid>` / `@<uuid-prefix>` → that top-level transcript (never spans subagents); \
         `@<agent-id>` (from `csift agents`) → that subagent transcript; a `*.jsonl` path → \
@@ -97,6 +104,17 @@ pub struct ShowArgs {
     /// (mutually exclusive with `--format json`).
     #[arg(long)]
     pub raw: bool,
+
+    /// Report the transcript's conversation FORK facts instead of fetching records:
+    /// every record with MORE THAN ONE conversation child (a later parentUuid
+    /// re-attach: a rewind, a retry, or a parallel lane), each child with its line and
+    /// timestamp, ranked by the WIDEST inter-child time gap (a rewind usually shows
+    /// hours, a parallel lane near zero). Tool-result carriers, isMeta records, and
+    /// compaction summaries never count as children (a parallel tool fan-out is not a
+    /// fork). FACTS ONLY: which branch is live is not computable from the jsonl, so
+    /// csift reports and ranks, never classifies.
+    #[arg(long = "branch-points", conflicts_with_all = ["line", "uuid", "turn", "raw"])]
+    pub branch_points: bool,
 
     /// Emit JSON instead of the rendered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]

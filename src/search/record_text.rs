@@ -145,6 +145,13 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
     {
         parts.push(excerpt);
     }
+    // A boundary's `parentUuid` is null; `logicalParentUuid` names the record the
+    // compaction re-links to (harness ground truth) - surface it on the same line.
+    if rec.is_compact_boundary() {
+        if let Some(lp) = rec.logical_parent_uuid.as_deref() {
+            parts.push(format!("[logicalParent={lp}]"));
+        }
+    }
     (!parts.is_empty()).then(|| parts.join(" "))
 }
 

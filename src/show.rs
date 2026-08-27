@@ -26,9 +26,11 @@ use crate::search::{fetch_records, merged_any_sidecar, print_record_line, role_g
 use crate::timez::{format_local_compact, local_iso};
 
 mod addr;
+mod branch;
 mod render;
 mod run;
 
 pub(crate) use addr::*;
+pub(crate) use branch::*;
 pub(crate) use render::*;
 pub(crate) use run::*;
