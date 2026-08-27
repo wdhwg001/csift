@@ -2,6 +2,7 @@ mod attachments;
 mod basics;
 mod census;
 mod classify;
+mod diagnosis;
 mod filters;
 mod headers;
 mod output;

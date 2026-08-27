@@ -133,6 +133,10 @@ pub(crate) fn axis_census(
                     Some(t) => *counts.entry(t).or_insert(0) += 1,
                     None => excluded += 1,
                 },
+                A::Version => match group.iter().find_map(|h| h.version.clone()) {
+                    Some(v) => *counts.entry(v).or_insert(0) += 1,
+                    None => excluded += 1,
+                },
             }
         }
     }

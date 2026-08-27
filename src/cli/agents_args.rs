@@ -300,6 +300,9 @@ pub enum CountAxis {
     /// Per attachment payload type (implies the `--attachments` gate; non-attachment
     /// records excluded + counted).
     Attachment,
+    /// Per Claude Code version stamp (the record's top-level `version`; records without
+    /// one excluded + counted).
+    Version,
 }
 
 impl CountAxis {
@@ -313,6 +316,7 @@ impl CountAxis {
             CountAxis::Pairing => "pairing",
             CountAxis::Model => "model",
             CountAxis::Attachment => "attachment",
+            CountAxis::Version => "version",
         }
     }
 }

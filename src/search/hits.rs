@@ -173,6 +173,7 @@ pub(crate) fn collect_record_hits(
         .and_then(|v| v.as_str())
         .map(str::to_string);
     let attachment_type = rec.attachment_type();
+    let version = rec.version.clone();
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);
@@ -202,6 +203,7 @@ pub(crate) fn collect_record_hits(
                 tool_name,
                 model: model.clone(),
                 attachment_type: attachment_type.clone(),
+                version: version.clone(),
                 direction: dir,
                 tool_use_id: tuid,
                 pair: None,

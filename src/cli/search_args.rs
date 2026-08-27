@@ -25,7 +25,7 @@ use super::*;
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
         harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
-        harness.meta.{hook,loop}. With none given, EVERY label is eligible. `-T`/`--label-not` \
+        harness.meta.{hook,loop,attachment}. With none given, EVERY label is eligible. `-T`/`--label-not` \
         EXCLUDES with the same selector grammar (the rg -t/-T duality): the effective set is \
         (-t selectors, or ALL) minus (-T selectors); a combination that excludes everything it \
         includes is a hard error. The human turn is \
@@ -362,7 +362,9 @@ pub struct SearchArgs {
     /// (per attachment payload type - the `type` inside a `type:"attachment"` record's
     /// payload, e.g. `hook_additional_context` / `edited_text_file` /
     /// `compact_file_reference`; this axis IMPLIES the --attachments gate, so the census
-    /// is answerable without the separate flag). Records
+    /// is answerable without the separate flag) · `version` (per Claude Code version -
+    /// every record carries the writing CC's top-level `version` stamp, so this shows the
+    /// version(s) a session ran under and where an upgrade landed mid-flight). Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
     /// the excluded count is reported; never silently. Honors `-t`/`-T`/time/turn/scope;
     /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis
