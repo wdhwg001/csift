@@ -361,7 +361,7 @@ evidence of absence, which is why recover's window accounting (§6.7) exists.
 
 ## 5. Label taxonomy — `role.class.sub` (`search -t/--category`, repeatable)
 
-The `-t` axis is a 3-role, **25-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, drift-guard-tested at 25). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (an unmodeled record → empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path (so `-t agent` covers the whole role, `-t agent.tool` covers use+result), and the rendered/JSON label is always the full dotted leaf path.
+The `-t` axis is a 3-role, **26-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, drift-guard-tested at 26). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (an unmodeled record → empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path (so `-t agent` covers the whole role, `-t agent.tool` covers use+result), and the rendered/JSON label is always the full dotted leaf path.
 
 ### 5.1 The tree (role → class → sub)
 ```
@@ -386,9 +386,10 @@ harness                                    (Claude Code machinery — render gly
 ├─ harness.command.{invocation, stdout}          <command-name> slash wrapper + <local-command-stdout>
 ├─ harness.interrupt.{user, tool}                [Request interrupted by user] / …for tool use]
 ├─ harness.schedule.{wakeup, continuation}       fired ScheduleWakeup/autonomous-loop timer tick / "Continue from where you left off."
-└─ harness.meta.{hook, loop}                     hook feedback (stop-hook / <local-command-caveat> / edit-retry) + autonomous-loop driver tick
+├─ harness.meta.{hook, loop}                     hook feedback (stop-hook / <local-command-caveat> / edit-retry) + autonomous-loop driver tick
+└─ harness.meta.attachment                       any OTHER attachment payload (v0.8.1; scanned only under --attachments / --count-by attachment / an explicit show address; text = the VERBATIM payload JSON)
 ```
-Notes: `harness.notification.subagent` = the `AutomationKind::Agent` pulse (renamed so it never collides with the `agent` role). An `isMeta` record matching no harness marker classifies **empty** (excluded), never `user.message`. `system` records other than `compact_boundary`, plus `attachment`/`file-history-snapshot`/`queue-operation`/metadata records, carry no label. `harness.compaction.boundary` IS a valid classify label and, since D7, IS surfaced by `search` (the §7 prefilter keeps the `compact_boundary` record; `record_raw_text` renders its content + `compactMetadata` — see §4.7); its sibling `harness.compaction.summary` is a `type:"user"` record and IS searchable.
+Notes: `harness.notification.subagent` = the `AutomationKind::Agent` pulse (renamed so it never collides with the `agent` role). An `isMeta` record matching no harness marker classifies **empty** (excluded), never `user.message`. `system` records other than `compact_boundary`, plus `file-history-snapshot`/`queue-operation`/metadata records, carry no label; an `attachment` record classifies `harness.meta.hook` (a hook-context payload) or `harness.meta.attachment` (anything else), both reachable only through their gates (v0.8.1). `harness.compaction.boundary` IS a valid classify label and, since D7, IS surfaced by `search` (the §7 prefilter keeps the `compact_boundary` record; `record_raw_text` renders its content + `compactMetadata` — see §4.7); its sibling `harness.compaction.summary` is a `type:"user"` record and IS searchable.
 
 ### 5.2 Multi-label (one record → ≥1 leaf) + Q4 dedup
 A physical record can carry several labels; `search` emits it **ONCE** under the **richest** view when a query selects ≥2 of them (Q4 dedup), while JSON `labels[]` still lists the full set.
@@ -424,6 +425,73 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 ---
 
 ## 6. Subcommand specifications
+
+> **v0.8.1 CHANGE LEDGER (non-breaking; the maintenance round: additive surfaces + one
+> correctness flip -- `csift 0.8.1`).** Every claim below was verified against real corpora
+> (and the live on-disk stores where applicable) before implementation; two brief-proposed
+> features were refuted by that verification and replaced with fact-reporting surfaces.
+> - **`list`: `version`/`git_branch` report LAST-seen** (a correctness flip with the v0.7.1
+>   precedent: the docs promise the session's version, and a session that upgraded Claude
+>   Code or switched branches mid-flight reported stale opening samples). The opening
+>   samples move to `version_first`/`git_branch_first` (JSON also mirrors `version_last`/
+>   `git_branch_last`); text shows a drift arrow (`branch a->b, CC x->y`) when they moved.
+>   `cwd` stays FIRST-seen on purpose: the record cwd follows the tracked shell cwd, so
+>   last-seen could be a transient subdirectory.
+> - **`plan` surfaces the binding record's `slug`** (text `slug` line, JSON `slug`): the
+>   slug is minted at Plan-Mode entry and carried by the `plan_mode` bind record itself
+>   (absent from every earlier record, including the whole head window).
+> - **`agents`: fork provenance + `--agent-type`.** A transcript created by `/fork` opens
+>   with a `fork-context-ref` record (`{agentId, parentSessionId, parentLastUuid,
+>   contextLength}`, timestampless); nodes carry `fork_parent_last_uuid` +
+>   `fork_context_length` (text: `forked-at <uuid> (context N)`), and `--agent-type <T>`
+>   (repeatable, exact match) filters nodes by `agent_type` (`--agent-type fork` lists
+>   fork children). NOT a `--shape` value: the discriminator is the agent type, not the
+>   on-disk location.
+> - **`search --attachments` + the `harness.meta.attachment` leaf + `--count-by
+>   attachment`.** Attachment records (the bulk of many transcripts' bytes) become
+>   searchable behind an explicit gate generalizing the `--additional-context` precedent:
+>   the flag is a SUPERSET of it (hook payloads keep `harness.meta.hook`; every other
+>   payload classifies the new leaf, `Class::ALL` 25 -> 26), the matchable text is the
+>   VERBATIM payload JSON (a byte substring of the raw line, so the prefilter and
+>   whole-file-gate laws hold with no synthesized markers), and the census axis implies
+>   the gate. A default scan still never parses attachment lines; an explicit `show`
+>   address renders any attachment record flag-free.
+> - **`search --count-by version`**: a per-record census of the top-level Claude Code
+>   `version` stamp (which versions a session ran under, where an upgrade landed);
+>   stampless records are excluded and disclosed.
+> - **`stats`: whole-file line-type census.** Every physical line counts under its
+>   top-level `type` (`line_types` in JSON, a `types` text line, merged scope totals); a
+>   file fact like `lines`, never windowed. The non-candidate probe fully validates every
+>   line, so a `{...}`-framed line with an invalid interior is now counted malformed even
+>   off the candidate path: stats' full-scan census claim is exact.
+> - **`recover --list-backups`**: lists Claude Code's OWN file-history checkpoint store
+>   (`<claude-home>/file-history/<session>/<hash>@vN`; hash = sha256 of the absolute path,
+>   first 16 hex; content = the plain snapshot). Verified store facts bound the surface:
+>   tool-layer writes only (bash and manual edits never land there), pruned wholesale, and
+>   `@vN` counters reset per session dir and get reused, so only the backup instant (store
+>   mtime) orders entries. Listing only: checkpoint content has no transcript anchor and is
+>   never merged into a reconstruction; an empty result exits 0 and says absence proves
+>   nothing. Rides the same change: four doc sites claimed `backupFileName` is frequently
+>   null; measured 83-98% present, reworded.
+> - **`show --branch-points` + `logicalParentUuid`.** The brief proposed a live/abandoned
+>   rewind-branch classifier; verification REFUTED it (parallel tool fan-out creates
+>   sibling childless leaves that false-positive as abandoned branches on most sessions),
+>   so csift ships fork FACTS instead: every record with 2+ conversation children (a later
+>   `parentUuid` re-attach), children with lines and timestamps, ranked by the widest
+>   inter-child gap; tool-result carriers, isMeta records, and compaction summaries never
+>   count as children; csift never classifies which side is live. The model also gains the
+>   boundary's top-level `logicalParentUuid` (the true predecessor a compaction re-links
+>   to), surfaced in the boundary excerpt as `[logicalParent=<uuid>]`.
+> - **`plan --audit`**: joins the target scope's structured plan-file mutations against the
+>   corpus's `plan_mode` bindings and warns when the mutating session does not bind the
+>   file (only the BOUND plan is re-injected in full after a compaction). Plan files are
+>   identified by the binding join, never a directory guess (`plansDirectory` is
+>   configurable); bash-side edits are outside the audit and the empty form says so.
+> - **Out of scope, recorded**: the live team/task coordination files under the config home
+>   (mutable, unversioned, mid-write state owned by the running harness) stay unread; the
+>   transcript is the durable record (`agents` for topology, `search -t
+>   agent.communication` for the messages).
+> - Dependency: `sha2` (the store key). Suite grows to 935 unit + 456 e2e.
 
 > **v0.8.0 CHANGE LEDGER (BREAKING; the bash-mutation cwd resolution + honest window
 > accounting -- `csift 0.8.0`).** The feature: bash file mutations resolve against the
