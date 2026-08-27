@@ -270,3 +270,66 @@ fn stats_aggregates_are_exact() {
         js.stdout
     );
 }
+
+#[test]
+fn stats_line_type_census_counts_every_physical_line() {
+    // Every physical line lands in the `types` census by its top-level `type`; a
+    // {…}-framed line with an INVALID interior is counted malformed (the probe upgrades
+    // the O(1) shape check to an exact whole-file census on stats).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the harbor"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+            r#"{"type":"attachment","uuid":"att1","attachment":{"type":"edited_text_file","filePath":"/p/x.rs","snippet":"fn y() {}"}}"#, "\n",
+            r#"{"type":"file-history-snapshot","messageId":"m1"}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-06-07T05:00:02.000Z","compactMetadata":{"trigger":"auto","preTokens":10,"postTokens":2,"durationMs":5}}"#, "\n",
+            r#"{"type":"attachment","broken":}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("types"),
+        "census line present:\n{}",
+        out.stdout
+    );
+    for key in [
+        "user×1",
+        "assistant×1",
+        "attachment×1",
+        "file-history-snapshot×1",
+        "system×1",
+    ] {
+        assert!(out.stdout.contains(key), "missing {key}:\n{}", out.stdout);
+    }
+    assert!(
+        out.stdout.contains("1 malformed line(s) skipped"),
+        "framed-invalid interior on a non-candidate line is COUNTED:\n{}",
+        out.stdout
+    );
+
+    let outj = h.run(&["stats", at(SESS).as_str(), "--format", "json"]);
+    let rows: Vec<serde_json::Value> = outj
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let session = rows
+        .iter()
+        .find(|r| r["kind"] == "session")
+        .expect("session row");
+    assert_eq!(session["lines"], 6, "physical line count");
+    assert_eq!(session["line_types"]["user"], 1);
+    assert_eq!(session["line_types"]["attachment"], 1);
+    assert_eq!(session["line_types"]["file-history-snapshot"], 1);
+    assert_eq!(session["line_types"]["system"], 1);
+    assert_eq!(session["skipped_lines"], 1);
+    let summary = rows.last().unwrap();
+    assert_eq!(
+        summary["line_types"]["assistant"], 1,
+        "summary merges the census: {}",
+        outj.stdout
+    );
+}

@@ -45,6 +45,11 @@ struct SessionStats {
     last_utc: Option<String>,
     compactions: usize,
     skipped_lines: usize,
+    /// Whole-file census: every parseable physical line counted by its top-level `type`
+    /// value (`user`, `assistant`, `attachment`, `file-history-snapshot`, …; `(untyped)`
+    /// when the field is absent). A FILE fact like `lines`: never windowed by
+    /// `--since`/`--turn`.
+    line_types: BTreeMap<String, usize>,
 }
 
 /// Entry point for `csift stats`.
@@ -98,6 +103,35 @@ fn line_is_stats_candidate(line: &[u8]) -> bool {
     crate::parse::line_has_role_marker(line)
 }
 
+/// One kept line from the stats scan: a fully parsed transcript record, or just the
+/// top-level `type` of a NON-candidate line (attachment / file-history-snapshot /
+/// system / …) - the line-type census keeps every physical line accountable without
+/// building full records for the non-record majority of bytes.
+enum StatsLine {
+    Record(Box<Record>),
+    Other(String),
+}
+
+/// Minimal probe for a non-candidate line: full JSON syntax validation plus the top-level
+/// `type` value, without building a `Record`. This UPGRADES the O(1) shape check to an
+/// exact census for stats (the named corruption-census authority): a `{…}`-framed line
+/// with an invalid INTERIOR is now counted malformed too. Blank → `Ok(None)`; a typeless
+/// object → `"(untyped)"`.
+fn line_type_probe(line: &[u8]) -> std::result::Result<Option<String>, ()> {
+    if line.iter().all(u8::is_ascii_whitespace) {
+        return Ok(None);
+    }
+    #[derive(serde::Deserialize)]
+    struct TypeProbe {
+        #[serde(rename = "type")]
+        r#type: Option<String>,
+    }
+    match serde_json::from_slice::<TypeProbe>(line) {
+        Ok(p) => Ok(Some(p.r#type.unwrap_or_else(|| "(untyped)".to_string()))),
+        Err(_) => Err(()),
+    }
+}
+
 fn stats_one_file(
     path: &Path,
     window: &TimeWindow,
@@ -122,18 +156,39 @@ fn stats_one_file(
     out.lines = memchr::memchr_iter(b'\n', bytes).count()
         + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n"));
 
-    let (records, skipped): (Vec<Record>, usize) = scan_lines_parallel(bytes, |line, _| {
+    let (kept, skipped): (Vec<StatsLine>, usize) = scan_lines_parallel(bytes, |line, _| {
         if !line_is_stats_candidate(line) {
-            // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
-            return crate::parse::non_candidate_verdict(line);
+            // Census every non-candidate line by its top-level `type` (full syntax
+            // validation, subsuming the R10 shape check - see [`line_type_probe`]).
+            return match line_type_probe(line) {
+                Ok(Some(t)) => LineVerdict::Keep(StatsLine::Other(t)),
+                Ok(None) => LineVerdict::Ignore,
+                Err(()) => LineVerdict::Skip,
+            };
         }
         match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => LineVerdict::Keep(rec),
+            Ok(Some(rec)) => LineVerdict::Keep(StatsLine::Record(Box::new(rec))),
             Ok(None) => LineVerdict::Ignore,
             Err(_) => LineVerdict::Skip,
         }
     });
     out.skipped_lines = skipped;
+    // Split the kept lines: EVERY line lands in the type census (a file fact, like
+    // `lines`); only real records go on to the windowed aggregates below.
+    let mut records: Vec<Record> = Vec::new();
+    for l in kept {
+        match l {
+            StatsLine::Record(rec) => {
+                let t = rec
+                    .r#type
+                    .clone()
+                    .unwrap_or_else(|| "(untyped)".to_string());
+                *out.line_types.entry(t).or_insert(0) += 1;
+                records.push(*rec);
+            }
+            StatsLine::Other(t) => *out.line_types.entry(t).or_insert(0) += 1,
+        }
+    }
 
     // `--turn`: per-record turn membership on the FULL transcript's genuine-turn
     // order (the SAME 0-based axis `search`/`files` window on), computed BEFORE the time
@@ -247,6 +302,27 @@ fn merged_tools(rows: &[SessionStats]) -> BTreeMap<String, usize> {
     total
 }
 
+fn merged_line_types(rows: &[SessionStats]) -> BTreeMap<String, usize> {
+    let mut total: BTreeMap<String, usize> = BTreeMap::new();
+    for r in rows {
+        for (t, n) in &r.line_types {
+            *total.entry(t.clone()).or_insert(0) += *n;
+        }
+    }
+    total
+}
+
+/// Count-desc `key×n` census line (`types` rows; the small closed-ish type space needs no
+/// cap - a cap would be silent truncation).
+fn line_types_line(types: &BTreeMap<String, usize>) -> String {
+    let mut lt: Vec<(&String, &usize)> = types.iter().collect();
+    lt.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    lt.iter()
+        .map(|(k, v)| format!("{k}×{v}"))
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
 fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
     crate::text::emit_scope_banner(top, sub);
     for r in rows {
@@ -262,6 +338,9 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
             "  lines {} · records {} user + {} assistant · turns {} · compactions {}",
             r.lines, r.user_records, r.assistant_records, r.turns, r.compactions
         );
+        if !r.line_types.is_empty() {
+            println!("  types  {}", line_types_line(&r.line_types));
+        }
         if let (Some(f), Some(l)) = (r.first_utc.as_deref(), r.last_utc.as_deref()) {
             println!(
                 "  span   {}  →  {}  ({})",
@@ -300,6 +379,10 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
             top,
             sub
         );
+        let types = merged_line_types(rows);
+        if !types.is_empty() {
+            println!("  types  {}", line_types_line(&types));
+        }
         println!(
             "  records {} user + {} assistant · turns {} · compactions {}",
             rows.iter().map(|r| r.user_records).sum::<usize>(),
@@ -376,6 +459,7 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) ->
             "is_subagent": r.is_subagent,
             "parent_session_id": r.parent_session_id,
             "lines": r.lines,
+            "line_types": r.line_types,
             "user_records": r.user_records,
             "assistant_records": r.assistant_records,
             "turns": r.turns,
@@ -392,6 +476,7 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) ->
     }
     let summary = crate::text::envelope_summary(json!({
         "sessions": rows.len(),
+        "line_types": merged_line_types(rows),
         "turns": rows.iter().map(|r| r.turns).sum::<usize>(),
         "tools": merged_tools(rows),
         "tokens": tokens_json(&merged_tokens(rows)),

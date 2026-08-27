@@ -145,11 +145,16 @@ impl ShowArgs {
         (message.usage sums), tool-call counts by name (per CALL: one per invocation; \
         `search --count-by tool` counts RECORDS, use + result carrier, so it reads ≈2× \
         these tallies: a unit difference, not a discrepancy), turn count, first/last \
-        timestamps + duration, compaction count, malformed-line count. Spans subagents \
+        timestamps + duration, compaction count, malformed-line count, and a whole-file \
+        LINE-TYPE census (every physical line counted by its top-level `type`: `user`, \
+        `assistant`, `attachment`, `file-history-snapshot`, `system`, …) - the answer to \
+        \"what else is in this jsonl besides the conversation\", since non-record lines \
+        are the majority of many transcripts' bytes and no other surface parses them. \
+        Spans subagents \
         by default (each transcript is its own row; the scope TOTAL block sums them). \
         `--since`/`--until` bound the counted records by timestamp. Under `--turn`/time \
-        windowing every figure windows EXCEPT `lines`, which stays the file's physical \
-        line count (a file fact, not a window fact).",
+        windowing every figure windows EXCEPT `lines` and the `types` census, which stay \
+        file facts (physical line count / per-type line counts), not window facts.",
     after_help = "EXAMPLES\n  \
           csift stats @<uuid>                    # one session + its subagents\n  \
           csift stats @<uuid> --no-subagents     # just the top-level thread\n  \
@@ -157,10 +162,12 @@ impl ShowArgs {
           csift stats @<uuid> --format json | tail -1 | jq .tokens   # scope token totals\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: header → one {kind:\"session\", …} row per session → summary. Session \
-        rows carry {session_id, is_subagent, parent_session_id, lines, user_records, \
+        rows carry {session_id, is_subagent, parent_session_id, lines, line_types:{<type>:count}, \
+        user_records, \
         assistant_records, turns, compactions, first_utc, first_local, last_utc, last_local, \
         tokens:{<model>:{input, output, cache_read, cache_creation}}, tools:{<name>:count}, \
-        skipped_lines}. The summary adds the scope totals ({sessions, tokens, tools, turns, \
+        skipped_lines}. The summary adds the scope totals ({sessions, line_types, tokens, tools, \
+        turns, \
         dropped_by_cap, skipped_lines}): `tail -1 | jq .tokens` is the one-liner for total \
         burn. `skipped_lines` here is a FULL-SCAN census (stats parses every line): the \
         corruption-census authority for \"does this transcript carry a torn/corrupt line \
