@@ -9,7 +9,12 @@ use super::*;
         parsing the whole file. For each session jsonl under the target(s) it emits: \
         session id, the FIRST genuine-user message (+ time), the LAST genuine-user \
         message (+ time), the LAST agent message (+ time), plus the decoded cwd / git \
-        branch / CC version. A forward HEAD read finds the first user; a backward \
+        branch / CC version. `git_branch`/`version` are LAST-seen (what the session is \
+        on NOW - a session that upgraded or switched branches mid-flight reports the \
+        current value, with the opening value in `*_first` and a `first->last` drift \
+        arrow in text); `cwd` stays FIRST-seen on purpose (the record cwd follows the \
+        tracked shell cwd, so last-seen could be a transient subdirectory - the \
+        session's home is the opening value). A forward HEAD read finds the first user; a backward \
         TAIL read finds the last user/agent; neither parses the full file, so it \
         stays fast on 200 MB+ transcripts. Files are scanned in parallel across the \
         corpus, then sorted for deterministic output.\n\n\
@@ -34,7 +39,8 @@ use super::*;
           The standard envelope v2 (same as every command): a `{kind:\"header\", \
         command:\"list\", sessions_in_scope, top_level_sessions, subagent_sessions}` line, then \
         ONE `{kind:\"session\", …}` row per session: {session_id, is_subagent, \
-        parent_session_id, path, cwd, git_branch, version, first_user, last_user, last_agent, \
+        parent_session_id, path, cwd, git_branch, git_branch_first, git_branch_last, version, \
+        version_first, version_last, first_user, last_user, last_agent, \
         skipped_lines, sidecar_present, pending_elicitations, with_elicitation_sidecar}, then \
         a closing `{kind:\"summary\", sessions, skipped_lines, \
         dropped_by_cap}`. `is_subagent` flags a bare-hex subagent row; `parent_session_id` is \

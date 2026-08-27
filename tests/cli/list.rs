@@ -487,3 +487,59 @@ fn list_json_and_text_discriminate_subagent_id_domain_with_scope_banner() {
         top_only.stdout
     );
 }
+
+#[test]
+fn list_version_and_branch_are_last_seen_with_first_pairs() {
+    // A session that upgraded CC and switched branch mid-flight: the base fields
+    // report what the session is on NOW; the opening samples live in *_first, and
+    // the text meta line shows the drift arrow. cwd stays first-seen on purpose.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","cwd":"/p","version":"2.0.100","gitBranch":"trunk","message":{"role":"user","content":"start"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/p/sub","version":"2.0.100","gitBranch":"trunk","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","cwd":"/p/sub","version":"2.0.200","gitBranch":"release","message":{"role":"user","content":"after the upgrade"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:01.000Z","cwd":"/p/sub","version":"2.0.200","gitBranch":"release","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    let json = h.run(&["list", at(SESS).as_str(), "--format", "json"]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let row: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "session")
+        .expect("session row");
+    assert_eq!(row["version"], "2.0.200", "base = last-seen");
+    assert_eq!(row["version_first"], "2.0.100");
+    assert_eq!(row["version_last"], "2.0.200");
+    assert_eq!(row["git_branch"], "release");
+    assert_eq!(row["git_branch_first"], "trunk");
+    assert_eq!(row["git_branch_last"], "release");
+    assert_eq!(row["cwd"], "/p", "cwd stays first-seen");
+
+    let text = h.run(&["list", at(SESS).as_str()]);
+    assert!(
+        text.stdout
+            .contains("branch trunk->release, CC 2.0.100->2.0.200"),
+        "drift arrows: {}",
+        text.stdout
+    );
+
+    // A stable session renders bare values and equal pairs.
+    let h2 = Home::new();
+    h2.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","cwd":"/p","version":"2.0.100","gitBranch":"main","message":{"role":"user","content":"only turn"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/p","version":"2.0.100","gitBranch":"main","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+        ),
+    );
+    let stable = h2.run(&["list", at(SESS).as_str()]);
+    assert!(
+        stable.stdout.contains("branch main, CC 2.0.100"),
+        "no arrow when stable: {}",
+        stable.stdout
+    );
+}

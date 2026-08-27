@@ -26,10 +26,22 @@ pub struct SessionSummary {
     pub parent_session_id: String,
     /// Absolute path to the session jsonl.
     pub path: PathBuf,
-    /// Decoded human-readable cwd (read from the data, §2.4), if present.
+    /// Decoded human-readable cwd (read from the data, §2.4), if present. FIRST-seen
+    /// deliberately: the record cwd follows the tracked shell cwd (SPEC 4.9), so the
+    /// last-seen value can legitimately be a subdirectory; the session's home is the
+    /// opening value. Asymmetric with version/git_branch below on purpose.
     pub cwd: Option<String>,
+    /// LAST-seen Claude Code version (from the tail window) - the version the session
+    /// is actually on now. A session that upgraded mid-flight used to report the
+    /// opening sample here, which contradicted the field's documented meaning.
     pub version: Option<String>,
+    /// FIRST-seen Claude Code version (from the head window); equals `version` unless
+    /// the session upgraded mid-flight.
+    pub version_first: Option<String>,
+    /// LAST-seen git branch (same last-seen rule and rationale as `version`).
     pub git_branch: Option<String>,
+    /// FIRST-seen git branch.
+    pub git_branch_first: Option<String>,
     pub first_user: Option<MessagePreview>,
     pub last_user: Option<MessagePreview>,
     pub last_agent: Option<MessagePreview>,

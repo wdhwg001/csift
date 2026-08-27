@@ -39,13 +39,20 @@ pub(crate) fn render_text(
         let cwd = s.cwd.as_deref().unwrap_or("<unknown cwd>");
         let mut meta = String::new();
         if let Some(b) = &s.git_branch {
-            meta.push_str(&format!("branch {b}"));
+            // Mid-session drift renders as first->last; a stable value stays bare.
+            match &s.git_branch_first {
+                Some(f) if f != b => meta.push_str(&format!("branch {f}->{b}")),
+                _ => meta.push_str(&format!("branch {b}")),
+            }
         }
         if let Some(v) = &s.version {
             if !meta.is_empty() {
                 meta.push_str(", ");
             }
-            meta.push_str(&format!("CC {v}"));
+            match &s.version_first {
+                Some(f) if f != v => meta.push_str(&format!("CC {f}->{v}")),
+                _ => meta.push_str(&format!("CC {v}")),
+            }
         }
         if meta.is_empty() {
             println!("  cwd      {cwd}");
@@ -137,8 +144,14 @@ pub(crate) fn render_json(
             "parent_session_id": s.parent_session_id,
             "path": s.path.to_string_lossy(),
             "cwd": s.cwd,
+            // `version`/`git_branch` are LAST-seen (what the session is on now);
+            // the *_first/*_last pairs make the window explicit (_last == the base).
             "version": s.version,
+            "version_first": s.version_first,
+            "version_last": s.version,
             "git_branch": s.git_branch,
+            "git_branch_first": s.git_branch_first,
+            "git_branch_last": s.git_branch,
             "first_user": preview_json(s.first_user.as_ref()),
             "last_user": preview_json(s.last_user.as_ref()),
             "last_agent": preview_json(s.last_agent.as_ref()),

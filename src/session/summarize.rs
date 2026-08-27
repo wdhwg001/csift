@@ -41,11 +41,22 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     // ── TAIL read: last genuine-user + last agent message (newest-first) ──
     let mut last_user: Option<MessagePreview> = None;
     let mut last_agent: Option<MessagePreview> = None;
+    // LAST-seen identity: the tail walks newest-first, so the first version/branch-
+    // bearing record it visits IS the newest one. Costs nothing - the same records
+    // are already being read for last_user/last_agent.
+    let mut version_last: Option<String> = None;
+    let mut git_branch_last: Option<String> = None;
     // `head_consumed` as the floor keeps the two windows DISJOINT: a malformed line is
     // counted exactly once (R12 killed the head+tail double-book on files where both
     // scans used to walk the same region).
     let tail_skipped =
         tail_records_prefiltered(path, line_is_list_candidate, head_consumed, |rec| {
+            if version_last.is_none() {
+                version_last = rec.version.clone();
+            }
+            if git_branch_last.is_none() {
+                git_branch_last = rec.git_branch.clone();
+            }
             if last_agent.is_none() {
                 if let Some(text) = rec.agent_text() {
                     last_agent = Some(MessagePreview::from(rec.timestamp.clone(), &text));
@@ -110,8 +121,13 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         parent_session_id,
         path: path.to_path_buf(),
         cwd,
-        version,
-        git_branch,
+        // The base fields are LAST-seen (what the session is on NOW); the head
+        // capture becomes the *_first pair. Either window can be empty - fall back
+        // to the other so a one-record session reports the same value everywhere.
+        version: version_last.clone().or_else(|| version.clone()),
+        version_first: version.or(version_last),
+        git_branch: git_branch_last.clone().or_else(|| git_branch.clone()),
+        git_branch_first: git_branch.or(git_branch_last),
         first_user,
         last_user,
         last_agent,
