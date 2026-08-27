@@ -150,9 +150,12 @@ impl ImageArgs {
           csift recover @<uuid> --file @plan          # DUMP the bound plan's reconstructed content\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: header → {kind:\"plan\", plan_file, session_id, is_subagent, \
-        parent_session_id, plan_exists, line} rows → summary. `plan_exists` says whether the \
-        bound file is still on disk: a DELETED plan is still locatable here, and \
-        `csift recover <target> --file @plan` rebuilds its content from the transcript."
+        parent_session_id, plan_exists, line, slug} rows → summary. `plan_exists` says whether \
+        the bound file is still on disk: a DELETED plan is still locatable here, and \
+        `csift recover <target> --file @plan` rebuilds its content from the transcript. \
+        `slug` is the session's plan slug (one stable value per session, minted at Plan-Mode \
+        entry; the harness derives the plan file name from it and re-keys recovery on it) - \
+        null when the binding record predates the field."
 )]
 pub struct PlanArgs {
     /// Project target(s) (actual cwd or encoded dir) whose session(s) to resolve the bound

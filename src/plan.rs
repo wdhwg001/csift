@@ -55,6 +55,12 @@ pub struct PlanRef {
     pub plan_exists: bool,
     /// JSONL line number of the (latest) `plan_mode` attachment, for provenance.
     pub line_no: usize,
+    /// The session's plan slug (the harness derives the plan file name from it).
+    /// Read from the binding record itself - the slug is minted at Plan-Mode entry,
+    /// so it is absent from every earlier record (including the whole head window),
+    /// but always present on the `plan_mode` attachment record. `None` when the
+    /// record predates the field.
+    pub slug: Option<String>,
 }
 
 /// Tight byte prefilter for the plan-resolution pre-pass: `plan_mode` is a rare token, so
@@ -107,6 +113,7 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
             plan_file: plan_file.to_string(),
             plan_exists: Path::new(plan_file).is_file(),
             line_no: *line_no,
+            slug: rec.slug.clone(),
         });
     }
     Ok(latest)
@@ -212,6 +219,9 @@ fn render_reverse_text(plan_file: &Path, hits: &[PlanRef]) {
         if r.is_subagent {
             println!("parent   {}", r.parent_session_id);
         }
+        if let Some(slug) = &r.slug {
+            println!("slug     {slug}");
+        }
         println!("bound at jsonl L{}", r.line_no);
     }
 }
@@ -231,6 +241,7 @@ fn render_reverse_json(plan_file: &Path, hits: &[PlanRef]) -> Result<()> {
             "is_subagent": r.is_subagent,
             "parent_session_id": r.parent_session_id,
             "line": r.line_no,
+            "slug": r.slug,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
@@ -310,6 +321,9 @@ fn render_text(refs: &[PlanRef]) {
             r.plan_file,
             if r.plan_exists { "exists" } else { "missing" }
         );
+        if let Some(slug) = &r.slug {
+            println!("slug     {slug}");
+        }
         if r.is_subagent {
             println!("parent   {}", r.parent_session_id);
         }
@@ -329,6 +343,7 @@ fn render_json(refs: &[PlanRef]) -> Result<()> {
             "plan_file": r.plan_file,
             "plan_exists": r.plan_exists,
             "line": r.line_no,
+            "slug": r.slug,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
@@ -404,16 +419,26 @@ mod tests {
         );
         assert!(resolve_session_plan(&no_path).unwrap().is_none());
 
-        // (e) a real, complete plan_mode attachment → bound.
+        // (e) a real, complete plan_mode attachment → bound. The binding record's own
+        //     top-level `slug` rides along (the harness mints it at Plan-Mode entry, so
+        //     the bind record always carries it on current CC).
         let real = write(
             "real.jsonl",
-            "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"isSubAgent\":false,\"planFilePath\":\"/x/p.md\",\"planExists\":false},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",
+            "{\"type\":\"attachment\",\"slug\":\"quiet-harbor-relay\",\"attachment\":{\"type\":\"plan_mode\",\"isSubAgent\":false,\"planFilePath\":\"/x/p.md\",\"planExists\":false},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",
         );
         let got = resolve_session_plan(&real)
             .unwrap()
             .expect("a real plan_mode binds");
         assert_eq!(got.plan_file, "/x/p.md");
         assert!(!got.is_subagent);
+        assert_eq!(got.slug.as_deref(), Some("quiet-harbor-relay"));
+
+        // (f) an OLDER binding record without the slug field → None, never fabricated.
+        let no_slug = write(
+            "noslug.jsonl",
+            "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"isSubAgent\":false,\"planFilePath\":\"/x/q.md\",\"planExists\":false},\"timestamp\":\"2026-06-07T05:00:00Z\"}\n",
+        );
+        assert_eq!(resolve_session_plan(&no_slug).unwrap().unwrap().slug, None);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

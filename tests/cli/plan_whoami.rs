@@ -549,3 +549,47 @@ fn plan_no_target_resolves_calling_session_from_env() {
         out2.stderr
     );
 }
+
+#[test]
+fn plan_surfaces_the_slug_from_the_binding_record() {
+    // The binding record's top-level `slug` (minted at Plan-Mode entry) rides the
+    // plan output; an older record without the field yields null, never a guess.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#, "\n",
+            r#"{"type":"attachment","slug":"quiet-harbor-relay","attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"/p/plans/quiet-harbor-relay.md","planExists":false},"uuid":"att0","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", at(SESS).as_str(), "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("slug     quiet-harbor-relay"),
+        "text slug line: {}",
+        out.stdout
+    );
+    let json = h.run(&[
+        "plan",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let row: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "plan")
+        .expect("plan row");
+    assert_eq!(row["slug"], "quiet-harbor-relay");
+
+    // Reverse lookup carries it too.
+    let rev = h.run(&["plan", "--reverse", "/p/plans/quiet-harbor-relay.md", ENC]);
+    assert!(rev.success, "stderr: {}", rev.stderr);
+    assert!(
+        rev.stdout.contains("slug     quiet-harbor-relay"),
+        "reverse slug line: {}",
+        rev.stdout
+    );
+}

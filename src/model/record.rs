@@ -42,6 +42,12 @@ pub struct Record {
     #[serde(default, rename = "gitBranch")]
     pub git_branch: Option<String>,
 
+    /// The session's plan slug (one stable value per session, minted when the session
+    /// enters Plan Mode; ABSENT from every record before that entry and from
+    /// metadata-only records). The harness derives the plan file name from it.
+    #[serde(default)]
+    pub slug: Option<String>,
+
     #[serde(default, rename = "isSidechain")]
     pub is_sidechain: Option<bool>,
 
