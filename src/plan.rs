@@ -33,6 +33,9 @@ use crate::cli::{OutputFormat, PlanArgs};
 use crate::parse::mmap_bytes;
 use crate::path;
 
+mod audit;
+pub(crate) use audit::*;
+
 /// The magic `--file` value that tells `recover` to reconstruct the session-bound plan
 /// file instead of an explicit path. Bash-safe (no shell metacharacters → no escaping in
 /// a mixed script) and consistent with `--at`'s `@line:` / `@turn:` sigils.
@@ -280,6 +283,11 @@ pub fn run_plan(args: &PlanArgs) -> Result<()> {
         args.want_subagents().into(),
         path::Caller::Other,
     )?;
+
+    // AUDIT: the scope's plan-file edits joined against corpus bindings.
+    if args.audit {
+        return run_plan_audit(args, &session_files);
+    }
 
     // Resolve each transcript's plan binding IN PARALLEL (rayon pool = CPU count) - mirrors
     // recover/search/files. A big session's plan lives in its 300MB+ top-level transcript, and a

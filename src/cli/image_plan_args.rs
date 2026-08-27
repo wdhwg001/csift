@@ -190,6 +190,18 @@ pub struct PlanArgs {
     #[arg(long, value_name = "PLAN_FILE")]
     pub reverse: Option<PathBuf>,
 
+    /// AUDIT the target scope's PLAN-FILE edits against plan BINDINGS: find every
+    /// structured mutation (Write/Edit/MultiEdit/NotebookEdit) the scope made to a file
+    /// that SOME session binds as its plan, and WARN when the mutating session does not
+    /// bind that file itself. Why it matters: after a compaction only the session's own
+    /// BOUND plan is re-injected in full; content parked in another session's plan file
+    /// does not come back. Plan files are identified by JOINING against the corpus's
+    /// plan_mode bindings (one prefiltered scan of every project), never by guessing a
+    /// plans directory (plansDirectory is configurable). Bash-side edits are outside
+    /// this audit (structured tools only).
+    #[arg(long, conflicts_with = "reverse")]
+    pub audit: bool,
+
     /// Exclude subagent transcripts: resolve only the top-level session's bound plan (forward),
     /// or only top-level bindings (reverse).
     #[arg(long = "no-subagents")]
