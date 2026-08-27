@@ -43,8 +43,14 @@ aho-corasick = "1.1.4"
 # `#[global_allocator]` registration in main.rs is a safe attribute.
 mimalloc = { version = "0.1", default-features = false }
 unicode-normalization = "0.1.25"
+# CC's file-history checkpoint store keys entries by sha256(absolute path) truncated to
+# 16 hex chars; `recover --list-backups` recomputes that key (RustCrypto pure-Rust).
+sha2 = "0.10"
 
 [dev-dependencies]
+# The list-backups e2e computes the same store key as the binary (sha256 of the
+# absolute path) to author its fixture filenames.
+sha2 = "0.10"
 # Installs a git pre-commit hook on first `cargo test`/build that runs the same
 # gate as CI: fmt --check + clippy (warnings-as-errors) + test. The hook is
 # sourced from .cargo-husky/hooks/ (user-hooks feature) and copied to

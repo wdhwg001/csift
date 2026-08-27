@@ -49,6 +49,7 @@ const EXCERPT_MAX: usize = 400;
 // Data model
 // ─────────────────────────────────────────────────────────────────────────────
 
+mod backups;
 mod buffer;
 mod carriers;
 mod diff;

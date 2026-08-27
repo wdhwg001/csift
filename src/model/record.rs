@@ -121,9 +121,10 @@ pub struct Record {
     /// `file-history-snapshot` payload (a top-level sibling). Carries
     /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.
     /// Read only by `recover` to know a disk backup EXISTED for a path at a time
-    /// (a coverage annotation); the on-disk blob name is not derivable from it (the
-    /// real `backupFileName` is frequently `null`), so it is never used to fabricate
-    /// content. Additive + tolerant.
+    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%
+    /// across real corpora), but the store it names is PRUNED and its content has no
+    /// transcript anchor, so it is never used to fabricate content; `recover
+    /// --list-backups` lists the store itself. Additive + tolerant.
     #[serde(default)]
     pub snapshot: Option<serde_json::Value>,
 

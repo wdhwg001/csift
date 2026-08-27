@@ -296,7 +296,8 @@ pub enum RecoverMode {
         an explicit gap, an un-anchorable edit is a coverage hole, a Bash touch is a \
         heuristic (not authoritative) boundary. No silent truncation.",
     after_help = "MODE (choose AT MOST ONE; default = restore)\n  \
-          --salvage / --patches / --at <WHEN> / --coverage are MUTUALLY EXCLUSIVE; \
+          --salvage / --patches / --at <WHEN> / --coverage / --list-backups are MUTUALLY \
+        EXCLUSIVE; \
         passing two (e.g. `--coverage --patches`) is a parse error. With NONE, the default \
         RESTORE mode applies: it hands back the file's final content, or FAILS (never a \
         partial file) when the session saw only part of it; reach for `--salvage` then. \
@@ -307,6 +308,7 @@ pub enum RecoverMode {
           csift recover @<uuid> --file /abs/app.py --out /abs/app.py # restore straight back onto disk (raw bytes, no banners)\n  \
           csift recover @<uuid> --file /abs/gone.py --salvage       # file is gone + only partly seen: dump what survived, gaps explicit\n  \
           csift recover . --file /abs/PLAN.md --coverage            # scope first: covered ranges + boundaries, no dump\n  \
+          csift recover --file /abs/app.py --list-backups           # CC's own rewind checkpoints of this path (store listing, no transcript scan)\n  \
           csift recover @<uuid> --file /abs/app.py --patches        # segmented unified diffs over the whole session\n  \
           csift recover @<uuid> --file /abs/app.py --since 2h       # patches for the last 2h only (rewind a window)\n  \
           csift recover @<uuid> --file /abs/app.py --at @latest     # partial-tolerant final snapshot (holes shown)\n  \
@@ -441,6 +443,20 @@ pub struct RecoverArgs {
     /// Coverage / scoping summary (no content dump). Alias: `--dry-run`.
     #[arg(long, visible_alias = "dry-run", group = "mode")]
     pub coverage: bool,
+
+    /// List Claude Code's OWN file-history checkpoint store for `--file` (the rewind
+    /// feature's snapshots under `<claude-home>/file-history/<session>/<hash>@vN`): one
+    /// row per stored checkpoint (backup instant, bytes, @vN, store path), ordered by
+    /// backup instant. The store key is sha256 of the absolute path (first 16 hex), so
+    /// `--file` must be a literal absolute path (`@plan` cannot be hashed). Provenance
+    /// bounds, verified against the live store: written at the TOOL layer only (bash and
+    /// manual edits never land here), PRUNED over time, and `@vN` counters reset per
+    /// session dir (never an order key) - so absence proves nothing and a listing is
+    /// NOT a history. Listing only: csift never merges checkpoint content into a
+    /// reconstruction (it has no transcript anchor); inspect or copy a row's store path
+    /// yourself.
+    #[arg(long = "list-backups", group = "mode", conflicts_with = "files_from")]
+    pub list_backups: bool,
 
     /// Inclusive turn-index range in the shared grammar: `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) - 0-BASED: turn 0 is the pre-first-user
     /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine

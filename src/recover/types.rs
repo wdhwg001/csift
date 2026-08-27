@@ -65,9 +65,10 @@ pub(crate) enum EventKind {
     /// holds other changes this stream never saw: an authoritative, NON-invalidating
     /// annotation boundary.
     StaleRecovered,
-    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time. The
-    /// on-disk blob name is NOT derivable from the record (the real `backupFileName` is
-    /// frequently null), so this is a COVERAGE ANNOTATION only - never a content anchor.
+    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time. A
+    /// COVERAGE ANNOTATION only, never a content anchor: the named blob lives in a
+    /// PRUNED tool-layer store with no transcript anchor for its content (list it with
+    /// `recover --list-backups`).
     HistorySnapshotMarker,
 }
 

@@ -1,5 +1,6 @@
 mod at;
 mod at_json;
+mod backups;
 mod batch_plan;
 mod coverage;
 mod disclosure;

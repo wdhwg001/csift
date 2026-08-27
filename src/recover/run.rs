@@ -4,6 +4,10 @@ use super::*;
 
 /// Entry point for `csift recover`.
 pub fn run_recover(args: &RecoverArgs) -> Result<()> {
+    // STORE LISTING: reads CC's file-history checkpoint store, no transcript scan.
+    if args.list_backups {
+        return super::backups::run_list_backups(args);
+    }
     // BATCH MODE: many files in one corpus scan (parse each transcript ONCE).
     if args.files_from.is_some() {
         return run_recover_batch(args);
