@@ -5,11 +5,13 @@ use crate::harness::*;
 const ENC: &str = "-Users-dev-example-project";
 const BINDER: &str = "11111111-2222-4333-8444-555566667777";
 const AUDITEE: &str = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeffff0000";
+const COBINDER: &str = "ffffffff-1111-4222-8333-444455556666";
 const SHARED_PLAN: &str = "/Users/dev/.claude/plans/amber-drifting-kite.md";
 const OWN_PLAN: &str = "/Users/dev/.claude/plans/copper-still-pond.md";
 
 /// BINDER binds the shared plan; AUDITEE binds its own plan, edits its own plan once,
-/// edits the shared plan twice, and edits an ordinary file (never audited).
+/// edits the shared plan twice, edits an ordinary file (never audited), and carries one
+/// shape-malformed line; COBINDER ALSO binds AUDITEE's plan and edits it once (its own).
 fn audit_scenario(h: &Home) {
     h.write(
         &format!("{ENC}/{BINDER}.jsonl"),
@@ -27,7 +29,16 @@ fn audit_scenario(h: &Home) {
             r#"{{"type":"assistant","uuid":"a2","parentUuid":"u1","timestamp":"2026-06-07T05:00:03.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t2","name":"Edit","input":{{"file_path":"{sp}","old_string":"c","new_string":"d"}}}}]}}}}"#, "\n",
             r#"{{"type":"assistant","uuid":"a3","parentUuid":"u1","timestamp":"2026-06-07T05:00:04.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t3","name":"Write","input":{{"file_path":"{sp}","content":"whole"}}}}]}}}}"#, "\n",
             r#"{{"type":"assistant","uuid":"a4","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t4","name":"Edit","input":{{"file_path":"/Users/dev/example-project/src/main.rs","old_string":"e","new_string":"f"}}}}]}}}}"#, "\n",
+            "not json here", "\n",
         ), op = OWN_PLAN, sp = SHARED_PLAN),
+    );
+    h.write(
+        &format!("{ENC}/{COBINDER}.jsonl"),
+        &format!(concat!(
+            r#"{{"type":"user","uuid":"c1","timestamp":"2026-06-07T03:00:00.000Z","message":{{"role":"user","content":"resume the pond plan"}}}}"#, "\n",
+            r#"{{"type":"attachment","isSidechain":false,"attachment":{{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"{op}","planExists":true}},"uuid":"catt","timestamp":"2026-06-07T03:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}}"#, "\n",
+            r#"{{"type":"assistant","uuid":"ca1","parentUuid":"c1","timestamp":"2026-06-07T03:00:02.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"ct1","name":"Edit","input":{{"file_path":"{op}","old_string":"x","new_string":"y"}}}}]}}}}"#, "\n",
+        ), op = OWN_PLAN),
     );
 }
 
@@ -71,6 +82,16 @@ fn plan_audit_warns_on_edits_to_an_unbound_plan() {
         "an ordinary file is never audited:\n{}",
         out.stdout
     );
+    assert!(
+        !out.stdout.contains("ok: every audited"),
+        "no all-clear line while a warning stands:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("(1 malformed line(s) skipped)"),
+        "the scan's malformed line is booked:\n{}",
+        out.stdout
+    );
 
     let outj = h.run(&["plan", &at(AUDITEE), "--audit", "--format", "json"]);
     let rows: Vec<serde_json::Value> = outj
@@ -93,6 +114,11 @@ fn plan_audit_warns_on_edits_to_an_unbound_plan() {
         .find(|r| r["kind"] == "plan-edit" && r["path"] == OWN_PLAN)
         .expect("own-plan row");
     assert_eq!(own["bound_by_owner"], true);
+    assert_eq!(
+        own["binder_session_id"], COBINDER,
+        "the displayed binder prefers a NON-owner co-binder: {}",
+        outj.stdout
+    );
     let summary = rows.last().unwrap();
     assert_eq!(summary["warnings"], 1);
     assert_eq!(summary["plan_files_touched"], 2);
@@ -112,5 +138,34 @@ fn plan_audit_clean_session_reports_ok_and_none() {
                 .contains("bash-side edits are outside this audit"),
         "honest empty + the audit's stated blind spot:\n{}",
         out.stdout
+    );
+    assert!(
+        !out.stdout.contains("ok: every audited"),
+        "the all-clear line needs audited rows, not an empty set:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn plan_audit_all_clear_and_multi_owner_attribution() {
+    let h = Home::new();
+    audit_scenario(&h);
+    // COBINDER edits only a plan it binds: rows exist, zero warnings, the all-clear line.
+    let ok = h.run(&["plan", &at(COBINDER), "--audit"]);
+    assert!(ok.success, "stderr: {}", ok.stderr);
+    assert!(
+        ok.stdout.contains("ok: every audited") && !ok.stdout.contains("warning:"),
+        "all-clear on own-plan-only edits:\n{}",
+        ok.stdout
+    );
+    // A multi-session scope names the mutating owner on each edits row.
+    let multi = h.run(&["plan", ENC, "--audit"]);
+    assert!(multi.success, "stderr: {}", multi.stderr);
+    assert!(
+        multi
+            .stdout
+            .contains(&format!("2 mutation(s) by {AUDITEE}")),
+        "edits rows carry the owner in a multi-owner scope:\n{}",
+        multi.stdout
     );
 }

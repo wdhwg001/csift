@@ -333,3 +333,85 @@ fn stats_line_type_census_counts_every_physical_line() {
         outj.stdout
     );
 }
+
+const SESS2: &str = "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e";
+
+#[test]
+fn stats_total_block_merges_census_and_books_malformed_notes_exactly() {
+    // Session 1 carries one tool call and one shape-malformed line; session 2 is clean
+    // with OUT-OF-ORDER timestamps. Pins: the TOTAL block appears only for >1 session
+    // and merges the types census + tools; the malformed note prints per-session AND as
+    // the scope total (exactly twice, never a "(0 malformed" line); first/last span
+    // derives from timestamp COMPARISON, not file order; the duration label is exact.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}"#, "\n",
+            "not json here\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS2}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"mid"}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"earliest, recorded late"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u2","timestamp":"2026-06-07T06:30:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"latest"}]}}"#, "\n",
+        ),
+    );
+    let both = h.run(&["stats", ENC]);
+    assert!(both.success, "stderr: {}", both.stderr);
+    assert!(both.stdout.contains("TOTAL"), "{}", both.stdout);
+    let total_tail = &both.stdout[both.stdout.find("TOTAL").unwrap()..];
+    assert!(
+        total_tail.contains("types") && total_tail.contains("user×3"),
+        "TOTAL merges the census:\n{}",
+        both.stdout
+    );
+    assert!(
+        total_tail.contains("tools") && total_tail.contains("Read×1"),
+        "TOTAL merges tools:\n{}",
+        both.stdout
+    );
+    assert_eq!(
+        both.stdout.matches("malformed line(s) skipped").count(),
+        2,
+        "per-session note + scope total, exactly twice:\n{}",
+        both.stdout
+    );
+    assert!(
+        !both.stdout.contains("(0 malformed"),
+        "a clean session never prints a zero note:\n{}",
+        both.stdout
+    );
+
+    // Single session: no TOTAL block, and a clean file prints no malformed note at all.
+    let one = h.run(&["stats", at(SESS2).as_str()]);
+    assert!(!one.stdout.contains("TOTAL"), "{}", one.stdout);
+    assert!(!one.stdout.contains("malformed"), "{}", one.stdout);
+    // Span is comparison-derived: earliest 05:00Z (recorded second), latest 06:30Z. The
+    // JSON pair is raw UTC (tz-independent; text renders local).
+    let onej = h.run(&["stats", at(SESS2).as_str(), "--format", "json"]);
+    let row: serde_json::Value = onej
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "session")
+        .expect("session row");
+    assert_eq!(
+        row["first_utc"], "2026-06-07T05:00:00.000Z",
+        "first from comparison, not file order: {}",
+        onej.stdout
+    );
+    assert_eq!(
+        row["last_utc"], "2026-06-07T06:30:00.000Z",
+        "{}",
+        onej.stdout
+    );
+    assert!(
+        one.stdout.contains("(1h30m"),
+        "exact duration:\n{}",
+        one.stdout
+    );
+}

@@ -542,4 +542,9 @@ fn list_version_and_branch_are_last_seen_with_first_pairs() {
         "no arrow when stable: {}",
         stable.stdout
     );
+    assert!(
+        !stable.stdout.contains("->"),
+        "a stable session never renders a drift arrow: {}",
+        stable.stdout
+    );
 }

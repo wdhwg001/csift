@@ -18,13 +18,27 @@ fn branch_points_reports_forks_and_excludes_tool_result_carriers() {
             r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:00:10.000Z","message":{"role":"user","content":"first path"}}"#, "\n",
             r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","content":[{"type":"text","text":"down the first path"}]}}"#, "\n",
             r#"{"type":"user","uuid":"u3","parentUuid":"a1","timestamp":"2026-06-07T07:00:00.000Z","message":{"role":"user","content":"rewound here"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1b","parentUuid":"u1","timestamp":"2026-06-07T05:00:50.000Z","message":{"role":"assistant","content":[{"type":"text","text":"a retried opening"}]}}"#, "\n",
+            "not json here", "\n",
         ),
     );
     let out = h.run(&["show", at(SESS).as_str(), "--branch-points"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stdout.contains("1 branch point(s)") && out.stdout.contains("uuid a1"),
-        "exactly the a1 fork:\n{}",
+        out.stdout.contains("2 branch point(s)") && out.stdout.contains("uuid a1"),
+        "the a1 rewind + the u1 assistant-retry fork:\n{}",
+        out.stdout
+    );
+    // The retry fork's children are ASSISTANT records (a1 L2 + a1b L8, 45s apart):
+    // assistant children count, and a sub-minute gap renders bare seconds.
+    assert!(
+        out.stdout.contains("uuid u1") && out.stdout.contains("widest gap 45s"),
+        "assistant-retry fork with a seconds-scale gap:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("(1 malformed line(s) skipped)"),
+        "the torn tail line is booked:\n{}",
         out.stdout
     );
     assert!(
@@ -73,7 +87,12 @@ fn branch_points_reports_forks_and_excludes_tool_result_carriers() {
     assert_eq!(bp["children"][0]["line"], 5);
     assert_eq!(bp["children"][1]["line"], 7);
     let summary = rows.last().unwrap();
-    assert_eq!(summary["branch_points"], 1);
+    assert_eq!(summary["branch_points"], 2);
+    assert_eq!(
+        summary["conversation_records"], 6,
+        "u1 a1 u2 a2 u3 a1b; carriers excluded: {}",
+        outj.stdout
+    );
 
     // A linear session reports an honest zero.
     let h2 = Home::new();
@@ -89,6 +108,11 @@ fn branch_points_reports_forks_and_excludes_tool_result_carriers() {
     assert!(
         lin.stdout.contains("0 branch point(s)") && lin.stdout.contains("no forks"),
         "{}",
+        lin.stdout
+    );
+    assert!(
+        !lin.stdout.contains("malformed"),
+        "a clean file prints no zero note: {}",
         lin.stdout
     );
 }
