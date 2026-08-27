@@ -5,6 +5,66 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.8.1] - 2026-08-27
+
+A maintenance round: additive surfaces plus one correctness flip, each
+verified against real corpora (and the live on-disk stores) before
+implementation. Two proposed features failed that verification and shipped
+as fact-reporting surfaces instead: a live/abandoned rewind-branch
+classifier false-positived on parallel tool fan-out across most sessions
+(shipped as `show --branch-points`, facts ranked by inter-child gap, no
+verdicts), and a file-history reconstruction merge was cut down to a
+listing after the store proved pruned with reused version counters
+(shipped as `recover --list-backups`).
+
+- `list`: `version` and `git_branch` now report the LAST-seen value (what
+  the session is on now; the docs always promised the session's version,
+  and a mid-flight upgrade or branch switch previously reported stale
+  opening samples). The opening values ride new `version_first` /
+  `git_branch_first` fields, JSON mirrors `*_last`, and text shows a drift
+  arrow (`branch a->b, CC x->y`) when they moved. `cwd` stays first-seen
+  on purpose: the record cwd follows the tracked shell cwd.
+- `search --attachments` + the `harness.meta.attachment` label +
+  `--count-by attachment`: attachment records (the bulk of many
+  transcripts' bytes) become searchable behind an explicit gate, a
+  superset of `--additional-context`; the matchable text is the verbatim
+  payload JSON; the census axis implies the gate. A default scan still
+  never parses attachment lines; an explicit `show` address renders any
+  attachment record flag-free. The label taxonomy grows to 26 leaves.
+- `search --count-by version`: a per-record census of the Claude Code
+  version stamp (which versions a session ran under, where an upgrade
+  landed); stampless records are excluded and disclosed.
+- `stats`: a whole-file line-type census (`types` line, JSON `line_types`,
+  merged scope totals) counting every physical line by its top-level
+  `type`; a file fact like `lines`, never windowed. The probe fully
+  validates non-candidate lines, so a framed line with an invalid interior
+  is now counted malformed even off the candidate path.
+- `recover --list-backups`: lists Claude Code's own file-history
+  checkpoint store for an absolute `--file` (store key sha256 of the
+  path), ordered by backup instant, with the provenance bounds stated in
+  the output: tool-layer writes only, pruned, version counters reset per
+  session dir. Listing only; checkpoint content is never merged into a
+  reconstruction. Four doc sites claiming `backupFileName` is frequently
+  null were corrected (measured 83-98% present).
+- `show --branch-points`: every record with two or more conversation
+  children (a rewind, retry, or parallel lane), children with lines and
+  timestamps, ranked by the widest inter-child time gap; tool-result
+  carriers, isMeta records, and compaction summaries never count as
+  children. Facts only: csift ranks, never classifies which side is live.
+  The compaction boundary's `logicalParentUuid` (the true predecessor the
+  compaction re-links to) now rides the boundary's rendered excerpt.
+- `plan`: binding output gains the plan `slug` (read off the bind record);
+  `plan --audit` joins the scope's structured plan-file mutations against
+  the corpus's plan bindings and warns when the mutating session does not
+  bind the file (only the bound plan is re-injected after a compaction).
+- `agents`: fork provenance (`fork_parent_last_uuid`, `fork_context_length`,
+  a `forked-at` text line) from the `fork-context-ref` record a `/fork`
+  transcript opens with, and a repeatable exact-match `--agent-type`
+  filter (`--agent-type fork` lists fork children).
+- Out of scope, recorded: the live team/task coordination files stay
+  unread; the transcript is the durable record.
+- New dependency: sha2 (the checkpoint-store key).
+
 ## [0.8.0] - 2026-08-22
 
 Bash file mutations now resolve against the shell cwd Claude Code itself
