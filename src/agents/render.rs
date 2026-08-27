@@ -181,6 +181,17 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
     head.push_str(&format!("  {}", n.status.label()));
     println!("{head}");
 
+    // A `/fork` child: name the fork point (the parent's last record uuid at fork
+    // time - feed it to `csift show @<parent-session> --uuid <it>`) + the carried
+    // context length. Facts from the head fork-context-ref record, absent otherwise.
+    if let Some(fp) = &n.fork_parent_last_uuid {
+        let ctx = n
+            .fork_context_length
+            .map(|c| format!(" (context {c})"))
+            .unwrap_or_default();
+        println!("{ind2}forked-at  {fp}{ctx}");
+    }
+
     // A FROZEN lane: the status above says `running`, but it is blocked at an unreturned tool_use.
     // Surface WHY prominently - the disambiguation a flat `running` (or, before the fix, `completed`)
     // hid. escalation-blocked = waiting for a human Yes; awaiting-execution = slow-or-wedged.

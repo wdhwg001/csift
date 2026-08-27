@@ -58,6 +58,12 @@ pub struct SubagentNode {
     /// Files this subagent mutated (reuses the `files`/`bash_mutations` extractors over the
     /// node's own transcript). Each is `(path, op_label, is_create)`.
     pub files_changed: Vec<(String, String, bool)>,
+    /// Fork provenance (a `/fork` child's head `fork-context-ref` record): the
+    /// parent's last record uuid at fork time - the fork point, feedable to
+    /// `csift show @<parent-session> --uuid <it>`. `None` for a non-fork agent.
+    pub fork_parent_last_uuid: Option<String>,
+    /// The context length carried into the fork, from the same record.
+    pub fork_context_length: Option<u64>,
     /// tool_use-graph nesting depth (0 = a direct subagent of the parent session).
     pub depth: usize,
     /// Nested sub-subagents (empty on all current data).
@@ -361,6 +367,8 @@ pub(crate) fn node_for(
         returned_message,
         returned_message_source,
         status: lc.status,
+        fork_parent_last_uuid: lc.fork_parent_last_uuid.clone(),
+        fork_context_length: lc.fork_context_length,
         pending_tool_use_id,
         pending_tool_name,
         pending_classification,

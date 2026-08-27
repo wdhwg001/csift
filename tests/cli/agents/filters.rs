@@ -166,3 +166,91 @@ fn agents_single_agent_grab_includes_returned_and_files() {
     assert_eq!(files[0]["path"], "/repo/src/parse.rs");
     assert_eq!(files[0]["op"], "edit");
 }
+
+#[test]
+fn agents_fork_provenance_and_agent_type_filter() {
+    // A /fork child: line 1 is a timestampless fork-context-ref carrying the parent's
+    // last uuid at fork time + the carried context length; meta agentType is "fork".
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-f0f0f0f0f0f0.jsonl"),
+        concat!(
+            r#"{"type":"fork-context-ref","agentId":"f0f0f0f0f0f0","parentSessionId":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","parentLastUuid":"aaaa1111-2222-4333-8444-555566667777","contextLength":2513}"#, "\n",
+            r#"{"type":"user","isSidechain":true,"agentId":"f0f0f0f0f0f0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"forked work"}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"f0f0f0f0f0f0","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"continuing from the fork"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-f0f0f0f0f0f0.meta.json"),
+        r#"{"agentType":"fork","isFork":true}"#,
+    );
+    // A second, ordinary subagent to prove the filter separates.
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-abcd9999ee00.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"abcd9999ee00","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"plain work"}}"#, "\n",
+            r#"{"type":"assistant","isSidechain":true,"agentId":"abcd9999ee00","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-abcd9999ee00.meta.json"),
+        r#"{"agentType":"general-purpose","description":"worker","toolUseId":"t1"}"#,
+    );
+
+    let out = h.run(&["agents", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("forked-at  aaaa1111-2222-4333-8444-555566667777 (context 2513)"),
+        "fork point named: {}",
+        out.stdout
+    );
+
+    let json = h.run(&["agents", at(SESS).as_str(), "--format", "json"]);
+    let fork_row: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "agent" && o["agent_type"] == "fork")
+        .expect("fork agent row");
+    assert_eq!(
+        fork_row["fork_parent_last_uuid"],
+        "aaaa1111-2222-4333-8444-555566667777"
+    );
+    assert_eq!(fork_row["fork_context_length"], 2513);
+    let plain_row: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "agent" && o["agent_type"] == "general-purpose")
+        .expect("plain agent row");
+    assert_eq!(plain_row["fork_parent_last_uuid"], serde_json::Value::Null);
+
+    // The repeatable exact-match type filter separates the two.
+    let only_fork = h.run(&["agents", at(SESS).as_str(), "--agent-type", "fork"]);
+    assert!(
+        only_fork.stdout.contains("f0f0f0f0f0f0"),
+        "{}",
+        only_fork.stdout
+    );
+    assert!(
+        !only_fork.stdout.contains("abcd9999ee00"),
+        "filter excludes the other type: {}",
+        only_fork.stdout
+    );
+    let both = h.run(&[
+        "agents",
+        at(SESS).as_str(),
+        "--agent-type",
+        "fork",
+        "--agent-type",
+        "general-purpose",
+    ]);
+    assert!(both.stdout.contains("f0f0f0f0f0f0") && both.stdout.contains("abcd9999ee00"));
+}

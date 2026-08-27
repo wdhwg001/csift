@@ -15,7 +15,16 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     // HEAD: first record's timestamp == start. We do not need genuine-user logic
     // here - the very first record (isSidechain user seed) IS the start instant.
     let mut started_utc: Option<String> = None;
+    // A `/fork` child's LINE 1 is a timestampless `fork-context-ref` record carrying
+    // the parent's last uuid at fork time + the carried context length; it precedes
+    // the first timestamped record, so the same head walk captures it for free.
+    let mut fork_parent_last_uuid: Option<String> = None;
+    let mut fork_context_length: Option<u64> = None;
     let (head_skipped, head_consumed) = head_records(&subagent.path, |rec| {
+        if rec.is_type("fork-context-ref") {
+            fork_parent_last_uuid = rec.parent_last_uuid.clone();
+            fork_context_length = rec.context_length;
+        }
         if let Some(ts) = &rec.timestamp {
             started_utc = Some(ts.clone());
             return false; // first timestamped record is enough
@@ -89,6 +98,8 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
         status,
         pending,
         skipped_lines: head_skipped + tail_skipped,
+        fork_parent_last_uuid,
+        fork_context_length,
     })
 }
 

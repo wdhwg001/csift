@@ -31,6 +31,8 @@ fn node(
         pending_classification: None,
         pending_since_utc: None,
         files_changed: Vec::new(),
+        fork_parent_last_uuid: None,
+        fork_context_length: None,
         depth: 0,
         children: Vec::new(),
         skipped_lines: 0,

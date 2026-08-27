@@ -95,6 +95,11 @@ pub struct SubagentLifecycle {
     pub pending: Option<PendingToolUse>,
     /// Malformed lines skipped while reading the transcript (never hidden).
     pub skipped_lines: usize,
+    /// Fork provenance from a head `fork-context-ref` record (a `/fork` child):
+    /// the parent's last record uuid at fork time. `None` for a non-fork agent.
+    pub fork_parent_last_uuid: Option<String>,
+    /// The context length carried into the fork, from the same record.
+    pub fork_context_length: Option<u64>,
 }
 
 /// Determinable subagent run status.

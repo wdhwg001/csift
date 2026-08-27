@@ -64,6 +64,7 @@ pub fn run_agents(args: &AgentsArgs) -> Result<()> {
         }
     } else {
         nodes.retain(|n| kind_allowed(n.kind, &args.kinds));
+        nodes.retain(|n| agent_type_allowed(n.agent_type.as_deref(), &args.agent_types));
         nodes.retain(|n| window_admits(n, &time_window, args.order_by));
     }
 
@@ -166,6 +167,13 @@ pub(crate) fn topology_for_session(
         nodes,
         workflow_runs,
     })
+}
+
+/// True when the node's `agent_type` passes the repeatable `--agent-type` filter
+/// (exact match, empty filter ⇒ all). A node with NO agent_type only passes an
+/// empty filter - an explicit filter never matches the unknown.
+fn agent_type_allowed(agent_type: Option<&str>, wanted: &[String]) -> bool {
+    wanted.is_empty() || agent_type.is_some_and(|t| wanted.iter().any(|w| w == t))
 }
 
 /// True when `kind` passes the `--shape` filter (empty filter ⇒ all kinds).

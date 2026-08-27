@@ -100,7 +100,10 @@ pub enum AgentKindFilter {
         workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
         started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
         depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
-        pending_since_utc/_local, skipped_lines} (+ control_hint on a teammate; \
+        pending_since_utc/_local, skipped_lines, fork_parent_last_uuid, \
+        fork_context_length} (+ control_hint on a teammate; the fork_* pair is non-null \
+        ONLY on a /fork child - the parent's last record uuid at fork time, feedable to \
+        `csift show @<parent_session_id> --uuid <it>`, and the carried context length; \
         STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \
         abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \
         hours/days is overwhelmingly \"parent session ended, nobody is coming back\", not \
@@ -181,6 +184,16 @@ pub struct AgentsArgs {
     /// is given (a direct grab).
     #[arg(long = "shape", value_enum)]
     pub kinds: Vec<AgentKindFilter>,
+
+    /// Only show subagents whose `agent_type` EXACTLY matches (repeatable; e.g.
+    /// `--agent-type fork`, `--agent-type general-purpose`). Default: all types.
+    /// This is the DESCRIPTIVE type axis (the meta/spawn `agentType`, an open set),
+    /// orthogonal to `--shape` (the on-disk transcript-shape axis): a `/fork` child
+    /// is `--agent-type fork` but genuinely `--shape builtin-task`. A node with no
+    /// agent_type never matches an explicit filter. Ignored when `--agent <hex>` is
+    /// given (a direct grab).
+    #[arg(long = "agent-type", value_name = "TYPE")]
+    pub agent_types: Vec<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
     /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`); an ISO8601 instant

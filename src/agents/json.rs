@@ -172,6 +172,11 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
         "pending_since_local": n.pending_since_utc.as_deref().and_then(local_iso),
         "depth": n.depth,
         "skipped_lines": n.skipped_lines,
+        // Fork provenance (a /fork child's head fork-context-ref record); null
+        // on every non-fork agent. The uuid is the PARENT session's last record
+        // at fork time - feed it to `csift show @<parent_session_id> --uuid <it>`.
+        "fork_parent_last_uuid": n.fork_parent_last_uuid,
+        "fork_context_length": n.fork_context_length,
     });
     let map = obj.as_object_mut().expect("json object");
     // A teammate carries the control-mechanism pointer inline (the JSON twin of the text note)

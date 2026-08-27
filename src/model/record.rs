@@ -48,6 +48,17 @@ pub struct Record {
     #[serde(default)]
     pub slug: Option<String>,
 
+    /// Fork provenance (line 1 of a `/fork` child transcript, `type:"fork-context-ref"`):
+    /// the PARENT session's last record uuid at fork time - the fork point, feedable to
+    /// `csift show @<parent> --uuid <it>`. Absent everywhere else.
+    #[serde(default, rename = "parentLastUuid")]
+    pub parent_last_uuid: Option<String>,
+
+    /// The context length (in messages) carried into the fork, from the same
+    /// `fork-context-ref` record.
+    #[serde(default, rename = "contextLength")]
+    pub context_length: Option<u64>,
+
     #[serde(default, rename = "isSidechain")]
     pub is_sidechain: Option<bool>,
 
