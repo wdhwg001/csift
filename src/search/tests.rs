@@ -23,6 +23,7 @@ fn args(pattern: &str) -> SearchArgs {
         no_truncate: false,
         resolve_persisted: false,
         additional_context: false,
+        attachments: false,
         no_subagents: false,
         format: OutputFormat::Text,
     }

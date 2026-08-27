@@ -79,6 +79,15 @@ pub(crate) fn search_one_file(
     let needs_hook_context = (args.additional_context
         && args.label_filter().selected(Class::MetaHook.path()))
         || address.is_some();
+    // The `--attachments` widening (a SUPERSET of `--additional-context`): keep EVERY
+    // `type:"attachment"` line when the flag (or the `--count-by attachment` axis, which
+    // implies it) is set AND the selector can reach either `harness.meta` leaf - or when
+    // an ADDRESS names records directly (`show --line`/`--uuid` renders any addressed
+    // attachment record flag-free).
+    let needs_attachments = (args.scan_attachments()
+        && (args.label_filter().selected(Class::MetaAttachment.path())
+            || args.label_filter().selected(Class::MetaHook.path())))
+        || address.is_some();
 
     // ── §7f whole-file gate ──
     // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
@@ -111,7 +120,12 @@ pub(crate) fn search_one_file(
                 if force_full.load(Ordering::Relaxed) {
                     return crate::parse::LineVerdict::Ignore; // verdict already "full scan"
                 }
-                if !line_is_transcript_candidate(line, needs_compact_boundary, needs_hook_context) {
+                if !line_is_transcript_candidate(
+                    line,
+                    needs_compact_boundary,
+                    needs_hook_context,
+                    needs_attachments,
+                ) {
                     // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
                     return crate::parse::non_candidate_verdict(line);
                 }
@@ -184,7 +198,12 @@ pub(crate) fn search_one_file(
     // never match a boundary, so it pays ZERO for the extra check - the hard `-t` filter PRUNES the
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
-        if !line_is_transcript_candidate(line, needs_compact_boundary, needs_hook_context) {
+        if !line_is_transcript_candidate(
+            line,
+            needs_compact_boundary,
+            needs_hook_context,
+            needs_attachments,
+        ) {
             // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
             return crate::parse::non_candidate_verdict(line);
         }
@@ -278,6 +297,7 @@ pub(crate) fn line_is_transcript_candidate(
     line: &[u8],
     needs_compact_boundary: bool,
     needs_hook_context: bool,
+    needs_attachments: bool,
 ) -> bool {
     // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
     // marker (genuine-user string content, tool carriers, assistant blocks all do).
@@ -289,6 +309,12 @@ pub(crate) fn line_is_transcript_candidate(
     // compact `"key":"value"` byte pair - a reserialized line keeps the value intact.
     static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"hook_additional_context"));
+    // Quoted needle: `"attachment"` appears verbatim as the record's `"type"` VALUE (and as
+    // its payload KEY); an in-content quote is escaped to `\"` in raw bytes, so prose that
+    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value
+    // survives a reserialize; R13).
+    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
@@ -302,4 +328,7 @@ pub(crate) fn line_is_transcript_candidate(
         // `show --line`/`--uuid` address - the refetch a search hit prints must resolve without
         // the flag). Same `&&`-gating law as the boundary: a default scan pays ZERO.
         || (needs_hook_context && HOOK_CONTEXT_FINDER.find(line).is_some())
+        // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
+        // explicit address). Same `&&`-gating law: a default scan pays ZERO.
+        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())
 }

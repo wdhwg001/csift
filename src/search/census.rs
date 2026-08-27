@@ -129,6 +129,10 @@ pub(crate) fn axis_census(
                     Some(m) => *counts.entry(m).or_insert(0) += 1,
                     None => excluded += 1,
                 },
+                A::Attachment => match group.iter().find_map(|h| h.attachment_type.clone()) {
+                    Some(t) => *counts.entry(t).or_insert(0) += 1,
+                    None => excluded += 1,
+                },
             }
         }
     }
@@ -196,6 +200,9 @@ pub(crate) fn active_filters_str(args: &SearchArgs) -> String {
     }
     if args.additional_context {
         parts.push("--additional-context".to_string());
+    }
+    if args.attachments {
+        parts.push("--attachments".to_string());
     }
     if parts.is_empty() {
         "none".to_string()

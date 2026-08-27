@@ -90,6 +90,12 @@ pub enum Class {
     /// `harness.meta.loop` - an autonomous-loop driver tick (`# Autonomous loop tick` /
     /// `Run the autonomous check`).
     MetaLoop,
+    /// `harness.meta.attachment` - any OTHER `type:"attachment"` record's payload
+    /// (edited_text_file, compact_file_reference, file snapshots, todos, …). Scanned only
+    /// under `search --attachments` / `--count-by attachment` (or an explicit `show`
+    /// address); the matchable text is the VERBATIM payload JSON. A hook-context payload
+    /// stays the more specific [`Class::MetaHook`].
+    MetaAttachment,
 }
 
 #[allow(dead_code)]
@@ -125,6 +131,7 @@ impl Class {
         Class::ScheduleContinuation,
         Class::MetaHook,
         Class::MetaLoop,
+        Class::MetaAttachment,
     ];
 
     /// The canonical dotted path (GOLD §2) - the `-t` selector form (P2) and render label.
@@ -156,6 +163,7 @@ impl Class {
             Class::ScheduleContinuation => "harness.schedule.continuation",
             Class::MetaHook => "harness.meta.hook",
             Class::MetaLoop => "harness.meta.loop",
+            Class::MetaAttachment => "harness.meta.attachment",
         }
     }
 
@@ -186,7 +194,8 @@ impl Class {
             | Class::ScheduleWakeup
             | Class::ScheduleContinuation
             | Class::MetaHook
-            | Class::MetaLoop => Role::Harness,
+            | Class::MetaLoop
+            | Class::MetaAttachment => Role::Harness,
         }
     }
 }

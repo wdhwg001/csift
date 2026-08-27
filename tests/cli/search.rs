@@ -1,3 +1,4 @@
+mod attachments;
 mod basics;
 mod census;
 mod classify;

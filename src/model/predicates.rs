@@ -295,6 +295,33 @@ impl Record {
         serde_json::from_str(raw.get()).ok()
     }
 
+    /// The attachment payload's own `type` value (`hook_additional_context`,
+    /// `edited_text_file`, `compact_file_reference`, …) - the `--count-by attachment`
+    /// census key. `None` off a non-attachment record or when the payload has no type.
+    #[must_use]
+    pub fn attachment_type(&self) -> Option<String> {
+        if !self.is_type("attachment") {
+            return None;
+        }
+        let v = self.attachment_value()?;
+        v.as_object()?
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    }
+
+    /// The VERBATIM payload JSON of a `type:"attachment"` record - the matchable/rendered
+    /// text under `search --attachments` for every non-hook payload. Verbatim by design:
+    /// the text is a byte substring of the source line, so the §7d literal prefilter and
+    /// the §7f whole-file gate stay sound with no synthesized-marker machinery.
+    #[must_use]
+    pub fn attachment_payload_text(&self) -> Option<String> {
+        if !self.is_type("attachment") {
+            return None;
+        }
+        self.attachment.as_ref().map(|raw| raw.get().to_string())
+    }
+
     /// Hook-injected `additionalContext` text: a `type:"attachment"` record whose payload is
     /// `{"type":"hook_additional_context","content":[…],…}` - the context a SessionStart /
     /// UserPromptSubmit / … hook injected into the turn. `content` is a string ARRAY in real

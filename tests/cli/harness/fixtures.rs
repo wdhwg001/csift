@@ -542,3 +542,25 @@ pub(crate) fn hook_context_scenario(h: &Home) {
     );
     h.write(&format!("{enc}/{HOOKCTX_SESS}.jsonl"), body);
 }
+
+/// A session carrying GENERIC `type:"attachment"` records (edited_text_file +
+/// compact_file_reference) plus one hook-context payload and a plain exchange - the
+/// `search --attachments` gate / `--count-by attachment` census scenarios.
+pub(crate) const ATTACH_SESS: &str = "7e2f4a19-8c3b-4d5e-a671-2b9d0c8e4f33";
+
+pub(crate) fn attachment_scenario(h: &Home) {
+    let enc = "-Users-dev-example-project";
+    let body = concat!(
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the beacon work"}}"#,
+        "\n",
+        r#"{"type":"attachment","uuid":"att1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","attachment":{"type":"edited_text_file","filePath":"/Users/dev/example-project/src/beacon.rs","snippet":"fn glowlantern() {}"}}"#,
+        "\n",
+        r#"{"type":"attachment","uuid":"att2","parentUuid":"u1","timestamp":"2026-06-07T05:00:02.000Z","attachment":{"type":"compact_file_reference","path":"/Users/dev/example-project/notes/harbor.md"}}"#,
+        "\n",
+        r#"{"type":"attachment","uuid":"att3","parentUuid":"u1","timestamp":"2026-06-07T05:00:03.000Z","attachment":{"type":"hook_additional_context","content":["mistgate token applies"],"hookEvent":"SessionStart"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"text","text":"done with the beacon work"}]}}"#,
+        "\n",
+    );
+    h.write(&format!("{enc}/{ATTACH_SESS}.jsonl"), body);
+}

@@ -59,13 +59,13 @@ fn all_classes_cover_the_enum() {
         let head = c.path().split('.').next().unwrap();
         assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
     }
-    // ALL has no duplicates and matches the verified table size (25 leaves).
+    // ALL has no duplicates and matches the verified table size (26 leaves).
     let mut seen: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
     seen.sort_unstable();
     let n = seen.len();
     seen.dedup();
     assert_eq!(seen.len(), n, "duplicate in Class::ALL");
-    assert_eq!(n, 25, "Class::ALL leaf count drifted");
+    assert_eq!(n, 26, "Class::ALL leaf count drifted");
 }
 
 #[test]
@@ -262,5 +262,38 @@ fn hook_additional_context_text_shapes_and_classify() {
     )
     .unwrap();
     assert_eq!(other.hook_additional_context_text(), None);
-    assert!(other.classify(&ctx).is_empty());
+    // A non-hook payload is no longer invisible: it classifies the generic attachment leaf.
+    assert_eq!(other.classify(&ctx), vec![Class::MetaAttachment]);
+}
+
+#[test]
+fn attachment_type_and_payload_text_extraction() {
+    // A generic attachment: type extracted, payload text VERBATIM, MetaAttachment leaf,
+    // never a turn opener.
+    let rec: Record = serde_json::from_str(
+        r#"{"type":"attachment","uuid":"x2","attachment":{"type":"edited_text_file","filePath":"/tmp/a.rs","snippet":"fn x() {}"}}"#,
+    )
+    .unwrap();
+    assert_eq!(rec.attachment_type().as_deref(), Some("edited_text_file"));
+    let text = rec.attachment_payload_text().unwrap();
+    assert!(text.contains("edited_text_file") && text.contains("fn x() {}"));
+    let ctx = ClassifyCtx::top_level();
+    assert_eq!(rec.classify(&ctx), vec![Class::MetaAttachment]);
+    assert!(!rec.opens_turn());
+    // A hook payload keeps the more specific MetaHook leaf but still censuses by type.
+    let hook: Record = serde_json::from_str(
+        r#"{"type":"attachment","attachment":{"type":"hook_additional_context","content":["ctx"]}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        hook.attachment_type().as_deref(),
+        Some("hook_additional_context")
+    );
+    assert_eq!(hook.classify(&ctx), vec![Class::MetaHook]);
+    // A non-attachment record: both extractors None.
+    let user: Record =
+        serde_json::from_str(r#"{"type":"user","message":{"role":"user","content":"hi"}}"#)
+            .unwrap();
+    assert_eq!(user.attachment_type(), None);
+    assert_eq!(user.attachment_payload_text(), None);
 }

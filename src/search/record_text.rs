@@ -48,6 +48,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
             | Class::ScheduleContinuation
             | Class::MetaHook
             | Class::MetaLoop
+            | Class::MetaAttachment
     )
 }
 
@@ -97,6 +98,12 @@ pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
     // Hook-injected additionalContext attachment: its joined content IS the record's text -
     // both the searchable body under `--additional-context` and the `show`-addressed render.
     if let Some(text) = rec.hook_additional_context_text() {
+        return Some(text);
+    }
+    // Any other attachment payload (`--attachments`): the VERBATIM payload JSON is the
+    // record's text - honestly raw, and a byte substring of the source line, so the
+    // literal prefilter and the whole-file gate hold with no synthesized markers.
+    if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }
     let Some(msg) = rec.message.as_ref() else {

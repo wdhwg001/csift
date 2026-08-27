@@ -31,6 +31,7 @@ fn render_label_decorates_pairing_and_direction() {
         timestamp_utc: None,
         tool_name: None,
         model: None,
+        attachment_type: None,
         direction: None,
         tool_use_id: Some("t1".into()),
         pair: Some(Pairing::Paired),

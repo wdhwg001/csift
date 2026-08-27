@@ -358,7 +358,11 @@ pub struct SearchArgs {
     /// just `csift search "" <t> --count-by pairing`: a frozen SendMessage counts as
     /// pending under any selector) · `model` (per assistant model, the raw `message.model`
     /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in
-    /// assistant record such as an API-error notice, is reported verbatim). Records
+    /// assistant record such as an API-error notice, is reported verbatim) · `attachment`
+    /// (per attachment payload type - the `type` inside a `type:"attachment"` record's
+    /// payload, e.g. `hook_additional_context` / `edited_text_file` /
+    /// `compact_file_reference`; this axis IMPLIES the --attachments gate, so the census
+    /// is answerable without the separate flag). Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
     /// the excluded count is reported; never silently. Honors `-t`/`-T`/time/turn/scope;
     /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis
@@ -424,6 +428,17 @@ pub struct SearchArgs {
     #[arg(long)]
     pub additional_context: bool,
 
+    /// Also scan EVERY `type:"attachment"` record: the harness sidecar payloads (hook
+    /// context, edited-file snapshots, compact file references, file snapshots, …) a
+    /// default scan never parses (they are the bulk of a transcript's bytes and echo files
+    /// wholesale). A SUPERSET of --additional-context: a hook payload still surfaces under
+    /// `harness.meta.hook`; every other payload surfaces under `harness.meta.attachment`
+    /// with its VERBATIM payload JSON as the matchable text. `--count-by attachment`
+    /// implies this gate; an explicit `show --line`/`--uuid` address always renders an
+    /// addressed attachment record, flag or not.
+    #[arg(long)]
+    pub attachments: bool,
+
     /// Emit JSON instead of the headered text format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
@@ -442,6 +457,14 @@ impl SearchArgs {
     #[must_use]
     pub fn targets(&self) -> Vec<PathBuf> {
         self.paths.clone()
+    }
+
+    /// True when the scan should keep `type:"attachment"` lines: the explicit
+    /// `--attachments` flag, or the `--count-by attachment` axis (unanswerable without
+    /// the gate - the D7 implied-widening precedent).
+    #[must_use]
+    pub fn scan_attachments(&self) -> bool {
+        self.attachments || matches!(self.count_by, Some(CountAxis::Attachment))
     }
 
     /// The effective `-t`/`-T` filter (include minus exclude).

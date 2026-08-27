@@ -44,6 +44,9 @@ pub struct Hit {
     /// The source record's `message.model` (assistant records; string models only) - the
     /// `--count-by model` axis key. `None` when the record carries no model.
     pub model: Option<String>,
+    /// The source record's attachment payload `type` (`attachment` records only) - the
+    /// `--count-by attachment` axis key. `None` when the record carries no attachment.
+    pub attachment_type: Option<String>,
     /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`
     /// (GOLD §4); `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
     pub direction: Option<(String, String)>,

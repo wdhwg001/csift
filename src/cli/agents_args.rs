@@ -297,6 +297,9 @@ pub enum CountAxis {
     Pairing,
     /// Per assistant model (records without a model excluded + counted).
     Model,
+    /// Per attachment payload type (implies the `--attachments` gate; non-attachment
+    /// records excluded + counted).
+    Attachment,
 }
 
 impl CountAxis {
@@ -309,6 +312,7 @@ impl CountAxis {
             CountAxis::Session => "session",
             CountAxis::Pairing => "pairing",
             CountAxis::Model => "model",
+            CountAxis::Attachment => "attachment",
         }
     }
 }

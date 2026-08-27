@@ -175,6 +175,15 @@ impl Record {
             return out;
         }
 
+        // Any OTHER `type:"attachment"` record (edited_text_file, compact_file_reference,
+        // file snapshots, …): harness sidecar payload - labeled `harness.meta.attachment`.
+        // Only `search --attachments` / `--count-by attachment` (or an explicit `show`
+        // address) ever parses these lines; the record never opens a turn.
+        if self.attachment_payload_text().is_some() {
+            push_unique(&mut out, Class::MetaAttachment);
+            return out;
+        }
+
         match self.r#type.as_deref() {
             Some("system") => {
                 if self.is_compact_boundary() {
