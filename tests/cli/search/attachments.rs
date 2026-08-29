@@ -189,6 +189,23 @@ fn image_bearing_rows_teach_extraction_once_and_in_input_form() {
         both.stdout
     );
 
+    // An image-less run prints NEITHER the inline hint NOR the footer note.
+    let plain = h.run(&["search", "got it", at(SESS).as_str()]);
+    assert!(
+        !plain.stdout.contains("read the image(s):")
+            && !plain.stdout.contains("extractable, not decorative"),
+        "no image, no hint machinery:\n{}",
+        plain.stdout
+    );
+    // The hint also rides a SIBLING row when the image sits on the turn's other side.
+    let sib = h.run(&["search", "got it", at(SESS).as_str(), "--siblings"]);
+    assert_eq!(
+        sib.stdout.matches("read the image(s):").count(),
+        1,
+        "sibling image row teaches too, once:\n{}",
+        sib.stdout
+    );
+
     // show renders the same hint on an addressed image-bearing record.
     let shown = h.run(&["show", at(SESS).as_str(), "--line", "1"]);
     assert!(

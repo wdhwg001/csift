@@ -56,6 +56,19 @@ fn whoami_env_form_reports_lane_fields_as_null_and_says_why() {
 }
 
 #[test]
+fn whoami_rejects_every_target_except_trap_and_main() {
+    let h = Home::new();
+    lane_fixture(&h);
+    let out = h.run_with_env(&["whoami", &at(SESS)], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(!out.success, "a session target is not a whoami question");
+    assert!(
+        out.stderr.contains("whoami accepts no target except"),
+        "the pointed rejection:\n{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn at_main_resolution_names_its_inference_on_stderr() {
     // csift cannot know the caller's lane, so EVERY @main resolution says what it
     // inferred - stderr only, stdout stays pure for pipes.

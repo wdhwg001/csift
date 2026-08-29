@@ -517,6 +517,11 @@ fn count_by_result_separates_errored_results_and_marks_them_inline() {
         "both buckets:\n{}",
         out.stdout
     );
+    assert!(
+        out.stderr.contains("2 record(s) have no result"),
+        "non-result records are excluded AND disclosed:\n{}",
+        out.stderr
+    );
     let outj = h.run(&[
         "search",
         "",

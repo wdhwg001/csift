@@ -47,6 +47,22 @@ fn search_collapses_the_draft_and_discloses_the_count() {
     let summary: serde_json::Value =
         serde_json::from_str(outj.stdout.lines().last().unwrap()).unwrap();
     assert_eq!(summary["superseded_drafts"], 1, "{}", outj.stdout);
+
+    // A draft-free session prints NO draft note and NO zero-malformed note.
+    let clean_sess = "8b7c6d5e-4f30-4219-b987-654321fedcba";
+    h.write(
+        &format!("{ENC}/{clean_sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"clean lane"}}"#,
+            "\n",
+        ),
+    );
+    let clean = h.run(&["search", "", &at(clean_sess), "-t", "user.message"]);
+    assert!(
+        !clean.stdout.contains("superseded draft") && !clean.stdout.contains("malformed"),
+        "clean run prints no zero notes:\n{}",
+        clean.stdout
+    );
 }
 
 #[test]
@@ -56,6 +72,11 @@ fn show_fetches_an_addressed_draft_with_an_honest_header() {
     draft_fixture(&h);
     let out = h.run(&["show", at(SESS).as_str(), "--line", "1"]);
     assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("malformed"),
+        "a clean fetch prints no zero note:\n{}",
+        out.stdout
+    );
     assert!(
         out.stdout.contains("abandoned phrasing")
             && out.stdout.contains("superseded draft")
@@ -99,6 +120,13 @@ fn show_fetches_an_addressed_draft_with_an_honest_header() {
         .filter(|o: &serde_json::Value| o["kind"] == "record")
         .collect();
     assert_eq!(rows.len(), 2, "{}", both.stdout);
+    let bsummary: serde_json::Value =
+        serde_json::from_str(both.stdout.lines().last().unwrap()).unwrap();
+    assert_eq!(
+        bsummary["records"], 2,
+        "summary counts the units: {}",
+        both.stdout
+    );
     assert!(
         rows.iter()
             .any(|r| r["superseded_draft"] == false && r["turn_index"] == 0),
