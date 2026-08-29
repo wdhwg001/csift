@@ -95,6 +95,16 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
 
     let path = locate_transcript(&session_id);
 
+    // C-16 lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC
+    // hands a subagent its parent's id), so env-only resolution cannot know whether the
+    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null.
+    eprintln!(
+        "csift: note: resolved via env ($CLAUDE_CODE_SESSION_ID), which names the TOP-LEVEL \
+         session in every lane - from a subagent this is the PARENT's id, not yours. Lane \
+         fields are null under env-only resolution; a first-try `whoami @trap:<marker>` hit \
+         proves your true lane."
+    );
+
     let me = WhoAmI { session_id, path };
     match args.format {
         OutputFormat::Text => render_text(&me),
@@ -190,6 +200,7 @@ fn locate_transcript(session_id: &str) -> Option<PathBuf> {
 
 fn render_text(me: &WhoAmI) {
     println!("session  {}", me.session_id);
+    println!("lane     unknown from env alone (a subagent sees its parent's id here)");
     // The path is ALWAYS printed (it is the useful bit); a not-found note when it can't be located.
     match &me.path {
         Some(p) => println!("path     {}", p.display()),
@@ -203,9 +214,11 @@ fn render_json(me: &WhoAmI) -> Result<()> {
     let obj = json!({
         "kind": "identity",
         "session_id": me.session_id,
-        "is_subagent": false,
-        "parent_session_id": me.session_id,
-        "depth": 0,
+        // Lane-honest nulls: env-only resolution cannot distinguish the top-level caller
+        // from a subagent handed its parent's id. Unknown is stated, never fabricated.
+        "is_subagent": serde_json::Value::Null,
+        "parent_session_id": serde_json::Value::Null,
+        "depth": serde_json::Value::Null,
         "path": me.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
     });
     println!("{}", serde_json::to_string(&obj)?);
