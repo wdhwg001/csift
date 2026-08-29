@@ -426,6 +426,52 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.8.2 CHANGE LEDGER (non-breaking; field-incident fixes + a soundness correction --
+> `csift 0.8.2`).** Every item traces to a measured field incident or a live re-measurement;
+> two of the fixes correct csift's OWN documentation and output where they stated a wrong
+> mechanism or a fabricated certainty.
+> - **Targeting: a bare-basename `*.jsonl` token resolves and classifies.** `x.jsonl` with no
+>   separator fed its empty parent into the project scan (a wrong "no session file found"
+>   bail) and misclassified a bare `agent-<hex>.jsonl` as a top-level session. The token is
+>   absolutized at the top of the `.jsonl` branch; every spelling of one file now resolves
+>   identically on every command.
+> - **@trap mechanism sentence corrected (soundness).** The documented "the main record is
+>   flushed only after the command completes" was refuted by re-measurement: a subagent
+>   transcript flushes per content block (on disk at dispatch, first try resolves); the MAIN
+>   conversation's record is an async flush of the completed assistant message landing
+>   ~1-3.4s after dispatch - a race, not a wait. Both behavior rules survive with corrected
+>   reasons; the no-match error is re-ordered route-first (`@main` is the answer, the
+>   literal-marker check second, the same-marker retry last as lane confirmation); and a
+>   @trap that RESOLVES to the main transcript now prints a stderr lane note (that branch's
+>   former silence is what let the wrong doctrine form). Dated ledger entries keep their
+>   original text with bracketed corrections.
+> - **Lane honesty: `whoami` (env form) + `@main`.** The env names the TOP-LEVEL session in
+>   every lane, so bare `whoami` reported three confidently wrong fields from a subagent -
+>   on exactly the command an agent runs to CHECK its identity. Env-form `is_subagent` /
+>   `parent_session_id` / `depth` are now null (unknown is stated, never fabricated), text
+>   carries a lane line, stderr names the resolution path; every `@main` resolution prints
+>   an unconditional stderr lane note. A first-try `@trap` HIT is lane proof; a miss proves
+>   nothing.
+> - **Image discoverability.** A fleet incident published "images are unreadable" without
+>   testing extraction. The first image-bearing row per run now carries a paste-ready hint
+>   (INPUT id forms: a `#N` handle as the bare number; `L<line>i<n>` as-is) on search and
+>   show; the search footer gains a capability note; search and verbatim `--help` gain SEE
+>   ALSO sections naming the extraction command.
+> - **Errored results are visible.** Hit JSON gains `is_error` (true|false on result hits,
+>   never null there); the text render decorates an errored result row `[error]`; a new
+>   additive `--count-by result` axis buckets `ok`|`error` (the closed `pairing` enum is
+>   untouched: pairing answers "did a result come back", result answers "was it good").
+> - **Superseded-draft honesty.** The esc-edit draft collapse in turn reconstruction was
+>   silent and an addressed draft failed with a wrong error. The collapse count is now
+>   disclosed (search footer + JSON `superseded_drafts`); an explicit `show --line`/`--uuid`
+>   fetches a draft as an annotated unit outside turn numbering (JSON `superseded_draft`,
+>   null `turn_index`); the address-miss error states the real render domain.
+> - **SKILL**: a new "Why not hand-roll this format" section (nine measured traps, each
+>   returning a plausible wrong answer with no error, each mapped to a csift move) placed
+>   before the routing table; the frontmatter description now carries the cost of skipping
+>   csift (a live-session /reload-skills is needed once after upgrading).
+> - Suite grows to 935 unit + 466 e2e.
+
 > **v0.8.1 CHANGE LEDGER (non-breaking; the maintenance round: additive surfaces + one
 > correctness flip -- `csift 0.8.1`).** Every claim below was verified against real corpora
 > (and the live on-disk stores where applicable) before implementation; two brief-proposed
@@ -708,7 +754,11 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    invited an agentic caller to batch both attempts into ONE shell script — which is
 >    still ONE in-flight Bash tool_use (nothing flushes until the script exits), so both
 >    miss. The no-match error, SKILL's §trap, and the assumption table now say the retry
->    must be a NEW, SEPARATE Bash invocation.
+>    must be a NEW, SEPARATE Bash invocation. *(v0.8.2 correction: the mechanism clause
+>    here was refuted — the main-lane write is an async flush of the completed assistant
+>    message landing ~1-3.4s after dispatch, a race, not a wait; the same-script rule
+>    stands because both attempts run inside that unlanded window. The routing behavior
+>    shipped at this version is unchanged.)*
 > 2. **`--multiline` × re-serialized `tool_use.input` documented** (search --help +
 >    SKILL): EVERY tool_use's matchable text is name + re-serialized JSON input (not only
 >    AskUserQuestion's), so an embedded real newline is the two-character `\n` by match
@@ -999,7 +1049,10 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 >    transcript (eager flush — first try resolves, re-verified); the MAIN conversation's
 >    record is flushed AFTER the current Bash call completes (a 3s in-command sleep still
 >    saw 0 on disk), so a top-level FIRST use ALWAYS misses and only re-running the SAME
->    marker (now in the flushed previous record) resolves. The no-match error now states
+>    marker (now in the flushed previous record) resolves. *(v0.8.2 correction: refuted —
+>    the main-lane write is an async flush landing ~1-3.4s after dispatch; that 3s probe
+>    sat exactly at the window's edge and had no resolving power. The observed behaviors
+>    and the shipped routing stand.)* The no-match error now states
 >    the timing split and routes both paths (`@main` for the main thread — env-based, no
 >    race; re-run the SAME command+marker otherwise; a FRESH marker restarts the race).
 >    SKILL/`--help` document it; the `whoami` SUBAGENT CAVEAT is corrected to current CC
@@ -1380,13 +1433,13 @@ path     ~/.claude/projects/-Users-testuser-Projects-widget-app-prototype/0a1b2c
 
 `whoami` and `@main` both read `CLAUDE_CODE_SESSION_ID`, which CC sets to the **top-level** session id in EVERY Bash environment — including inside an in-process subagent. A subagent therefore cannot name *itself* by env (CC withholds the per-subagent id from the Bash env; it is given only to hooks). `@trap:<marker>` recovers it from the transcript instead.
 
-**Mechanism.** The caller INVENTS a unique marker and embeds it **literally** in the very csift command (shaped like `csift agents @trap:JollyShinyBrook4283` — though that exact marker literal is RESERVED and always refused: as a doc example it co-occurs with `csift` and gets copied by many agents, so it can never resolve to one transcript; callers must invent their own). CC records an assistant message — including its `tool_use` — to the transcript BEFORE the tool runs (a subagent's sidechain transcript is flushed via `recordSidechainTranscript` ahead of execution; verified empirically — a subagent's Bash can already grep its own marker mid-run). csift resolves `CLAUDE_CODE_SESSION_ID`, then scans that session's main transcript **and** its subagent transcripts for a **shell** `tool_use` — `Bash`, or Windows' separate `PowerShell` tool (same `input.command` field; v0.7.4) — whose `command` contains BOTH the marker AND the literal `csift` (so an unrelated command that merely echoed the token cannot satisfy it). Resolution:
+**Mechanism.** The caller INVENTS a unique marker and embeds it **literally** in the very csift command (shaped like `csift agents @trap:JollyShinyBrook4283` — though that exact marker literal is RESERVED and always refused: as a doc example it co-occurs with `csift` and gets copied by many agents, so it can never resolve to one transcript; callers must invent their own). A SUBAGENT's transcript is flushed per content block as it closes, so its `tool_use` is on disk at dispatch (verified empirically — a subagent's Bash can already grep its own marker mid-run). The MAIN transcript is written differently: an async flush of the COMPLETED assistant message, landing ~1-3.4s after the tool was dispatched (re-measured 2026-08-29) — a race, not a wait. csift resolves `CLAUDE_CODE_SESSION_ID`, then scans that session's main transcript **and** its subagent transcripts for a **shell** `tool_use` — `Bash`, or Windows' separate `PowerShell` tool (same `input.command` field; v0.7.4) — whose `command` contains BOTH the marker AND the literal `csift` (so an unrelated command that merely echoed the token cannot satisfy it). Resolution:
 - exactly one **subagent** carries it → that agent (then its subtree, per `--no-subagents`);
 - only the **main** transcript carries it → the session itself;
-- **zero** → error (marker not literal / mistyped, the command did not run `csift`, or the transcript has not flushed — re-run);
+- **zero** → error (marker not literal / mistyped, the command did not run `csift`, or the record has not landed yet on the main lane — the error routes `@main` first, then the literal check, then a same-marker re-run as lane confirmation);
 - **>1 subagent** → ambiguity error (use a fresher marker).
 
-A subagent resolves **first-try** (its tool_use is flushed before it runs); the main thread flushes at turn end, so a main-thread `@trap` may need a re-run — from the main thread just use `@main`.
+A subagent resolves **first-try** (its tool_use is on disk at dispatch). From the main thread the record lands ~1-3.4s after dispatch, so a first `@trap` normally loses that race and a re-run resolves — but the main thread should simply use `@main`, and a @trap that does resolve to the main transcript says so on stderr (v0.8.2).
 
 **Marker grammar (ENFORCED — the discipline is the point).** The marker must be a fresh, one-shot, imaginative, CONTEXT-INDEPENDENT token the model invents on the spot: **EXACTLY 3 CamelCase words** (each one uppercase letter + ≥2 lowercase — no single letters, no ALLCAPS acronyms like `HTML` / `USB`) followed by **exactly 4 digits** that do not form a trivial run (all-equal / consecutive / simple odd / simple even — `0000` / `1234` / `9876` / `1357` / `2468`). It must NOT be script-generated (a generator would itself be a `csift`-ish Bash command carrying the marker → ambiguity), built from a shell variable / concatenation (it must appear verbatim in the recorded command), or reused. csift rejects every violation loudly with guidance. This strictness exists precisely to make a hand-invented literary token the path of least resistance and kill the over-engineered shortcuts at the source.
 
