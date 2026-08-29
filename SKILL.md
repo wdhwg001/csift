@@ -78,6 +78,8 @@ above fails quietly and the number you report is wrong in a direction you cannot
 | subagent tree: lifecycle · status · frozen lanes | `agents [target]` |
 | the session's bound plan file | `plan [target]` |
 | pasted images: list / extract to a file you can Read | `image [target] --out DIR` |
+| has this session truly stopped? (LIVE verdict + evidence) | `status TARGET` |
+| block until it stops / asks / reads a file (a monitor) | `wait TARGET --until COND [--timeout S]` |
 
 Two commands read transcript content — pick by intent: `show` fetches from the live transcript (this includes the tail-peek `show T --turn -3..`); `verbatim` reconstructs what a compaction summary already discarded (budget-bounded, crosses boundaries). Everything you want to READ is `show`; `verbatim` is only for compaction-clipped history — and it tells you (stderr note) when you use it on a session with no compaction.
 
@@ -118,7 +120,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 
 ## Five laws (all commands)
 
-1. **Exit law**: an ADDRESS that misses = hard error, exit≠0 (`show --line 99`, `show --turn 99`, `--uuid`, a pinned `@id`, `--agent`, `recover --file`, `image --id`). A FILTER that matches nothing = honest empty, exit 0 (`search`, time windows, open/from-end ranges) — and a zero-match `search` self-diagnoses on stderr: definitive absence + active filters + (under `-t`/`-T`) the labels the pattern DOES occur under. Never re-derive syntax because a result came back empty.
+1. **Exit law**: an ADDRESS that misses = hard error, exit≠0 (`show --line 99`, `show --turn 99`, `--uuid`, a pinned `@id`, `--agent`, `recover --file`, `image --id`). A FILTER that matches nothing = honest empty, exit 0 (`search`, time windows, open/from-end ranges) — and a zero-match `search` self-diagnoses on stderr: definitive absence + active filters + (under `-t`/`-T`) the labels the pattern DOES occur under. Never re-derive syntax because a result came back empty. ONE exit-code exception, `wait`'s timeout = **124** (the GNU timeout convention): a monitor's timeout is a normal outcome a script must branch on; it never extends to any other command or outcome.
 2. **One range grammar, two axes**: every range flag (`--line` / `--turn` / `--file-lines`) takes `N` · `A..B` · `N..` · `..N` · `-k` (k-th from the END; `-3..` = last 3) · `..` (all), inclusive. `A-B` hard-errors with the correct spelling; a statically reversed `9..3` errors at parse. Axes: `turn`/`tN` = 0-based logical turn; `line`/`Lnnnn` = 1-based physical jsonl line; `--file-lines` (recover) = the reconstructed FILE's lines. On `show`, an explicit `--turn N`/`A..B` is an address (law 1); open/from-end forms clamp. `--turn` (windowing) ∧ `--since/--until` intersect (AND) everywhere.
 3. **Span law**: subagents included by default; `--no-subagents` restricts; both switches exist everywhere (contradictory pair = parse error). `verbatim` is the one opt-IN (`--subagents`; its budget multiplies per session) and the one command that REQUIRES a target. `agents` rejects both (it LISTS subagents).
 4. **Caps law — no silent truncation**: every cap reports its drop and how to get more. Defaults: `list` 50 rows on an unscoped all-projects run; `show` 200 record units (the drop prints the exact continuation command); `search`/`stats` uncapped until `--max-count N`. `--max-count 0 = uncapped`, uniformly. Malformed lines are counted (`N malformed line(s) skipped`), never hidden — including obviously-corrupt lines the byte prefilters never parse (free-text garbage, crash-truncation: any non-blank line that isn't `{…}`-framed); the one undetectable residue is a `{…}`-framed line whose INTERIOR is invalid JSON on a non-candidate line (validating those would repeal the perf contract). SCOPE of the count: the full-scan commands (`search`/`stats`/`show`/`files`/`recover`/`verbatim`/`image`) census the whole file; the head/tail readers (`list` rows, `agents` rows) census the LINES THEY READ — booked exactly once (the two windows are disjoint), scope-qualified in the text note, and never a whole-file verdict (that is `stats`). A sidecar marker line the current schema cannot read (schema skew — e.g. a pre-release fossil) counts as malformed too; it never merges and never vanishes.
@@ -313,11 +315,32 @@ Default list (content-deduped). `--id` input = bare digits (the `[Image #N]` num
 
 ---
 
+## status + wait — live truth (point-in-time, explicitly non-reproducible)
+
+The one deliberate departure from the forensic contract: these two answer "NOW" and say so (everything else stays reproducible). `status TARGET` = one verdict with named evidence; `wait TARGET --until COND…` = block until a condition fires.
+
+```
+csift status TARGET [--no-subagents] [--format json]
+csift wait TARGET --until COND [--until COND…] [--timeout SECS] [--interval MS] [--no-subagents] [--format json]
+```
+- Verdicts (closed set): `running` (a tool in flight: an unreturned tool call at the tail, or registry busy/shell) · `waiting-children` (main idle, subagent/workflow lanes live — incl. the workflow journal's started-minus-result imbalance) · `waiting-hitl` (a pending AUQ/ExitPlanMode/MCP elicitation via the sidecar) · `idle-eot` (end_turn, nothing pending anywhere) · `stale-dead` (owner process gone — pid probe + a process-start-time guard against pid reuse; the tail then says HOW it died) · `unknown` (evidence insufficient or contradictory — stated, never guessed).
+- The join reads the harness's own registry (`<claude-home>/sessions/<pid>.json`; transition-writes ONLY, never a heartbeat — an hours-old `statusUpdatedAt` just means "unchanged"), the transcript tail, and process liveness. HONESTY LIMITS, printed when they bite: a pending PERMISSION prompt is invisible (no sidecar exists yet — it masquerades as idle, and idle verdicts say so); the registry covers top-level interactive sessions only (a subagent target degrades to tail evidence, never a fabricated row).
+- `wait` conditions (repeatable, OR, first hit wins): `stop` · `hitl` · `auq` · `notification[:RE]` (main-lane only — notifications never land in child transcripts) · `tool:NAME[:RE]` (RE over the serialized input) · `write:PATH_RE[:LINE_RE]` · `verdict:V`. Same RE2-class regex as search.
+- BASELINE SEMANTICS — the monitor/query boundary: `wait` snapshots every watched file's byte length at startup and fires ONLY on events strictly after those offsets; a condition already satisfied by history never fires (history is `search`). After the snapshot a readiness line prints to stderr (`csift: watching N file(s)…`) — a scripted caller orders its own trigger AFTER that line and the race is gone.
+- Exit codes: 0 = fired (JSON names which condition + evidence) · **124** = timeout (JSON `fired:"timeout"`) · other non-zero = error. No `--timeout` = wait forever (the readiness line says so).
+
+```bash
+csift status @<uuid>                              # is it truly stopped? (with evidence)
+csift wait @<uuid> --until stop --timeout 300     # block until truly stopped (or 5m -> exit 124)
+csift wait @main --until auq                      # fire when a question lands
+csift wait @<uuid> --until tool:Read:handover     # ...until it reads that file
+```
+
 ## JSON — envelope v2 + schema reference (transcribed from live output)
 
 Every `--format json` stream is exactly: `{"kind":"header","command":…}` first (span commands add `sessions_in_scope`/`top_level_sessions`/`subagent_sessions`) → kind-tagged rows → `{"kind":"summary",…}` last. Universal idiom: `jq 'select(.kind=="<row>")'`; summary = `tail -1 | jq`.
 
-Row kinds: list→`session` · search→`exchange` | `census` · show→`record` | `branch-point` · stats→`session` · files→`mutation|file|dir|bucket|boundary` · agents→`session|run|agent` · verbatim→`turn|compaction_boundary|collapsed_agents` · plan→`plan` | `binding` | `plan-edit` (--audit) · image→`image|extract` · whoami→`identity` · recover→`coverage|segment|snapshot|restore|boundary|backup` (--list-backups).
+Row kinds: list→`session` · search→`exchange` | `census` · show→`record` | `branch-point` · stats→`session` · files→`mutation|file|dir|bucket|boundary` · agents→`session|run|agent` · verbatim→`turn|compaction_boundary|collapsed_agents` · plan→`plan` | `binding` | `plan-edit` (--audit) · image→`image|extract` · whoami→`identity` · recover→`coverage|segment|snapshot|restore|boundary|backup` (--list-backups) · status→`verdict` · wait→one bare `{kind:"wait"}` object.
 
 Shared row fields — the id trio on every spanning row: `session_id` (the transcript's OWN id: top-level uuid or subagent agent-id, both round-trip as `@…`) + `is_subagent` + `parent_session_id` (the owning uuid; = session_id on top-level rows). The two-rule id law: line-addressed fetches use `session_id`; scope-level re-targeting uses `parent_session_id`. Hits and collapsed rows carry `refetch` — a ready-to-run `csift show` command at the right id; prefer running it verbatim over assembling your own.
 
@@ -335,6 +358,7 @@ Key fields per row (fixture-verified):
 - agents `session`: `session_id, runs, agents` (counts). `run`: `session_id, run_id, task_id, workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, default_model, started_utc/local`. `agent`: `agent_id, shape, parent_session_id, parent_agent_id, depth, workflow_id, agent_type, name, team_name, description, fork_parent_last_uuid, fork_context_length, spawn_tool(_use_id), trigger/started/completed/last_activity_utc+local, duration, status, pending_tool_use_id/tool_name/classification/since_*, skipped_lines (head/tail window census, like list's) — completed_* and duration are non-null ONLY when status=completed; last_activity_* is the tail instant on every timestamped lane (== pending_since_* when frozen), control_hint?` (+ `returned_message(_source)`, `files_changed[]` when requested — `returned_message` is the NEWEST message the child EVER returned; on a frozen/running lane it predates the pending call, so read it beside `pending_*`, never as the outcome). Summary: `sessions, runs, agents`.
 - verbatim `turn`: trio + `turn_index, line (null=sidecar), source, role, ts_utc/local, tool_calls, full_chars, rendered_chars, truncated, elided_*, also_in_summary, compactions_before, text (FULL), is_automation (+trigger_kind, task_id, status, event)`; `compaction_boundary`: `line, summary_chars`; `collapsed_agents`: `first_line, last_line, refetch`. Header adds the full budget accounting: `budget_chars, max_total_chars, round_trip_fraction, chars_used, boundaries_spanned (budget-window-relative), boundaries_total (scope's true total), selected_user, selected_assistant, automation_by_kind (the SELECTED triggers per class), automation_in_scope_by_kind (every in-scope pulse REGARDLESS of budget — the same window-vs-scope pairing as boundaries_*), automation_triggers (flat total of automation_by_kind's values), budget_is_per_session, sessions_rendered, with_elicitation_sidecar`.
 - files rows carry the trio + `path, op, turn_index, line, is_create, heuristic, resolution, path_verbatim, command_errored, ts_utc/local` (timeline) or per-op counts + `first/last_utc/local` (grouped); `boundary`: `path, line, turn_index, cause, ts_utc/local`. Summary: `sessions, distinct_files, total_mutations, edit_before_read_boundaries, skipped_lines, detail_level` (no cap ⇒ no `dropped_by_cap`).
+- status `verdict`: `{verdict, evidence:[{surface (registry|pid|tail|children|sidecar), value, age_secs}], children:[{session_id, state (in-flight|active|settled), detail}], pending:[…], notes:[…]}`; summary `{verdict}`. wait exit object: `{kind:"wait", fired (condition|"timeout"), verdict, waited_secs, evidence:[…]}`.
 - whoami `identity`: `session_id, path` + lane fields `is_subagent`/`parent_session_id`/`depth` — REAL on the @trap chain, **null** on the env form (unknowable).
 
 ## jq canon — csift narrows, jq refines

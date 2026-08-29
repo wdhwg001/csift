@@ -426,6 +426,51 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 
 ## 6. Subcommand specifications
 
+> **v0.9.0 CHANGE LEDGER (MINOR - a new COMMAND CLASS: the live-truth pair `status` +
+> `wait` -- `csift 0.9.0`).** The version signals the contract addition, not a breakage:
+> every existing surface is unchanged; the new pair is a deliberate, documented departure
+> from the forensic contract (point-in-time, explicitly non-reproducible; everything else
+> stays reproducible). Grounded in live measurement on this machine (registry shape,
+> flush timing, journal incrementality all verified before design).
+> - **`csift status TARGET`**: one verdict on "has this session truly stopped?" from a
+>   three-way join - the harness session registry (`<claude-home>/sessions/<pid>.json`:
+>   status idle/busy/shell observed, blocked/waiting carried by the binary;
+>   transition-writes only, NEVER a heartbeat - staleness is inverted, an old
+>   statusUpdatedAt means "unchanged"; the failure mode is a SIGKILLed session's stale
+>   entry, guarded by a ps-based pid probe plus a process-start-time check that parses
+>   the registry's UTC-rendered procStart against ps's local-rendered lstart as
+>   INSTANTS), the transcript tail state machine (an unreturned tool call at the tail =
+>   in flight; stop_reason is trustworthy on the main lane and normally null mid-message
+>   on subagents; growth alone is never activity - enqueues and attachments grow an idle
+>   main), and child lanes (each child transcript's own tail + the INCREMENTAL workflow
+>   journal, where started minus result = agents in flight; meta.json has no status
+>   field and workflow result files are terminal-only). The elicitation sidecar covers
+>   HITL. Verdicts: running | waiting-children | waiting-hitl | idle-eot | stale-dead |
+>   unknown - each with named evidence rows; idle verdicts carry the honesty note that a
+>   pending PERMISSION prompt is invisible to this instrument (no sidecar exists yet).
+>   The registry covers top-level interactive sessions only; a subagent target degrades
+>   honestly to tail evidence.
+> - **`csift wait TARGET --until COND ...`**: block until a condition fires. Conditions
+>   (repeatable, OR, first hit wins): stop | hitl | auq | notification[:RE] (main lane
+>   only - notifications never persist in child transcripts) | tool:NAME[:RE] |
+>   write:PATH_RE[:LINE_RE] | verdict:V; the same RE2-class regex engine as search.
+>   BASELINE SEMANTICS: wait snapshots every watched file's byte length at startup and
+>   fires only on events strictly after those offsets - a condition satisfied by history
+>   alone never fires (history is `search`'s job); a readiness line on stderr after the
+>   snapshot makes scripted waits race-free against their own trigger. Incremental
+>   torn-tail-guarded reads (append-atomicity measured); adaptive polling (200ms floor
+>   to 2s, `--interval` pins it); new child lanes join the watch mid-wait with baseline
+>   zero. EXIT LAW EXCEPTION: timeout exits **124** (the GNU timeout convention) - the
+>   ONE documented exception to the 0-vs-non-zero law, because a monitor's timeout is a
+>   normal outcome a script must branch on; JSON always carries fired:"timeout".
+> - Model: `Message` gains the tolerant `stop_reason` field. Structure gate: the
+>   per-folder subfolder cap rises 15 to 16 (src/ grows one directory per command family
+>   by design and now sits AT the cap; the next command module must consolidate first).
+> - Out of scope (recorded): a permission-prompt sidecar (the elicitations precedent,
+>   post-0.9.0); a per-subagent registry (does not exist in the harness - never faked);
+>   teams inbox contents (C-09 stands); remote/cross-machine sessions.
+> - Suite grows to 939 unit + 474 e2e.
+
 > **v0.8.2 CHANGE LEDGER (non-breaking; field-incident fixes + a soundness correction --
 > `csift 0.8.2`).** Every item traces to a measured field incident or a live re-measurement;
 > two of the fixes correct csift's OWN documentation and output where they stated a wrong
