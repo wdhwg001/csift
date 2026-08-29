@@ -5,6 +5,17 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.9.1] - 2026-08-30
+
+- Fixed: pid liveness on busybox-ps hosts (Alpine and friends). busybox
+  `ps` rejects `-p` and the `lstart` field outright, so the probe's ps
+  form failed for a LIVE pid exactly as for a dead one, and `status`
+  read a live session as `stale-dead`. When the ps form fails the probe
+  now consults `/proc/<pid>` on Linux: present means alive with the
+  start time unknown (the reuse-guard skip stays disclosed); absent
+  keeps the no-such-process verdict. Found by the release matrix's musl
+  test lanes.
+
 ## [0.9.0] - 2026-08-30
 
 A new command class: `status` and `wait`, the live-truth pair. Every other
