@@ -5,6 +5,42 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.9.0] - 2026-08-30
+
+A new command class: `status` and `wait`, the live-truth pair. Every other
+command answers "what happened" reproducibly; these two answer "what is
+happening NOW", are point-in-time, and are explicitly non-reproducible - a
+deliberate, documented departure from the forensic contract.
+
+- `csift status <target>`: one-shot liveness verdict for a session -
+  `running` | `waiting-children` | `waiting-hitl` | `idle-eot` |
+  `stale-dead` | `unknown` - from a three-way join, never a single-surface
+  inference: the harness session registry (`<claude-home>/sessions/
+  <pid>.json`, transition-writes only, never a heartbeat), the transcript
+  tail state machine (an unreturned tool call at the tail = a tool in
+  flight), and a `ps`-based owner-pid probe guarded against pid reuse by
+  the process start time (the registry renders it UTC, `ps lstart` renders
+  it local; both parse as instants). Child liveness joins each subagent
+  transcript's own tail with the incremental workflow journal (`started`
+  minus `result` = agents in flight). The elicitation sidecar covers
+  human-in-the-loop blocks. Every verdict ships its evidence rows, and
+  every degradation is stated in the output: a skipped reuse guard, a
+  missing registry row, the invisible pending permission prompt.
+- `csift wait <target> --until COND[,...]`: block until a condition fires,
+  first hit wins. The closed condition set: `stop`, `hitl`, `auq`,
+  `notification[:REGEX]`, `tool:NAME[:REGEX]`, `write:PATH_RE[:LINE_RE]`,
+  `verdict:V`. STRICT post-start baseline semantics: only bytes appended
+  after the watch starts count as events; history is `search`'s job. A
+  readiness line on stderr makes scripted waits race-free against their
+  own trigger. Polling is incremental (byte offsets, torn tails held) and
+  adaptive (200ms floor to 2s ceiling; `--interval` overrides); child lanes
+  and the elicitation sidecar born after the watch starts join it
+  automatically with a zero baseline.
+- Exit codes: `wait` exits 124 on `--timeout` expiry (the GNU `timeout`
+  convention) - the ONE documented exception to the crate's 0-vs-non-zero
+  exit law; it applies to no other command.
+- `Message.stop_reason` joins the tolerant record model.
+
 ## [0.8.2] - 2026-08-30
 
 Field-incident fixes plus one soundness correction. Every item traces to a
