@@ -204,7 +204,14 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         // A `*.jsonl` transcript target. A SUBAGENT transcript → that agent (+ its subtree); a
         // top-level `<uuid>.jsonl` → that session. Either way its project dir scopes the search.
         if t.ends_with(".jsonl") {
-            let file = Path::new(t);
+            // Absolutize FIRST: a bare-basename token (`x.jsonl` with no separator) has
+            // `parent() == Some("")`, which used to feed an empty dir into the scan (a
+            // tolerated read_dir failure ending in a wrong "no session file found" bail)
+            // AND made the `subagents` component test misclassify a bare
+            // `agent-<hex>.jsonl` as a top-level session. One canonical form fixes the
+            // dir, the classification, and the sidecar sniff together.
+            let file = crate::path::absolutize(Path::new(t))?;
+            let file = file.as_path();
             // An elicitation SIDECAR (hook-written backfill, csift-elicitation marker records
             // only) is not a Claude Code transcript - it is read AUTOMATICALLY when you target
             // its session and cannot be searched directly. Reject it loudly so a stray target is

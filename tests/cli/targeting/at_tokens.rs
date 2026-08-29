@@ -486,3 +486,72 @@ fn bare_id_shaped_tokens_get_the_at_hint() {
         a.stderr
     );
 }
+
+#[test]
+fn bare_basename_jsonl_target_resolves_from_its_own_dir() {
+    // A `*.jsonl` token with NO path separator used to feed its empty parent ("") into
+    // the project scan (a wrong "no session file found" bail), and the same shape
+    // misclassified a bare `agent-<hex>.jsonl` as a top-level session (the `subagents`
+    // component test sees no components). The token is absolutized first now, so every
+    // spelling of the same file resolves identically.
+    let h = Home::new();
+    let sess = "3f2e1d0c-9b8a-4756-a432-10fedcba9876";
+    let enc = "-Users-dev-example-project";
+    let top = h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"drifting buoy"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#,
+            "\n",
+        ),
+    );
+    let sub = h.write(
+        &format!("{enc}/{sess}/subagents/agent-b7c6d5e4f3a29180.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"su1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"probe the reef"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"sa1","parentUuid":"su1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reef probed"}]}}"#,
+            "\n",
+        ),
+    );
+
+    // Top-level transcript, four spellings of the same file: absolute · ./relative ·
+    // subdir-relative (from the encoded dir's parent) · bare basename (cwd = its dir).
+    let abs = h.run(&["list", top.to_str().unwrap()]);
+    assert!(abs.success, "absolute: {}", abs.stderr);
+    let dir = top.parent().unwrap();
+    let dot = h.run_full(&["list", &format!("./{sess}.jsonl")], &[], Some(dir));
+    assert!(dot.success, "./relative: {}", dot.stderr);
+    let subdir = h.run_full(
+        &["list", &format!("{enc}/{sess}.jsonl")],
+        &[],
+        Some(dir.parent().unwrap()),
+    );
+    assert!(subdir.success, "subdir-relative: {}", subdir.stderr);
+    let bare = h.run_full(&["list", &format!("{sess}.jsonl")], &[], Some(dir));
+    assert!(bare.success, "bare basename: {}", bare.stderr);
+    for out in [&abs, &dot, &subdir, &bare] {
+        assert!(
+            out.stdout.contains(sess) && out.stdout.contains("drifting buoy"),
+            "same session row from every spelling:\n{}",
+            out.stdout
+        );
+    }
+
+    // Bare-basename SUBAGENT transcript: must classify as the agent (its own id, its
+    // own record), never as a top-level session named by the `agent-` stem.
+    let sdir = sub.parent().unwrap();
+    let sbare = h.run_full(
+        &["list", "agent-b7c6d5e4f3a29180.jsonl", "--no-subagents"],
+        &[],
+        Some(sdir),
+    );
+    assert!(sbare.success, "bare subagent basename: {}", sbare.stderr);
+    assert!(
+        sbare.stdout.contains("SUBAGENT  b7c6d5e4f3a29180")
+            && sbare.stdout.contains("probe the reef"),
+        "classified as the subagent, bare id, own content:\n{}",
+        sbare.stdout
+    );
+}
