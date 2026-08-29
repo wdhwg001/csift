@@ -84,6 +84,21 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                 }
             }
         }
+        // ── Sidecar discovery: the sidecar DIR is typically born mid-wait (the first
+        //    pending ask creates it), and its path resolves only once the dir exists -
+        //    so re-attempt each poll. A file born after start is wholly post-start, so
+        //    baseline 0 is exact. ──
+        if !is_subagent_target {
+            if let Some(sc) = crate::elicitation::sidecar_path(&main) {
+                if !cursors.iter().any(|c| c.path == sc) {
+                    cursors.push(Cursor {
+                        path: sc,
+                        offset: 0,
+                        is_main: true,
+                    });
+                }
+            }
+        }
 
         // ── Incremental reads: appended COMPLETE lines only (a torn tail is held at its
         //    offset and re-read next poll - the atomic-append measurements make this the
