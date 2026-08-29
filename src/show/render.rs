@@ -20,6 +20,7 @@ pub(crate) fn render_text(
         println!("SESSION {session_id}");
     }
     let mut units = 0usize;
+    let mut image_hint_done = false;
     for ex in exchanges {
         println!();
         println!(
@@ -29,6 +30,12 @@ pub(crate) fn render_text(
         );
         for h in &ex.hits {
             print_record_line(role_glyph(h.class), h);
+            if !image_hint_done {
+                if let Some(l) = crate::search::image_hint_line(session_id, &h.image_ids) {
+                    println!("{l}");
+                    image_hint_done = true;
+                }
+            }
             units += 1;
         }
     }

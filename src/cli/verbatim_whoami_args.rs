@@ -80,7 +80,11 @@ use super::*;
         explicit `… [+K chars, L lines elided] …` marker in BOTH). For UN-truncated unit \
         bodies use `--format json`, which emits one VERBATIM object per unit (full `text`, no \
         per-unit cap) plus interleaved compaction-boundary records.",
-    after_help = "EXAMPLES\n  \
+    after_help = "SEE ALSO\n  \
+          verbatim cites image handles inline (`[1 image: #265]`): \
+        csift image <target> --id <ID> --out DIR extracts them to files you can then Read - pass a \
+        `#N` handle as the bare number.\n\n\
+        EXAMPLES\n  \
           csift verbatim .                                     # default 40K-char reconstruction, top-level thread\n  \
           csift verbatim @<uuid> --budget 12000                # recover JUST my thread (~10-15K, no fan-out)\n  \
           csift verbatim @<uuid> --subagents --format json     # ALSO span subagents (budget × N, line-numbered)\n  \

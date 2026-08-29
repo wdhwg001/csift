@@ -155,3 +155,59 @@ fn show_renders_an_addressed_attachment_flag_free() {
         out.stdout
     );
 }
+
+#[test]
+fn image_bearing_rows_teach_extraction_once_and_in_input_form() {
+    // C-11: the image annotation used to be decorative - fleets classified images as
+    // unreadable without ever testing extraction. The first image-bearing row now
+    // carries a paste-ready hint (INPUT id forms: a #N handle as the bare number),
+    // printed once per run, and a capability note rides the footer.
+    let h = image_home();
+    let out = h.run(&["search", "screenshot", at(SESS).as_str()]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("read the image(s): csift image @"),
+        "inline hint under the first image row:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("--id #"),
+        "the hint never uses the display form (#N is not valid --id input):\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("extractable, not decorative"),
+        "footer capability note:\n{}",
+        out.stdout
+    );
+    // Two image-bearing rows in one run: the inline hint appears exactly once.
+    let both = h.run(&["search", "", at(SESS).as_str(), "-t", "user.message"]);
+    assert_eq!(
+        both.stdout.matches("read the image(s):").count(),
+        1,
+        "once per run:\n{}",
+        both.stdout
+    );
+
+    // show renders the same hint on an addressed image-bearing record.
+    let shown = h.run(&["show", at(SESS).as_str(), "--line", "1"]);
+    assert!(
+        shown.stdout.contains("read the image(s): csift image @"),
+        "show teaches extraction too:\n{}",
+        shown.stdout
+    );
+
+    // The helps name the capability (SEE ALSO), closing the discovery gap.
+    let sh = h.run(&["search", "--help"]);
+    assert!(
+        sh.stdout.contains("SEE ALSO") && sh.stdout.contains("csift image"),
+        "search --help names image:\n{}",
+        sh.stdout
+    );
+    let vh = h.run(&["verbatim", "--help"]);
+    assert!(
+        vh.stdout.contains("SEE ALSO") && vh.stdout.contains("csift image"),
+        "verbatim --help names image:\n{}",
+        vh.stdout
+    );
+}

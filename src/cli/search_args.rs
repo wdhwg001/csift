@@ -98,6 +98,10 @@ use super::*;
         capped per leaf (thinking ≤2, tool.use ≤3, tool.result ≤3, harness ≤2); the capped-away \
         remainder surfaces as an explicit `(+N more · csift show @<id> --line A..B)` pointer. A \
         record that itself matched is never duplicated as a sibling.\n\n\
+        SEE ALSO\n  \
+          search is the surface that PRINTS image handles (`[N image(s): #7]` / `L123i1`), so: \
+        csift image <target> --id <ID> --out DIR extracts them to files you can then Read - pass a \
+        `#N` handle as the bare number. An image-bearing row is evidence, not a blank.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
           `-c`/`--count-only` prints just the integer EXCHANGE total: matched round-trips, \
         the ripgrep `-c` idiom, honoring every filter (per-RECORD counts are `--count-by`). \

@@ -157,6 +157,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     //    O(matched-sessions) legend block ahead of the first hit. ──
     let tok = header_tokens(&outcome.exchanges);
 
+    let mut image_hint_done = false;
     for ex in &outcome.exchanges {
         println!();
         // `<tok>·t6` - the id-prefix token + 0-based turn index (the SAME numbering
@@ -192,11 +193,23 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
             if ex.is_subagent && !hit.from_sidecar && hit.line > 0 {
                 println!("      ↳ csift show @{} --line {}", ex.session_id, hit.line);
             }
+            if !image_hint_done {
+                if let Some(l) = image_hint_line(&ex.session_id, &hit.image_ids) {
+                    println!("{l}");
+                    image_hint_done = true;
+                }
+            }
         }
         // `--siblings`: the turn's non-matched records, under a dim `·` context marker so
         // they read as surrounding back-and-forth, not as matches.
         for sib in &ex.siblings {
             print_record_line('·', sib);
+            if !image_hint_done {
+                if let Some(l) = image_hint_line(&ex.session_id, &sib.image_ids) {
+                    println!("{l}");
+                    image_hint_done = true;
+                }
+            }
         }
         // The FIXED policy's capped-away remainder - explicit, with the exact fetch
         // command (self-healing escape hatch; `@<session_id>` round-trips for both a
@@ -244,6 +257,13 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // first sentences of a clipped fragment can badly misread the record's full intent. Tell it
     // exactly how to get the whole text. Auto-suppressed under --no-truncate / --line / --uuid (those
     // lift the cap, so nothing is truncated → `any_truncated_excerpt` is false).
+    if any_image_ids(&outcome.exchanges) {
+        println!(
+            "note: image annotations above are extractable, not decorative: \
+             csift image <target> --id <ID> --out DIR (bare number for a #N handle), then \
+             Read the decoded file."
+        );
+    }
     if any_truncated_excerpt(&outcome.exchanges) {
         emit_truncation_caution();
     }
@@ -300,6 +320,29 @@ pub(crate) fn image_suffix(ids: &[String]) -> String {
     }
     let noun = if ids.len() == 1 { "image" } else { "images" };
     format!("  [{} {}: {}]", ids.len(), noun, ids.join(", "))
+}
+
+/// The paste-ready extraction command for a row's images, printed ONCE per run under the
+/// first image-bearing row (C-11: the inline `[N image(s): #7]` annotation taught nothing
+/// about extraction, and fleets classified images as unreadable without ever testing).
+/// INPUT forms only: `#7` is display, `--id` takes the bare number; `L<line>i<n>` is
+/// identical in both. Addressed at the row's OWNING transcript id (the per-FILE ID law).
+pub(crate) fn image_hint_line(session_id: &str, ids: &[String]) -> Option<String> {
+    let first = ids.first()?;
+    let input = first.strip_prefix('#').unwrap_or(first);
+    Some(format!(
+        "      ↳ read the image(s): csift image @{session_id} --id {input} --out DIR           (decodes to a file you can then Read - an image-bearing turn is evidence, not a blank)"
+    ))
+}
+
+/// True when any hit or sibling row carries image ids - gates the capability footer note.
+pub(crate) fn any_image_ids(exchanges: &[Exchange]) -> bool {
+    exchanges.iter().any(|ex| {
+        ex.hits
+            .iter()
+            .chain(ex.siblings.iter())
+            .any(|h| !h.image_ids.is_empty())
+    })
 }
 
 /// The JSON rendering of a tool hit's `▹` pairing state (shared with `show`).
