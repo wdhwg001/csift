@@ -5,6 +5,56 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.8.2] - 2026-08-30
+
+Field-incident fixes plus one soundness correction. Every item traces to a
+measured incident or a live re-measurement; two items correct csift's own
+documentation and output where they stated a wrong mechanism or a
+fabricated certainty.
+
+- Targeting: a bare-basename `*.jsonl` token (no path separator) now
+  resolves and classifies correctly on every command; it used to fail with
+  a wrong error, and a bare `agent-<hex>.jsonl` was misread as a top-level
+  session.
+- The @trap timing mechanism was documented wrong and is corrected
+  everywhere, including the runtime error text: a subagent transcript
+  flushes per content block (on disk at dispatch, first try resolves); the
+  main conversation's record is an async flush of the completed assistant
+  message landing about 1-3.4 seconds after dispatch - a race, not a wait.
+  The no-match error now routes `@main` first, and a @trap that resolves
+  to the main transcript prints a stderr lane note instead of succeeding
+  silently.
+- Lane honesty: bare `whoami` reported `is_subagent:false`, `depth:0`, and
+  an echoed parent id from inside a subagent - three confidently wrong
+  fields on exactly the command an agent runs to check its identity. The
+  env form now reports those fields as null (the env names the top-level
+  session in every lane, so the answer is unknowable), prints a lane line
+  in text, and notes the resolution path on stderr; every `@main`
+  resolution prints the same unconditional stderr note.
+- Image discoverability: the first image-bearing row per run (search and
+  show) carries a paste-ready extraction hint in input id forms (a `#N`
+  handle as the bare number); the search footer gains a capability note;
+  `search --help` and `verbatim --help` gain SEE ALSO sections naming
+  `csift image`. Driven by a fleet incident that published "images are
+  unreadable" without ever testing extraction.
+- Errored tool results are visible: hit JSON carries `is_error`, the text
+  render decorates an errored result `[error]`, and a new `--count-by
+  result` axis buckets `ok` | `error` (the closed `pairing` enum is
+  untouched: pairing answers "did a result come back", result answers
+  "was it good").
+- Superseded-draft honesty: the esc-edit draft collapse in turn
+  reconstruction is now disclosed (search footer + JSON
+  `superseded_drafts`), an explicitly addressed draft fetches via
+  `show --line`/`--uuid` as an annotated unit outside turn numbering, and
+  the address-miss error states the real render domain. Previously a
+  multi-megabyte genuine user record could vanish from every scan with no
+  count and fail an addressed fetch with a wrong reason.
+- SKILL: a new "Why not hand-roll this format" section (nine measured
+  traps, each returning a plausible wrong answer with no error, each
+  mapped to a csift move) placed before the routing table; the frontmatter
+  description now carries the cost of skipping csift and names the image
+  capability.
+
 ## [0.8.1] - 2026-08-27
 
 A maintenance round: additive surfaces plus one correctness flip, each
