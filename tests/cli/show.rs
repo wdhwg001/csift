@@ -526,3 +526,4 @@ fn addressed_show_renders_hook_attachment_without_the_flag() {
 }
 
 mod branching;
+mod drafts;

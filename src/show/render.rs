@@ -23,11 +23,21 @@ pub(crate) fn render_text(
     let mut image_hint_done = false;
     for ex in exchanges {
         println!();
-        println!(
-            "t{}  {}",
-            ex.turn_index,
-            format_local_compact(ex.started_utc.as_deref())
-        );
+        if ex.superseded_draft {
+            // C-18: a superseded draft sits OUTSIDE turn numbering - name it, never
+            // fabricate a t<N>.
+            println!(
+                "(superseded draft — an opener replaced by a later same-parent sibling; \
+                 outside turn numbering)  {}",
+                format_local_compact(ex.started_utc.as_deref())
+            );
+        } else {
+            println!(
+                "t{}  {}",
+                ex.turn_index,
+                format_local_compact(ex.started_utc.as_deref())
+            );
+        }
         for h in &ex.hits {
             print_record_line(role_glyph(h.class), h);
             if !image_hint_done {
@@ -102,7 +112,10 @@ pub(crate) fn render_json(
                 "session_id": session_id,
                 "is_subagent": is_subagent,
                 "parent_session_id": parent_session_id,
-                "turn_index": ex.turn_index,
+                // C-18: a superseded draft has NO turn index (outside numbering) - null,
+                // never a fabricated number; the flag names why.
+                "turn_index": if ex.superseded_draft { serde_json::Value::Null } else { json!(ex.turn_index) },
+                "superseded_draft": ex.superseded_draft,
                 // A merged elicitation-sidecar record has no physical line (null).
                 "line": if h.from_sidecar { serde_json::Value::Null } else { json!(h.line) },
                 "uuid": h.uuid,

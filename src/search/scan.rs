@@ -57,6 +57,7 @@ pub(crate) fn search_one_file(
             exchanges: Vec::new(),
             skipped_lines: 0,
             turn_count: 0,
+            superseded_drafts: 0,
         });
     };
     let bytes: &[u8] = &mmap;
@@ -167,6 +168,7 @@ pub(crate) fn search_one_file(
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped,
                     turn_count: 0,
+                    superseded_drafts: 0,
                 });
             }
             let (pending, pending_skipped) = crate::elicitation::unresolved_pending(path)?;
@@ -175,6 +177,7 @@ pub(crate) fn search_one_file(
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped + pending_skipped,
                     turn_count: 0,
+                    superseded_drafts: 0,
                 });
             }
         }
@@ -240,7 +243,7 @@ pub(crate) fn search_one_file(
         }
     }
 
-    let (mut exchanges, turn_count) = reconstruct_and_match(
+    let (mut exchanges, turn_count, superseded_drafts) = reconstruct_and_match(
         path,
         &records,
         args,
@@ -286,6 +289,7 @@ pub(crate) fn search_one_file(
         exchanges,
         skipped_lines: skipped,
         turn_count,
+        superseded_drafts,
     })
 }
 

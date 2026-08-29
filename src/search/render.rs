@@ -259,6 +259,16 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     if merged_any_sidecar(&outcome.exchanges) {
         println!("with elicitation sidecar");
     }
+    // C-18: the esc-edit draft collapse is DISCLOSED, never silent - a superseded opener
+    // is a real record a scan deliberately hides (turn hygiene), so the count and the
+    // escape hatch are stated.
+    if outcome.superseded_drafts > 0 {
+        println!(
+            "({} superseded draft(s) collapsed — esc-edit resends outside turn numbering; \
+             address one directly with csift show --line/--uuid to read it)",
+            outcome.superseded_drafts
+        );
+    }
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
@@ -498,6 +508,9 @@ pub(crate) fn render_json(
         "transcript_ids_truncated": ids_truncated,
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
+        // C-18: superseded-draft openers the turn reconstruction collapsed (esc-edit
+        // resends) - real records outside turn numbering, fetchable by explicit address.
+        "superseded_drafts": outcome.superseded_drafts,
         // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) - the
         // machine echo of the `with elicitation sidecar` text note.
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),

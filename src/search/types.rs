@@ -135,6 +135,11 @@ pub struct Exchange {
     pub turn_lines: (usize, usize),
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
+    /// True for an ADDRESSED superseded-draft unit (an opener replaced by a later
+    /// same-parent sibling: esc-cancel / edit-resend). Such a record sits OUTSIDE turn
+    /// numbering (`turn_index` is meaningless and renders null/annotated); it is only
+    /// ever emitted by an explicit `show --line`/`--uuid` address, never by a scan.
+    pub superseded_draft: bool,
 }
 
 /// Outcome of a search run, including the no-silent-truncation accounting.
@@ -151,6 +156,9 @@ pub struct SearchOutcome {
     pub dropped_by_cap: usize,
     /// Total malformed lines skipped while scanning (surfaced, never hidden).
     pub skipped_lines: usize,
+    /// Superseded-draft openers collapsed by turn reconstruction across the scanned
+    /// files (esc-cancel / edit-resend siblings) - disclosed, never silent (C-18).
+    pub superseded_drafts: usize,
     /// SCOPE-span counts of the RESOLVED transcript set (top-level + subagent files), from
     /// `resolve_session_files` - so the fan-out is announced even when a spanned subagent
     /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).

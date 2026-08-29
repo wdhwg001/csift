@@ -250,9 +250,10 @@ pub(crate) fn run_rendered(
     }
     if !misses.is_empty() {
         bail!(
-            "no such record(s): {} — a rendered record is a `role:user`/`role:assistant` \
-             message line (metadata/attachment lines are not records; inspect those with \
-             `--raw`)",
+            "no such record(s): {} — an explicit address renders message lines \
+             (role:user/role:assistant, superseded drafts included) and attachment lines; \
+             other metadata line types (file-history-snapshot, queue-operation, mode, …) \
+             and torn lines are inspectable with `--raw`",
             misses.join(", ")
         );
     }

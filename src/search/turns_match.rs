@@ -17,7 +17,7 @@ pub(crate) fn reconstruct_and_match(
     want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
-) -> (Vec<Exchange>, usize) {
+) -> (Vec<Exchange>, usize, usize) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
     // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
@@ -33,7 +33,10 @@ pub(crate) fn reconstruct_and_match(
     // Group records into turns via the shared §6.4 delimiter (model::group_turn_indices
     // is the single source of truth, used identically by `files`). The outer index is
     // the 0-based turn index; map each index group back to its `Kept` borrows.
-    let index_turns = group_turn_indices_deduped(records, |k| &k.rec);
+    // The skip set is computed EXPLICITLY (not inside the deduped grouper) so the
+    // collapse can be DISCLOSED and an addressed draft can still be fetched (C-18).
+    let skip = crate::model::superseded_draft_indices(records, |k| &k.rec);
+    let index_turns = crate::model::group_turn_indices_core(records, |k| k.rec.opens_turn(), &skip);
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
@@ -79,11 +82,15 @@ pub(crate) fn reconstruct_and_match(
     // Build one turn's Exchange (or None when range-filtered / hit-free) - ONE closure
     // shared verbatim by the serial and parallel walks below, so the two paths cannot
     // drift apart.
-    let build_exchange = |turn_index: usize, idxs: &[usize]| -> Option<Exchange> {
-        // Turn-range filter (inclusive, 0-based on genuine-user order).
-        if let Some((lo, hi)) = turn_bounds {
-            if turn_index < lo || turn_index > hi {
-                return None;
+    let build_exchange = |turn_index: usize, idxs: &[usize], draft: bool| -> Option<Exchange> {
+        // Turn-range filter (inclusive, 0-based on genuine-user order). A draft sits
+        // OUTSIDE turn numbering, so the range never applies to it (it is only reachable
+        // by an explicit address anyway).
+        if !draft {
+            if let Some((lo, hi)) = turn_bounds {
+                if turn_index < lo || turn_index > hi {
+                    return None;
+                }
             }
         }
 
@@ -169,6 +176,7 @@ pub(crate) fn reconstruct_and_match(
             siblings_hidden,
             turn_lines,
             record_uuids,
+            superseded_draft: draft,
         })
     };
 
@@ -181,22 +189,33 @@ pub(crate) fn reconstruct_and_match(
     // (a small file's join overhead isn't worth it). An ordered collect keeps the
     // output byte-identical to the serial walk.
     const PAR_TURNS_MIN_RECORDS: usize = 1024;
-    let out: Vec<Exchange> = if inner_parallel && records.len() >= PAR_TURNS_MIN_RECORDS {
+    let mut out: Vec<Exchange> = if inner_parallel && records.len() >= PAR_TURNS_MIN_RECORDS {
         index_turns
             .par_iter()
             .enumerate()
-            .filter_map(|(i, idxs)| build_exchange(i, idxs))
+            .filter_map(|(i, idxs)| build_exchange(i, idxs, false))
             .collect()
     } else {
         index_turns
             .iter()
             .enumerate()
-            .filter_map(|(i, idxs)| build_exchange(i, idxs))
+            .filter_map(|(i, idxs)| build_exchange(i, idxs, false))
             .collect()
     };
 
+    // C-18: an EXPLICIT address reaches a superseded draft too (the refetch law - it IS
+    // a real record; only turn numbering excludes it). Each addressed draft renders as
+    // its own annotated unit; scans never emit one.
+    if address.is_some() {
+        let mut draft_idxs: Vec<usize> = skip.iter().copied().collect();
+        draft_idxs.sort_unstable();
+        for i in draft_idxs {
+            out.extend(build_exchange(0, &[i], true));
+        }
+    }
+
     // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
-    (out, index_turns.len())
+    (out, index_turns.len(), skip.len())
 }
 
 /// The FIXED `--siblings` policy (the former per-selector cap DSL is gone - one

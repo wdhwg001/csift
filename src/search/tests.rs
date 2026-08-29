@@ -76,7 +76,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
     // no subagents - an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
     // former per-file `build_spawn_lookup` returned here.
     let spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
-    let (exchanges, _turn_count) = reconstruct_and_match(
+    let (exchanges, _turn_count, _drafts) = reconstruct_and_match(
         std::path::Path::new("/x/0a1b2c3d-0000-0000-0000-000000000000.jsonl"),
         &kept,
         a,

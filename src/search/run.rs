@@ -215,6 +215,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     let mut all: Vec<Exchange> = Vec::new();
     for fr in per_file {
         outcome.skipped_lines += fr.skipped_lines;
+        outcome.superseded_drafts += fr.superseded_drafts;
         all.extend(fr.exchanges);
     }
     all.sort_by(|a, b| {
@@ -495,6 +496,9 @@ pub(crate) struct FileResult {
     /// against. Consumed by `show`'s turn address-miss reporting (`no such turn: t99 -
     /// the transcript has N turn(s)`); 0 on the early-return paths (empty / gated file).
     pub(crate) turn_count: usize,
+    /// Superseded-draft openers collapsed by this file's turn reconstruction (C-18);
+    /// 0 on the early-return paths (no reconstruction ran, nothing was collapsed).
+    pub(crate) superseded_drafts: usize,
 }
 
 /// A retained record. `can_hit` is the §7d keyword-prefilter verdict on the raw
