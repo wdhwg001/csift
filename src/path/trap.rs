@@ -11,20 +11,22 @@ pub(crate) enum TrapSelf {
 
 /// Resolve `@trap:<marker>` to the CALLING agent/session by finding the transcript whose Bash
 /// `tool_use` command carries the (unique, literal) marker AND the literal `csift` - i.e. the
-/// very command that launched this run. Mechanism + TIMING (both verified live 2026-07-12): a
-/// SUBAGENT's transcript records the launching tool_use eagerly - its own Bash can grep the
-/// marker mid-execution, so a first try resolves; the MAIN conversation's record is flushed only
-/// AFTER the current Bash call completes (a 3s in-command sleep still saw 0 on disk), so a
-/// top-level FIRST use ALWAYS misses and only a re-run of the SAME marker (now in the previous,
-/// flushed record) resolves. @trap therefore earns its keep for subagents (which cannot name
-/// themselves); a main thread should prefer `@main` (env-based, no race) - the no-match error
-/// routes both. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
+/// very command that launched this run. Mechanism + TIMING (subagent verified live 2026-07-12;
+/// main-lane mechanism re-measured 2026-08-29): a SUBAGENT's transcript flushes per content
+/// block as it closes, so its launching tool_use is on disk at dispatch and a first try
+/// resolves. The MAIN conversation writes an async flush of the COMPLETED assistant message
+/// that lands ~1-3.4s AFTER the tool was dispatched - a RACE, not a wait (a 263s command was
+/// observed with its unpaired tool_use already on disk 39s in). csift finishes well inside
+/// that window, so a top-level FIRST use normally misses and a re-run of the SAME marker
+/// (whose record has landed by then) resolves. @trap therefore earns its keep for subagents
+/// (which cannot name themselves); a main thread should prefer `@main` (env-based, no race) -
+/// the no-match error routes both. It searches the calling session (`CLAUDE_CODE_SESSION_ID`) + its subagent
 /// transcripts; a subagent match → that agent (then its subtree, per scope); only the main
 /// transcript → the session. The marker grammar is enforced strictly (see
 /// [`validate_trap_marker`]) precisely so the discipline cannot be shortcut: it must be a fresh,
 /// one-shot, imaginative token the model invents on the spot - never script-generated (a
 /// generator would itself be a `csift`-ish Bash call carrying the marker → ambiguity). Errors on
-/// a malformed marker, no match (marker not literal / mistyped / not yet flushed, or the command
+/// a malformed marker, no match (marker not literal / mistyped / its record not landed yet, or the command
 /// did not actually run `csift`), or >1 subagent (use a fresher random marker).
 pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
     let marker = marker.trim();
@@ -46,19 +48,33 @@ pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
 
     match subagent_hits.len() {
         1 => Ok(TrapSelf::Agent(subagent_hits.remove(0))),
-        0 if main_hit => Ok(TrapSelf::Session(session_id)),
+        0 if main_hit => {
+            // T4: this branch used to succeed SILENTLY, and that silence manufactured the
+            // wrong mechanism story (main trap -> miss -> retry -> hit -> written up as
+            // doctrine). Name the lane on stderr: stdout bytes unchanged, exit 0, and the
+            // signal is the RESOLUTION itself, so it holds regardless of flush timing.
+            eprintln!(
+                "csift: note: @trap:{marker} resolved to the TOP-LEVEL session {session_id} - \
+                 the marker was carried by the MAIN transcript, so you are NOT a subagent in \
+                 this lane. `@main` answers this directly with no race; @trap is for \
+                 subagents, which cannot name themselves."
+            );
+            Ok(TrapSelf::Session(session_id))
+        }
         0 => bail!(
             "@trap: marker `{marker}` not found in a `csift` shell command (Bash / PowerShell) of \
-             the calling session. \
-             It must appear LITERALLY in THIS csift invocation (no shell variable / concatenation, \
-             and the command must actually run `csift`). TIMING: a SUBAGENT's transcript already \
-             carries its command mid-run (a first try resolves), but the MAIN conversation's own \
-             record is only flushed AFTER the current command finishes — a top-level FIRST use \
-             always misses. If you are the top-level thread: use `@main` (env-based, no race), or \
-             re-run this EXACT command with the SAME marker as a NEW, SEPARATE shell invocation — \
-             a second attempt inside the SAME shell script does NOT count (the whole script is ONE \
-             still-in-flight command; nothing flushes until it exits), and a fresh marker restarts \
-             the race and misses again."
+             the calling session. MOST LIKELY you are the TOP-LEVEL thread: use `@main` \
+             (env-based, no race). That is the answer to your question. \
+             Otherwise, check that the marker appears LITERALLY in THIS csift invocation (no \
+             shell variable / concatenation, and the command must actually run `csift`) - a \
+             non-literal marker misses in every lane. \
+             LAST, to confirm the lane: re-run this EXACT command with the SAME marker as a NEW, \
+             SEPARATE shell invocation. The main conversation's record is an async flush of the \
+             completed assistant message, landing ~1-3.4s after the tool was dispatched, so a \
+             first use races it; the retry reads the by-then-landed record. A second attempt \
+             inside the SAME shell script does NOT count - it runs inside that same unlanded \
+             window, whose width is invisible from inside the script. A fresh marker restarts \
+             the race."
         ),
         n => bail!(
             "@trap: marker `{marker}` is AMBIGUOUS — it matched {n} subagents. Use a fresher, \

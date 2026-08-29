@@ -52,10 +52,11 @@ use super::*;
         environment, so a running subagent cannot name itself via env. Instead you INVENT a marker \
         and embed it LITERALLY in this very csift command; csift finds the transcript whose Bash \
         `csift` command carries that marker and scopes to that agent's subtree. TIMING: a \
-        subagent's transcript records the command mid-run, so a first try resolves; the MAIN \
-        conversation flushes its own record only AFTER the command completes, so a top-level \
-        FIRST use always misses; from the main thread use `@main` instead (env-based, no race), \
-        or re-run the SAME command with the SAME marker. \
+        subagent's transcript flushes per content block, so its command is on disk at dispatch \
+        and a first try resolves; the MAIN conversation's record is an async flush of the \
+        completed assistant message landing ~1-3.4s after dispatch, so a top-level FIRST use \
+        races it and normally misses; from the main thread use `@main` instead (env-based, no \
+        race), or re-run the SAME command with the SAME marker. \
         DISCIPLINE (enforced): invent the marker ONE-SHOT, by you, right now: an imaginative, \
         literary, random, CONTEXT-INDEPENDENT token of EXACTLY 3 CamelCase words + 4 random digits, \
         shaped like `@trap:JollyShinyBrook4283`. That exact literal is the RESERVED doc \

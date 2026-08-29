@@ -389,9 +389,10 @@ impl VerbatimArgs {
         env-INDEPENDENT answer use `whoami @trap:<marker>`: you embed a one-shot literal marker in \
         that very command and csift maps it to your subagent hex and walks the UPSTREAM CHAIN up to \
         the top-level root (the @trap form's JSON is `{chain:[{session_id, is_subagent, \
-        parent_session_id, depth, path}, …]}`). @trap TIMING: a subagent's transcript records the \
-        command mid-run (a first try resolves); the MAIN conversation flushes its own record only \
-        AFTER the command completes, so a top-level FIRST use always misses; from the main thread \
+        parent_session_id, depth, path}, …]}`). @trap TIMING: a subagent's transcript flushes per \
+        content block (its command is on disk at dispatch, so a first try resolves); the MAIN \
+        conversation's record lands ~1-3.4s after dispatch as an async flush of the completed \
+        message, so a top-level FIRST use races it and normally misses; from the main thread \
         use `@main` (no race), or re-run the SAME command with the SAME marker. \
         WITHOUT @trap, don't assume which id the env gave; feed it to `csift agents --agent <id> \
         --format json`; a returned node → read `parent_session_id` for the ROOT; `no subagent \

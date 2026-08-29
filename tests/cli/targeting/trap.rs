@@ -40,8 +40,8 @@ fn trap_resolves_a_powershell_shell_command() {
 fn target_at_trap_resolves_caller_via_bash_marker() {
     // `@trap:<marker>` finds the transcript whose Bash `csift` command carries a unique, literal
     // marker the caller embedded. A subagent match → that subagent (+ its subtree); a main-thread
-    // match → the session. CC flushes the assistant tool_use to disk BEFORE the command runs, so
-    // the very command that launched csift is already greppable.
+    // match → the session. A SUBAGENT transcript flushes per content block, so the very command
+    // that launched csift is already greppable at dispatch; the fixtures stand in for both lanes.
     let enc = "-Users-testuser-Projects-trap";
     let hex = "aaa111bbb222ccc33"; // 17 hex, like a real agent id
     let h = Home::new();
@@ -91,6 +91,15 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
         "resolved the session: {}",
         main.stdout
     );
+    // A main-transcript resolution names the lane on stderr (T4: the silent success on
+    // this branch is what once manufactured the wrong flush-mechanism doctrine).
+    assert!(
+        main.stderr.contains("TOP-LEVEL session")
+            && main.stderr.contains("@main")
+            && main.stderr.contains("NOT a subagent"),
+        "lane note on stderr: {}",
+        main.stderr
+    );
 
     // A VALID marker nobody embedded → honest "not found" (never a silent empty result).
     let miss = h.run_with_env(
@@ -103,9 +112,9 @@ fn target_at_trap_resolves_caller_via_bash_marker() {
         "guides back to the literal-csift requirement: {}",
         miss.stderr
     );
-    // The no-match error routes BOTH timing paths: the main thread to `@main` (its own
-    // record only flushes after the command completes, so a first use always misses) and
-    // the retry to the SAME marker (a fresh one restarts the race).
+    // The no-match error routes lane FIRST (the main thread to `@main`: its record lands
+    // ~1-3.4s after dispatch as an async flush, so a first use loses the race), then the
+    // literal-marker check, then the SAME-marker retry as lane confirmation.
     assert!(
         miss.stderr.contains("@main") && miss.stderr.contains("SAME marker"),
         "routes the main-thread flush race: {}",
