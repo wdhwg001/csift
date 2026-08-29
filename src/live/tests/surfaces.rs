@@ -229,3 +229,14 @@ fn tail_window_spans_a_real_turn_tail() {
     let s = tail_shape(&f.0).unwrap();
     assert_eq!(s.last_stop_reason.as_deref(), Some("end_turn"), "{s:?}");
 }
+
+#[cfg(unix)]
+#[test]
+fn probe_pid_reports_a_reaped_pid_dead() {
+    // A reliably dead pid: spawn `true`, reap it. Exercises the ps-failure arm and its
+    // /proc fallback check (absent on macOS, absent-for-the-pid on Linux).
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    let _ = child.wait();
+    assert_eq!(probe_pid(pid, None), PidLiveness::Dead);
+}

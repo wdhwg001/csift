@@ -175,11 +175,26 @@ fn p4_stale_dead_via_pid_and_reuse_guard() {
         ),
     );
     let out2 = h2.run(&["status", &at(LIVE_SESS)]);
-    assert!(
-        out2.stdout.contains("verdict  stale-dead") && out2.stdout.contains("pid reused"),
-        "start-time mismatch = reuse, dead:\n{}",
-        out2.stdout
-    );
+    // The reuse verdict needs a start time from ps; a busybox ps (Alpine) cannot give
+    // one, and the honest outcome there is a pid-only probe with the skip disclosed.
+    let ps_has_lstart = std::process::Command::new("ps")
+        .args(["-p", &me.to_string(), "-o", "lstart="])
+        .output()
+        .is_ok_and(|o| o.status.success() && !o.stdout.iter().all(u8::is_ascii_whitespace));
+    if ps_has_lstart {
+        assert!(
+            out2.stdout.contains("verdict  stale-dead") && out2.stdout.contains("pid reused"),
+            "start-time mismatch = reuse, dead:\n{}",
+            out2.stdout
+        );
+    } else {
+        assert!(
+            out2.stdout.contains("alive (pid only)")
+                && out2.stdout.contains("reuse guard was skipped"),
+            "no start time on this host = pid-only, disclosed:\n{}",
+            out2.stdout
+        );
+    }
 }
 
 #[test]

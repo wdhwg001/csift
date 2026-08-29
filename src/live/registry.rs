@@ -156,6 +156,14 @@ pub(crate) fn ps_probe(pid: u32) -> PsProbe {
     };
     let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if !out.status.success() || text.is_empty() {
+        // busybox ps (Alpine and friends) rejects `-p`/`lstart` outright, so the probe
+        // fails for a LIVE pid too. On Linux `/proc/<pid>` answers liveness directly:
+        // present = alive with the start time unknown (the reuse-guard skip is
+        // disclosed); absent (or no /proc at all, as on macOS where the ps form is
+        // reliable) = the no-such-process verdict stands.
+        if std::path::Path::new(&format!("/proc/{pid}")).is_dir() {
+            return PsProbe::Alive(None);
+        }
         return PsProbe::NoProcess;
     }
     let local = crate::timez::local_tz();
