@@ -118,4 +118,9 @@ fn zero_match_diagnosis_on_a_clean_corpus_has_no_malformed_caveat() {
         "no malformed caveat on a clean corpus: {}",
         out.stderr
     );
+    assert!(
+        !out.stdout.contains("malformed"),
+        "and no zero note on stdout either: {}",
+        out.stdout
+    );
 }

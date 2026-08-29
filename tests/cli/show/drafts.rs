@@ -136,6 +136,28 @@ fn show_fetches_an_addressed_draft_with_an_honest_header() {
 }
 
 #[test]
+fn show_prints_the_malformed_note_when_a_torn_line_exists() {
+    let h = Home::new();
+    let sess = "9c8d7e6f-5a4b-4321-8765-fedcba098765";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"solid line"}}"#,
+            "\n",
+            "not json here",
+            "\n",
+        ),
+    );
+    let out = h.run(&["show", &at(sess), "--line", "1"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("1 malformed line(s) skipped"),
+        "the torn line is booked on a fetch too:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
 fn show_miss_error_states_the_current_render_domain() {
     let h = Home::new();
     draft_fixture(&h);
