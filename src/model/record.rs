@@ -179,6 +179,12 @@ pub struct Message {
     /// via `as_str`. Consumed by `stats`.
     #[serde(default)]
     pub model: Option<serde_json::Value>,
+    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /
+    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN
+    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which
+    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.
+    #[serde(default, rename = "stop_reason")]
+    pub stop_reason: Option<String>,
 
     /// The token-usage echo on assistant records. Kept UNPARSED (same rationale as
     /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].

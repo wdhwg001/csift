@@ -12,6 +12,7 @@ mod cli;
 mod elicitation;
 mod files;
 mod image;
+mod live;
 mod model;
 mod parse;
 mod path;
@@ -76,6 +77,8 @@ fn run(cli: Cli) -> Result<()> {
         Command::Plan(args) => plan::run_plan(&args),
         Command::Verbatim(args) => turns::run_verbatim(&args),
         Command::Image(args) => image::run_image(&args),
+        Command::Status(args) => live::run_status(&args),
+        Command::Wait(args) => live::run_wait(&args),
         // The hidden rename tombstone (cli.rs): always the pointed error, never a run.
         Command::Turns(_) => anyhow::bail!(
             "`csift turns` was RENAMED to `csift verbatim` in v0.5 — same command, same \

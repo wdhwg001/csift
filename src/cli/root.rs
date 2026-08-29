@@ -183,6 +183,8 @@ pub enum Command {
     Plan(PlanArgs),
     Verbatim(VerbatimArgs),
     Image(ImageArgs),
+    Status(StatusArgs),
+    Wait(WaitArgs),
     // HIDDEN catch-all for the REMOVED `turns` name (→ `verbatim`, v0.5). Exists only so
     // the rename gets the pointed successor error the `-t thinking` legacy values get,
     // instead of clap's teach-nothing "unrecognized subcommand". Never works, always bails

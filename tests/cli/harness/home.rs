@@ -52,6 +52,32 @@ impl Home {
         p
     }
 
+    /// Write a session-registry fixture row at `<root>/.claude/sessions/<pid>.json`
+    /// (the live-truth surfaces read it through the same claude_home resolution).
+    pub(crate) fn write_session_registry(&self, pid: u32, json: &str) -> PathBuf {
+        let dir = self.root.join(".claude").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(format!("{pid}.json"));
+        std::fs::write(&p, json).unwrap();
+        p
+    }
+
+    /// Spawn csift with piped stdio and this `$HOME`, returning the Child - the `wait`
+    /// tests block on its readiness stderr line before appending their trigger.
+    pub(crate) fn spawn(&self, args: &[&str]) -> std::process::Child {
+        let exe = env!("CARGO_BIN_EXE_csift");
+        Command::new(exe)
+            .args(args)
+            .env("HOME", &self.root)
+            .env("USERPROFILE", &self.root)
+            .env_remove("CLAUDE_CODE_SESSION_ID")
+            .env_remove("CODEX_COMPANION_SESSION_ID")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn csift")
+    }
+
     /// Run the csift binary with this `$HOME`, returning (success, stdout, stderr).
     pub(crate) fn run(&self, args: &[&str]) -> Output {
         self.run_with_env(args, &[])

@@ -9,6 +9,7 @@ mod files;
 mod harness;
 mod image;
 mod list;
+mod live;
 mod plan_audit;
 mod plan_whoami;
 mod recover;
