@@ -493,3 +493,89 @@ fn count_by_version_censuses_the_cc_version_stamp() {
         outj.stdout
     );
 }
+
+#[test]
+fn count_by_result_separates_errored_results_and_marks_them_inline() {
+    // C-13: an errored result is still `paired` (a result came back), so the pairing
+    // census is structurally blind to "any failed reads?". The result axis answers it,
+    // the errored row says so inline, and JSON carries is_error.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"read the ledgers"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/p/ok.md"}},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/p/gone.md"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"fine content"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r2","parentUuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"<tool_use_error>File does not exist.</tool_use_error>","is_error":true}]}}"#, "\n",
+        ),
+    );
+    // The axis: 1 ok, 1 error; non-result records excluded and disclosed.
+    let out = h.run(&["search", "", at(SESS).as_str(), "--count-by", "result"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("ok") && out.stdout.contains("error"),
+        "both buckets:\n{}",
+        out.stdout
+    );
+    let outj = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "--count-by",
+        "result",
+        "--format",
+        "json",
+    ]);
+    let rows: Vec<serde_json::Value> = outj
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    for (key, n) in [("ok", 1), ("error", 1)] {
+        assert!(
+            rows.iter().any(|r| r["kind"] == "census"
+                && r["axis"] == "result"
+                && r["key"] == key
+                && r["records"] == n),
+            "{key} bucket: {}",
+            outj.stdout
+        );
+    }
+    // Pairing census UNCHANGED: both calls are paired (the axes answer different questions).
+    let pairing = h.run(&["search", "", at(SESS).as_str(), "--count-by", "pairing"]);
+    assert!(
+        pairing.stdout.contains("3  paired"),
+        "errored results still pair (1 use-carrier + 2 result-carriers = 3 records):\n{}",
+        pairing.stdout
+    );
+    // Text render: the errored result row carries [error]; the clean one does not.
+    let txt = h.run(&["search", "", at(SESS).as_str(), "-t", "agent.tool.result"]);
+    assert!(
+        txt.stdout.contains("agent.tool.result [error]")
+            || txt.stdout.contains("agent.tool.result\u{200b}[error]")
+            || txt.stdout.contains("▹ agent.tool.result [error]"),
+        "inline error marker:\n{}",
+        txt.stdout
+    );
+    assert_eq!(
+        txt.stdout.matches("[error]").count(),
+        1,
+        "only the errored row is marked:\n{}",
+        txt.stdout
+    );
+    // JSON hits carry is_error on both sides of the truth.
+    let hj = h.run(&[
+        "search",
+        "",
+        at(SESS).as_str(),
+        "-t",
+        "agent.tool.result",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        hj.stdout.contains(r#""is_error":true"#) && hj.stdout.contains(r#""is_error":false"#),
+        "explicit error state on every result hit: {}",
+        hj.stdout
+    );
+}

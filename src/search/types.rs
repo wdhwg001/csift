@@ -50,6 +50,11 @@ pub struct Hit {
     /// The source record's top-level Claude Code `version` stamp - the `--count-by
     /// version` axis key. `None` when the record carries none.
     pub version: Option<String>,
+    /// RESULT-side error state: `Some(true)` = this tool_result carried `is_error`,
+    /// `Some(false)` = a clean result, `None` = not a tool_result hit. Drives the text
+    /// `[error]` decoration, JSON `is_error`, and the `--count-by result` axis (pairing
+    /// answers "did a result come back"; this answers "was it good").
+    pub is_error: Option<bool>,
     /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`
     /// (GOLD §4); `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
     pub direction: Option<(String, String)>,

@@ -303,6 +303,9 @@ pub enum CountAxis {
     /// Per Claude Code version stamp (the record's top-level `version`; records without
     /// one excluded + counted).
     Version,
+    /// Per tool-result error state (`ok` | `error`; non-result records excluded +
+    /// counted). Pairing answers "did a result come back"; this answers "was it good".
+    Result,
 }
 
 impl CountAxis {
@@ -317,6 +320,7 @@ impl CountAxis {
             CountAxis::Model => "model",
             CountAxis::Attachment => "attachment",
             CountAxis::Version => "version",
+            CountAxis::Result => "result",
         }
     }
 }

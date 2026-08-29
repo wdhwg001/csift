@@ -33,6 +33,7 @@ fn render_label_decorates_pairing_and_direction() {
         model: None,
         attachment_type: None,
         version: None,
+        is_error: None,
         direction: None,
         tool_use_id: Some("t1".into()),
         pair: Some(Pairing::Paired),

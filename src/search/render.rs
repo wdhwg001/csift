@@ -17,17 +17,27 @@ pub(crate) fn role_glyph(class: Class) -> char {
 /// markers - a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
 pub(crate) fn render_label(h: &Hit) -> String {
     // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
+    // C-13: a RESULT-side hit whose tool_result carried `is_error` says so in-band -
+    // pairing answers "did a result come back"; the decoration answers "was it good".
+    let err = if h.class == Class::AgentToolResult && h.is_error == Some(true) {
+        " [error]"
+    } else {
+        ""
+    };
     match (h.class, h.pair) {
         (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {
-            return "agent.tool.use ▹ agent.tool.result".to_string();
+            return format!("agent.tool.use ▹ agent.tool.result{err}");
         }
         (Class::AgentToolUse, Some(Pairing::PendingNoResult)) => {
             return "agent.tool.use (no result — pending)".to_string();
         }
         (Class::AgentToolResult, Some(Pairing::OrphanResult)) => {
-            return "agent.tool.result (use not in scope)".to_string();
+            return format!("agent.tool.result (use not in scope){err}");
         }
         _ => {}
+    }
+    if !err.is_empty() {
+        return format!("{}{err}", h.class.path());
     }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
@@ -403,6 +413,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // Tool-pairing (§7): the use↔result join state + the joining `tool_use_id`; null on a
         // non-tool hit.
         "pairing": pairing,
+        "is_error": h.is_error,
         "tool_use_id": h.tool_use_id,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and

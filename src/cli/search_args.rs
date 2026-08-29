@@ -368,7 +368,11 @@ pub struct SearchArgs {
     /// `compact_file_reference`; this axis IMPLIES the --attachments gate, so the census
     /// is answerable without the separate flag) · `version` (per Claude Code version -
     /// every record carries the writing CC's top-level `version` stamp, so this shows the
-    /// version(s) a session ran under and where an upgrade landed mid-flight). Records
+    /// version(s) a session ran under and where an upgrade landed mid-flight) · `result`
+    /// (per tool-result error state, `ok` | `error` - `pairing` answers "did a result
+    /// come back", `result` answers "was it good": "any failed reads?" is
+    /// `search "" T --count-by result`; errored results also render an inline `[error]`
+    /// and carry JSON `is_error`). Records
     /// outside an axis's domain (no tool name / no pairing / no model) are excluded AND
     /// the excluded count is reported; never silently. Honors `-t`/`-T`/time/turn/scope;
     /// empty pattern = whole-scope census. Under an active `-t`/`-T`, the `label` axis

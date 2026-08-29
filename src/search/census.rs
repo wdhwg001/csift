@@ -137,6 +137,11 @@ pub(crate) fn axis_census(
                     Some(v) => *counts.entry(v).or_insert(0) += 1,
                     None => excluded += 1,
                 },
+                A::Result => match group.iter().find_map(|h| h.is_error) {
+                    Some(true) => *counts.entry("error".to_string()).or_insert(0) += 1,
+                    Some(false) => *counts.entry("ok".to_string()).or_insert(0) += 1,
+                    None => excluded += 1,
+                },
             }
         }
     }

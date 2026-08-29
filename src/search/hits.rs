@@ -192,7 +192,8 @@ pub(crate) fn collect_record_hits(
                     text: &str,
                     tool_name: Option<String>,
                     dir: Option<(String, String)>,
-                    tuid: Option<String>| {
+                    tuid: Option<String>,
+                    result_err: Option<bool>| {
         if let Some(span) = matcher.locate(text) {
             let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
             hits.push(Hit {
@@ -204,6 +205,7 @@ pub(crate) fn collect_record_hits(
                 model: model.clone(),
                 attachment_type: attachment_type.clone(),
                 version: version.clone(),
+                is_error: result_err,
                 direction: dir,
                 tool_use_id: tuid,
                 pair: None,
@@ -232,7 +234,7 @@ pub(crate) fn collect_record_hits(
             } else {
                 None
             };
-            emit(class, &text, None, dir, None);
+            emit(class, &text, None, dir, None, None);
         }
     } else {
         for crate::model::RecordTextSection {
@@ -249,7 +251,7 @@ pub(crate) fn collect_record_hits(
             } else {
                 None
             };
-            emit(class, &text, None, dir, None);
+            emit(class, &text, None, dir, None, None);
         }
     }
 
@@ -268,7 +270,7 @@ pub(crate) fn collect_record_hits(
     };
     if let Some(class) = user_dual {
         if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
-            emit(class, &text, None, None, None);
+            emit(class, &text, None, None, None, None);
         }
     }
 
@@ -287,6 +289,7 @@ pub(crate) fn collect_record_hits(
                 Class::AgentToolUse,
                 text,
                 rec.csift_kind.clone(),
+                None,
                 None,
                 None,
             );
@@ -308,8 +311,8 @@ pub(crate) fn collect_record_hits(
 
 /// The hit-emission sink shared by [`collect_record_hits`] and its block loop:
 /// (class, text, tool_name, direction, tool_use_id).
-type EmitHit<'a> =
-    dyn FnMut(Class, &str, Option<String>, Option<(String, String)>, Option<String>) + 'a;
+type EmitHit<'a> = dyn FnMut(Class, &str, Option<String>, Option<(String, String)>, Option<String>, Option<bool>)
+    + 'a;
 
 /// The block loop of [`collect_record_hits`]: one emission per selected block-bearing unit -
 /// thinking (incl. the opaque redacted placeholder), assistant text, tool_use (richest comm
@@ -334,7 +337,7 @@ fn collect_block_hits(
                 Block::Thinking { thinking, .. }
                     if has(Class::AgentThinking) && sel(Class::AgentThinking) =>
                 {
-                    emit(Class::AgentThinking, thinking, None, None, None);
+                    emit(Class::AgentThinking, thinking, None, None, None, None);
                 }
                 Block::RedactedThinking { .. }
                     if has(Class::AgentThinking) && sel(Class::AgentThinking) =>
@@ -347,6 +350,7 @@ fn collect_block_hits(
                         None,
                         None,
                         None,
+                        None,
                     );
                 }
                 Block::Text { text }
@@ -356,7 +360,7 @@ fn collect_block_hits(
                 {
                     // Only assistant `text` blocks are the agent message; a user `text` block is
                     // a record-text unit (handled above), never agent.message.
-                    emit(Class::AgentMessage, text, None, None, None);
+                    emit(Class::AgentMessage, text, None, None, None, None);
                 }
                 Block::ToolUse { id, name, input } => {
                     // Richest-selected for this tool_use: comm (sent/signal) > agent.tool.use.
@@ -375,14 +379,19 @@ fn collect_block_hits(
                         } else {
                             None
                         };
-                        emit(class, &rendered, name.clone(), dir, id.clone());
+                        emit(class, &rendered, name.clone(), dir, id.clone(), None);
                     }
                 }
                 Block::ToolResult {
                     content: Some(c),
                     tool_use_id,
+                    is_error,
                     ..
                 } => {
+                    // C-13: every result hit states its error side explicitly - an absent
+                    // field IS a clean result on the wire, so it maps to false, never null
+                    // (pairing answers "did a result come back"; this answers "was it good").
+                    let result_errored = is_error.unwrap_or(false);
                     // The user-facing dual was SELECTED + emitted as the richest view (§3 Q4) → skip
                     // the agent.tool.result duplicate. (When the dual is present but NOT selected -
                     // e.g. `-t agent.tool.result` alone - `user_dual` is None, so the plain result
@@ -414,7 +423,14 @@ fn collect_block_hits(
                     } else {
                         None
                     };
-                    emit(class, &text, name, dir, tool_use_id.clone());
+                    emit(
+                        class,
+                        &text,
+                        name,
+                        dir,
+                        tool_use_id.clone(),
+                        Some(result_errored),
+                    );
                 }
                 _ => {}
             }
