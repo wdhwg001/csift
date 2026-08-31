@@ -186,6 +186,12 @@ pub struct Message {
     #[serde(default, rename = "stop_reason")]
     pub stop_reason: Option<String>,
 
+    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC
+    /// writes one line per content block and repeats the message envelope on each),
+    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.
+    #[serde(default)]
+    pub id: Option<String>,
+
     /// The token-usage echo on assistant records. Kept UNPARSED (same rationale as
     /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].
     #[serde(default)]

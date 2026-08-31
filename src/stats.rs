@@ -6,7 +6,7 @@
 //! no view modes, no tuning flags; `--since`/`--until` bound the counted records by
 //! timestamp (a record with no timestamp never falls inside a bounded window).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use anyhow::Result;
@@ -219,6 +219,7 @@ fn stats_one_file(
         .map(|(_, r)| r)
         .collect();
 
+    let mut usage_peak: HashMap<(String, String), [u64; 4]> = HashMap::new();
     for rec in &admitted {
         match rec.r#type.as_deref() {
             Some("user") => out.user_records += 1,
@@ -238,12 +239,37 @@ fn stats_one_file(
         }
         if let Some(msg) = rec.message.as_ref() {
             if let Some(u) = msg.token_usage() {
+                // CC repeats the IDENTICAL message.usage on every per-block record of
+                // one API message; summing per record over-reports 2.2-3.5x (measured).
+                // Dedupe per FILE by message.id, taking the per-field MAX across the
+                // id's admitted records: identical on clean data, and immune to the
+                // compaction-replay shape where a replayed copy carries ZEROED usage
+                // (first-wins would depend on traversal order). An id-less record
+                // counts on its own, as before.
                 let model = msg.model_id().unwrap_or("(unknown)").to_string();
-                let sums = out.tokens.entry(model).or_default();
-                sums.input += u.input_tokens.unwrap_or(0);
-                sums.output += u.output_tokens.unwrap_or(0);
-                sums.cache_read += u.cache_read_input_tokens.unwrap_or(0);
-                sums.cache_creation += u.cache_creation_input_tokens.unwrap_or(0);
+                let vals = [
+                    u.input_tokens.unwrap_or(0),
+                    u.output_tokens.unwrap_or(0),
+                    u.cache_read_input_tokens.unwrap_or(0),
+                    u.cache_creation_input_tokens.unwrap_or(0),
+                ];
+                match msg.id.as_deref() {
+                    Some(id) if !id.is_empty() => {
+                        let peak = usage_peak
+                            .entry((model, id.to_string()))
+                            .or_insert([0u64; 4]);
+                        for (p, v) in peak.iter_mut().zip(vals) {
+                            *p = (*p).max(v);
+                        }
+                    }
+                    _ => {
+                        let sums = out.tokens.entry(model).or_default();
+                        sums.input += vals[0];
+                        sums.output += vals[1];
+                        sums.cache_read += vals[2];
+                        sums.cache_creation += vals[3];
+                    }
+                }
             }
         }
         if let Some(blocks) = rec.blocks() {
@@ -254,6 +280,13 @@ fn stats_one_file(
                 }
             }
         }
+    }
+    for ((model, _), vals) in usage_peak {
+        let sums = out.tokens.entry(model).or_default();
+        sums.input += vals[0];
+        sums.output += vals[1];
+        sums.cache_read += vals[2];
+        sums.cache_creation += vals[3];
     }
     out.turns = group_turn_indices_deduped(&admitted, |r| *r).len();
     Ok(out)
@@ -278,6 +311,10 @@ fn duration_label(first: Option<&str>, last: Option<&str>) -> String {
     }
 }
 
+/// Scope law: usage dedupe is PER FILE (each row already deduped by message.id). The
+/// same id CAN recur across a session's transcripts - the spawn message is copied into
+/// each child's opening context with its own usage - and each copy is a genuine
+/// per-transcript fact, so the TOTAL row sums them; it never dedupes across files.
 fn merged_tokens(rows: &[SessionStats]) -> BTreeMap<String, TokenSums> {
     let mut total: BTreeMap<String, TokenSums> = BTreeMap::new();
     for r in rows {
