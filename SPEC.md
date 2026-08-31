@@ -361,7 +361,7 @@ evidence of absence, which is why recover's window accounting (§6.7) exists.
 
 ## 5. Label taxonomy — `role.class.sub` (`search -t/--category`, repeatable)
 
-The `-t` axis is a 3-role, **26-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, drift-guard-tested at 26). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (an unmodeled record → empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path (so `-t agent` covers the whole role, `-t agent.tool` covers use+result), and the rendered/JSON label is always the full dotted leaf path.
+The `-t` axis is a 3-role, **27-leaf** dotted taxonomy (`model::Class`; `Class::ALL` is the single source of truth, drift-guard-tested at 27). `Record::classify(ctx) -> Vec<Class>` is the engine: **multi-label** (one physical record can carry >1 leaf), pure, tolerant (an unmodeled record → empty `Vec`, never a crash). A selector matches a record iff some selector path is a **dot-SEGMENT prefix** of some label path (so `-t agent` covers the whole role, `-t agent.tool` covers use+result), and the rendered/JSON label is always the full dotted leaf path.
 
 ### 5.1 The tree (role → class → sub)
 ```
@@ -373,6 +373,7 @@ user                                       (the human)
 agent                                      (the assistant)
 ├─ agent.message           visible end-of-turn text (assistant `text` block)
 ├─ agent.thinking          thinking block (incl. `redacted_thinking` → here, renders `[redacted thinking]`)
+├─ agent.thinking.narration  narration-TAGGED thinking block (v0.9.2): an API-issued one-sentence summary of the reasoning beside it, in the user's language. The tag hides in the base64 `signature` (protobuf field path 2→1→8, LAST length-delimited field at each level; decoded whole-string, every failure → plain `agent.thinking`; open tag set). Renders the `[narration summary]` LABEL-zone marker (display-only); sibling cap 1; excluded from `verbatim`. The first leaf whose path another leaf prefixes: `-t agent.thinking` selects both, pure reasoning = `-t agent.thinking -T agent.thinking.narration`.
 ├─ agent.tool.use          tool_use block (incl. a pending elicitation sidecar marker — AUQ/ExitPlanMode/MCP)
 ├─ agent.tool.result       tool_result block (incl. errored)
 └─ agent.communication                     (EVERY comm hit renders  from ⇨ to)
@@ -425,6 +426,15 @@ Every `agent.communication.*` hit renders a direction (`Record::direction`); the
 ---
 
 ## 6. Subcommand specifications
+
+> **v0.9.2 CHANGE LEDGER (non-breaking surface additions + one measurement CORRECTION -- `csift 0.9.2`).**
+> ① NEW LEAF `agent.thinking.narration` (taxonomy 26 -> 27). Since at least CC 2.1.170 the API can return a SECOND `thinking` block per assistant message under `thinking.display:"summarized"`: a one-sentence, user-language summary of the reasoning beside it, distinguished ONLY by a tag encoded in the base64 `signature` (protobuf path 2 -> 1 -> 8, LAST field at each level; clients >= 2.1.241 render it dim under the hint `summarized`). Classification is by SIGNATURE alone -- ~4% of narration blocks have no reasoning sibling at all, so adjacency is never consulted; signatures reach 200K+ base64 chars, so the WHOLE string is decoded; every failure path (absent/empty/bad base64/truncation/unknown wire type/non-UTF-8/unknown tag) degrades to plain `agent.thinking`. Render: the `[narration summary]` marker rides the LABEL zone only (the tag word is base64-hidden in raw bytes; matchable marker text would break the §7 prefilter laws). Sibling cap 1. `verbatim` never replays narration (already true by construction; pinned). RE-CLASSIFICATION IS INTENDED: narration blocks exist on disk from 2026-06-10, so historical `--count-by label` figures move -- `agent.thinking`(0.9.1) == `agent.thinking` + `agent.thinking.narration`(0.9.2).
+> ② `stats` TOKEN CORRECTION: Claude Code writes one line per content block and repeats the IDENTICAL `message.usage` on every per-block record of one API message; summing per record over-read 2.2-3.5x (measured per field/model/session). Sums now dedupe PER FILE by the new tolerant `message.id` field, per-field MAX across the id's admitted records (immune to the compaction-replay shape that re-writes an id with ZEROED usage). An id-less record counts on its own. Scope law: the same id recurs across a session's transcripts (the spawn message is copied into each child with its own usage) and each copy is a genuine per-transcript fact, so the TOTAL row sums rows, never dedupes across files. Printed totals DROP accordingly.
+> ③ `stats` narration census: `narration_blocks` per model (block counts only -- usage is per MESSAGE and covers the reasoning block and its narration sibling together, so a narration token figure is not derivable and none is invented) + `unknown_thinking_tags` (a tag value that is neither `thinking` nor `narration` surfaces without a csift release).
+> ④ Help staleness swept: the `-t` reference said "25 leaves" and omitted `harness.meta.attachment` since v0.8.1; the hand-kept path oracle in the unit tree was missing the same leaf and gained a length pin against `Class::ALL`.
+
+> **v0.9.1 CHANGE LEDGER (non-breaking; pid-liveness fix on busybox-ps hosts -- `csift 0.9.1`).**
+> busybox `ps` (Alpine and friends) rejects `-p`/`lstart` outright, so the `status` pid probe read a LIVE pid as dead and reported a live session `stale-dead`. When the ps form fails the probe now consults `/proc/<pid>` on Linux (present => alive, start time unknown, reuse-guard skip disclosed; absent, or no /proc as on macOS where ps is reliable => the no-such-process verdict stands). Found by the release matrix's musl test lanes; the reuse-guard e2e became platform-aware. (This entry was added retroactively in the v0.9.2 pass -- the 0.9.1 release commit carried only the CHANGELOG digest.)
 
 > **v0.9.0 CHANGE LEDGER (MINOR - a new COMMAND CLASS: the live-truth pair `status` +
 > `wait` -- `csift 0.9.0`).** The version signals the contract addition, not a breakage:

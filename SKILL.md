@@ -88,6 +88,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | you might assume | actually |
 |---|---|
 | empty pattern `""` matches nothing | it matches EVERYTHING — the base filter for `-t`/time/turn/census |
+| every thinking block is the model's reasoning | since CC 2.1.170 the API can add a SECOND thinking block per message: a narration-tagged one-sentence SUMMARY (same wire shape; tag hidden in the signature). csift labels it `agent.thinking.narration`; `-t agent.thinking` selects both, pure reasoning is `-t agent.thinking -T agent.thinking.narration`. And NO thinking block is raw chain of thought — the API documents all thinking text as summarized |
 | `-c` counts matching records/lines | it counts EXCHANGES (round-trips); per-record counts = `--count-by` |
 | `-l` lists every matching transcript | it lists OWNING session uuids (re-feedable); per-transcript detail = JSON summary `transcript_ids` |
 | `--sessions-from` scopes to exactly the listed ids | the ids then EXPAND to their subagents (span default) — add `--no-subagents` to pin |
@@ -138,7 +139,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 ### @trap:<marker> — "which subagent am I?"
 **Scope: this is the subagent-only tool.** A running subagent cannot read its own id from env; the top-level thread already has `@main` (env-based, no race, always correct) — reach for `@trap` only when you cannot name yourself. Invent a fresh marker, put it literally IN the csift command; csift finds the transcript whose shell tool_use carries it (Bash — or Windows' separate `PowerShell` tool, same `command` field). Grammar (enforced): exactly 3 CamelCase words + exactly 4 non-trivial trailing digits, hand-invented, context-independent — shaped like `@trap:JollyShinyBrook4283`, which is a RESERVED example csift hard-rejects (invent your own; never script-generate or reuse). TIMING: a subagent's transcript flushes per content block, so its launching command is on disk at dispatch and a **first try resolves** — that is the whole design. Diagnostic: from the MAIN thread a first use normally misses instead (the main record is an async flush of the completed message landing ~1-3.4s after dispatch, and csift beats it) — a miss therefore means EITHER you are the main thread (use `@main`) OR your marker was not literal; in neither branch is retrying `@trap` the answer. When @trap does resolve to the main transcript, csift says so on stderr. One-shot means one marker per identity question, not one per attempt (a fresh marker restarts the race). UNIQUENESS is conversation-wide: in a team/multi-subagent setting the marker must be unique across ALL concurrently-running agents, not just your own retries — a marker that lands in two transcripts (e.g. relayed to a peer in a message) errors AMBIGUOUS, fail-loud, never a silent wrong match. `whoami @trap:<marker>` returns the full upstream ancestry chain.
 
-## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 26 leaves
+## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 27 leaves
 
 Selector = dot-segment prefix: `-t agent` (role) · `-t agent.tool` (use+result) · a full leaf = just it. No `-t` ⇒ all. `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
 
@@ -147,6 +148,10 @@ user     .message   genuine human prose (incl. slash-command args, rendered `/na
          .answer    AskUserQuestion answer (Q+options+answer unit)
          .rejection plan/tool reject + typed instruction
 agent    .message · .thinking (redacted → "[redacted thinking]") · .tool.use · .tool.result
+         .thinking.narration   an API-issued one-sentence SUMMARY of the reasoning beside it
+                               (tag hidden in the signature; renders "[narration summary]";
+                               NOT the model's reasoning — pure reasoning = -t agent.thinking
+                               -T agent.thinking.narration; excluded from verbatim replay)
          .communication.{inbox,sent,signal}   peer msgs — rendered `from ⇨ to` (self = owner)
 harness  .notification.{workflow,monitor,subagent,background-command,task}  ← <task-notification>
          .compaction.{summary,boundary}   boundary renders its compactMetadata (trigger=…)
@@ -233,7 +238,7 @@ Reads `$CLAUDE_CODE_SESSION_ID` (alias `$CODEX_COMPANION_SESSION_ID`). Neither s
 csift stats [target…] [--since W] [--until W] [--turn N|A..B|N..|-k] [--max-count N]
   [--sessions-from F] [--no-subagents] [--format json]
 ```
-Per session: lines, user/assistant record counts, turns, compactions, first→last span + duration, tokens per model (input/output/cache_read/cache_creation), tool CALLS by name (the tool-frequency ranking), and a whole-file `types` census — every physical line counted by its top-level `type` (`user`, `assistant`, `attachment`, `file-history-snapshot`, `system`, …): the answer to "what else fills this jsonl", since non-record lines are the bulk of many transcripts and no other surface parses them. `--turn` windows the aggregates on the turn axis — token burn of the last N turns is `stats @main --turn -N..` (everything windows EXCEPT `lines` and the `types` census — file facts, not window facts). Scope total block when >1 session; JSON summary carries scope totals (`tail -1 | jq .tokens`).
+Per session: lines, user/assistant record counts, turns, compactions, first→last span + duration, tokens per model (input/output/cache_read/cache_creation — counted ONCE per API message: CC repeats the identical usage object on every per-block record, so per-record sums over-read 2-3.5x, which is exactly what pre-0.9.2 csift printed), narration blocks per model (API summaries, `agent.thinking.narration`; the token split is not derivable so only blocks are counted; a non-thinking non-narration tag shows as `unknown_thinking_tags`), tool CALLS by name (the tool-frequency ranking), and a whole-file `types` census — every physical line counted by its top-level `type` (`user`, `assistant`, `attachment`, `file-history-snapshot`, `system`, …): the answer to "what else fills this jsonl", since non-record lines are the bulk of many transcripts and no other surface parses them. `--turn` windows the aggregates on the turn axis — token burn of the last N turns is `stats @main --turn -N..` (everything windows EXCEPT `lines` and the `types` census — file facts, not window facts). Scope total block when >1 session; JSON summary carries scope totals (`tail -1 | jq .tokens`).
 
 ## files — what changed, when
 
