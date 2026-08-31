@@ -50,6 +50,14 @@ struct SessionStats {
     /// when the field is absent). A FILE fact like `lines`: never windowed by
     /// `--since`/`--turn`.
     line_types: BTreeMap<String, usize>,
+    /// Narration-tagged thinking blocks per model (`agent.thinking.narration`: an
+    /// API-issued summary of the reasoning beside it). A BLOCK count only - the token
+    /// split is not derivable from the jsonl (usage is per MESSAGE and covers the
+    /// reasoning block and its narration sibling together).
+    narration_blocks: BTreeMap<String, usize>,
+    /// Thinking-signature tags that decoded to something OTHER than thinking or
+    /// narration - a new tag value surfaces here without a csift release.
+    unknown_thinking_tags: usize,
 }
 
 /// Entry point for `csift stats`.
@@ -278,6 +286,21 @@ fn stats_one_file(
                     let name = name.as_deref().unwrap_or("(unnamed)").to_string();
                     *out.tools.entry(name).or_insert(0) += 1;
                 }
+                if let Block::Thinking { signature, .. } = b {
+                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {
+                        Some(crate::model::NARRATION_TAG) => {
+                            let model = rec
+                                .message
+                                .as_ref()
+                                .and_then(|m| m.model_id())
+                                .unwrap_or("(unknown)")
+                                .to_string();
+                            *out.narration_blocks.entry(model).or_insert(0) += 1;
+                        }
+                        Some("thinking") | None => {}
+                        Some(_) => out.unknown_thinking_tags += 1,
+                    }
+                }
             }
         }
     }
@@ -324,6 +347,16 @@ fn merged_tokens(rows: &[SessionStats]) -> BTreeMap<String, TokenSums> {
             e.output += t.output;
             e.cache_read += t.cache_read;
             e.cache_creation += t.cache_creation;
+        }
+    }
+    total
+}
+
+fn merged_narration(rows: &[SessionStats]) -> BTreeMap<String, usize> {
+    let mut total: BTreeMap<String, usize> = BTreeMap::new();
+    for r in rows {
+        for (model, n) in &r.narration_blocks {
+            *total.entry(model.clone()).or_insert(0) += n;
         }
     }
     total
@@ -394,6 +427,18 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
                 );
             }
         }
+        if !r.narration_blocks.is_empty() {
+            println!(
+                "  narration blocks {}  (API summaries, agent.thinking.narration; token split unavailable)",
+                line_types_line(&r.narration_blocks)
+            );
+        }
+        if r.unknown_thinking_tags > 0 {
+            println!(
+                "  unknown thinking-signature tags {}  (neither thinking nor narration - a new API tag value)",
+                r.unknown_thinking_tags
+            );
+        }
         if !r.tools.is_empty() {
             // Descending by count, then name - the "what ran here" glance.
             let mut tools: Vec<(&String, &usize)> = r.tools.iter().collect();
@@ -432,6 +477,10 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
                 "  tokens {model}: in {} · out {} · cache-read {} · cache-write {}",
                 t.input, t.output, t.cache_read, t.cache_creation
             );
+        }
+        let narration = merged_narration(rows);
+        if !narration.is_empty() {
+            println!("  narration blocks {}", line_types_line(&narration));
         }
         if !tools.is_empty() {
             let mut ts: Vec<(&String, &usize)> = tools.iter().collect();
@@ -503,6 +552,8 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) ->
             "compactions": r.compactions,
             "tools": r.tools,
             "tokens": tokens_json(&r.tokens),
+            "narration_blocks": r.narration_blocks,
+            "unknown_thinking_tags": r.unknown_thinking_tags,
             "first_utc": r.first_utc,
             "first_local": r.first_utc.as_deref().and_then(local_iso),
             "last_utc": r.last_utc,
@@ -517,6 +568,8 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) ->
         "turns": rows.iter().map(|r| r.turns).sum::<usize>(),
         "tools": merged_tools(rows),
         "tokens": tokens_json(&merged_tokens(rows)),
+        "narration_blocks": merged_narration(rows),
+        "unknown_thinking_tags": rows.iter().map(|r| r.unknown_thinking_tags).sum::<usize>(),
         "skipped_lines": rows.iter().map(|r| r.skipped_lines).sum::<usize>(),
         "dropped_by_cap": dropped,
     }));

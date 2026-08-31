@@ -257,3 +257,52 @@ fn probe5_span_counts_subagent_narration() {
     ]);
     assert_eq!(narration_count(&top.stdout), 2, "{}", top.stdout);
 }
+
+#[test]
+fn stats_counts_narration_blocks_per_model_and_flags_unknown_tags() {
+    let h = Home::new();
+    let t = sig("thinking");
+    let n = sig("narration");
+    let x = sig("future-tag");
+    let stats_sess = "5a4b3c2d-1e0f-4987-b654-3210fedcba98";
+    h.write(
+        &format!("{ENC}/{stats_sess}.jsonl"),
+        &format!(concat!(
+            r#"{{"type":"assistant","uuid":"s1","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","id":"msg_s1","model":"claude-test-1","content":[{{"type":"thinking","thinking":"placeholder reasoning","signature":"{t}"}}]}}}}"#, "\n",
+            r#"{{"type":"assistant","uuid":"s2","timestamp":"2026-06-07T05:00:02.000Z","message":{{"role":"assistant","id":"msg_s1","model":"claude-test-1","content":[{{"type":"thinking","thinking":"placeholder summary","signature":"{n}"}}]}}}}"#, "\n",
+            r#"{{"type":"assistant","uuid":"s3","timestamp":"2026-06-07T05:00:03.000Z","message":{{"role":"assistant","id":"msg_s2","model":"claude-test-2","content":[{{"type":"thinking","thinking":"placeholder summary two","signature":"{n}"}}]}}}}"#, "\n",
+            r#"{{"type":"assistant","uuid":"s4","timestamp":"2026-06-07T05:00:04.000Z","message":{{"role":"assistant","id":"msg_s3","model":"claude-test-1","content":[{{"type":"thinking","thinking":"placeholder oddity","signature":"{x}"}}]}}}}"#, "\n",
+        ), t = t, n = n, x = x),
+    );
+    let out = h.run(&["stats", &format!("@{stats_sess}"), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let row: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "session")
+        .expect("session row");
+    assert_eq!(
+        row["narration_blocks"]["claude-test-1"], 1,
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        row["narration_blocks"]["claude-test-2"], 1,
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        row["unknown_thinking_tags"], 1,
+        "a future tag value surfaces without a release: {}",
+        out.stdout
+    );
+    let text = h.run(&["stats", &format!("@{stats_sess}")]);
+    assert!(
+        text.stdout.contains("narration blocks")
+            && text.stdout.contains("claude-test-1×1")
+            && text.stdout.contains("unknown thinking-signature tags 1"),
+        "{}",
+        text.stdout
+    );
+}

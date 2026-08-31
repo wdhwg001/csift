@@ -160,7 +160,11 @@ impl ShowArgs {
              by model, time span, compactions",
     long_about = "One scan, one fixed rich shape: the aggregation questions that \
         otherwise force hand-rolled jsonl parsing: token burn per model \
-        (message.usage sums), tool-call counts by name (per CALL: one per invocation; \
+        (message.usage, counted ONCE per API message: Claude Code repeats the identical \
+        usage object on every per-block record of one message, so sums dedupe by \
+        message.id per transcript - a per-record sum over-reads 2-3.5x), narration-block \
+        counts per model (agent.thinking.narration: API-issued summaries; the token \
+        split is not derivable, so only blocks are counted), tool-call counts by name (per CALL: one per invocation; \
         `search --count-by tool` counts RECORDS, use + result carrier, so it reads ≈2× \
         these tallies: a unit difference, not a discrepancy), turn count, first/last \
         timestamps + duration, compaction count, malformed-line count, and a whole-file \
@@ -183,9 +187,10 @@ impl ShowArgs {
         rows carry {session_id, is_subagent, parent_session_id, lines, line_types:{<type>:count}, \
         user_records, \
         assistant_records, turns, compactions, first_utc, first_local, last_utc, last_local, \
-        tokens:{<model>:{input, output, cache_read, cache_creation}}, tools:{<name>:count}, \
-        skipped_lines}. The summary adds the scope totals ({sessions, line_types, tokens, tools, \
-        turns, \
+        tokens:{<model>:{input, output, cache_read, cache_creation}}, \
+        narration_blocks:{<model>:count}, unknown_thinking_tags, tools:{<name>:count}, \
+        skipped_lines}. The summary adds the scope totals ({sessions, line_types, tokens, \
+        narration_blocks, unknown_thinking_tags, tools, turns, \
         dropped_by_cap, skipped_lines}): `tail -1 | jq .tokens` is the one-liner for total \
         burn. `skipped_lines` here is a FULL-SCAN census (stats parses every line): the \
         corruption-census authority for \"does this transcript carry a torn/corrupt line \
