@@ -5,6 +5,64 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.9.2] - 2026-08-31
+
+Narration-aware classification plus a token-accounting correction. Saved
+numbers move in two places, both on purpose: label censuses split, and
+stats token totals drop.
+
+- New label `agent.thinking.narration` (taxonomy 26 -> 27). Since at
+  least Claude Code 2.1.170 the API can return a SECOND thinking block
+  in an assistant message: a one-sentence, user-language summary of the
+  reasoning beside it, distinguished only by a tag encoded inside the
+  base64 `signature` (protobuf field path 2 -> 1 -> 8, LAST field at
+  each level; clients 2.1.241+ render it dim under the hint word
+  `summarized`). csift counted these as reasoning. Classification is by
+  signature alone (about 4 percent of narration blocks have no
+  reasoning sibling, so adjacency is never consulted); the whole
+  signature is decoded (they reach 200K+ base64 chars); every failure
+  path degrades to plain `agent.thinking`; the tag set is open. Hits
+  carry a `[narration summary]` marker in the label zone; narration
+  gets a sibling cap of 1; `verbatim` never replays narration (already
+  true by construction, now pinned). `-t agent.thinking` still selects
+  both leaves; pure reasoning is `-t agent.thinking -T
+  agent.thinking.narration`. Historical records re-classify BY DESIGN:
+  narration blocks exist on disk from 2026-06-10, so saved
+  `--count-by label` figures change, conserving the sum.
+- New label `user.unsent` (taxonomy -> 28). A message that was sent,
+  esc-recalled into the input box, edited and re-sent leaves the
+  ORIGINAL on disk, sharing the resend's parentUuid - and since 0.8.2
+  csift collapsed it to a bare count. Drafts are now searchable and
+  censusable under their own leaf: a matching draft renders as its own
+  annotated unit (`<tok>·draft`, JSON `superseded_draft:true`, null
+  `turn_index`, hits labeled `user.unsent`), turn numbering is
+  untouched, `--turn` windows suppress draft units, and `user.message`
+  counts are unchanged (drafts were never censused before). Documented
+  limits, both measured: a recalled-then-abandoned message has no
+  resend sibling and is structurally undetectable; a QUEUED text edited
+  before dispatch never becomes a user record at all - the bytes
+  survive only in `queue-operation` lines, which csift treats as
+  non-records (raw-reachable; a future release may gate them).
+- `stats` token sums are corrected: Claude Code repeats the identical
+  `message.usage` object on every per-block record of one API message,
+  and stats summed per record - an over-report measured at 2.2x to 3.5x
+  per field and model. Sums now dedupe per transcript by `message.id`
+  (per-field MAX, immune to the compaction-replay shape that rewrites
+  an id with zeroed usage); id-less records count individually as
+  before; the scope TOTAL still sums transcripts (the same id recurs
+  across a session's transcripts with genuinely different per-file
+  usage). Printed totals drop accordingly.
+- `stats` gains a narration census: `narration_blocks` per model (block
+  counts only - the token split is not derivable from the jsonl, so
+  none is invented) and `unknown_thinking_tags` (a signature tag that
+  is neither `thinking` nor `narration` surfaces without a csift
+  release).
+- The narration decode is byte-gated on the hot path (a signature
+  containing none of the tag's three base64 alignments skips the
+  decode), keeping large-corpus search at its previous speed.
+- Help staleness swept: the `-t` reference said "25 leaves" and omitted
+  `harness.meta.attachment` since v0.8.1.
+
 ## [0.9.1] - 2026-08-30
 
 - Fixed: pid liveness on busybox-ps hosts (Alpine and friends). busybox
