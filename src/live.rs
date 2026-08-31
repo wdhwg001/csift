@@ -14,7 +14,8 @@
 //!    tool in flight (subagent transcripts flush per content block; main lands ~1-3.4s
 //!    after dispatch); the last assistant record's `stop_reason` is trustworthy on the
 //!    main lane (0.0-0.3% null) and NORMALLY null mid-message on subagents;
-//! 3. owner-process liveness - a signal-0 probe (unix; other hosts degrade honestly).
+//! 3. owner-process liveness - a `ps`-based probe with a `/proc/<pid>` fallback where
+//!    ps lacks the flags (unix; other hosts degrade honestly).
 //!
 //! Growth classification (the F9 trap): a main transcript GROWS while idle (notification
 //! enqueues, attachments), so mtime alone is never "busy" - what grew must be classified

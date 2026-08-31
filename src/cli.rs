@@ -1,7 +1,7 @@
 //! Command-line surface (clap derive).
 //!
-//! Eleven subcommands: `list`, `search`, `show`, `stats`, `agents`, `whoami`, `files`,
-//! `recover`, `plan`, `verbatim`, `image`. Each carries example-rich help (`--help`) keyed off
+//! Thirteen subcommands: `list`, `search`, `show`, `stats`, `agents`, `whoami`, `files`,
+//! `recover`, `plan`, `verbatim`, `image`, `status`, `wait`. Each carries example-rich help (`--help`) keyed off
 //! the SPEC §6 baseline invocations. `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`
 //! span each session's subagent transcripts by default (`--no-subagents` opts out); `verbatim`
 //! is the exception - a single-thread recovery tool whose per-session budget MULTIPLIES, so

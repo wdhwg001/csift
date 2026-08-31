@@ -1,4 +1,4 @@
-//! Cli root + the Command enum (11 subcommands + the hidden turns tombstone).
+//! Cli root + the Command enum (13 subcommands + the hidden turns tombstone).
 
 use super::*;
 
@@ -29,8 +29,13 @@ use super::*;
           plan     locate the Plan-Mode plan file bound to a session (recover --file @plan dumps it)\n  \
           verbatim RESTORE the verbatim user/assistant back-and-forth a compaction summary\n           \
                    CLIPPED, within a char budget (live-tail peek is `show --turn`)\n  \
-          image    list + extract the inline images a session carries (pastes/screenshots)\n\n\
-        list/search/stats/files/recover/plan/image span each session's subagent transcripts by \
+          image    list + extract the inline images a session carries (pastes/screenshots)\n  \
+          status   one-shot LIVE verdict on a session: running / waiting-children /\n           \
+                   waiting-hitl / idle-eot / stale-dead / unknown, with the evidence named\n  \
+          wait     block until a session condition fires (stop / hitl / auq / notification /\n           \
+                   tool: / write: / verdict:), exit 124 on --timeout\n\n\
+        list/search/stats/files/recover/plan/image/status/wait span each session's subagent \
+        transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
         to restrict to top-level sessions. `verbatim` is the exception among the file-operating \
         commands: it defaults to the TOP-LEVEL thread only (single-thread recovery), \

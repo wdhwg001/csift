@@ -403,7 +403,8 @@ pub struct SearchArgs {
     /// WITH the agent's reply (answers "I said X, what did you say back?"). FIXED policy,
     /// zero arguments: message units always render (user.*, agent.message,
     /// agent.communication.*); chattier machinery is capped per leaf (agent.thinking ≤ 2,
-    /// agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2): the caps apply to the
+    /// agent.thinking.narration ≤ 1, agent.tool.use ≤ 3, agent.tool.result ≤ 3,
+    /// harness.* ≤ 2): the caps apply to the
     /// NON-matching context records ONLY; your actual pattern hits always render in full,
     /// however many share a leaf (so a `--siblings` block can legitimately show more than
     /// the cap count of same-leaf lines). Anything capped away is

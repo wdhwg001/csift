@@ -12,7 +12,8 @@ use super::*;
         (`<claude-home>/sessions/<pid>.json` - status transitions land sub-second), the \
         transcript's tail state machine (an unpaired shell/tool call at the tail = a tool \
         in flight; the last assistant record's stop_reason), and owner-process liveness \
-        (a signal-0 probe plus a process-start-time guard against pid reuse). Child \
+        (a `ps`-based probe, falling back to `/proc/<pid>` where ps lacks the flags, plus \
+        a process-start-time guard against pid reuse). Child \
         transcripts and workflow journals join in by default (span law); the elicitation \
         sidecar covers human-in-the-loop states.\n\n\
         VERDICTS (a closed set): `running` (generating, or a tool in flight) · \
