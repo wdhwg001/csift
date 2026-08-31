@@ -5,6 +5,26 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.9.3] - 2026-09-01
+
+Help corrections and a documentation catch-up; no behavior changes.
+
+- The root help's hand-written SUBCOMMANDS block still listed eleven
+  commands, contradicting the generated list one screen below: status
+  and wait join it and the span-default enumeration.
+- The status/wait help described owner-process liveness as a signal-0
+  probe - a mechanism that never shipped. Corrected to the ps-based
+  probe with the /proc fallback (the 0.9.1 mechanism).
+- The --siblings policy text gains the narration cap of 1 shipped in
+  0.9.2, in the help and in every reference document.
+- README catches up two releases: thirteen subcommands with status and
+  wait rows, a live-status highlight, Quickstart rows for status /
+  wait / user.unsent / the label census, and the 0.8.1+ flags in their
+  rows. SPEC gains per-command sections for status (6.13) and wait
+  (6.14) and rewrites the stats section to the deduped token
+  accounting; SKILL's superseded-draft bullet and JSON reference catch
+  up to 0.9.2.
+
 ## [0.9.2] - 2026-08-31
 
 Narration-aware classification plus a token-accounting correction. Saved
