@@ -5,6 +5,7 @@ mod classify;
 mod diagnosis;
 mod filters;
 mod headers;
+mod narration;
 mod output;
 mod scope;
 mod taxonomy;

@@ -21,7 +21,8 @@ use super::*;
         record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
         whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
         user.message | user.answer | user.rejection | agent.message | agent.thinking | \
-        agent.tool.use | agent.tool.result | agent.communication.{inbox,sent,signal} | \
+        agent.thinking.narration | agent.tool.use | agent.tool.result | \
+        agent.communication.{inbox,sent,signal} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
         harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
@@ -147,7 +148,7 @@ use super::*;
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 25 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 27 leaves\n  \
           user     .message                genuine human prose (a slash command with typed\n                                   \
         prose renders as `/name args`)\n           \
         .answer                 an answered AskUserQuestion: question, options and\n                                   \
@@ -156,11 +157,15 @@ use super::*;
         instruction (+ a `[plan: …]` pointer when resolvable)\n  \
           agent    .message · .thinking    assistant prose · reasoning (a redacted block\n                                   \
         renders \"[redacted thinking]\")\n           \
+        .thinking.narration     an API-issued one-sentence SUMMARY of the reasoning\n                                   \
+        beside it, never the reasoning (renders \"[narration\n                                   \
+        summary]\"; pure reasoning = -t agent.thinking\n                                   \
+        -T agent.thinking.narration)\n           \
         .tool.use · .tool.result  tool traffic, paired by tool_use_id (the `▹` join)\n           \
         .communication.{inbox,sent,signal}  peer messages, rendered `from ⇨ to`\n  \
           harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
         .compaction.{summary,boundary} · .command.{invocation,stdout}\n           \
-        .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop}\n  \
+        .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop,attachment}\n  \
           `-t agent` selects the whole role, `-t agent.tool` both tool leaves, a full path\n  \
         just that leaf; `-T` excludes with the same grammar (a combination that excludes\n  \
         everything it includes is a parse error, as is a selector typo, with suggestions).\n  \

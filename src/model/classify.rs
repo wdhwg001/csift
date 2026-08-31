@@ -11,25 +11,6 @@ impl Record {
         self.is_type("system") && self.subtype.as_deref() == Some("compact_boundary")
     }
 
-    /// The parsed inbound teammate/peer message (GOLD §5) carried by this `type:"user"`
-    /// record, or `None`. Reads the raw (un-normalized) message text so the peer preamble's
-    /// `\n` survives. Gated to `type:"user"` (the only place a teammate message arrives).
-    #[must_use]
-    pub fn teammate_message(&self) -> Option<TeammateMessage> {
-        if !self.is_type("user") {
-            return None;
-        }
-        let text = self.raw_message_text()?;
-        parse_teammate_message(&text)
-    }
-
-    /// True when this record is an inbound TEAMMATE message specifically (GOLD §1) - a
-    /// `<teammate-message>` at a section boundary. Used by the `list`/`turns` clean-preview gate.
-    #[must_use]
-    pub fn is_teammate_message_record(&self) -> bool {
-        self.teammate_message().is_some()
-    }
-
     /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2) - a
     /// `<teammate-message>` OR `<agent-message>` at a section boundary. The predicate
     /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is
@@ -214,7 +195,10 @@ impl Record {
                     push_unique(out, Class::AgentMessage);
                 }
                 Block::Text { .. } => {}
-                Block::Thinking { .. } | Block::RedactedThinking { .. } => {
+                Block::Thinking { signature, .. } => {
+                    push_unique(out, thinking_block_class(signature.as_deref()));
+                }
+                Block::RedactedThinking { .. } => {
                     push_unique(out, Class::AgentThinking);
                 }
                 Block::ToolUse { name, input, .. } => {

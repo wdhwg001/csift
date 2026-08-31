@@ -24,6 +24,7 @@ mod classify_roles;
 mod classify_support;
 mod grouping;
 mod mutation;
+mod narration;
 mod peer;
 mod predicates;
 mod record;

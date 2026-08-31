@@ -107,7 +107,7 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
         return Ok(s.to_string());
     }
     // The pre-v0.5 FLAT spellings get a direct successor pointer (faster convergence than
-    // scanning the 25-value list) - a guidance hint, not a compat shim: still a hard error.
+    // scanning the full selector list) - a guidance hint, not a compat shim: still a hard error.
     let legacy = match s {
         "thinking" => Some("agent.thinking"),
         "tool" => Some("agent.tool"),

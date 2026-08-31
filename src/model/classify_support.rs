@@ -222,3 +222,25 @@ impl std::fmt::Debug for ClassifyCtx<'_> {
             .finish()
     }
 }
+
+#[allow(dead_code)]
+impl Record {
+    /// The parsed inbound teammate/peer message (GOLD §5) carried by this `type:"user"`
+    /// record, or `None`. Reads the raw (un-normalized) message text so the peer preamble's
+    /// `\n` survives. Gated to `type:"user"` (the only place a teammate message arrives).
+    #[must_use]
+    pub fn teammate_message(&self) -> Option<TeammateMessage> {
+        if !self.is_type("user") {
+            return None;
+        }
+        let text = self.raw_message_text()?;
+        parse_teammate_message(&text)
+    }
+
+    /// True when this record is an inbound TEAMMATE message specifically (GOLD §1) - a
+    /// `<teammate-message>` at a section boundary. Used by the `list`/`turns` clean-preview gate.
+    #[must_use]
+    pub fn is_teammate_message_record(&self) -> bool {
+        self.teammate_message().is_some()
+    }
+}

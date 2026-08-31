@@ -334,10 +334,16 @@ fn collect_block_hits(
     if let Some(blocks) = rec.blocks() {
         for block in blocks {
             match block {
-                Block::Thinking { thinking, .. }
-                    if has(Class::AgentThinking) && sel(Class::AgentThinking) =>
-                {
-                    emit(Class::AgentThinking, thinking, None, None, None, None);
+                Block::Thinking {
+                    thinking,
+                    signature,
+                } => {
+                    // Signature-only split (narration vs reasoning); adjacency is never
+                    // consulted, and a mixed multi-block record splits per BLOCK.
+                    let class = crate::model::thinking_block_class(signature.as_deref());
+                    if has(class) && sel(class) {
+                        emit(class, thinking, None, None, None, None);
+                    }
                 }
                 Block::RedactedThinking { .. }
                     if has(Class::AgentThinking) && sel(Class::AgentThinking) =>

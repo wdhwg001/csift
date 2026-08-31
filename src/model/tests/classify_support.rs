@@ -12,6 +12,7 @@ fn class_path_for_every_variant() {
         (Class::UserRejection, "user.rejection"),
         (Class::AgentMessage, "agent.message"),
         (Class::AgentThinking, "agent.thinking"),
+        (Class::AgentThinkingNarration, "agent.thinking.narration"),
         (Class::AgentToolUse, "agent.tool.use"),
         (Class::AgentToolResult, "agent.tool.result"),
         (Class::CommInbox, "agent.communication.inbox"),
@@ -35,7 +36,15 @@ fn class_path_for_every_variant() {
         (Class::ScheduleContinuation, "harness.schedule.continuation"),
         (Class::MetaHook, "harness.meta.hook"),
         (Class::MetaLoop, "harness.meta.loop"),
+        (Class::MetaAttachment, "harness.meta.attachment"),
     ];
+    // The hand-kept oracle covers the WHOLE enum - a leaf added to Class::ALL but not
+    // here slid past this test once (MetaAttachment, v0.8.1); the length pin closes that.
+    assert_eq!(
+        table.len(),
+        Class::ALL.len(),
+        "oracle table drifted from Class::ALL"
+    );
     for (c, p) in table {
         assert_eq!(c.path(), p, "path mismatch for {c:?}");
         // The role is always the first dot-segment of the path.
@@ -59,13 +68,13 @@ fn all_classes_cover_the_enum() {
         let head = c.path().split('.').next().unwrap();
         assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
     }
-    // ALL has no duplicates and matches the verified table size (26 leaves).
+    // ALL has no duplicates and matches the verified table size (27 leaves).
     let mut seen: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
     seen.sort_unstable();
     let n = seen.len();
     seen.dedup();
     assert_eq!(seen.len(), n, "duplicate in Class::ALL");
-    assert_eq!(n, 26, "Class::ALL leaf count drifted");
+    assert_eq!(n, 27, "Class::ALL leaf count drifted");
 }
 
 #[test]

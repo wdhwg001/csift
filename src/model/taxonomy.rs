@@ -45,6 +45,11 @@ pub enum Class {
     AgentMessage,
     /// `agent.thinking` - a thinking block (see the GOLD-gap note re `redacted_thinking`).
     AgentThinking,
+    /// `agent.thinking.narration` - a narration-tagged thinking block: an API-issued
+    /// one-sentence summary of the reasoning beside it, NOT the reasoning itself. The
+    /// tag hides inside the base64 `signature` (see `model/narration.rs`); the first
+    /// leaf whose path is prefixed by another leaf (`-t agent.thinking` selects both).
+    AgentThinkingNarration,
     /// `agent.tool.use` - a tool_use block (incl. a pending elicitation sidecar marker).
     AgentToolUse,
     /// `agent.tool.result` - a tool_result block (incl. errored).
@@ -111,6 +116,7 @@ impl Class {
         Class::UserRejection,
         Class::AgentMessage,
         Class::AgentThinking,
+        Class::AgentThinkingNarration,
         Class::AgentToolUse,
         Class::AgentToolResult,
         Class::CommInbox,
@@ -143,6 +149,7 @@ impl Class {
             Class::UserRejection => "user.rejection",
             Class::AgentMessage => "agent.message",
             Class::AgentThinking => "agent.thinking",
+            Class::AgentThinkingNarration => "agent.thinking.narration",
             Class::AgentToolUse => "agent.tool.use",
             Class::AgentToolResult => "agent.tool.result",
             Class::CommInbox => "agent.communication.inbox",
@@ -175,6 +182,7 @@ impl Class {
             Class::UserMessage | Class::UserAnswer | Class::UserRejection => Role::User,
             Class::AgentMessage
             | Class::AgentThinking
+            | Class::AgentThinkingNarration
             | Class::AgentToolUse
             | Class::AgentToolResult
             | Class::CommInbox

@@ -222,10 +222,14 @@ pub(crate) fn reconstruct_and_match(
 /// zero-argument flag, one predictable behavior): within a matched turn's non-matched
 /// records, MESSAGE-class units always render (user.*, agent.message,
 /// agent.communication.*); the chattier machinery is capped per LEAF -
-/// agent.thinking ≤ 2, agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2.
+/// agent.thinking ≤ 2, agent.thinking.narration ≤ 1 (a summary of the reasoning
+/// beside it - one suffices), agent.tool.use ≤ 3, agent.tool.result ≤ 3, harness.* ≤ 2.
 /// Anything capped away is counted and surfaced as an explicit
 /// `(+N more · csift show …)` pointer - self-healing, never silent.
 pub(crate) fn sibling_cap(class: Class) -> Option<usize> {
+    if class == Class::AgentThinkingNarration {
+        return Some(1);
+    }
     let path = class.path();
     if path.starts_with("agent.thinking") {
         Some(2)

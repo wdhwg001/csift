@@ -39,6 +39,11 @@ pub(crate) fn render_label(h: &Hit) -> String {
     if !err.is_empty() {
         return format!("{}{err}", h.class.path());
     }
+    // A narration record is an API summary, never the model's reasoning - the marker
+    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.
+    if h.class == Class::AgentThinkingNarration {
+        return format!("{} [narration summary]", h.class.path());
+    }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
         return format!("{}  {from} ⇨ {to}", h.class.path());
