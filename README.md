@@ -108,7 +108,7 @@ csift is the missing tool it should have had.
    A background task's completion notice is a `"user"` role. \
    A subagent's return: also `"user"`. \
    Your `AskUserQuestion` answer: a _tool result_. \
-   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 27 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said.
+   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 28 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said.
 
 7. 🛎 **Pending questions, on the record.**
 

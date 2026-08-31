@@ -1,4 +1,5 @@
-//! C-18 superseded-draft honesty: scans disclose the collapse; addresses still fetch.
+//! C-18 + user.unsent: a draft stays outside turn numbering but is searchable under
+//! its own leaf; the collapse count is disclosed; addresses still fetch.
 
 use crate::harness::*;
 
@@ -20,19 +21,20 @@ fn draft_fixture(h: &Home) {
 }
 
 #[test]
-fn search_collapses_the_draft_and_discloses_the_count() {
+fn search_keeps_drafts_out_of_user_message_and_discloses_the_count() {
     let h = Home::new();
     draft_fixture(&h);
     let out = h.run(&["search", "", at(SESS).as_str(), "-t", "user.message"]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
         out.stdout.contains("the sent phrasing") && !out.stdout.contains("abandoned phrasing"),
-        "the scan hides the draft (turn hygiene):\n{}",
+        "user.message stays pure - a draft never rides it:\n{}",
         out.stdout
     );
     assert!(
-        out.stdout.contains("1 superseded draft(s) collapsed"),
-        "the collapse is DISCLOSED, never silent:\n{}",
+        out.stdout
+            .contains("1 superseded draft(s) outside turn numbering"),
+        "the draft set is DISCLOSED, never silent:\n{}",
         out.stdout
     );
     let outj = h.run(&[

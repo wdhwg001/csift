@@ -186,6 +186,7 @@ fn sibling_cap_policy_is_fixed_and_message_classes_uncapped() {
     assert_eq!(sibling_cap(Class::CommInbox), None);
     assert_eq!(sibling_cap(Class::AgentThinking), Some(2));
     assert_eq!(sibling_cap(Class::AgentThinkingNarration), Some(1));
+    assert_eq!(sibling_cap(Class::UserUnsent), None);
     assert_eq!(sibling_cap(Class::AgentToolUse), Some(3));
     assert_eq!(sibling_cap(Class::AgentToolResult), Some(3));
     assert_eq!(sibling_cap(Class::CommandStdout), Some(2));

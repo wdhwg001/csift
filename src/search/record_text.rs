@@ -31,6 +31,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
     matches!(
         c,
         Class::UserMessage
+            | Class::UserUnsent
             | Class::CommInbox
             | Class::CommSignal
             | Class::NotificationWorkflow
@@ -74,7 +75,9 @@ pub(crate) fn record_text_emission(
             | Class::NotificationSubagent
             | Class::NotificationBackgroundCommand
             | Class::NotificationTask => rec.automation_label(),
-            Class::UserMessage | Class::CommInbox => rec.reconstructed_user_text(Some(plan_index)),
+            Class::UserMessage | Class::UserUnsent | Class::CommInbox => {
+                rec.reconstructed_user_text(Some(plan_index))
+            }
             // A teammate signal rides on the raw string; `reconstructed_user_text` returns it for a
             // teammate record (it flattens the content), with the raw text as the fallback.
             Class::CommSignal => rec

@@ -135,10 +135,11 @@ pub struct Exchange {
     pub turn_lines: (usize, usize),
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
-    /// True for an ADDRESSED superseded-draft unit (an opener replaced by a later
-    /// same-parent sibling: esc-cancel / edit-resend). Such a record sits OUTSIDE turn
-    /// numbering (`turn_index` is meaningless and renders null/annotated); it is only
-    /// ever emitted by an explicit `show --line`/`--uuid` address, never by a scan.
+    /// True for a superseded-draft unit (an opener replaced by a later same-parent
+    /// sibling: esc-cancel / edit-resend). Such a record sits OUTSIDE turn numbering
+    /// (`turn_index` is meaningless and renders null/annotated); its hits carry the
+    /// single label `user.unsent`. A scan emits it when it matches (except under a
+    /// `--turn` window); an explicit `show --line`/`--uuid` address always reaches it.
     pub superseded_draft: bool,
 }
 

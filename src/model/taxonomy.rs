@@ -41,6 +41,14 @@ pub enum Class {
     /// `user.rejection` - a plan/tool rejection carrying a typed instruction. Dual-labeled
     /// with [`Class::AgentToolResult`].
     UserRejection,
+    /// `user.unsent` - a SUPERSEDED turn-opener draft: sent, esc-recalled into the input
+    /// box, edited and re-sent, leaving the original on disk sharing the resend's
+    /// parentUuid. Assigned at the SCAN layer (the superseded set needs a LATER sibling,
+    /// which a pure per-record classify cannot see); outside turn numbering; 99% never
+    /// drew a reply. A recalled-then-ABANDONED message has no sibling and is
+    /// structurally undetectable; a QUEUED text edited before dispatch never becomes a
+    /// user record at all (it survives only in `queue-operation` lines).
+    UserUnsent,
     /// `agent.message` - the assistant's visible end-of-turn text block(s).
     AgentMessage,
     /// `agent.thinking` - a thinking block (see the GOLD-gap note re `redacted_thinking`).
@@ -114,6 +122,7 @@ impl Class {
         Class::UserMessage,
         Class::UserAnswer,
         Class::UserRejection,
+        Class::UserUnsent,
         Class::AgentMessage,
         Class::AgentThinking,
         Class::AgentThinkingNarration,
@@ -147,6 +156,7 @@ impl Class {
             Class::UserMessage => "user.message",
             Class::UserAnswer => "user.answer",
             Class::UserRejection => "user.rejection",
+            Class::UserUnsent => "user.unsent",
             Class::AgentMessage => "agent.message",
             Class::AgentThinking => "agent.thinking",
             Class::AgentThinkingNarration => "agent.thinking.narration",
@@ -179,7 +189,9 @@ impl Class {
     #[must_use]
     pub fn role(self) -> Role {
         match self {
-            Class::UserMessage | Class::UserAnswer | Class::UserRejection => Role::User,
+            Class::UserMessage | Class::UserAnswer | Class::UserRejection | Class::UserUnsent => {
+                Role::User
+            }
             Class::AgentMessage
             | Class::AgentThinking
             | Class::AgentThinkingNarration

@@ -8,6 +8,7 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_turn_hits(
     turn: &Turn<'_>,
+    superseded: bool,
     filter: LabelFilter<'_>,
     matcher: &Matcher,
     time_window: &TimeWindow,
@@ -45,6 +46,7 @@ pub(crate) fn collect_turn_hits(
         let before = hits.len();
         collect_record_hits(
             rec,
+            superseded,
             filter,
             matcher,
             resolve_persisted,
@@ -107,6 +109,7 @@ pub(crate) fn collect_turn_siblings(
         let before = sibs.len();
         collect_record_hits(
             &kept.rec,
+            false,
             all,
             &pure,
             resolve_persisted,
@@ -152,6 +155,7 @@ pub(crate) fn collect_turn_siblings(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_record_hits(
     rec: &Record,
+    superseded: bool,
     filter: LabelFilter<'_>,
     matcher: &Matcher,
     resolve_persisted: bool,
@@ -161,7 +165,15 @@ pub(crate) fn collect_record_hits(
     ctx: &ClassifyCtx,
     hits: &mut Vec<Hit>,
 ) {
-    let labels = rec.classify(ctx);
+    // A superseded turn-opener draft (the scan layer computed the set - a pure
+    // per-record classify cannot see the LATER same-parent sibling) carries the single
+    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the
+    // conversation, so it never rides `user.message` (whose counts stay pure).
+    let labels = if superseded {
+        vec![Class::UserUnsent]
+    } else {
+        rec.classify(ctx)
+    };
     if labels.is_empty() {
         return; // unmodeled / excluded record - carries no role.class.sub label
     }

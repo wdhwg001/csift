@@ -59,6 +59,7 @@ above fails quietly and the number you report is wrong in a direction you cannot
 | read a session's recent turns ("what's it doing now") | `show TARGET --turn -3..` |
 | what record-types live here, and how many | `search "" TARGET --count-by label` |
 | which tools ran, how often (per-record census) | `search "" TARGET --count-by tool` — or `stats` (per-CALL counts) |
+| what did I almost send (esc-recalled drafts) | `search "" TARGET -t user.unsent` |
 | any pending / unanswered tool calls | `search "" T --count-by pairing` (the count) — or `agents` (per-lane detail: which tool, since when, escalation-blocked vs awaiting) |
 | which model(s) produced the replies | `search "" TARGET --count-by model` |
 | which CC version(s) a session ran under, where an upgrade landed | `search "" TARGET --count-by version` |
@@ -88,6 +89,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 | you might assume | actually |
 |---|---|
 | empty pattern `""` matches nothing | it matches EVERYTHING — the base filter for `-t`/time/turn/census |
+| what I typed but esc-recalled is gone | a sent-then-esc-recalled draft IS on disk — `-t user.unsent` finds it (7 in one real session, one a 2.48M-char paste). What is genuinely gone from user records: a QUEUED message edited before dispatch (61% of queued texts in one corpus never became user records; the bytes survive only in `queue-operation` non-record lines, `--raw` territory) |
 | every thinking block is the model's reasoning | since CC 2.1.170 the API can add a SECOND thinking block per message: a narration-tagged one-sentence SUMMARY (same wire shape; tag hidden in the signature). csift labels it `agent.thinking.narration`; `-t agent.thinking` selects both, pure reasoning is `-t agent.thinking -T agent.thinking.narration`. And NO thinking block is raw chain of thought — the API documents all thinking text as summarized |
 | `-c` counts matching records/lines | it counts EXCHANGES (round-trips); per-record counts = `--count-by` |
 | `-l` lists every matching transcript | it lists OWNING session uuids (re-feedable); per-transcript detail = JSON summary `transcript_ids` |
@@ -139,7 +141,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 ### @trap:<marker> — "which subagent am I?"
 **Scope: this is the subagent-only tool.** A running subagent cannot read its own id from env; the top-level thread already has `@main` (env-based, no race, always correct) — reach for `@trap` only when you cannot name yourself. Invent a fresh marker, put it literally IN the csift command; csift finds the transcript whose shell tool_use carries it (Bash — or Windows' separate `PowerShell` tool, same `command` field). Grammar (enforced): exactly 3 CamelCase words + exactly 4 non-trivial trailing digits, hand-invented, context-independent — shaped like `@trap:JollyShinyBrook4283`, which is a RESERVED example csift hard-rejects (invent your own; never script-generate or reuse). TIMING: a subagent's transcript flushes per content block, so its launching command is on disk at dispatch and a **first try resolves** — that is the whole design. Diagnostic: from the MAIN thread a first use normally misses instead (the main record is an async flush of the completed message landing ~1-3.4s after dispatch, and csift beats it) — a miss therefore means EITHER you are the main thread (use `@main`) OR your marker was not literal; in neither branch is retrying `@trap` the answer. When @trap does resolve to the main transcript, csift says so on stderr. One-shot means one marker per identity question, not one per attempt (a fresh marker restarts the race). UNIQUENESS is conversation-wide: in a team/multi-subagent setting the marker must be unique across ALL concurrently-running agents, not just your own retries — a marker that lands in two transcripts (e.g. relayed to a peer in a message) errors AMBIGUOUS, fail-loud, never a silent wrong match. `whoami @trap:<marker>` returns the full upstream ancestry chain.
 
-## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 27 leaves
+## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 28 leaves
 
 Selector = dot-segment prefix: `-t agent` (role) · `-t agent.tool` (use+result) · a full leaf = just it. No `-t` ⇒ all. `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
 
@@ -147,6 +149,12 @@ Selector = dot-segment prefix: `-t agent` (role) · `-t agent.tool` (use+result)
 user     .message   genuine human prose (incl. slash-command args, rendered `/name args`)
          .answer    AskUserQuestion answer (Q+options+answer unit)
          .rejection plan/tool reject + typed instruction
+         .unsent    a SUPERSEDED draft: sent, esc-recalled, edited, re-sent — the original
+                    stays on disk sharing the resend's parentUuid, OUTSIDE turn numbering,
+                    never counted as user.message. LIMITS: a recalled-then-ABANDONED
+                    message has no resend sibling and is undetectable; a QUEUED text
+                    edited before dispatch never becomes a user record at all (it survives
+                    only in queue-operation lines — non-records, reachable via --raw)
 agent    .message · .thinking (redacted → "[redacted thinking]") · .tool.use · .tool.result
          .thinking.narration   an API-issued one-sentence SUMMARY of the reasoning beside it
                                (tag hidden in the signature; renders "[narration summary]";

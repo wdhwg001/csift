@@ -183,17 +183,21 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // parent token is the plain first-8 of the owning top-level uuid - no collision
         // machinery (the resolver's fail-loud ambiguity check is the backstop).
         let t = &tok[ex.session_id.as_str()];
+        // A superseded draft sits OUTSIDE turn numbering - name it, never fabricate a t<N>.
+        let turn_tag = if ex.superseded_draft {
+            "draft (superseded — outside turn numbering)".to_string()
+        } else {
+            format!("t{}", ex.turn_index)
+        };
         if ex.is_subagent {
             println!(
-                "{t}·t{} (parent {})  {}",
-                ex.turn_index,
+                "{t}·{turn_tag} (parent {})  {}",
                 id_prefix(&ex.parent_session_id, 8),
                 format_local_compact(ex.started_utc.as_deref())
             );
         } else {
             println!(
-                "{t}·t{}  {}",
-                ex.turn_index,
+                "{t}·{turn_tag}  {}",
                 format_local_compact(ex.started_utc.as_deref())
             );
         }
@@ -269,8 +273,8 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     // escape hatch are stated.
     if outcome.superseded_drafts > 0 {
         println!(
-            "({} superseded draft(s) collapsed — esc-edit resends outside turn numbering; \
-             address one directly with csift show --line/--uuid to read it)",
+            "({} superseded draft(s) outside turn numbering — esc-edit resends; searchable \
+             as -t user.unsent, addressable via csift show --line/--uuid)",
             outcome.superseded_drafts
         );
     }
@@ -470,7 +474,8 @@ pub(crate) fn render_json(
             // re-feedable `parent_session_id` (= session_id for a top-level hit).
             "is_subagent": ex.is_subagent,
             "parent_session_id": ex.parent_session_id,
-            "turn_index": ex.turn_index,
+            "turn_index": if ex.superseded_draft { serde_json::Value::Null } else { serde_json::json!(ex.turn_index) },
+            "superseded_draft": ex.superseded_draft,
             // Envelope-level chronological position = the turn-opening timestamp, the key
             // the combined timeline is sorted on. `ts_local` is the same instant in the
             // host TZ. Per-hit `ts_utc` (in `hits`) can diverge for a deep tool_use match.

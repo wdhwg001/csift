@@ -20,7 +20,7 @@ use super::*;
         CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
         record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
         whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
-        user.message | user.answer | user.rejection | agent.message | agent.thinking | \
+        user.message | user.answer | user.rejection | user.unsent | agent.message | agent.thinking | \
         agent.thinking.narration | agent.tool.use | agent.tool.result | \
         agent.communication.{inbox,sent,signal} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
@@ -148,13 +148,17 @@ use super::*;
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 27 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 28 leaves\n  \
           user     .message                genuine human prose (a slash command with typed\n                                   \
         prose renders as `/name args`)\n           \
         .answer                 an answered AskUserQuestion: question, options and\n                                   \
         the picked answer as one unit\n           \
         .rejection              a plan/tool rejection carrying the user's typed\n                                   \
-        instruction (+ a `[plan: …]` pointer when resolvable)\n  \
+        instruction (+ a `[plan: …]` pointer when resolvable)\n           \
+        .unsent                 a SUPERSEDED draft: sent, esc-recalled, edited and\n                                   \
+        re-sent - the original stays on disk OUTSIDE turn\n                                   \
+        numbering (never counted as user.message; a queued\n                                   \
+        text edited before dispatch never becomes a record)\n  \
           agent    .message · .thinking    assistant prose · reasoning (a redacted block\n                                   \
         renders \"[redacted thinking]\")\n           \
         .thinking.narration     an API-issued one-sentence SUMMARY of the reasoning\n                                   \

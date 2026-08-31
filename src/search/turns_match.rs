@@ -103,6 +103,7 @@ pub(crate) fn reconstruct_and_match(
         // turn-record indices that produced them (so siblings can exclude matched records).
         let (mut hits, hit_idxs) = collect_turn_hits(
             &turn,
+            draft,
             filter,
             matcher,
             time_window,
@@ -203,10 +204,11 @@ pub(crate) fn reconstruct_and_match(
             .collect()
     };
 
-    // C-18: an EXPLICIT address reaches a superseded draft too (the refetch law - it IS
-    // a real record; only turn numbering excludes it). Each addressed draft renders as
-    // its own annotated unit; scans never emit one.
-    if address.is_some() {
+    // C-18 + user.unsent: a superseded draft is a real record OUTSIDE turn numbering.
+    // A scan emits it as its own annotated unit when it hits (searchable, labeled
+    // `user.unsent`) - except under a `--turn` window, which asks about NUMBERED turns
+    // and a draft belongs to none. An explicit address always reaches it (refetch law).
+    if address.is_some() || turn_bounds.is_none() {
         let mut draft_idxs: Vec<usize> = skip.iter().copied().collect();
         draft_idxs.sort_unstable();
         for i in draft_idxs {

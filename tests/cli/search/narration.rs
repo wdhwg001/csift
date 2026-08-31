@@ -306,3 +306,80 @@ fn stats_counts_narration_blocks_per_model_and_flags_unknown_tags() {
         text.stdout
     );
 }
+
+#[test]
+fn stats_narration_total_merges_across_sessions_and_absence_prints_nothing() {
+    let h = Home::new();
+    let n = sig("narration");
+    let s1 = "7e6f5a4b-3c2d-4109-8765-43210fedcba9";
+    let s2 = "8f709a1b-4d3e-4210-9876-543210fedcb0";
+    for (sess, model) in [(s1, "claude-test-1"), (s2, "claude-test-1")] {
+        h.write(
+            &format!("{ENC}/{sess}.jsonl"),
+            &format!(concat!(
+                r#"{{"type":"assistant","uuid":"t1","timestamp":"2026-06-07T05:00:01.000Z","message":{{"role":"assistant","id":"msg_t1","model":"{model}","content":[{{"type":"thinking","thinking":"placeholder summary","signature":"{n}"}}]}}}}"#, "\n",
+            ), model = model, n = n),
+        );
+    }
+    let out = h.run(&["stats", &at(s1), &at(s2)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    // The scope TOTAL block merges the per-model narration counts (1 + 1).
+    assert!(
+        out.stdout.contains("TOTAL") && out.stdout.contains("narration blocks claude-test-1×2"),
+        "{}",
+        out.stdout
+    );
+    let j = h.run(&["stats", &at(s1), &at(s2), "--format", "json"]);
+    let summary: serde_json::Value =
+        serde_json::from_str(j.stdout.lines().last().unwrap()).unwrap();
+    assert_eq!(
+        summary["narration_blocks"]["claude-test-1"], 2,
+        "{}",
+        j.stdout
+    );
+    assert_eq!(summary["unknown_thinking_tags"], 0, "{}", j.stdout);
+
+    // A narration-free session prints NEITHER stats line (absence stays silent).
+    let s3 = "9a8b7c6d-5e4f-4321-a987-6543210fedcb";
+    h.write(
+        &format!("{ENC}/{s3}.jsonl"),
+        concat!(
+            r#"{"type":"assistant","uuid":"p1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","id":"msg_p1","model":"claude-test-1","content":[{"type":"thinking","thinking":"plain reasoning, no signature"}]}}"#,
+            "\n",
+        ),
+    );
+    let quiet = h.run(&["stats", &at(s3)]);
+    assert!(
+        !quiet.stdout.contains("narration blocks")
+            && !quiet.stdout.contains("unknown thinking-signature"),
+        "{}",
+        quiet.stdout
+    );
+}
+
+#[test]
+fn stats_empty_string_message_id_counts_individually() {
+    // An empty-string id is NOT a dedupe key: two such records with different usage
+    // both count (the id-less fallback), never collapse into one map slot.
+    let h = Home::new();
+    let s = "0b1c2d3e-4f5a-4678-b210-fedcba987654";
+    h.write(
+        &format!("{ENC}/{s}.jsonl"),
+        concat!(
+            r#"{"type":"assistant","uuid":"e1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","id":"","model":"claude-test-1","usage":{"input_tokens":0,"output_tokens":11,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"content":[{"type":"text","text":"one"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"e2","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","id":"","model":"claude-test-1","usage":{"input_tokens":0,"output_tokens":31,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"content":[{"type":"text","text":"two"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &at(s), "--format", "json"]);
+    let row: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "session")
+        .expect("row");
+    assert_eq!(
+        row["tokens"]["claude-test-1"]["output"], 42,
+        "{}",
+        out.stdout
+    );
+}
