@@ -1,12 +1,12 @@
 # SPEC.md — csift
 
-> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All eleven subcommands (§6) are built; §10 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `verbatim` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
+> **Status: AUTHORITATIVE — implemented.** This is the single source of truth for *what csift does and how*. Its design is grounded in real `~/.claude/projects` data (51 sampled sessions across CC 2.1.133–2.1.168, files up to 225 MB / 115 879 records), and the measurements throughout are cited as the evidence for each decision. All thirteen subcommands (§6) are built; §10 folds in the per-feature design rationale + the empirical measurements behind the deepest three (`recover` / `verbatim` / `agents`). [`AGENTS.md`](./AGENTS.md) (Claude Code loads it as the `CLAUDE.md` symlink) remains authoritative for *how to work in the repo* (git discipline, gates, conventions); this file is authoritative for *what to build*. An engineer who has never seen a Claude Code (CC) `.jsonl` should be able to implement csift from this document alone.
 
 ---
 
 ## 0. Mission & non-negotiables
 
-**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Eleven subcommands: `list`, `search`, `show` (record FETCH by line / turn / uuid, §6.11), `stats` (one-scan aggregates, §6.12), `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `verbatim` (turn-fidelity reconstruction across compaction, §6.8), `image` (list + extract the images a session carries, §6.9). `list`/`search`/`stats`/`files`/`recover`/`plan`/`image` span each session's subagent transcripts by default (`--no-subagents` opts out); `verbatim` is the exception (top-level thread only, `--subagents` opts in, a target is REQUIRED); `agents` lists subagents as its targets (rejects both span flags).
+**csift = "ripgrep for Claude Code session transcripts".** A fast Rust CLI to **list** and **regex-search** CC session `.jsonl` files. Thirteen subcommands: `list`, `search`, `show` (record FETCH by line / turn / uuid, §6.11), `stats` (one-scan aggregates, §6.12), `agents` (subagent lifecycle, §6.5), `whoami`, `files` (which files a session changed, §6.6), `recover` (reconstruct a file's content from the transcript, §6.7), `plan` (locate the plan file bound to a session, §6.7.1), `verbatim` (turn-fidelity reconstruction across compaction, §6.8), `image` (list + extract the images a session carries, §6.9), `status` (one-shot LIVE verdict, §6.13), `wait` (block until a session condition fires, §6.14). `list`/`search`/`stats`/`files`/`recover`/`plan`/`image`/`status`/`wait` span each session's subagent transcripts by default (`--no-subagents` opts out); `verbatim` is the exception (top-level thread only, `--subagents` opts in, a target is REQUIRED); `agents` lists subagents as its targets (rejects both span flags).
 
 - **Primary consumer is an LLM** (a CC agent searching/recovering its own or a peer session). Output must be clean, token-efficient, and regex-driven. Human/LLM-readable text by default; `--format json` for machine use.
 - **Explicitly NO BM25 / embeddings / semantic search.** Pure regex/ripgrep only. Lexical tokenisation across scripts (CJK / multi-byte) is intractable for scoring; regex is the strength and the whole point.
@@ -1407,9 +1407,9 @@ csift list --format json .                              # machine-readable index
 | `--max-count N` | — | usize | none (**unlimited — no cap**) | cap emitted exchanges; **reports dropped count**. `--max-count 0` = uncapped (the crate-wide convention). |
 | `--count-only` | `-c` | bool | off | print ONLY the match total — one integer counting EXCHANGES, not lines (ripgrep `-c` idiom); honors every filter. The total is ALSO in the normal footer, so `--count-only` just isolates it for a pipe. |
 | `--sessions-with-matches` | `-l` | bool | off | print ONLY the distinct matching OWNING sessions (`parent_session_id`), one per line, sorted, UNCAPPED (a `--max-count` drop notes on stderr). Pipes into `--sessions-from -`. (Per-transcript detail = the JSON summary's `transcript_ids`, ≤100 + `transcript_ids_truncated` — named apart from this owning-session stream.) |
-| `--count-by AXIS` | — | value-enum | off | instead of exchanges, print a per-KEY CENSUS of the matched RECORDS along ONE closed axis (a record whose several sections match still counts ONCE — `record_groups` groups per-section hits back into records) — `<count>  <key>` per line (stderr carries the record accounting). The axis is a CLOSED value-enum, NOT a query language: `label` (per role.class.sub leaf — a record counts under EVERY leaf it carries, so a leaf's count = how many records `-t <leaf>` would surface; the exploration on-ramp) · `tool` (per tool name) · `turn` (per turn, ASCENDING turn order — a histogram; keys `t<N>`, or `<full-transcript-id>·t<N>` when >1 transcript is in scope) · `session` (per transcript) · `pairing` (`paired`\|`pending`\|`orphan`, joined by `tool_use_id`; the join rides the tool BLOCK through the communication views — a SendMessage/spawn whose richest view is `agent.communication.sent`/`.signal`, and a subagent-return `…inbox` on a tool_result, are IN the domain, so a frozen SendMessage is `pending` with no `-t`; record-text comm units carry no tool_use_id and are excluded+reported — the one-command "any pending tools?") · `model` (per assistant model). `label` MULTI-counts; every OTHER axis counts each record ONCE and EXCLUDES records outside its domain (no tool/pairing/model), REPORTING the excluded count (never silent). `label` sorts richest-first; the others count-DESC except `turn` (ascending). An EMPTY PATTERN = a whole-scope census. Honors `-t`/`-T`/time/turn/scope; a THIRD terminal mode (conflicts with `-c`/`-l`/`--siblings`/`--raw`). JSON: a `census` row per key (`{axis, key, records}`) + a `{axis, matched_records, distinct_keys, excluded_records, dropped_by_cap, skipped_lines}` summary. |
+| `--count-by AXIS` | — | value-enum | off | instead of exchanges, print a per-KEY CENSUS of the matched RECORDS along ONE closed axis (a record whose several sections match still counts ONCE — `record_groups` groups per-section hits back into records) — `<count>  <key>` per line (stderr carries the record accounting). The axis is a CLOSED value-enum, NOT a query language: `label` (per role.class.sub leaf — a record counts under EVERY leaf it carries, so a leaf's count = how many records `-t <leaf>` would surface; the exploration on-ramp) · `tool` (per tool name) · `turn` (per turn, ASCENDING turn order — a histogram; keys `t<N>`, or `<full-transcript-id>·t<N>` when >1 transcript is in scope) · `session` (per transcript) · `pairing` (`paired`\|`pending`\|`orphan`, joined by `tool_use_id`; the join rides the tool BLOCK through the communication views — a SendMessage/spawn whose richest view is `agent.communication.sent`/`.signal`, and a subagent-return `…inbox` on a tool_result, are IN the domain, so a frozen SendMessage is `pending` with no `-t`; record-text comm units carry no tool_use_id and are excluded+reported — the one-command "any pending tools?") · `model` (per assistant model) · `attachment` (per attachment payload type; IMPLIES the `--attachments` gate) · `version` (per CC version stamp) · `result` (tool results `ok`|`error` - pairing answers "did a result come back", result answers "was it good"). `label` MULTI-counts; every OTHER axis counts each record ONCE and EXCLUDES records outside its domain (no tool/pairing/model), REPORTING the excluded count (never silent). `label` sorts richest-first; the others count-DESC except `turn` (ascending). An EMPTY PATTERN = a whole-scope census. Honors `-t`/`-T`/time/turn/scope; a THIRD terminal mode (conflicts with `-c`/`-l`/`--siblings`/`--raw`). JSON: a `census` row per key (`{axis, key, records}`) + a `{axis, matched_records, distinct_keys, excluded_records, dropped_by_cap, skipped_lines}` summary. |
 | `--raw` | — | bool | off | emit each matched record's VERBATIM jsonl line (deduped per record) instead of the rendered exchange — `show --raw`'s escape hatch on search's whole filter surface. stdout = pure jsonl; scope/drop/malformed notes → stderr; sidecar-merged records (no physical line) are omitted with a stderr note. Excludes `--format json`/`--siblings`/`-c`/`-l`/`--no-truncate`. |
-| `--siblings` | — | bool | off | render each matched turn's NON-matched records (the surrounding back-and-forth) under a FIXED zero-arg policy: message units always (user.*, agent.message, agent.communication.*); thinking≤2, tool.use≤3, tool.result≤3, harness≤2 per leaf; overflow surfaces an explicit `(+N more · csift show @<id> --line A..B)` pointer + JSON `siblings_hidden`/`turn_lines` |
+| `--siblings` | — | bool | off | render each matched turn's NON-matched records (the surrounding back-and-forth) under a FIXED zero-arg policy: message units always (user.*, agent.message, agent.communication.*); thinking≤2, thinking.narration≤1, tool.use≤3, tool.result≤3, harness≤2 per leaf; overflow surfaces an explicit `(+N more · csift show @<id> --line A..B)` pointer + JSON `siblings_hidden`/`turn_lines` |
 | `--no-truncate` | — | bool | off | emit each record's FULL text instead of the centered ~400-char excerpt (no `--full` alias — that spelling was removed as ambiguous). When NOT set and ≥1 excerpt is clipped, a trailing reader-caution prints (text) / `excerpts_truncated:true` (JSON): an excerpt is a match-centered FRAGMENT, not a summary, and can misrepresent the record's full intent — re-fetch via `--no-truncate` or `csift show` (§6.11; every JSON hit's `refetch` is the ready-to-run command) |
 | `--sessions-from F` | — | path or `-` | none | UNION the scope with an id LIST (whitespace-separated uuid/prefix/agent-id tokens, bare or `@`-prefixed — what `-l` emits); per-id fail-loud; an explicit EMPTY list = an empty scope (honest empty), never all-projects. Available on every multi-target subcommand. |
 | `--resolve-persisted` | — | bool | false | resolve `<persisted-output>` pointers (§4.6); under `--raw` it affects MATCHING only (the emitted line is the original) |
@@ -1446,7 +1446,7 @@ matches  1 exchange · 1 session · oldest first
 
 matched 1 exchange · 1 session · label=all
 ```
-(A subagent session's table row reads `s2 = <hex> (subagent · parent s1)`; an `agent.tool.result` hit names its tool, `▸ agent.tool.result Edit  L2128  …`. The footer keyword is `label=<joined selectors or all>` (+ `label-not=<…>` when `-T` is active).)
+(A subagent exchange header carries its parent on EVERY row: `<tok>·t<N> (parent <first-8>)`; an `agent.tool.result` hit names its tool, `▸ agent.tool.result Edit  L2128  …`. The footer keyword is `label=<joined selectors or all>` (+ `label-not=<…>` when `-T` is active).)
 
 **Example invocations:**
 ```bash
@@ -1877,10 +1877,16 @@ addressing mode: `--line` (jsonl line), `--uuid` (record uuid), or `--turn` (tur
 `csift stats [PATH|@…]… [--since W] [--until W] [--turn N|A..B|-k] [--max-count N] [--sessions-from F] [--subagents|--no-subagents] [--format json]`
 
 Per session (spans subagents by default; each transcript is its own row): physical
-`lines`; `user_records`/`assistant_records`; `turns` (the shared §6.4 grouping);
-`compactions` (isCompactSummary count); first/last timestamps + duration; `tokens`
-per model (summed `message.usage` input/output/cache_read/cache_creation); `tools`
-call counts by tool_use name. `--since`/`--until` bound the COUNTED records (turn
+`lines`; a whole-file `line_types` census (every physical line by its top-level `type`;
+a FILE fact, never windowed - v0.8.1); `user_records`/`assistant_records`; `turns`
+(the shared §6.4 grouping); `compactions` (isCompactSummary count); first/last
+timestamps + duration; `tokens` per model (`message.usage`
+input/output/cache_read/cache_creation, counted ONCE per API message: CC repeats the
+identical usage object on every per-block record, so sums dedupe PER FILE by
+`message.id` with a per-field MAX - v0.9.2; an id-less record counts on its own; the
+scope TOTAL sums rows and never dedupes across files); `narration_blocks` per model +
+`unknown_thinking_tags` (v0.9.2, §5.1 `agent.thinking.narration`; block counts only -
+the token split is not derivable from the jsonl); `tools` call counts by tool_use name. `--since`/`--until` bound the COUNTED records (turn
 grouping runs over the windowed set); `--turn`
 windows on the genuine-turn axis — indices computed over the FULL transcript (stable),
 then INTERSECTED (AND) with the time window. Text prints per-session blocks + a scope
@@ -1890,6 +1896,68 @@ fixed shape — no view modes, no tuning flags. `--max-count N` (opt-in, default
 unlimited) bounds an unscoped run's emitted per-session rows to the N most-recently-active,
 reporting the drop (never silent); the scope TOTAL block then covers the shown subset.
 `--max-count 0` = UNCAPPED (the crate-wide convention).
+
+### 6.13 `status` — one-shot LIVE verdict (the live-truth pair, v0.9.0)
+
+`csift status <TARGET> [--subagents|--no-subagents] [--format json]` — exactly ONE session per call.
+
+A deliberate, documented departure from the forensic contract: `status` (and `wait`)
+answer "NOW", are point-in-time, and are explicitly NON-reproducible; every other
+command stays reproducible. The verdict is a THREE-WAY JOIN, never a single-surface
+inference: (1) the harness session registry (`<claude-home>/sessions/<pid>.json` -
+status transitions land sub-second but the file is TRANSITION-written only, never a
+heartbeat: an hours-old `statusUpdatedAt` just means the state has not changed; covers
+TOP-LEVEL interactive sessions only, a subagent has no row and csift never fabricates
+one); (2) the transcript tail state machine (a bounded 512KB tail window, complete
+lines only: an unreturned `tool_use` at the tail = a tool in flight; the last assistant
+`stop_reason` is trustworthy on the MAIN lane and normally null mid-message on
+subagents); (3) owner-process liveness (a `ps`-based probe with a `/proc/<pid>`
+fallback where ps lacks the flags, e.g. busybox - v0.9.1; guarded against pid reuse by
+the process start time: the registry renders `procStart` in UTC while `ps lstart`
+renders local, both parse as instants with a 2s tolerance; a missing/unparseable start
+time degrades to a pid-only probe AND says so). Child liveness = each child
+transcript's own tail + recent-growth recency (child transcripts grow only from the
+child's own flow) + the incremental workflow journal (`started` minus `result` =
+agents in flight). The elicitation sidecar covers human-in-the-loop blocks.
+
+VERDICTS (closed set, precedence dead > hitl > running > children > eot > unknown):
+`running` | `waiting-children` | `waiting-hitl` | `idle-eot` | `stale-dead` |
+`unknown`. Every verdict ships its evidence rows (surface + value + age), and every
+degradation is STATED in the output: a skipped reuse guard, a missing registry row,
+and the honesty note that a pending PERMISSION prompt lives only in CC process memory
+and would masquerade as idle. Growth alone is never activity (a main transcript grows
+while idle - enqueues, attachments); what grew must be classified. JSON: header
+(session trio) → one `{kind:"verdict"}` row (verdict, evidence[], children[],
+pending[], notes[]) → summary.
+
+### 6.14 `wait` — block until a session condition fires (v0.9.0)
+
+`csift wait <TARGET> --until COND… [--timeout S] [--interval MS] [--subagents|--no-subagents] [--format json]`
+
+Conditions (closed grammar, OR semantics, first hit wins; an unknown head is a hard
+error naming the set): `stop` (verdict becomes idle-eot or stale-dead) · `hitl` ·
+`auq` (a sidecar pending ask, or a native AskUserQuestion tool_use landing) ·
+`notification[:REGEX]` (a `<task-notification>` in the MAIN transcript - they never
+land in children) · `tool:NAME[:REGEX]` (any watched lane) · `write:PATH_RE[:LINE_RE]`
+(Write/Edit/MultiEdit/NotebookEdit) · `verdict:V`.
+
+BASELINE SEMANTICS (the monitor/query boundary): every watched file's byte length is
+snapshotted at startup; ONLY bytes appended after those offsets are events - a
+condition already satisfied by history NEVER fires (history is `search`'s job). After
+the snapshot a READINESS line prints to stderr (`csift: watching N file(s)…`), so a
+scripted caller orders its own trigger after it and the race is gone; the same line
+carries the no-`--timeout` heads-up. Reads are incremental (byte offsets, complete
+lines only - a torn tail is held and re-read next poll); polling is adaptive (200ms
+floor to a 2s ceiling; `--interval` pins it). Child lanes and the elicitation sidecar
+born AFTER the watch starts join it automatically with a ZERO baseline (their whole
+content is post-start; a sidecar's dir is typically created by the first pending ask -
+v0.9.2). Verdict-class conditions re-run the §6.13 join each poll.
+
+EXIT CODES: 0 = a condition fired (the output names which, plus the closing
+assessment); **124** = `--timeout` expired (the GNU timeout convention - the ONE
+documented exception to the crate's 0-vs-non-zero exit law, §4; JSON still emits
+`fired:"timeout"`); any other non-zero = error. JSON: a single `{kind:"wait"}` object
+(fired, verdict, waited_secs, evidence[]).
 
 ## 7. Performance design (NON-FUNCTIONAL contract)
 
@@ -1968,8 +2036,10 @@ Every JSON stream is EXACTLY three parts, no exceptions (S==0, `-c`, restore inc
    workflow `run`, and every subagent as its own `agent` row in tree pre-order; NESTING is
    text-mode only, rebuilt in JSON from `parent_agent_id`/`depth`; there is NO nested
    `workflow_runs`/`children` row field, and `--agent` is no exception), verbatim→`turn|
-   compaction_boundary|collapsed_agents`, plan→`plan`, image→`image|extract`,
-   whoami→`identity`, recover→`coverage|segment|snapshot|restore|boundary`.
+   compaction_boundary|collapsed_agents`, plan→`plan|binding|plan-edit`,
+   image→`image|extract`, whoami→`identity`,
+   recover→`coverage|segment|snapshot|restore|boundary|backup`,
+   show→ also `branch-point` (under `--branch-points`), status→`verdict`, wait→`wait`.
 3. `{"kind":"summary", …}` — the LAST line, always (even all-zero counts). Notable
    summaries: search `census` mode → `{axis, matched_records, distinct_keys,
    excluded_records, dropped_by_cap, skipped_lines}`; files → adds `sessions` (distinct

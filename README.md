@@ -8,7 +8,7 @@
   <p><strong>The missing tool for Claude Code session transcripts.</strong></p>
 
   <p>
-    <strong>search</strong>, <strong>recover</strong>, and <strong>audit</strong> any Claude Code session straight from the <code>.jsonl</code> logs.
+    <strong>search</strong>, <strong>recover</strong>, <strong>monitor</strong>, and <strong>audit</strong> any Claude Code session straight from the <code>.jsonl</code> logs.
   </p>
 
   <p>
@@ -108,29 +108,34 @@ csift is the missing tool it should have had.
    A background task's completion notice is a `"user"` role. \
    A subagent's return: also `"user"`. \
    Your `AskUserQuestion` answer: a _tool result_. \
-   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 28 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said.
+   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 28 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said. \
+   Two labels exist because the format hides things: `user.unsent` finds the message you esc-recalled and never actually sent, and `agent.thinking.narration` separates the API's one-line summaries from the reasoning they summarize.
 
 7. 🛎 **Pending questions, on the record.**
 
    csift ships a hook that records `AskUserQuestion` / `ExitPlanMode` / MCP elicitations to a sidecar file, and every csift surface **merges** the unresolved ones in transparently. An orchestrator can finally see which session is stuck waiting on a human, and on what.
 
-8. 🔎 **Round-trips, not lines.**
+8. 🩺 **Is it actually stopped?**
+
+   `csift status` answers RIGHT NOW: running, waiting on children, waiting on a human, idle, or dead. One verdict joined from the harness's session registry, the transcript's tail, and a process probe, with the evidence named. `csift wait --until stop` (or `auq`, `notification:RE`, `tool:Bash`, `write:PATH`) blocks until it happens and exits 124 on timeout. The one corner of csift that answers "now" instead of "what happened": point-in-time by design.
+
+9. 🔎 **Round-trips, not lines.**
 
    A hit returns the whole exchange, rebuilt from the `uuid`/`parentUuid` graph: the matched tool call with its result, the user turn with the agent's reply. This is the context that `grep` or Claude's ad-hoc scripts can **never** reliably provide.
 
-9. 🌳 **Subagent topology.**
+10. 🌳 **Subagent topology.**
 
    Kind, lifecycle, and the parent→child tree of every spawned agent, plus detection of lanes frozen on a pending permission approval.
 
-10. 🤖 **Designed for humans and LLMs.**
+11. 🤖 **Designed for humans and LLMs.**
 
     Output is terse, re-feedable, and even structural. Simply install the skill and your Claude will gain the power.
 
-11. 🔒 **Local, read-only, no magic.**
+12. 🔒 **Local, read-only, no magic.**
 
     Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry, no hidden detections. It reads files already on your disk and never mutates your session histories.
 
-12. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
+13. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
 
     200 MB transcripts and multi-GB corpora in **about a second**, quick enough to call from inside a hook without noticing.
 
@@ -177,25 +182,31 @@ npx skills add wdhwg001/csift
 | inspect a session's subagents                         | `csift agents @<uuid>`                                   |
 | identify the current session                          | `csift whoami`                                           |
 | pull a pasted image back out                          | `csift image @<uuid> --out ./imgs`                       |
+| is that session still running, and on what            | `csift status @<uuid>`                                   |
+| block until a session stops or asks                   | `csift wait @<uuid> --until stop --timeout 300`          |
+| find the message you esc-recalled and never sent      | `csift search "" @<uuid> -t user.unsent`                 |
+| see what record-types fill a session                  | `csift search "" @<uuid> --count-by label`               |
 | run the NEXT command over exactly what matched        | `csift search "X" -l \| csift stats --sessions-from -`   |
 
 Run `csift <command> --help` for the full flag set and examples.
 
-## The eleven subcommands
+## The thirteen subcommands
 
 |                |                                                                                                                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`list`**     | fast "which session is this?" index: first/last user + last agent, per session                                                                                                          |
-| **`search`**   | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `-l` matching sessions, `--raw` verbatim lines)                                                      |
-| **`show`**     | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes |
-| **`stats`**    | one-scan aggregates per session: tokens by model, tool calls, turns, span, compactions                                                                                                  |
+| **`search`**   | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `--count-by` censuses, `--attachments`, `-l` matching sessions, `--raw` verbatim lines)                                                      |
+| **`show`**     | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes; `--branch-points` maps where the conversation forked |
+| **`stats`**    | one-scan aggregates per session: tokens by model (counted once per API message), tool calls, turns, span, compactions, narration blocks, a whole-file line-type census                                                                                                  |
 | **`agents`**   | a session's subagents: kind, lifecycle, status, and the parent→child topology                                                                                                           |
 | **`whoami`**   | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe                                                                                                        |
 | **`files`**    | which files/dirs a session changed, when, plus edits made outside the tool stream                                                                                                       |
-| **`recover`**  | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream: byte-exact or honest gaps                                                                                       |
-| **`plan`**     | locate the Plan-Mode plan file bound to a session (and reverse: which session owns a plan)                                                                                              |
+| **`recover`**  | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream: byte-exact or honest gaps; `--list-backups` reads Claude Code's own file-history checkpoints                                                                                       |
+| **`plan`**     | locate the Plan-Mode plan file bound to a session (reverse: which session owns a plan; `--audit` flags edits to plans the session does not own)                                                                                              |
 | **`verbatim`** | restore the verbatim turns a compaction summary clipped, within a budget (the live-tail peek is `show --turn`)                                                                          |
 | **`image`**    | list + extract images pasted into a transcript (handle/locator addressing, format transcode)                                                                                            |
+| **`status`**   | one-shot LIVE verdict on a session: running / waiting-children / waiting-hitl / idle-eot / stale-dead / unknown, joined from the registry + transcript tail + process probe             |
+| **`wait`**     | block until a session condition fires (`stop` / `hitl` / `auq` / `notification[:RE]` / `tool:NAME` / `write:PATH` / `verdict:V`); exits 124 on `--timeout`                              |
 
 ## The summary is a selection. csift keeps the conversation.
 
@@ -223,7 +234,7 @@ They are dense, cross-referenced, and written for a model's attention, not yours
 
 An honest note first: csift's potholes are Claude's own, and I don't think fixing them should be a human's job. The intended path is to have Claude clone the repo and clean up after itself, then open the PR. From the PR onward, though, I expect a human who has read the code; if reviewing your PR would mean chatting with an AI, it should have been an Issue instead. Issues are genuinely welcome: describe the problem clearly and I'm happy to point my Claude at it.
 
-The entire quality gate is one pre-commit hook (installed on your first `cargo test`): `cargo fmt --check` → `cargo clippy --all-targets -D warnings` → `cargo test`. Keep those green and you're set.
+The entire quality gate is one pre-commit hook (installed on your first `cargo test`): the structure gate (file/folder limits) → `cargo fmt --check` → `cargo clippy --all-targets -D warnings` → `cargo test`. Keep those green and you're set.
 
 ## License
 
