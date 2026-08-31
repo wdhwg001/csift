@@ -35,11 +35,29 @@ pub(crate) fn thinking_signature_tag(signature: Option<&str>) -> Option<String> 
     std::str::from_utf8(f8).ok().map(str::to_string)
 }
 
+/// The three base64 alignments of the tag bytes (`narration` at stream offset 0/1/2
+/// mod 3). A signature containing NONE of them cannot decode to `narration`, so the
+/// hot path skips the full decode - a µs substring check instead of decoding a 200KB
+/// signature (classify runs on every thinking block of every candidate record; the
+/// ungated form cost ~+20% wall on a 685MB transcript). Verified sound on 13,957 real
+/// signatures (alignment MIXES within one file - all three needles are required).
+/// Whitespace inside the base64 (tolerated by the decoder, never observed in real
+/// signatures) would break needle adjacency, so it conservatively re-opens the gate.
+const NARRATION_B64_ALIGNMENTS: [&str; 3] = ["bmFycmF0aW9u", "5hcnJhdGlv", "uYXJyYXRp"];
+
 /// The leaf for a thinking block: `agent.thinking.narration` iff the signature tag reads
 /// exactly `narration`; every other outcome (tag `thinking`, an unknown tag, no tag)
 /// stays `agent.thinking`.
 pub(crate) fn thinking_block_class(signature: Option<&str>) -> Class {
-    if thinking_signature_tag(signature).as_deref() == Some(NARRATION_TAG) {
+    let Some(sig) = signature else {
+        return Class::AgentThinking;
+    };
+    let gate_open = NARRATION_B64_ALIGNMENTS.iter().any(|n| sig.contains(n))
+        || sig.bytes().any(|b| b.is_ascii_whitespace());
+    if !gate_open {
+        return Class::AgentThinking;
+    }
+    if thinking_signature_tag(Some(sig)).as_deref() == Some(NARRATION_TAG) {
         Class::AgentThinkingNarration
     } else {
         Class::AgentThinking

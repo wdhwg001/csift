@@ -196,3 +196,32 @@ fn classify_splits_thinking_records_by_signature_only() {
         );
     }
 }
+
+#[test]
+fn the_byte_gate_is_sound_across_all_three_alignments() {
+    // The hot-path gate skips the decode when no base64 alignment of the tag is
+    // present; shifting the tag's stream offset by 0/1/2 bytes exercises every
+    // alignment - a lost needle silently misclassifies one of these.
+    for pad in 0..3usize {
+        let mut outer = vec![0x08, 0x02];
+        outer.extend(field(14, &vec![0x2a; 4 + pad]));
+        outer.extend(field(2, &field(1, &field(8, b"narration"))));
+        let sig = b64(&outer);
+        assert_eq!(
+            thinking_block_class(Some(&sig)),
+            Class::AgentThinkingNarration,
+            "pad {pad}"
+        );
+    }
+    // Whitespace inside the base64 breaks needle adjacency; the gate must re-open and
+    // the decoder (whitespace-tolerant) still finds the tag.
+    let mut outer = vec![0x08, 0x02];
+    outer.extend(field(2, &field(1, &field(8, b"narration"))));
+    let sig = b64(&outer);
+    let mid = sig.len() / 2;
+    let spaced = format!("{} {}", &sig[..mid], &sig[mid..]);
+    assert_eq!(
+        thinking_block_class(Some(&spaced)),
+        Class::AgentThinkingNarration
+    );
+}
