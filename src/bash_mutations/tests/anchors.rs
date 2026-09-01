@@ -276,3 +276,45 @@ fn redirect_token_forms_and_refusals() {
     // tee with a flag-shaped operand refuses.
     assert_eq!(one("tee -x /tmp/f <<'EOF'\nbody\nEOF"), None);
 }
+
+#[test]
+fn mutation_kill_pins() {
+    // Two heredoc write segments pair each body to ITS opener (the body cursor
+    // advances per segment).
+    let two = bash_anchors("cat > a.txt <<'A'\nalpha\nA\ncat > b.txt <<'B'\nbeta\nB");
+    assert_eq!(
+        two.writes,
+        vec![
+            AnchorCmd::WriteFull {
+                operand: "a.txt".into(),
+                content: "alpha\n".into(),
+                heredoc: true
+            },
+            AnchorCmd::WriteFull {
+                operand: "b.txt".into(),
+                content: "beta\n".into(),
+                heredoc: true
+            },
+        ],
+        "{two:?}"
+    );
+    // A flag-shaped tee operand can never be the target file.
+    assert_eq!(one("tee -a <<'EOF'\nbody\nEOF"), None);
+    assert_eq!(one("tee -a -b <<'EOF'\nbody\nEOF"), None);
+    // `echo -E` is the no-escape default: consumed, not part of the content.
+    assert!(matches!(
+        one("echo -E hi > f.txt"),
+        Some(AnchorCmd::WriteFull { content, .. }) if content == "hi\n"
+    ));
+    // A %-bearing printf format is never literal output.
+    assert_eq!(one("printf '%sx' > f.txt"), None);
+    // A single-quoted operand keeps $ verbatim (sq is literal by definition).
+    assert_eq!(
+        one("cat '/tmp/a$b.txt'"),
+        Some(AnchorCmd::ReadFull {
+            operand: "/tmp/a$b.txt".into()
+        })
+    );
+    // A backgrounded command anchors nothing.
+    assert_eq!(one("echo hi > f.txt &"), None);
+}

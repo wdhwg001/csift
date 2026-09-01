@@ -333,3 +333,16 @@ fn any_literal_prefilter_case_sensitive_multi_needle() {
     // The empty pattern derives no needles (the pure filter never gates).
     assert!(required_needles("").is_none());
 }
+
+#[test]
+fn needle_extraction_mutation_pins() {
+    // A min-0 repetition contributes NOTHING even when its inner literal is the
+    // longest part - it may match zero times, so its literal is not required.
+    assert_eq!(
+        required_needles("(alphaxx)*barb"),
+        Some(vec!["barb".to_string()])
+    );
+    // A C0 control char inside an otherwise plain pattern is JSON-escaped in raw
+    // lines: it splits the runs, and the short remainders anchor nothing.
+    assert!(required_needles("ab\u{01}cd").is_none());
+}

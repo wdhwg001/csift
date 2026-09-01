@@ -365,3 +365,56 @@ fn no_target_and_interrupted_gates() {
         "{events:?}"
     );
 }
+
+#[test]
+fn mutation_kill_pins() {
+    // A same-file second touch under a DIFFERENT spelling still refuses the anchor
+    // (the collision check compares RESOLVED paths, not verbatim strings).
+    let twice = "cat > notes.md <<'EOF'\nalpha\nEOF\nsed -i 's/a/b/' ./notes.md";
+    let use_line = format!(
+        r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":{c}}}}}]}}}}"#,
+        c = serde_json::to_string(twice).unwrap()
+    );
+    let records = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        use_line.leak(),
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"stdout":"","stderr":"","interrupted":false},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":""}]}}"#,
+    ]);
+    let events = extract_events(&records, "/w/notes.md");
+    assert!(
+        events
+            .iter()
+            .all(|e| !matches!(e.kind, EventKind::FullSnapshot { .. })),
+        "a differently-spelled second touch refuses: {events:?}"
+    );
+
+    // Exact-window reads stay WINDOWS (only an EOF-short window from line 1 is the
+    // whole file).
+    let mk = |cmd: &str, stdout_json: &str| {
+        let use_line = format!(
+            r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":{c}}}}}]}}}}"#,
+            c = serde_json::to_string(cmd).unwrap()
+        );
+        let result = format!(
+            r#"{{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{{"stdout":{s},"stderr":"","interrupted":false}},"message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"b1","content":{s}}}]}}}}"#,
+            s = stdout_json
+        );
+        numbered(&[
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+            use_line.clone().leak(),
+            result.clone().leak(),
+        ])
+    };
+    let head_exact = mk("head -n 2 f.txt", r#""one\ntwo\n""#);
+    let events = extract_events(&head_exact, "/w/f.txt");
+    assert!(
+        matches!(&events[0].kind, EventKind::BashWindowRead { start_line: 1, lines } if lines.len() == 2),
+        "an exact head window is not provably the whole file: {events:?}"
+    );
+    let sed_exact = mk("sed -n '3,5p' f.txt", r#""c\nd\ne\n""#);
+    let events = extract_events(&sed_exact, "/w/f.txt");
+    assert!(
+        matches!(&events[0].kind, EventKind::BashWindowRead { start_line: 3, lines } if lines.len() == 3),
+        "an exact sed window splices, never refuses: {events:?}"
+    );
+}

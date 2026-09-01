@@ -308,6 +308,12 @@ fn p13_settled_children_fold_and_tasks_section() {
         &format!("tasks/{LIVE_SESS}/5.json"),
         r#"{"id":5,"subject":"Refit the hull","status":"completed"}"#,
     );
+    // A numeric-id OPEN task renders its number and sorts NUMERICALLY (12 after 3,
+    // where a lexicographic order would put "12" first).
+    h.write_claude(
+        &format!("tasks/{LIVE_SESS}/12.json"),
+        r#"{"id":12,"subject":"Chart the drift","status":"pending"}"#,
+    );
     let out = h.run(&["status", &at(LIVE_SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     // Settled lanes fold to a count line; no per-lane settled rows survive.
@@ -333,8 +339,14 @@ fn p13_settled_children_fold_and_tasks_section() {
         out.stdout
     );
     assert!(
-        out.stdout.contains("tasks     2 open ; 3 completed"),
-        "tasks summary (decoys skipped, numeric id counted):\n{}",
+        out.stdout.contains("tasks     3 open ; 3 completed"),
+        "tasks summary (decoys skipped, numeric ids counted):\n{}",
+        out.stdout
+    );
+    let i12 = out.stdout.find("#12 pending  Chart the drift");
+    assert!(
+        i12.is_some() && i3 < i12,
+        "numeric id order (3 before 12):\n{}",
         out.stdout
     );
     assert!(
@@ -360,12 +372,17 @@ fn p13_settled_children_fold_and_tasks_section() {
     assert_eq!(row["settled_children"], 2, "{}", j.stdout);
     assert_eq!(
         row["tasks"].as_array().map(Vec::len),
-        Some(2),
+        Some(3),
         "{}",
         j.stdout
     );
     assert_eq!(row["tasks"][0]["id"], "2", "{}", j.stdout);
     assert_eq!(row["tasks"][1]["blocked_by"][0], "2", "{}", j.stdout);
+    assert_eq!(
+        row["tasks"][2]["id"], "12",
+        "numeric id renders: {}",
+        j.stdout
+    );
     assert_eq!(row["tasks_completed"], 3, "{}", j.stdout);
 }
 
