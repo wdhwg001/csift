@@ -208,3 +208,45 @@ fn attach_gate_requires_mtime_agreement_and_version_change() {
     assert_eq!(verified_store_content(&store.join("missing@v9"), bt), None);
     std::fs::remove_dir_all(&home).unwrap();
 }
+
+#[test]
+fn first_marker_divergence_rebases_and_tolerance_is_inclusive() {
+    // The FIRST marker is a baseline worth checking: a divergence there rebases too.
+    let events = vec![write_event(1, "old\n"), marker(3, 1, Some("new\n"))];
+    let rep = replay(&events, None);
+    assert_eq!(rep.counts.snapshot_rebase, 1);
+    assert_eq!(rep.final_buffer.known_lines(), vec![(1, "new".to_string())]);
+
+    // The mtime window is inclusive: exactly 120s off still verifies; 121s refuses.
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("csift-tol-{}-{n}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let blob = dir.join("hash@v1");
+    std::fs::write(&blob, "body\n").unwrap();
+    let bt = "2026-06-07T05:00:00Z";
+    let instant: jiff::Timestamp = bt.parse().unwrap();
+    let t = std::time::UNIX_EPOCH
+        + std::time::Duration::from_secs(u64::try_from(instant.as_second() + 120).unwrap());
+    std::fs::File::options()
+        .write(true)
+        .open(&blob)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+    assert_eq!(
+        verified_store_content(&blob, bt).as_deref(),
+        Some("body\n"),
+        "exactly 120s off is inside the window"
+    );
+    let t2 = std::time::UNIX_EPOCH
+        + std::time::Duration::from_secs(u64::try_from(instant.as_second() + 121).unwrap());
+    std::fs::File::options()
+        .write(true)
+        .open(&blob)
+        .unwrap()
+        .set_modified(t2)
+        .unwrap();
+    assert_eq!(verified_store_content(&blob, bt), None, "121s is outside");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

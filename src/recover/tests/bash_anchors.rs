@@ -418,3 +418,107 @@ fn mutation_kill_pins() {
         "an exact sed window splices, never refuses: {events:?}"
     );
 }
+
+#[test]
+fn read_anchor_counts_and_window_totals() {
+    // cat-full: the read-anchor COUNT rides the replay (not just the content).
+    let clean = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"cat f.txt"}}]}}"#,
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"stdout":"alpha\nbeta\n","stderr":"","interrupted":false},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"alpha\nbeta\n"}]}}"#,
+    ]);
+    let events = extract_events(&clean, "/w/f.txt");
+    let rep = replay(&events, None);
+    assert_eq!(rep.counts.bash_read_anchor, 1);
+
+    // A window splice floors seen_total to its OBSERVED extent exactly.
+    let sed = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"sed -n '3,4p' f.txt"}}]}}"#,
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"stdout":"gamma\ndelta\n","stderr":"","interrupted":false},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"gamma\ndelta\n"}]}}"#,
+    ]);
+    let events = extract_events(&sed, "/w/f.txt");
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.final_buffer.seen_total_lines,
+        Some(4),
+        "extent = start 3 + 2 lines - 1"
+    );
+}
+
+#[test]
+fn append_placement_edges() {
+    // Multi-line append content lands at consecutive positions after the base.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "alpha\n".into(),
+                total_lines: 1,
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::BashAppend {
+                content: "beta\ngamma\n".into(),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.final_buffer.known_lines(),
+        vec![
+            (1, "alpha".to_string()),
+            (2, "beta".to_string()),
+            (3, "gamma".to_string())
+        ]
+    );
+    assert_eq!(rep.final_buffer.seen_total_lines, Some(3));
+
+    // An INCOMPLETE buffer whose newline flag is set (a full anchor followed by a
+    // window splice past the end) must still refuse placement.
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::FullSnapshot {
+                content: "alpha\n".into(),
+                total_lines: 1,
+                source: SnapSource::Write,
+            },
+        },
+        FileEvent {
+            line_no: 2,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::BashWindowRead {
+                start_line: 5,
+                lines: vec!["epsilon".into()],
+            },
+        },
+        FileEvent {
+            line_no: 3,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::BashAppend {
+                content: "zeta\n".into(),
+            },
+        },
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.boundaries
+            .iter()
+            .filter(|b| b.kind == "bash_append_unplaced")
+            .count(),
+        1,
+        "gap between line 1 and 5: the append point is unknowable: {:?}",
+        rep.boundaries
+    );
+}
