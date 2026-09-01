@@ -60,6 +60,17 @@ pub(crate) fn render_text(
             println!("  cwd      {cwd}   ({meta})");
         }
 
+        if let Some(bu) = &s.clone_boundary_uuid {
+            match &s.clone_of {
+                Some(origin) => {
+                    println!("  clone    forked from SESSION {origin} at compaction boundary {bu}")
+                }
+                None => println!(
+                    "  clone    forked at compaction boundary {bu} (origin not in this \
+                     project dir)"
+                ),
+            }
+        }
         print_preview("first ◂", s.first_user.as_ref());
         print_preview("last ◂ ", s.last_user.as_ref());
         print_preview("last ▸ ", s.last_agent.as_ref());
@@ -165,6 +176,13 @@ pub(crate) fn render_json(
             // Empty / false for a session with no pending and for every subagent row.
             "pending_elicitations": s.pending_elicitations,
             "with_elicitation_sidecar": !s.pending_elicitations.is_empty(),
+            // C-19 clone lineage: a transcript whose first timestamped record is a
+            // compaction boundary was minted by copying another session there. Note
+            // the corollary for every spanning surface: a clone DOUBLE-COUNTS its
+            // inherited records until scoped away.
+            "is_clone": s.clone_boundary_uuid.is_some(),
+            "clone_of": s.clone_of,
+            "clone_boundary_uuid": s.clone_boundary_uuid,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

@@ -53,6 +53,18 @@ pub struct SessionSummary {
     /// with no sidecar / no pending, and ALWAYS empty for a subagent row (the sidecar is keyed
     /// by the top-level session). Drives the `with elicitation sidecar` annotation.
     pub pending_elicitations: Vec<String>,
+    /// C-19 clone lineage: Some when this transcript is a CLONE - its FIRST
+    /// TIMESTAMPED record is a `compact_boundary`, the signature of a session file
+    /// minted by COPYING another session at a compaction point (background-job forks
+    /// do this: record uuids preserved, timestamps predating the file, the slug
+    /// stripped). The value is that boundary record's uuid (the fork point).
+    /// Always None for a subagent row.
+    pub clone_boundary_uuid: Option<String>,
+    /// The ORIGIN session this clone was copied from: the sibling transcript in the
+    /// same project dir where the boundary record natively lives (a mid-file record,
+    /// not a head clone). None when the origin is outside the dir, cleaned up, or
+    /// the transcript is not a clone - the clone flag stands on its own.
+    pub clone_of: Option<String>,
     /// True when the session's elicitation SIDECAR FILE exists at all (= the csift hook
     /// is installed for this session - resolved pairs stay in the file). The tri-state a
     /// consumer needs: present+pending / present+none (safe to conclude "not blocked on

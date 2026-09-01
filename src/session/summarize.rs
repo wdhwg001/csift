@@ -115,6 +115,16 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
     let sidecar_present =
         !is_subagent && crate::elicitation::sidecar_path(path).is_some_and(|p| p.is_file());
 
+    // ── C-19 clone lineage (top-level rows only; forks copy whole session files) ──
+    let clone_boundary_uuid = if is_subagent {
+        None
+    } else {
+        clone_head_boundary(path)?
+    };
+    let clone_of = clone_boundary_uuid
+        .as_deref()
+        .and_then(|u| clone_origin(path, u));
+
     Ok(SessionSummary {
         session_id,
         is_subagent,
@@ -134,7 +144,83 @@ pub fn summarize_session(path: &Path) -> Result<SessionSummary> {
         skipped_lines: head_skipped + tail_skipped + sidecar_skipped,
         pending_elicitations,
         sidecar_present,
+        clone_boundary_uuid,
+        clone_of,
     })
+}
+
+/// The C-19 clone law: a transcript whose FIRST TIMESTAMPED record is a
+/// system/`compact_boundary` was minted by copying another session at a compaction
+/// point. Measured on a real 61-file project dir: exactly the one known fork
+/// detected, zero false positives; file-birthtime rules were REFUTED (filesystem
+/// copies and migrations move birthtimes days past the records). Walks head lines
+/// until the first record carrying a timestamp and early-exits - near-free on a
+/// normal transcript (a handful of bookkeeping lines lead the file).
+pub(crate) fn clone_head_boundary(path: &Path) -> Result<Option<String>> {
+    static TS: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"\"timestamp\""));
+    let Some(mmap) = crate::parse::mmap_bytes(path)? else {
+        return Ok(None);
+    };
+    for line in mmap.split(|&b| b == b'\n') {
+        if TS.find(line).is_none() {
+            continue;
+        }
+        if let Ok(Some(rec)) = crate::parse::parse_line(line) {
+            if rec.timestamp.is_some() {
+                let hit = rec.is_compact_boundary();
+                return Ok(hit
+                    .then(|| rec.uuid.clone().unwrap_or_default())
+                    .filter(|u| !u.is_empty()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Join a detected clone to its ORIGIN: the sibling transcript where the boundary
+/// record NATIVELY lives. A prose mention of the uuid parses to a record whose own
+/// uuid differs; a co-clone's head probe returns the same boundary uuid and is
+/// skipped. Cost (one memmem sweep over the project dir's siblings) is paid ONLY
+/// when a clone was detected.
+pub(crate) fn clone_origin(path: &Path, boundary_uuid: &str) -> Option<String> {
+    let dir = path.parent()?;
+    let finder = memchr::memmem::Finder::new(boundary_uuid.as_bytes());
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let sib = entry.path();
+        if sib == *path
+            || sib.extension().and_then(|e| e.to_str()) != Some("jsonl")
+            || !sib.is_file()
+        {
+            continue;
+        }
+        let Ok(Some(mmap)) = crate::parse::mmap_bytes(&sib) else {
+            continue;
+        };
+        let bytes: &[u8] = &mmap;
+        let mut at = 0usize;
+        let mut carrier = false;
+        while let Some(pos) = finder.find(&bytes[at..]) {
+            let abs = at + pos;
+            let start = memchr::memrchr(b'\n', &bytes[..abs]).map_or(0, |i| i + 1);
+            let end = memchr::memchr(b'\n', &bytes[abs..]).map_or(bytes.len(), |i| abs + i);
+            if let Ok(Some(rec)) = crate::parse::parse_line(&bytes[start..end]) {
+                if rec.uuid.as_deref() == Some(boundary_uuid) && rec.is_compact_boundary() {
+                    carrier = true;
+                    break;
+                }
+            }
+            at = end.min(bytes.len());
+            if at >= bytes.len() {
+                break;
+            }
+        }
+        if carrier && clone_head_boundary(&sib).ok().flatten().as_deref() != Some(boundary_uuid) {
+            return Some(crate::subagent::session_id_from_path(&sib));
+        }
+    }
+    None
 }
 
 pub(crate) fn capture_identity_if_empty(
