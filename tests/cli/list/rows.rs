@@ -548,3 +548,14 @@ fn list_version_and_branch_are_last_seen_with_first_pairs() {
         stable.stdout
     );
 }
+
+#[test]
+fn text_rows_never_open_with_a_blank_line() {
+    let h = populated_home();
+    let out = h.run(&["list"]);
+    assert!(
+        !out.stdout.starts_with('\n'),
+        "the first row opens the output; blanks only separate rows:\n{}",
+        out.stdout
+    );
+}

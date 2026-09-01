@@ -319,3 +319,25 @@ fn plan_slug_only_honors_plans_directory_and_reverse() {
     let b = rev.stdout.find(SLUGSESS2).unwrap();
     assert!(a < b, "deterministic id order:\n{}", rev.stdout);
 }
+
+#[test]
+fn plan_slug_over_length_never_binds() {
+    const LSESS: &str = "ffff4444-5555-4666-8777-888899990000";
+    let h = Home::new();
+    let long = "a".repeat(121);
+    h.write(
+        &format!("{ENC}/{LSESS}.jsonl"),
+        &format!(
+            "{}\n",
+            format_args!(
+                r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","slug":"{long}","message":{{"role":"user","content":"work"}}}}"#
+            )
+        ),
+    );
+    let out = h.run(&["plan", &at(LSESS)]);
+    assert!(
+        !out.stdout.contains("slug only"),
+        "a 121-char slug fails the validity rule and never binds:\n{}",
+        out.stdout
+    );
+}
