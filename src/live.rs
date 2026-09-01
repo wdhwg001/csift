@@ -41,6 +41,7 @@ mod registry;
 mod render;
 mod status;
 mod tail;
+mod tasks;
 mod verdict;
 mod wait;
 
@@ -50,6 +51,7 @@ pub(crate) use registry::*;
 pub(crate) use render::*;
 pub(crate) use status::*;
 pub(crate) use tail::*;
+pub(crate) use tasks::*;
 pub(crate) use verdict::*;
 pub(crate) use wait::*;
 

@@ -82,12 +82,18 @@ pub(crate) fn assess_path(main: &Path, want_subagents: bool) -> Result<Assessmen
             .collect()
     };
 
-    Ok(assess(
+    let mut assessment = assess(
         registry.as_ref(),
         liveness.as_ref(),
         &main_tail,
         &children,
         &pending,
         is_subagent_target,
-    ))
+    );
+    // The task list is keyed by the top-level session (like the sidecar); a subagent
+    // target gets no section instead of its parent's list under its own id.
+    if !is_subagent_target {
+        assessment.tasks = tasks_report(&owner_id);
+    }
+    Ok(assessment)
 }

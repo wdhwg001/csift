@@ -15,7 +15,13 @@ use super::*;
         (a `ps`-based probe, falling back to `/proc/<pid>` where ps lacks the flags, plus \
         a process-start-time guard against pid reuse). Child \
         transcripts and workflow journals join in by default (span law); the elicitation \
-        sidecar covers human-in-the-loop states.\n\n\
+        sidecar covers human-in-the-loop states. Each child lane is classified \
+        `in-flight` (unreturned call), `generating` (a tail record younger than 300s \
+        with no end_turn yet - a long generation writes nothing for minutes, so recency \
+        plus a non-final stop_reason is the live signal), or `settled`; settled lanes \
+        FOLD to a count so live work stays visible. The session's harness task list \
+        (`<claude-home>/tasks/`) renders open tasks (in_progress first, then pending, \
+        with blockers) and folds completed ones to a count.\n\n\
         VERDICTS (a closed set): `running` (generating, or a tool in flight) · \
         `waiting-children` (main idle, subagent/workflow lanes live) · `waiting-hitl` \
         (blocked on a human: a pending AskUserQuestion/ExitPlanMode/MCP elicitation) · \
@@ -39,8 +45,10 @@ use super::*;
           csift status @<uuid> --no-subagents     # the main lane only\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: {kind:\"header\", command:\"status\", session_id, is_subagent, \
-        parent_session_id} → one {kind:\"verdict\", verdict, since_utc, since_local, \
-        evidence:[{surface, value, age_secs}], children:[{session_id, state, detail}], \
+        parent_session_id} → one {kind:\"verdict\", verdict, \
+        evidence:[{surface, value, age_secs}], children:[{session_id, state, detail} - \
+        live lanes only], settled_children, tasks:[{id, subject, status, blocked_by}] \
+        (null when the session has no tasks dir), tasks_completed, \
         pending:[...], notes:[...]} → {kind:\"summary\", verdict}."
 )]
 pub struct StatusArgs {

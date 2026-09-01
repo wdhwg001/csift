@@ -11,16 +11,20 @@
 
 use super::*;
 
-/// A child transcript's mtime younger than this counts as "recently active" evidence
-/// beside the tail shape (a subagent flushes per content block, so a working child's
-/// transcript moves constantly).
-const CHILD_RECENT_SECS: i64 = 15;
+/// Tail-record age (seconds) under which a settled-looking child is treated as still
+/// GENERATING when its last assistant record is not an end_turn. Measured: intra-lane
+/// record gaps reach p99.9 = 295s during genuine work (a long generation writes
+/// nothing for minutes), while dead lanes sit >= 31h out - four orders of magnitude of
+/// separation, so 300s misses almost no real work and resurrects no dead lane. The
+/// old 15s window read a lane mid-generation as settled 1 time in 17.
+const CHILD_RECENT_SECS: i64 = 300;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ChildState {
     pub(crate) session_id: String,
-    /// `in-flight` (unreturned tail call) | `active` (recent growth, no pending call) |
-    /// `settled`.
+    /// `in-flight` (unreturned tail call) | `generating` (recent tail record and the
+    /// last assistant record is not an end_turn - the model is mid-generation; a
+    /// paired tail alone proves nothing) | `settled`.
     pub(crate) state: &'static str,
     pub(crate) detail: String,
 }
@@ -40,11 +44,8 @@ pub(crate) fn children_report(main_jsonl: &Path) -> Result<ChildrenReport> {
     for sub in &subs {
         let sid = crate::subagent::session_id_from_path(sub);
         let shape = tail_shape(sub)?;
-        let mtime_age = std::fs::metadata(sub)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.elapsed().ok())
-            .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
+        // The RECORD-tail instant is the semantic fact (mtime can lag or lead it).
+        let tail_age = shape.last_ts_utc.as_deref().and_then(|t| age_secs(Some(t)));
         let (state, detail) = if let Some((tool, ts)) = &shape.unreturned_use {
             (
                 "in-flight",
@@ -55,22 +56,26 @@ pub(crate) fn children_report(main_jsonl: &Path) -> Result<ChildrenReport> {
                         .unwrap_or_default()
                 ),
             )
-        } else if mtime_age.is_some_and(|a| a <= CHILD_RECENT_SECS) {
+        } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)
+            && shape.last_stop_reason.as_deref() != Some("end_turn")
+        {
+            // A paired tail with a fresh record and no end_turn = mid-generation (the
+            // model is thinking/writing between tool calls; stop_reason alone would
+            // mark 73% of DEAD lanes live, so recency is the load-bearing conjunct).
             (
-                "active",
-                format!("transcript grew {}s ago", mtime_age.unwrap_or(0)),
+                "generating",
+                format!(
+                    "last record {}s ago, no end_turn yet",
+                    tail_age.unwrap_or(0)
+                ),
             )
         } else {
             (
                 "settled",
-                shape
-                    .last_ts_utc
-                    .as_deref()
-                    .and_then(|t| age_secs(Some(t)))
-                    .map_or_else(
-                        || "no timestamped tail".to_string(),
-                        |a| format!("last record {a}s ago"),
-                    ),
+                tail_age.map_or_else(
+                    || "no timestamped tail".to_string(),
+                    |a| format!("last record {a}s ago"),
+                ),
             )
         };
         if state != "settled" {

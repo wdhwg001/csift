@@ -144,32 +144,72 @@ fn children_report_tolerates_garbage_journals_and_quiet_children() {
 }
 
 #[test]
-fn children_report_reads_fresh_growth_as_active() {
+fn children_report_generating_needs_recency_and_no_end_turn() {
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!("csift-live-ac-{}-{n}", std::process::id()));
     let main = root.join("s1.jsonl");
     std::fs::create_dir_all(root.join("s1/subagents")).unwrap();
     std::fs::write(&main, "").unwrap();
-    // Settled tail (paired call) but JUST written: recency is real evidence on a child
-    // lane (child transcripts grow only from the child's own flow).
     let child = root.join("s1/subagents/agent-fedcba9876543210.jsonl");
-    std::fs::write(
-        &child,
-        concat!(
-            r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]}}"#, "\n",
-            r#"{"type":"user","timestamp":"2026-06-07T05:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#, "\n",
+    let now = jiff::Timestamp::now().to_string();
+    // Paired tail + fresh record + last stop_reason NOT end_turn: mid-generation. The
+    // record-tail instant is the signal (mtime is not consulted at all).
+    let write_child = |use_ts: &str, tail: &str| {
+        std::fs::write(
+            &child,
+            format!(
+                concat!(
+                    r#"{{"type":"assistant","timestamp":"{u}","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t1","name":"Bash","input":{{}}}}]}}}}"#,
+                    "\n{t}\n",
+                ),
+                u = use_ts,
+                t = tail
+            ),
+        )
+        .unwrap();
+    };
+    write_child(
+        &now,
+        &format!(
+            r#"{{"type":"user","timestamp":"{now}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t1","content":"ok"}}]}}}}"#
         ),
-    )
-    .unwrap();
+    );
     let report = children_report(&main).unwrap();
     assert_eq!(report.children.len(), 1);
-    assert_eq!(report.children[0].state, "active", "{report:?}");
+    assert_eq!(report.children[0].state, "generating", "{report:?}");
     assert!(
-        report.children[0].detail.contains("transcript grew"),
+        report.children[0].detail.contains("no end_turn yet"),
         "{report:?}"
     );
     assert_eq!(report.live_count, 1);
+
+    // Same freshness but the last assistant record IS an end_turn: settled (a clean
+    // finish seconds ago is not generation).
+    write_child(
+        &now,
+        &format!(
+            concat!(
+                r#"{{"type":"user","timestamp":"{now}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t1","content":"ok"}}]}}}}"#,
+                "\n",
+                r#"{{"type":"assistant","timestamp":"{now}","message":{{"role":"assistant","stop_reason":"end_turn","content":[{{"type":"text","text":"done"}}]}}}}"#
+            ),
+            now = now
+        ),
+    );
+    let report = children_report(&main).unwrap();
+    assert_eq!(report.children[0].state, "settled", "{report:?}");
+    assert_eq!(report.live_count, 0);
+
+    // No end_turn but the tail record is ancient: settled (stop_reason alone would
+    // resurrect dead lanes - recency is the load-bearing conjunct).
+    write_child(
+        "2026-06-07T05:00:01Z",
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#,
+    );
+    let report = children_report(&main).unwrap();
+    assert_eq!(report.children[0].state, "settled", "{report:?}");
+    assert_eq!(report.live_count, 0);
     std::fs::remove_dir_all(&root).unwrap();
 }
 

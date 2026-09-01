@@ -14,8 +14,37 @@ pub(crate) fn render_status_text(session_id: &str, a: &Assessment) {
             .unwrap_or_default();
         println!("  {:<9} {}{age}", e.surface, e.value);
     }
-    for c in &a.children {
+    let (live, settled): (Vec<_>, Vec<_>) = a.children.iter().partition(|c| c.state != "settled");
+    for c in live {
         println!("  child     {}  {}  {}", c.session_id, c.state, c.detail);
+    }
+    if !settled.is_empty() {
+        println!(
+            "  child     {} settled lane(s) folded (ids: csift agents @{session_id})",
+            settled.len()
+        );
+    }
+    // Text shows the section only when there is at least one task (an existing but
+    // empty dir stays JSON-visible as tasks:[] versus null).
+    if a.tasks.found && (!a.tasks.open.is_empty() || a.tasks.completed > 0) {
+        for t in &a.tasks.open {
+            let blocked = if t.blocked_by.is_empty() {
+                String::new()
+            } else {
+                format!("  (blocked by #{})", t.blocked_by.join(", #"))
+            };
+            println!(
+                "  task      #{} {}  {}{blocked}",
+                t.id,
+                t.status,
+                crate::text::collapse_and_truncate(&t.subject, 200)
+            );
+        }
+        println!(
+            "  tasks     {} open ; {} completed",
+            a.tasks.open.len(),
+            a.tasks.completed
+        );
     }
     for n in &a.notes {
         println!("  note: {n}");
@@ -45,11 +74,23 @@ pub(crate) fn render_status_json(
             "value": e.value,
             "age_secs": e.age_secs,
         })).collect::<Vec<_>>(),
-        "children": a.children.iter().map(|c| json!({
+        "children": a.children.iter().filter(|c| c.state != "settled").map(|c| json!({
             "session_id": c.session_id,
             "state": c.state,
             "detail": c.detail,
         })).collect::<Vec<_>>(),
+        "settled_children": a.children.iter().filter(|c| c.state == "settled").count(),
+        "tasks": if a.tasks.found {
+            json!(a.tasks.open.iter().map(|t| json!({
+                "id": t.id,
+                "subject": t.subject,
+                "status": t.status,
+                "blocked_by": t.blocked_by,
+            })).collect::<Vec<_>>())
+        } else {
+            serde_json::Value::Null
+        },
+        "tasks_completed": if a.tasks.found { json!(a.tasks.completed) } else { serde_json::Value::Null },
         "pending": a.pending,
         "notes": a.notes,
     });

@@ -62,6 +62,15 @@ impl Home {
         p
     }
 
+    /// Write a fixture under `<root>/.claude/<rel>` (tasks and other beside-projects
+    /// surfaces resolve through the same claude_home).
+    pub(crate) fn write_claude(&self, rel: &str, contents: &str) -> PathBuf {
+        let p = self.root.join(".claude").join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, contents).unwrap();
+        p
+    }
+
     /// Spawn csift with piped stdio and this `$HOME`, returning the Child - the `wait`
     /// tests block on its readiness stderr line before appending their trigger.
     pub(crate) fn spawn(&self, args: &[&str]) -> std::process::Child {

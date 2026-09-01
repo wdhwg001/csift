@@ -43,6 +43,8 @@ pub(crate) struct Assessment {
     pub(crate) children: Vec<ChildState>,
     pub(crate) pending: Vec<String>,
     pub(crate) notes: Vec<String>,
+    /// The harness task list (attached by `assess_path`; empty default in the pure join).
+    pub(crate) tasks: TasksReport,
 }
 
 /// Join the surfaces into one verdict. Precedence (each step names its evidence):
@@ -213,5 +215,6 @@ pub(crate) fn assess(
         children: children.children.clone(),
         pending: pending_elicitations.to_vec(),
         notes,
+        tasks: TasksReport::default(),
     }
 }
