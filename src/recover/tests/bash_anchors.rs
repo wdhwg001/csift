@@ -522,3 +522,18 @@ fn append_placement_edges() {
         rep.boundaries
     );
 }
+
+#[test]
+fn head_short_by_one_promotes_to_full() {
+    // head -n 3 returning 2 lines: EOF one short of the window - the whole file.
+    let records = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"head -n 3 f.txt"}}]}}"#,
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"stdout":"one\ntwo\n","stderr":"","interrupted":false},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"one\ntwo\n"}]}}"#,
+    ]);
+    let events = extract_events(&records, "/w/f.txt");
+    assert!(
+        matches!(&events[0].kind, EventKind::FullSnapshot { source, .. } if *source == SnapSource::BashCat),
+        "{events:?}"
+    );
+}

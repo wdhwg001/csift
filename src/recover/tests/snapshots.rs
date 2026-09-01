@@ -250,3 +250,37 @@ fn first_marker_divergence_rebases_and_tolerance_is_inclusive() {
     assert_eq!(verified_store_content(&blob, bt), None, "121s is outside");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn marker_counts_and_incomplete_agreement_never_rebase() {
+    // Every marker counts once, whatever it decides.
+    let events = vec![
+        write_event(1, "alpha\n"),
+        marker(3, 1, None),
+        marker(6, 1, None),
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(rep.counts.history_snapshot, 2);
+
+    // An INCOMPLETE buffer whose known lines AGREE with the snapshot must not
+    // rebase (only a disagreement or a complete-length mismatch is divergence).
+    let events = vec![
+        FileEvent {
+            line_no: 1,
+            turn_index: 0,
+            timestamp_utc: None,
+            kind: EventKind::BashWindowRead {
+                start_line: 3,
+                lines: vec!["gamma".into(), "delta".into()],
+            },
+        },
+        marker(5, 1, Some("alpha\nbeta\ngamma\ndelta\nepsilon\n")),
+    ];
+    let rep = replay(&events, None);
+    assert_eq!(
+        rep.counts.snapshot_rebase, 0,
+        "agreeing known lines on a longer file: {:?}",
+        rep.boundaries
+    );
+    assert!(rep.boundaries.is_empty(), "{:?}", rep.boundaries);
+}

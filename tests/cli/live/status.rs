@@ -418,3 +418,20 @@ fn p14_no_tasks_dir_means_null_not_empty() {
     assert!(row["tasks"].is_null(), "{}", j.stdout);
     assert!(row["tasks_completed"].is_null(), "{}", j.stdout);
 }
+
+#[test]
+fn p15_completed_only_tasks_still_summarize() {
+    // A dir holding ONLY completed tasks: no rows, but the summary line shows.
+    let h = Home::new();
+    live_eot_main(&h);
+    h.write_claude(
+        &format!("tasks/{LIVE_SESS}/1.json"),
+        r#"{"id":"1","subject":"Moor the skiff","status":"completed"}"#,
+    );
+    let out = h.run(&["status", &at(LIVE_SESS)]);
+    assert!(
+        out.stdout.contains("tasks     0 open ; 1 completed"),
+        "completed-only dirs still summarize:\n{}",
+        out.stdout
+    );
+}

@@ -341,3 +341,30 @@ fn plan_slug_over_length_never_binds() {
         out.stdout
     );
 }
+
+#[test]
+fn plan_prefers_the_top_level_binding_over_a_subagent_one() {
+    const PSESS: &str = "abab4444-5555-4666-8777-888899990000";
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{PSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"plan it"}}"#, "\n",
+            r#"{"type":"attachment","isSidechain":false,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":false,"planFilePath":"/plans/top-level-plan.md","planExists":false},"uuid":"att1","timestamp":"2026-06-07T05:00:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{PSESS}/subagents/agent-abcdef0123456789.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"abcdef0123456789","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"sub work"}}"#, "\n",
+            r#"{"type":"attachment","isSidechain":true,"attachment":{"type":"plan_mode","reminderType":"full","isSubAgent":true,"planFilePath":"/plans/subagent-plan.md","planExists":false},"uuid":"att2","timestamp":"2026-06-07T05:01:01.000Z","userType":"external","entrypoint":"cli","cwd":"/p"}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", &at(PSESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("top-level-plan.md"),
+        "the top-level lane's own plan wins:\n{}",
+        out.stdout
+    );
+}

@@ -558,4 +558,24 @@ fn text_rows_never_open_with_a_blank_line() {
         "the first row opens the output; blanks only separate rows:\n{}",
         out.stdout
     );
+    // The banner's own trailing blank is the ONLY blank before the first row -
+    // never two in a row anywhere in the output.
+    assert!(
+        !out.stdout.contains("\n\n\n"),
+        "never more than one consecutive blank line:\n{}",
+        out.stdout
+    );
+    // Later rows ARE separated by a blank (pin the boundary between row 1 and
+    // row 2 specifically - the banner also precedes row 0 with a blank).
+    assert!(
+        out.stdout.contains("\n\nSUBAGENT  bbb222"),
+        "rows after the first are blank-separated:\n{}",
+        out.stdout
+    );
+    // Zero is never disclosed as a drop.
+    assert!(
+        !out.stdout.contains("more session(s)"),
+        "an uncapped scoped list reports no drop:\n{}",
+        out.stdout
+    );
 }

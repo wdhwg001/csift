@@ -107,3 +107,43 @@ fn content_less_jump_discloses_without_rebasing() {
         cov.stdout
     );
 }
+
+#[test]
+fn first_marker_blob_divergence_rebases_end_to_end() {
+    // The replay diverges from the very FIRST snapshot's verified blob: the attach
+    // pass must treat the first marker as a baseline (not skip it).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"write"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/w/one.txt","content":"old\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"type":"create","filePath":"/w/one.txt","content":"old\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"file-history-snapshot","messageId":"m1","snapshot":{"messageId":"m1","timestamp":"2026-06-07T05:01:00.000Z","trackedFileBackups":{"/w/one.txt":{"backupFileName":"feed0002@v1","version":1,"backupTime":"2026-06-07T05:01:00.000Z"}}},"isSnapshotUpdate":false}"#, "\n",
+        ),
+    );
+    let p = h.write_claude(&format!("file-history/{SSESS}/feed0002@v1"), "new\n");
+    let instant: jiff::Timestamp = "2026-06-07T05:01:00Z".parse().unwrap();
+    let t = std::time::UNIX_EPOCH
+        + std::time::Duration::from_secs(u64::try_from(instant.as_second()).unwrap());
+    std::fs::File::options()
+        .write(true)
+        .open(&p)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+    let out = h.run(&[
+        "recover",
+        at(SSESS).as_str(),
+        "--file",
+        "/w/one.txt",
+        "--at",
+        "@latest",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("new") && !out.stdout.contains("old"),
+        "the first-marker blob is the disk truth:\n{}",
+        out.stdout
+    );
+}

@@ -332,5 +332,23 @@ fn clone_probe_arms_and_origin_join_edges() {
     )
     .unwrap();
     assert_eq!(clone_origin(&clone, bx), None);
+
+    // A sibling carrying an UNRELATED boundary plus the uuid in prose is not a
+    // carrier either (the carrier check demands the RECORD with that uuid).
+    let decoy = root.join("d1.jsonl");
+    std::fs::write(
+        &decoy,
+        format!(
+            "{{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"prose about {bx}\"}}}}\n{{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"99999999-aaaa-4bbb-8ccc-dddddddddddd\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}}\n"
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        clone_origin(&clone, bx),
+        None,
+        "an unrelated boundary near a prose quote is not the origin"
+    );
+    std::fs::remove_file(&decoy).unwrap();
+
     std::fs::remove_dir_all(&root).unwrap();
 }

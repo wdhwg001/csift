@@ -89,6 +89,12 @@ fn list_clone_lineage_detected_and_joined() {
         "no clone line on the origin:\n{}",
         pj.stdout
     );
+    // Clean fixtures: the malformed-line note never prints for a zero count.
+    assert!(
+        !out.stdout.contains("malformed"),
+        "no zero-count malformed note:\n{}",
+        out.stdout
+    );
 }
 
 #[test]
