@@ -55,19 +55,34 @@ fn resolve_cutoff_line_turn_and_datetime() {
             line_no: 10,
             turn_index: 0,
             timestamp_utc: Some("2026-06-07T05:00:00Z".into()),
-            kind: EventKind::HistorySnapshotMarker,
+            kind: EventKind::HistorySnapshotMarker {
+                version: None,
+                backup_file: None,
+                backup_time: None,
+                content: None,
+            },
         },
         FileEvent {
             line_no: 20,
             turn_index: 1,
             timestamp_utc: Some("2026-06-07T06:00:00Z".into()),
-            kind: EventKind::HistorySnapshotMarker,
+            kind: EventKind::HistorySnapshotMarker {
+                version: None,
+                backup_file: None,
+                backup_time: None,
+                content: None,
+            },
         },
         FileEvent {
             line_no: 30,
             turn_index: 2,
             timestamp_utc: Some("2026-06-07T07:00:00Z".into()),
-            kind: EventKind::HistorySnapshotMarker,
+            kind: EventKind::HistorySnapshotMarker {
+                version: None,
+                backup_file: None,
+                backup_time: None,
+                content: None,
+            },
         },
     ];
     assert_eq!(resolve_cutoff("@line:25", &events).unwrap(), Some(25));
@@ -209,7 +224,12 @@ fn resolve_cutoff_empty_string_means_no_cutoff() {
         line_no: 7,
         turn_index: 0,
         timestamp_utc: Some("2026-06-07T05:00:00Z".into()),
-        kind: EventKind::HistorySnapshotMarker,
+        kind: EventKind::HistorySnapshotMarker {
+            version: None,
+            backup_file: None,
+            backup_time: None,
+            content: None,
+        },
     }];
     assert_eq!(
         resolve_cutoff("   ", &events).unwrap(),

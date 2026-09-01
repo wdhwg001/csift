@@ -42,7 +42,8 @@ pub(crate) fn scan_one_file_multi(
 
     let mut out = Vec::new();
     for ti in present {
-        let events = extract_with_turns(&records, &turns, Some(&targets[ti]));
+        let mut events = extract_with_turns(&records, &turns, Some(&targets[ti]));
+        attach_snapshot_content(&mut events, path);
         if !events.is_empty() {
             out.push((
                 ti,
@@ -268,7 +269,10 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
 
     let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
     let turns = group_turn_indices_deduped(&recs, |r| *r);
-    let events = extract_with_turns(&records, &turns, target_file);
+    let mut events = extract_with_turns(&records, &turns, target_file);
+    // v0.9.4: attach mtime-verified file-history content to version-change markers
+    // so the replay can detect and rebase across tool-record-less writes.
+    attach_snapshot_content(&mut events, path);
     let opaque = collect_opaque_commands(&session_id, &records, &turns);
     Ok(ScanResult {
         session_id,

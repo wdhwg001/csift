@@ -8,3 +8,4 @@ mod disclosure;
 mod modes;
 mod patches;
 mod signals;
+mod snapshots;

@@ -134,7 +134,7 @@ impl Replay {
             .filter(|b| {
                 matches!(
                     b.kind,
-                    "modified_since_read" | "external_edit" | "hint_modified"
+                    "modified_since_read" | "external_edit" | "hint_modified" | "external_write"
                 )
             })
             .count()

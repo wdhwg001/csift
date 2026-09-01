@@ -130,6 +130,7 @@ fn ops_label_omits_zeroes_and_flags_bash() {
         path_verbatim: None,
         resolution: None,
         command_errored: false,
+        detail: None,
     });
     c.add(&FileMutation {
         path: "/tmp/b".into(),
@@ -139,6 +140,7 @@ fn ops_label_omits_zeroes_and_flags_bash() {
         path_verbatim: None,
         resolution: None,
         command_errored: false,
+        detail: None,
     });
     let label = c.ops_label();
     assert!(label.contains("1 write"), "got: {label}");
@@ -160,6 +162,7 @@ fn op_counts_and_label_cover_notebook_and_multiedit() {
             path_verbatim: None,
             resolution: None,
             command_errored: false,
+            detail: None,
         });
     }
     let label = c.ops_label();

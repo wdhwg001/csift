@@ -143,6 +143,9 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
     let mut mutations = extract_mutations(&session_id, &records, &line_nos);
+    // v0.9.4: settings-family external writes from the file-history instrument.
+    let externals = extract_external_writes(&session_id, &records, &line_nos, &mutations);
+    mutations.extend(externals);
     let mut boundaries = extract_boundaries(&session_id, &records, &line_nos);
     if is_subagent {
         for tm in &mut mutations {
@@ -174,13 +177,15 @@ pub(crate) fn line_is_files_candidate(line: &[u8]) -> bool {
     // coverage rides the tool-name needles below, so admitting every assistant
     // text record here would repeal this prefilter). Finders built ONCE (per-line
     // hot path - the stateless form rebuilt its searcher every call).
-    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 5]> =
+    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 6]> =
         std::sync::LazyLock::new(|| {
             [
                 memmem::Finder::new(b"Edit"),
                 memmem::Finder::new(b"Write"),
                 memmem::Finder::new(b"Bash"),
                 memmem::Finder::new(b"filePath"),
+                // Settings-family external writes read the snapshot version sequence.
+                memmem::Finder::new(b"file-history-snapshot"),
                 // Keep tool_result ERROR carriers - they carry the Edit-before-Read boundaries
                 // (and drive `failed_ids`, so a cancelled/errored op is never miscounted as a
                 // real mutation), and an error carrier may not otherwise match (its

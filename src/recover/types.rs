@@ -77,11 +77,25 @@ pub(crate) enum EventKind {
     /// onto a COMPLETE newline-terminated buffer; otherwise it degrades to a
     /// disclosed heuristic boundary (content known, position not).
     BashAppend { content: String },
-    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time. A
-    /// COVERAGE ANNOTATION only, never a content anchor: the named blob lives in a
-    /// PRUNED tool-layer store with no transcript anchor for its content (list it with
-    /// `recover --list-backups`).
-    HistorySnapshotMarker,
+    /// A `file-history-snapshot` recorded a disk backup of `--file` at this time.
+    /// Since v0.9.4 the marker carries its INSTRUMENT payload: the per-path
+    /// `version` (monotone within a GENERATION; the counter resets mid-session on
+    /// process restart - 148 real occurrences - so a DECREASE means a new
+    /// generation, never an anomaly), the store `backupFileName`, its `backupTime`,
+    /// and - attached by the scan post-pass ONLY on a version CHANGE, and only when
+    /// the store file exists AND its mtime agrees with `backupTime` (the @vN name
+    /// COLLIDES across a generation reset, so an unverified read can return the
+    /// wrong generation's bytes) - the snapshot CONTENT. The replay layer uses a
+    /// verified content to detect and REBASE across harness-side writes that left
+    /// no tool record (e.g. Claude Code rewriting settings.json on /model); an
+    /// unverified marker stays the old coverage annotation.
+    HistorySnapshotMarker {
+        version: Option<u64>,
+        backup_file: Option<String>,
+        backup_time: Option<String>,
+        /// mtime-verified store content (scan post-pass); None = unavailable.
+        content: Option<String>,
+    },
 }
 
 /// The provenance of a [`EventKind::FullSnapshot`]. The `Bash*` variants are the
@@ -98,6 +112,9 @@ pub(crate) enum SnapSource {
     BashHeredoc,
     /// A literal `echo`/`printf` write or `truncate -s 0`.
     BashWrite,
+    /// Claude Code's own file-history snapshot content, adopted as the rebase
+    /// anchor when the replay disagrees with it (mtime-verified store bytes).
+    HistorySnapshot,
 }
 
 impl SnapSource {
@@ -109,6 +126,7 @@ impl SnapSource {
             SnapSource::BashCat => "bash-cat",
             SnapSource::BashHeredoc => "bash-heredoc",
             SnapSource::BashWrite => "bash-write",
+            SnapSource::HistorySnapshot => "file-history-snapshot",
         }
     }
 }

@@ -196,7 +196,7 @@ pub(crate) fn extract_from_record(
     // ── (8) file-history-snapshot marker (a top-level sibling, no `message`) ──
     if let Some(snap) = rec.snapshot.as_ref() {
         if let Some(tfb) = snap.get("trackedFileBackups").and_then(|v| v.as_object()) {
-            for path in tfb.keys() {
+            for (path, entry) in tfb {
                 if path_matches(target_file, path) {
                     events.push(FileEvent {
                         line_no,
@@ -206,7 +206,18 @@ pub(crate) fn extract_from_record(
                             .and_then(serde_json::Value::as_str)
                             .map(str::to_string)
                             .or_else(|| ts.clone()),
-                        kind: EventKind::HistorySnapshotMarker,
+                        kind: EventKind::HistorySnapshotMarker {
+                            version: entry.get("version").and_then(serde_json::Value::as_u64),
+                            backup_file: entry
+                                .get("backupFileName")
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_string),
+                            backup_time: entry
+                                .get("backupTime")
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_string),
+                            content: None,
+                        },
                     });
                 }
             }

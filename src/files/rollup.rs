@@ -42,6 +42,8 @@ pub(crate) struct OpCounts {
     pub(crate) notebook_edit: usize,
     pub(crate) multi_edit: usize,
     pub(crate) bash: usize,
+    /// Snapshot-inferred external writes (settings family; no tool record).
+    pub(crate) external_write: usize,
     /// Distinct file paths contributing to this group (for dir/bucket rows).
     pub(crate) files: std::collections::BTreeSet<String>,
     pub(crate) first_ts: Option<String>,
@@ -56,6 +58,7 @@ impl OpCounts {
             FileOp::NotebookEdit => self.notebook_edit += 1,
             FileOp::MultiEdit => self.multi_edit += 1,
             FileOp::BashMutation => self.bash += 1,
+            FileOp::ExternalWrite => self.external_write += 1,
         }
         self.files.insert(m.path.clone());
         if let Some(ts) = &m.timestamp_utc {
@@ -70,7 +73,12 @@ impl OpCounts {
     }
 
     pub(crate) fn total(&self) -> usize {
-        self.write + self.edit + self.notebook_edit + self.multi_edit + self.bash
+        self.write
+            + self.edit
+            + self.notebook_edit
+            + self.multi_edit
+            + self.bash
+            + self.external_write
     }
 
     /// The op-count fragment as `"N write, N edit, …"`, omitting zero counts; Bash is
@@ -91,6 +99,9 @@ impl OpCounts {
         }
         if self.bash > 0 {
             parts.push(format!("{} bash (heuristic)", self.bash));
+        }
+        if self.external_write > 0 {
+            parts.push(format!("{} external write (inferred)", self.external_write));
         }
         if parts.is_empty() {
             "0".to_string()

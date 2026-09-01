@@ -32,4 +32,5 @@ mod patching;
 mod render;
 mod replay;
 mod signals;
+mod snapshots;
 mod string_edits;

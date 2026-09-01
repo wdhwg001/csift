@@ -57,10 +57,12 @@ mod diff;
 mod events;
 mod render;
 mod replay;
+mod replay_model;
 mod report;
 mod restore;
 mod run;
 mod scan;
+mod snapshots;
 mod timeline;
 mod types;
 
@@ -71,10 +73,12 @@ pub(crate) use diff::*;
 pub(crate) use events::*;
 pub(crate) use render::*;
 pub(crate) use replay::*;
+pub(crate) use replay_model::*;
 pub(crate) use report::*;
 pub(crate) use restore::*;
 pub(crate) use run::*;
 pub(crate) use scan::*;
+pub(crate) use snapshots::*;
 pub(crate) use timeline::*;
 pub(crate) use types::*;
 

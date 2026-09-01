@@ -171,7 +171,10 @@ fn extract_history_snapshot_marker_for_target() {
     ]);
     let ev = extract_events(&recs, "/p/a.rs");
     assert_eq!(ev.len(), 1);
-    assert!(matches!(ev[0].kind, EventKind::HistorySnapshotMarker));
+    assert!(matches!(
+        ev[0].kind,
+        EventKind::HistorySnapshotMarker { .. }
+    ));
     // A snapshot for a DIFFERENT file is not extracted for our target.
     let other = extract_events(&recs, "/p/other.rs");
     assert!(other.is_empty());

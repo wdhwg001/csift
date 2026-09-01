@@ -121,6 +121,7 @@ pub(crate) fn bash_file_mutation(
         path_verbatim,
         resolution: (!marker).then(|| class.as_str()),
         command_errored,
+        detail: None,
     }
 }
 

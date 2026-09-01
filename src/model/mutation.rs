@@ -24,6 +24,14 @@ pub enum FileOp {
     MultiEdit,
     /// A file mutation inferred HEURISTICALLY from a Bash command string.
     BashMutation,
+    /// A write with NO tool record, inferred from Claude Code's own file-history
+    /// snapshot instrument (a tracked path's version jumped with no tool write in
+    /// the interval) - the harness rewriting its settings family (/model, /config,
+    /// plugin toggles), or any out-of-band editor. `files` reports it ONLY for the
+    /// settings family (`.claude/settings*.json`): the tracked set spans thousands
+    /// of ordinary source paths and listing harness bookkeeping for them would
+    /// flood every timeline.
+    ExternalWrite,
 }
 
 impl FileOp {
@@ -36,6 +44,7 @@ impl FileOp {
             FileOp::NotebookEdit => "notebook-edit",
             FileOp::MultiEdit => "multi-edit",
             FileOp::BashMutation => "bash",
+            FileOp::ExternalWrite => "external write",
         }
     }
 
@@ -53,6 +62,7 @@ impl FileOp {
             FileOp::NotebookEdit => "notebook_edit",
             FileOp::MultiEdit => "multi_edit",
             FileOp::BashMutation => "bash",
+            FileOp::ExternalWrite => "external_write",
         }
     }
 
@@ -91,6 +101,9 @@ pub struct FileMutation {
     /// failed and which arms ran is unknowable, so the mutation is KEPT and flagged
     /// instead of silently dropped (a chain often mutates before its failing step).
     pub command_errored: bool,
+    /// Extra provenance for a synthesized row (the ExternalWrite's snapshot version
+    /// transition + interval). `None` on every tool-extracted mutation.
+    pub detail: Option<String>,
 }
 
 impl Record {
@@ -152,6 +165,7 @@ impl Record {
                 is_create: self_is_create,
                 path_verbatim: None,
                 resolution: None,
+                detail: None,
                 command_errored: false,
             });
         }

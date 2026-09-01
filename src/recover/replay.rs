@@ -1,92 +1,6 @@
-//! Replay: confidence, boundaries, segment accounting, the event replay core.
+//! The event replay core (see `replay_model` for the outcome types).
 
 use super::*;
-
-/// The confidence of an integrity boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Confidence {
-    Authoritative,
-    Heuristic,
-}
-
-impl Confidence {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Confidence::Authoritative => "AUTHORITATIVE",
-            Confidence::Heuristic => "HEURISTIC",
-        }
-    }
-    pub(crate) fn json(self) -> &'static str {
-        match self {
-            Confidence::Authoritative => "authoritative",
-            Confidence::Heuristic => "heuristic",
-        }
-    }
-}
-
-/// A detected integrity boundary - a point where reconstruction across it is invalid.
-#[derive(Debug, Clone)]
-pub(crate) struct Boundary {
-    pub(crate) line_no: usize,
-    pub(crate) turn_index: usize,
-    pub(crate) timestamp_utc: Option<String>,
-    pub(crate) kind: &'static str,
-    pub(crate) confidence: Confidence,
-    pub(crate) detail: String,
-}
-
-/// Per-op counts for the coverage report.
-#[derive(Debug, Default, Clone)]
-pub(crate) struct EventCounts {
-    pub(crate) read_full: usize,
-    pub(crate) read_windowed: usize,
-    pub(crate) edit: usize,
-    pub(crate) edit_unanchorable: usize,
-    pub(crate) write: usize,
-    pub(crate) bash: usize,
-    pub(crate) external_edit: usize,
-    pub(crate) history_snapshot: usize,
-    pub(crate) integrity_error: usize,
-    /// Claude Code `staleReadFileStateHint` attributions naming this file.
-    pub(crate) stale_hint: usize,
-    /// Successful Edits flagged `staleRecovered` (disk had drifted; edit applied).
-    pub(crate) stale_recovered: usize,
-    /// Gated Bash READ content anchors (cat full + windows) admitted into the replay.
-    pub(crate) bash_read_anchor: usize,
-    /// Gated Bash WRITE content anchors (heredoc/echo/printf/truncate/appends).
-    pub(crate) bash_write_anchor: usize,
-}
-
-/// One reconstructed segment (a maximal run of events with no hard boundary inside).
-#[derive(Debug, Clone)]
-pub(crate) struct Segment {
-    pub(crate) index: usize,
-    pub(crate) line_no_start: usize,
-    pub(crate) line_no_end: usize,
-    pub(crate) turn_start: usize,
-    pub(crate) turn_end: usize,
-    pub(crate) ts_start: Option<String>,
-    pub(crate) ts_end: Option<String>,
-    /// The buffer state at the END of this segment.
-    pub(crate) end_buffer: SparseBuffer,
-    /// The buffer state at the START of this segment (its pre-state).
-    pub(crate) start_buffer: SparseBuffer,
-    /// False when this segment opened after a boundary with no fresh full anchor.
-    pub(crate) pre_state_known: bool,
-    /// The kind of full anchor (if any) that opened/seeded this segment.
-    pub(crate) anchor_source: Option<SnapSource>,
-}
-
-/// The full replay outcome for one session's `--file` events.
-#[derive(Debug, Default)]
-pub(crate) struct Replay {
-    pub(crate) segments: Vec<Segment>,
-    pub(crate) boundaries: Vec<Boundary>,
-    pub(crate) counts: EventCounts,
-    /// The final buffer after replaying ALL events (used by `--coverage`/`--at`).
-    pub(crate) final_buffer: SparseBuffer,
-    pub(crate) coverage_holes: Vec<(usize, usize, usize)>, // (line_no, turn, jsonl-ish marker)
-}
 
 /// Replay a session's ordered `--file` events into segments + boundaries + counts.
 /// `cutoff_line` (when `Some`) stops replay at jsonl line ≤ cutoff (for `--at`).
@@ -99,6 +13,11 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
     let mut pre_state_known = true;
     let mut had_full_anchor = false;
     let mut anchor_source: Option<SnapSource> = None;
+    // Snapshot-instrument state (v0.9.4): the last seen file-history version (a
+    // DECREASE = a generation reset, never an anomaly) and whether any mutation
+    // event landed since the previous marker (the content-less silent-write test).
+    let mut last_snap_version: Option<u64> = None;
+    let mut writes_since_marker = false;
 
     #[allow(clippy::too_many_arguments)]
     let close_segment = |out: &mut Replay,
@@ -140,7 +59,11 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 source,
             } => {
                 match source {
-                    SnapSource::FullRead | SnapSource::FileAttachment => {
+                    // HistorySnapshot never arrives as a FullSnapshot event (it is
+                    // set directly by the marker arm's rebase); read-family defensively.
+                    SnapSource::FullRead
+                    | SnapSource::FileAttachment
+                    | SnapSource::HistorySnapshot => {
                         out.counts.read_full += 1;
                     }
                     SnapSource::Write => out.counts.write += 1,
@@ -156,6 +79,12 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 // segment's pre-state is the anchor content itself (post-read), so the diff
                 // shows only the edits made AFTER the read, not a spurious "creation".
                 let pre_before_reset = buf.clone();
+                if matches!(
+                    source,
+                    SnapSource::Write | SnapSource::BashHeredoc | SnapSource::BashWrite
+                ) {
+                    writes_since_marker = true;
+                }
                 anchor_source = Some(*source);
                 buf.reset_to_full(content, *total_lines, e.line_no);
                 had_full_anchor = true;
@@ -166,9 +95,10 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                         SnapSource::Write | SnapSource::BashHeredoc | SnapSource::BashWrite => {
                             pre_before_reset
                         }
-                        SnapSource::FullRead | SnapSource::FileAttachment | SnapSource::BashCat => {
-                            buf.clone()
-                        }
+                        SnapSource::FullRead
+                        | SnapSource::FileAttachment
+                        | SnapSource::BashCat
+                        | SnapSource::HistorySnapshot => buf.clone(),
                     };
                     seg_open = Some(here.clone());
                     pre_state_known = true;
@@ -211,6 +141,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                         });
                     }
                 }
+                writes_since_marker = true;
                 let outcome = apply_edit(&mut buf, hunks, structured_patch, e.line_no);
                 if outcome == EditOutcome::UnAnchorable {
                     out.counts.edit_unanchorable += 1;
@@ -262,6 +193,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
             }
             EventKind::ExternalEdit { snippet } => {
                 out.counts.external_edit += 1;
+                writes_since_marker = true;
                 // HARD boundary: close current segment, then splice the external snippet.
                 close_segment(
                     &mut out,
@@ -311,6 +243,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 resolution,
             } => {
                 out.counts.bash += 1;
+                writes_since_marker = true;
                 // SOFT boundary: close current segment + flag heuristic.
                 close_segment(
                     &mut out,
@@ -344,6 +277,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
             }
             EventKind::StaleReadHint { path } => {
                 out.counts.stale_hint += 1;
+                writes_since_marker = true;
                 // HARD boundary: Claude Code itself stat'd the read set and named this
                 // file as modified by a shell command. Content-less (nothing to
                 // splice), so the buffer stays, but reconstruction across the point no
@@ -422,6 +356,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     matches!(total, Some(0)) || (complete && buf.content_ends_with_newline);
                 if placeable {
                     out.counts.bash_write_anchor += 1;
+                    writes_since_marker = true;
                     if seg_open.is_none() {
                         seg_start = buf.clone();
                         seg_open = Some(here.clone());
@@ -441,6 +376,7 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     seg_last = Some(here);
                 } else {
                     out.counts.bash += 1;
+                    writes_since_marker = true;
                     close_segment(
                         &mut out,
                         &seg_start,
@@ -465,9 +401,109 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     anchor_source = None;
                 }
             }
-            EventKind::HistorySnapshotMarker => {
+            EventKind::HistorySnapshotMarker {
+                version, content, ..
+            } => {
                 out.counts.history_snapshot += 1;
-                // A coverage annotation only - not an anchor, not a boundary.
+                // The file-history INSTRUMENT (v0.9.4): Claude Code backs the tracked
+                // file up per prompt and bumps `version` only when the bytes changed.
+                // A version CHANGE therefore captures the disk truth at that instant -
+                // including harness-side writes that leave NO tool record (measured:
+                // half of all settings.json mutations corpus-wide). Three cases:
+                // - verified CONTENT attached + it DISAGREES with the replayed known
+                //   lines: an untracked write happened - close the segment, disclose
+                //   an authoritative `external_write` boundary, and REBASE the buffer
+                //   on the snapshot content (CC's own byte-exact backup outranks a
+                //   replay it contradicts);
+                // - no content, but the version JUMPED with NO mutation event since
+                //   the previous marker: the same fact without the bytes - an
+                //   authoritative content-less boundary (StaleReadHint shape: the
+                //   buffer stays, trust across the point does not);
+                // - a generation RESET (version decreased: the counter restarts on
+                //   process restart, 148 real cases) or an unchanged version:
+                //   bookkeeping only - cross-generation comparison is invalid by
+                //   construction.
+                let action = snapshot_action(
+                    last_snap_version,
+                    *version,
+                    content.as_deref(),
+                    &buf,
+                    writes_since_marker,
+                );
+                if version.is_some() {
+                    last_snap_version = *version;
+                }
+                match action {
+                    SnapAction::Nothing => {}
+                    SnapAction::Rebase => {
+                        let snap_content = content.as_deref().unwrap_or_default();
+                        let snap_lines = split_lines(snap_content);
+                        {
+                            out.counts.snapshot_rebase += 1;
+                            close_segment(
+                                &mut out,
+                                &seg_start,
+                                &buf,
+                                &seg_open,
+                                &seg_last,
+                                pre_state_known,
+                                anchor_source,
+                            );
+                            out.boundaries.push(Boundary {
+                                line_no: e.line_no,
+                                turn_index: e.turn_index,
+                                timestamp_utc: e.timestamp_utc.clone(),
+                                kind: "external_write",
+                                confidence: Confidence::Authoritative,
+                                detail: format!(
+                                    "the replayed buffer disagrees with Claude Code's own file-history \
+                                     snapshot v{} - a write with no tool record happened in this \
+                                     window; the replay is REBASED on the snapshot content",
+                                    version.map_or_else(|| "?".to_string(), |v| v.to_string())
+                                ),
+                            });
+                            buf.reset_to_full(snap_content, snap_lines.len(), e.line_no);
+                            anchor_source = Some(SnapSource::HistorySnapshot);
+                            had_full_anchor = true;
+                            seg_start = buf.clone();
+                            seg_open = Some(here.clone());
+                            seg_last = Some(here);
+                            pre_state_known = false;
+                        }
+                    }
+                    SnapAction::ContentlessBoundary => {
+                        close_segment(
+                            &mut out,
+                            &seg_start,
+                            &buf,
+                            &seg_open,
+                            &seg_last,
+                            pre_state_known,
+                            anchor_source,
+                        );
+                        out.boundaries.push(Boundary {
+                            line_no: e.line_no,
+                            turn_index: e.turn_index,
+                            timestamp_utc: e.timestamp_utc.clone(),
+                            kind: "external_write",
+                            confidence: Confidence::Authoritative,
+                            detail: format!(
+                                "file-history version jumped to v{} with NO tool write of this \
+                                 file since the previous snapshot - a harness-side or \
+                                 out-of-band write; the snapshot content is unavailable \
+                                 (pruned, unverifiable, or never stored), so nothing is \
+                                 rebased and trust across this point ends",
+                                version.map_or_else(|| "?".to_string(), |v| v.to_string())
+                            ),
+                        });
+                        seg_open = None;
+                        seg_last = None;
+                        pre_state_known = false;
+                        had_full_anchor = false;
+                        anchor_source = None;
+                    }
+                }
+                writes_since_marker = false;
             }
         }
     }
@@ -515,3 +551,49 @@ pub(crate) fn buffer_disagrees_with_original(buf: &SparseBuffer, original_file: 
 // ─────────────────────────────────────────────────────────────────────────────
 // Unified diff (in-crate, safe Rust)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// What a snapshot marker means for the replay - the PURE decision half of the
+/// marker arm (the effects live in `replay`):
+/// - verified content that DISAGREES with the replayed known lines (or a complete
+///   buffer with a different length) => `Rebase` - valid across a generation reset
+///   too, since the bytes are mtime-verified against THIS marker's backupTime;
+/// - no content, but a same-generation version JUMP with no mutation event since
+///   the previous marker => `ContentlessBoundary` (the silence signal is
+///   generation-bound: a version DECREASE is a counter restart, not a write);
+/// - anything else => `Nothing`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SnapAction {
+    Rebase,
+    ContentlessBoundary,
+    Nothing,
+}
+
+fn snapshot_action(
+    last_version: Option<u64>,
+    version: Option<u64>,
+    content: Option<&str>,
+    buf: &SparseBuffer,
+    writes_since_marker: bool,
+) -> SnapAction {
+    if let Some(snap_content) = content {
+        let snap_lines = split_lines(snap_content);
+        let known_disagrees = buf
+            .known
+            .iter()
+            .any(|(n, cell)| snap_lines.get(n - 1).is_none_or(|l| *l != cell.text));
+        let complete_len_differs = buf
+            .seen_total_lines
+            .is_some_and(|t| buf.known.len() == t && t != snap_lines.len());
+        if !buf.known.is_empty() && (known_disagrees || complete_len_differs) {
+            return SnapAction::Rebase;
+        }
+        return SnapAction::Nothing;
+    }
+    let jumped = matches!((last_version, version), (Some(p), Some(v)) if v > p);
+    let reset = matches!((last_version, version), (Some(p), Some(v)) if v < p);
+    if jumped && !reset && !writes_since_marker {
+        SnapAction::ContentlessBoundary
+    } else {
+        SnapAction::Nothing
+    }
+}

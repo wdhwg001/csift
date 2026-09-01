@@ -147,13 +147,19 @@ pub(crate) fn render_timeline(outcome: &Outcome) {
             } else {
                 ""
             };
+            let detail = m
+                .mutation
+                .detail
+                .as_deref()
+                .map(|d| format!("  ({d})"))
+                .unwrap_or_default();
             let errored = if m.mutation.command_errored {
                 " (command errored)"
             } else {
                 ""
             };
             println!(
-                "  L{}  {}  turn {}  {}{}  {}{}",
+                "  L{}  {}  turn {}  {}{}  {}{}{detail}",
                 m.line_no,
                 format_timestamp(m.mutation.timestamp_utc.as_deref()),
                 m.turn_index,
@@ -254,6 +260,9 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
                     // the typed spelling when it differs, and `command_errored` flags
                     // a mutation kept from a partially-failed bash chain.
                     "resolution": m.mutation.resolution,
+                    // Snapshot-instrument provenance on an external_write row (null
+                    // on every tool-extracted mutation).
+                    "detail": m.mutation.detail,
                     "path_verbatim": m.mutation.path_verbatim,
                     "command_errored": m.mutation.command_errored,
                 });
@@ -353,6 +362,7 @@ pub(crate) fn json_grouped<F: Fn(&FileMutation) -> String>(
                 "notebook_edit": counts.notebook_edit,
                 "multi_edit": counts.multi_edit,
                 "bash": counts.bash,
+                "external_write": counts.external_write,
                 "total": counts.total(),
                 "distinct_files": counts.files.len(),
                 "first_utc": counts.first_ts,
