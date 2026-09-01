@@ -82,7 +82,7 @@ csift is the missing tool it should have had.
 
 1. ⏪ **Recover files & deleted plans.**
 
-   `csift recover` analyzes and aggregates every edit/read and restores the file's exact bytes, at any point in time, in diff patches or final files, and honors Claude Code's file-modified markers. When it can't reliably recover due to modified boundaries, it salvages what survived with gaps marked.
+   `csift recover` analyzes and aggregates every edit/read and restores the file's exact bytes, at any point in time, in diff patches or final files, and honors Claude Code's file-modified markers. Shell traffic counts too: a heredoc or literal echo written through Bash, and a clean `cat`/`head`/`sed -n` read, replay as real content under strict admission gates. When it can't reliably recover due to modified boundaries, it salvages what survived with gaps marked.
 
 2. 🖼 **Images back out.**
 
@@ -117,7 +117,7 @@ csift is the missing tool it should have had.
 
 8. 🩺 **Is it actually stopped?**
 
-   `csift status` answers RIGHT NOW: running, waiting on children, waiting on a human, idle, or dead. One verdict joined from the harness's session registry, the transcript's tail, and a process probe, with the evidence named. `csift wait --until stop` (or `auq`, `notification:RE`, `tool:Bash`, `write:PATH`) blocks until it happens and exits 124 on timeout. The one corner of csift that answers "now" instead of "what happened": point-in-time by design.
+   `csift status` answers RIGHT NOW: running, waiting on children, waiting on a human, idle, or dead. One verdict joined from the harness's session registry, the transcript's tail, and a process probe, with the evidence named. Live child lanes and open tasks stay visible while finished ones fold to a count. `csift wait --until stop` (or `auq`, `notification:RE`, `tool:Bash`, `write:PATH`) blocks until it happens and exits 124 on timeout. The one corner of csift that answers "now" instead of "what happened": point-in-time by design.
 
 9. 🔎 **Round-trips, not lines.**
 
@@ -194,7 +194,7 @@ Run `csift <command> --help` for the full flag set and examples.
 
 |                |                                                                                                                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`list`**     | fast "which session is this?" index: first/last user + last agent, per session                                                                                                          |
+| **`list`**     | fast "which session is this?" index: first/last user + last agent, per session; flags a background-job clone and names the session it forked from                                        |
 | **`search`**   | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `--count-by` censuses, `--attachments`, `-l` matching sessions, `--raw` verbatim lines)                                                      |
 | **`show`**     | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes; `--branch-points` maps where the conversation forked |
 | **`stats`**    | one-scan aggregates per session: tokens by model (counted once per API message), tool calls, turns, span, compactions, narration blocks, a whole-file line-type census                                                                                                  |
