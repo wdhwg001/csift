@@ -5,6 +5,107 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.9.4] - 2026-09-02
+
+Bash reads become reads and bash writes become writes in recover, plan
+binding matches Claude Code's own rule, list names a forked clone's
+origin, status shows what is actually moving, and metachar regex
+searches stop paying full price.
+
+- recover: BASH CONTENT ANCHORS. The deterministic shell subset now
+  replays as first-class content instead of boundaries. Writes anchor
+  per segment - a quoted-delimiter heredoc via cat/tee (the body is
+  byte-verbatim in the transcript; an unquoted delimiter is admitted
+  only with an expansion-free body), literal echo/printf, and
+  truncate -s 0 - so the dominant real shape, write-the-file-then-run-it
+  in one compound command, anchors; a compound command additionally
+  demands a clean result echo (empty stderr, not interrupted: only the
+  last segment owns the exit code, and a failing write always says so
+  on stderr), and a second touch of the same resolved path anywhere in
+  the command refuses the anchor. Reads anchor as single simple
+  commands only (cat, head -n N, sed -n 'A,Bp') under the completeness
+  gate; a window from line 1 that hits EOF is the whole file. A
+  byte-known >> append is placed only onto a complete
+  newline-terminated buffer, else it is disclosed as
+  bash_append_unplaced. Deliberate non-anchors, measured or
+  unplaceable: tail, sed -i, variable targets, interpreter and ssh
+  heredocs. Coverage counts bash-read-anchor / bash-write-anchor;
+  segment provenance names bash-heredoc / bash-cat / bash-write. A
+  real heredoc-then-run python tool went from "no recoverable history"
+  to 33/33 lines recovered verbatim.
+- plan: a correctness fix. csift bound only via the plan_mode
+  attachment, while Claude Code itself binds by the FIRST record
+  carrying a valid slug - so on a forked clone (attachments stripped,
+  slug records kept) csift answered "no plan" for a session whose plan
+  CC will re-inject. Two binding laws now apply in precedence order;
+  rows carry binding_source ("plan_mode" | "slug-only") and
+  minted_at_compaction (the slug's first carrier is a compaction
+  boundary - the fork mint site). plansDirectory from settings.json is
+  honored.
+- list: clone lineage. A transcript whose first timestamped record is
+  a compact_boundary was minted by copying another session at that
+  compaction (a background-job fork: uuids preserved, timestamps
+  predating the file, slug stripped; zero false positives on a
+  61-file real dir - file-birthtime rules were refuted). The row
+  annotates the fork and names the ORIGIN session (a prose quote of
+  the boundary uuid or a co-clone can never win the join); JSON gains
+  is_clone / clone_of / clone_boundary_uuid. Documented corollary: a
+  clone double-counts its inherited records on every spanning surface
+  until scoped away.
+- status: child lanes gain a `generating` state - a tail record
+  younger than 300s whose last assistant stop_reason is not end_turn
+  is mid-generation (measured: intra-lane record gaps reach p99.9 =
+  295s while dead lanes sit 31h+ out; the old 15s mtime window
+  misread one lane in 17, and stop_reason alone would mark 73% of
+  dead lanes live). The mtime `active` state is retired; settled lanes
+  fold to a count (JSON children[] carries live lanes only, beside
+  settled_children); and a tasks section reads the harness task list
+  (open tasks in_progress-first with blockers, completed folded to a
+  count). The status help schema line also drops since_utc/since_local,
+  which the verdict row never emitted.
+- search: required-needle prefilter extraction. A pattern with
+  metacharacters now derives a necessity-only literal set from its
+  parsed structure (an alternation gates only when every branch
+  demands a safe needle), so `TodoWrite.*legacy|legacy.*TodoWrite`
+  runs 1.70x faster wall / 1.9x less CPU unscoped with byte-identical
+  output; a space-carrying plain pattern now anchors its longest
+  whitespace-free run.
+- files + recover: the file-history snapshot instrument. Claude Code
+  rewrites its settings files in-process (/model, /config, plugin
+  toggles) with no tool record - measured, half of all settings.json
+  mutations are invisible to the tool stream, and one such write
+  silently deleted a freshly-edited key while recover replayed the
+  file WITH it, calling a never-existed state 100% complete. CC's own
+  per-prompt snapshot version sequence is now read as an instrument:
+  recover compares the replayed buffer to mtime-verified snapshot
+  content at every version change and REBASES on divergence (an
+  authoritative external_write boundary; content-less jumps disclose
+  the same boundary without rebasing), and files emits
+  "external write" timeline rows - scope hard-limited to the settings
+  family (.claude/settings*.json): the tracked set spans 1701 corpus
+  paths against 11 settings-family ones. The version counter resets
+  mid-session (148 real cases) and the @vN store name collides across
+  a reset, so generations are segmented and unverified blobs refused.
+- search: bare role selectors now speak LLM-visibility - a
+  correctness fix. user.unsent under -t user broke a 0.7-era consumer
+  (a superseded draft 12 seconds before the real submit poisoned a
+  last-human-touch hook). A bare role (-t user) selects the role's
+  LLM-visible leaves only; a new glob form (-t 'user.*') selects
+  every leaf under the prefix; intermediate prefixes and full paths
+  keep their full sets, so -t harness.compaction still reaches the
+  boundary. Exactly two leaves are invisible, instrument-verified:
+  user.unsent (CC's own preservedMessages accounting excludes every
+  draft uuid - a draft is not in the surviving conversation) and
+  harness.compaction.boundary (a metrics-only system record).
+  -t user restores the 0.7 contract; 0.9.2 through 0.9.3 briefly
+  included drafts under it.
+- SKILL: the staleness guard is mechanical (run csift --version at
+  first use after any compaction; a mismatch means the in-context copy
+  is a stale echo), the description gains the corpus-first trigger
+  (live sessions need /reload-skills), and two stale claims are fixed
+  (the turns rename is v0.4; the retired @trap retry ritual is gone
+  from the whoami section).
+
 ## [0.9.3] - 2026-09-01
 
 Help corrections and a documentation catch-up; no behavior changes.
