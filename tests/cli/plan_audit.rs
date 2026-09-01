@@ -169,3 +169,111 @@ fn plan_audit_all_clear_and_multi_owner_attribution() {
         multi.stdout
     );
 }
+
+// ── slug-only binding (Claude Code's first-slug law; the forked-session shape) ──
+
+const SLUG_ENC: &str = "-Users-dev-example-project";
+
+#[test]
+fn plan_slug_only_binding_minted_at_compaction() {
+    // No plan_mode anywhere; the FIRST slug carrier is the compact_boundary itself
+    // (the fork/mint signature). Claude Code will inject/rebuild the slug's file, so
+    // "no plan" would be a wrong answer.
+    let h = Home::new();
+    let sess = "4b3a2c1d-9e8f-4765-b432-10fedcba9877";
+    h.write(
+        &format!("{SLUG_ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start"}}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"2026-06-07T06:00:00.000Z","slug":"minted-harbor-lantern","compactMetadata":{"trigger":"auto","preTokens":1000,"postTokens":100}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T06:00:01.000Z","slug":"minted-harbor-lantern","message":{"role":"assistant","content":[{"type":"text","text":"resumed"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", &format!("@{sess}")]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("minted-harbor-lantern.md")
+            && out.stdout.contains("[missing]")
+            && out.stdout.contains("slug only")
+            && out.stdout.contains("MINTED at a compaction boundary"),
+        "{}",
+        out.stdout
+    );
+    let j = h.run(&["plan", &format!("@{sess}"), "--format", "json"]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "plan")
+        .expect("plan row");
+    assert_eq!(row["binding_source"], "slug-only", "{}", j.stdout);
+    assert_eq!(row["minted_at_compaction"], true, "{}", j.stdout);
+    assert_eq!(row["slug"], "minted-harbor-lantern", "{}", j.stdout);
+    assert_eq!(row["line"], 2, "{}", j.stdout);
+}
+
+#[test]
+fn plan_slug_only_ordinary_carrier_and_invalid_slug() {
+    let h = Home::new();
+    // Ordinary first carrier: slug-only, NOT minted-at-compaction.
+    let s1 = "5c4b3a2d-8f9e-4654-a321-0fedcba98766";
+    h.write(
+        &format!("{SLUG_ENC}/{s1}.jsonl"),
+        concat!(
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","slug":"steady-reef-charter","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", &format!("@{s1}"), "--format", "json"]);
+    let row: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "plan")
+        .expect("row");
+    assert_eq!(row["binding_source"], "slug-only", "{}", out.stdout);
+    assert_eq!(row["minted_at_compaction"], false, "{}", out.stdout);
+
+    // A slug value Claude Code itself would reject never binds (honest empty).
+    let s2 = "6d5c4b3a-7e8f-4543-b210-fedcba987655";
+    h.write(
+        &format!("{SLUG_ENC}/{s2}.jsonl"),
+        concat!(
+            r#"{"type":"assistant","uuid":"b1","timestamp":"2026-06-07T05:00:01.000Z","slug":"Not_A_Valid_Slug","message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}"#, "\n",
+        ),
+    );
+    let bad = h.run(&["plan", &format!("@{s2}")]);
+    assert!(bad.success);
+    assert!(
+        bad.stderr.contains("no plan file is bound"),
+        "{} / {}",
+        bad.stdout,
+        bad.stderr
+    );
+}
+
+#[test]
+fn plan_mode_attachment_still_outranks_the_slug_law() {
+    // Both present: the explicit attachment wins (it carries the verbatim path).
+    let h = Home::new();
+    let sess = "7e6d5c4b-6a9f-4432-a109-edcba9876544";
+    h.write(
+        &format!("{SLUG_ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","slug":"quiet-shoal-beacon","message":{"role":"assistant","content":[{"type":"text","text":"planning"}]}}"#, "\n",
+            r#"{"type":"attachment","uuid":"p1","timestamp":"2026-06-07T05:00:02.000Z","slug":"quiet-shoal-beacon","attachment":{"type":"plan_mode","planFilePath":"/Users/dev/plans/quiet-shoal-beacon.md","isSubAgent":false}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", &format!("@{sess}"), "--format", "json"]);
+    let row: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "plan")
+        .expect("row");
+    assert_eq!(row["binding_source"], "plan_mode", "{}", out.stdout);
+    assert_eq!(
+        row["plan_file"], "/Users/dev/plans/quiet-shoal-beacon.md",
+        "{}",
+        out.stdout
+    );
+}

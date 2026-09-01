@@ -64,6 +64,16 @@ pub struct PlanRef {
     /// but always present on the `plan_mode` attachment record. `None` when the
     /// record predates the field.
     pub slug: Option<String>,
+    /// How the binding was established: `plan_mode` (the explicit attachment, path
+    /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying
+    /// record binds `<plans-dir>/<slug>.md` - Claude Code's own binding law, which a
+    /// forked/background session reaches because the fork strips its history's
+    /// attachments, and any compaction mints a slug even without Plan Mode).
+    pub binding_source: &'static str,
+    /// True when the first slug-carrying record is a `compact_boundary` itself: the
+    /// slug was MINTED at that compaction (Plan Mode never ran; Claude Code will
+    /// still inject or rebuild the file it names) - the forked-session signature.
+    pub minted_at_compaction: bool,
 }
 
 /// Tight byte prefilter for the plan-resolution pre-pass: `plan_mode` is a rare token, so
@@ -117,9 +127,85 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
             plan_exists: Path::new(plan_file).is_file(),
             line_no: *line_no,
             slug: rec.slug.clone(),
+            binding_source: "plan_mode",
+            minted_at_compaction: false,
         });
     }
+    // No `plan_mode` anywhere: fall back to Claude Code's ACTUAL binding law - the
+    // FIRST record carrying a `slug` binds `<plans-dir>/<slug>.md` (the harness's
+    // getSlugFromLog takes the first slug in the log, no attachment consulted). A
+    // forked/background session reaches this state by construction (the clone strips
+    // attachment history), and its slug is often minted by the first own compaction -
+    // reporting "no plan" there is a WRONG answer: CC will inject/rebuild that file.
+    if latest.is_none() {
+        if let Some((line_no, rec)) = first_slug_record(bytes) {
+            if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {
+                let plan_file = plans_dir().join(format!("{slug}.md"));
+                latest = Some(PlanRef {
+                    session_id: session_id.clone(),
+                    is_subagent,
+                    parent_session_id: parent_session_id.clone(),
+                    plan_exists: plan_file.is_file(),
+                    plan_file: plan_file.display().to_string(),
+                    line_no,
+                    slug: Some(slug.to_string()),
+                    binding_source: "slug-only",
+                    minted_at_compaction: rec.is_compact_boundary(),
+                });
+            }
+        }
+    }
     Ok(latest)
+}
+
+/// The FIRST record carrying a `slug` field (Claude Code's binding key), by a
+/// sequential early-exit walk - the fallback runs only when no `plan_mode` exists, and
+/// a slugged session's first carrier normally sits early after the mint point.
+fn first_slug_record(bytes: &[u8]) -> Option<(usize, crate::model::Record)> {
+    static SLUG: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"\"slug\""));
+    let mut line_no = 0usize;
+    for line in bytes.split(|&b| b == b'\n') {
+        line_no += 1;
+        if SLUG.find(line).is_none() {
+            continue;
+        }
+        if let Ok(Some(rec)) = crate::parse::parse_line(line) {
+            if rec.slug.is_some() {
+                return Some((line_no, rec));
+            }
+        }
+    }
+    None
+}
+
+/// Claude Code's slug validity rule (lowercase alnum head, alnum/dash tail, <=120
+/// chars) - a stray tolerated `slug` value that CC itself would reject never binds.
+fn slug_is_valid(s: &str) -> bool {
+    let mut chars = s.chars();
+    let Some(head) = chars.next() else {
+        return false;
+    };
+    s.len() <= 120
+        && (head.is_ascii_lowercase() || head.is_ascii_digit())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// The plans directory: `plansDirectory` from `<claude-home>/settings.json` when set
+/// (absolute as-is, relative joined to the config home), else `<claude-home>/plans`.
+fn plans_dir() -> PathBuf {
+    let Ok(home) = crate::path::claude_home() else {
+        return PathBuf::from("plans");
+    };
+    if let Ok(raw) = std::fs::read_to_string(home.join("settings.json")) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Some(d) = v.get("plansDirectory").and_then(serde_json::Value::as_str) {
+                let p = PathBuf::from(d);
+                return if p.is_absolute() { p } else { home.join(p) };
+            }
+        }
+    }
+    home.join("plans")
 }
 
 /// Resolve the single plan file to use for `recover --file @plan` across the in-scope
@@ -245,6 +331,8 @@ fn render_reverse_json(plan_file: &Path, hits: &[PlanRef]) -> Result<()> {
             "parent_session_id": r.parent_session_id,
             "line": r.line_no,
             "slug": r.slug,
+            "binding_source": r.binding_source,
+            "minted_at_compaction": r.minted_at_compaction,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }
@@ -332,6 +420,18 @@ fn render_text(refs: &[PlanRef]) {
         if let Some(slug) = &r.slug {
             println!("slug     {slug}");
         }
+        if r.binding_source == "slug-only" {
+            println!(
+                "binding  slug only — no plan_mode attachment; Claude Code binds by the \
+                 first slug-carrying record{}",
+                if r.minted_at_compaction {
+                    " (slug MINTED at a compaction boundary — Plan Mode never ran; CC \
+                     still injects/rebuilds this file)"
+                } else {
+                    ""
+                }
+            );
+        }
         if r.is_subagent {
             println!("parent   {}", r.parent_session_id);
         }
@@ -352,6 +452,8 @@ fn render_json(refs: &[PlanRef]) -> Result<()> {
             "plan_exists": r.plan_exists,
             "line": r.line_no,
             "slug": r.slug,
+            "binding_source": r.binding_source,
+            "minted_at_compaction": r.minted_at_compaction,
         });
         println!("{}", serde_json::to_string(&obj)?);
     }

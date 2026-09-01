@@ -128,13 +128,19 @@ impl ImageArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Locate the Plan-Mode plan file BOUND to a session (via its `plan_mode` attachment)",
+    about = "Locate the plan file BOUND to a session (plan_mode attachment, or the first-slug law)",
     long_about = "Locate the Plan-Mode PLAN FILE bound to a session. Claude Code stores plans \
         flat under `~/.claude/plans/<three-words>.md` (a subagent's gets an `-agent-<hex>` \
-        suffix); the random name is bound to the session by the `plan_mode` ATTACHMENT the \
-        transcript writes on entering Plan Mode. That attachment is the authoritative binding \
-       : a session may also Edit/Write OTHER sessions' plan files, but those are not its own \
-        plan, so this never path-guesses.\n\n\
+        suffix). TWO binding laws, in precedence order, mirroring Claude Code's own: (1) the \
+        `plan_mode` ATTACHMENT written on entering Plan Mode (carries the verbatim path); \
+        (2) when NO plan_mode exists anywhere, the FIRST record carrying a `slug` binds \
+        `<plans-dir>/<slug>.md` - Claude Code reads the first slug in the log, and a \
+        forked/background session reaches this state by construction (its clone strips \
+        attachment history; any compaction MINTS a slug even without Plan Mode - the \
+        output then says `slug only`, plus `MINTED at a compaction boundary` when the \
+        first carrier is the boundary itself: CC will still inject/rebuild that file). \
+        A session may also Edit/Write OTHER sessions' plan files, but those are not its \
+        own plan, so this never path-guesses.\n\n\
         TARGET: a project PATH / encoded-dir (positional), or an `@<uuid>` session token. \
         With NO target, the CALLING session is resolved from `CLAUDE_CODE_SESSION_ID` \
         (like `whoami`): `csift plan` answers \"what is MY plan file\". Subagents are spanned \
