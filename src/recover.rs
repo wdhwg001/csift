@@ -50,6 +50,7 @@ const EXCERPT_MAX: usize = 400;
 // ─────────────────────────────────────────────────────────────────────────────
 
 mod backups;
+mod bash_anchors;
 mod buffer;
 mod carriers;
 mod diff;
@@ -63,6 +64,7 @@ mod scan;
 mod timeline;
 mod types;
 
+pub(crate) use bash_anchors::*;
 pub(crate) use buffer::*;
 pub(crate) use carriers::*;
 pub(crate) use diff::*;

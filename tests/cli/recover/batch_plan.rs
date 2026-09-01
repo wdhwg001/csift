@@ -282,7 +282,7 @@ fn batch_summary_counts_partial_and_flagged_windows() {
         concat!(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"work"}}"#, "\n",
             r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/p","toolUseResult":{"type":"create","filePath":"/p/whole.md","content":"a\nb\n"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/p","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"echo x >> whole.md"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","timestamp":"2026-06-07T05:00:02.000Z","cwd":"/p","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"sed -i 's/a/z/' whole.md"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:03.000Z","cwd":"/p","toolUseResult":{"file":{"filePath":"/p/partial.md","content":"ten\neleven","startLine":10,"numLines":2,"totalLines":40}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"ok"}]}}"#, "\n",
         ),
     );

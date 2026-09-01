@@ -65,6 +65,18 @@ pub(crate) enum EventKind {
     /// holds other changes this stream never saw: an authoritative, NON-invalidating
     /// annotation boundary.
     StaleRecovered,
+    /// A WINDOWED read recovered from a gated Bash command's stdout (`sed -n 'A,Bp'`
+    /// / `head -n N`): lines `[start_line, start_line + lines.len())` verbatim. The
+    /// observed extent (`start_line + lines.len() - 1`) is the only total it can
+    /// honestly claim; the splice floors, never shrinks, the seen length.
+    BashWindowRead {
+        start_line: usize,
+        lines: Vec<String>,
+    },
+    /// A byte-known Bash APPEND (`>> file` heredoc/echo, `tee -a`). Placeable ONLY
+    /// onto a COMPLETE newline-terminated buffer; otherwise it degrades to a
+    /// disclosed heuristic boundary (content known, position not).
+    BashAppend { content: String },
     /// A `file-history-snapshot` recorded a disk backup of `--file` at this time. A
     /// COVERAGE ANNOTATION only, never a content anchor: the named blob lives in a
     /// PRUNED tool-layer store with no transcript anchor for its content (list it with
@@ -72,12 +84,20 @@ pub(crate) enum EventKind {
     HistorySnapshotMarker,
 }
 
-/// The provenance of a [`EventKind::FullSnapshot`].
+/// The provenance of a [`EventKind::FullSnapshot`]. The `Bash*` variants are the
+/// v0.9.4 content anchors: deterministic bash reads/writes admitted by
+/// `bash_mutations::bash_anchor` plus the recover-side completeness gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SnapSource {
     Write,
     FullRead,
     FileAttachment,
+    /// A gated `cat`/to-EOF window read: the command's verbatim stdout.
+    BashCat,
+    /// A quoted-delimiter heredoc write via cat/tee: the body from the tool_use input.
+    BashHeredoc,
+    /// A literal `echo`/`printf` write or `truncate -s 0`.
+    BashWrite,
 }
 
 impl SnapSource {
@@ -86,6 +106,9 @@ impl SnapSource {
             SnapSource::Write => "write",
             SnapSource::FullRead => "full-read",
             SnapSource::FileAttachment => "file-attachment",
+            SnapSource::BashCat => "bash-cat",
+            SnapSource::BashHeredoc => "bash-heredoc",
+            SnapSource::BashWrite => "bash-write",
         }
     }
 }

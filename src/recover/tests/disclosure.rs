@@ -89,7 +89,7 @@ fn hard_and_soft_boundary_counts_split_by_invalidation() {
 fn bash_join_resolves_against_the_record_cwd_with_verbatim_belt() {
     let records = numbered(&[
         r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
-        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/work/proj","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"echo x >> notes.md"}}]}}"#,
+        r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/work/proj","message":{"role":"assistant","content":[{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"sed -i 's/alpha/beta/' notes.md"}}]}}"#,
     ]);
     // Absolute --file matches the RESOLVED spelling of the relative operand.
     let abs = extract_events(&records, "/work/proj/notes.md");

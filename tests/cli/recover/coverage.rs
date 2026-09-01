@@ -256,7 +256,8 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
         &format!("{ENC}/{SESS}.jsonl"),
         concat!(
             r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"make a config"}}"#, "\n",
-            // Bash creates the file (heuristic touch, no content captured).
+            // Bash creates the file - a LITERAL printf, so since v0.9.4 the content
+            // is a first-class bash-write anchor (not a mere heuristic touch).
             r#"{"type":"assistant","uuid":"ab","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b0","name":"Bash","input":{"command":"printf 'B1\nB2\nB3\n' > /p/cfg.txt"}}]}}"#, "\n",
             r#"{"type":"user","uuid":"cb","timestamp":"2026-06-07T05:00:01.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b0","content":""}]}}"#, "\n",
             // Direct Edit with no prior Read → fails.
@@ -299,8 +300,13 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
     );
     assert_eq!(
         ev["bash"].as_u64(),
+        Some(0),
+        "the literal create is an anchor, not a heuristic touch: {cov}"
+    );
+    assert_eq!(
+        ev["bash_write_anchor"].as_u64(),
         Some(1),
-        "the Bash create IS a (heuristic) touch: {cov}"
+        "the literal printf create anchors its content: {cov}"
     );
     assert_eq!(
         ev["integrity_error"].as_u64(),
@@ -309,8 +315,8 @@ fn recover_coverage_excludes_failed_edit_before_read_after_bash_create() {
     );
     assert_eq!(
         cov["recoverable_lines"].as_u64(),
-        Some(0),
-        "nothing is recoverable (Bash has no content, the edit failed): {cov}"
+        Some(3),
+        "the literal bash create carries every line; the failed edit adds nothing: {cov}"
     );
 }
 

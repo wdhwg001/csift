@@ -22,6 +22,7 @@ fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
         .collect()
 }
 
+mod bash_anchors;
 mod boundaries;
 mod coverage;
 mod diff;

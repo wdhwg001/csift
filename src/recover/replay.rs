@@ -51,6 +51,10 @@ pub(crate) struct EventCounts {
     pub(crate) stale_hint: usize,
     /// Successful Edits flagged `staleRecovered` (disk had drifted; edit applied).
     pub(crate) stale_recovered: usize,
+    /// Gated Bash READ content anchors (cat full + windows) admitted into the replay.
+    pub(crate) bash_read_anchor: usize,
+    /// Gated Bash WRITE content anchors (heredoc/echo/printf/truncate/appends).
+    pub(crate) bash_write_anchor: usize,
 }
 
 /// One reconstructed segment (a maximal run of events with no hard boundary inside).
@@ -136,9 +140,14 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 source,
             } => {
                 match source {
-                    SnapSource::FullRead => out.counts.read_full += 1,
+                    SnapSource::FullRead | SnapSource::FileAttachment => {
+                        out.counts.read_full += 1;
+                    }
                     SnapSource::Write => out.counts.write += 1,
-                    SnapSource::FileAttachment => out.counts.read_full += 1,
+                    SnapSource::BashCat => out.counts.bash_read_anchor += 1,
+                    SnapSource::BashHeredoc | SnapSource::BashWrite => {
+                        out.counts.bash_write_anchor += 1;
+                    }
                 }
                 let opened_here = seg_open.is_none();
                 // A WRITE is a creation/whole-file event → its segment's pre-state is the
@@ -151,9 +160,15 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                 buf.reset_to_full(content, *total_lines, e.line_no);
                 had_full_anchor = true;
                 if opened_here {
+                    // A write-family anchor is a CHANGE (pre-state = the buffer before
+                    // it); a read-family anchor is an OBSERVATION (pre-state = itself).
                     seg_start = match source {
-                        SnapSource::Write => pre_before_reset,
-                        SnapSource::FullRead | SnapSource::FileAttachment => buf.clone(),
+                        SnapSource::Write | SnapSource::BashHeredoc | SnapSource::BashWrite => {
+                            pre_before_reset
+                        }
+                        SnapSource::FullRead | SnapSource::FileAttachment | SnapSource::BashCat => {
+                            buf.clone()
+                        }
                     };
                     seg_open = Some(here.clone());
                     pre_state_known = true;
@@ -376,6 +391,79 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                              exist)"
                         .to_string(),
                 });
+            }
+            EventKind::BashWindowRead { start_line, lines } => {
+                out.counts.bash_read_anchor += 1;
+                if seg_open.is_none() {
+                    seg_start = buf.clone();
+                    seg_open = Some(here.clone());
+                }
+                // The observed extent is the honest total; `splice` takes the max with
+                // the prior seen length (a window can floor it, never shrink it). The
+                // separator/terminator normalization inside `splice` can undercount
+                // this observed extent by one on a newline-terminated file - re-floor
+                // to the highest line this window actually saw.
+                let extent = start_line + lines.len() - 1;
+                buf.splice(*start_line, lines, extent, e.line_no);
+                buf.seen_total_lines = Some(buf.seen_total_lines.unwrap_or(0).max(extent));
+                seg_last = Some(here);
+            }
+            EventKind::BashAppend { content } => {
+                // Placeable ONLY when the whole file is known and newline-terminated
+                // (appended bytes start a NEW line then; a non-terminated tail would
+                // CONCATENATE and the split is unknowable) - or the buffer is a known
+                // EMPTY file. Anything else: a disclosed heuristic boundary (the
+                // content is known, its line position is not).
+                let total = buf.seen_total_lines;
+                let complete = total.is_some_and(|t| {
+                    t > 0 && buf.known.len() == t && buf.known.keys().next_back() == Some(&t)
+                });
+                let placeable =
+                    matches!(total, Some(0)) || (complete && buf.content_ends_with_newline);
+                if placeable {
+                    out.counts.bash_write_anchor += 1;
+                    if seg_open.is_none() {
+                        seg_start = buf.clone();
+                        seg_open = Some(here.clone());
+                    }
+                    let base = total.unwrap_or(0);
+                    for (i, text) in crate::recover::split_lines(content).into_iter().enumerate() {
+                        buf.known.insert(
+                            base + 1 + i,
+                            LineCell {
+                                text,
+                                last_line_no: e.line_no,
+                            },
+                        );
+                    }
+                    buf.seen_total_lines = Some(buf.known.keys().next_back().copied().unwrap_or(0));
+                    buf.content_ends_with_newline = content.ends_with('\n');
+                    seg_last = Some(here);
+                } else {
+                    out.counts.bash += 1;
+                    close_segment(
+                        &mut out,
+                        &seg_start,
+                        &buf,
+                        &seg_open,
+                        &seg_last,
+                        pre_state_known,
+                        anchor_source,
+                    );
+                    out.boundaries.push(Boundary {
+                        line_no: e.line_no,
+                        turn_index: e.turn_index,
+                        timestamp_utc: e.timestamp_utc.clone(),
+                        kind: "bash_append_unplaced",
+                        confidence: Confidence::Heuristic,
+                        detail: "bash append with byte-known content, but the buffer is                                  not a complete newline-terminated file here - the                                  append point is unknowable, so it stays a boundary"
+                            .to_string(),
+                    });
+                    seg_open = None;
+                    seg_last = None;
+                    pre_state_known = false;
+                    anchor_source = None;
+                }
             }
             EventKind::HistorySnapshotMarker => {
                 out.counts.history_snapshot += 1;

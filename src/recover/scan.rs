@@ -430,6 +430,7 @@ pub(crate) fn extract_with_turns(
             }
         }
 
+        let mut turn_events: Vec<FileEvent> = Vec::new();
         for &i in idxs {
             let (line_no, rec) = (&records[i].0, &records[i].1);
             extract_from_record(
@@ -438,7 +439,7 @@ pub(crate) fn extract_with_turns(
                 rec,
                 target_file,
                 &id_to_path,
-                &mut events,
+                &mut turn_events,
             );
             // Carrier-less ops (subagent/workflow): reconstruct content from the tool_use
             // INPUT. Gated on `ids_with_result` so it NEVER double-emits in a top-level
@@ -452,9 +453,28 @@ pub(crate) fn extract_with_turns(
                 target_file,
                 &ids_with_result,
                 &failed_ids,
-                &mut events,
+                &mut turn_events,
             );
         }
+        // v0.9.4 Bash content anchors: gated command shapes become first-class content
+        // events, and an admitted WRITE/APPEND anchor supersedes the heuristic
+        // BashTouch row the same command produced (one command never yields both a
+        // content event and a self-inflicted boundary).
+        let mut anchors = collect_turn_bash_anchors(records, idxs, target_file, &failed_ids);
+        if !anchors.suppress.is_empty() {
+            turn_events.retain(|e| {
+                !matches!(&e.kind, EventKind::BashTouch { path, .. }
+                    if anchors.suppress.iter().any(|(l, p)| *l == e.line_no && p == path))
+            });
+        }
+        for mut e in anchors.events.drain(..) {
+            e.turn_index = turn_index;
+            turn_events.push(e);
+        }
+        // Anchor events land at their own record lines; keep the replay stream in
+        // strict line order (stable, so same-line order is preserved).
+        turn_events.sort_by_key(|e| e.line_no);
+        events.extend(turn_events);
     }
 
     events

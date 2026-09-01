@@ -75,6 +75,7 @@
 //! reports `dst`, not `note`). An IN-PATH `#` (`/tmp/a#b`) is preserved - `#` masks only when
 //! it starts a token.
 
+mod anchors;
 mod classes;
 mod commands;
 mod cwd;
@@ -85,6 +86,7 @@ mod mask;
 mod outputs;
 mod redirect;
 
+pub(crate) use anchors::*;
 pub(crate) use classes::*;
 pub(crate) use commands::*;
 pub(crate) use cwd::*;

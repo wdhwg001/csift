@@ -328,6 +328,27 @@ pub enum RecoverMode {
         FROM THE TOOL STREAM; only a clean window note implies nothing else ran. A \
         `--turn`/`--since`/`--until` window that excludes integrity-relevant events \
         prints a note naming how many fell outside.\n\n\
+        BASH CONTENT ANCHORS (deterministic shell reads/writes join the replay)\n  \
+          A small closed set of shell shapes carries the file content ITSELF, so it \
+        replays as first-class events instead of degrading to a boundary: a \
+        quoted-delimiter heredoc written via `cat`/`tee` (the body is byte-verbatim \
+        in the transcript; an unquoted delimiter is admitted only with an \
+        expansion-free body); `echo`/`printf` with purely literal arguments; \
+        `truncate -s 0`; and on the READ side `cat <file>`, `head -n N <file>`, and \
+        `sed -n 'A,Bp' <file>`, whose stdout is the file window when the result echo \
+        is clean (empty stderr, not interrupted, not externalized, exit ok). Every \
+        anchor demands a SINGLE simple command with a literal operand resolved \
+        against the recording shell's cwd; pipes, chains, substitutions, variable \
+        targets, interpreter heredocs (a script is not file content), and ssh-fed \
+        heredocs (a REMOTE filesystem) all stay in the boundary lanes. An admitted \
+        write anchor supersedes its own heuristic bash-mutation boundary. A \
+        byte-known `>>` append is PLACED only onto a complete newline-terminated \
+        buffer; anywhere else it is disclosed as a `bash_append_unplaced` boundary \
+        (content known, position unknowable). `tail` output is never placeable in a \
+        line-keyed buffer without the file length, so it is deliberately not an \
+        anchor; `sed -i` rewrites are likewise left heuristic. Coverage counts the \
+        admitted anchors as `bash-read-anchor`/`bash-write-anchor`, and segment \
+        provenance names the class (`bash-heredoc`/`bash-cat`/`bash-write`).\n\n\
         FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\n  \
           A Bash result's `staleReadFileStateHint` is Claude Code itself reporting \
         that the command modified files in its read set, BY NAME (paths relative to \

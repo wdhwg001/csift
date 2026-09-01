@@ -75,6 +75,12 @@ pub(crate) fn fmt_counts(c: &EventCounts) -> String {
     if c.bash > 0 {
         parts.push(format!("{} bash (heuristic)", c.bash));
     }
+    if c.bash_read_anchor > 0 {
+        parts.push(format!("{} bash-read-anchor", c.bash_read_anchor));
+    }
+    if c.bash_write_anchor > 0 {
+        parts.push(format!("{} bash-write-anchor", c.bash_write_anchor));
+    }
     if c.external_edit > 0 {
         parts.push(format!("{} external-edit", c.external_edit));
     }
@@ -340,6 +346,8 @@ pub(crate) fn counts_json(c: &EventCounts) -> serde_json::Value {
         "edit_unanchorable": c.edit_unanchorable,
         "write": c.write,
         "bash": c.bash,
+        "bash_read_anchor": c.bash_read_anchor,
+        "bash_write_anchor": c.bash_write_anchor,
         "external_edit": c.external_edit,
         "history_snapshot": c.history_snapshot,
         "integrity_error": c.integrity_error,
