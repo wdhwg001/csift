@@ -294,8 +294,14 @@ fn plan_slug_only_honors_plans_directory_and_reverse() {
     );
     let out = h.run(&["plan", &at(SLUGSESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
+    // The derived path joins with the platform's own separator - pin the
+    // plansDirectory adjacency in that native form.
+    let joined = format!(
+        "my-plans{}quiet-harbor-lantern.md",
+        std::path::MAIN_SEPARATOR
+    );
     assert!(
-        out.stdout.contains("my-plans/quiet-harbor-lantern.md") && out.stdout.contains("slug only"),
+        out.stdout.contains(&joined) && out.stdout.contains("slug only"),
         "plansDirectory honored on the slug law:\n{}",
         out.stdout
     );
