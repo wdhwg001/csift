@@ -352,3 +352,53 @@ fn clone_probe_arms_and_origin_join_edges() {
 
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn clone_origin_decoys_stay_outside_the_join() {
+    let root = std::env::temp_dir().join(format!("csift-clone-decoy-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let bx = "3a4b5c6d-7e8f-4a9b-8c0d-1e2f3a4b5c6d";
+    let clone = root.join("c1.jsonl");
+    std::fs::write(
+        &clone,
+        format!(
+            "{{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"{bx}\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}}\n"
+        ),
+    )
+    .unwrap();
+
+    // A NON-jsonl sibling carrying the full native-origin shape is never scanned -
+    // only .jsonl files join.
+    let txt = root.join("o1.txt");
+    std::fs::write(
+        &txt,
+        format!(
+            "{{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"hi\"}}}}\n{{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"{bx}\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}}\n"
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        clone_origin(&clone, bx),
+        None,
+        "a non-jsonl decoy never becomes the origin"
+    );
+    std::fs::remove_file(&txt).unwrap();
+
+    // A sibling whose OWN boundary merely REFERENCES the uuid (logicalParentUuid)
+    // is not a carrier - the carrier record must bear the uuid itself.
+    let refr = root.join("s2.jsonl");
+    std::fs::write(
+        &refr,
+        format!(
+            "{{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"hi\"}}}}\n{{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"77777777-8888-4999-8aaa-bbbbbbbbbbbb\",\"logicalParentUuid\":\"{bx}\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}}\n"
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        clone_origin(&clone, bx),
+        None,
+        "a boundary that only references the uuid is not the carrier"
+    );
+    std::fs::remove_file(&refr).unwrap();
+    std::fs::remove_file(&clone).ok();
+}

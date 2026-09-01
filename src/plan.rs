@@ -469,6 +469,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn resolve_plan_target_prefers_the_top_level_lane() {
+        // Both lanes carry a binding: the top-level session's own plan wins the
+        // sigil resolution; the subagent's binding is a fallback only.
+        let dir = std::env::temp_dir().join(format!("csift-plan-lane-{}", std::process::id()));
+        let sub_dir = dir.join("11111111-2222-4333-8444-555555555555/subagents");
+        std::fs::create_dir_all(&sub_dir).unwrap();
+        let top = dir.join("11111111-2222-4333-8444-555555555555.jsonl");
+        std::fs::write(
+            &top,
+            "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"planFilePath\":\"/plans/top-level-plan.md\",\"isSubAgent\":false},\"uuid\":\"a1\",\"timestamp\":\"2026-06-07T05:00:01.000Z\"}\n",
+        )
+        .unwrap();
+        let sub = sub_dir.join("agent-abcdef0123456789.jsonl");
+        std::fs::write(
+            &sub,
+            "{\"type\":\"attachment\",\"attachment\":{\"type\":\"plan_mode\",\"planFilePath\":\"/plans/subagent-plan.md\",\"isSubAgent\":true},\"uuid\":\"a2\",\"timestamp\":\"2026-06-07T05:01:01.000Z\"}\n",
+        )
+        .unwrap();
+        let r = resolve_plan_target(&[top.clone(), sub.clone()]).unwrap();
+        std::fs::remove_file(&top).ok();
+        std::fs::remove_file(&sub).ok();
+        assert_eq!(r.plan_file, "/plans/top-level-plan.md");
+        assert!(!r.is_subagent);
+    }
+
+    #[test]
     fn plan_sigil_is_bash_safe_and_at_prefixed() {
         // No shell metacharacter → no escaping needed in a mixed script; `@`-sigil matches
         // the `--at @line:`/`@turn:` convention.
