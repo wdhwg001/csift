@@ -486,3 +486,32 @@ fn acceptance_excluded_and_unmarked_meta_carry_no_label() {
         );
     }
 }
+
+#[test]
+fn harness_role_excludes_the_boundary_and_the_drilldown_keeps_it() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"2026-06-07T05:01:00.000Z","content":"Compacted","compactMetadata":{"trigger":"auto","preTokens":900,"postTokens":90,"durationMs":4}}"#, "\n",
+        ),
+    );
+    // The bare role: the metrics-only boundary is not the conversation.
+    let role = h.run(&["search", "", &at(SESS), "-t", "harness"]);
+    assert!(
+        !role.stdout.contains("compaction boundary"),
+        "-t harness excludes the boundary:\n{}",
+        role.stdout
+    );
+    // The deliberate drill-down keeps its full set - compaction points stay findable.
+    let drill = h.run(&["search", "", &at(SESS), "-t", "harness.compaction"]);
+    assert!(
+        drill.stdout.contains("trigger=auto"),
+        "-t harness.compaction still reaches the boundary:\n{}",
+        drill.stdout
+    );
+    // And the glob reaches everything too.
+    let glob = h.run(&["search", "", &at(SESS), "-t", "harness.*"]);
+    assert!(glob.stdout.contains("trigger=auto"), "{}", glob.stdout);
+}

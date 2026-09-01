@@ -149,6 +149,17 @@ use super::*;
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
         THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 28 leaves\n  \
+          LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
+        role's LLM-VISIBLE leaves - the conversation as the model receives/produces\n  \
+        it. Exactly two leaves are invisible and need naming or a glob: `user.unsent`\n  \
+        (a superseded draft is not in the surviving conversation - CC's own\n  \
+        preservedMessages accounting excludes every draft) and\n  \
+        `harness.compaction.boundary` (a metrics-only system record). The glob form\n  \
+        `-t 'user.*'` selects EVERY leaf under the prefix, visibility ignored; an\n  \
+        intermediate prefix (`-t harness.compaction`) or an exact leaf path is a\n  \
+        deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \
+        contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
+        last-human-touch consumer.)\n  \
           user     .message                genuine human prose (a slash command with typed\n                                   \
         prose renders as `/name args`)\n           \
         .answer                 an answered AskUserQuestion: question, options and\n                                   \
@@ -260,11 +271,13 @@ pub struct SearchArgs {
     pub subagents: bool,
 
     /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
-    /// selector matches a record label iff it is a dot-SEGMENT prefix of the label's path:
-    /// `-t user` (the whole user role), `-t agent.message`, `-t agent.thinking`, `-t agent.tool`
-    /// (use+result), `-t agent.communication` (inbox/sent/signal), `-t harness.notification`. An
-    /// invalid selector is a HARD error listing the valid set; with none given, every label is
-    /// eligible. (0 back-compat: the old flat `thinking`/`tool`/`tool-response` now error.)
+    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE
+    /// (`-t user`) selects the role's LLM-VISIBLE leaves only (excludes `user.unsent` /
+    /// `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every leaf under the
+    /// prefix, visibility ignored; an intermediate prefix or exact leaf (`-t agent.tool`,
+    /// `-t user.unsent`) selects its full set. An invalid selector is a HARD error listing the
+    /// valid set; with none given, every label is eligible. (0 back-compat: the old flat
+    /// `thinking`/`tool`/`tool-response` now error.)
     #[arg(
         short = 't',
         long = "label",

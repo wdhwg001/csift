@@ -148,13 +148,14 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 
 ## Labels (`-t/--label` · `-T/--label-not`) — dotted `role.class.sub`, 3 roles, 28 leaves
 
-Selector = dot-segment prefix: `-t agent` (role) · `-t agent.tool` (use+result) · a full leaf = just it. No `-t` ⇒ all. `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
+Selector = dot-segment prefix, THREE forms (v0.9.4): a bare ROLE (`-t user`) = the role's **LLM-visible** leaves only — the conversation as the model receives/produces it; a GLOB (`-t 'user.*'`, quote it from the shell) = every leaf under the prefix, visibility ignored; an intermediate prefix (`-t agent.tool` = use+result, `-t harness.compaction` = summary+boundary) or a full leaf = its full set, a deliberate drill-down. No `-t` ⇒ all labels (drafts and boundaries stay searchable by default, with disclosure). `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
 
 ```
 user     .message   genuine human prose (incl. slash-command args, rendered `/name args`)
          .answer    AskUserQuestion answer (Q+options+answer unit)
          .rejection plan/tool reject + typed instruction
-         .unsent    a SUPERSEDED draft: sent, esc-recalled, edited, re-sent — the original
+         .unsent    [not LLM-visible: outside `-t user`; reach via `-t user.unsent` or `-t 'user.*'`]
+                    a SUPERSEDED draft: sent, esc-recalled, edited, re-sent — the original
                     stays on disk sharing the resend's parentUuid, OUTSIDE turn numbering,
                     never counted as user.message. LIMITS: a recalled-then-ABANDONED
                     message has no resend sibling and is undetectable; a QUEUED text
@@ -167,10 +168,13 @@ agent    .message · .thinking (redacted → "[redacted thinking]") · .tool.use
                                -T agent.thinking.narration; excluded from verbatim replay)
          .communication.{inbox,sent,signal}   peer msgs — rendered `from ⇨ to` (self = owner)
 harness  .notification.{workflow,monitor,subagent,background-command,task}  ← <task-notification>
-         .compaction.{summary,boundary}   boundary renders its compactMetadata (trigger=…)
+         .compaction.{summary,boundary}   boundary renders its compactMetadata (trigger=…);
+                    boundary is [not LLM-visible: outside `-t harness`; reach via
+                    `-t harness.compaction` or the full leaf] — a metrics-only system record
          .command.{invocation,stdout} · .interrupt.{user,tool}
          .schedule.{wakeup,continuation} · .meta.{hook,loop,attachment}
 ```
+LLM-VISIBILITY (v0.9.4): exactly TWO leaves are outside the bare-role selectors — `user.unsent` (a superseded draft is NOT in the surviving conversation: CC's own `preservedMessages` accounting excludes every draft uuid; say "not in the surviving conversation", never "the model never saw it" — a few drafts drew replies before the esc) and `harness.compaction.boundary` (no message field at all). Everything else a role selector reaches is delivered-or-produced conversation. `-t user` therefore restores the 0.7-era contract ("what the human actually sent"): 0.9.2..0.9.3 briefly included drafts under it, which poisoned a real last-human-touch hook (a draft 12s before the real submit). `isMeta` is an AUTHORSHIP flag and `isVisibleInTranscriptOnly` a summary display flag — neither is a visibility instrument.
 Gated meta leaves: `harness.meta.hook` needs `search --additional-context` (or the superset `--attachments`); `harness.meta.attachment` (any OTHER attachment payload — edited_text_file, compact_file_reference, file snapshots …) needs `--attachments` or `--count-by attachment` — a default scan never parses attachment lines; an explicit `show --line/--uuid` address renders any of them flag-free.
 Glyphs: `◂` user · `▸` agent · `⚙` harness · `·` sibling · `▹` tool use↔result pair (unreturned → `(no result — pending)`; orphan → `(use not in scope)`) · `⇨` comm direction. Turn boundary = genuine user ∨ AUQ answer ∨ typed rejection ∨ inbound peer message; slash-command wrappers, interrupts, `<local-command-stdout>`, compaction summaries never open a turn.
 

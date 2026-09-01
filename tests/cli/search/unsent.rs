@@ -136,3 +136,34 @@ fn show_labels_an_addressed_draft_unsent() {
     assert_eq!(rec["label"], "user.unsent", "{}", out.stdout);
     assert_eq!(rec["superseded_draft"], true, "{}", out.stdout);
 }
+
+#[test]
+fn role_selector_excludes_drafts_and_the_glob_reaches_them() {
+    let h = unsent_home();
+    // The 0.7-era contract restored: `-t user` = what the human actually sent.
+    let role = h.run(&["search", "", &at(SESS), "-t", "user"]);
+    assert!(
+        !role.stdout.contains("draft (superseded"),
+        "-t user never surfaces a draft:\n{}",
+        role.stdout
+    );
+    assert!(
+        role.stdout.contains("harbor") && role.stdout.contains("now the shoals"),
+        "{}",
+        role.stdout
+    );
+    // The explicit everything form reaches it.
+    let glob = h.run(&["search", "", &at(SESS), "-t", "user.*"]);
+    assert!(
+        glob.stdout.contains("draft (superseded"),
+        "-t 'user.*' includes the draft:\n{}",
+        glob.stdout
+    );
+    // The census keys follow the same law.
+    let census = h.run(&["search", "", &at(SESS), "-t", "user", "--count-by", "label"]);
+    assert!(
+        !census.stdout.contains("user.unsent"),
+        "role-scoped census keys are visible-only:\n{}",
+        census.stdout
+    );
+}

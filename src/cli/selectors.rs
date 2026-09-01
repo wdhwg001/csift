@@ -33,23 +33,52 @@ pub fn label_selectors() -> Vec<String> {
     out
 }
 
-/// True iff `selector` is a valid `-t` value (some [`Class`] path has it as a segment-prefix).
+/// True iff `selector` is a valid `-t` value: some [`Class`] path has it as a
+/// segment-prefix, or it is the `.*` glob form of such a prefix.
 #[must_use]
 pub fn selector_is_valid(selector: &str) -> bool {
+    let bare = selector.strip_suffix(".*").unwrap_or(selector);
+    !bare.is_empty()
+        && Class::ALL
+            .iter()
+            .any(|c| selector_is_segment_prefix(bare, c.path()))
+}
+
+/// The three selector forms (v0.9.4 - the C-25 visibility law):
+/// - a BARE ROLE (`user` / `agent` / `harness`, i.e. any single-segment selector)
+///   matches only the role's LLM-VISIBLE leaves - the coarse "show me the
+///   conversation" ask (a superseded draft under `-t user` poisoned a real
+///   downstream consumer, which is how this law was born);
+/// - a GLOB (`user.*`, or any valid prefix + `.*`) matches EVERY leaf under the
+///   prefix, visibility ignored - the explicit "truly everything" form;
+/// - an intermediate prefix or full leaf path (`harness.compaction`,
+///   `user.unsent`) matches by segment-prefix regardless of visibility - a
+///   deliberate drill-down names what it wants.
+#[must_use]
+pub fn selector_matches(selector: &str, path: &str) -> bool {
+    if let Some(prefix) = selector.strip_suffix(".*") {
+        return selector_is_segment_prefix(prefix, path);
+    }
+    if !selector_is_segment_prefix(selector, path) {
+        return false;
+    }
+    if selector.contains('.') {
+        return true; // intermediate prefix or exact leaf: any visibility.
+    }
+    // A bare role: visible leaves only.
     Class::ALL
         .iter()
-        .any(|c| selector_is_segment_prefix(selector, c.path()))
+        .find(|c| c.path() == path)
+        .is_none_or(|c| c.llm_visible())
 }
 
 /// Does a record-label `path` satisfy the active `-t` selectors? Empty selectors ⇒ every label is
-/// eligible (no `-t` filter). Otherwise the label matches iff ANY selector is a segment-prefix of
-/// it (GOLD §6) - so `-t agent` surfaces the whole agent role, `-t agent.tool` use+result.
+/// eligible (no `-t` filter). Otherwise the label matches iff ANY selector matches it under the
+/// three-form rule ([`selector_matches`]) - `-t agent` surfaces the agent role's visible leaves,
+/// `-t agent.tool` use+result, `-t 'user.*'` every user leaf incl. `user.unsent`.
 #[must_use]
 pub fn label_selected(selectors: &[String], path: &str) -> bool {
-    selectors.is_empty()
-        || selectors
-            .iter()
-            .any(|s| selector_is_segment_prefix(s, path))
+    selectors.is_empty() || selectors.iter().any(|s| selector_matches(s, path))
 }
 
 /// The active `-t`/`-T` label filter - the include selectors (empty ⇒ every label) MINUS the
@@ -79,14 +108,13 @@ impl<'a> LabelFilter<'a> {
         }
     }
 
-    /// Does a record-label `path` survive include-minus-exclude?
+    /// Does a record-label `path` survive include-minus-exclude? Both sides speak
+    /// the same three-form rule ([`selector_matches`]), so `-T user` excludes the
+    /// visible user leaves while `-T 'user.*'` excludes them all.
     #[must_use]
     pub fn selected(&self, path: &str) -> bool {
         label_selected(self.include, path)
-            && !self
-                .exclude
-                .iter()
-                .any(|s| selector_is_segment_prefix(s, path))
+            && !self.exclude.iter().any(|s| selector_matches(s, path))
     }
 
     /// True when NO leaf of [`Class::ALL`] survives - a statically-contradictory `-t`/`-T`
@@ -118,8 +146,9 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
         format!(" ('{s}' is the pre-v0.5 flat spelling — today that is `{t}`.)")
     });
     Err(format!(
-        "unknown label selector '{s}'.{hint} A selector is a dotted role.class.sub path or any \
-         prefix of one. Valid: {}",
+        "unknown label selector '{s}'.{hint} A selector is a dotted role.class.sub path, any \
+         prefix of one (a bare role selects its LLM-visible leaves only), or a prefix + `.*` \
+         (every leaf under it, visibility ignored). Valid: {}",
         label_selectors().join(", ")
     ))
 }

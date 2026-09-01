@@ -419,3 +419,54 @@ fn files_encoded_token_then_flag_ordering() {
         _ => panic!("expected files"),
     }
 }
+
+#[test]
+fn selector_three_forms_and_visibility() {
+    // Bare ROLE: LLM-visible leaves only.
+    assert!(selector_matches("user", "user.message"));
+    assert!(selector_matches("user", "user.answer"));
+    assert!(
+        !selector_matches("user", "user.unsent"),
+        "drafts are not the conversation"
+    );
+    assert!(selector_matches("harness", "harness.compaction.summary"));
+    assert!(
+        !selector_matches("harness", "harness.compaction.boundary"),
+        "a metrics-only system record"
+    );
+    // GLOB: everything under the prefix, visibility ignored.
+    assert!(selector_matches("user.*", "user.unsent"));
+    assert!(selector_matches("user.*", "user.message"));
+    assert!(selector_matches("harness.*", "harness.compaction.boundary"));
+    assert!(!selector_matches("user.*", "agent.message"));
+    // Intermediate prefix / exact leaf: a drill-down keeps its full set.
+    assert!(selector_matches(
+        "harness.compaction",
+        "harness.compaction.boundary"
+    ));
+    assert!(selector_matches("user.unsent", "user.unsent"));
+    assert!(selector_matches("agent.tool", "agent.tool.result"));
+    // Validity: globs on valid prefixes parse; degenerate forms error.
+    assert!(parse_label_selector("user.*").is_ok());
+    assert!(parse_label_selector("harness.compaction.*").is_ok());
+    assert!(parse_label_selector(".*").is_err());
+    assert!(parse_label_selector("user.**").is_err());
+    assert!(parse_label_selector("nope.*").is_err());
+    // The -T duality: excluding the bare role leaves the invisible leaf alive.
+    let include = vec!["user.*".to_string()];
+    let exclude = vec!["user".to_string()];
+    let f = LabelFilter::new(&include, &exclude);
+    assert!(
+        f.selected("user.unsent"),
+        "-t 'user.*' -T user = the drafts alone"
+    );
+    assert!(!f.selected("user.message"));
+    // Statically-empty detection speaks glob too.
+    let include = vec!["user".to_string()];
+    let exclude = vec!["user.*".to_string()];
+    let f = LabelFilter::new(&include, &exclude);
+    assert!(
+        f.is_statically_empty(),
+        "-t user -T 'user.*' can never match"
+    );
+}

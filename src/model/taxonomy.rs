@@ -113,6 +113,28 @@ pub enum Class {
 
 #[allow(dead_code)]
 impl Class {
+    /// LLM-VISIBILITY (v0.9.4): true when the record's content is part of the
+    /// conversation the model actually receives or produces. Exactly TWO leaves are
+    /// invisible, each with a measured instrument:
+    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -
+    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes
+    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads
+    ///   through the resend sibling, never the draft. (Wording law: "not in the
+    ///   surviving conversation", never "the model never saw it" - a few drafts
+    ///   drew real replies before the retraction.)
+    /// - `harness.compaction.boundary`: a system record with NO message field at
+    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the
+    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on
+    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -
+    ///   neither is a visibility instrument.)
+    ///
+    /// A bare ROLE selector (`-t user`) expands to visible leaves only; the
+    /// glob form and explicit paths reach the invisible ones.
+    #[must_use]
+    pub fn llm_visible(self) -> bool {
+        !matches!(self, Class::UserUnsent | Class::CompactionBoundary)
+    }
+
     /// Every leaf [`Class`] in taxonomy order (GOLD §2). The single source of truth for
     /// enumerating the class space - P2 builds the `-t` selector table from it, and tests
     /// assert `path()`/`role()` exhaustively over it (a new variant added to the enum but not
