@@ -49,12 +49,16 @@ pub struct Matcher {
 pub(crate) enum Prefilter {
     /// Case-sensitive literal: SIMD `memmem` substring search.
     Literal(memmem::Finder<'static>),
-    /// Smart-case / `-i` insensitive literal: a `(?i)`-wrapped escaped literal as a
-    /// bytes regex - `memmem` has no caseless mode, but the regex engine compiles a
-    /// caseless literal to an accelerated (Teddy-class) multi-substring scan, so the
-    /// dominant lowercase-smart-case search gets the SAME prefilter power the
-    /// case-sensitive path always had.
+    /// Smart-case / `-i` insensitive literal(s): a `(?i)`-wrapped escaped literal
+    /// alternation as a bytes regex - `memmem` has no caseless mode, but the regex
+    /// engine compiles a caseless literal alternation to an accelerated (Teddy-class)
+    /// multi-substring scan, so the dominant lowercase-smart-case search gets the SAME
+    /// prefilter power the case-sensitive path always had.
     CaselessLiteral(BytesRegex),
+    /// Case-sensitive ANY-of needle set (a REQUIRED-literal extraction from a regex
+    /// with metacharacters: every branch of the pattern demands one of these). One
+    /// `memmem::Finder` per needle, same rationale as the synth markers (not AC).
+    AnyLiteral(Vec<memmem::Finder<'static>>),
 }
 
 impl Prefilter {
@@ -66,6 +70,7 @@ impl Prefilter {
         match self {
             Prefilter::Literal(finder) => finder.find(haystack).is_some(),
             Prefilter::CaselessLiteral(re) => re.is_match(haystack),
+            Prefilter::AnyLiteral(finders) => finders.iter().any(|f| f.find(haystack).is_some()),
         }
     }
 }
@@ -234,17 +239,26 @@ pub fn build_matcher(args: &SearchArgs) -> Result<Matcher> {
     // bytes regex: `memmem` has no caseless mode, but the regex engine lowers a
     // caseless literal to an accelerated multi-substring scan, so the dominant
     // lowercase search is no longer forced to parse every candidate line.
-    let prefilter = match required_literal(&args.pattern) {
+    let prefilter = match required_needles(&args.pattern) {
         None => None,
-        Some(_) if case_insensitive => {
-            // `lit` == the whole pattern (no metachars by construction); escape anyway
-            // so this stays correct if `required_literal` ever loosens.
-            let src = format!("(?i){}", regex::escape(&args.pattern));
+        Some(needles) if case_insensitive => {
+            // Each needle escaped; the alternation of escaped literals compiles to a
+            // Teddy-class caseless multi-substring scan.
+            let alts: Vec<String> = needles.iter().map(|n| regex::escape(n)).collect();
+            let src = format!("(?i){}", alts.join("|"));
             let re = BytesRegex::new(&src)
                 .with_context(|| format!("invalid caseless prefilter for {:?}", args.pattern))?;
             Some(Prefilter::CaselessLiteral(re))
         }
-        Some(lit) => Some(Prefilter::Literal(memmem::Finder::new(&lit).into_owned())),
+        Some(needles) if needles.len() == 1 => Some(Prefilter::Literal(
+            memmem::Finder::new(needles[0].as_bytes()).into_owned(),
+        )),
+        Some(needles) => Some(Prefilter::AnyLiteral(
+            needles
+                .iter()
+                .map(|n| memmem::Finder::new(n.as_bytes()).into_owned())
+                .collect(),
+        )),
     };
 
     // The synthesized-text escape hatch is only needed when a prefilter can prune.
@@ -335,6 +349,94 @@ pub(crate) fn required_literal(pattern: &str) -> Option<Vec<u8>> {
         return None;
     }
     Some(pattern.as_bytes().to_vec())
+}
+
+/// A required-needle set for the prefilter: every string the pattern can match
+/// contains AT LEAST ONE of these literals verbatim. The whole-pattern literal case
+/// (no metachars) stays the fast path; a pattern WITH metacharacters goes through a
+/// NECESSITY-ONLY walk of its parsed HIR ([`hir_needles`]). Each needle must pass the
+/// SAME safety predicate the single-literal path enforces (whitespace-free,
+/// JSON-escape-free - see [`required_literal`]'s safety argument, which transfers
+/// per needle), so the historical "never extract a literal from a regex" rule's
+/// RATIONALE is preserved while its blanket form is retired: the rule guarded against
+/// unsafe or non-required extractions, and this walk emits neither.
+pub(crate) fn required_needles(pattern: &str) -> Option<Vec<String>> {
+    if let Some(lit) = required_literal(pattern) {
+        return String::from_utf8(lit).ok().map(|s| vec![s]);
+    }
+    if pattern.is_empty() {
+        return None;
+    }
+    // Parse WITHOUT case folding: extraction yields typed-case literals, and the
+    // caller applies the engine's case mode to the prefilter (a caseless scan of a
+    // typed needle is a superset gate under a caseless engine).
+    let hir = regex_syntax::ParserBuilder::new()
+        .utf8(false)
+        .build()
+        .parse(pattern)
+        .ok()?;
+    let needles = hir_needles(&hir)?;
+    // Bound the gate: a huge ANY-of set scans slower than it saves.
+    (needles.len() <= MAX_NEEDLES).then_some(needles)
+}
+
+/// Needle-set size cap and per-needle minimum length. A 1-2 byte needle hits nearly
+/// every line (the gate would always pass - pure overhead), so short runs are
+/// treated as no contribution.
+const MAX_NEEDLES: usize = 8;
+const MIN_NEEDLE_LEN: usize = 3;
+
+/// NECESSITY-only literal extraction over a parsed pattern. Returns `Some(set)` iff
+/// every match of this sub-pattern must contain one of `set` verbatim:
+/// - a literal contributes its longest SAFE run (whitespace and JSON-escaped chars
+///   split the run - a sub-run of a required literal is itself required);
+/// - a concatenation must contain EVERY part, so the strongest single part's set is
+///   chosen (longest worst-case needle, then fewest needles);
+/// - an alternation must satisfy SOME branch, so every branch must contribute and
+///   the result is the union - one branch without a safe needle kills the gate;
+/// - a repetition with `min == 0` contributes nothing; `min >= 1` contributes its
+///   inner's set once;
+/// - classes, dots, and look-arounds contribute nothing (never a failure - a sibling
+///   concat part can still anchor the gate).
+fn hir_needles(hir: &regex_syntax::hir::Hir) -> Option<Vec<String>> {
+    use regex_syntax::hir::HirKind;
+    match hir.kind() {
+        HirKind::Literal(lit) => {
+            let s = std::str::from_utf8(&lit.0).ok()?;
+            let run = s
+                .split(|c: char| c.is_whitespace() || json_escapes_in_string(c))
+                .max_by_key(|r| r.len())?;
+            (run.len() >= MIN_NEEDLE_LEN).then(|| vec![run.to_string()])
+        }
+        HirKind::Concat(parts) => parts
+            .iter()
+            .filter_map(hir_needles)
+            .max_by(|a, b| set_strength(a).cmp(&set_strength(b))),
+        HirKind::Alternation(branches) => {
+            let mut union: Vec<String> = Vec::new();
+            for b in branches {
+                for n in hir_needles(b)? {
+                    if !union.contains(&n) {
+                        union.push(n);
+                    }
+                }
+            }
+            (!union.is_empty()).then_some(union)
+        }
+        HirKind::Repetition(rep) if rep.min >= 1 => hir_needles(&rep.sub),
+        HirKind::Capture(g) => hir_needles(&g.sub),
+        _ => None,
+    }
+}
+
+/// Ordering key for choosing a concat's strongest contribution: prefer the set whose
+/// WORST needle is longest (that needle bounds the gate's selectivity), then fewer
+/// needles.
+fn set_strength(set: &[String]) -> (usize, std::cmp::Reverse<usize>) {
+    (
+        set.iter().map(String::len).min().unwrap_or(0),
+        std::cmp::Reverse(set.len()),
+    )
 }
 
 /// Build the SYNTHESIZED-text marker finders for [`Matcher::synth`] (one SIMD

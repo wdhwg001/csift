@@ -262,6 +262,7 @@ dependencies = [
  "mimalloc",
  "rayon",
  "regex",
+ "regex-syntax",
  "serde",
  "serde_json",
  "sha2",

@@ -78,9 +78,11 @@ fn quote_pattern_no_silent_drop_case_sensitive() {
     // text), not silently drop the hit (SPEC §0). Build the matcher with an
     // uppercase letter so smart-case stays case-SENSITIVE (the buggy path).
     let m = build_matcher(&args("Say\"Xello")).unwrap();
+    // The WHOLE literal must never anchor (the quote is stored escaped), but its
+    // longest safe RUN ("Xello") survives JSON encoding verbatim and gates safely.
     assert!(
-        m.prefilter.is_none(),
-        "no byte prefilter for a quote-containing literal"
+        matches!(m.prefilter, Some(Prefilter::Literal(_))),
+        "the quote-free run anchors; the full literal never does"
     );
     // The decoded text matches the regex.
     assert!(m.is_match("Say\"Xello there"));
@@ -112,18 +114,92 @@ fn prefilter_drops_lines_without_literal() {
 }
 
 #[test]
-fn prefilter_whitespace_literal_is_ineligible() {
-    // `normalize_line` collapses whitespace in several render paths (genuine-user
-    // text, peer bodies, notification reports), so a rendered "hello world" can be
-    // raw "hello\nworld" - a space-carrying literal must NOT anchor a byte
-    // prefilter in EITHER case mode.
+fn prefilter_space_pattern_anchors_its_longest_safe_run() {
+    // `normalize_line` collapses whitespace in several render paths, so a rendered
+    // "hello world" can be raw "hello\nworld" - the WHOLE space-carrying literal
+    // must never anchor a byte prefilter. Its whitespace-free RUNS survive any
+    // rewrite though (they sit inside unrewritten non-whitespace spans), so the
+    // longest safe run gates instead of nothing at all.
     let m = build_matcher(&args("hello world")).unwrap();
-    assert!(m.prefilter.is_none());
+    assert!(matches!(m.prefilter, Some(Prefilter::CaselessLiteral(_))));
+    // Raw bytes hold the JSON-escaped newline seam; the run still hits.
+    assert!(m.line_may_match(br"prefix hello\nworld suffix"));
+    assert!(!m.line_may_match(b"unrelated bytes"));
     let m2 = build_matcher(&args("Hello World")).unwrap();
-    assert!(m2.prefilter.is_none(), "case-sensitive too");
-    // No prefilter ⇒ nothing is provably a miss.
-    assert!(m.line_may_match(b"unrelated bytes"));
-    assert!(m.file_may_match(b"unrelated bytes"));
+    assert!(
+        matches!(m2.prefilter, Some(Prefilter::Literal(_))),
+        "case-sensitive: byte-exact run"
+    );
+    assert!(m2.line_may_match(br"say Hello\nWorld now"));
+    assert!(!m2.line_may_match(b"unrelated bytes"));
+}
+
+#[test]
+fn required_needles_alternation_and_necessity() {
+    // The motivating query shape: BOTH branches require the same literal - the
+    // union dedups to ONE needle and the whole-file gate applies.
+    assert_eq!(
+        required_needles("TodoWrite.*legacy|legacy.*TodoWrite"),
+        Some(vec!["TodoWrite".to_string()])
+    );
+    // Distinct branch literals union into an ANY-of set.
+    // (The parser splits a literal run before a repetition: `betay+z` is
+    // beta·y+·z, so the branch's strongest safe part is "beta".)
+    assert_eq!(
+        required_needles("alphax.*[0-9]|betay+z"),
+        Some(vec!["alphax".to_string(), "beta".to_string()])
+    );
+    // One branch without a safe needle kills the gate (necessity would break).
+    assert!(required_needles("alphax|[0-9]+").is_none());
+    // Class-only / short-literal patterns anchor nothing.
+    assert!(required_needles("[a-z]+").is_none());
+    assert!(required_needles("ca.ry").is_none(), "runs under 3 bytes");
+    // The plain-literal fast path is unchanged.
+    assert_eq!(required_needles("carry"), Some(vec!["carry".to_string()]));
+}
+
+#[test]
+fn required_needles_concat_repetition_and_runs() {
+    // A concat picks its strongest part (longest worst-case needle).
+    assert_eq!(
+        required_needles("abc.*defgh"),
+        Some(vec!["defgh".to_string()])
+    );
+    // min=0 repetition contributes nothing; the sibling part anchors.
+    assert_eq!(
+        required_needles("(foo)*barbaz"),
+        Some(vec!["barbaz".to_string()])
+    );
+    // min>=1 repetition requires its inner.
+    assert_eq!(
+        required_needles("(carry)+"),
+        Some(vec!["carry".to_string()])
+    );
+    // Anchors and word boundaries never block extraction.
+    assert_eq!(
+        required_needles("^\\bTodoWrite\\b$"),
+        Some(vec!["TodoWrite".to_string()])
+    );
+    // A JSON-escapable char splits a literal into safe runs.
+    assert_eq!(
+        required_needles("say\"hopeful.*"),
+        Some(vec!["hopeful".to_string()])
+    );
+}
+
+#[test]
+fn metachar_pattern_gate_composes_with_synth_markers() {
+    // Needle "subagent" extracted from both branches; the notification line's raw
+    // bytes lack it (the kind slug is SYNTHESIZED at render) - the marker keeps the
+    // line matchable, the literal miss alone proves nothing.
+    let m = build_matcher(&args("subagent.*probe|probe.*subagent")).unwrap();
+    assert!(m.prefilter.is_some());
+    let line = br#"{"type":"user","message":{"role":"user","content":"<task-notification><task-id>t1</task-id><summary>Agent \"probe\" completed</summary></task-notification>"}}"#;
+    assert!(m.line_may_match(line));
+    assert!(
+        !m.line_may_match(b"{\"type\":\"user\"} nothing relevant"),
+        "no needle, no marker: provably a miss"
+    );
 }
 
 #[test]

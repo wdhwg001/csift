@@ -214,3 +214,45 @@ fn search_help_mentions_regex_dialect_boundaries() {
     assert!(out.stdout.contains("backreference"));
     assert!(out.stdout.contains("lookahead") || out.stdout.contains("lookbehind"));
 }
+
+#[test]
+fn regex_alternation_extracts_needles_and_still_matches() {
+    // The v0.9.4 required-needle gate: a metachar alternation is prefiltered by the
+    // union of its branches' safe literals - matches survive, needle-less files gate.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let mk = |id: &str, text: &str| {
+        h.write(
+            &format!("{enc}/{id}.jsonl"),
+            &format!(
+                "{}\n",
+                format_args!(
+                    r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"{text}"}}}}"#
+                )
+            ),
+        );
+    };
+    mk(
+        "aaaa0001-0000-4000-8000-000000000001",
+        "Harborx lights the beacon",
+    );
+    mk(
+        "aaaa0001-0000-4000-8000-000000000002",
+        "the beacon calls, Lanternz answers",
+    );
+    mk(
+        "aaaa0001-0000-4000-8000-000000000003",
+        "nothing relevant here",
+    );
+    let out = h.run(&["search", "Harborx.*beacon|beacon.*Lanternz", enc, "-c"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout.trim(),
+        "2",
+        "both branch shapes match:\n{}",
+        out.stdout
+    );
+    // Same query case-insensitively (caseless alternation prefilter path).
+    let ci = h.run(&["search", "harborx.*beacon|beacon.*lanternz", enc, "-c"]);
+    assert_eq!(ci.stdout.trim(), "2", "{}", ci.stdout);
+}
