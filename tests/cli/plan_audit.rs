@@ -277,3 +277,45 @@ fn plan_mode_attachment_still_outranks_the_slug_law() {
         out.stdout
     );
 }
+
+#[test]
+fn plan_slug_only_honors_plans_directory_and_reverse() {
+    const SLUGSESS: &str = "dddd4444-5555-4666-8777-888899990000";
+    let h = Home::new();
+    // A RELATIVE plansDirectory joins to the config home.
+    h.write_claude("settings.json", r#"{"plansDirectory":"my-plans"}"#);
+    h.write_claude("my-plans/quiet-harbor-lantern.md", "plan body\n");
+    h.write(
+        &format!("{ENC}/{SLUGSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","slug":"quiet-harbor-lantern","message":{"role":"user","content":"forked work"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","slug":"quiet-harbor-lantern","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["plan", &at(SLUGSESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("my-plans/quiet-harbor-lantern.md") && out.stdout.contains("slug only"),
+        "plansDirectory honored on the slug law:\n{}",
+        out.stdout
+    );
+    // Reverse: which session binds this plan file - resolves through the slug law
+    // too; a SECOND binder exercises the deterministic ordering.
+    const SLUGSESS2: &str = "eeee4444-5555-4666-8777-888899990000";
+    h.write(
+        &format!("{ENC}/{SLUGSESS2}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","slug":"quiet-harbor-lantern","message":{"role":"user","content":"second fork"}}"#, "\n",
+        ),
+    );
+    let plan_abs = h.root.join(".claude/my-plans/quiet-harbor-lantern.md");
+    let rev = h.run(&["plan", "--reverse", plan_abs.to_str().unwrap()]);
+    assert!(
+        rev.stdout.contains(SLUGSESS) && rev.stdout.contains(SLUGSESS2),
+        "reverse finds both slug-only binders:\n{}",
+        rev.stdout
+    );
+    let a = rev.stdout.find(SLUGSESS).unwrap();
+    let b = rev.stdout.find(SLUGSESS2).unwrap();
+    assert!(a < b, "deterministic id order:\n{}", rev.stdout);
+}

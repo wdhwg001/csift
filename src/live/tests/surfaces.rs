@@ -127,10 +127,13 @@ fn children_report_tolerates_garbage_journals_and_quiet_children() {
         .unwrap()
         .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
         .unwrap();
-    // A journal with a garbage line: the line is skipped, the imbalance still counts.
+    // A journal with a garbage line and an unknown event type: both are skipped,
+    // the imbalance still counts. A sibling wf dir WITHOUT a journal contributes
+    // nothing (and does not error).
+    std::fs::create_dir_all(root.join("s1/subagents/workflows/wf_b")).unwrap();
     std::fs::write(
         wf.join("journal.jsonl"),
-        "not json at all\n{\"type\":\"started\",\"agentId\":\"a1\"}\n{\"type\":\"result\",\"agentId\":\"a1\"}\n{\"type\":\"started\",\"agentId\":\"a2\"}\n",
+        "not json at all\n{\"type\":\"progress\"}\n{\"type\":\"started\",\"agentId\":\"a1\"}\n{\"type\":\"result\",\"agentId\":\"a1\"}\n{\"type\":\"started\",\"agentId\":\"a2\"}\n",
     )
     .unwrap();
     let report = children_report(&main).unwrap();

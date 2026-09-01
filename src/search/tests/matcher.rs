@@ -307,3 +307,29 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
 
     std::fs::remove_file(&p).ok();
 }
+
+#[test]
+fn any_literal_prefilter_case_sensitive_multi_needle() {
+    // Uppercase pattern -> case-sensitive; two distinct branch needles -> AnyLiteral.
+    let m = build_matcher(&args("Alphax.*probe|Betay.*probe")).unwrap();
+    assert!(matches!(m.prefilter, Some(Prefilter::AnyLiteral(_))));
+    // (Branch 2's strongest safe needle ties between "Betay" and "probe"; either
+    // choice is a REQUIRED literal of that branch, so the gate stays sound.)
+    assert!(m.line_may_match(b"... Alphax then something ..."));
+    assert!(m.line_may_match(b"... Betay probe something ..."));
+    assert!(!m.line_may_match(b"... alphax lowercase misses ..."));
+    assert!(!m.line_may_match(b"... nothing relevant ..."));
+    // Whole-file and prefilter-only forms run the same needle set.
+    assert!(m.file_may_match(b"a whole file where Alphax appears"));
+    assert!(!m.file_may_match(b"a whole file with neither"));
+    assert!(m.line_prefilter_hits(b"probe present"));
+    assert!(!m.line_prefilter_hits(b"nothing"));
+    // The needle-set size cap: >8 branch literals -> no gate.
+    let wide = "aaax1|bbbx2|cccx3|dddx4|eeex5|fffx6|gggx7|hhhx8|iiix9";
+    let m2 = build_matcher(&args(wide)).unwrap();
+    assert!(m2.prefilter.is_none(), "over-cap union anchors nothing");
+    // A prefilter-less matcher can prove nothing.
+    assert!(m2.line_prefilter_hits(b"anything"));
+    // The empty pattern derives no needles (the pure filter never gates).
+    assert!(required_needles("").is_none());
+}

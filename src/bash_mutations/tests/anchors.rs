@@ -234,3 +234,45 @@ fn write_anchors_survive_compound_commands() {
     let two = bash_anchors("echo alpha > a.txt && echo beta > b.txt");
     assert_eq!(two.writes.len(), 2, "{two:?}");
 }
+
+#[test]
+fn redirect_token_forms_and_refusals() {
+    // Attached redirect forms.
+    assert_eq!(
+        one("echo hi >f.txt"),
+        Some(AnchorCmd::WriteFull {
+            operand: "f.txt".into(),
+            content: "hi\n".into(),
+            heredoc: false
+        })
+    );
+    assert_eq!(
+        one("echo hi >>f.txt"),
+        Some(AnchorCmd::Append {
+            operand: "f.txt".into(),
+            content: "hi\n".into(),
+            heredoc: false
+        })
+    );
+    // A SPACED heredoc opener (`<< 'EOF'`) still pairs its delimiter token.
+    assert_eq!(
+        one("cat > f.txt << 'EOF'\nbody\nEOF"),
+        Some(AnchorCmd::WriteFull {
+            operand: "f.txt".into(),
+            content: "body\n".into(),
+            heredoc: true
+        })
+    );
+    // Two redirects, fd-form redirects, here-strings: refuse.
+    assert_eq!(one("echo a > f.txt > g.txt"), None);
+    assert_eq!(one("echo a 2>/dev/null > f.txt"), None);
+    assert_eq!(one("cat <<< words"), None);
+    // Two heredocs in one segment: refuse.
+    assert_eq!(one("cat <<'A' <<'B' > f.txt\nx\nA\ny\nB"), None);
+    // A variable redirect target refuses the whole segment.
+    assert_eq!(one("echo hi > $OUT"), None);
+    // Adjacent quoted spans are not one literal.
+    assert_eq!(one("cat 'a'x'b'"), None);
+    // tee with a flag-shaped operand refuses.
+    assert_eq!(one("tee -x /tmp/f <<'EOF'\nbody\nEOF"), None);
+}

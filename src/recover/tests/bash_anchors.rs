@@ -257,3 +257,111 @@ fn compound_write_needs_the_clean_echo_and_no_same_path_second_touch() {
         "same-path second touch refuses the anchor: {events:?}"
     );
 }
+
+#[test]
+fn window_gates_and_mid_file_eof() {
+    let mk = |cmd: &str, stdout_json: &str| {
+        let use_line = format!(
+            r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":{c}}}}}]}}}}"#,
+            c = serde_json::to_string(cmd).unwrap()
+        );
+        let result = format!(
+            r#"{{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{{"stdout":{s},"stderr":"","interrupted":false}},"message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"b1","content":{s}}}]}}}}"#,
+            s = stdout_json
+        );
+        numbered(&[
+            r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+            use_line.clone().leak(),
+            result.clone().leak(),
+        ])
+    };
+    // More stdout lines than the window can print: not this command's output.
+    let over = mk("sed -n '3,4p' f.txt", r#""a\nb\nc\n""#);
+    assert!(extract_events(&over, "/w/f.txt").is_empty());
+    // A to-EOF window from MID-file: a window splice, exact total at EOF.
+    let mid = mk("sed -n '5,$p' f.txt", r#""five\nsix\n""#);
+    let events = extract_events(&mid, "/w/f.txt");
+    assert!(
+        matches!(&events[0].kind, EventKind::BashWindowRead { start_line: 5, lines }
+            if lines.len() == 2),
+        "{events:?}"
+    );
+    // A to-EOF window from line 1 IS the whole file.
+    let full = mk("sed -n '1,$p' f.txt", r#""one\n""#);
+    let events = extract_events(&full, "/w/f.txt");
+    assert!(
+        matches!(&events[0].kind, EventKind::FullSnapshot { source, .. } if *source == SnapSource::BashCat),
+        "{events:?}"
+    );
+    // An empty window print (past EOF) places nothing.
+    let empty = mk("sed -n '9,9p' f.txt", r#""""#);
+    assert!(extract_events(&empty, "/w/f.txt").is_empty());
+    // A truncate write anchors an empty file.
+    let trunc = mk("truncate -s 0 f.txt", r#""""#);
+    let events = extract_events(&trunc, "/w/f.txt");
+    assert!(
+        matches!(&events[0].kind, EventKind::FullSnapshot { content, source, .. }
+            if content.is_empty() && *source == SnapSource::BashWrite),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn compound_write_without_result_echo_stays_a_boundary() {
+    // A compound-command write in a carrier-less (subagent-shaped) lane: the clean
+    // echo cannot be proven, so no anchor - the heuristic touch survives.
+    let cmd = "cat > notes.md <<'EOF'\nalpha\nEOF\npython3 notes.md";
+    let use_line = format!(
+        r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":{c}}}}}]}}}}"#,
+        c = serde_json::to_string(cmd).unwrap()
+    );
+    let records = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        use_line.leak(),
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":"ran"}]}}"#,
+    ]);
+    let events = extract_events(&records, "/w/notes.md");
+    assert!(
+        events
+            .iter()
+            .all(|e| !matches!(e.kind, EventKind::FullSnapshot { .. })),
+        "{events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::BashTouch { .. })),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn no_target_and_interrupted_gates() {
+    // No --file target: the anchor pass is a no-op (nothing to join against).
+    let records = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+    ]);
+    let turns =
+        group_turn_indices_deduped(&records.iter().map(|(_, r)| r).collect::<Vec<_>>(), |r| *r);
+    let out = collect_turn_bash_anchors(&records, &turns[0], None, &Default::default());
+    assert!(out.events.is_empty() && out.suppress.is_empty());
+
+    // An INTERRUPTED compound command cannot vouch for its write.
+    let cmd = "cat > notes.md <<'EOF'\nalpha\nEOF\nsleep 60";
+    let use_line = format!(
+        r#"{{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","cwd":"/w","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"b1","name":"Bash","input":{{"command":{c}}}}}]}}}}"#,
+        c = serde_json::to_string(cmd).unwrap()
+    );
+    let records = numbered(&[
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
+        use_line.leak(),
+        r#"{"type":"user","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"stdout":"","stderr":"","interrupted":true},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"b1","content":""}]}}"#,
+    ]);
+    let events = extract_events(&records, "/w/notes.md");
+    assert!(
+        events
+            .iter()
+            .all(|e| !matches!(e.kind, EventKind::FullSnapshot { .. })),
+        "{events:?}"
+    );
+}

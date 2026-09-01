@@ -153,6 +153,9 @@ fn segment_parts<'a>(seg: &'a str, seg_mask: &'a str) -> Option<SegmentParts<'a>
             continue;
         }
         let m = t.masked;
+        if m.starts_with("<<<") {
+            return None; // a here-STRING feeds stdin - its operand is DATA, not a file.
+        }
         if m.starts_with("<<") {
             // Heredoc opener: `<<'EOF'` attached, or `<<` with the word following.
             let rest = m.trim_start_matches("<<").trim_start_matches('-');

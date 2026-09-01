@@ -257,3 +257,80 @@ fn summarize_session_id_is_filename_stem() {
     assert_eq!(s.session_id, stem);
     assert_ne!(s.session_id, "DATA-ID");
 }
+
+#[test]
+fn clone_probe_arms_and_origin_join_edges() {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!("csift-clone-{}-{n}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let bx = "0f1e2d3c-4b5a-4697-8807-16f5e4d3c2b1";
+
+    // A garbage line CARRYING the timestamp needle parses to nothing and is walked
+    // past; the boundary after it still detects.
+    let clone = root.join("c1.jsonl");
+    std::fs::write(
+        &clone,
+        format!(
+            "not json but mentions \"timestamp\" anyway\n{{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"{bx}\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}}\n"
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        clone_head_boundary(&clone).unwrap().as_deref(),
+        Some(bx),
+        "garbage before the boundary is walked past"
+    );
+
+    // An EMPTY transcript probes to a clean None.
+    let empty = root.join("c0.jsonl");
+    std::fs::write(&empty, "").unwrap();
+    assert_eq!(clone_head_boundary(&empty).unwrap(), None);
+
+    // A boundary with an EMPTY-string uuid detects nothing either.
+    let blank = root.join("c3.jsonl");
+    std::fs::write(
+        &blank,
+        "{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}\n",
+    )
+    .unwrap();
+    assert_eq!(clone_head_boundary(&blank).unwrap(), None);
+
+    // A boundary with NO uuid detects nothing (never an empty-string lineage).
+    let anon = root.join("c2.jsonl");
+    std::fs::write(
+        &anon,
+        "{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}\n",
+    )
+    .unwrap();
+    assert_eq!(clone_head_boundary(&anon).unwrap(), None);
+
+    // Origin join: the sibling quotes the uuid in PROSE before carrying the real
+    // record - the at-advance loop must reach the record and name the origin.
+    let origin = root.join("o1.jsonl");
+    std::fs::write(
+        &origin,
+        format!(
+            "{{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"discussing {bx} in prose\"}}}}\n{{\"type\":\"system\",\"subtype\":\"compact_boundary\",\"uuid\":\"{bx}\",\"timestamp\":\"2026-06-07T05:10:00.000Z\"}}\n"
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        clone_origin(&clone, bx).as_deref(),
+        Some("o1"),
+        "prose quote is skipped, the record wins"
+    );
+
+    // A prose-ONLY sibling can never be the origin.
+    std::fs::remove_file(&origin).unwrap();
+    let bystander = root.join("b1.jsonl");
+    std::fs::write(
+        &bystander,
+        format!(
+            "{{\"type\":\"user\",\"uuid\":\"u1\",\"timestamp\":\"2026-06-07T05:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"only prose about {bx}\"}}}}\n"
+        ),
+    )
+    .unwrap();
+    assert_eq!(clone_origin(&clone, bx), None);
+    std::fs::remove_dir_all(&root).unwrap();
+}
