@@ -112,7 +112,7 @@ pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
 
 /// True when an open tag whose PREFIX (the text before it) is `prefix` sits at a valid SECTION
 /// BOUNDARY (FINDING-1): the content start (only whitespace precedes), immediately after the
-/// relayed peer preamble ([`PEER_MESSAGE_PREAMBLE`]), or right after a prior section's CLOSE tag
+/// relayed peer preamble (one of [`PEER_MESSAGE_PREAMBLES`]), or right after a prior section's CLOSE tag
 /// (`</task-notification>` / `</teammate-message>` / `</agent-message>`, modulo trailing
 /// whitespace). A tag that appears MID-PROSE - a genuine user message merely QUOTING the literal
 /// tag, common in csift's own dev sessions - is NOT a boundary, so it does not start a section and
@@ -120,7 +120,7 @@ pub fn parse_all_teammate_messages(content: &str) -> Vec<TeammateMessage> {
 pub(crate) fn is_section_boundary(prefix: &str) -> bool {
     let t = prefix.trim_end();
     t.is_empty()
-        || t.ends_with(PEER_MESSAGE_PREAMBLE)
+        || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))
         || t.ends_with(TASK_NOTIFICATION_CLOSE)
         || t.ends_with(TEAMMATE_MESSAGE_CLOSE)
         || t.ends_with(AGENT_MESSAGE_CLOSE)

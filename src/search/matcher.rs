@@ -489,6 +489,7 @@ pub(crate) fn synth_marker_finders(
         b"Your questions have been answered",
         // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.
         b"stopped by the user",
+        b"The user answered:",
     ];
     if args
         .label_filter()

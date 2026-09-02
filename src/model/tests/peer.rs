@@ -30,6 +30,36 @@ fn is_teammate_message_bare_and_peer_forms() {
 }
 
 #[test]
+fn every_relay_preamble_form_is_a_section_boundary() {
+    // CC 2.1.258 relays a peer message under one of THREE preambles; a tag right after any
+    // of them is a real delivery, and an `<agent-message>` behind the mid-turn form was
+    // unlabeled until the set was widened (29 of 47 corpus records).
+    for pre in [
+        "Another Claude session sent a message:",
+        "Another Claude session sent a message while you were working:",
+        "A peer session sent a message while you were working:",
+    ] {
+        assert!(is_section_boundary(&format!("{pre}\n")), "{pre}");
+        assert!(is_section_boundary(pre), "{pre} (no newline)");
+        let rec: Record = serde_json::from_str(&format!(
+            r#"{{"type":"user","isMeta":true,"message":{{"role":"user","content":"{pre}\n<agent-message from=\"peer-1\">ship it</agent-message>"}}}}"#
+        ))
+        .unwrap();
+        let labels = rec.classify(&ClassifyCtx::top_level());
+        assert!(
+            labels.contains(&Class::CommInbox),
+            "{pre}: inbound peer, got {labels:?}"
+        );
+        assert!(!rec.is_genuine_user(), "{pre}: never the human");
+    }
+    // A preamble that merely resembles one is NOT a boundary (no silent widening).
+    assert!(!is_section_boundary(
+        "Another Claude session mentioned a message:"
+    ));
+    assert!(!is_section_boundary("A peer session sent a message"));
+}
+
+#[test]
 fn parse_teammate_message_prose_extracts_id_no_signal() {
     let tm = parse_teammate_message(
             r#"<teammate-message teammate_id="g4g5-probe" color="blue" summary="x">G4/G5 probe complete.</teammate-message>"#,

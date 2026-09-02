@@ -14,6 +14,10 @@
 pub const AUQ_ANSWER_MARKERS: &[&str] = &[
     "User has answered your questions",
     "Your questions have been answered",
+    // CC 2.1.258's third branch (`The user answered: "<q>"="<a>". Read the answers
+    // carefully ...`); the fourth branch `The user did not answer the questions.` is
+    // the UNANSWERED case and must never open a turn, so it stays out.
+    "The user answered:",
 ];
 
 /// True when `text` (a `tool_result`'s rendered content) is a synthesized
@@ -142,11 +146,19 @@ pub const PLAN_REJECTION_USER_PREFIX: &str = "To tell you how to proceed, the us
 /// never the operator: classified `agent.communication.{inbox,signal}`, never `user`.
 pub const TEAMMATE_MESSAGE_OPEN: &str = "<teammate-message";
 
-/// The preamble Claude Code prepends to a peer message it relays into a session (GOLD §5):
+/// The preambles Claude Code prepends to a peer message it relays into a session (GOLD §5):
 /// `Another Claude session sent a message:\n<teammate-message …>`. A peer tag IMMEDIATELY after
-/// this preamble is at a section BOUNDARY (FINDING-1, [`is_section_boundary`]) - so a real relayed
-/// peer message is recognized while a tag merely QUOTED mid-prose is not.
-pub const PEER_MESSAGE_PREAMBLE: &str = "Another Claude session sent a message:";
+/// a preamble is at a section BOUNDARY (FINDING-1, [`is_section_boundary`]) - so a real relayed
+/// peer message is recognized while a tag merely QUOTED mid-prose is not. CC 2.1.258 defines
+/// THREE forms in one binary literal (`"Another Claude session sent a message"` + `:` or
+/// ` while you were working:`, and `"A peer session sent a message while you were
+/// working:"`); the mid-turn form carried 29 of 47 `<agent-message>` records in the
+/// reference corpus and left them unlabeled until v0.10.1.
+pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[
+    "Another Claude session sent a message:",
+    "Another Claude session sent a message while you were working:",
+    "A peer session sent a message while you were working:",
+];
 
 /// The opening tag of an inbound `<agent-message from="…">` peer form (P1c M1) - a DISTINCT
 /// inbound peer message from [`TEAMMATE_MESSAGE_OPEN`], seen `isMeta` in real data (e.g. an OMC

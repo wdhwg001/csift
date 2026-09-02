@@ -41,6 +41,15 @@ fn is_auq_answer_text_recognises_both_phrasings() {
     assert!(is_auq_answer_text(
         "Your questions have been answered: \"q\"=\"a\"."
     ));
+    // CC 2.1.258's third branch (16 carriers on disk at that version); the retired
+    // "User has answered" form stays recognised for older transcripts.
+    assert!(is_auq_answer_text(
+        "The user answered: \"q\"=\"a\". Read the answers carefully."
+    ));
+    // The UNANSWERED branch never opens a turn.
+    assert!(!is_auq_answer_text(
+        "The user did not answer the questions."
+    ));
     assert!(!is_auq_answer_text("a normal tool output"));
 }
 
