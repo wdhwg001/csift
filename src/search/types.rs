@@ -86,11 +86,11 @@ pub struct Hit {
     /// renders `(elicitation sidecar)` in place of `Lnnnn` and carries `source:"elicitation-
     /// sidecar"` in JSON. Backfilled with the address.
     pub from_sidecar: bool,
-    /// v0.9.5: a `user.queued` hit's queue event (`enqueue` / `popAll` / `remove`), verbatim
+    /// v0.10.0: a `user.queued` hit's queue event (`enqueue` / `popAll` / `remove`), verbatim
     /// from the `queue-operation` line; `None` on every other hit. Rendered in the label
     /// zone, JSON `queue_operation`.
     pub queue_operation: Option<String>,
-    /// v0.9.5: the `remove` reason when the line carries one (`absorbed_mid_turn` /
+    /// v0.10.0: the `remove` reason when the line carries one (`absorbed_mid_turn` /
     /// `delivered_to_agent` - structural evidence the queued text was consumed); `None`
     /// otherwise. JSON `queue_reason`.
     pub queue_reason: Option<String>,

@@ -44,7 +44,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
     if h.class == Class::AgentThinkingNarration {
         return format!("{} [narration summary]", h.class.path());
     }
-    // v0.9.5: a queued line names its queue event (and a remove's reason) in the label
+    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label
     // zone - display-only; the matchable text stays the verbatim queued content.
     if h.class == Class::UserQueued {
         let op = h.queue_operation.as_deref().unwrap_or("queued");
@@ -443,7 +443,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "pairing": pairing,
         "is_error": h.is_error,
         "tool_use_id": h.tool_use_id,
-        // v0.9.5 queue facts (a `user.queued` hit); null on every other hit.
+        // v0.10.0 queue facts (a `user.queued` hit); null on every other hit.
         "queue_operation": h.queue_operation,
         "queue_reason": h.queue_reason,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when

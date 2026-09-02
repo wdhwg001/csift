@@ -135,7 +135,7 @@ pub struct Record {
     #[serde(default)]
     pub snapshot: Option<serde_json::Value>,
 
-    /// `file-history-delta` (v0.9.5): the ONE path this delta line tracks, beside the
+    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the
     /// `backup` object below. Absent everywhere else. Additive + tolerant.
     #[serde(default, rename = "trackingPath")]
     pub tracking_path: Option<String>,
@@ -145,7 +145,7 @@ pub struct Record {
     #[serde(default)]
     pub backup: Option<serde_json::Value>,
 
-    /// `queue-operation` (v0.9.5): the queue event - `enqueue` | `dequeue` | `remove` |
+    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |
     /// `popAll` (open set; measured those four). The human-typed (or automation) text
     /// rides top-level `content` on every operation except `dequeue`.
     #[serde(default)]
@@ -157,7 +157,7 @@ pub struct Record {
     #[serde(default)]
     pub reason: Option<String>,
 
-    /// `system`/`turn_duration` (v0.9.5): wall-clock ms of the turn. Kept as a raw
+    /// `system`/`turn_duration` (v0.10.0): wall-clock ms of the turn. Kept as a raw
     /// `Value` so an odd shape can never fail the record (tolerance discipline, the
     /// `Message.model` precedent); read via [`Record::u64_field`].
     #[serde(default, rename = "durationMs")]
@@ -176,7 +176,7 @@ pub struct Record {
     #[serde(default, rename = "pendingWorkflowCount")]
     pub pending_workflow_count: Option<serde_json::Value>,
 
-    /// `system`/`stop_hook_summary` (v0.9.5): how many Stop hooks ran.
+    /// `system`/`stop_hook_summary` (v0.10.0): how many Stop hooks ran.
     #[serde(default, rename = "hookCount")]
     pub hook_count: Option<serde_json::Value>,
 

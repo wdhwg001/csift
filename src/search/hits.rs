@@ -186,7 +186,7 @@ pub(crate) fn collect_record_hits(
         .map(str::to_string);
     let attachment_type = rec.attachment_type();
     let version = rec.version.clone();
-    // v0.9.5: the queue facts ride only a queue-operation record (None elsewhere).
+    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).
     let queue_operation = if rec.is_type("queue-operation") {
         rec.operation.clone()
     } else {

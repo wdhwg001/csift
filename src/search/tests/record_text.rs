@@ -1,4 +1,4 @@
-//! Record-text resolution for the v0.9.5 promoted leaves + the duration formatter.
+//! Record-text resolution for the v0.10.0 promoted leaves + the duration formatter.
 
 use super::*;
 

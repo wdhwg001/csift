@@ -1,4 +1,4 @@
-//! v0.9.5 promoted non-record line types: queue-operation, the REPL-render system
+//! v0.10.0 promoted non-record line types: queue-operation, the REPL-render system
 //! subtypes (turn_duration / away_summary / stop_hook_summary) and the file-history
 //! instrument lines. Each maps to exactly ONE LLM-invisible leaf; everything here is
 //! tolerant (an odd shape yields `None`, never a crash).
@@ -6,7 +6,7 @@
 use super::*;
 
 impl Record {
-    /// The single promoted leaf a NON-message line carries (v0.9.5), or `None` for a
+    /// The single promoted leaf a NON-message line carries (v0.10.0), or `None` for a
     /// message record and for every line type that stays unmodeled (the session-state
     /// cache lines, the unpromoted system subtypes, a content-less queue `dequeue`).
     #[must_use]

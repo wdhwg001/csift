@@ -1,4 +1,4 @@
-//! v0.9.5 promoted non-record lines: one invisible leaf each, riders and blanks excluded.
+//! v0.10.0 promoted non-record lines: one invisible leaf each, riders and blanks excluded.
 
 use super::*;
 

@@ -161,7 +161,7 @@ use super::*;
         deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \
         contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
         last-human-touch consumer.)\n  \
-          GATED LEAVES (v0.9.5): the five promoted non-record leaves - `user.queued`\n  \
+          GATED LEAVES (v0.10.0): the five promoted non-record leaves - `user.queued`\n  \
         and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot}` - are\n  \
         scanned ONLY when an explicit -t reaches them (the full path, a glob such as\n  \
         `-t 'user.*'` / `-t 'harness.*'`, or the `harness.meta` prefix), or when a\n  \
@@ -509,7 +509,7 @@ pub struct SearchArgs {
     pub format: OutputFormat,
 }
 
-/// The v0.9.5 promoted non-record leaves - scanned only under an explicit selector
+/// The v0.10.0 promoted non-record leaves - scanned only under an explicit selector
 /// ([`SearchArgs::reaches_gated`]) or a `show` address.
 pub const GATED_LEAVES: [Class; 5] = [
     Class::UserQueued,
@@ -542,7 +542,7 @@ impl SearchArgs {
         self.attachments || matches!(self.count_by, Some(CountAxis::Attachment))
     }
 
-    /// The v0.9.5 gated-leaf rule: a promoted non-record leaf is scanned ONLY when an
+    /// The v0.10.0 gated-leaf rule: a promoted non-record leaf is scanned ONLY when an
     /// EXPLICIT `-t` selector reaches it (the full path, a glob, or the `harness.meta`
     /// prefix). A bare scan with no `-t` admits every label elsewhere but never parses
     /// these lines: most queued content is a duplicate automation pulse and every

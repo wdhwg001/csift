@@ -186,7 +186,7 @@ pub(crate) struct EmptyDiagnosis {
     /// AND the pattern matches under OTHER labels; `None` when no label filter, or the pattern
     /// is genuinely absent even unfiltered.
     pub(crate) excluded_by_label: Option<(Vec<(String, usize)>, usize)>,
-    /// v0.9.5: true when no active selector reached a gated (promoted non-record)
+    /// v0.10.0: true when no active selector reached a gated (promoted non-record)
     /// leaf - those lines were never parsed, so the absence does not cover them.
     pub(crate) gated_unreached: bool,
 }

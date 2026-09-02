@@ -89,7 +89,7 @@ pub(crate) fn search_one_file(
         && (args.label_filter().selected(Class::MetaAttachment.path())
             || args.label_filter().selected(Class::MetaHook.path())))
         || address.is_some();
-    // v0.9.5 promoted non-record lines: admitted ONLY under an EXPLICIT selector that
+    // v0.10.0 promoted non-record lines: admitted ONLY under an EXPLICIT selector that
     // reaches the leaf (`reaches_gated` - a bare no-`-t` scan never parses them) or an
     // address (`show --line`/`--uuid` renders an addressed line flag-free).
     let reach = |c: Class| args.reaches_gated(c) || address.is_some();
@@ -307,15 +307,15 @@ pub(crate) struct CandidateGates {
     pub(crate) hook_context: bool,
     /// `--attachments` / the attachment axis (or an address): every attachment line.
     pub(crate) attachments: bool,
-    /// v0.9.5 (explicit selector or address): `queue-operation` lines.
+    /// v0.10.0 (explicit selector or address): `queue-operation` lines.
     pub(crate) queued: bool,
-    /// v0.9.5: `system`/`turn_duration` lines.
+    /// v0.10.0: `system`/`turn_duration` lines.
     pub(crate) turn_duration: bool,
-    /// v0.9.5: `system`/`away_summary` lines.
+    /// v0.10.0: `system`/`away_summary` lines.
     pub(crate) away_summary: bool,
-    /// v0.9.5: `system`/`stop_hook_summary` lines.
+    /// v0.10.0: `system`/`stop_hook_summary` lines.
     pub(crate) stop_hooks: bool,
-    /// v0.9.5: `file-history-snapshot` + `file-history-delta` lines.
+    /// v0.10.0: `file-history-snapshot` + `file-history-delta` lines.
     pub(crate) snapshot: bool,
 }
 
@@ -344,7 +344,7 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     // survives a reserialize; R13).
     static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
-    // v0.9.5 promoted lines. Quoted-value / bare-value needles per the R13 law: the
+    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the
     // `type` values `"queue-operation"` and `"file-history-` (a prefix covering both
     // `-snapshot` and `-delta`), and the bare `subtype` values for the three system
     // records (a value substring survives a reserialize; prose quoting the word lands
@@ -375,7 +375,7 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
         // explicit address). Same `&&`-gating law: a default scan pays ZERO.
         || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())
-        // v0.9.5 promoted lines, each behind its own explicit-selector gate.
+        // v0.10.0 promoted lines, each behind its own explicit-selector gate.
         || (gates.queued && QUEUED_FINDER.find(line).is_some())
         || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())
         || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())

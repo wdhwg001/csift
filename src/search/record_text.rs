@@ -114,7 +114,7 @@ pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
     if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }
-    // v0.9.5 promoted non-message lines: verbatim content where the line has one
+    // v0.10.0 promoted non-message lines: verbatim content where the line has one
     // (queued text, away recap), a fabricated key=value excerpt otherwise (turn
     // duration, stop hooks, file-history) - each fabricated form is registered as a
     // synth marker (`synth_marker_finders`) so the whole-file gate stays sound.
@@ -170,7 +170,7 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" "))
 }
 
-/// The searchable + renderable text of a v0.9.5 PROMOTED non-message line, keyed on
+/// The searchable + renderable text of a v0.10.0 PROMOTED non-message line, keyed on
 /// [`Record::promoted_class`]. `user.queued` / `harness.meta.away-summary` return the
 /// verbatim `content` string (a raw byte substring, prefilter-safe). The other three
 /// fabricate a bracketed key=value excerpt from the record's own fields - present

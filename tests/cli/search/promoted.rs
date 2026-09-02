@@ -1,4 +1,4 @@
-//! v0.9.5 promoted non-record leaves: gated behind an explicit selector, each
+//! v0.10.0 promoted non-record leaves: gated behind an explicit selector, each
 //! reachable by its own path, fabricated excerpts sound under the whole-file gate,
 //! `show` renders them flag-free, and the zero-match diagnosis names the gate.
 

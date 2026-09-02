@@ -165,7 +165,7 @@ impl Record {
             return out;
         }
 
-        // v0.9.5: a promoted NON-message line (queue-operation / turn_duration /
+        // v0.10.0: a promoted NON-message line (queue-operation / turn_duration /
         // away_summary / stop_hook_summary / file-history-*) carries exactly one leaf
         // (`classify_promoted.rs`); every one of them is LLM-invisible.
         if let Some(c) = self.promoted_class() {
