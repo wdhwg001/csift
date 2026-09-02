@@ -5,6 +5,98 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.10.1] - 2026-09-03
+
+Verified against a real Claude Code 2.1.258 session on Windows 11 ARM64 (a Sonnet 5
+build with four subagents and a dev server left running as a background task), which
+the 0.10.0 release matrix never exercised: its Windows suite was green while the pid
+probe was compiled out there.
+
+### Fixed
+
+- `status` / `wait`: the registry's `shell` status was read as a running shape. The
+  harness writes `shell` only as `idle` relabeled while a background shell task is
+  open, so a session that had ended its turn with `npm run dev` running reported
+  `running` and `wait --until stop` could not fire even under a lens that ignored the
+  dev server. `shell` now reads as the idle-with-background-shell shape it is: the
+  seventh verdict when the scan counts the task, `idle-eot` when the lens excludes it,
+  with a note either way. `busy` is the only registry running signal.
+- `status` / `wait` on Windows: the pid probe now exists there. `procStart` in a
+  Windows registry row is a FILETIME tick count (100ns since 1601), not an asctime
+  string, so the old parser silently skipped the reuse guard; the probe now reads the
+  owner's start time through PowerShell `Get-Process` (falling back to `tasklist` for
+  liveness alone), compares instants with the same 2s tolerance, and reports
+  `stale-dead` for a dead owner. A row whose `pidDomain` names another domain
+  (`darwin`, `linux`, `win32:<host>`) is never probed and the verdict says so.
+- `status` / `wait`: a child lane whose completion notification already landed in the
+  main transcript is `settled` regardless of its tail, so a subagent that finished
+  seconds ago no longer counts as a live lane for up to 300 seconds.
+- `plan`: the slug-only binding resolved a relative `plansDirectory` against the
+  config home and took an absolute one verbatim. Claude Code resolves it against the
+  project root (the session's cwd) through the merged settings scopes, and refuses a
+  value that escapes that root, falling back to `~/.claude/plans`. csift now does the
+  same, reading the user, project and project-local settings in that precedence. The
+  introspection ledger's first audit caught this one.
+- `agents`: a `/fork` child reported depth 65. Its transcript is a clone of the parent's
+  and carries the spawning tool_use itself, so the spawn join named the child as its own
+  parent and the depth walk ran to its cycle cap. csift now reads the `parentAgentId`
+  the harness writes into the child's meta.json and never accepts a node as its own
+  parent. Also from the audit: the parent's record of a subagent return carries an
+  appended continuation footer, not a truncation (help and docs corrected), and
+  recover's Bash read anchors already reach built-in and teammate lanes, whose results
+  carry the `toolUseResult` echo; only workflow lanes lack it (comment corrected).
+- `search`: an inbound peer message relayed mid-turn carried no label at all. Claude
+  Code 2.1.258 relays under three preambles ("Another Claude session sent a message:",
+  the same "while you were working:" form, and "A peer session sent a message while
+  you were working:"); csift knew only the first, so 29 of 47 `<agent-message>` records
+  in the reference corpus were invisible to every census. All three are section
+  boundaries now, and the corpus-wide `agent.communication.inbox` census moves from
+  8721 to 8750 records.
+- `search`: the third AskUserQuestion answer phrasing Claude Code 2.1.258 writes
+  ("The user answered: ...") is an answer marker and a turn opener; the unanswered
+  branch ("The user did not answer the questions.") never is. The retired "User has
+  answered your questions" form stays recognised for older transcripts.
+- `status` / `wait`: the registry reader takes `procStartFt` when a row carries it
+  beside `procStart`, matching the harness's own `procStartFt ?? procStart` readers.
+
+### Added
+
+- `waiting-hitl` gains two instruments beside the elicitation sidecar: the registry's
+  `waiting` status (the harness sets it for any blocking dialog, including permission
+  prompts, plan approvals and sandbox or worker requests) and an unreturned
+  `AskUserQuestion` / `ExitPlanMode` at the main tail. Claude Code 2.1.258 writes a
+  multi-question AskUserQuestion to the transcript at question time; a single-question
+  one still stays buffered until answered, which the sidecar covers. The idle-verdict
+  honesty note now names the registry status it saw instead of calling every
+  permission prompt invisible.
+- `INTROSPECTION.json`: a structured ledger of every Claude Code behavior csift depends
+  on, one claim per entry with its code site, its verbatim snippet, the version it was
+  pinned against and a per-release check record carrying the instrument, the
+  observation and the counting rule. A pre-commit gate ties the README's
+  "verified against Claude Code" badge to the ledger: the badge version is admitted
+  only when every claim carries a check at that version, snippets must still exist in
+  their files, and check evidence must be claim-specific.
+- README badges for the verified Claude Code version and the crate-wide mutation score
+  (cargo-mutants over the whole crate: killed mutants, counting a mutant that hangs the
+  suite as killed, over every viable mutant; the release notes carry the caught-only
+  floor and the timeout share).
+- `harness.meta.system`, the 34th label: a gated catch-all for every other `type:"system"`
+  subtype the harness writes for its own UI and never sends to the model, such as the
+  `informational` warning that Remote Control disconnected after an account switch,
+  `api_error`, the model-refusal fallbacks, `agents_killed`, `local_command` and
+  `scheduled_task_fire`. It renders as `[<subtype> <level>] <content>`, is scanned only
+  under an explicit `-t` like the other promoted leaves, and `show --line` renders it
+  without `--raw`. The compaction boundary keeps its own leaf.
+
+### Changed
+
+- README highlight 8 is laid out as short lines.
+- Documentation records the re-measured laws: the registry status vocabulary
+  `busy | shell | idle | waiting` and what each means, the `claude -p` row with a null
+  status, the multi-question AskUserQuestion flush, the Windows record shapes (both
+  `Bash` and `PowerShell` tools in one session, the same background-task result
+  grammar, task output files under the local temp dir).
+
 ## [0.10.0] - 2026-09-02
 
 Sessions stop lying about being stopped: status and wait now see every
