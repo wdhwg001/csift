@@ -394,3 +394,58 @@ fn the_agents_stopped_notice_is_harness_not_human() {
         list.stdout
     );
 }
+
+#[test]
+fn rows_name_a_subagent_lane_and_a_live_output_file() {
+    let h = Home::new();
+    // The main lane is settled; the launch lives in a subagent lane, its output file exists.
+    let out_path = h.root.join("b9z8y7x6w.output");
+    std::fs::write(&out_path, "seven!!").unwrap();
+    let sub_launch = r#"{"type":"assistant","uuid":"s1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t9","name":"Bash","input":{"command":"cargo build","description":"Build in the child","run_in_background":true}}]}}"#;
+    let sub_result = format!(
+        r#"{{"type":"user","uuid":"s2","timestamp":"2026-06-07T05:01:01.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t9","content":"Command running in background with ID: b9z8y7x6w. Output is being written to: {}. You will be notified when it completes."}}]}}}}"#,
+        out_path.to_str().unwrap()
+    );
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{PROMPT}\n{EOT}\n"),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-abcdef0123456789.jsonl"),
+        &format!("{sub_launch}\n{sub_result}\n"),
+    );
+    let out = h.run(&["status", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("verdict  idle-background-open"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("output 7 B, last write")
+            && out.stdout.contains("lane abcdef0123456789"),
+        "the row carries the output stat and the launching lane:\n{}",
+        out.stdout
+    );
+    // --no-subagents drops the child's launch: a clean stop.
+    let out = h.run(&["status", &at(SESS), "--no-subagents"]);
+    assert!(out.stdout.contains("verdict  idle-eot"), "{}", out.stdout);
+}
+
+#[test]
+fn the_last_section_prints_with_only_a_prompt_on_disk() {
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &format!("{PROMPT}\n"));
+    let out = h.run(&["status", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("last ◂") && !out.stdout.contains("last ▸"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("never a review of the work"),
+        "the warning rides even a one-sided section:\n{}",
+        out.stdout
+    );
+}

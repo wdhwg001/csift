@@ -92,7 +92,10 @@ pub(crate) fn render_background_text(b: &BackgroundReport) {
             .as_deref()
             .map(|r| format!("  [ignored: {r}]"))
             .unwrap_or_default();
-        let lane = if t.lane.len() > 16 {
+        // A launch from a subagent lane names the lane (a bare agent id); the main
+        // session's own uuid is the row's context already.
+        let is_uuid = t.lane.len() == 36 && t.lane.matches('-').count() == 4;
+        let lane = if is_uuid {
             String::new()
         } else {
             format!("  lane {}", t.lane)

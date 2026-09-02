@@ -32,9 +32,14 @@ fn the_lens_ignores_by_time_and_pattern_but_still_lists() {
         r.tasks[0].ignored_by.as_deref(),
         Some("launched before --background-since now")
     );
-    // An absolute cutoff before the launch keeps it.
+    // An absolute cutoff before the launch keeps it; a cutoff EXACTLY at the launch
+    // instant keeps it too ("at or after"); one millisecond later ignores it.
     let lens = BackgroundLens::from_args(Some("2026-06-01T00:00:00Z"), &[]).unwrap();
     assert_eq!(report(&t, &lens).open_counted(), 1);
+    let lens = BackgroundLens::from_args(Some("2026-06-07T05:00:01Z"), &[]).unwrap();
+    assert_eq!(report(&t, &lens).open_counted(), 1);
+    let lens = BackgroundLens::from_args(Some("2026-06-07T05:00:01.001Z"), &[]).unwrap();
+    assert_eq!(report(&t, &lens).open_ignored(), 1);
     // Bad inputs fail loud.
     assert!(BackgroundLens::from_args(Some("yesterday-ish"), &[]).is_err());
     assert!(BackgroundLens::from_args(None, &["(".to_string()]).is_err());
@@ -57,8 +62,30 @@ fn open_tasks_sort_counted_then_ignored_then_closed_newest_first() {
         .replace("\"t1\"", "\"t3\"")
         .replace("05:00:01", "05:00:06")
         .replace("npm run dev", "cargo watch");
+    // A fourth launch, NEWER than the ignored one, that already completed: closed rank
+    // sorts after every open row whatever its launch time.
+    let l4 = LAUNCH
+        .replace("\"t1\"", "\"t4\"")
+        .replace("05:00:01", "05:00:08")
+        .replace("npm run dev", "make check");
+    let r4 = LAUNCH_RESULT
+        .replace("\"t1\"", "\"t4\"")
+        .replace("b1a2b3c4d", "b4b4b4b4b")
+        .replace("05:00:02", "05:00:09");
+    let done4 = r#"{"type":"user","uuid":"n4","timestamp":"2026-06-07T05:03:30.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b4b4b4b4b</task-id>\n<status>completed</status>\n<summary>done</summary>\n</task-notification>"}}"#;
     let t = TempSession::new(
-        &lines(&[LAUNCH, LAUNCH_RESULT, &l2, &r2, &l3, EOT, done1]),
+        &lines(&[
+            LAUNCH,
+            LAUNCH_RESULT,
+            &l2,
+            &r2,
+            &l3,
+            &l4,
+            &r4,
+            EOT,
+            done1,
+            done4,
+        ]),
         None,
     );
     let lens = BackgroundLens::from_args(None, &["tail -f".to_string()]).unwrap();
@@ -73,6 +100,7 @@ fn open_tasks_sort_counted_then_ignored_then_closed_newest_first() {
         vec![
             ("t3", true, false),
             ("t2", true, true),
+            ("t4", false, false),
             ("t1", false, false)
         ],
         "{order:?}"
@@ -82,6 +110,16 @@ fn open_tasks_sort_counted_then_ignored_then_closed_newest_first() {
 #[test]
 fn last_messages_take_the_newest_prompt_and_reply_as_excerpts() {
     let long = "x".repeat(900);
+    // Exactly the cap is NOT a clip.
+    let exact = TempSession::new(
+        &(format!(
+            r#"{{"type":"assistant","uuid":"a0","timestamp":"2026-06-07T04:00:00.000Z","message":{{"role":"assistant","stop_reason":"end_turn","content":[{{"type":"text","text":"{}"}}]}}}}"#,
+            "y".repeat(400)
+        ) + "\n"),
+        None,
+    );
+    let e = last_messages(&exact.main).unwrap().agent.unwrap();
+    assert!(!e.truncated && e.text.chars().count() == 400, "{}", e.text);
     let main = format!(
         concat!(
             r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"first prompt"}}}}"#,
@@ -137,7 +175,10 @@ fn activity_census_and_tail_state_words() {
         ),
         "main",
     );
-    assert_eq!(act.records, 5);
+    // A tool_result carrier (agent.tool.result, outside every counted arm) changes no
+    // counter but the record total.
+    act.fold(&parse(LAUNCH_RESULT), "main");
+    assert_eq!(act.records, 6);
     assert_eq!(act.lanes.len(), 2);
     assert_eq!(act.tools.get("Bash"), Some(&1));
     assert_eq!(act.tools.get("Read"), Some(&1));
@@ -152,14 +193,14 @@ fn activity_census_and_tail_state_words() {
     );
     assert_eq!(
         act.summary_line(),
-        "5 record(s) in 2 lane(s): tools Bash x1 Read x1 · thinking 1 · messages 1 · prompts 1 · notifications 1"
+        "6 record(s) in 2 lane(s): tools Bash x1 Read x1 · thinking 1 · messages 1 · prompts 1 · notifications 1"
     );
     assert_eq!(
         Activity::default().summary_line(),
         "nothing landed after the baseline"
     );
     let j = act.json();
-    assert_eq!(j["records"], 5);
+    assert_eq!(j["records"], 6);
     assert_eq!(j["tools"]["Bash"], 1);
 
     // Tail-state words.

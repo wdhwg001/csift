@@ -242,3 +242,21 @@ fn a_monitor_is_open_through_event_pulses_until_it_ends_or_times_out() {
     assert_eq!(r.tasks[0].id.as_deref(), Some("s8s8s8s8s"));
     assert_eq!(r.open_ignored(), 1);
 }
+
+#[test]
+fn foreground_tools_are_never_launches_and_a_real_output_file_stats() {
+    // A foreground Bash (no run_in_background) and a Read are not launches.
+    let fg = r#"{"type":"assistant","uuid":"f1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"f1","name":"Bash","input":{"command":"ls","description":"List"}},{"type":"tool_use","id":"f2","name":"Read","input":{"file_path":"/x"}}]}}"#;
+    let fg_res = r#"{"type":"user","uuid":"f2","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"f1","content":"a b"},{"type":"tool_result","tool_use_id":"f2","content":"x"}]}}"#;
+    let t = TempSession::new(&lines(&[fg, fg_res, EOT]), None);
+    assert!(report(&t, &BackgroundLens::default()).tasks.is_empty());
+    // A background shell whose output file EXISTS reports its size and last write.
+    let t = TempSession::new("", None);
+    let out_path = t.root.join("b1a2b3c4d.output");
+    std::fs::write(&out_path, "twelve bytes").unwrap();
+    let result = LAUNCH_RESULT.replace("/nonexistent/b1a2b3c4d.output", out_path.to_str().unwrap());
+    std::fs::write(&t.main, lines(&[LAUNCH, &result, EOT])).unwrap();
+    let r = report(&t, &BackgroundLens::default());
+    assert_eq!(r.tasks[0].output_bytes, Some(12));
+    assert!(r.tasks[0].output_age_secs.is_some_and(|a| a < 60));
+}

@@ -397,11 +397,15 @@ mod tests {
 
     #[test]
     fn relative_short_string_is_not_relative() {
-        // A single-char string (len < 2) cannot be a relative form → it falls through
-        // to absolute parsing, which fails for "x" (so an error), but "1" alone is
-        // also < 2 chars and not absolute either.
-        assert!(TimeWindow::from_args(Some("x"), None).is_err());
-        assert!(TimeWindow::from_args(Some("1"), None).is_err());
+        // A unit-less or digit-less string is not a relative form: it falls through to
+        // absolute parsing, whose error names the ISO grammar (never the relative
+        // quantity message - the fallthrough is the `||` in parse_relative).
+        for s in ["x", "1", "h", "-"] {
+            let err = TimeWindow::from_args(Some(s), None)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("cannot parse time bound"), "{s}: {err}");
+        }
     }
 
     #[test]

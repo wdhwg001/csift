@@ -516,6 +516,10 @@ fn agents_stopped_notice_is_a_subagent_notification_not_the_human() {
         "2 background agents were paused by the user",
         "twenty background agents were stopped by the user: x",
         "2 background agents were stopped",
+        "the dev server was stopped by the user",
+        "Background agent restarted; it was stopped by the user earlier",
+        "3 tasks stopped by the user",
+        "2 background agents were killed, stopped by the user",
     ] {
         assert!(!is_agents_stopped_notice(text), "{text}");
     }
