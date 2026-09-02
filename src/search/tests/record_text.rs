@@ -11,12 +11,23 @@ fn promoted_text_is_verbatim_for_queued_and_recap() {
     let q = rec(
         r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"check the widget build"}"#,
     );
+    // Both the promoted path and the shared raw-text entry return the verbatim content
+    // (the promoted arm is pinned directly: the D7 system fallback would also read
+    // `content`, so only a direct call proves the arm is live).
+    assert_eq!(
+        promoted_record_text(&q).as_deref(),
+        Some("check the widget build")
+    );
     assert_eq!(
         record_raw_text(&q).as_deref(),
         Some("check the widget build")
     );
     let a = rec(
         r#"{"type":"system","subtype":"away_summary","content":"Two checks finished.","uuid":"u","timestamp":"t"}"#,
+    );
+    assert_eq!(
+        promoted_record_text(&a).as_deref(),
+        Some("Two checks finished.")
     );
     assert_eq!(record_raw_text(&a).as_deref(), Some("Two checks finished."));
     // A non-promoted record is untouched by the promoted path.
