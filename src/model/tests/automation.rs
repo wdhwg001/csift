@@ -178,43 +178,28 @@ fn automation_kind_from_summary_direct() {
         Monitor
     );
     assert_eq!(AutomationKind::from_summary(Some("cron run")), Monitor);
-    // The captured-monitor shape: a monitor/cron cadence implemented as a `&`-detached
-    // `Background command "<monitor-named>"`. The quoted command NAME carrying a
-    // monitor-cadence token routes to Monitor (not the generic BackgroundCommand), so the
-    // dominant monitor activity is not disguised. (Verified against a captured session, where
-    // the monitor loop is `Relaunch monitor timer` / `Re-arm corrected monitor` bg-cmds.)
+    // v0.10.0: a `Background command "…"` pulse is ALWAYS background-command, whatever its
+    // quoted name says. The former quoted-name heuristic (monitor / re-arm / liveness in the
+    // name routed to Monitor) predates the real Monitor tool and double-booked: measured 40
+    // false `monitor` records on one project against zero genuine Monitor pulses.
+    for s in [
+        "Background command \"Relaunch monitor timer (cycle 2)\" completed",
+        "Background command \"Re-arm corrected monitor (full-tree liveness)\" completed",
+        "Background command \"nightly monitor tick (25min)\"",
+        "Background command \"Run pre-commit gate\" completed (monitor it for failures)",
+        "Background command \"Baseline release build\"",
+        "Background command \"resource monitoring agent\"",
+    ] {
+        assert_eq!(
+            AutomationKind::from_summary(Some(s)),
+            BackgroundCommand,
+            "{s}"
+        );
+    }
+    // The Monitor tool's own shapes: an event pulse and a termination notice.
     assert_eq!(
-        AutomationKind::from_summary(Some(
-            "Background command \"Relaunch monitor timer (cycle 2)\" completed"
-        )),
+        AutomationKind::from_summary(Some("Monitor \"watch the build\" ended: command exited")),
         Monitor
-    );
-    assert_eq!(
-        AutomationKind::from_summary(Some(
-            "Background command \"Re-arm corrected monitor (full-tree liveness)\" completed"
-        )),
-        Monitor
-    );
-    assert_eq!(
-        AutomationKind::from_summary(Some("Background command \"nightly monitor tick (25min)\"")),
-        Monitor
-    );
-    // PRECISION: a background command that merely mentions monitoring in PROSE (outside the
-    // quoted name) or names an unrelated command stays BackgroundCommand - no over-capture.
-    assert_eq!(
-        AutomationKind::from_summary(Some(
-            "Background command \"Run pre-commit gate\" completed (monitor it for failures)"
-        )),
-        BackgroundCommand
-    );
-    assert_eq!(
-        AutomationKind::from_summary(Some("Background command \"Baseline release build\"")),
-        BackgroundCommand
-    );
-    // The standalone-word guard: `monitoring`/`demonitor` are NOT the word `monitor`.
-    assert_eq!(
-        AutomationKind::from_summary(Some("Background command \"resource monitoring agent\"")),
-        BackgroundCommand
     );
     assert_eq!(AutomationKind::from_summary(Some("something else")), Task);
     assert_eq!(AutomationKind::from_summary(None), Task);
@@ -257,33 +242,32 @@ fn plural_word_pick_pinned() {
 }
 
 #[test]
-fn monitor_cadence_tokens_route_each_disjunct() {
-    // Mutation pin: each cadence token ALONE routes a `Background command "…"` pulse to
-    // Monitor (the disjuncts must stay independent), and a plain name stays bg-command.
-    for s in [
-        r#"Background command "nightly monitor tick (25min)" completed"#,
-        r#"Background command "liveness probe" completed"#,
-        r#"Background command "Re-arm corrected watchdog" completed"#,
-        r#"Background command "Relaunch monitor timer (cycle 2)" completed"#,
+fn background_command_pulses_never_route_to_monitor() {
+    // v0.10.0 regression pin for the retired quoted-name heuristic: every cadence-flavored
+    // quoted name that used to route to Monitor stays a background-command, and the
+    // genuine Monitor-tool shapes are the only Monitor route.
+    use AutomationKind::{BackgroundCommand, Monitor};
+    for name in [
+        "monitor loop",
+        "liveness probe",
+        "re-arm the watchdog",
+        "relaunch monitor timer",
+        "MONITOR (uppercase)",
     ] {
+        let s = format!("Background command \"{name}\" completed");
         assert_eq!(
-            AutomationKind::from_summary(Some(s)),
-            AutomationKind::Monitor,
+            AutomationKind::from_summary(Some(&s)),
+            BackgroundCommand,
             "{s}"
         );
     }
     assert_eq!(
-        AutomationKind::from_summary(Some(r#"Background command "build project" completed"#)),
-        AutomationKind::BackgroundCommand,
-        "a plain quoted name stays background-command"
+        AutomationKind::from_summary(Some("Monitor event: \"watch\"")),
+        Monitor
     );
-    // The word must be STANDALONE - a substring inside a larger word is not the signal.
     assert_eq!(
-        AutomationKind::from_summary(Some(
-            r#"Background command "monitoring-dashboard build" completed"#
-        )),
-        AutomationKind::BackgroundCommand,
-        "substring 'monitor' inside a larger word must not route"
+        AutomationKind::from_summary(Some("monitor \"watch\" ended")),
+        Monitor
     );
 }
 

@@ -32,7 +32,11 @@ pub(crate) fn resolve_live_target(target: &[PathBuf], want_subagents: bool) -> R
 /// Entry point for `csift status`.
 pub fn run_status(args: &StatusArgs) -> Result<()> {
     let main = resolve_live_target(&args.target, args.want_subagents())?;
-    let assessment = assess_path(&main, args.want_subagents())?;
+    let lens = BackgroundLens::from_args(
+        args.lens.background_since.as_deref(),
+        &args.lens.ignore_background,
+    )?;
+    let assessment = assess_path(&main, args.want_subagents(), &lens)?;
     let session_id = crate::subagent::session_id_from_path(&main);
     let is_subagent = crate::subagent::is_subagent_path(&main);
     let parent_session_id =
@@ -46,8 +50,14 @@ pub fn run_status(args: &StatusArgs) -> Result<()> {
     Ok(())
 }
 
-/// One full three-way join over a resolved transcript path.
-pub(crate) fn assess_path(main: &Path, want_subagents: bool) -> Result<Assessment> {
+/// One full join over a resolved transcript path (registry, tail, pid, children,
+/// sidecar, background launches under the lens, the harness task list, the last
+/// messages).
+pub(crate) fn assess_path(
+    main: &Path,
+    want_subagents: bool,
+    lens: &BackgroundLens,
+) -> Result<Assessment> {
     let session_id = crate::subagent::session_id_from_path(main);
     let is_subagent_target = crate::subagent::is_subagent_path(main);
     let owner_id =
@@ -82,14 +92,17 @@ pub(crate) fn assess_path(main: &Path, want_subagents: bool) -> Result<Assessmen
             .collect()
     };
 
-    let mut assessment = assess(
+    let background = background_report(main, want_subagents, lens)?;
+    let mut assessment = assess_full(
         registry.as_ref(),
         liveness.as_ref(),
         &main_tail,
         &children,
         &pending,
         is_subagent_target,
+        &background,
     );
+    assessment.last = last_messages(main)?;
     // The task list is keyed by the top-level session (like the sidecar); a subagent
     // target gets no section instead of its parent's list under its own id.
     if !is_subagent_target {

@@ -43,7 +43,35 @@ pub fn is_synthetic_user_marker(content: &str) -> bool {
     INTERRUPT_MARKERS.contains(&content)
         || content.starts_with(LOCAL_COMMAND_STDOUT_PREFIX)
         || is_slash_command_wrapper(content)
+        || is_agents_stopped_notice(content)
 }
+
+/// The harness's "N background agent(s) were stopped by the user: ..." notice (v0.10.0):
+/// a plain-string `type:"user"` record Claude Code writes when async agents are killed
+/// from the UI. It names a count and truncated prompt prefixes, never an id, and it
+/// triggers no generation - the model sees it only alongside the next real prompt. Not
+/// the operator, never a turn opener; classifies `harness.notification.subagent`.
+#[must_use]
+pub fn is_agents_stopped_notice(content: &str) -> bool {
+    let s = content.trim_start();
+    // The singular template names the agent: `Background agent "<desc>" was stopped by
+    // the user.` (no count).
+    if s.starts_with("Background agent \"") && s.contains(" was stopped by the user") {
+        return true;
+    }
+    let digits = s.bytes().take_while(u8::is_ascii_digit).count();
+    if digits == 0 {
+        return false;
+    }
+    let rest = &s[digits..];
+    (rest.starts_with(" background agent was stopped by the user")
+        || rest.starts_with(" background agents were stopped by the user"))
+        && rest.contains(AGENTS_STOPPED_MARKER)
+}
+
+/// The raw-byte marker the agents-stopped notice always carries (the synth-marker
+/// needle for its fabricated `[subagent stopped]` label prefix).
+pub const AGENTS_STOPPED_MARKER: &str = "stopped by the user";
 
 /// The two exact-content synthesized strings Claude Code writes when the user
 /// interrupts (§4.2.1). They are a `type:"user"` `text`-block record whose content is

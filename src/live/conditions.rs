@@ -5,7 +5,9 @@ use super::*;
 /// One parsed `--until` condition.
 #[derive(Debug)]
 pub(crate) enum Cond {
-    /// Verdict becomes idle-eot or stale-dead.
+    /// Verdict becomes idle-eot or stale-dead - a TRUE stop. `idle-background-open`
+    /// (the turn ended but a background task the lens counts has not returned) never
+    /// satisfies it; narrow the lens or wait for the timeout.
     Stop,
     /// Verdict becomes waiting-hitl.
     Hitl,
@@ -80,12 +82,13 @@ pub(crate) fn parse_condition(s: &str) -> Result<Cond> {
             "running" => Verdict::Running,
             "waiting-children" => Verdict::WaitingChildren,
             "waiting-hitl" => Verdict::WaitingHitl,
+            "idle-background-open" => Verdict::IdleBackgroundOpen,
             "idle-eot" => Verdict::IdleEot,
             "stale-dead" => Verdict::StaleDead,
             "unknown" => Verdict::Unknown,
             other => bail!(
                 "--until verdict: unknown verdict `{other}` (running | waiting-children | \
-                 waiting-hitl | idle-eot | stale-dead | unknown)"
+                 waiting-hitl | idle-background-open | idle-eot | stale-dead | unknown)"
             ),
         };
         return Ok(Cond::VerdictIs(verdict));

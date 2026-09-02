@@ -120,6 +120,7 @@ impl Home {
         let out = child.wait_with_output().expect("wait csift");
         Output {
             success: out.status.success(),
+            code: out.status.code(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
         }
@@ -148,6 +149,7 @@ impl Home {
         let out = cmd.output().expect("spawn csift");
         Output {
             success: out.status.success(),
+            code: out.status.code(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
         }
@@ -162,6 +164,8 @@ impl Drop for Home {
 
 pub(crate) struct Output {
     pub(crate) success: bool,
+    /// The process exit code (`None` when killed by a signal).
+    pub(crate) code: Option<i32>,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
 }
@@ -563,6 +567,7 @@ pub(crate) fn run_real(args: &[&str]) -> Output {
     let out = cmd.output().expect("spawn csift");
     Output {
         success: out.status.success(),
+        code: out.status.code(),
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
     }

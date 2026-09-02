@@ -182,6 +182,10 @@ impl Record {
         let Content::Text(s) = content else {
             return None;
         };
+        // The agents-stopped kill notice (no XML, no id): `[subagent stopped] <notice>`.
+        if is_agents_stopped_notice(s) {
+            return Some(format!("[subagent stopped] {}", normalize_line(s)));
+        }
         if !s.starts_with(TASK_NOTIFICATION_PREFIX) {
             return None;
         }

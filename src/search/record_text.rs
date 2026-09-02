@@ -281,27 +281,9 @@ fn snapshot_record_text(rec: &Record) -> Option<String> {
     ))
 }
 
-/// A compact human duration for a millisecond count: `12s` / `1m 5s` / `2h 3m` /
-/// `10d 17h` - the top two units, so an absurd span (a turn that straddled a resume
-/// gap) still reads as what it is instead of a heap of seconds.
-pub(crate) fn fmt_ms(ms: u64) -> String {
-    let secs = (ms + 500) / 1000; // nearest second, as the REPL renders it
-    let (d, h, m, s) = (
-        secs / 86_400,
-        (secs / 3600) % 24,
-        (secs / 60) % 60,
-        secs % 60,
-    );
-    if d > 0 {
-        format!("{d}d {h}h")
-    } else if h > 0 {
-        format!("{h}h {m}m")
-    } else if m > 0 {
-        format!("{m}m {s}s")
-    } else {
-        format!("{s}s")
-    }
-}
+/// The shared duration formatter (`crate::text::fmt_ms`), re-exported so the unit
+/// tests beside this file keep their unqualified name.
+pub(crate) use crate::text::fmt_ms;
 
 /// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt -
 /// `[compaction boundary: trigger=auto preTokens=1000 postTokens=200 durationMs=50]` (only the

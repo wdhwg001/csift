@@ -198,6 +198,13 @@ impl Matcher {
                 return true;
             }
         }
+        // The agents-stopped notice renders through `automation_label` (a fabricated
+        // `[subagent stopped]` head) without a `<task-notification>` section.
+        if let Some(t) = rec.automation_label() {
+            if self.locate(&t).is_some() {
+                return true;
+            }
+        }
         if let Some(t) = record_raw_text(rec) {
             if self.locate(&t).is_some() {
                 return true;
@@ -480,6 +487,8 @@ pub(crate) fn synth_marker_finders(
         br#""answers""#,
         b"User has answered your questions",
         b"Your questions have been answered",
+        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.
+        b"stopped by the user",
     ];
     if args
         .label_filter()

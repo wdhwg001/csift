@@ -322,6 +322,11 @@ impl Record {
         if s.starts_with(IMAGE_SOURCE_PREFIX) {
             return;
         }
+        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.
+        if is_agents_stopped_notice(s) {
+            push_unique(out, Class::NotificationSubagent);
+            return;
+        }
         // The spawn-prompt seed of a subagent transcript is an inbound comm (parent ⇨ self),
         // not the operator (GOLD §3) - unchanged, regardless of isMeta.
         if ctx.is_subagent && ctx.is_transcript_opener {

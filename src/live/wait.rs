@@ -16,6 +16,8 @@ struct Cursor {
     path: PathBuf,
     offset: u64,
     is_main: bool,
+    /// The transcript's own id (activity is censused per lane).
+    lane: String,
 }
 
 /// Entry point for `csift wait`.
@@ -27,6 +29,17 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
     let needs_verdict = conds.iter().any(|(_, c)| c.needs_verdict());
     let main = resolve_live_target(&args.target, args.want_subagents())?;
+    let lens = BackgroundLens::from_args(
+        args.lens.background_since.as_deref(),
+        &args.lens.ignore_background,
+    )?;
+    // The timeout is REQUIRED (v0.10.0): a background task may never return by design
+    // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.
+    let Some(timeout_secs) = args.timeout else {
+        bail!(
+            "wait needs --timeout <SECS>: a background task can be designed never to return              (a dev server, a watcher), so a wait without a bound never ends. Pick a bound,              branch on exit 124, and read the at-exit report; narrow what counts with              --background-since now / --ignore-background <RE>"
+        );
+    };
     let is_subagent_target = crate::subagent::is_subagent_path(&main);
 
     // ── Baselines: snapshot every currently-watched file's length. Only bytes appended
@@ -37,10 +50,12 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
             return;
         }
         let offset = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let lane = crate::subagent::session_id_from_path(&path);
         cursors.push(Cursor {
             path,
             offset,
             is_main,
+            lane,
         });
     };
     seed(main.clone(), true, &mut cursors);
@@ -58,17 +73,23 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
     // ── Readiness line (stderr): the caller can order its own actions AFTER this - the
     //    line is what makes a scripted wait race-free against its own trigger. ──
     let start = std::time::Instant::now();
-    let deadline = args.timeout.map(std::time::Duration::from_secs);
+    let deadline = std::time::Duration::from_secs(timeout_secs);
     eprintln!(
-        "csift: watching {} file(s) from byte offsets; conditions: {}{}",
+        "csift: watching {} file(s) from byte offsets; conditions: {}; timeout {timeout_secs}s{}",
         cursors.len(),
         args.until.join(" | "),
-        match args.timeout {
-            Some(t) => format!("; timeout {t}s"),
-            None => "; no --timeout given - waiting until a condition fires".to_string(),
+        if lens.is_active() {
+            format!(
+                "; lens: since {}, {} ignore pattern(s)",
+                lens.since_raw.as_deref().unwrap_or("-"),
+                lens.ignore.len()
+            )
+        } else {
+            String::new()
         }
     );
 
+    let mut activity = Activity::default();
     let mut interval = args.interval.unwrap_or(POLL_FLOOR_MS);
     loop {
         // ── New-child discovery: a lane spawned after start joins the watch set with
@@ -76,10 +97,12 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
         if args.want_subagents() && !is_subagent_target {
             for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {
                 if !cursors.iter().any(|c| c.path == sub) {
+                    let lane = crate::subagent::session_id_from_path(&sub);
                     cursors.push(Cursor {
                         path: sub,
                         offset: 0,
                         is_main: false,
+                        lane,
                     });
                 }
             }
@@ -91,10 +114,12 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
         if !is_subagent_target {
             if let Some(sc) = crate::elicitation::sidecar_path(&main) {
                 if !cursors.iter().any(|c| c.path == sc) {
+                    let lane = crate::subagent::session_id_from_path(&main);
                     cursors.push(Cursor {
                         path: sc,
                         offset: 0,
                         is_main: true,
+                        lane,
                     });
                 }
             }
@@ -125,9 +150,10 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                 let Ok(Some(rec)) = crate::parse::parse_line(line) else {
                     continue;
                 };
+                activity.fold(&rec, &cur.lane);
                 for (raw, cond) in &conds {
                     if record_matches(cond, &rec, cur.is_main) {
-                        return finish(args, raw, &main, start.elapsed());
+                        return finish(args, raw, &main, &lens, &activity, start.elapsed());
                     }
                 }
             }
@@ -136,18 +162,16 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
 
         // ── Verdict-class conditions: re-join the surfaces (bounded tail work). ──
         if needs_verdict {
-            let assessment = assess_path(&main, args.want_subagents())?;
+            let assessment = assess_path(&main, args.want_subagents(), &lens)?;
             for (raw, cond) in &conds {
                 if verdict_matches(cond, assessment.verdict) {
-                    return finish(args, raw, &main, start.elapsed());
+                    return finish(args, raw, &main, &lens, &activity, start.elapsed());
                 }
             }
         }
 
-        if let Some(d) = deadline {
-            if start.elapsed() >= d {
-                return finish_timeout(args, &main, start.elapsed());
-            }
+        if start.elapsed() >= deadline {
+            return finish_timeout(args, &main, &lens, &activity, start.elapsed());
         }
 
         // Adaptive cadence: floor while moving, back off toward the ceiling when quiet.
@@ -163,17 +187,30 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
 }
 
 /// A condition fired: render + exit 0.
-fn finish(args: &WaitArgs, fired: &str, main: &Path, waited: std::time::Duration) -> Result<()> {
-    let assessment = assess_path(main, args.want_subagents())?;
-    emit_wait(args, fired, &assessment, waited)?;
+fn finish(
+    args: &WaitArgs,
+    fired: &str,
+    main: &Path,
+    lens: &BackgroundLens,
+    activity: &Activity,
+    waited: std::time::Duration,
+) -> Result<()> {
+    let assessment = assess_path(main, args.want_subagents(), lens)?;
+    emit_wait(args, fired, main, &assessment, activity, waited)?;
     Ok(())
 }
 
 /// The timeout elapsed: render `fired:"timeout"` + exit 124 (never through the error
 /// path - a timeout is a NORMAL monitor outcome, just a distinguishable one).
-fn finish_timeout(args: &WaitArgs, main: &Path, waited: std::time::Duration) -> Result<()> {
-    let assessment = assess_path(main, args.want_subagents())?;
-    emit_wait(args, "timeout", &assessment, waited)?;
+fn finish_timeout(
+    args: &WaitArgs,
+    main: &Path,
+    lens: &BackgroundLens,
+    activity: &Activity,
+    waited: std::time::Duration,
+) -> Result<()> {
+    let assessment = assess_path(main, args.want_subagents(), lens)?;
+    emit_wait(args, "timeout", main, &assessment, activity, waited)?;
     let _ = std::io::stdout().flush();
     std::process::exit(i32::from(TIMEOUT_EXIT));
 }
@@ -181,16 +218,26 @@ fn finish_timeout(args: &WaitArgs, main: &Path, waited: std::time::Duration) -> 
 fn emit_wait(
     args: &WaitArgs,
     fired: &str,
+    main: &Path,
     a: &Assessment,
+    activity: &Activity,
     waited: std::time::Duration,
 ) -> Result<()> {
+    let session_id = crate::subagent::session_id_from_path(main);
     match args.format {
         OutputFormat::Text => {
             println!("fired    {fired}");
             println!("verdict  {}", a.verdict.slug());
             println!("waited   {}s", waited.as_secs());
+            println!("at exit  {}", a.tail_state);
+            println!("activity {}", activity.summary_line());
             for e in &a.evidence {
                 println!("  {:<9} {}", e.surface, e.value);
+            }
+            render_background_text(&a.background);
+            render_last_text(&session_id, &a.last);
+            for n in a.notes.iter().chain(a.background.notes.iter()) {
+                println!("  note: {n}");
             }
         }
         OutputFormat::Json => {
@@ -199,11 +246,16 @@ fn emit_wait(
                 "fired": fired,
                 "verdict": a.verdict.slug(),
                 "waited_secs": waited.as_secs(),
+                "at_exit": a.tail_state,
+                "activity": activity.json(),
                 "evidence": a.evidence.iter().map(|e| serde_json::json!({
                     "surface": e.surface,
                     "value": e.value,
                     "age_secs": e.age_secs,
                 })).collect::<Vec<_>>(),
+                "background": background_json(&a.background),
+                "last": last_json(&a.last),
+                "notes": a.notes.iter().chain(a.background.notes.iter()).collect::<Vec<_>>(),
             });
             println!("{}", serde_json::to_string(&obj)?);
         }

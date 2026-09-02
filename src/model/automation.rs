@@ -32,13 +32,14 @@ pub enum AutomationKind {
 impl AutomationKind {
     /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything
     /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`
-    /// LEADING prefixes route a monitor-COMPLETION `<task-notification>` to
-    /// [`AutomationKind::Monitor`] (the captured-monitor `Monitor event:` shape). ADDITIONALLY, a
-    /// `Background command "…"` pulse whose QUOTED NAME carries a monitor-cadence token
-    /// (`monitor`/`re-arm`/`relaunch monitor`/`liveness`) routes to `Monitor` too - the
-    /// captured-monitor shape, where the monitor loop is a `&`-detached background command (a pure
-    /// leading-prefix check disguised ALL of it as `background-command`). This does NOT cover
-    /// `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach this classifier).
+    /// LEADING prefixes route a Monitor-tool pulse or termination notice
+    /// (`Monitor event: …` / `Monitor "…" …`) to [`AutomationKind::Monitor`]. A `Background
+    /// command "…"` pulse is ALWAYS `background-command`, whatever its quoted name says
+    /// (v0.10.0: the former quoted-name heuristic - `monitor`/`re-arm`/`liveness` in the name
+    /// routed to `Monitor` - predates the real Monitor tool and double-booked; measured on one
+    /// project it produced 40 `monitor` records against zero genuine Monitor pulses). This
+    /// does NOT cover `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach
+    /// this classifier).
     #[must_use]
     pub fn from_summary(summary: Option<&str>) -> Self {
         let s = summary.unwrap_or("").trim_start();
@@ -46,19 +47,7 @@ impl AutomationKind {
         // prefix case-insensitively so a `Background command "…"` is not mistaken for `task`.
         let lower = s.to_ascii_lowercase();
         if lower.starts_with("background command") {
-            // A monitor/cron cadence is FREQUENTLY implemented as a `&`-detached background
-            // command whose QUOTED NAME is the monitor mechanism (`Background command
-            // "Relaunch monitor timer (cycle 2)"` / `"Re-arm corrected monitor …"` /
-            // `"nightly monitor tick (25min)"`). The leading classifier is `Background command`, so
-            // a pure prefix check buried EVERY such pulse under `background-command` and the
-            // `Monitor` class matched zero of them on a captured session. Route to `Monitor` when
-            // the quoted command NAME carries a monitor-cadence token, so the dominant monitor
-            // activity is attributed to its own class instead of disguised as generic bg-cmd.
-            if quoted_name_is_monitor_cadence(s) {
-                AutomationKind::Monitor
-            } else {
-                AutomationKind::BackgroundCommand
-            }
+            AutomationKind::BackgroundCommand
         } else if lower.starts_with("dynamic workflow") || lower.starts_with("workflow") {
             AutomationKind::Workflow
         } else if lower.starts_with("monitor")
@@ -84,32 +73,6 @@ impl AutomationKind {
             AutomationKind::Task => "task",
         }
     }
-}
-
-/// True when a `Background command "<name>" …` summary's QUOTED command name names a
-/// monitor / cron cadence - so the pulse is attributed to [`AutomationKind::Monitor`] rather
-/// than the generic [`AutomationKind::BackgroundCommand`]. Extracts the substring between the
-/// FIRST pair of double quotes (the command name) and matches a conservative set of
-/// monitor-cadence tokens against it (case-insensitive): the standalone word `monitor`, or
-/// `re-arm`, `relaunch monitor`, `liveness`. The match is restricted to the quoted NAME (never
-/// the whole summary) so a background command that merely mentions "monitor" in trailing prose
-/// is not over-captured; absent quotes, nothing matches (stays `BackgroundCommand`). Tokens
-/// chosen to be strongly monitor-specific - `tick`/`cadence` alone are too broad and excluded.
-pub(crate) fn quoted_name_is_monitor_cadence(summary: &str) -> bool {
-    let Some(open) = summary.find('"') else {
-        return false;
-    };
-    let rest = &summary[open + 1..];
-    let Some(close) = rest.find('"') else {
-        return false;
-    };
-    let name = rest[..close].to_ascii_lowercase();
-    // The standalone word `monitor` (not a substring of a larger word) is the dominant signal;
-    // `re-arm` / `relaunch monitor` / `liveness` cover the re-arming-loop names.
-    name.split(|c: char| !c.is_alphanumeric())
-        .any(|w| w == "monitor" || w == "liveness")
-        || name.contains("re-arm")
-        || name.contains("relaunch monitor")
 }
 
 /// A parsed `<task-notification>` automation trigger - the stable inner tags of a

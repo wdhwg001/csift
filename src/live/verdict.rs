@@ -8,6 +8,10 @@ pub(crate) enum Verdict {
     Running,
     WaitingChildren,
     WaitingHitl,
+    /// The turn ended (a clean end_turn) but N background task(s) the lens counts have
+    /// not returned - neither running nor stopped: by design (a dev server, a watcher)
+    /// or not, csift cannot tell. Never satisfies `--until stop`.
+    IdleBackgroundOpen,
     IdleEot,
     StaleDead,
     Unknown,
@@ -20,6 +24,7 @@ impl Verdict {
             Verdict::Running => "running",
             Verdict::WaitingChildren => "waiting-children",
             Verdict::WaitingHitl => "waiting-hitl",
+            Verdict::IdleBackgroundOpen => "idle-background-open",
             Verdict::IdleEot => "idle-eot",
             Verdict::StaleDead => "stale-dead",
             Verdict::Unknown => "unknown",
@@ -45,12 +50,19 @@ pub(crate) struct Assessment {
     pub(crate) notes: Vec<String>,
     /// The harness task list (attached by `assess_path`; empty default in the pure join).
     pub(crate) tasks: TasksReport,
+    /// Background launches and their fate (the lens already applied).
+    pub(crate) background: BackgroundReport,
+    /// The newest prompt + assistant message (attached by `assess_path`).
+    pub(crate) last: LastMessages,
+    /// What the main lane is doing at this instant, in words (`in a Bash call for
+    /// 34s` / `generating (last record 12s ago)` / `idle (last stop_reason end_turn, 5m
+    /// 2s ago)`).
+    pub(crate) tail_state: String,
 }
 
-/// Join the surfaces into one verdict. Precedence (each step names its evidence):
-/// dead process > blocked-on-human > tool-in-flight > live children > clean EoT >
-/// unknown. Never guesses: a shape the rules cannot rank is `unknown` with the
-/// disagreement in the evidence rows.
+/// The six-surface join without a background report (test-only convenience; production
+/// goes through [`assess_full`]).
+#[cfg(test)]
 pub(crate) fn assess(
     registry: Option<&RegistryRow>,
     liveness: Option<&PidLiveness>,
@@ -58,6 +70,30 @@ pub(crate) fn assess(
     children: &ChildrenReport,
     pending_elicitations: &[String],
     is_subagent_target: bool,
+) -> Assessment {
+    assess_full(
+        registry,
+        liveness,
+        main_tail,
+        children,
+        pending_elicitations,
+        is_subagent_target,
+        &BackgroundReport::default(),
+    )
+}
+
+/// Join the surfaces into one verdict. Precedence (each step names its evidence):
+/// dead process > blocked-on-human > tool-in-flight > live children > open background
+/// task under the lens > clean EoT > unknown. Never guesses: a shape the rules cannot
+/// rank is `unknown` with the disagreement in the evidence rows.
+pub(crate) fn assess_full(
+    registry: Option<&RegistryRow>,
+    liveness: Option<&PidLiveness>,
+    main_tail: &TailShape,
+    children: &ChildrenReport,
+    pending_elicitations: &[String],
+    is_subagent_target: bool,
+    background: &BackgroundReport,
 ) -> Assessment {
     let mut evidence: Vec<Evidence> = Vec::new();
     let mut notes: Vec<String> = Vec::new();
@@ -159,6 +195,13 @@ pub(crate) fn assess(
             age_secs: None,
         });
     }
+    if !background.tasks.is_empty() {
+        evidence.push(Evidence {
+            surface: "background",
+            value: background.summary_line(),
+            age_secs: None,
+        });
+    }
 
     // ── The join ──
     let dead = matches!(liveness, Some(PidLiveness::Dead | PidLiveness::Reused));
@@ -185,6 +228,16 @@ pub(crate) fn assess(
         Verdict::Running
     } else if children.live_count > 0 {
         Verdict::WaitingChildren
+    } else if eot_shape && background.open_counted() > 0 {
+        notes.push(
+            "the turn ended, but background task(s) have not returned - by design (a dev \
+             server, a watcher) or not, csift cannot tell: a UI stop, a Monitor timeout or \
+             agent teardown leaves no transcript marker, and Claude Code reconciles only at \
+             the next session start. `--background-since` / `--ignore-background` narrow \
+             what counts; kill a dead one with the tool or the shell"
+                .to_string(),
+        );
+        Verdict::IdleBackgroundOpen
     } else if eot_shape {
         Verdict::IdleEot
     } else if main_tail.records_seen == 0 {
@@ -201,7 +254,10 @@ pub(crate) fn assess(
 
     // F7 honesty: a pending PERMISSION prompt is invisible without a sidecar and would
     // masquerade exactly as these two verdicts.
-    if matches!(verdict, Verdict::IdleEot | Verdict::WaitingChildren) {
+    if matches!(
+        verdict,
+        Verdict::IdleEot | Verdict::WaitingChildren | Verdict::IdleBackgroundOpen
+    ) {
         notes.push(
             "a pending permission prompt lives only in Claude Code process memory and is \
              invisible to this instrument - it would masquerade as idle"
@@ -216,5 +272,42 @@ pub(crate) fn assess(
         pending: pending_elicitations.to_vec(),
         notes,
         tasks: TasksReport::default(),
+        background: background.clone(),
+        last: LastMessages::default(),
+        tail_state: tail_state_words(main_tail),
+    }
+}
+
+/// The main lane's instant state in words (the at-exit line of `wait`, the tail row
+/// of `status`).
+pub(crate) fn tail_state_words(tail: &TailShape) -> String {
+    let ago = |secs: Option<i64>| {
+        secs.map(|s| {
+            format!(
+                " {} ago",
+                crate::text::fmt_secs(u64::try_from(s).unwrap_or(0))
+            )
+        })
+        .unwrap_or_default()
+    };
+    if let Some((tool, ts)) = &tail.unreturned_use {
+        let for_ = age_secs(ts.as_deref())
+            .map(|s| {
+                format!(
+                    " for {}",
+                    crate::text::fmt_secs(u64::try_from(s).unwrap_or(0))
+                )
+            })
+            .unwrap_or_default();
+        return format!("in a {tool} call{for_}");
+    }
+    let age = age_secs(tail.last_ts_utc.as_deref());
+    let sr = tail.last_stop_reason.as_deref().unwrap_or("(none)");
+    if sr != "end_turn" && age.is_some_and(|a| a <= CHILD_RECENT_SECS) && tail.records_seen > 0 {
+        format!("generating (last record{}, stop_reason {sr})", ago(age))
+    } else if tail.records_seen == 0 {
+        "no records readable at the tail".to_string()
+    } else {
+        format!("idle (last stop_reason {sr}, last record{})", ago(age))
     }
 }

@@ -267,6 +267,36 @@ impl RangeSpec {
     }
 }
 
+/// A compact human duration for a second count: `12s` / `1m 5s` / `2h 3m` / `10d 17h`,
+/// always the top two units, so an absurd span (a turn that straddled a resume gap, a
+/// background task launched weeks ago) reads as what it is instead of a heap of
+/// seconds. Shared by every surface that renders an age or a duration.
+#[must_use]
+pub(crate) fn fmt_secs(secs: u64) -> String {
+    let (d, h, m, s) = (
+        secs / 86_400,
+        (secs / 3600) % 24,
+        (secs / 60) % 60,
+        secs % 60,
+    );
+    if d > 0 {
+        format!("{d}d {h}h")
+    } else if h > 0 {
+        format!("{h}h {m}m")
+    } else if m > 0 {
+        format!("{m}m {s}s")
+    } else {
+        format!("{s}s")
+    }
+}
+
+/// [`fmt_secs`] over a millisecond count, rounded to the nearest second (as the REPL
+/// renders its "Done in Ns" line).
+#[must_use]
+pub(crate) fn fmt_ms(ms: u64) -> String {
+    fmt_secs((ms + 500) / 1000)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

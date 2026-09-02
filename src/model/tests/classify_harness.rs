@@ -486,3 +486,37 @@ fn classify_unmodeled_records_are_empty() {
     );
     assert!(img.classify(&ClassifyCtx::top_level()).is_empty());
 }
+
+#[test]
+fn agents_stopped_notice_is_a_subagent_notification_not_the_human() {
+    for text in [
+        "2 background agents were stopped by the user: \"You are doing a ROUGH...\", \"You are doing e...\".",
+        "1 background agent was stopped by the user: \"Census the reef...\".",
+        "Background agent \"Census the reef\" was stopped by the user.",
+    ] {
+        assert!(is_agents_stopped_notice(text), "{text}");
+        assert!(is_synthetic_user_marker(text), "{text}");
+        let rec = parse(&format!(
+            r#"{{"type":"user","uuid":"k1","timestamp":"2026-06-07T05:10:00.000Z","message":{{"role":"user","content":{}}}}}"#,
+            serde_json::to_string(text).unwrap()
+        ));
+        assert!(!rec.is_genuine_user(), "never the operator: {text}");
+        assert!(!rec.opens_turn(), "never a turn opener: {text}");
+        assert_eq!(
+            rec.classify(&ClassifyCtx::top_level()),
+            vec![Class::NotificationSubagent]
+        );
+        let label = rec.automation_label().unwrap();
+        assert!(label.starts_with("[subagent stopped] "), "{label}");
+        assert!(label.contains("stopped by the user"), "{label}");
+    }
+    // Look-alikes stay prose.
+    for text in [
+        "background agents were stopped by the user",
+        "2 background agents were paused by the user",
+        "twenty background agents were stopped by the user: x",
+        "2 background agents were stopped",
+    ] {
+        assert!(!is_agents_stopped_notice(text), "{text}");
+    }
+}

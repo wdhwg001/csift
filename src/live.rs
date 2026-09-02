@@ -33,10 +33,15 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 
 use crate::cli::{OutputFormat, StatusArgs, WaitArgs};
+use crate::model::{extract_xml_tag, Block, Content, Record, TASK_NOTIFICATION_PREFIX};
 use crate::parse::mmap_bytes;
 
+mod activity;
+mod background;
+mod background_scan;
 mod children;
 mod conditions;
+mod last;
 mod registry;
 mod render;
 mod status;
@@ -45,8 +50,12 @@ mod tasks;
 mod verdict;
 mod wait;
 
+pub(crate) use activity::*;
+pub(crate) use background::*;
+pub(crate) use background_scan::*;
 pub(crate) use children::*;
 pub(crate) use conditions::*;
+pub(crate) use last::*;
 pub(crate) use registry::*;
 pub(crate) use render::*;
 pub(crate) use status::*;

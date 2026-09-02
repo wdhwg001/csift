@@ -2,6 +2,24 @@
 
 use super::*;
 
+/// The background-task LENS shared by `status` and `wait`: which OPEN background tasks
+/// count toward the verdict (and toward `--until stop`). Every task is still listed;
+/// an excluded one is marked with the rule that excluded it.
+#[derive(Args, Debug, Default, Clone)]
+pub struct BackgroundLensArgs {
+    /// Only background tasks launched at or after WHEN count; earlier ones are listed
+    /// as ignored. WHEN is the shared time grammar (`2026-09-02`, `2h`, `1d`, `2mo`,
+    /// `-30m`) or `now` (this command's own start instant: ignore everything already
+    /// dangling when the wait began - the orchestrator's usual lens).
+    #[arg(long = "background-since", value_name = "WHEN")]
+    pub background_since: Option<String>,
+
+    /// Ignore background tasks whose command or description matches RE (repeatable):
+    /// the dev server, the watcher, the tail -f you know never returns.
+    #[arg(long = "ignore-background", value_name = "RE")]
+    pub ignore_background: Vec<String>,
+}
+
 /// `csift status`: one-shot liveness verdict for a session.
 #[derive(Args, Debug)]
 #[command(
@@ -22,13 +40,48 @@ use super::*;
         FOLD to a count so live work stays visible. The session's harness task list \
         (`<claude-home>/tasks/`) renders open tasks (in_progress first, then pending, \
         with blockers) and folds completed ones to a count.\n\n\
+        BACKGROUND TASKS (v0.10.0): a `Bash` launched with run_in_background returns its \
+        tool_result within milliseconds, so the tail machine pairs it at once - the \
+        harness itself writes NOTHING about a still-running shell at end of turn (the \
+        REPL's \"N shell still running\" lives in process memory; the end-of-turn record \
+        carries a duration and a message count, and its pending counts cover background \
+        AGENTS only). `status` therefore scans the whole main transcript (launches from \
+        every lane, completions land only in the main file) and lists every OPEN task: \
+        kind (shell | agent | monitor), id, launch instant and age, description or \
+        command, the output file's size and last write, and the state of every closed one \
+        folded to counts (completed / failed / killed / stopped / timed out). A Monitor is \
+        armed as an immediately-paired tool call and shares the shell id namespace; event \
+        pulses never close it, only its termination notice or timeout does, and a \
+        PERSISTENT monitor never returns by design - name it with --ignore-background. NOT RETURNED IS NOT PROOF OF \
+        RUNNING: Claude Code's own orphan summary says a UI stop, a Monitor timeout or \
+        agent teardown leaves no transcript marker, and it reconciles only at the next \
+        session start. A long session commonly carries several to dozens of dangling \
+        or days-old tasks.\n\n\
+        THE LENS - which open tasks COUNT toward the verdict (all are still listed, an \
+        excluded one marked with its rule): `--background-since WHEN` counts only tasks \
+        launched at or after WHEN (the shared time grammar, or `now` = this command's \
+        start instant); `--ignore-background RE` (repeatable) excludes tasks whose command \
+        or description matches (the dev server, the watcher). No lens = everything \
+        counts.\n\n\
         VERDICTS (a closed set): `running` (generating, or a tool in flight) · \
         `waiting-children` (main idle, subagent/workflow lanes live) · `waiting-hitl` \
         (blocked on a human: a pending AskUserQuestion/ExitPlanMode/MCP elicitation) · \
-        `idle-eot` (truly stopped at end of turn) · `stale-dead` (the owning process is \
-        gone; the tail shape then says HOW it died) · `unknown` (evidence insufficient or \
-        contradictory - stated, never guessed). Every verdict lists the evidence rows \
-        that produced it.\n\n\
+        `idle-background-open` (the turn ended, but N background task(s) the lens counts \
+        have not returned - neither running nor stopped; by design or not, csift cannot \
+        tell) · `idle-eot` (truly stopped at end of turn) · `stale-dead` (the owning \
+        process is gone; the tail shape then says HOW it died) · `unknown` (evidence \
+        insufficient or contradictory - stated, never guessed). Every verdict lists the \
+        evidence rows that produced it.\n\n\
+        LAST MESSAGES: the newest human prompt and the newest assistant message print as \
+        excerpts (clipped with an explicit `(+N chars)` marker; the whole turn is `csift \
+        show @<id> --turn -1`). WARNING for a model reading this: the excerpt is a PARTIAL \
+        view of the final state, useful only for judging whether a background task is \
+        still meaningful (the message may still be waiting on a task that will never \
+        return). In any orchestration it must NEVER be read as a complete or near-complete \
+        review of the work: counting tool calls and reading the last message is a check \
+        shallower than any human would accept, and trust built on it violates the \
+        guardrail - a model with a partial context tends to believe it read everything, \
+        even past an explicit tool error.\n\n\
         THIS IS A LIVE-TRUTH COMMAND: point-in-time, explicitly NON-reproducible - a \
         deliberate, documented departure from the forensic contract (search/show/stats \
         stay reproducible; status answers \"now\" and says so). It reads outside \
@@ -42,14 +95,21 @@ use super::*;
           csift status @<uuid>                    # is it truly stopped?\n  \
           csift status @main                      # my own session (env)\n  \
           csift status @<uuid> --format json | jq .verdict\n  \
-          csift status @<uuid> --no-subagents     # the main lane only\n\n\
+          csift status @<uuid> --no-subagents     # the main lane only\n  \
+          csift status @<uuid> --ignore-background 'npm run dev'   # the dev server never returns\n  \
+          csift status @<uuid> --background-since 2h              # only recent launches count\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: {kind:\"header\", command:\"status\", session_id, is_subagent, \
         parent_session_id} → one {kind:\"verdict\", verdict, \
         evidence:[{surface, value, age_secs}], children:[{session_id, state, detail} - \
         live lanes only], settled_children, tasks:[{id, subject, status, blocked_by}] \
         (null when the session has no tasks dir), tasks_completed, \
-        pending:[...], notes:[...]} → {kind:\"summary\", verdict}."
+        pending:[...], background:{open, ignored, completed, failed, killed, stopped, \
+        scanned_files, tasks:[{kind, id, tool_use_id, lane, state, description, command, \
+        launched_utc, launched_local, age_secs, output_file, output_bytes, \
+        output_age_secs, ignored_by} - open tasks only], notes:[...]}, \
+        last:{user:{ts_utc, ts_local, text, truncated}|null, agent:{...}|null}, \
+        tail_state, notes:[...]} → {kind:\"summary\", verdict}."
 )]
 pub struct StatusArgs {
     /// ONE session: `@<uuid>` | `@<uuid-prefix>` | `@main` | `@<agent-id>` | a `*.jsonl`
@@ -74,6 +134,9 @@ pub struct StatusArgs {
     /// Emit JSON instead of the text verdict.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+
+    #[command(flatten)]
+    pub lens: BackgroundLensArgs,
 }
 
 impl StatusArgs {
@@ -90,14 +153,17 @@ impl StatusArgs {
              notification), then exit reporting which one fired",
     long_about = "The monitor half of the live-truth pair: poll a session until one of \
         the `--until` conditions fires, then exit 0 naming it (JSON carries its \
-        evidence). BASELINE SEMANTICS - the difference between a monitor and a query: \
+        evidence), or the REQUIRED --timeout elapses (exit 124 with a report of what \
+        the session did meanwhile). BASELINE SEMANTICS - the difference between a monitor and a query: \
         `wait` snapshots every watched file's byte length at startup and observes ONLY \
         events strictly AFTER those offsets. A condition already satisfied by history \
         alone never fires - history is `search`'s job. After the snapshot, one readiness \
         line prints to stderr (`csift: watching N file(s) ...`) so a scripted caller can \
         order its own actions after the baseline.\n\n\
         CONDITIONS (repeatable; OR; first hit wins):\n  \
-          stop                      verdict becomes idle-eot or stale-dead\n  \
+          stop                      verdict becomes idle-eot or stale-dead - a TRUE stop; \
+        `idle-background-open` never satisfies it (narrow the lens, or let the timeout \
+        elapse and read the report)\n  \
           hitl                      verdict becomes waiting-hitl\n  \
           auq                       the elicitation sidecar gains an unanswered question\n  \
           notification[:REGEX]      a task-notification lands in the MAIN transcript\n  \
@@ -107,19 +173,33 @@ impl StatusArgs {
         Regexes are the same RE2-class engine as search (no backrefs/lookaround). \
         Polling is adaptive (200ms floor backing off toward 2s when quiet; `--interval` \
         pins it); reads are incremental (only appended bytes, torn-tail guarded).\n\n\
+        --timeout IS REQUIRED (v0.10.0): a background task can be designed never to \
+        return (a dev server, a watcher, a tail -f), so an unbounded wait on `stop` is a \
+        bug, not a wait. A call without --timeout is rejected with that reason.\n\n\
+        HOW TO WAIT ON A SESSION (the orchestrator's steps): 1. `csift status @<id>` \
+        first and read the background rows - which tasks dangle, how old, which are \
+        days-old zombies; 2. pick the lens: `--background-since now` counts only what \
+        launches after you start waiting (the usual form), `--ignore-background RE` \
+        names the services you know never return; 3. always set --timeout and branch \
+        on exit 124; 4. on timeout read the report - `at exit` (in a tool call for N s / \
+        generating / idle), `activity` (what landed while you waited: tool calls by name, \
+        thinking, messages, prompts, notifications), the open background rows, and the \
+        last messages - under the LAST MESSAGES warning in `csift status --help`.\n\n\
         EXIT CODES: 0 = a condition fired · 124 = --timeout elapsed (the GNU timeout \
         convention; the ONE documented exception to the crate's 0-vs-non-zero law, \
         because a monitor's timeout is a normal outcome a script must branch on) · \
-        any other non-zero = error. With no --timeout, wait waits forever and the \
-        readiness line says so.",
+        any other non-zero = error.",
     after_help = "EXAMPLES\n  \
           csift wait @<uuid> --until stop --timeout 300      # block until truly stopped (or 5m)\n  \
           csift wait @main --until auq                       # fire when a question lands\n  \
           csift wait @<uuid> --until tool:Read:handover      # …until it reads that file\n  \
-          csift wait @<uuid> --until stop --until hitl --format json | jq .fired\n\n\
+          csift wait @<uuid> --until stop --until hitl --timeout 600 --format json | jq .fired\n  \
+          csift wait @<uuid> --until stop --timeout 900 --background-since now --ignore-background 'npm run dev'\n\n\
         JSON SCHEMA (per --format json)\n  \
           One object on exit: {kind:\"wait\", fired (the condition string | \"timeout\"), \
-        verdict, evidence:[...], waited_secs}."
+        verdict, waited_secs, at_exit, activity:{records, lanes, tools:{name: count}, \
+        thinking, agent_messages, user_prompts, notifications}, evidence:[...], \
+        background:{... as status}, last:{... as status}, notes:[...]}."
 )]
 pub struct WaitArgs {
     /// ONE session (same grammar as `status`).
@@ -136,8 +216,9 @@ pub struct WaitArgs {
     #[arg(long = "until", value_name = "COND", required = true)]
     pub until: Vec<String>,
 
-    /// Give up after SECS seconds: exit 124 (the GNU timeout convention), JSON
-    /// `fired:"timeout"`. Default: no timeout (wait forever; the readiness line notes it).
+    /// REQUIRED. Give up after SECS seconds: exit 124 (the GNU timeout convention), JSON
+    /// `fired:"timeout"`, plus the at-exit report. A background task may never return
+    /// by design, so a wait without a bound is rejected.
     #[arg(long, value_name = "SECS")]
     pub timeout: Option<u64>,
 
@@ -156,6 +237,9 @@ pub struct WaitArgs {
     /// Emit the exit object as JSON.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
+
+    #[command(flatten)]
+    pub lens: BackgroundLensArgs,
 }
 
 impl WaitArgs {
