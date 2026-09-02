@@ -1,9 +1,12 @@
 //! Time-window parsing for `search --since`/`--until` (SPEC §6.2).
 //!
 //! A bound is EITHER an absolute ISO8601 instant/date OR a relative form
-//! (`2h`, `3d`, `90m`, `45s`, `1w`) interpreted as "that long ago" relative to
+//! (`2h`, `3d`, `90m`, `45s`, `1w`, `2mo`, `1y`) interpreted as "that long ago" relative to
 //! **now in the system-local timezone** (auto-detected via [`crate::timez::local_tz`]),
-//! then converted to UTC for comparison. A record's `timestamp` (raw UTC ISO8601) is
+//! then converted to UTC for comparison, OR the token `now` (the instant the command
+//! started - the lens form `--background-since now` means "only what launches after
+//! I started"). A leading `-` on a relative form is tolerated (`-1d` == `1d`: the only
+//! direction is "ago"). `mo` = 30 days and `y` = 365 days, calendar-approximate. A record's `timestamp` (raw UTC ISO8601) is
 //! compared against the resolved bounds; a record with no timestamp NEVER falls
 //! inside a bounded window (SPEC §6.2).
 //!
@@ -102,27 +105,30 @@ impl TimeWindow {
 /// Parse one bound: try the relative form first (`<N><unit>`), then absolute
 /// ISO8601 (full instant; bare datetime = system-local wall clock; bare date =
 /// system-local midnight).
-fn parse_bound(s: &str) -> Result<Timestamp> {
+pub(crate) fn parse_bound(s: &str) -> Result<Timestamp> {
     let s = s.trim();
+    // `now`: the command's own start instant (resolved once, at parse time).
+    if s.eq_ignore_ascii_case("now") {
+        return Ok(Timestamp::now());
+    }
     if let Some(ts) = parse_relative(s)? {
         return Ok(ts);
     }
     parse_absolute(s)
 }
 
-/// Relative form: an optional-sign-free integer followed by a single unit char.
-/// `Ok(None)` when `s` is not in this shape (so the caller falls through to
-/// absolute parsing). Resolved against now in the system-local timezone → UTC.
+/// Relative form: an integer followed by a unit (`s` `m` `h` `d` `w` `mo` `y`), with
+/// an optional leading `-` (tolerated: "ago" is the only direction). `Ok(None)` when
+/// `s` is not in this shape (so the caller falls through to absolute parsing).
+/// Resolved against now in the system-local timezone → UTC.
 fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
-    // Must be all-ASCII-digits then exactly one unit letter.
-    let bytes = s.as_bytes();
-    if bytes.len() < 2 {
+    let body = s.strip_prefix('-').unwrap_or(s);
+    // Digits, then the unit (one or two ASCII letters).
+    let digits_end = body.bytes().take_while(u8::is_ascii_digit).count();
+    if digits_end == 0 || digits_end == body.len() {
         return Ok(None);
     }
-    let (num_part, unit) = s.split_at(s.len() - 1);
-    if num_part.is_empty() || !num_part.bytes().all(|b| b.is_ascii_digit()) {
-        return Ok(None);
-    }
+    let (num_part, unit) = body.split_at(digits_end);
     let n: i64 = num_part
         .parse()
         .with_context(|| format!("invalid relative-time quantity in {s:?}"))?;
@@ -133,6 +139,15 @@ fn parse_relative(s: &str) -> Result<Option<Timestamp>> {
         "h" => Span::new().try_hours(n),
         "d" => Span::new().try_days(n),
         "w" => Span::new().try_weeks(n),
+        // Calendar-approximate: a month is 30 days, a year 365 - a cutoff, not a ledger.
+        "mo" => n.checked_mul(30).map_or_else(
+            || Span::new().try_days(i64::MAX),
+            |d| Span::new().try_days(d),
+        ),
+        "y" => n.checked_mul(365).map_or_else(
+            || Span::new().try_days(i64::MAX),
+            |d| Span::new().try_days(d),
+        ),
         _ => return Ok(None), // not a recognized unit → let absolute parsing try
     }
     .with_context(|| format!("relative-time span out of range in {s:?}"))?;
@@ -180,7 +195,7 @@ fn parse_absolute(s: &str) -> Result<Timestamp> {
         "cannot parse time bound {s:?}: expected ISO8601 — `2026-06-01` (bare date = \
          system-local midnight), `2026-06-01T05:00:00` (bare datetime = system-LOCAL \
          wall-clock time), `2026-06-01T05:00:00Z` / `…+10:00` (explicit zone) — or a \
-         relative form (e.g. 2h, 3d, 90m)"
+         relative form (e.g. 2h, 3d, 90m, 2mo, 1y; a leading `-` is tolerated) — or `now`"
     )
 }
 
@@ -289,12 +304,51 @@ mod tests {
 
     #[test]
     fn relative_units_all_parse() {
-        for u in ["1s", "30m", "2h", "3d", "1w"] {
+        for u in ["1s", "30m", "2h", "3d", "1w", "2mo", "1y", "-1d", "-30m"] {
             assert!(
                 TimeWindow::from_args(Some(u), None).is_ok(),
                 "unit failed: {u}"
             );
         }
+    }
+
+    #[test]
+    fn month_and_year_are_calendar_approximate_and_ordered() {
+        // 2mo = 60 days and 1y = 365 days ago: each bound sits where the equivalent
+        // day count sits (to the second), and the sign is always "ago".
+        let mo = parse_bound("2mo").unwrap();
+        let d60 = parse_bound("60d").unwrap();
+        assert!(
+            (mo.as_second() - d60.as_second()).abs() <= 1,
+            "{mo} vs {d60}"
+        );
+        let y = parse_bound("1y").unwrap();
+        let d365 = parse_bound("365d").unwrap();
+        assert!(
+            (y.as_second() - d365.as_second()).abs() <= 1,
+            "{y} vs {d365}"
+        );
+        assert!(y < mo && mo < parse_bound("1d").unwrap());
+        // `5m` stays MINUTES (the single-letter unit wins over any prefix of `mo`).
+        let m5 = parse_bound("5m").unwrap();
+        assert!(m5.as_second() - parse_bound("300s").unwrap().as_second() <= 1);
+    }
+
+    #[test]
+    fn leading_minus_is_tolerated_and_now_is_the_start_instant() {
+        let plain = parse_bound("1d").unwrap();
+        let minus = parse_bound("-1d").unwrap();
+        assert!((plain.as_second() - minus.as_second()).abs() <= 1);
+        let before = Timestamp::now();
+        let now = parse_bound("now").unwrap();
+        let after = Timestamp::now();
+        assert!(before <= now && now <= after);
+        assert!(parse_bound("NOW").is_ok());
+        // A bare minus, or a minus with no unit, is not a relative form.
+        assert!(TimeWindow::from_args(Some("-"), None).is_err());
+        assert!(TimeWindow::from_args(Some("-5"), None).is_err());
+        // Overflowing the month/year multiplier still errors instead of wrapping.
+        assert!(TimeWindow::from_args(Some(&format!("{}y", i64::MAX)), None).is_err());
     }
 
     #[test]
@@ -359,9 +413,11 @@ mod tests {
 
     #[test]
     fn relative_unrecognized_unit_falls_through_to_absolute() {
-        // `5y` - digits + an unrecognized unit letter → parse_relative returns None
-        // (the `_ => return Ok(None)` arm) and absolute parsing then fails.
-        assert!(TimeWindow::from_args(Some("5y"), None).is_err());
+        // `5q` - digits + an unrecognized unit → parse_relative returns None
+        // (the `_ => return Ok(None)` arm) and absolute parsing then fails. So does a
+        // three-letter unit.
+        assert!(TimeWindow::from_args(Some("5q"), None).is_err());
+        assert!(TimeWindow::from_args(Some("5mon"), None).is_err());
     }
 
     #[test]

@@ -196,7 +196,7 @@ pub struct AgentsArgs {
     pub agent_types: Vec<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
-    /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`); an ISO8601 instant
+    /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`,`2mo`,`1y`; a leading `-` is tolerated); an ISO8601 instant
     /// (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime (`2026-06-01T05:00:00`) = that
     /// LOCAL wall-clock time; or a bare date (`2026-06-01`) = LOCAL MIDNIGHT. Filters by
     /// TRIGGER time by default (`--order-by start|completion` switches axis).

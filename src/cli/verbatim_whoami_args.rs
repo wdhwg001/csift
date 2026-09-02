@@ -256,7 +256,8 @@ pub struct VerbatimArgs {
     pub turn_range: Option<String>,
 
     /// Lower time bound. WHEN grammar (system-local tz): a relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
-    /// = that many seconds/minutes/hours/days/weeks AGO (`45s`, `90m`, `2h`, `3d`, `1w`);
+    /// = that many seconds/minutes/hours/days/weeks/months/years AGO (`45s`, `90m`, `2h`,
+    /// `3d`, `1w`, `2mo`, `1y`; `mo` = 30 days, `y` = 365; a leading `-` is tolerated);
     /// an ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime
     /// (`2026-06-01T05:00:00`) = that LOCAL wall-clock time; or a bare date (`2026-06-01`)
     /// = LOCAL MIDNIGHT that day. Intersects (AND) with --turn (both filters apply).
