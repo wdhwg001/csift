@@ -20,6 +20,7 @@ mod automation;
 mod boundaries;
 mod classify_comm;
 mod classify_harness;
+mod classify_promoted;
 mod classify_roles;
 mod classify_support;
 mod grouping;

@@ -20,13 +20,14 @@ use super::*;
         CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
         record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
         whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
-        user.message | user.answer | user.rejection | user.unsent | agent.message | agent.thinking | \
-        agent.thinking.narration | agent.tool.use | agent.tool.result | \
+        user.message | user.answer | user.rejection | user.unsent | user.queued | agent.message | \
+        agent.thinking | agent.thinking.narration | agent.tool.use | agent.tool.result | \
         agent.communication.{inbox,sent,signal} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
         harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
-        harness.meta.{hook,loop,attachment}. With none given, EVERY label is eligible. `-T`/`--label-not` \
+        harness.meta.{hook,loop,attachment,turn-duration,away-summary,stop-hooks,snapshot}. With none \
+        given, EVERY label is eligible. `-T`/`--label-not` \
         EXCLUDES with the same selector grammar (the rg -t/-T duality): the effective set is \
         (-t selectors, or ALL) minus (-T selectors); a combination that excludes everything it \
         includes is a hard error. The human turn is \
@@ -148,7 +149,7 @@ use super::*;
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 28 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 33 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
         role's LLM-VISIBLE leaves - the conversation as the model receives/produces\n  \
         it. Exactly two leaves are invisible and need naming or a glob: `user.unsent`\n  \

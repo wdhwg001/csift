@@ -135,6 +135,64 @@ pub struct Record {
     #[serde(default)]
     pub snapshot: Option<serde_json::Value>,
 
+    /// `file-history-delta` (v0.9.5): the ONE path this delta line tracks, beside the
+    /// `backup` object below. Absent everywhere else. Additive + tolerant.
+    #[serde(default, rename = "trackingPath")]
+    pub tracking_path: Option<String>,
+
+    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,
+    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.
+    #[serde(default)]
+    pub backup: Option<serde_json::Value>,
+
+    /// `queue-operation` (v0.9.5): the queue event - `enqueue` | `dequeue` | `remove` |
+    /// `popAll` (open set; measured those four). The human-typed (or automation) text
+    /// rides top-level `content` on every operation except `dequeue`.
+    #[serde(default)]
+    pub operation: Option<String>,
+
+    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and
+    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was
+    /// consumed. Absent on every other line. Open set, kept verbatim.
+    #[serde(default)]
+    pub reason: Option<String>,
+
+    /// `system`/`turn_duration` (v0.9.5): wall-clock ms of the turn. Kept as a raw
+    /// `Value` so an odd shape can never fail the record (tolerance discipline, the
+    /// `Message.model` precedent); read via [`Record::u64_field`].
+    #[serde(default, rename = "durationMs")]
+    pub duration_ms: Option<serde_json::Value>,
+
+    /// `turn_duration`: the running message count at turn end.
+    #[serde(default, rename = "messageCount")]
+    pub message_count: Option<serde_json::Value>,
+
+    /// `turn_duration`: background agents still running at turn end (the REPL's
+    /// "Waiting for N agents" line). Optional; measured on ~3% of records.
+    #[serde(default, rename = "pendingBackgroundAgentCount")]
+    pub pending_background_agent_count: Option<serde_json::Value>,
+
+    /// `turn_duration`: workflows still running at turn end. Optional (~5%).
+    #[serde(default, rename = "pendingWorkflowCount")]
+    pub pending_workflow_count: Option<serde_json::Value>,
+
+    /// `system`/`stop_hook_summary` (v0.9.5): how many Stop hooks ran.
+    #[serde(default, rename = "hookCount")]
+    pub hook_count: Option<serde_json::Value>,
+
+    /// `stop_hook_summary`: `[{command, durationMs}, …]` - the hook command lines are
+    /// the record's only text.
+    #[serde(default, rename = "hookInfos")]
+    pub hook_infos: Option<serde_json::Value>,
+
+    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).
+    #[serde(default, rename = "hookErrors")]
+    pub hook_errors: Option<serde_json::Value>,
+
+    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.
+    #[serde(default, rename = "preventedContinuation")]
+    pub prevented_continuation: Option<bool>,
+
     /// csift's own provenance marker on an ELICITATION SIDECAR record (§3.10). A
     /// hook-written `elicitations.jsonl` line carries `csift:"elicitation-marker-v1"`
     /// on every record so a merged sidecar record is distinguishable from a native CC

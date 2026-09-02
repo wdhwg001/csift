@@ -50,6 +50,11 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
             | Class::MetaHook
             | Class::MetaLoop
             | Class::MetaAttachment
+            | Class::UserQueued
+            | Class::MetaTurnDuration
+            | Class::MetaAwaySummary
+            | Class::MetaStopHooks
+            | Class::MetaSnapshot
     )
 }
 
@@ -109,6 +114,13 @@ pub(crate) fn record_raw_text(rec: &Record) -> Option<String> {
     if let Some(text) = rec.attachment_payload_text() {
         return Some(text);
     }
+    // v0.9.5 promoted non-message lines: verbatim content where the line has one
+    // (queued text, away recap), a fabricated key=value excerpt otherwise (turn
+    // duration, stop hooks, file-history) - each fabricated form is registered as a
+    // synth marker (`synth_marker_finders`) so the whole-file gate stays sound.
+    if let Some(text) = promoted_record_text(rec) {
+        return Some(text);
+    }
     let Some(msg) = rec.message.as_ref() else {
         // No `message` blocks → a system record. D7: the boundary's content + compactMetadata.
         return system_record_text(rec);
@@ -156,6 +168,139 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
         }
     }
     (!parts.is_empty()).then(|| parts.join(" "))
+}
+
+/// The searchable + renderable text of a v0.9.5 PROMOTED non-message line, keyed on
+/// [`Record::promoted_class`]. `user.queued` / `harness.meta.away-summary` return the
+/// verbatim `content` string (a raw byte substring, prefilter-safe). The other three
+/// fabricate a bracketed key=value excerpt from the record's own fields - present
+/// fields only, stable order - so the leaf is both matchable and legible:
+/// - turn-duration: `[turn duration: 1m 5s · durationMs=64911 messageCount=908
+///   pendingBackgroundAgentCount=2]`;
+/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`
+///   line per hook (the commands are the record's only text);
+/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, …]` (paths sorted) or
+///   `[file-history delta at <ts>: <path>@vN backup=<name>]`.
+///
+/// `None` for a non-promoted record.
+pub(crate) fn promoted_record_text(rec: &Record) -> Option<String> {
+    match rec.promoted_class()? {
+        Class::UserQueued | Class::MetaAwaySummary => rec.content_str().map(str::to_string),
+        Class::MetaTurnDuration => {
+            let mut fields: Vec<String> = Vec::new();
+            let ms = Record::u64_field(rec.duration_ms.as_ref());
+            if let Some(ms) = ms {
+                fields.push(format!("{} · durationMs={ms}", fmt_ms(ms)));
+            }
+            for (key, v) in [
+                ("messageCount", rec.message_count.as_ref()),
+                (
+                    "pendingBackgroundAgentCount",
+                    rec.pending_background_agent_count.as_ref(),
+                ),
+                ("pendingWorkflowCount", rec.pending_workflow_count.as_ref()),
+            ] {
+                if let Some(n) = Record::u64_field(v) {
+                    fields.push(format!("{key}={n}"));
+                }
+            }
+            (!fields.is_empty()).then(|| format!("[turn duration: {}]", fields.join(" ")))
+        }
+        Class::MetaStopHooks => {
+            let count = Record::u64_field(rec.hook_count.as_ref()).unwrap_or(0);
+            let errors = rec
+                .hook_errors
+                .as_ref()
+                .and_then(serde_json::Value::as_array)
+                .map_or(0, Vec::len);
+            let prevented = rec.prevented_continuation.unwrap_or(false);
+            let mut lines = vec![format!(
+                "[stop hooks: count={count} errors={errors} prevented={prevented}]"
+            )];
+            if let Some(infos) = rec
+                .hook_infos
+                .as_ref()
+                .and_then(serde_json::Value::as_array)
+            {
+                for info in infos {
+                    let Some(cmd) = info.get("command").and_then(serde_json::Value::as_str) else {
+                        continue;
+                    };
+                    match Record::u64_field(info.get("durationMs")) {
+                        Some(ms) => lines.push(format!("{cmd} ({ms}ms)")),
+                        None => lines.push(cmd.to_string()),
+                    }
+                }
+            }
+            Some(lines.join("\n"))
+        }
+        Class::MetaSnapshot => snapshot_record_text(rec),
+        _ => None,
+    }
+}
+
+/// The `harness.meta.snapshot` excerpt for a `file-history-snapshot` (every tracked
+/// path with its version, sorted) or a `file-history-delta` (the one path). The
+/// snapshot line has no top-level timestamp; the nested one rides the excerpt.
+fn snapshot_record_text(rec: &Record) -> Option<String> {
+    let ver = |v: Option<&serde_json::Value>| {
+        Record::u64_field(v).map_or_else(|| "?".to_string(), |n| n.to_string())
+    };
+    if rec.is_type("file-history-delta") {
+        let path = rec.tracking_path.as_deref()?;
+        let backup = rec.backup.as_ref();
+        let version = ver(backup.and_then(|b| b.get("version")));
+        let at = rec.timestamp.as_deref().unwrap_or("?");
+        let name = backup
+            .and_then(|b| b.get("backupFileName"))
+            .and_then(serde_json::Value::as_str)
+            .map(|n| format!(" backup={n}"))
+            .unwrap_or_default();
+        return Some(format!(
+            "[file-history delta at {at}: {path}@v{version}{name}]"
+        ));
+    }
+    let snap = rec.snapshot.as_ref()?;
+    let at = snap
+        .get("timestamp")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("?");
+    let mut entries: Vec<String> = snap
+        .get("trackedFileBackups")
+        .and_then(serde_json::Value::as_object)
+        .map(|m| {
+            m.iter()
+                .map(|(path, e)| format!("{path}@v{}", ver(e.get("version"))))
+                .collect()
+        })
+        .unwrap_or_default();
+    entries.sort_unstable();
+    Some(format!(
+        "[file-history snapshot at {at}: {}]",
+        entries.join(", ")
+    ))
+}
+
+/// A compact human duration for a millisecond count: `12s` / `1m 5s` / `2h 3m` /
+/// `10d 17h` - the top two units, so an absurd span (a turn that straddled a resume
+/// gap) still reads as what it is instead of a heap of seconds.
+pub(crate) fn fmt_ms(ms: u64) -> String {
+    let secs = (ms + 500) / 1000; // nearest second, as the REPL renders it
+    let (d, h, m, s) = (
+        secs / 86_400,
+        (secs / 3600) % 24,
+        (secs / 60) % 60,
+        secs % 60,
+    );
+    if d > 0 {
+        format!("{d}d {h}h")
+    } else if h > 0 {
+        format!("{h}h {m}m")
+    } else if m > 0 {
+        format!("{m}m {s}s")
+    } else {
+        format!("{s}s")
+    }
 }
 
 /// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt -

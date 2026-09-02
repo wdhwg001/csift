@@ -165,6 +165,14 @@ impl Record {
             return out;
         }
 
+        // v0.9.5: a promoted NON-message line (queue-operation / turn_duration /
+        // away_summary / stop_hook_summary / file-history-*) carries exactly one leaf
+        // (`classify_promoted.rs`); every one of them is LLM-invisible.
+        if let Some(c) = self.promoted_class() {
+            push_unique(&mut out, c);
+            return out;
+        }
+
         match self.r#type.as_deref() {
             Some("system") => {
                 if self.is_compact_boundary() {

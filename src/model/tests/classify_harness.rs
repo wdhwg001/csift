@@ -474,8 +474,8 @@ fn classify_elicitation_pending_and_resolved() {
 
 #[test]
 fn classify_unmodeled_records_are_empty() {
-    // A system away_summary is outside the taxonomy → no labels (never crash).
-    let sys = parse(r#"{"type":"system","subtype":"away_summary","content":"gone 5m"}"#);
+    // An UNPROMOTED system subtype is outside the taxonomy → no labels (never crash).
+    let sys = parse(r#"{"type":"system","subtype":"api_error","error":"x","retryAttempt":1}"#);
     assert!(sys.classify(&ClassifyCtx::top_level()).is_empty());
     // A metadata-only record likewise.
     let meta = parse(r#"{"type":"last-prompt","leafUuid":"x"}"#);

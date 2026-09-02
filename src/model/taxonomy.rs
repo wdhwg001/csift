@@ -49,6 +49,16 @@ pub enum Class {
     /// structurally undetectable; a QUEUED text edited before dispatch never becomes a
     /// user record at all (it survives only in `queue-operation` lines).
     UserUnsent,
+    /// `user.queued` - the human's text as it sat in the input QUEUE: a
+    /// `queue-operation` line carrying `content` (an `enqueue`, a `popAll` recall to
+    /// the input box, or a `remove` with the text). Not in the surviving conversation
+    /// (no `message{}`); the dispatched twin, when there is one, is the later
+    /// `user.message` record. Automation riders (a `<task-notification>` / peer
+    /// message queued by the harness) are NOT the human and carry no label here;
+    /// content-less `dequeue` lines carry nothing to search. The queue line has no
+    /// join key (measured: 4-6 keys, no promptId/uuid), so `dispatched` is never
+    /// asserted - only the verbatim `operation` + `reason` facts ride the hit.
+    UserQueued,
     /// `agent.message` - the assistant's visible end-of-turn text block(s).
     AgentMessage,
     /// `agent.thinking` - a thinking block (see the GOLD-gap note re `redacted_thinking`).
@@ -109,6 +119,29 @@ pub enum Class {
     /// address); the matchable text is the VERBATIM payload JSON. A hook-context payload
     /// stays the more specific [`Class::MetaHook`].
     MetaAttachment,
+    /// `harness.meta.turn-duration` - the `system`/`turn_duration` end-of-turn
+    /// telemetry record (`durationMs`, `messageCount`, and the optional
+    /// `pendingBackgroundAgentCount` / `pendingWorkflowCount`): the structured body
+    /// behind the REPL's "Done in Ns" / "Waiting for N agents" lines, which never land
+    /// on disk themselves. No `message{}`: not in the surviving conversation.
+    MetaTurnDuration,
+    /// `harness.meta.away-summary` - the `system`/`away_summary` recap the harness
+    /// generates (a side model call, config-gated) when the operator returns after 5+
+    /// minutes away. Model-generated prose, yet no `message{}`: shown in the UI, not in
+    /// the surviving conversation (measured 1,196/1,198 never re-appear downstream).
+    MetaAwaySummary,
+    /// `harness.meta.stop-hooks` - the `system`/`stop_hook_summary` execution ledger
+    /// of the Stop hooks that ran at turn end (`hookInfos[].command` + durations,
+    /// `hookErrors`, `preventedContinuation`). Distinct from [`Class::MetaHook`], which
+    /// is the text a hook INJECTED into the model; this record is the run itself and
+    /// its `hookAdditionalContext` is empty on every measured instance.
+    MetaStopHooks,
+    /// `harness.meta.snapshot` - a `file-history-snapshot` (the per-prompt tracked-file
+    /// version table) or a `file-history-delta` (one path's version bump) line: the
+    /// instrument `recover` reads for external settings writes (v0.9.4), now
+    /// searchable by path and version. No `message{}`; a snapshot line has no
+    /// top-level timestamp (the excerpt carries the nested one).
+    MetaSnapshot,
 }
 
 #[allow(dead_code)]
@@ -128,11 +161,28 @@ impl Class {
     ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -
     ///   neither is a visibility instrument.)
     ///
+    /// v0.9.5 adds the promoted non-record line types, all invisible by the same
+    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured
+    /// over 24 non-record types; every user/assistant record does), and Claude Code's
+    /// own source labels them REPL-render internals. DAG threading is NOT the
+    /// instrument here - later user records name a `turn_duration` uuid as parentUuid
+    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate
+    /// as messages (it is a tail window, not a visibility filter).
+    ///
     /// A bare ROLE selector (`-t user`) expands to visible leaves only; the
     /// glob form and explicit paths reach the invisible ones.
     #[must_use]
     pub fn llm_visible(self) -> bool {
-        !matches!(self, Class::UserUnsent | Class::CompactionBoundary)
+        !matches!(
+            self,
+            Class::UserUnsent
+                | Class::UserQueued
+                | Class::CompactionBoundary
+                | Class::MetaTurnDuration
+                | Class::MetaAwaySummary
+                | Class::MetaStopHooks
+                | Class::MetaSnapshot
+        )
     }
 
     /// Every leaf [`Class`] in taxonomy order (GOLD §2). The single source of truth for
@@ -145,6 +195,7 @@ impl Class {
         Class::UserAnswer,
         Class::UserRejection,
         Class::UserUnsent,
+        Class::UserQueued,
         Class::AgentMessage,
         Class::AgentThinking,
         Class::AgentThinkingNarration,
@@ -169,6 +220,10 @@ impl Class {
         Class::MetaHook,
         Class::MetaLoop,
         Class::MetaAttachment,
+        Class::MetaTurnDuration,
+        Class::MetaAwaySummary,
+        Class::MetaStopHooks,
+        Class::MetaSnapshot,
     ];
 
     /// The canonical dotted path (GOLD §2) - the `-t` selector form (P2) and render label.
@@ -179,6 +234,7 @@ impl Class {
             Class::UserAnswer => "user.answer",
             Class::UserRejection => "user.rejection",
             Class::UserUnsent => "user.unsent",
+            Class::UserQueued => "user.queued",
             Class::AgentMessage => "agent.message",
             Class::AgentThinking => "agent.thinking",
             Class::AgentThinkingNarration => "agent.thinking.narration",
@@ -203,6 +259,10 @@ impl Class {
             Class::MetaHook => "harness.meta.hook",
             Class::MetaLoop => "harness.meta.loop",
             Class::MetaAttachment => "harness.meta.attachment",
+            Class::MetaTurnDuration => "harness.meta.turn-duration",
+            Class::MetaAwaySummary => "harness.meta.away-summary",
+            Class::MetaStopHooks => "harness.meta.stop-hooks",
+            Class::MetaSnapshot => "harness.meta.snapshot",
         }
     }
 
@@ -211,9 +271,11 @@ impl Class {
     #[must_use]
     pub fn role(self) -> Role {
         match self {
-            Class::UserMessage | Class::UserAnswer | Class::UserRejection | Class::UserUnsent => {
-                Role::User
-            }
+            Class::UserMessage
+            | Class::UserAnswer
+            | Class::UserRejection
+            | Class::UserUnsent
+            | Class::UserQueued => Role::User,
             Class::AgentMessage
             | Class::AgentThinking
             | Class::AgentThinkingNarration
@@ -237,7 +299,11 @@ impl Class {
             | Class::ScheduleContinuation
             | Class::MetaHook
             | Class::MetaLoop
-            | Class::MetaAttachment => Role::Harness,
+            | Class::MetaAttachment
+            | Class::MetaTurnDuration
+            | Class::MetaAwaySummary
+            | Class::MetaStopHooks
+            | Class::MetaSnapshot => Role::Harness,
         }
     }
 }

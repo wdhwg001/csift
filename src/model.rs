@@ -32,6 +32,7 @@ use serde::Deserialize;
 
 mod automation;
 mod classify;
+mod classify_promoted;
 mod classify_support;
 mod exchange;
 mod grouping;
