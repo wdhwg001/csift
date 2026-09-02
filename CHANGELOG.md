@@ -5,6 +5,92 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.10.0] - 2026-09-02
+
+Sessions stop lying about being stopped: status and wait now see every
+background shell, async agent and Monitor a session launched, wait
+requires a timeout, and the lines csift used to skip become five new
+searchable leaves.
+
+- status + wait: BACKGROUND TASKS. A Bash launched with run_in_background
+  gets its tool_result within milliseconds, so the tail state machine
+  paired it at once and a session idle with a dev server still running
+  read as a clean stop; the harness itself writes nothing about a running
+  shell at end of turn (measured on 100 turn_duration records emitted
+  with an open shell: no shell field at all; the REPL's "N shell still
+  running" is process memory). status now scans the whole main transcript
+  for backgrounded shells, async agents and Monitor arms and joins their
+  task-notification completions by the launching tool_use id across all
+  three carriers (a user record, a queue-operation line, a queued_command
+  attachment), reading launches from every lane and completions from the
+  main file only, where they always land. Every open task renders a bg
+  row with kind, id, launch instant and age, description or command, and
+  the output file's size and last write; closed ones fold to counts. Not
+  returned is not proof of running: Claude Code's own orphan summary says
+  a UI stop, a Monitor timeout or agent teardown leaves no transcript
+  marker, and the section repeats that. Measured: 24 of 3133 corpus
+  launches never returned, 22 of them launched more than a day before
+  their session ended.
+- status + wait: THE SEVENTH VERDICT and THE LENS. idle-background-open
+  means the turn ended but background task(s) the lens counts have not
+  returned, neither running nor stopped, and it never satisfies
+  --until stop. --background-since WHEN (the shared time grammar, now
+  with 2mo and 1y units, a tolerated leading minus, and the token now
+  for the command's own start instant) counts only tasks launched at or
+  after WHEN; --ignore-background RE (repeatable) excludes tasks whose
+  command or description matches. Every task is still listed with the
+  rule that excluded it.
+- wait: BREAKING. --timeout is required, because a background task can
+  be designed never to return, so an unbounded wait on stop was a bug
+  in every 0.9.x. A call without it is rejected with that reason. On
+  every exit the report carries the tail state in words, a census of
+  what landed while waiting (tool calls by name, thinking, messages,
+  prompts, notifications), the bg rows, and the last prompt and reply as
+  excerpts. Both commands print those excerpts under a warning written
+  for a model reader: an excerpt is a partial view of the final state,
+  useful only for judging whether a background task is still meaningful,
+  never a review of the work.
+- search: two classification fixes. The harness's agents-stopped notice
+  ("N background agents were stopped by the user: ..." and its singular
+  form) was counted as a human turn; it is harness.notification.subagent,
+  never genuine, never a turn opener, rendered "[subagent stopped] ...".
+  A Background command pulse is always background-command: the quoted
+  name heuristic that routed re-arm and monitor-named commands to the
+  monitor leaf predated the real Monitor tool and produced 40 false
+  monitor records on one project against zero genuine pulses. Historical
+  counts for those two leaves move by design.
+- search: FIVE PROMOTED LEAVES (taxonomy 28 -> 33). The non-record jsonl
+  line types become searchable, classifiable leaves. user.queued is a
+  queue-operation line carrying the human's text, with the queue event
+  in the label zone (enqueue, popAll, or remove with its reason) and as
+  JSON queue_operation / queue_reason. harness.meta.turn-duration renders
+  the turn_duration record as "[turn duration: 1m 5s . durationMs=64911
+  messageCount=908 pendingBackgroundAgentCount=2]", the structured body
+  behind the REPL's "Done in Ns" line, which never lands on disk itself.
+  harness.meta.away-summary is the model-generated recap shown on return
+  after five minutes away. harness.meta.stop-hooks is the Stop-hook
+  execution ledger. harness.meta.snapshot covers file-history snapshot
+  and delta lines. Every one of the five is LLM-invisible by the same
+  instrument as the compaction boundary: none carries a message field.
+- search: THE GATED-LEAF LAW. A promoted leaf is parsed only when an
+  explicit -t reaches it (the full path, a glob, or the harness.meta
+  prefix) or a show address names the line; a bare scan never parses
+  those lines (measured 1.03x, noise). The three fabricated renders
+  register their type value as a synth marker so the whole-file gate
+  stays sound; a zero-match run without such a selector says so.
+- search: QUEUE FACTS, measured. Content rides enqueue, popAll and most
+  removes, never dequeue; the remove reason is absorbed_mid_turn or
+  delivered_to_agent; the queue line has no join key, so csift never
+  asserts dispatched. Correction to the 0.9.2 entry: the "about 61% never
+  become user records" figure counted every queue operation over three
+  sessions; counting enqueue lines only over six sessions, the human's
+  prose reaches a user record 72 to 81 percent of the time.
+- show: an explicit --line or --uuid address renders every promoted line
+  with no flag; the miss error names what stays --raw only.
+- help and docs: 33 leaves, the GATED LEAVES rule, the seven verdicts,
+  the background and lens paragraphs, the how-to-wait procedure, and the
+  last-messages warning.
+
 ## [0.9.4] - 2026-09-02
 
 Bash reads become reads and bash writes become writes in recover, plan
