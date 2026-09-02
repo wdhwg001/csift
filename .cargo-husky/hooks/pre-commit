@@ -75,6 +75,18 @@ cargo fmt --all -- --check
 echo "[csift pre-commit] cargo clippy --all-targets -- -D warnings"
 cargo clippy --all-targets -- -D warnings
 
+echo "[csift pre-commit] introspection ledger gate (INTROSPECTION.json backs the README badges)"
+# The ledger names every Claude Code behavior csift depends on; the README's
+# "verified against Claude Code X" badge is admitted only when EVERY claim carries a
+# check at X with claim-specific evidence, and every cited snippet still exists in
+# its file. The rules live in tests/cli/ledger.rs; the full `cargo test` below runs
+# it too, this step just fails first and by name.
+cargo test --quiet --test cli ledger_gate 2>&1 | tail -20
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+    echo "[csift pre-commit] LEDGER GATE FAILED (see tests/cli/ledger.rs for the rules)"
+    exit 1
+fi
+
 echo "[csift pre-commit] cargo test"
 cargo test
 

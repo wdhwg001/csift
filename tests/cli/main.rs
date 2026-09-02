@@ -8,6 +8,7 @@ mod elicitation;
 mod files;
 mod harness;
 mod image;
+mod ledger;
 mod list;
 mod live;
 mod plan_audit;

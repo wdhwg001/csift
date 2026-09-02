@@ -15,7 +15,9 @@
     <img alt="Rust 1.89+" src="https://img.shields.io/badge/Rust-1.89%2B-dea584?logo=rust&logoColor=white" />
     <img alt="search: pure regex" src="https://img.shields.io/badge/search-pure%20regex-7c9cff" />
     <img alt="embeddings: none" src="https://img.shields.io/badge/embeddings-none-22d3ee" />
-    <img alt="coverage: 95.6%" src="https://img.shields.io/badge/coverage-95.6%25-4ade80" />
+    <img alt="coverage: 95.7%" src="https://img.shields.io/badge/coverage-95.7%25-4ade80" />
+    <img alt="mutation score: 91.2%" src="https://img.shields.io/badge/mutation%20score-91.2%25-a3e635" />
+    <img alt="verified against Claude Code 2.1.258" src="https://img.shields.io/badge/verified%20against%20Claude%20Code-2.1.258-d97757" />
     <img alt="built for Claude Code" src="https://img.shields.io/badge/built%20for-Claude%20Code-d97757" />
     <img alt="written by Claude Code" src="https://img.shields.io/badge/written%20by-Claude%20Code-d97757" />
     <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-a78bfa" />
