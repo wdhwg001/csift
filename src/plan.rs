@@ -34,7 +34,9 @@ use crate::parse::mmap_bytes;
 use crate::path;
 
 mod audit;
+mod slug;
 pub(crate) use audit::*;
+use slug::*;
 
 /// The magic `--file` value that tells `recover` to reconstruct the session-bound plan
 /// file instead of an explicit path. Bash-safe (no shell metacharacters → no escaping in
@@ -59,10 +61,11 @@ pub struct PlanRef {
     /// JSONL line number of the (latest) `plan_mode` attachment, for provenance.
     pub line_no: usize,
     /// The session's plan slug (the harness derives the plan file name from it).
-    /// Read from the binding record itself - the slug is minted at Plan-Mode entry,
-    /// so it is absent from every earlier record (including the whole head window),
-    /// but always present on the `plan_mode` attachment record. `None` when the
-    /// record predates the field.
+    /// Read from the binding record itself: the `plan_mode` attachment record always
+    /// carries it. The slug is minted BEFORE Plan-Mode entry (measured at CC 2.1.258:
+    /// the first slug-carrying record precedes the `plan_mode` line in 18 of 18
+    /// transcripts), so earlier records may carry it too - the binding record is
+    /// simply the authoritative carrier. `None` when the record predates the field.
     pub slug: Option<String>,
     /// How the binding was established: `plan_mode` (the explicit attachment, path
     /// verbatim) or `slug-only` (no `plan_mode` anywhere; the FIRST slug-carrying
@@ -140,7 +143,10 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
     if latest.is_none() {
         if let Some((line_no, rec)) = first_slug_record(bytes) {
             if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {
-                let plan_file = plans_dir().join(format!("{slug}.md"));
+                // The record's own cwd is the project root the harness resolved
+                // plansDirectory against (stamped per record, section 3.11).
+                let root = rec.cwd.as_deref().map(Path::new);
+                let plan_file = plans_dir(root).join(format!("{slug}.md"));
                 latest = Some(PlanRef {
                     session_id: session_id.clone(),
                     is_subagent,
@@ -156,56 +162,6 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
         }
     }
     Ok(latest)
-}
-
-/// The FIRST record carrying a `slug` field (Claude Code's binding key), by a
-/// sequential early-exit walk - the fallback runs only when no `plan_mode` exists, and
-/// a slugged session's first carrier normally sits early after the mint point.
-fn first_slug_record(bytes: &[u8]) -> Option<(usize, crate::model::Record)> {
-    static SLUG: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
-        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"\"slug\""));
-    let mut line_no = 0usize;
-    for line in bytes.split(|&b| b == b'\n') {
-        line_no += 1;
-        if SLUG.find(line).is_none() {
-            continue;
-        }
-        if let Ok(Some(rec)) = crate::parse::parse_line(line) {
-            if rec.slug.is_some() {
-                return Some((line_no, rec));
-            }
-        }
-    }
-    None
-}
-
-/// Claude Code's slug validity rule (lowercase alnum head, alnum/dash tail, <=120
-/// chars) - a stray tolerated `slug` value that CC itself would reject never binds.
-fn slug_is_valid(s: &str) -> bool {
-    let mut chars = s.chars();
-    let Some(head) = chars.next() else {
-        return false;
-    };
-    s.len() <= 120
-        && (head.is_ascii_lowercase() || head.is_ascii_digit())
-        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-}
-
-/// The plans directory: `plansDirectory` from `<claude-home>/settings.json` when set
-/// (absolute as-is, relative joined to the config home), else `<claude-home>/plans`.
-fn plans_dir() -> PathBuf {
-    let Ok(home) = crate::path::claude_home() else {
-        return PathBuf::from("plans");
-    };
-    if let Ok(raw) = std::fs::read_to_string(home.join("settings.json")) {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if let Some(d) = v.get("plansDirectory").and_then(serde_json::Value::as_str) {
-                let p = PathBuf::from(d);
-                return if p.is_absolute() { p } else { home.join(p) };
-            }
-        }
-    }
-    home.join("plans")
 }
 
 /// Resolve the single plan file to use for `recover --file @plan` across the in-scope

@@ -282,27 +282,34 @@ fn plan_mode_attachment_still_outranks_the_slug_law() {
 fn plan_slug_only_honors_plans_directory_and_reverse() {
     const SLUGSESS: &str = "dddd4444-5555-4666-8777-888899990000";
     let h = Home::new();
-    // A RELATIVE plansDirectory joins to the config home.
+    // Claude Code resolves a RELATIVE plansDirectory against the PROJECT ROOT (the
+    // record's cwd), never the config home, and only accepts a directory contained in
+    // that root. The project root is a real dir here so the plan file can exist.
+    let proj = h.root.join("harbor-project");
+    std::fs::create_dir_all(proj.join("my-plans")).unwrap();
+    std::fs::write(
+        proj.join("my-plans").join("quiet-harbor-lantern.md"),
+        "plan body\n",
+    )
+    .unwrap();
+    let cwd = serde_json::to_string(proj.to_str().unwrap()).unwrap();
     h.write_claude("settings.json", r#"{"plansDirectory":"my-plans"}"#);
-    h.write_claude("my-plans/quiet-harbor-lantern.md", "plan body\n");
-    h.write(
-        &format!("{ENC}/{SLUGSESS}.jsonl"),
+    let transcript = format!(
         concat!(
-            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","slug":"quiet-harbor-lantern","message":{"role":"user","content":"forked work"}}"#, "\n",
-            r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","slug":"quiet-harbor-lantern","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#, "\n",
+            r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","cwd":{cwd},"slug":"quiet-harbor-lantern","message":{{"role":"user","content":"forked work"}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"a1","timestamp":"2026-06-07T05:00:01.000Z","cwd":{cwd},"slug":"quiet-harbor-lantern","message":{{"role":"assistant","content":[{{"type":"text","text":"ok"}}]}}}}"#,
+            "\n",
         ),
+        cwd = cwd
     );
+    h.write(&format!("{ENC}/{SLUGSESS}.jsonl"), &transcript);
     let out = h.run(&["plan", &at(SLUGSESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // The derived path joins with the platform's own separator - pin the
-    // plansDirectory adjacency in that native form.
-    let joined = format!(
-        "my-plans{}quiet-harbor-lantern.md",
-        std::path::MAIN_SEPARATOR
-    );
+    let expected = proj.join("my-plans").join("quiet-harbor-lantern.md");
     assert!(
-        out.stdout.contains(&joined) && out.stdout.contains("slug only"),
-        "plansDirectory honored on the slug law:\n{}",
+        out.stdout.contains(expected.to_str().unwrap()) && out.stdout.contains("slug only"),
+        "plansDirectory joins the project root on the slug law:\n{}",
         out.stdout
     );
     // Reverse: which session binds this plan file - resolves through the slug law
@@ -310,12 +317,11 @@ fn plan_slug_only_honors_plans_directory_and_reverse() {
     const SLUGSESS2: &str = "eeee4444-5555-4666-8777-888899990000";
     h.write(
         &format!("{ENC}/{SLUGSESS2}.jsonl"),
-        concat!(
-            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","slug":"quiet-harbor-lantern","message":{"role":"user","content":"second fork"}}"#, "\n",
-        ),
+        &(format!(
+            r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","cwd":{cwd},"slug":"quiet-harbor-lantern","message":{{"role":"user","content":"second fork"}}}}"#,
+        ) + "\n"),
     );
-    let plan_abs = h.root.join(".claude/my-plans/quiet-harbor-lantern.md");
-    let rev = h.run(&["plan", "--reverse", plan_abs.to_str().unwrap()]);
+    let rev = h.run(&["plan", "--reverse", expected.to_str().unwrap()]);
     assert!(
         rev.stdout.contains(SLUGSESS) && rev.stdout.contains(SLUGSESS2),
         "reverse finds both slug-only binders:\n{}",
@@ -324,6 +330,39 @@ fn plan_slug_only_honors_plans_directory_and_reverse() {
     let a = rev.stdout.find(SLUGSESS).unwrap();
     let b = rev.stdout.find(SLUGSESS2).unwrap();
     assert!(a < b, "deterministic id order:\n{}", rev.stdout);
+
+    // A project-local setting outranks the user-scope one (the harness merges scopes).
+    std::fs::create_dir_all(proj.join(".claude")).unwrap();
+    std::fs::write(
+        proj.join(".claude").join("settings.local.json"),
+        r#"{"plansDirectory":"local-plans"}"#,
+    )
+    .unwrap();
+    let local = h.run(&["plan", &at(SLUGSESS)]);
+    let expected_local = proj.join("local-plans").join("quiet-harbor-lantern.md");
+    assert!(
+        local.stdout.contains(expected_local.to_str().unwrap()),
+        "project-local plansDirectory wins:\n{}",
+        local.stdout
+    );
+    // A value that escapes the project root is refused: the default dir applies.
+    std::fs::write(
+        proj.join(".claude").join("settings.local.json"),
+        r#"{"plansDirectory":"../escape-hatch"}"#,
+    )
+    .unwrap();
+    let escaped = h.run(&["plan", &at(SLUGSESS)]);
+    let fallback = h
+        .root
+        .join(".claude")
+        .join("plans")
+        .join("quiet-harbor-lantern.md");
+    assert!(
+        escaped.stdout.contains(fallback.to_str().unwrap())
+            && !escaped.stdout.contains("escape-hatch"),
+        "an escaping plansDirectory falls back to the default plans dir:\n{}",
+        escaped.stdout
+    );
 }
 
 #[test]

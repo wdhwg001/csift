@@ -134,7 +134,9 @@ impl ImageArgs {
         suffix). TWO binding laws, in precedence order, mirroring Claude Code's own: (1) the \
         `plan_mode` ATTACHMENT written on entering Plan Mode (carries the verbatim path); \
         (2) when NO plan_mode exists anywhere, the FIRST record carrying a `slug` binds \
-        `<plans-dir>/<slug>.md` - Claude Code reads the first slug in the log, and a \
+        `<plans-dir>/<slug>.md` (`plansDirectory` from the merged user/project/local \
+        settings, resolved against the PROJECT ROOT - the record's cwd - and accepted only \
+        inside it; else `~/.claude/plans`) - Claude Code reads the first slug in the log, and a \
         forked/background session reaches this state by construction (its clone strips \
         attachment history; any compaction MINTS a slug even without Plan Mode - the \
         output then says `slug only`, plus `MINTED at a compaction boundary` when the \
@@ -159,8 +161,9 @@ impl ImageArgs {
         parent_session_id, plan_exists, line, slug} rows → summary. `plan_exists` says whether \
         the bound file is still on disk: a DELETED plan is still locatable here, and \
         `csift recover <target> --file @plan` rebuilds its content from the transcript. \
-        `slug` is the session's plan slug (one stable value per session, minted at Plan-Mode \
-        entry; the harness derives the plan file name from it and re-keys recovery on it) - \
+        `slug` is the session's plan slug (one stable value per session, minted before Plan \
+        Mode is entered - the first slug-carrying record precedes the plan_mode line; the \
+        harness derives the plan file name from it and re-keys recovery on it) - \
         null when the binding record predates the field."
 )]
 pub struct PlanArgs {
