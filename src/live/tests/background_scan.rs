@@ -254,7 +254,9 @@ fn foreground_tools_are_never_launches_and_a_real_output_file_stats() {
     let t = TempSession::new("", None);
     let out_path = t.root.join("b1a2b3c4d.output");
     std::fs::write(&out_path, "twelve bytes").unwrap();
-    let result = LAUNCH_RESULT.replace("/nonexistent/b1a2b3c4d.output", out_path.to_str().unwrap());
+    // The path is embedded in a JSON string: JSON-escape it (Windows backslashes).
+    let escaped = serde_json::to_string(out_path.to_str().unwrap()).unwrap();
+    let result = LAUNCH_RESULT.replace("/nonexistent/b1a2b3c4d.output", escaped.trim_matches('"'));
     std::fs::write(&t.main, lines(&[LAUNCH, &result, EOT])).unwrap();
     let r = report(&t, &BackgroundLens::default());
     assert_eq!(r.tasks[0].output_bytes, Some(12));

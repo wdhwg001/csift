@@ -409,7 +409,10 @@ fn rows_name_a_subagent_lane_and_a_live_output_file() {
     let sub_launch = r#"{"type":"assistant","uuid":"s1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t9","name":"Bash","input":{"command":"cargo build","description":"Build in the child","run_in_background":true}}]}}"#;
     let sub_result = format!(
         r#"{{"type":"user","uuid":"s2","timestamp":"2026-06-07T05:01:01.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t9","content":"Command running in background with ID: b9z8y7x6w. Output is being written to: {}. You will be notified when it completes."}}]}}}}"#,
-        out_path.to_str().unwrap()
+        // JSON-escaped: a Windows temp path carries backslashes.
+        serde_json::to_string(out_path.to_str().unwrap())
+            .unwrap()
+            .trim_matches('"')
     );
     h.write(
         &format!("{ENC}/{SESS}.jsonl"),
