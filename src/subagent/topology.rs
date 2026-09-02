@@ -5,7 +5,8 @@ use super::*;
 /// One fully-linked subagent node in the topology (§new-model). Carries the flat
 /// lifecycle facts PLUS the toolUseId-linked spawn linkage (trigger time, parent agent,
 /// returned message) and the per-node files-changed list. `children` is the tool_use-graph
-/// nesting (empty on all current data - depth is uniformly 1, a platform constraint).
+/// nesting (real multi-level chains exist since CC 2.1.25x: measured 190 nodes at depth
+/// 1-3 with a distinct parent across the corpus).
 #[derive(Debug, Clone)]
 pub struct SubagentNode {
     /// Bare-hex canonical agent id (== record `agentId`).
@@ -216,7 +217,7 @@ pub fn discover_workflow_runs(session_jsonl: &Path) -> Result<Vec<WorkflowRun>> 
 ///
 /// `with_files` gates the (heavier) per-node transcript re-scan for mutations - off by
 /// default so a plain `agents` listing stays cheap. The nodes come back flat (depth 0);
-/// the tool_use-graph nesting is a no-op on current data (depth uniformly 1).
+/// the tool_use-graph nesting produces real depth>0 chains on current data.
 pub fn build_topology(session_jsonl: &Path, with_files: bool) -> Result<Vec<SubagentNode>> {
     let subs = discover_subagents(session_jsonl)?;
     if subs.is_empty() {
@@ -342,13 +343,27 @@ pub(crate) fn node_for(
     } else {
         Vec::new()
     };
+    // Parent agent: the meta's own `parentAgentId` when the harness wrote one, else the
+    // tool_use-graph join - and NEVER the node itself. A `/fork` child is a clone of its
+    // parent's transcript, so the spawning tool_use sits in the child's own file and the
+    // graph join names the child as its own parent (measured: every depth-65 node was
+    // such a self-cycle before v0.10.1).
+    let not_self = |p: String| (p != subagent.agent_id).then_some(p);
+    let parent_agent_id = subagent
+        .meta_parent_agent_id
+        .clone()
+        .and_then(not_self)
+        .or_else(|| {
+            effective_spawn_id
+                .as_deref()
+                .and_then(|id| index.parent_agent_for(id))
+                .and_then(not_self)
+        });
     Ok(SubagentNode {
         agent_id: subagent.agent_id.clone(),
         kind: subagent.kind,
         parent_session_id: subagent.parent_session_id.clone(),
-        parent_agent_id: effective_spawn_id
-            .as_deref()
-            .and_then(|id| index.parent_agent_for(id)),
+        parent_agent_id,
         spawn_tool_use_id: effective_spawn_id.clone(),
         spawn_tool,
         workflow_id: subagent.workflow_id.clone(),

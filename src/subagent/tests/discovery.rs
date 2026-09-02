@@ -140,6 +140,7 @@ fn read_meta_none_for_missing_unreadable_and_malformed() {
             name: None,
             task_kind: None,
             team_name: None,
+            parent_agent_id: None,
         }
     );
 }
@@ -151,7 +152,7 @@ fn read_meta_captures_all_builtin_fields() {
     let fx = Fixture::new();
     let full = fx.write(
             "full.meta.json",
-            "{\"agentType\":\"oh-my-claudecode:executor\",\"description\":\"run it\",\"toolUseId\":\"toolu_01R7Zi2gHHGkaTvzuDMH7bK3\"}",
+            "{\"agentType\":\"oh-my-claudecode:executor\",\"description\":\"run it\",\"toolUseId\":\"toolu_01R7Zi2gHHGkaTvzuDMH7bK3\",\"parentAgentId\":\"a0f1e2d3c4b5a6978\"}",
         );
     assert_eq!(
         read_meta(Some(&full)),
@@ -162,6 +163,7 @@ fn read_meta_captures_all_builtin_fields() {
             name: None,
             task_kind: None,
             team_name: None,
+            parent_agent_id: Some("a0f1e2d3c4b5a6978".to_string()),
         }
     );
 }

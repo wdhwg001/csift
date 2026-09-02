@@ -121,8 +121,10 @@ pub enum AgentKindFilter {
         lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending. \
         SEMANTICS: it answers \"what did the ORCHESTRATOR record as the return\", not \
         \"what did the agent conclude\": a `sync-tool-result` source faithfully reports \
-        the parent's tool_result even when the harness truncated it to a `Done. \
-        agentId: …` wrapper; the child's own final words are always \
+        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \
+        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \
+        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \
+        appends, it never truncates); the child's own final words are always \
         `csift show @<agent-id> --turn -1..`). \
         `agent_type` is \
         the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`); \

@@ -68,6 +68,11 @@ pub struct Subagent {
     /// ONCE at discovery alongside `agent_type`; `None` for a workflow agent (its meta carries
     /// only `agentType`).
     pub description: Option<String>,
+    /// `parentAgentId` from meta.json (CC 2.1.25x+): the harness's own word on which agent
+    /// spawned this one. Preferred over the tool_use-graph join when present, and the ONLY
+    /// way a `/fork` child (a clone carrying its own spawning tool_use) gets a real parent
+    /// instead of itself.
+    pub meta_parent_agent_id: Option<String>,
 }
 
 /// Lifecycle facts derived from a subagent transcript (+ its workflow journal, when

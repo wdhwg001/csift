@@ -268,3 +268,60 @@ fn build_topology_with_files_attaches_node_files_changed() {
     let lean = build_topology(&session, false).unwrap();
     assert!(lean[0].files_changed.is_empty());
 }
+
+#[test]
+fn fork_child_carrying_its_own_spawn_never_parents_itself() {
+    // A `/fork` child is a CLONE of its parent's transcript, so the spawning tool_use
+    // sits inside the child's own file and the global spawn index attributes the spawn
+    // to the child itself. Without the guard the child became its own parent and the
+    // depth walk ran to the cycle cap (65); now the self-link is dropped (depth 0), and
+    // the meta's `parentAgentId` - the harness's own word - wins when present.
+    let fx = Fixture::new();
+    let enc = "-Users-forkself";
+    let spawn = "{\"type\":\"assistant\",\"timestamp\":\"2026-06-07T04:00:00.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_k\",\"name\":\"Agent\",\"input\":{\"description\":\"fork\"}}]}}\n";
+    let session = fx.write(&format!("{enc}/{SESS}.jsonl"), spawn);
+    // The clone: the same spawning record, then the child's own work.
+    fx.write(
+        &format!("{enc}/{SESS}/subagents/agent-kkk111.jsonl"),
+        &format!(
+            "{spawn}{{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"kkk111\",\"timestamp\":\"2026-06-07T04:00:05.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"forked\"}}}}\n"
+        ),
+    );
+    fx.write(
+        &format!("{enc}/{SESS}/subagents/agent-kkk111.meta.json"),
+        "{\"agentType\":\"fork\",\"toolUseId\":\"toolu_k\"}",
+    );
+    let nodes = build_topology(&session, false).unwrap();
+    let k = nodes.iter().find(|n| n.agent_id == "kkk111").unwrap();
+    assert_eq!(
+        k.parent_agent_id, None,
+        "a self-link is never a parent: {k:?}"
+    );
+    assert_eq!(k.depth, 0);
+
+    // With a real sibling named by the meta's parentAgentId, that wins: depth 1.
+    fx.write(
+        &format!("{enc}/{SESS}/subagents/agent-ppp222.jsonl"),
+        "{\"type\":\"user\",\"isSidechain\":true,\"agentId\":\"ppp222\",\"timestamp\":\"2026-06-07T03:59:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"parent work\"}}\n",
+    );
+    fx.write(
+        &format!("{enc}/{SESS}/subagents/agent-ppp222.meta.json"),
+        "{\"agentType\":\"general-purpose\"}",
+    );
+    fx.write(
+        &format!("{enc}/{SESS}/subagents/agent-kkk111.meta.json"),
+        "{\"agentType\":\"fork\",\"toolUseId\":\"toolu_k\",\"parentAgentId\":\"ppp222\"}",
+    );
+    let nodes = build_topology(&session, false).unwrap();
+    let k = nodes.iter().find(|n| n.agent_id == "kkk111").unwrap();
+    assert_eq!(k.parent_agent_id.as_deref(), Some("ppp222"), "{k:?}");
+    assert_eq!(k.depth, 1);
+    // A meta parentAgentId that names the node itself is ignored too.
+    fx.write(
+        &format!("{enc}/{SESS}/subagents/agent-kkk111.meta.json"),
+        "{\"agentType\":\"fork\",\"toolUseId\":\"toolu_k\",\"parentAgentId\":\"kkk111\"}",
+    );
+    let nodes = build_topology(&session, false).unwrap();
+    let k = nodes.iter().find(|n| n.agent_id == "kkk111").unwrap();
+    assert_eq!(k.parent_agent_id, None, "{k:?}");
+}

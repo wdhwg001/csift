@@ -47,6 +47,7 @@ pub(crate) fn make_subagent(
         team_name: meta.team_name,
         agent_type: meta.agent_type,
         description: meta.description,
+        meta_parent_agent_id: meta.parent_agent_id,
     }
 }
 
@@ -69,6 +70,12 @@ pub struct MetaFields {
     pub task_kind: Option<String>,
     /// `teamName` - the team a teammate belongs to (teammate metas only).
     pub team_name: Option<String>,
+    /// `parentAgentId` - the harness's own word on the spawning agent (written since CC
+    /// 2.1.25x; 92 metas in the reference corpus). Load-bearing for a `/fork` child: its
+    /// transcript is a CLONE of the parent's and therefore carries the spawning tool_use
+    /// itself, so the tool_use-graph join names the child as its own parent. This field
+    /// breaks that self-cycle (v0.10.1).
+    pub parent_agent_id: Option<String>,
 }
 
 /// Read `{agentType, description, toolUseId, name, taskKind, teamName}` from a subagent's
@@ -96,6 +103,7 @@ pub(crate) fn read_meta(meta_path: Option<&Path>) -> MetaFields {
         name: str_field("name"),
         task_kind: str_field("taskKind"),
         team_name: str_field("teamName"),
+        parent_agent_id: str_field("parentAgentId"),
     }
 }
 
