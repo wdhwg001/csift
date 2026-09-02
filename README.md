@@ -123,7 +123,12 @@ csift is the missing tool it should have had.
 
 8. 🩺 **Is it actually stopped?**
 
-   An end-of-turn record is not a stop. The turn behind "Crunched for 46m 26s · done 11:00 am · 1 shell still running" wrote a `turn_duration` line carrying a duration, a message count, and nothing else. The running shell lived only in the REPL's memory. `csift status` does not take that line's word for it. It joins the harness's session registry, the transcript's tail (an unreturned tool call means in flight), every child lane's own tail, the task list, and a process probe into one verdict: running, waiting on children, waiting on a human, idle, or dead, with the evidence named. Live lanes and open tasks stay visible while finished ones fold to a count. Every background shell, async agent and Monitor the session ever launched is listed with its age and whether it came back, because the harness writes nothing about a running one and long sessions carry dozens of zombies. `csift wait --until stop --timeout 300` blocks until it really stops, exits 124 on timeout with a report of what the session did meanwhile, and takes a lens (`--background-since now`, `--ignore-background 'npm run dev'`) so a dev server that never returns does not hold the wait forever. The timeout is required, on purpose. The one corner of csift that answers "now" instead of "what happened", point-in-time by design.
+   An end-of-turn record is not a stop. \
+   "Crunched for 46m 26s · done 11:00 am · 1 shell still running" wrote a `turn_duration` line with a duration, a message count, and nothing about the shell. \
+   `csift status` joins the session registry, the transcript tail, every child lane, the task list and a process probe into one verdict, with the evidence named. \
+   Every background shell, async agent and Monitor is listed with its age and whether it came back. Long sessions carry dozens of zombies. \
+   `csift wait --until stop --timeout 300` blocks until it really stops, exits 124 on timeout with a report of what happened meanwhile, and takes a lens (`--ignore-background 'npm run dev'`) so a dev server never holds the wait. \
+   The timeout is required, on purpose. Point-in-time by design, on macOS, Linux and Windows.
 
 9. 🔎 **Round-trips, not lines.**
 

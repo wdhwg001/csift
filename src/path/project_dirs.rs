@@ -68,8 +68,8 @@ pub fn resolve_target(target: &Path) -> Result<ProjectDir> {
 }
 
 /// Claude Code's `MAX_SANITIZED_LENGTH`: a project's encoded dir-name is capped at 200
-/// chars; a longer cwd is stored as `<first-200>-<hash>` (§2.1). Matches the cleanroom
-/// `sanitizePath` + the shipping binary (`Siq`, verified 2026-06-16).
+/// chars; a longer cwd is stored as `<first-200>-<hash>` (§2.1). Matches the shipping
+/// binary's sanitizer (`Siq`, verified 2026-06-16).
 pub(crate) const MAX_SANITIZED_LENGTH: usize = 200;
 
 /// Resolve a >200-char encoded path to its on-disk dir by prefix-scanning the projects

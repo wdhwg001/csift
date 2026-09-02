@@ -41,7 +41,7 @@ impl From<bool> for SubagentScope {
 
 /// Resolve the CALLING session id from the environment - the value of `CLAUDE_CODE_SESSION_ID`,
 /// which CC sets to the process-global MAIN session id even inside a subagent (verified
-/// empirically + against the cleanroom; an in-process subagent's OWN id is NOT exported to the
+/// empirically + against the shipping binary; an in-process subagent's OWN id is NOT exported to the
 /// subprocess env). Used by `@main` and as the `@trap:` search root. There is no env-based
 /// `@self` because CC withholds the per-subagent id from the Bash env - `@trap:<marker>`
 /// recovers it from the transcript instead.
