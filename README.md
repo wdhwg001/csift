@@ -74,6 +74,10 @@ One regex, the **complete round-trip**, token-efficient output. No embeddings, n
 
   _Because, it explains, an unanswered `AskUserQuestion` is **never** written to disk at all, "so there's nothing I can watch." Or worse: "Yes, I can interpret it from the thinking."_
 
+- **"You said it stopped but it's waiting for a subagent!"**
+
+  _It apologized, found a "root cause" by searching all other jsonl files. When you have another session to orchestration in the same project, it wouldn't even know whether it's stopped. Or worse, it found a turn duration metadata and believed it must be the true stop. It is not._
+
 Each of these ends the same way: the agent says ~~_You are absolutely right._~~, then stumbles through a one-off script over raw JSON and gets it subtly wrong.
 
 csift is the missing tool it should have had.
@@ -117,7 +121,7 @@ csift is the missing tool it should have had.
 
 8. 🩺 **Is it actually stopped?**
 
-   `csift status` answers RIGHT NOW: running, waiting on children, waiting on a human, idle, or dead. One verdict joined from the harness's session registry, the transcript's tail, and a process probe, with the evidence named. Live child lanes and open tasks stay visible while finished ones fold to a count. `csift wait --until stop` (or `auq`, `notification:RE`, `tool:Bash`, `write:PATH`) blocks until it happens and exits 124 on timeout. The one corner of csift that answers "now" instead of "what happened": point-in-time by design.
+   An end-of-turn record is not a stop. The turn behind "Crunched for 46m 26s · done 11:00 am · 1 shell still running" wrote a `turn_duration` line carrying a duration, a message count, and nothing else. The running shell lived only in the REPL's memory. `csift status` does not take that line's word for it. It joins the harness's session registry, the transcript's tail (an unreturned tool call means in flight), every child lane's own tail, the task list, and a process probe into one verdict: running, waiting on children, waiting on a human, idle, or dead, with the evidence named. Live lanes and open tasks stay visible while finished ones fold to a count. `csift wait --until stop` (or `auq`, `notification:RE`, `tool:Bash`, `write:PATH`) blocks until it really happens and exits 124 on timeout. The one corner of csift that answers "now" instead of "what happened", point-in-time by design.
 
 9. 🔎 **Round-trips, not lines.**
 
@@ -125,7 +129,7 @@ csift is the missing tool it should have had.
 
 10. 🌳 **Subagent topology.**
 
-   Kind, lifecycle, and the parent→child tree of every spawned agent, plus detection of lanes frozen on a pending permission approval.
+    Kind, lifecycle, and the parent→child tree of every spawned agent, plus detection of lanes frozen on a pending permission approval.
 
 11. 🤖 **Designed for humans and LLMs.**
 

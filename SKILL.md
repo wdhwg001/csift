@@ -195,7 +195,11 @@ harness  .notification.{workflow,monitor,subagent,background-command,task}  ← 
                     pendingBackgroundAgentCount=2]` — the structured body behind the
                     REPL's "Done in Ns" / "Waiting for N agents" lines (which never
                     land on disk). Present fields only; a turn that straddled a resume
-                    gap reads as days, honestly
+                    gap reads as days, honestly. The pending counts cover background
+                    agents and workflows ONLY: a turn that ended with a background SHELL
+                    still running wrote no pending field at all (measured), so an EOT
+                    record is never evidence that the session is done — that is
+                    `csift status`
          .meta.away-summary    [not LLM-visible · GATED] the model-generated recap shown
                     when you return after 5+ minutes away (config-gated); verbatim text
          .meta.stop-hooks      [not LLM-visible · GATED] the Stop-hook execution ledger:
