@@ -246,7 +246,7 @@ fn a_monitor_is_open_through_event_pulses_until_it_ends_or_times_out() {
 #[test]
 fn foreground_tools_are_never_launches_and_a_real_output_file_stats() {
     // A foreground Bash (no run_in_background) and a Read are not launches.
-    let fg = r#"{"type":"assistant","uuid":"f1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"f1","name":"Bash","input":{"command":"ls","description":"List"}},{"type":"tool_use","id":"f2","name":"Read","input":{"file_path":"/x"}}]}}"#;
+    let fg = r#"{"type":"assistant","uuid":"f1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"f1","name":"Bash","input":{"command":"grep run_in_background notes.md","description":"List"}},{"type":"tool_use","id":"f2","name":"Read","input":{"file_path":"/x"}}]}}"#;
     let fg_res = r#"{"type":"user","uuid":"f2","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"f1","content":"a b"},{"type":"tool_result","tool_use_id":"f2","content":"x"}]}}"#;
     let t = TempSession::new(&lines(&[fg, fg_res, EOT]), None);
     assert!(report(&t, &BackgroundLens::default()).tasks.is_empty());

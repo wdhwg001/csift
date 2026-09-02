@@ -440,6 +440,26 @@ mod tests {
     }
 
     #[test]
+    fn window_boundaries_are_inclusive() {
+        // since == until is a valid point window, not an ordering error.
+        let point =
+            TimeWindow::from_args(Some("2026-06-01T00:00:00Z"), Some("2026-06-01T00:00:00Z"))
+                .unwrap();
+        assert!(point.contains(Some("2026-06-01T00:00:00Z")));
+        // `contains` admits a record exactly AT the upper bound.
+        let w = TimeWindow::from_args(None, Some("2026-06-07T00:00:00Z")).unwrap();
+        assert!(w.contains(Some("2026-06-07T00:00:00Z")));
+        // `intersects_span` admits a span that ENDS exactly at since, and one that
+        // STARTS exactly at until.
+        let w = TimeWindow::from_args(Some("2026-06-01T00:00:00Z"), Some("2026-06-02T00:00:00Z"))
+            .unwrap();
+        assert!(w.intersects_span(Some("2026-05-30T00:00:00Z"), Some("2026-06-01T00:00:00Z")));
+        assert!(w.intersects_span(Some("2026-06-02T00:00:00Z"), Some("2026-06-03T00:00:00Z")));
+        assert!(!w.intersects_span(Some("2026-05-30T00:00:00Z"), Some("2026-05-31T23:59:59Z")));
+        assert!(!w.intersects_span(Some("2026-06-02T00:00:01Z"), Some("2026-06-03T00:00:00Z")));
+    }
+
+    #[test]
     fn absolute_full_instant_path() {
         // A full ISO instant takes the `s.parse::<Timestamp>()` Ok arm in
         // parse_absolute (distinct from the bare-date arm other tests cover).

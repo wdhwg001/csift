@@ -46,6 +46,11 @@ fn an_open_background_shell_is_the_seventh_verdict_with_its_row() {
         out.stdout
     );
     assert!(
+        !out.stdout.contains("  lane "),
+        "a main-lane launch names no lane (the session is the row's context):\n{}",
+        out.stdout
+    );
+    assert!(
         out.stdout.contains("have not returned") && out.stdout.contains("csift cannot tell"),
         "the honesty note:\n{}",
         out.stdout
