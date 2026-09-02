@@ -69,12 +69,16 @@ fn system_subtypes_map_to_their_meta_leaves() {
         r#"{"type":"system","subtype":"stop_hook_summary","hookCount":1,"hookInfos":[{"command":"/x/h.sh","durationMs":9}],"uuid":"u","timestamp":"t"}"#,
     );
     assert_eq!(sh, vec![Class::MetaStopHooks]);
-    // The boundary keeps its own leaf; an unknown subtype stays unlabeled.
+    // The boundary keeps its own leaf; every other subtype is the v0.10.1 catch-all
+    // (`harness.meta.system`); a subtype-less system line stays unlabeled.
     let cb = labels(
         r#"{"type":"system","subtype":"compact_boundary","uuid":"u","timestamp":"t","compactMetadata":{"trigger":"auto"}}"#,
     );
     assert_eq!(cb, vec![Class::CompactionBoundary]);
-    assert!(labels(r#"{"type":"system","subtype":"agents_killed","uuid":"u"}"#).is_empty());
+    assert_eq!(
+        labels(r#"{"type":"system","subtype":"agents_killed","uuid":"u"}"#),
+        vec![Class::MetaSystem]
+    );
     assert!(labels(r#"{"type":"system","uuid":"u"}"#).is_empty());
 }
 
@@ -111,6 +115,46 @@ fn promoted_leaves_are_all_llm_invisible_and_role_correct() {
     ] {
         assert!(labels(line).is_empty(), "{line}");
     }
+}
+
+#[test]
+fn meta_system_is_the_catch_all_for_every_other_system_subtype() {
+    // The Remote Control disconnect notice (CC 2.1.258): a `system`/`informational`
+    // record with a level and a string content - the catch-all leaf, invisible.
+    let info = r#"{"type":"system","subtype":"informational","level":"warning","uuid":"i1","timestamp":"2026-06-07T05:00:01.000Z","content":"Remote Control disconnected - run /remote-control"}"#;
+    assert_eq!(labels(info), vec![Class::MetaSystem], "{info}");
+    let rec: Record = serde_json::from_str(info).unwrap();
+    assert_eq!(rec.promoted_class(), Some(Class::MetaSystem));
+    assert_eq!(rec.level.as_deref(), Some("warning"));
+    assert!(!Class::MetaSystem.llm_visible());
+    assert_eq!(Class::MetaSystem.role(), Role::Harness);
+    assert_eq!(Class::MetaSystem.path(), "harness.meta.system");
+    // Every unmodeled subtype lands here, whatever its content shape.
+    for sub in [
+        "api_error",
+        "model_refusal_fallback",
+        "model_refusal_no_fallback",
+        "agents_killed",
+        "local_command",
+        "scheduled_task_fire",
+        "some_future_subtype",
+    ] {
+        let line = format!(
+            r#"{{"type":"system","subtype":"{sub}","uuid":"x","timestamp":"2026-06-07T05:00:01.000Z","content":{{"k":1}}}}"#
+        );
+        assert_eq!(labels(&line), vec![Class::MetaSystem], "{line}");
+    }
+    // The modeled subtypes keep their own leaves; the boundary is never the catch-all.
+    let boundary = r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","timestamp":"2026-06-07T05:00:03.000Z","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#;
+    let rec: Record = serde_json::from_str(boundary).unwrap();
+    assert_eq!(rec.promoted_class(), None);
+    assert!(!labels(boundary).contains(&Class::MetaSystem), "{boundary}");
+    let td = r#"{"type":"system","subtype":"turn_duration","uuid":"t1","timestamp":"2026-06-07T05:00:03.000Z","durationMs":5}"#;
+    assert_eq!(labels(td), vec![Class::MetaTurnDuration]);
+    // A system record with NO subtype stays unmodeled (nothing to name it by).
+    let bare =
+        r#"{"type":"system","uuid":"z","timestamp":"2026-06-07T05:00:03.000Z","content":"x"}"#;
+    assert!(labels(bare).is_empty(), "{bare}");
 }
 
 #[test]

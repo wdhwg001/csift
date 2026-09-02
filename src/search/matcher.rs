@@ -472,6 +472,8 @@ fn set_strength(set: &[String]) -> (usize, std::cmp::Reverse<usize>) {
 /// - `turn_duration` / `stop_hook_summary` / `file-history-` (v0.10.0, only under an
 ///   explicit selector reaching the leaf) - the promoted renders fabricate
 ///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
+/// - `"subtype"` (v0.10.1, only under a selector reaching `harness.meta.system`) - the
+///   catch-all render fabricates the `[<subtype> <level>]` head.
 /// - Under `--resolve-persisted`: `persistedOutputPath` / `Full output saved to:` -
 ///   the matched text is EXTERNAL file content, absent from the transcript bytes by
 ///   definition.
@@ -487,9 +489,9 @@ pub(crate) fn synth_marker_finders(
         br#""answers""#,
         b"User has answered your questions",
         b"Your questions have been answered",
+        b"The user answered:",
         // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.
         b"stopped by the user",
-        b"The user answered:",
     ];
     if args
         .label_filter()
@@ -509,6 +511,12 @@ pub(crate) fn synth_marker_finders(
     }
     if args.reaches_gated(Class::MetaSnapshot) {
         verifiable.push(b"file-history-");
+    }
+    // v0.10.1 catch-all system subtypes: the render fabricates the `[<subtype> <level>]`
+    // head, so the key-only `"subtype"` needle (the same needle that admits the line)
+    // marks it for stage-2 re-rendering.
+    if args.reaches_gated(Class::MetaSystem) {
+        verifiable.push(br#""subtype""#);
     }
     // CONSERVATIVE (needs cross-record / external data - force the full scan).
     let mut conservative: Vec<&[u8]> = vec![b"To tell you how to proceed"];

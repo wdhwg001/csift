@@ -17,7 +17,12 @@ impl Record {
                 "turn_duration" => Some(Class::MetaTurnDuration),
                 "away_summary" => Some(Class::MetaAwaySummary),
                 "stop_hook_summary" => Some(Class::MetaStopHooks),
-                _ => None,
+                // The compaction boundary has its own leaf (`classify`, D7); every OTHER
+                // system subtype is the harness talking to its own UI (v0.10.1 catch-all:
+                // informational, api_error, model_refusal_*, agents_killed, local_command,
+                // scheduled_task_fire, and whatever a later build adds).
+                "compact_boundary" => None,
+                _ => Some(Class::MetaSystem),
             },
             "file-history-snapshot" | "file-history-delta" => Some(Class::MetaSnapshot),
             _ => None,

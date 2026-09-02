@@ -112,7 +112,7 @@ csift is the missing tool it should have had.
    A background task's completion notice is a `"user"` role. \
    A subagent's return: also `"user"`. \
    Your `AskUserQuestion` answer: a _tool result_. \
-   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 33 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said. \
+   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 34 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said. \
    Some labels exist because the format hides things: `user.unsent` finds the message you esc-recalled and never actually sent, `user.queued` finds what you typed into the queue while a turn was running, `harness.meta.turn-duration` is the record behind the "Done in 1m 5s" line, and `agent.thinking.narration` separates the API's one-line summaries from the reasoning they summarize.
 
 7. 🛎 **Pending questions, on the record.**

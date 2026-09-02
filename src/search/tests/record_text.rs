@@ -107,6 +107,37 @@ fn snapshot_and_delta_excerpts_name_paths_and_versions() {
 }
 
 #[test]
+fn meta_system_renders_subtype_level_and_content() {
+    // String content with a level: the Remote Control disconnect shape.
+    let info = rec(
+        r#"{"type":"system","subtype":"informational","level":"warning","uuid":"i","timestamp":"t","content":"Remote Control disconnected - run /remote-control"}"#,
+    );
+    assert_eq!(
+        promoted_record_text(&info).as_deref(),
+        Some("[informational warning] Remote Control disconnected - run /remote-control")
+    );
+    // No level: the head is the bare subtype; a non-string content renders as its JSON.
+    let killed = rec(
+        r#"{"type":"system","subtype":"agents_killed","uuid":"k","timestamp":"t","content":{"count":2}}"#,
+    );
+    assert_eq!(
+        promoted_record_text(&killed).as_deref(),
+        Some(r#"[agents_killed] {"count":2}"#)
+    );
+    // No content at all: the head alone (still a searchable, addressable record).
+    let bare = rec(r#"{"type":"system","subtype":"api_error","uuid":"e","timestamp":"t"}"#);
+    assert_eq!(promoted_record_text(&bare).as_deref(), Some("[api_error]"));
+    // An empty level string is treated as absent.
+    let empty = rec(
+        r#"{"type":"system","subtype":"local_command","level":"","uuid":"l","timestamp":"t","content":"ran"}"#,
+    );
+    assert_eq!(
+        promoted_record_text(&empty).as_deref(),
+        Some("[local_command] ran")
+    );
+}
+
+#[test]
 fn fmt_ms_picks_the_top_two_units() {
     assert_eq!(fmt_ms(0), "0s");
     assert_eq!(fmt_ms(499), "0s");

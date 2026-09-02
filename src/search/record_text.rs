@@ -55,6 +55,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
             | Class::MetaAwaySummary
             | Class::MetaStopHooks
             | Class::MetaSnapshot
+            | Class::MetaSystem
     )
 }
 
@@ -235,6 +236,27 @@ pub(crate) fn promoted_record_text(rec: &Record) -> Option<String> {
             Some(lines.join("\n"))
         }
         Class::MetaSnapshot => snapshot_record_text(rec),
+        Class::MetaSystem => {
+            // `[<subtype> <level>] <content>`: the head is fabricated (a synth marker
+            // covers it), the body is the record's own `content` - a string on every
+            // measured shape (informational, agents_killed, local_command), the compact
+            // JSON of whatever else a subtype carries otherwise.
+            let subtype = rec.subtype.as_deref().unwrap_or("system");
+            let head = match rec.level.as_deref() {
+                Some(level) if !level.is_empty() => format!("[{subtype} {level}]"),
+                _ => format!("[{subtype}]"),
+            };
+            let body = match rec.content.as_ref() {
+                Some(serde_json::Value::String(s)) => s.clone(),
+                Some(other) => other.to_string(),
+                None => String::new(),
+            };
+            Some(if body.is_empty() {
+                head
+            } else {
+                format!("{head} {body}")
+            })
+        }
         _ => None,
     }
 }

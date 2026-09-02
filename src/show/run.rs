@@ -253,9 +253,10 @@ pub(crate) fn run_rendered(
             "no such record(s): {} — an explicit address renders message lines \
              (role:user/role:assistant, superseded drafts included), attachment lines, and \
              the promoted non-record lines (a queue-operation with text, turn_duration, \
-             away_summary, stop_hook_summary, file-history-snapshot/-delta); session-state \
-             cache lines (last-prompt, mode, ai-title, …), a content-less queue dequeue, \
-             unpromoted system subtypes and torn lines are inspectable with `--raw`",
+             away_summary, stop_hook_summary, file-history-snapshot/-delta, and every \
+             other system subtype such as informational or api_error); session-state \
+             cache lines (last-prompt, mode, ai-title, …), a content-less queue dequeue \
+             and torn lines are inspectable with `--raw`",
             misses.join(", ")
         );
     }

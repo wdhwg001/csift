@@ -102,6 +102,7 @@ pub(crate) fn search_one_file(
         away_summary: reach(Class::MetaAwaySummary),
         stop_hooks: reach(Class::MetaStopHooks),
         snapshot: reach(Class::MetaSnapshot),
+        system: reach(Class::MetaSystem),
     };
 
     // ── §7f whole-file gate ──
@@ -317,6 +318,8 @@ pub(crate) struct CandidateGates {
     pub(crate) stop_hooks: bool,
     /// v0.10.0: `file-history-snapshot` + `file-history-delta` lines.
     pub(crate) snapshot: bool,
+    /// v0.10.1: every OTHER `type:"system"` subtype (`harness.meta.system`).
+    pub(crate) system: bool,
 }
 
 /// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
@@ -359,6 +362,11 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         std::sync::LazyLock::new(|| memmem::Finder::new(b"stop_hook_summary"));
     static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"file-history-"));
+    // v0.10.1 catch-all system subtypes: the key-only needle `"subtype"` (every system
+    // record carries it; a quoted KEY survives a reserialize, and the classify arm
+    // decides which subtype it is - the already-modeled ones simply reclassify).
+    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"subtype\""));
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
@@ -381,4 +389,5 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())
         || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())
         || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
+        || (gates.system && SUBTYPE_FINDER.find(line).is_some())
 }

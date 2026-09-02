@@ -149,7 +149,7 @@ use super::*;
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 33 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 34 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
         role's LLM-VISIBLE leaves - the conversation as the model receives/produces\n  \
         it. Exactly two leaves are invisible and need naming or a glob: `user.unsent`\n  \
@@ -161,15 +161,15 @@ use super::*;
         deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \
         contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
         last-human-touch consumer.)\n  \
-          GATED LEAVES (v0.10.0): the five promoted non-record leaves - `user.queued`\n  \
-        and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot}` - are\n  \
-        scanned ONLY when an explicit -t reaches them (the full path, a glob such as\n  \
-        `-t 'user.*'` / `-t 'harness.*'`, or the `harness.meta` prefix), or when a\n  \
-        `csift show --line/--uuid` address names the line. A bare scan with no -t, a\n  \
-        bare role, and `--count-by label` without -t never parse those lines (every\n  \
-        one is a non-message line, and most queued content is a duplicate automation\n  \
-        pulse). All five are LLM-invisible: none carries a message field. Their\n  \
-        raw form is still `show --line N --raw`.\n  \
+          GATED LEAVES (v0.10.0, +1 in v0.10.1): the six promoted non-record leaves -\n  \
+        `user.queued` and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot,\n  \
+        system}` - are scanned ONLY when an explicit -t reaches them (the full path, a\n  \
+        glob such as `-t 'user.*'` / `-t 'harness.*'`, or the `harness.meta` prefix), or\n  \
+        when a `csift show --line/--uuid` address names the line. A bare scan with no\n  \
+        -t, a bare role, and `--count-by label` without -t never parse those lines\n  \
+        (every one is a non-message line, and most queued content is a duplicate\n  \
+        automation pulse). All six are LLM-invisible: none carries a message field.\n  \
+        Their raw form is still `show --line N --raw`.\n  \
           user     .message                genuine human prose (a slash command with typed\n                                   \
         prose renders as `/name args`)\n           \
         .answer                 an answered AskUserQuestion: question, options and\n                                   \
@@ -208,7 +208,12 @@ use super::*;
         its duration, errors, preventedContinuation (GATED)\n           \
         .meta.snapshot          a file-history snapshot (every tracked path@version) or\n                                   \
         delta (one path's bump) - the v0.9.4 recover instrument,\n                                   \
-        now searchable by path and version (GATED)\n  \
+        now searchable by path and version (GATED)\n           \
+        .meta.system            every OTHER `type:system` subtype the harness writes for\n                                   \
+        its own UI (informational such as the Remote Control\n                                   \
+        disconnect warning, api_error, model_refusal_fallback,\n                                   \
+        agents_killed, local_command, scheduled_task_fire); renders\n                                   \
+        `[<subtype> <level>] <content>` (GATED, v0.10.1)\n  \
           `-t agent` selects the whole role, `-t agent.tool` both tool leaves, a full path\n  \
         just that leaf; `-T` excludes with the same grammar (a combination that excludes\n  \
         everything it includes is a parse error, as is a selector typo, with suggestions).\n  \
@@ -509,14 +514,15 @@ pub struct SearchArgs {
     pub format: OutputFormat,
 }
 
-/// The v0.10.0 promoted non-record leaves - scanned only under an explicit selector
-/// ([`SearchArgs::reaches_gated`]) or a `show` address.
-pub const GATED_LEAVES: [Class; 5] = [
+/// The promoted non-record leaves (v0.10.0, plus the v0.10.1 catch-all) - scanned only
+/// under an explicit selector ([`SearchArgs::reaches_gated`]) or a `show` address.
+pub const GATED_LEAVES: [Class; 6] = [
     Class::UserQueued,
     Class::MetaTurnDuration,
     Class::MetaAwaySummary,
     Class::MetaStopHooks,
     Class::MetaSnapshot,
+    Class::MetaSystem,
 ];
 
 impl SearchArgs {

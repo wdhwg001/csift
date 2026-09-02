@@ -142,6 +142,14 @@ pub enum Class {
     /// searchable by path and version. No `message{}`; a snapshot line has no
     /// top-level timestamp (the excerpt carries the nested one).
     MetaSnapshot,
+    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:"system"`
+    /// subtype the harness writes for its own UI and never sends to the model:
+    /// `informational` (e.g. the Remote Control disconnect warning, `level:"warning"`),
+    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,
+    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a
+    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so
+    /// invisible by the same instrument as the rest of this family; gated like them.
+    MetaSystem,
 }
 
 #[allow(dead_code)]
@@ -182,6 +190,7 @@ impl Class {
                 | Class::MetaAwaySummary
                 | Class::MetaStopHooks
                 | Class::MetaSnapshot
+                | Class::MetaSystem
         )
     }
 
@@ -224,6 +233,7 @@ impl Class {
         Class::MetaAwaySummary,
         Class::MetaStopHooks,
         Class::MetaSnapshot,
+        Class::MetaSystem,
     ];
 
     /// The canonical dotted path (GOLD §2) - the `-t` selector form (P2) and render label.
@@ -263,6 +273,7 @@ impl Class {
             Class::MetaAwaySummary => "harness.meta.away-summary",
             Class::MetaStopHooks => "harness.meta.stop-hooks",
             Class::MetaSnapshot => "harness.meta.snapshot",
+            Class::MetaSystem => "harness.meta.system",
         }
     }
 
@@ -303,7 +314,8 @@ impl Class {
             | Class::MetaTurnDuration
             | Class::MetaAwaySummary
             | Class::MetaStopHooks
-            | Class::MetaSnapshot => Role::Harness,
+            | Class::MetaSnapshot
+            | Class::MetaSystem => Role::Harness,
         }
     }
 }

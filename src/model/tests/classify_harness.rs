@@ -474,9 +474,16 @@ fn classify_elicitation_pending_and_resolved() {
 
 #[test]
 fn classify_unmodeled_records_are_empty() {
-    // An UNPROMOTED system subtype is outside the taxonomy → no labels (never crash).
+    // Every system subtype is modeled since v0.10.1 (the catch-all `harness.meta.system`
+    // takes api_error); a system record with NO subtype stays outside the taxonomy →
+    // no labels (never crash).
     let sys = parse(r#"{"type":"system","subtype":"api_error","error":"x","retryAttempt":1}"#);
-    assert!(sys.classify(&ClassifyCtx::top_level()).is_empty());
+    assert_eq!(
+        sys.classify(&ClassifyCtx::top_level()),
+        vec![Class::MetaSystem]
+    );
+    let bare = parse(r#"{"type":"system","error":"x"}"#);
+    assert!(bare.classify(&ClassifyCtx::top_level()).is_empty());
     // A metadata-only record likewise.
     let meta = parse(r#"{"type":"last-prompt","leafUuid":"x"}"#);
     assert!(meta.classify(&ClassifyCtx::top_level()).is_empty());

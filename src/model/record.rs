@@ -78,9 +78,15 @@ pub struct Record {
     pub is_visible_in_transcript_only: Option<bool>,
 
     /// `system` record subtype: stop_hook_summary | turn_duration | away_summary
-    /// | compact_boundary | …
+    /// | compact_boundary | informational | api_error | model_refusal_* | agents_killed
+    /// | local_command | scheduled_task_fire | …
     #[serde(default)]
     pub subtype: Option<String>,
+
+    /// `system` record severity (`"warning"` on the Remote Control disconnect notice,
+    /// `"info"` elsewhere); rides the `harness.meta.system` excerpt head (v0.10.1).
+    #[serde(default)]
+    pub level: Option<String>,
 
     /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`
     /// `"Conversation compacted …"` line). Read by `search` as the message-less fallback text (D7).

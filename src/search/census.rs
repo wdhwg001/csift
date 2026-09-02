@@ -280,7 +280,8 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
         // the label probe above) never looked at those lines, so say so.
         eprintln!(
             "csift: note: the gated leaves (user.queued, harness.meta.turn-duration, \
-             harness.meta.away-summary, harness.meta.stop-hooks, harness.meta.snapshot) \
+             harness.meta.away-summary, harness.meta.stop-hooks, harness.meta.snapshot, \
+             harness.meta.system) \
              are scanned only under an explicit -t that reaches them - this absence does \
              not cover those lines."
         );
