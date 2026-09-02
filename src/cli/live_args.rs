@@ -87,10 +87,18 @@ pub struct BackgroundLensArgs {
         stay reproducible; status answers \"now\" and says so). It reads outside \
         projects/ (the registry), honoring --claude-home.\n\n\
         HONESTY LIMITS, stated in the output when they bite: a pending PERMISSION prompt \
-        lives only in Claude Code process memory (no sidecar installed = it masquerades \
-        as idle; the note says so); the registry covers top-level interactive sessions \
-        only (a subagent target degrades to tail + pid evidence, never a fabricated \
-        row); on non-unix hosts the pid probe is unavailable and the verdict says so.",
+        leaves no transcript trace - only a CURRENT registry row shows it (status \
+        `waiting`, which the harness sets for any blocking dialog: a question, a \
+        permission prompt, a plan approval, a sandbox or worker request), and that row is \
+        transition-written, so a stale one is refuted only by the pid probe; a \
+        multi-question AskUserQuestion is written to the transcript at question time and \
+        the tail reads it as hitl, while a single-question one stays buffered until \
+        answered (the sidecar covers that shape); the registry covers top-level sessions \
+        only (a subagent target degrades to tail + pid evidence, never a fabricated row); \
+        the pid probe is `ps` (+ `/proc` on Linux) on unix and PowerShell `Get-Process` \
+        (+ `tasklist`) on Windows, where `procStart` is a FILETIME tick count; a row \
+        written in another pid domain (`pidDomain`) is never probed and the verdict says \
+        so.",
     after_help = "EXAMPLES\n  \
           csift status @<uuid>                    # is it truly stopped?\n  \
           csift status @main                      # my own session (env)\n  \

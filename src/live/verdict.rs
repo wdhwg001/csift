@@ -95,6 +95,68 @@ pub(crate) fn assess_full(
     is_subagent_target: bool,
     background: &BackgroundReport,
 ) -> Assessment {
+    let (evidence, mut notes) = collect_evidence(
+        registry,
+        liveness,
+        main_tail,
+        children,
+        pending_elicitations,
+        is_subagent_target,
+        background,
+    );
+    let verdict = rank_verdict(
+        registry,
+        liveness,
+        main_tail,
+        children,
+        pending_elicitations,
+        background,
+        &mut notes,
+    );
+
+    // F7 honesty: a pending PERMISSION prompt leaves no transcript trace and would
+    // masquerade exactly as these verdicts; only a CURRENT registry row (status
+    // `waiting`) can show one, and that row is transition-written, never a heartbeat.
+    if matches!(
+        verdict,
+        Verdict::IdleEot | Verdict::WaitingChildren | Verdict::IdleBackgroundOpen
+    ) {
+        notes.push(match registry.and_then(|r| r.status.as_deref()) {
+            Some(s) => format!(
+                "a pending permission prompt leaves no transcript trace - it would \
+                 masquerade as idle; the registry row (status {s}) would read `waiting` \
+                 while one is up, and that row is transition-written, so trust it only \
+                 while fresh"
+            ),
+            None => "a pending permission prompt lives only in Claude Code process memory \
+                     and is invisible to this instrument - it would masquerade as idle"
+                .to_string(),
+        });
+    }
+
+    Assessment {
+        verdict,
+        evidence,
+        children: children.children.clone(),
+        pending: pending_elicitations.to_vec(),
+        notes,
+        tasks: TasksReport::default(),
+        background: background.clone(),
+        last: LastMessages::default(),
+        tail_state: tail_state_words(main_tail),
+    }
+}
+
+/// Every surface's evidence row (plus its degradation note), in display order.
+fn collect_evidence(
+    registry: Option<&RegistryRow>,
+    liveness: Option<&PidLiveness>,
+    main_tail: &TailShape,
+    children: &ChildrenReport,
+    pending_elicitations: &[String],
+    is_subagent_target: bool,
+    background: &BackgroundReport,
+) -> (Vec<Evidence>, Vec<String>) {
     let mut evidence: Vec<Evidence> = Vec::new();
     let mut notes: Vec<String> = Vec::new();
 
@@ -140,6 +202,14 @@ pub(crate) fn assess_full(
             ),
             PidLiveness::Dead => ("dead".to_string(), None),
             PidLiveness::Reused => ("pid reused by another process".to_string(), None),
+            PidLiveness::ForeignDomain(d) => (
+                format!("row from another pid domain ({d})"),
+                Some(
+                    "the registry row was written in another pid domain (another machine \
+                     or OS): its pid means nothing here - stale-dead is undecidable"
+                        .to_string(),
+                ),
+            ),
             PidLiveness::Unavailable => (
                 "probe unavailable on this host".to_string(),
                 Some("pid liveness cannot be checked here - stale-dead is undecidable".to_string()),
@@ -203,26 +273,83 @@ pub(crate) fn assess_full(
         });
     }
 
-    // ── The join ──
+    (evidence, notes)
+}
+
+/// The join: dead process > blocked-on-human > tool-in-flight > live children > open
+/// background task under the lens > clean EoT > unknown, each step leaving its note.
+fn rank_verdict(
+    registry: Option<&RegistryRow>,
+    liveness: Option<&PidLiveness>,
+    main_tail: &TailShape,
+    children: &ChildrenReport,
+    pending_elicitations: &[String],
+    background: &BackgroundReport,
+    notes: &mut Vec<String>,
+) -> Verdict {
     let dead = matches!(liveness, Some(PidLiveness::Dead | PidLiveness::Reused));
-    let running_shape = main_tail.unreturned_use.is_some()
-        || registry
-            .and_then(|r| r.status.as_deref())
-            .is_some_and(|s| s == "busy" || s == "shell");
+    // Two HITL legs beside the sidecar: the registry's `waiting` status (the binary sets
+    // it whenever a dialog blocks the session: a question, a permission prompt, a plan
+    // approval, a sandbox/worker request), and an unreturned AskUserQuestion/ExitPlanMode
+    // at the tail (a MULTI-question ask is written at question time since CC 2.1.258;
+    // a single-question ask stays buffered until answered - the sidecar's shape).
+    let registry_waiting = registry
+        .and_then(|r| r.status.as_deref())
+        .is_some_and(|s| s == "waiting");
+    let tail_dialog = main_tail
+        .unreturned_use
+        .as_ref()
+        .is_some_and(|(tool, _)| matches!(tool.as_str(), "AskUserQuestion" | "ExitPlanMode"));
+    // The registry's `shell` status is IDLE WITH A BACKGROUND SHELL RUNNING (the binary
+    // computes `idle` and then relabels it `shell` while a local_bash task is open) -
+    // never a running shape. `busy` is the only registry running signal.
+    let registry_status = registry.and_then(|r| r.status.as_deref());
+    let registry_shell = registry_status == Some("shell");
+    let running_shape = main_tail.unreturned_use.is_some() || registry_status == Some("busy");
     let eot_shape = main_tail.unreturned_use.is_none()
-        && main_tail
+        && (main_tail
             .last_stop_reason
             .as_deref()
-            .is_some_and(|s| s == "end_turn");
+            .is_some_and(|s| s == "end_turn")
+            || registry_shell);
+    if registry_shell && !dead {
+        notes.push(if background.open_counted() > 0 {
+            "registry status shell: idle at end of turn with a background shell still \
+             running - the background section lists it"
+                .to_string()
+        } else {
+            "registry status shell: the harness reports a background shell still running \
+             that the background section does not count (launched in an unscanned lane, \
+             or excluded by the lens)"
+                .to_string()
+        });
+    }
 
-    let verdict = if dead {
+    if dead {
         notes.push(if main_tail.unreturned_use.is_some() {
             "the tail shows a call still open: the process died MID-TOOL".to_string()
         } else {
             "the tail is settled: the process ended after its last turn".to_string()
         });
         Verdict::StaleDead
-    } else if !pending_elicitations.is_empty() {
+    } else if !pending_elicitations.is_empty() || registry_waiting || tail_dialog {
+        if registry_waiting {
+            notes.push(
+                "registry status waiting: the session is blocked on a dialog (a question, a \
+                 permission prompt, a plan approval or a sandbox/worker request); the row is \
+                 transition-written, so a stale one from a dead session needs the pid probe \
+                 to refute it"
+                    .to_string(),
+            );
+        }
+        if tail_dialog {
+            notes.push(
+                "the tail holds an unreturned AskUserQuestion/ExitPlanMode call: a \
+                 multi-question ask is written at question time, a single-question ask \
+                 stays buffered until answered (the sidecar covers that shape)"
+                    .to_string(),
+            );
+        }
         Verdict::WaitingHitl
     } else if running_shape {
         Verdict::Running
@@ -250,31 +377,6 @@ pub(crate) fn assess_full(
             main_tail.last_stop_reason.as_deref().unwrap_or("(none)")
         ));
         Verdict::Unknown
-    };
-
-    // F7 honesty: a pending PERMISSION prompt is invisible without a sidecar and would
-    // masquerade exactly as these two verdicts.
-    if matches!(
-        verdict,
-        Verdict::IdleEot | Verdict::WaitingChildren | Verdict::IdleBackgroundOpen
-    ) {
-        notes.push(
-            "a pending permission prompt lives only in Claude Code process memory and is \
-             invisible to this instrument - it would masquerade as idle"
-                .to_string(),
-        );
-    }
-
-    Assessment {
-        verdict,
-        evidence,
-        children: children.children.clone(),
-        pending: pending_elicitations.to_vec(),
-        notes,
-        tasks: TasksReport::default(),
-        background: background.clone(),
-        last: LastMessages::default(),
-        tail_state: tail_state_words(main_tail),
     }
 }
 

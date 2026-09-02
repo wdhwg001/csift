@@ -145,15 +145,106 @@ fn p3_waiting_hitl_from_the_sidecar() {
     );
 }
 
-#[cfg(unix)]
+#[test]
+fn p3b_waiting_hitl_from_the_tail_and_the_registry_without_a_sidecar() {
+    // A multi-question AskUserQuestion is written at question time: an unreturned one
+    // at the tail is hitl, not running (no sidecar installed here).
+    let h = Home::new();
+    h.write(
+        &format!("{LIVE_ENC}/{LIVE_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick the harbor and the tide"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"ask9","name":"AskUserQuestion","input":{"questions":[{"question":"which harbor?","header":"Harbor","options":[{"label":"north"},{"label":"south"}]},{"question":"which tide?","header":"Tide","options":[{"label":"ebb"},{"label":"flood"}]}]}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["status", &at(LIVE_SESS)]);
+    assert!(
+        out.stdout.contains("verdict  waiting-hitl")
+            && out.stdout.contains("unreturned AskUserQuestion call")
+            && out.stdout.contains("single-question ask stays buffered"),
+        "tail dialog = blocked on a human:\n{}",
+        out.stdout
+    );
+    let js = h.run(&["status", &at(LIVE_SESS), "--format", "json"]);
+    assert!(
+        js.stdout.contains("\"verdict\":\"waiting-hitl\""),
+        "{}",
+        js.stdout
+    );
+
+    // The registry's `waiting` status alone (a permission prompt, a plan approval, ...)
+    // is hitl too, over a settled tail; the note names the dialog kinds.
+    let h2 = Home::new();
+    live_eot_main(&h2);
+    h2.write_session_registry(
+        std::process::id(),
+        &live_registry_row(std::process::id(), "waiting"),
+    );
+    let out2 = h2.run(&["status", &at(LIVE_SESS)]);
+    assert!(
+        out2.stdout.contains("verdict  waiting-hitl")
+            && out2.stdout.contains("status waiting")
+            && out2.stdout.contains("permission prompt, a plan approval"),
+        "registry waiting = blocked on a dialog:\n{}",
+        out2.stdout
+    );
+    // An idle row keeps idle-eot, and the permission-prompt note now names the row.
+    let h3 = Home::new();
+    live_eot_main(&h3);
+    h3.write_session_registry(
+        std::process::id(),
+        &live_registry_row(std::process::id(), "idle"),
+    );
+    let out3 = h3.run(&["status", &at(LIVE_SESS)]);
+    assert!(
+        out3.stdout.contains("verdict  idle-eot")
+            && out3
+                .stdout
+                .contains("registry row (status idle) would read `waiting`"),
+        "{}",
+        out3.stdout
+    );
+}
+
+#[test]
+fn p3c_foreign_pid_domain_row_is_never_probed() {
+    let h = Home::new();
+    live_running_main(&h);
+    let me = std::process::id();
+    h.write_session_registry(
+        me,
+        &format!(
+            r#"{{"pid":{me},"sessionId":"{LIVE_SESS}","status":"busy","procStart":"134328101803820142","pidDomain":"plan9:elsewhere","kind":"interactive"}}"#
+        ),
+    );
+    let out = h.run(&["status", &at(LIVE_SESS)]);
+    assert!(
+        out.stdout.contains("verdict  running")
+            && out
+                .stdout
+                .contains("row from another pid domain (plan9:elsewhere)")
+            && out.stdout.contains("stale-dead is undecidable"),
+        "{}",
+        out.stdout
+    );
+}
+
 #[test]
 fn p4_stale_dead_via_pid_and_reuse_guard() {
-    // A reliably dead pid: spawn `true`, reap it.
-    let dead = std::process::Command::new("true").spawn().unwrap();
+    // A reliably dead pid: spawn a no-op, reap it.
+    let spawn_noop = || {
+        if cfg!(windows) {
+            std::process::Command::new("cmd")
+                .args(["/c", "exit"])
+                .spawn()
+                .unwrap()
+        } else {
+            std::process::Command::new("true").spawn().unwrap()
+        }
+    };
+    let mut dead = spawn_noop();
     let dead_pid = dead.id();
-    let _ = std::process::Command::new("true").spawn().unwrap().wait();
-    let mut child = dead;
-    let _ = child.wait();
+    let _ = dead.wait();
 
     let h = Home::new();
     live_running_main(&h); // mid-tool tail
@@ -165,23 +256,50 @@ fn p4_stale_dead_via_pid_and_reuse_guard() {
         out.stdout
     );
 
-    // Reuse variant: OUR pid (alive) with a procStart that is not our start time.
+    // Reuse variant: OUR pid (alive) with a procStart that is not our start time, in
+    // the registry's own rendering for this platform (asctime UTC on unix, a FILETIME
+    // tick count on Windows - here one from 2022).
     let h2 = Home::new();
     live_eot_main(&h2);
     let me = std::process::id();
+    let old_start = if cfg!(windows) {
+        "133000000000000000"
+    } else {
+        "Sun Aug 16 09:04:23 2026"
+    };
     h2.write_session_registry(
         me,
         &format!(
-            r#"{{"pid":{me},"sessionId":"{LIVE_SESS}","status":"idle","procStart":"Sun Aug 16 09:04:23 2026","kind":"interactive"}}"#
+            r#"{{"pid":{me},"sessionId":"{LIVE_SESS}","status":"idle","procStart":"{old_start}","kind":"interactive"}}"#
         ),
     );
     let out2 = h2.run(&["status", &at(LIVE_SESS)]);
-    // The reuse verdict needs a start time from ps; a busybox ps (Alpine) cannot give
-    // one, and the honest outcome there is a pid-only probe with the skip disclosed.
-    let ps_has_lstart = std::process::Command::new("ps")
-        .args(["-p", &me.to_string(), "-o", "lstart="])
-        .output()
-        .is_ok_and(|o| o.status.success() && !o.stdout.iter().all(u8::is_ascii_whitespace));
+    // The reuse verdict needs a start time from the host probe; a busybox ps (Alpine)
+    // cannot give one, and the honest outcome there is a pid-only probe with the skip
+    // disclosed. On Windows the probe is PowerShell's Get-Process StartTime.
+    let ps_has_lstart = if cfg!(windows) {
+        std::process::Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!("(Get-Process -Id {me}).StartTime.ToFileTimeUtc()"),
+            ])
+            .output()
+            .is_ok_and(|o| {
+                o.status.success()
+                    && String::from_utf8_lossy(&o.stdout)
+                        .trim()
+                        .bytes()
+                        .all(|b| b.is_ascii_digit())
+                    && !o.stdout.iter().all(u8::is_ascii_whitespace)
+            })
+    } else {
+        std::process::Command::new("ps")
+            .args(["-p", &me.to_string(), "-o", "lstart="])
+            .output()
+            .is_ok_and(|o| o.status.success() && !o.stdout.iter().all(u8::is_ascii_whitespace))
+    };
     if ps_has_lstart {
         assert!(
             out2.stdout.contains("verdict  stale-dead") && out2.stdout.contains("pid reused"),
@@ -269,169 +387,75 @@ fn p7_status_json_envelope_and_registry_decoys() {
 }
 
 #[test]
-fn p13_settled_children_fold_and_tasks_section() {
+fn p16_a_completion_pulse_settles_its_lane_while_an_open_agent_stays_live() {
+    // Two async agents launched from the main lane, both with FRESH paired child tails
+    // and no end_turn (the `generating` shape). Agent A's completion notification has
+    // landed in the main transcript; agent B's has not. The returned set is built from
+    // the background scan (agent kind AND a closed state): A folds as settled, B stays
+    // live, and the verdict is waiting-children on B alone.
     let h = Home::new();
-    live_eot_main(&h);
-    // Two settled child lanes (ancient paired tails ending in end_turn).
-    for hexid in ["a1b2c3d4e5f60718", "b2c3d4e5f6071829"] {
-        h.write(
-            &format!("{LIVE_ENC}/{LIVE_SESS}/subagents/agent-{hexid}.jsonl"),
+    const A: &str = "a0123456789abcdef0";
+    const B: &str = "a9876543210fedcba9";
+    h.write(
+        &format!("{LIVE_ENC}/{LIVE_SESS}.jsonl"),
+        &format!(
             concat!(
-                r#"{"type":"assistant","uuid":"sa1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ct1","name":"Bash","input":{"command":"work"}}]}}"#, "\n",
-                r#"{"type":"user","uuid":"sr1","parentUuid":"sa1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ct1","content":"done"}]}}"#, "\n",
-                r#"{"type":"assistant","uuid":"sa2","parentUuid":"sr1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"child done"}]}}"#, "\n",
+                r#"{{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"survey both reefs"}}}}"#, "\n",
+                r#"{{"type":"user","uuid":"r2","timestamp":"2026-06-07T05:00:03.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t2","content":"Async agent launched successfully."}}]}},"toolUseResult":{{"isAsync":true,"status":"async_launched","agentId":"{A}","description":"Census the reef","outputFile":"/nonexistent/a.output"}}}}"#, "\n",
+                r#"{{"type":"user","uuid":"r3","timestamp":"2026-06-07T05:00:04.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t3","content":"Async agent launched successfully."}}]}},"toolUseResult":{{"isAsync":true,"status":"async_launched","agentId":"{B}","description":"Chart the shoal","outputFile":"/nonexistent/b.output"}}}}"#, "\n",
+                r#"{{"type":"user","uuid":"n1","timestamp":"2026-06-07T05:09:00.000Z","message":{{"role":"user","content":"<task-notification>\n<task-id>{A}</task-id>\n<tool-use-id>t2</tool-use-id>\n<status>completed</status>\n<summary>Agent \"Census the reef\" finished</summary>\n</task-notification>"}}}}"#, "\n",
+                r#"{{"type":"assistant","uuid":"a9","parentUuid":"n1","timestamp":"2026-06-07T05:09:05.000Z","message":{{"role":"assistant","stop_reason":"end_turn","content":[{{"type":"text","text":"one back, one still out"}}]}}}}"#, "\n",
+            ),
+            A = A,
+            B = B
+        ),
+    );
+    let now = jiff::Timestamp::now().to_string();
+    for id in [A, B] {
+        h.write(
+            &format!("{LIVE_ENC}/{LIVE_SESS}/subagents/agent-{id}.jsonl"),
+            &format!(
+                concat!(
+                    r#"{{"type":"assistant","uuid":"ca1","timestamp":"{now}","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"ct1","name":"Bash","input":{{"command":"work"}}}}]}}}}"#, "\n",
+                    r#"{{"type":"user","uuid":"cr1","parentUuid":"ca1","timestamp":"{now}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"ct1","content":"ok"}}]}}}}"#, "\n",
+                ),
+                now = now
             ),
         );
     }
-    // Tasks under BOTH directory-name forms (they merge into one list).
-    h.write_claude(
-        &format!("tasks/{LIVE_SESS}/1.json"),
-        r#"{"id":"1","subject":"Chart the reef","status":"completed"}"#,
-    );
-    h.write_claude(
-        &format!("tasks/{LIVE_SESS}/3.json"),
-        r#"{"id":"3","subject":"Mark the buoys","status":"pending","blockedBy":["2"]}"#,
-    );
-    h.write_claude(
-        &format!("tasks/session-{}/2.json", &LIVE_SESS[..8]),
-        r#"{"id":"2","subject":"Sound the channel","status":"in_progress","blockedBy":[]}"#,
-    );
-    h.write_claude(
-        &format!("tasks/session-{}/4.json", &LIVE_SESS[..8]),
-        r#"{"id":"4","subject":"Log the tide","status":"completed"}"#,
-    );
-    // Decoys: a non-json file, a malformed json, and a NUMERIC-id task - all
-    // tolerated (the first two silently, the number rendered as a string id).
-    h.write_claude(&format!("tasks/{LIVE_SESS}/notes.txt"), "not a task");
-    h.write_claude(&format!("tasks/{LIVE_SESS}/9.json"), "{broken");
-    h.write_claude(
-        &format!("tasks/{LIVE_SESS}/5.json"),
-        r#"{"id":5,"subject":"Refit the hull","status":"completed"}"#,
-    );
-    // A numeric-id OPEN task renders its number and sorts NUMERICALLY (12 after 3,
-    // where a lexicographic order would put "12" first).
-    h.write_claude(
-        &format!("tasks/{LIVE_SESS}/12.json"),
-        r#"{"id":12,"subject":"Chart the drift","status":"pending"}"#,
-    );
-    let out = h.run(&["status", &at(LIVE_SESS)]);
-    assert!(out.success, "stderr: {}", out.stderr);
-    // Settled lanes fold to a count line; no per-lane settled rows survive.
-    assert!(
-        out.stdout.contains("2 settled lane(s) folded"),
-        "fold line:\n{}",
-        out.stdout
-    );
-    assert!(
-        !out.stdout.contains("settled  last record"),
-        "no per-lane settled rows:\n{}",
-        out.stdout
-    );
-    // Tasks: in_progress leads, the blocked pending row names its blocker, completed
-    // folds to the summary count.
-    let i2 = out.stdout.find("#2 in_progress  Sound the channel");
-    let i3 = out
-        .stdout
-        .find("#3 pending  Mark the buoys  (blocked by #2)");
-    assert!(
-        i2.is_some() && i3.is_some() && i2 < i3,
-        "task rows ordered in_progress-first:\n{}",
-        out.stdout
-    );
-    assert!(
-        out.stdout.contains("tasks     3 open ; 3 completed"),
-        "tasks summary (decoys skipped, numeric ids counted):\n{}",
-        out.stdout
-    );
-    let i12 = out.stdout.find("#12 pending  Chart the drift");
-    assert!(
-        i12.is_some() && i3 < i12,
-        "numeric id order (3 before 12):\n{}",
-        out.stdout
-    );
-    assert!(
-        !out.stdout.contains("Chart the reef"),
-        "completed tasks never render as rows:\n{}",
-        out.stdout
-    );
-
-    // JSON: children carries only live lanes, the fold count and tasks ride the row.
     let j = h.run(&["status", &at(LIVE_SESS), "--format", "json"]);
-    let row: serde_json::Value = j
+    assert!(j.success, "stderr: {}", j.stderr);
+    let v: serde_json::Value = j
         .stdout
         .lines()
-        .filter_map(|l| serde_json::from_str(l).ok())
-        .find(|v: &serde_json::Value| v["kind"] == "verdict")
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|r: &serde_json::Value| r["kind"] == "verdict")
         .expect("verdict row");
+    assert_eq!(v["verdict"], "waiting-children", "{}", j.stdout);
+    let kids = v["children"].as_array().unwrap();
+    assert_eq!(kids.len(), 1, "only B is live: {}", j.stdout);
+    assert_eq!(kids[0]["session_id"], B);
+    assert_eq!(kids[0]["state"], "generating");
     assert_eq!(
-        row["children"].as_array().map(Vec::len),
-        Some(0),
-        "{}",
+        v["settled_children"], 1,
+        "A folded on its pulse: {}",
         j.stdout
     );
-    assert_eq!(row["settled_children"], 2, "{}", j.stdout);
-    assert_eq!(
-        row["tasks"].as_array().map(Vec::len),
-        Some(3),
-        "{}",
-        j.stdout
-    );
-    assert_eq!(row["tasks"][0]["id"], "2", "{}", j.stdout);
-    assert_eq!(row["tasks"][1]["blocked_by"][0], "2", "{}", j.stdout);
-    assert_eq!(
-        row["tasks"][2]["id"], "12",
-        "numeric id renders: {}",
-        j.stdout
-    );
-    assert_eq!(row["tasks_completed"], 3, "{}", j.stdout);
-}
-
-#[test]
-fn p14_no_tasks_dir_means_null_not_empty() {
-    // A tasks dir that EXISTS but holds nothing: the text section stays silent
-    // (an all-zero line is noise), while JSON below keeps the found distinction.
-    let h_empty = Home::new();
-    live_eot_main(&h_empty);
-    std::fs::create_dir_all(h_empty.root.join(".claude/tasks").join(LIVE_SESS)).unwrap();
-    let out_empty = h_empty.run(&["status", &at(LIVE_SESS)]);
-    assert!(
-        !out_empty.stdout.contains("tasks "),
-        "an empty dir prints no tasks section:\n{}",
-        out_empty.stdout
-    );
-
-    let h = Home::new();
-    live_eot_main(&h);
+    // Text: A folds into the count line, B renders as a live row.
     let out = h.run(&["status", &at(LIVE_SESS)]);
     assert!(
-        !out.stdout.contains("tasks "),
-        "no tasks section without a tasks dir:\n{}",
+        out.stdout.contains("1 settled lane(s) folded"),
+        "{}",
         out.stdout
     );
-    let j = h.run(&["status", &at(LIVE_SESS), "--format", "json"]);
-    let row: serde_json::Value = j
-        .stdout
-        .lines()
-        .filter_map(|l| serde_json::from_str(l).ok())
-        .find(|v: &serde_json::Value| v["kind"] == "verdict")
-        .expect("verdict row");
-    assert!(row["tasks"].is_null(), "{}", j.stdout);
-    assert!(row["tasks_completed"].is_null(), "{}", j.stdout);
-}
-
-#[test]
-fn p15_completed_only_tasks_still_summarize() {
-    // A dir holding ONLY completed tasks: no rows, but the summary line shows.
-    let h = Home::new();
-    live_eot_main(&h);
-    h.write_claude(
-        &format!("tasks/{LIVE_SESS}/1.json"),
-        r#"{"id":"1","subject":"Moor the skiff","status":"completed"}"#,
-    );
-    let out = h.run(&["status", &at(LIVE_SESS)]);
     assert!(
-        out.stdout.contains("tasks     0 open ; 1 completed"),
-        "completed-only dirs still summarize:\n{}",
+        !out.stdout.contains(&format!("{A}  generating")),
+        "A is folded, never a live row:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(B) && out.stdout.contains("generating"),
+        "{}",
         out.stdout
     );
 }

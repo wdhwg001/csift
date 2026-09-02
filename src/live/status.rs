@@ -64,14 +64,26 @@ pub(crate) fn assess_path(
         crate::subagent::parent_session_id_from_path(main).unwrap_or_else(|| session_id.clone());
 
     let registry = registry_row_for(&owner_id)?;
-    let liveness = registry
-        .as_ref()
-        .and_then(|r| r.pid)
-        .map(|pid| probe_pid(pid, registry.as_ref().and_then(|r| r.proc_start.as_deref())));
+    let liveness = registry.as_ref().and_then(|r| r.pid).map(|pid| {
+        probe_pid(
+            pid,
+            registry.as_ref().and_then(|r| r.proc_start.as_deref()),
+            registry.as_ref().and_then(|r| r.pid_domain.as_deref()),
+        )
+    });
 
     let main_tail = tail_shape(main)?;
+    // Background launches first: an async agent whose completion pulse already landed
+    // is a SETTLED lane whatever its tail says, so the children scan takes that set.
+    let background = background_report(main, want_subagents, lens)?;
+    let returned: std::collections::HashSet<String> = background
+        .tasks
+        .iter()
+        .filter(|t| t.kind == BgKind::Agent && t.state != BgState::Open)
+        .filter_map(|t| t.id.clone())
+        .collect();
     let children = if want_subagents && !is_subagent_target {
-        children_report(main)?
+        children_report(main, &returned)?
     } else {
         ChildrenReport::default()
     };
@@ -92,7 +104,6 @@ pub(crate) fn assess_path(
             .collect()
     };
 
-    let background = background_report(main, want_subagents, lens)?;
     let mut assessment = assess_full(
         registry.as_ref(),
         liveness.as_ref(),

@@ -1,17 +1,24 @@
 //! The harness session registry: `<claude-home>/sessions/<pid>.json`.
 //!
-//! Field shape (verified on disk): `{pid, sessionId, cwd, startedAt(ms), procStart(str),
-//! version, kind:"interactive", status, updatedAt, statusUpdatedAt, ...}`. `status`
-//! values observed on disk: `idle` / `busy` / `shell` (the binary also carries `blocked`
-//! and `waiting`). TRANSITION-writes only - never a heartbeat. Coverage: TOP-LEVEL
-//! interactive sessions only; a subagent has no row anywhere and csift never fabricates
-//! one.
+//! Field shape (verified on disk, CC 2.1.258): `{pid, sessionId, cwd, startedAt(ms),
+//! procStart(str), version, kind:"interactive", entrypoint:"cli"|"sdk-cli", pidDomain,
+//! status, updatedAt, statusUpdatedAt, bridgeSessionId?, tmux?, ...}`. `status` is the
+//! binary's closed set `busy | shell | idle | waiting`: `waiting` whenever the session is
+//! blocked on a dialog (a question, a permission prompt, a plan approval, a sandbox or
+//! worker request), `busy` while loading or delegating, else `idle`. A print-mode
+//! (`claude -p`) session writes a row too, with `status: null` that never transitions.
+//! TRANSITION-writes only - never a heartbeat. Coverage: TOP-LEVEL sessions only; a
+//! subagent has no row anywhere and csift never fabricates one.
 //!
-//! `procStart` renders in UTC (`Sun Aug 16 09:04:23 2026`) while `ps lstart` renders in
-//! the LOCAL zone - a naive string/local comparison flags pid reuse on EVERY row. Parse
-//! the registry value as UTC, the `ps` value as local, and compare instants (with a small
-//! tolerance); when either side is absent or unparseable, degrade to a pid-only probe AND
-//! say so in the evidence (the reuse guard was skipped, honest, never silent).
+//! `procStart` is the OWNER PROCESS's creation instant in a PLATFORM-SPECIFIC rendering:
+//! on unix an asctime string in UTC (`Sun Aug 16 09:04:23 2026`), on Windows a FILETIME
+//! integer (100ns ticks since 1601-01-01, e.g. `134328101803820142`). `pidDomain` names
+//! the pid space the row was written in (`darwin`, `linux`, or `win32:<hostname>`); a row
+//! from another domain cannot be probed here and the verdict says so. `ps lstart` renders
+//! in the LOCAL zone - a naive string/local comparison flags pid reuse on EVERY row.
+//! Parse both sides to instants and compare with a small tolerance; when either side is
+//! absent or unparseable, degrade to a pid-only probe AND say so in the evidence (the
+//! reuse guard was skipped, honest, never silent).
 
 use super::*;
 
@@ -22,8 +29,10 @@ pub(crate) struct RegistryRow {
     pub(crate) status: Option<String>,
     /// Millisecond epoch of the last status TRANSITION (not a heartbeat).
     pub(crate) status_updated_at_ms: Option<i64>,
-    /// The raw `procStart` string (UTC-rendered by the harness).
+    /// The raw `procStart` string (asctime UTC on unix, a FILETIME integer on Windows).
     pub(crate) proc_start: Option<String>,
+    /// The raw `pidDomain` (`darwin` | `linux` | `win32:<host>`); absent on older rows.
+    pub(crate) pid_domain: Option<String>,
 }
 
 /// Scan the registry dir for the row whose `sessionId` matches. `Ok(None)` when the dir
@@ -48,20 +57,24 @@ pub(crate) fn registry_row_for(session_id: &str) -> Result<Option<RegistryRow>> 
         if v.get("sessionId").and_then(serde_json::Value::as_str) != Some(session_id) {
             continue;
         }
+        let str_field = |k: &str| {
+            v.get(k)
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        };
         return Ok(Some(RegistryRow {
             pid: v
                 .get("pid")
                 .and_then(serde_json::Value::as_u64)
                 .and_then(|n| u32::try_from(n).ok()),
-            status: v
-                .get("status")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string),
+            status: str_field("status"),
             status_updated_at_ms: v.get("statusUpdatedAt").and_then(serde_json::Value::as_i64),
-            proc_start: v
-                .get("procStart")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string),
+            // The 2.1.258 schema carries TWO keys and every reader in the binary is
+            // `procStartFt ?? procStart` (a platform splitter writes exactly one of
+            // them; the Windows session measured live wrote the FILETIME under
+            // `procStart`, so both spellings are read and both renderings parse).
+            proc_start: str_field("procStartFt").or_else(|| str_field("procStart")),
+            pid_domain: str_field("pidDomain"),
         }));
     }
     Ok(None)
@@ -78,10 +91,11 @@ pub(crate) enum PidLiveness {
     /// Pid alive but its start time mismatches the registry's `procStart`: the pid was
     /// REUSED by another process - the session is dead.
     Reused,
-    /// The probe is unavailable on this host (non-unix): the verdict must say so.
-    /// (Constructed only under cfg(not(unix)); the allow keeps the unix build honest
-    /// without a crate-wide dead_code blanket.)
-    #[cfg_attr(unix, allow(dead_code))]
+    /// The row was written in another pid domain (`pidDomain` names it): the pid means
+    /// nothing here and the verdict must say so.
+    ForeignDomain(String),
+    /// No process probe exists on this host (neither `ps`, `/proc`, PowerShell nor
+    /// `tasklist` answered): the verdict must say so.
     Unavailable,
 }
 
@@ -92,55 +106,96 @@ pub(crate) enum ReuseGuard {
     Skipped,
 }
 
-/// Probe pid liveness WITHOUT signaling (and without a second `unsafe` site - the
-/// crate's single-allow law outranks the raw-syscall form): one `ps -p PID -o lstart=`
-/// answers both questions - a failing/empty ps = no such process; a start time within
-/// tolerance of the registry's UTC `procStart` = the same process (reuse guarded).
-pub(crate) fn probe_pid(pid: u32, proc_start_utc: Option<&str>) -> PidLiveness {
-    #[cfg(unix)]
-    {
-        match ps_probe(pid) {
-            PsProbe::NoProcess => PidLiveness::Dead,
-            PsProbe::Alive(actual) => {
-                match (proc_start_utc.and_then(parse_registry_proc_start), actual) {
-                    (Some(reg), Some(act)) => {
-                        if (reg.as_second() - act.as_second()).abs() <= 2 {
-                            PidLiveness::Alive {
-                                reuse_guard: ReuseGuard::Checked,
-                            }
-                        } else {
-                            PidLiveness::Reused
-                        }
-                    }
-                    _ => PidLiveness::Alive {
-                        reuse_guard: ReuseGuard::Skipped,
-                    },
-                }
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = (pid, proc_start_utc);
-        PidLiveness::Unavailable
+/// The pid domain this csift runs in, in the registry's own vocabulary (the prefix
+/// before any `:<hostname>` suffix).
+#[must_use]
+pub(crate) fn local_pid_domain() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(windows) {
+        "win32"
+    } else {
+        "unknown"
     }
 }
 
-/// The single-ps outcome: process absent, or alive with a (best-effort) start instant.
-#[cfg(unix)]
+/// Probe pid liveness WITHOUT signaling (and without a second `unsafe` site - the
+/// crate's single-allow law outranks the raw-syscall form): one process query answers
+/// both questions - a failing/empty query = no such process; a start time within
+/// tolerance of the registry's `procStart` = the same process (reuse guarded). A row
+/// from another pid domain is never probed (its pid belongs to another machine or OS).
+pub(crate) fn probe_pid(
+    pid: u32,
+    proc_start: Option<&str>,
+    pid_domain: Option<&str>,
+) -> PidLiveness {
+    if let Some(d) = pid_domain {
+        let head = d.split(':').next().unwrap_or(d);
+        if head != local_pid_domain() {
+            return PidLiveness::ForeignDomain(d.to_string());
+        }
+    }
+    match ps_probe(pid) {
+        PsProbe::Unavailable => PidLiveness::Unavailable,
+        PsProbe::NoProcess => PidLiveness::Dead,
+        PsProbe::Alive(actual) => match (proc_start.and_then(parse_registry_proc_start), actual) {
+            (Some(reg), Some(act)) => {
+                if (reg.as_second() - act.as_second()).abs() <= 2 {
+                    PidLiveness::Alive {
+                        reuse_guard: ReuseGuard::Checked,
+                    }
+                } else {
+                    PidLiveness::Reused
+                }
+            }
+            _ => PidLiveness::Alive {
+                reuse_guard: ReuseGuard::Skipped,
+            },
+        },
+    }
+}
+
+/// The single-query outcome: process absent, alive with a (best-effort) start instant,
+/// or no probe tool on this host at all.
 pub(crate) enum PsProbe {
     NoProcess,
     Alive(Option<jiff::Timestamp>),
+    /// Constructed only where no probe tool exists (never on unix, where `ps` failing
+    /// falls through to `/proc`); the allow keeps the unix build honest without a
+    /// crate-wide dead_code blanket.
+    #[cfg_attr(unix, allow(dead_code))]
+    Unavailable,
 }
 
-/// Parse the registry's `procStart` (asctime-like, UTC-rendered: `Sun Aug 16 09:04:23
-/// 2026`). `None` on any mismatch - the caller degrades to pid-only + a note.
+/// Seconds between the FILETIME epoch (1601-01-01) and the unix epoch.
+const FILETIME_UNIX_OFFSET_SECS: i64 = 11_644_473_600;
+
+/// Parse the registry's `procStart`: an asctime-like UTC string (`Sun Aug 16 09:04:23
+/// 2026`, unix) or a FILETIME integer (`134328101803820142`, Windows: 100ns ticks since
+/// 1601). `None` on any mismatch - the caller degrades to pid-only + a note.
 pub(crate) fn parse_registry_proc_start(s: &str) -> Option<jiff::Timestamp> {
-    let bd = jiff::fmt::strtime::parse("%a %b %e %H:%M:%S %Y", s.trim()).ok()?;
+    let s = s.trim();
+    if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
+        return filetime_to_timestamp(s.parse::<u64>().ok()?);
+    }
+    let bd = jiff::fmt::strtime::parse("%a %b %e %H:%M:%S %Y", s).ok()?;
     let dt = bd.to_datetime().ok()?;
     dt.to_zoned(jiff::tz::TimeZone::UTC)
         .ok()
         .map(|z| z.timestamp())
+}
+
+/// A Windows FILETIME (100ns ticks since 1601-01-01 UTC) as an instant; `None` when the
+/// value cannot be a real creation time (before the unix epoch or absurdly far out).
+pub(crate) fn filetime_to_timestamp(ticks: u64) -> Option<jiff::Timestamp> {
+    let secs = i64::try_from(ticks / 10_000_000).ok()? - FILETIME_UNIX_OFFSET_SECS;
+    if secs < 0 {
+        return None;
+    }
+    let nanos = i32::try_from((ticks % 10_000_000) * 100).ok()?;
+    jiff::Timestamp::new(secs, nanos).ok()
 }
 
 /// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success
@@ -177,4 +232,51 @@ pub(crate) fn ps_probe(pid: u32) -> PsProbe {
         }
     }
     PsProbe::Alive(None)
+}
+
+/// Windows: one PowerShell call answers both questions - `Get-Process -Id` fails (exit
+/// 3 by our script) for a missing pid, and `StartTime.ToFileTimeUtc()` yields the
+/// creation FILETIME (the registry's own rendering) when the process is ours to inspect;
+/// `NOSTART` when the start time is not readable (another user's process) = alive, guard
+/// skipped. When PowerShell cannot be spawned, `tasklist` answers liveness alone; when
+/// neither tool exists the probe is unavailable and the verdict says so.
+#[cfg(windows)]
+pub(crate) fn ps_probe(pid: u32) -> PsProbe {
+    let script = format!(
+        "$ErrorActionPreference='Stop'; try {{ $p = Get-Process -Id {pid} }} catch {{ exit 3 }}; \
+         try {{ [Console]::Out.Write($p.StartTime.ToFileTimeUtc()) }} catch {{ [Console]::Out.Write('NOSTART') }}"
+    );
+    if let Ok(out) = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+    {
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if out.status.code() == Some(3) {
+            return PsProbe::NoProcess;
+        }
+        if out.status.success() {
+            if text.bytes().all(|b| b.is_ascii_digit()) && !text.is_empty() {
+                return PsProbe::Alive(text.parse::<u64>().ok().and_then(filetime_to_timestamp));
+            }
+            return PsProbe::Alive(None);
+        }
+    }
+    // PowerShell missing or broken: tasklist answers liveness (no start time).
+    let Ok(out) = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
+        .output()
+    else {
+        return PsProbe::Unavailable;
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    if text.lines().any(|l| l.trim_start().starts_with('"')) {
+        PsProbe::Alive(None)
+    } else {
+        PsProbe::NoProcess
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+pub(crate) fn ps_probe(_pid: u32) -> PsProbe {
+    PsProbe::Unavailable
 }

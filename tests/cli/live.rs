@@ -2,4 +2,5 @@
 
 mod background;
 mod status;
+mod tasks;
 mod wait;

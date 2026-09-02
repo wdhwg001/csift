@@ -9,44 +9,96 @@ fn registry_proc_start_parses_as_utc() {
     assert!(parse_registry_proc_start("not a date").is_none());
 }
 
+#[test]
+fn registry_proc_start_filetime_form_is_the_windows_rendering() {
+    // A Windows row (CC 2.1.258): 100ns ticks since 1601 = the owner's creation instant.
+    let t = parse_registry_proc_start("134328101803820142").unwrap();
+    assert_eq!(t.to_string(), "2026-09-02T08:09:40.3820142Z");
+    assert_eq!(parse_registry_proc_start(" 134328101803820142 "), Some(t));
+    // Before the unix epoch or not a plausible tick count: no instant, guard skipped.
+    assert!(filetime_to_timestamp(0).is_none());
+    assert!(
+        parse_registry_proc_start("116444736000000000").is_some(),
+        "the unix epoch itself"
+    );
+    assert!(parse_registry_proc_start("").is_none());
+    assert!(parse_registry_proc_start("12ab").is_none());
+}
+
+/// Render an instant the way the registry does on THIS platform (asctime UTC on unix,
+/// FILETIME ticks on Windows) so the guard round-trips against the live probe.
+fn registry_rendering(t: jiff::Timestamp) -> String {
+    if cfg!(windows) {
+        let secs = u64::try_from(t.as_second()).unwrap() + 11_644_473_600;
+        let sub = u64::try_from(t.subsec_nanosecond()).unwrap() / 100;
+        format!("{}", secs * 10_000_000 + sub)
+    } else {
+        jiff::fmt::strtime::format("%a %b %e %H:%M:%S %Y", &t.to_zoned(jiff::tz::TimeZone::UTC))
+            .unwrap()
+    }
+}
+
 // ── The pid probe against real processes (own pid = deterministically alive) ──
 
-#[cfg(unix)]
 #[test]
 fn probe_pid_own_process_guard_states() {
     let me = std::process::id();
     // No procStart on the registry side: alive, guard skipped.
     assert_eq!(
-        probe_pid(me, None),
+        probe_pid(me, None, None),
         PidLiveness::Alive {
             reuse_guard: ReuseGuard::Skipped
         }
     );
     // An unparseable procStart degrades the same way.
     assert_eq!(
-        probe_pid(me, Some("not a date")),
+        probe_pid(me, Some("not a date"), None),
         PidLiveness::Alive {
             reuse_guard: ReuseGuard::Skipped
         }
     );
-    // When ps yields our real start instant, feeding it back UTC-rendered must pass the
-    // guard; shifting it far must flag reuse.
+    // The local domain is the registry's own vocabulary (`pidDomain`: `darwin`, `linux`,
+    // `win32:<host>`), pinned as a literal per platform - not read back from the
+    // function under test.
+    let expected = if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "win32"
+    };
+    assert_eq!(local_pid_domain(), expected);
+    assert_eq!(
+        probe_pid(me, None, Some(expected)),
+        PidLiveness::Alive {
+            reuse_guard: ReuseGuard::Skipped
+        }
+    );
+    // Our own pid domain is never foreign (with or without the host suffix).
+    let mine = format!("{}:some-host", local_pid_domain());
+    assert_eq!(
+        probe_pid(me, None, Some(&mine)),
+        PidLiveness::Alive {
+            reuse_guard: ReuseGuard::Skipped
+        }
+    );
+    // A row from another domain is never probed: its pid means nothing here.
+    assert_eq!(
+        probe_pid(me, None, Some("plan9:elsewhere")),
+        PidLiveness::ForeignDomain("plan9:elsewhere".to_string())
+    );
+    // When the probe yields our real start instant, feeding it back in the registry's
+    // own rendering must pass the guard; shifting it far must flag reuse.
     if let PsProbe::Alive(Some(act)) = ps_probe(me) {
-        let utc = act.to_zoned(jiff::tz::TimeZone::UTC);
-        let reg = jiff::fmt::strtime::format("%a %b %e %H:%M:%S %Y", &utc).unwrap();
+        let reg = registry_rendering(act);
         assert_eq!(
-            probe_pid(me, Some(&reg)),
+            probe_pid(me, Some(&reg), None),
             PidLiveness::Alive {
                 reuse_guard: ReuseGuard::Checked
             }
         );
-        let shifted = act - jiff::Span::new().hours(2);
-        let old = jiff::fmt::strtime::format(
-            "%a %b %e %H:%M:%S %Y",
-            &shifted.to_zoned(jiff::tz::TimeZone::UTC),
-        )
-        .unwrap();
-        assert_eq!(probe_pid(me, Some(&old)), PidLiveness::Reused);
+        let old = registry_rendering(act - jiff::Span::new().hours(2));
+        assert_eq!(probe_pid(me, Some(&old), None), PidLiveness::Reused);
     }
 }
 
@@ -136,7 +188,7 @@ fn children_report_tolerates_garbage_journals_and_quiet_children() {
         "not json at all\n{\"type\":\"progress\"}\n{\"type\":\"started\",\"agentId\":\"a1\"}\n{\"type\":\"result\",\"agentId\":\"a1\"}\n{\"type\":\"started\",\"agentId\":\"a2\"}\n",
     )
     .unwrap();
-    let report = children_report(&main).unwrap();
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
     assert_eq!(report.journal_in_flight, 1, "{report:?}");
     assert_eq!(report.children.len(), 1);
     assert_eq!(report.children[0].state, "settled");
@@ -178,7 +230,7 @@ fn children_report_generating_needs_recency_and_no_end_turn() {
             r#"{{"type":"user","timestamp":"{now}","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t1","content":"ok"}}]}}}}"#
         ),
     );
-    let report = children_report(&main).unwrap();
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
     assert_eq!(report.children.len(), 1);
     assert_eq!(report.children[0].state, "generating", "{report:?}");
     assert!(
@@ -200,7 +252,7 @@ fn children_report_generating_needs_recency_and_no_end_turn() {
             now = now
         ),
     );
-    let report = children_report(&main).unwrap();
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
     assert_eq!(report.children[0].state, "settled", "{report:?}");
     assert_eq!(report.live_count, 0);
 
@@ -210,7 +262,7 @@ fn children_report_generating_needs_recency_and_no_end_turn() {
         "2026-06-07T05:00:01Z",
         r#"{"type":"user","timestamp":"2026-06-07T05:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#,
     );
-    let report = children_report(&main).unwrap();
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
     assert_eq!(report.children[0].state, "settled", "{report:?}");
     assert_eq!(report.live_count, 0);
     std::fs::remove_dir_all(&root).unwrap();
@@ -273,13 +325,56 @@ fn tail_window_spans_a_real_turn_tail() {
     assert_eq!(s.last_stop_reason.as_deref(), Some("end_turn"), "{s:?}");
 }
 
-#[cfg(unix)]
 #[test]
 fn probe_pid_reports_a_reaped_pid_dead() {
-    // A reliably dead pid: spawn `true`, reap it. Exercises the ps-failure arm and its
-    // /proc fallback check (absent on macOS, absent-for-the-pid on Linux).
-    let mut child = std::process::Command::new("true").spawn().unwrap();
+    // A reliably dead pid: spawn a no-op, reap it. Exercises the ps-failure arm and its
+    // /proc fallback check (absent on macOS, absent-for-the-pid on Linux) or, on
+    // Windows, the PowerShell exit-3 arm.
+    let mut child = if cfg!(windows) {
+        std::process::Command::new("cmd")
+            .args(["/c", "exit"])
+            .spawn()
+            .unwrap()
+    } else {
+        std::process::Command::new("true").spawn().unwrap()
+    };
     let pid = child.id();
     let _ = child.wait();
-    assert_eq!(probe_pid(pid, None), PidLiveness::Dead);
+    assert_eq!(probe_pid(pid, None, None), PidLiveness::Dead);
+}
+
+#[test]
+fn children_report_settles_a_lane_whose_completion_pulse_landed() {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!("csift-live-rt-{}-{n}", std::process::id()));
+    let main = root.join("s1.jsonl");
+    std::fs::create_dir_all(root.join("s1/subagents")).unwrap();
+    std::fs::write(&main, "").unwrap();
+    // A fresh, unreturned tail: in-flight by every tail rule...
+    let child = root.join("s1/subagents/agent-0f1e2d3c4b5a6978.jsonl");
+    let now = jiff::Timestamp::now().to_string();
+    std::fs::write(
+        &child,
+        format!(
+            r#"{{"type":"assistant","timestamp":"{now}","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t1","name":"Bash","input":{{}}}}]}}}}"#
+        ) + "\n",
+    )
+    .unwrap();
+    let report = children_report(&main, &std::collections::HashSet::new()).unwrap();
+    assert_eq!(report.children[0].state, "in-flight", "{report:?}");
+    // ...until the main transcript's completion pulse names the agent: settled, the
+    // harness's own word outranking the tail.
+    let returned: std::collections::HashSet<String> =
+        std::iter::once("0f1e2d3c4b5a6978".to_string()).collect();
+    let report = children_report(&main, &returned).unwrap();
+    assert_eq!(report.children[0].state, "settled", "{report:?}");
+    assert!(
+        report.children[0]
+            .detail
+            .contains("completion notification"),
+        "{report:?}"
+    );
+    assert_eq!(report.live_count, 0);
+    std::fs::remove_dir_all(&root).unwrap();
 }

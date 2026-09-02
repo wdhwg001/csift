@@ -37,8 +37,16 @@ pub(crate) struct ChildrenReport {
     pub(crate) live_count: usize,
 }
 
-/// Inspect every child lane of `main_jsonl`.
-pub(crate) fn children_report(main_jsonl: &Path) -> Result<ChildrenReport> {
+/// Inspect every child lane of `main_jsonl`. `returned` names the agent ids whose
+/// completion notification already landed in the main transcript (an async agent's
+/// `<task-notification>`): such a lane is SETTLED whatever its tail looks like - the
+/// harness's own word outranks the recency heuristic (a lane that finished seconds
+/// ago still carries a fresh non-end_turn tail and would read `generating` for up to
+/// 300s otherwise).
+pub(crate) fn children_report(
+    main_jsonl: &Path,
+    returned: &std::collections::HashSet<String>,
+) -> Result<ChildrenReport> {
     let mut report = ChildrenReport::default();
     let subs = crate::subagent::subagent_transcript_files(main_jsonl).unwrap_or_default();
     for sub in &subs {
@@ -46,7 +54,12 @@ pub(crate) fn children_report(main_jsonl: &Path) -> Result<ChildrenReport> {
         let shape = tail_shape(sub)?;
         // The RECORD-tail instant is the semantic fact (mtime can lag or lead it).
         let tail_age = shape.last_ts_utc.as_deref().and_then(|t| age_secs(Some(t)));
-        let (state, detail) = if let Some((tool, ts)) = &shape.unreturned_use {
+        let (state, detail) = if returned.contains(&sid) {
+            (
+                "settled",
+                "completion notification received in the main transcript".to_string(),
+            )
+        } else if let Some((tool, ts)) = &shape.unreturned_use {
             (
                 "in-flight",
                 format!(
