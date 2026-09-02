@@ -86,6 +86,14 @@ pub struct Hit {
     /// renders `(elicitation sidecar)` in place of `Lnnnn` and carries `source:"elicitation-
     /// sidecar"` in JSON. Backfilled with the address.
     pub from_sidecar: bool,
+    /// v0.9.5: a `user.queued` hit's queue event (`enqueue` / `popAll` / `remove`), verbatim
+    /// from the `queue-operation` line; `None` on every other hit. Rendered in the label
+    /// zone, JSON `queue_operation`.
+    pub queue_operation: Option<String>,
+    /// v0.9.5: the `remove` reason when the line carries one (`absorbed_mid_turn` /
+    /// `delivered_to_agent` - structural evidence the queued text was consumed); `None`
+    /// otherwise. JSON `queue_reason`.
+    pub queue_reason: Option<String>,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) - i.e. the reader is seeing a fragment, not the
     /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch

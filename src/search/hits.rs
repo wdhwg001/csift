@@ -186,6 +186,17 @@ pub(crate) fn collect_record_hits(
         .map(str::to_string);
     let attachment_type = rec.attachment_type();
     let version = rec.version.clone();
+    // v0.9.5: the queue facts ride only a queue-operation record (None elsewhere).
+    let queue_operation = if rec.is_type("queue-operation") {
+        rec.operation.clone()
+    } else {
+        None
+    };
+    let queue_reason = if rec.is_type("queue-operation") {
+        rec.reason.clone()
+    } else {
+        None
+    };
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);
@@ -226,6 +237,8 @@ pub(crate) fn collect_record_hits(
                 raw: None,
                 image_ids: Vec::new(),
                 from_sidecar: false,
+                queue_operation: queue_operation.clone(),
+                queue_reason: queue_reason.clone(),
                 truncated,
             });
         }

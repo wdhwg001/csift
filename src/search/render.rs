@@ -44,6 +44,15 @@ pub(crate) fn render_label(h: &Hit) -> String {
     if h.class == Class::AgentThinkingNarration {
         return format!("{} [narration summary]", h.class.path());
     }
+    // v0.9.5: a queued line names its queue event (and a remove's reason) in the label
+    // zone - display-only; the matchable text stays the verbatim queued content.
+    if h.class == Class::UserQueued {
+        let op = h.queue_operation.as_deref().unwrap_or("queued");
+        return match h.queue_reason.as_deref() {
+            Some(reason) => format!("{} [{op} · {reason}]", h.class.path()),
+            None => format!("{} [{op}]", h.class.path()),
+        };
+    }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
         return format!("{}  {from} ⇨ {to}", h.class.path());
@@ -434,6 +443,9 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "pairing": pairing,
         "is_error": h.is_error,
         "tool_use_id": h.tool_use_id,
+        // v0.9.5 queue facts (a `user.queued` hit); null on every other hit.
+        "queue_operation": h.queue_operation,
+        "queue_reason": h.queue_reason,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.
@@ -536,6 +548,7 @@ pub(crate) fn render_json(
     if let Some(d) = diagnosis {
         summary_fields["definitive_absence"] = json!(true);
         summary_fields["active_filters"] = json!(d.active_filters);
+        summary_fields["gated_leaves_unreached"] = json!(d.gated_unreached);
         summary_fields["excluded_by_label"] = match &d.excluded_by_label {
             Some((rows, recs)) => {
                 let by: serde_json::Map<String, serde_json::Value> =

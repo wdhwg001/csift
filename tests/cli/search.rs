@@ -7,6 +7,7 @@ mod filters;
 mod headers;
 mod narration;
 mod output;
+mod promoted;
 mod scope;
 mod taxonomy;
 mod unsent;

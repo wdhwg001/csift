@@ -89,6 +89,20 @@ pub(crate) fn search_one_file(
         && (args.label_filter().selected(Class::MetaAttachment.path())
             || args.label_filter().selected(Class::MetaHook.path())))
         || address.is_some();
+    // v0.9.5 promoted non-record lines: admitted ONLY under an EXPLICIT selector that
+    // reaches the leaf (`reaches_gated` - a bare no-`-t` scan never parses them) or an
+    // address (`show --line`/`--uuid` renders an addressed line flag-free).
+    let reach = |c: Class| args.reaches_gated(c) || address.is_some();
+    let gates = CandidateGates {
+        compact_boundary: needs_compact_boundary,
+        hook_context: needs_hook_context,
+        attachments: needs_attachments,
+        queued: reach(Class::UserQueued),
+        turn_duration: reach(Class::MetaTurnDuration),
+        away_summary: reach(Class::MetaAwaySummary),
+        stop_hooks: reach(Class::MetaStopHooks),
+        snapshot: reach(Class::MetaSnapshot),
+    };
 
     // ── §7f whole-file gate ──
     // When the pattern anchors a raw-byte prefilter (a plain literal, either case mode) and
@@ -121,12 +135,7 @@ pub(crate) fn search_one_file(
                 if force_full.load(Ordering::Relaxed) {
                     return crate::parse::LineVerdict::Ignore; // verdict already "full scan"
                 }
-                if !line_is_transcript_candidate(
-                    line,
-                    needs_compact_boundary,
-                    needs_hook_context,
-                    needs_attachments,
-                ) {
+                if !line_is_transcript_candidate(line, &gates) {
                     // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
                     return crate::parse::non_candidate_verdict(line);
                 }
@@ -201,12 +210,7 @@ pub(crate) fn search_one_file(
     // never match a boundary, so it pays ZERO for the extra check - the hard `-t` filter PRUNES the
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
-        if !line_is_transcript_candidate(
-            line,
-            needs_compact_boundary,
-            needs_hook_context,
-            needs_attachments,
-        ) {
+        if !line_is_transcript_candidate(line, &gates) {
             // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
             return crate::parse::non_candidate_verdict(line);
         }
@@ -293,16 +297,37 @@ pub(crate) fn search_one_file(
     })
 }
 
+/// The `&&`-gated candidate keeps beyond the role marker (each one a SIMD memmem that
+/// runs only when its gate is on, so a default scan pays ZERO for all of them).
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct CandidateGates {
+    /// D7: the `compact_boundary` metrics record (selected label).
+    pub(crate) compact_boundary: bool,
+    /// `--additional-context` (or an address): hook-injected context attachments.
+    pub(crate) hook_context: bool,
+    /// `--attachments` / the attachment axis (or an address): every attachment line.
+    pub(crate) attachments: bool,
+    /// v0.9.5 (explicit selector or address): `queue-operation` lines.
+    pub(crate) queued: bool,
+    /// v0.9.5: `system`/`turn_duration` lines.
+    pub(crate) turn_duration: bool,
+    /// v0.9.5: `system`/`away_summary` lines.
+    pub(crate) away_summary: bool,
+    /// v0.9.5: `system`/`stop_hook_summary` lines.
+    pub(crate) stop_hooks: bool,
+    /// v0.9.5: `file-history-snapshot` + `file-history-delta` lines.
+    pub(crate) snapshot: bool,
+}
+
 /// §7d stage-1 category prefilter on raw bytes: keep a line only if it could be a
 /// transcript message (user/assistant role marker) - drops `attachment`,
-/// `file-history-snapshot`, `queue-operation`, and metadata noise pre-JSON. Kept
-/// deliberately permissive (substring, not structural) so no genuine turn is lost.
-pub(crate) fn line_is_transcript_candidate(
-    line: &[u8],
-    needs_compact_boundary: bool,
-    needs_hook_context: bool,
-    needs_attachments: bool,
-) -> bool {
+/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the
+/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive
+/// (substring, not structural) so no genuine turn is lost.
+pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {
+    let needs_compact_boundary = gates.compact_boundary;
+    let needs_hook_context = gates.hook_context;
+    let needs_attachments = gates.attachments;
     // Every user/assistant record carries a `"role":"user"`/`"role":"assistant"`
     // marker (genuine-user string content, tool carriers, assistant blocks all do).
     // R13: matched serialization-tolerantly - `"role": "user"` (reserialized JSON,
@@ -319,6 +344,21 @@ pub(crate) fn line_is_transcript_candidate(
     // survives a reserialize; R13).
     static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
+    // v0.9.5 promoted lines. Quoted-value / bare-value needles per the R13 law: the
+    // `type` values `"queue-operation"` and `"file-history-` (a prefix covering both
+    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system
+    // records (a value substring survives a reserialize; prose quoting the word lands
+    // on a role line and is harmless - it already parses).
+    static QUEUED_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"queue-operation\""));
+    static TURN_DURATION_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"turn_duration"));
+    static AWAY_SUMMARY_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"away_summary"));
+    static STOP_HOOKS_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"stop_hook_summary"));
+    static SNAPSHOT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(b"\"file-history-"));
     crate::parse::line_has_role_marker(line)
         // D7: ALSO keep the rare `compact_boundary` metrics record (a `type:"system"` record with no
         // role marker) so `search -t harness.compaction.boundary` can enumerate compaction points +
@@ -335,4 +375,10 @@ pub(crate) fn line_is_transcript_candidate(
         // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
         // explicit address). Same `&&`-gating law: a default scan pays ZERO.
         || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())
+        // v0.9.5 promoted lines, each behind its own explicit-selector gate.
+        || (gates.queued && QUEUED_FINDER.find(line).is_some())
+        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())
+        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())
+        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())
+        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())
 }

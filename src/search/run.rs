@@ -426,6 +426,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
             skipped_lines: outcome.skipped_lines,
             label_filtered,
             excluded_by_label,
+            gated_unreached: args.gated_unreached(),
         };
         emit_empty_diagnosis(&args.pattern, &diag);
         Some(diag)

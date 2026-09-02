@@ -42,6 +42,8 @@ fn render_label_decorates_pairing_and_direction() {
         raw: None,
         image_ids: Vec::new(),
         from_sidecar: false,
+        queue_operation: None,
+        queue_reason: None,
         truncated: false,
     };
     assert_eq!(render_label(&paired), "agent.tool.use ▹ agent.tool.result");

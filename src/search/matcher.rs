@@ -462,6 +462,9 @@ fn set_strength(set: &[String]) -> (usize, std::cmp::Reverse<usize>) {
 ///   `harness.compaction.boundary` - otherwise the boundary line is not even a scan
 ///   candidate, so its synthesized excerpt is unreachable) - `trigger=…`/`preTokens=…`
 ///   key=value text is fabricated from `compactMetadata`.
+/// - `turn_duration` / `stop_hook_summary` / `file-history-` (v0.9.5, only under an
+///   explicit selector reaching the leaf) - the promoted renders fabricate
+///   `[turn duration: …]` / `[stop hooks: …]` / `<path>@vN` text from the fields.
 /// - Under `--resolve-persisted`: `persistedOutputPath` / `Full output saved to:` -
 ///   the matched text is EXTERNAL file content, absent from the transcript bytes by
 ///   definition.
@@ -483,6 +486,19 @@ pub(crate) fn synth_marker_finders(
         .selected(Class::CompactionBoundary.path())
     {
         verifiable.push(b"compact_boundary");
+    }
+    // v0.9.5 promoted lines whose render FABRICATES text (key=value excerpts): the
+    // marker is the line's own type/subtype value, active only when the explicit
+    // selector admits the line (otherwise it is not a candidate at all). The queued
+    // and away-summary leaves render VERBATIM content and need no marker.
+    if args.reaches_gated(Class::MetaTurnDuration) {
+        verifiable.push(b"turn_duration");
+    }
+    if args.reaches_gated(Class::MetaStopHooks) {
+        verifiable.push(b"stop_hook_summary");
+    }
+    if args.reaches_gated(Class::MetaSnapshot) {
+        verifiable.push(b"file-history-");
     }
     // CONSERVATIVE (needs cross-record / external data - force the full scan).
     let mut conservative: Vec<&[u8]> = vec![b"To tell you how to proceed"];

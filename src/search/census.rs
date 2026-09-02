@@ -186,6 +186,9 @@ pub(crate) struct EmptyDiagnosis {
     /// AND the pattern matches under OTHER labels; `None` when no label filter, or the pattern
     /// is genuinely absent even unfiltered.
     pub(crate) excluded_by_label: Option<(Vec<(String, usize)>, usize)>,
+    /// v0.9.5: true when no active selector reached a gated (promoted non-record)
+    /// leaf - those lines were never parsed, so the absence does not cover them.
+    pub(crate) gated_unreached: bool,
 }
 
 /// Render the active `-t`/`-T`/time/turn filters as a compact echo (`none` when unfiltered) -
@@ -271,5 +274,15 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
                  `csift search \"\" <target> --count-by label`."
             );
         }
+    }
+    if diag.gated_unreached {
+        // The gated leaves are parsed only under an explicit selector; a bare scan (and
+        // the label probe above) never looked at those lines, so say so.
+        eprintln!(
+            "csift: note: the gated leaves (user.queued, harness.meta.turn-duration, \
+             harness.meta.away-summary, harness.meta.stop-hooks, harness.meta.snapshot) \
+             are scanned only under an explicit -t that reaches them - this absence does \
+             not cover those lines."
+        );
     }
 }

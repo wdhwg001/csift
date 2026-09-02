@@ -161,6 +161,15 @@ use super::*;
         deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \
         contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
         last-human-touch consumer.)\n  \
+          GATED LEAVES (v0.9.5): the five promoted non-record leaves - `user.queued`\n  \
+        and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot}` - are\n  \
+        scanned ONLY when an explicit -t reaches them (the full path, a glob such as\n  \
+        `-t 'user.*'` / `-t 'harness.*'`, or the `harness.meta` prefix), or when a\n  \
+        `csift show --line/--uuid` address names the line. A bare scan with no -t, a\n  \
+        bare role, and `--count-by label` without -t never parse those lines (every\n  \
+        one is a non-message line, and most queued content is a duplicate automation\n  \
+        pulse). All five are LLM-invisible: none carries a message field. Their\n  \
+        raw form is still `show --line N --raw`.\n  \
           user     .message                genuine human prose (a slash command with typed\n                                   \
         prose renders as `/name args`)\n           \
         .answer                 an answered AskUserQuestion: question, options and\n                                   \
@@ -170,7 +179,14 @@ use super::*;
         .unsent                 a SUPERSEDED draft: sent, esc-recalled, edited and\n                                   \
         re-sent - the original stays on disk OUTSIDE turn\n                                   \
         numbering (never counted as user.message; a queued\n                                   \
-        text edited before dispatch never becomes a record)\n  \
+        text edited before dispatch never becomes a record)\n           \
+        .queued                 the human's text as it sat in the input QUEUE (a\n                                   \
+        queue-operation line with content: enqueue, a popAll\n                                   \
+        recall, or a remove with its reason); the label zone\n                                   \
+        shows the operation. A queued automation pulse or\n                                   \
+        peer message is not the human and carries no label;\n                                   \
+        the queue line has no join key, so `dispatched` is\n                                   \
+        never asserted (GATED - see above)\n  \
           agent    .message · .thinking    assistant prose · reasoning (a redacted block\n                                   \
         renders \"[redacted thinking]\")\n           \
         .thinking.narration     an API-issued one-sentence SUMMARY of the reasoning\n                                   \
@@ -181,7 +197,18 @@ use super::*;
         .communication.{inbox,sent,signal}  peer messages, rendered `from ⇨ to`\n  \
           harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
         .compaction.{summary,boundary} · .command.{invocation,stdout}\n           \
-        .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop,attachment}\n  \
+        .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop,attachment}\n           \
+        .meta.turn-duration     the end-of-turn telemetry record (durationMs,\n                                   \
+        messageCount, pendingBackgroundAgentCount,\n                                   \
+        pendingWorkflowCount) behind the REPL's \"Done in Ns\" /\n                                   \
+        \"Waiting for N agents\" lines (GATED)\n           \
+        .meta.away-summary      the model-generated recap shown on return after 5+\n                                   \
+        minutes away; never in the surviving conversation (GATED)\n           \
+        .meta.stop-hooks        the Stop-hook execution ledger: each hook command and\n                                   \
+        its duration, errors, preventedContinuation (GATED)\n           \
+        .meta.snapshot          a file-history snapshot (every tracked path@version) or\n                                   \
+        delta (one path's bump) - the v0.9.4 recover instrument,\n                                   \
+        now searchable by path and version (GATED)\n  \
           `-t agent` selects the whole role, `-t agent.tool` both tool leaves, a full path\n  \
         just that leaf; `-T` excludes with the same grammar (a combination that excludes\n  \
         everything it includes is a parse error, as is a selector typo, with suggestions).\n  \
@@ -193,7 +220,8 @@ use super::*;
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
         labels:[…], line, uuid, excerpt, tool_name, pairing, \
-        from, to, ts_utc, ts_local, refetch}, …]}: `label` is the matched dotted path, `labels` \
+        from, to, ts_utc, ts_local, queue_operation, queue_reason, refetch}, …]}: `label` is the \
+        matched dotted path, `labels` \
         the record's full label set, `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
         when the hit is `agent.communication.*`, and `refetch` is the ready-to-run `csift show` \
@@ -212,7 +240,9 @@ use super::*;
         `record_uuids` lists every record stitched into the round-trip (§6.4 completeness \
         evidence). A trailing footer object {matched, sessions, transcript_ids, dropped_by_cap, \
         skipped_lines, with_elicitation_sidecar, excerpts_truncated} closes the stream, plus \
-        {definitive_absence, active_filters, excluded_by_label} on a ZERO-match run. \
+        {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached} on a \
+        ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts, null \
+        elsewhere; `gated_leaves_unreached` is true when no selector reached a gated leaf). \
         (`transcript_ids` is the per-TRANSCRIPT matching-id set, named apart from `-l`'s \
         owning-session ids.) (Whole-document `json.load` fails; parse line-by-line as JSONL: N \
         envelopes then the footer.)"
@@ -478,6 +508,16 @@ pub struct SearchArgs {
     pub format: OutputFormat,
 }
 
+/// The v0.9.5 promoted non-record leaves - scanned only under an explicit selector
+/// ([`SearchArgs::reaches_gated`]) or a `show` address.
+pub const GATED_LEAVES: [Class; 5] = [
+    Class::UserQueued,
+    Class::MetaTurnDuration,
+    Class::MetaAwaySummary,
+    Class::MetaStopHooks,
+    Class::MetaSnapshot,
+];
+
 impl SearchArgs {
     /// Whether subagent transcripts are spanned (the default). `--no-subagents` restricts to
     /// the top-level session(s). Feeds [`crate::path::SubagentScope::from`].
@@ -499,6 +539,24 @@ impl SearchArgs {
     #[must_use]
     pub fn scan_attachments(&self) -> bool {
         self.attachments || matches!(self.count_by, Some(CountAxis::Attachment))
+    }
+
+    /// The v0.9.5 gated-leaf rule: a promoted non-record leaf is scanned ONLY when an
+    /// EXPLICIT `-t` selector reaches it (the full path, a glob, or the `harness.meta`
+    /// prefix). A bare scan with no `-t` admits every label elsewhere but never parses
+    /// these lines: most queued content is a duplicate automation pulse and every
+    /// promoted line is a non-message line, so the default surface stays the
+    /// conversation. `-T`-only filters do not reach them either.
+    #[must_use]
+    pub fn reaches_gated(&self, c: Class) -> bool {
+        !self.labels.is_empty() && self.label_filter().selected(c.path())
+    }
+
+    /// True when NO gated leaf is reached by the active selectors (the zero-match
+    /// diagnosis names them so an absence is never mistaken for a scan of them).
+    #[must_use]
+    pub fn gated_unreached(&self) -> bool {
+        !GATED_LEAVES.iter().any(|&c| self.reaches_gated(c))
     }
 
     /// The effective `-t`/`-T` filter (include minus exclude).
