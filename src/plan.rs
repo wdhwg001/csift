@@ -143,9 +143,12 @@ pub fn resolve_session_plan(path: &Path) -> Result<Option<PlanRef>> {
     if latest.is_none() {
         if let Some((line_no, rec)) = first_slug_record(bytes) {
             if let Some(slug) = rec.slug.as_deref().filter(|s| slug_is_valid(s)) {
-                // The record's own cwd is the project root the harness resolved
-                // plansDirectory against (stamped per record, section 3.11).
-                let root = rec.cwd.as_deref().map(Path::new);
+                // The project root the harness resolves plansDirectory against is the
+                // session's ORIGINAL cwd - the transcript's first recorded cwd - not the
+                // slug record's own cwd, which follows the tracked shell cwd and may
+                // already sit in a subdirectory (section 3.11; v0.10.2).
+                let root_owned = first_cwd(bytes).or_else(|| rec.cwd.clone());
+                let root = root_owned.as_deref().map(Path::new);
                 let plan_file = plans_dir(root).join(format!("{slug}.md"));
                 latest = Some(PlanRef {
                     session_id: session_id.clone(),

@@ -413,3 +413,53 @@ fn plan_prefers_the_top_level_binding_over_a_subagent_one() {
         out.stdout
     );
 }
+
+#[test]
+fn plan_slug_binding_resolves_plans_directory_against_the_first_recorded_cwd() {
+    // The record-level `cwd` follows the tracked shell cwd (a `cd` into a subdir
+    // persists), while the harness resolves plansDirectory against the session's
+    // ORIGINAL cwd. The slug-carrying record here already sits in a subdirectory; the
+    // binding must still land under the root's plans dir (v0.10.2).
+    const SLUGSESS: &str = "abab4444-5555-4666-8777-888899990000";
+    let h = Home::new();
+    let proj = h.root.join("harbor-project");
+    std::fs::create_dir_all(proj.join("my-plans")).unwrap();
+    std::fs::create_dir_all(proj.join("sub")).unwrap();
+    std::fs::write(
+        proj.join("my-plans").join("quiet-harbor-lantern.md"),
+        "plan body\n",
+    )
+    .unwrap();
+    let root = serde_json::to_string(proj.to_str().unwrap()).unwrap();
+    let sub = serde_json::to_string(proj.join("sub").to_str().unwrap()).unwrap();
+    h.write_claude("settings.json", r#"{"plansDirectory":"my-plans"}"#);
+    let transcript = format!(
+        concat!(
+            r#"{{"type":"user","uuid":"u0","timestamp":"2026-06-07T04:59:00.000Z","cwd":{root},"message":{{"role":"user","content":"start at the root"}}}}"#,
+            "\n",
+            r#"{{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T04:59:01.000Z","cwd":{root},"message":{{"role":"assistant","content":[{{"type":"tool_use","id":"t0","name":"Bash","input":{{"command":"cd sub"}}}}]}}}}"#,
+            "\n",
+            r#"{{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:00:00.000Z","cwd":{sub},"slug":"quiet-harbor-lantern","message":{{"role":"user","content":"now plan it"}}}}"#,
+            "\n",
+        ),
+        root = root,
+        sub = sub
+    );
+    h.write(&format!("{ENC}/{SLUGSESS}.jsonl"), &transcript);
+    let out = h.run(&["plan", &at(SLUGSESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let expected = proj.join("my-plans").join("quiet-harbor-lantern.md");
+    let row: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|r: &serde_json::Value| r["kind"] == "plan")
+        .expect("plan row");
+    assert_eq!(
+        row["plan_file"],
+        expected.to_str().unwrap(),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(row["plan_exists"], true, "{}", out.stdout);
+}

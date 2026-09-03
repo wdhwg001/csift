@@ -45,6 +45,30 @@ pub(crate) fn slug_is_valid(s: &str) -> bool {
 /// `<claude-home>/plans`. csift mirrors the lexical containment check (the harness
 /// additionally walks symlinks of the nearest existing ancestor - unmodeled, a
 /// symlinked plans dir that escapes only after resolution is the one divergence).
+/// The transcript's FIRST recorded `cwd`: the harness's project root for the session -
+/// the value the head records are stamped with before any Bash `cd` moves the
+/// tracked shell cwd (section 3.11). The slug-carrying record's own cwd can already
+/// have drifted into a subdirectory, and plansDirectory resolves against the root,
+/// not the shell's position (v0.10.2). A bounded head walk; `None` when no head
+/// record carries a cwd. A session resumed from another directory re-resolves against
+/// that directory in the harness, which this instrument cannot see.
+pub(crate) fn first_cwd(bytes: &[u8]) -> Option<String> {
+    let mut pos = 0usize;
+    let mut seen = 0usize;
+    while pos < bytes.len() && seen < 256 {
+        let end = memchr::memchr(b'\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);
+        let line = &bytes[pos..end];
+        pos = end + 1;
+        seen += 1;
+        if let Ok(Some(rec)) = crate::parse::parse_line(line) {
+            if let Some(c) = rec.cwd.as_deref().filter(|c| !c.is_empty()) {
+                return Some(c.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// With no project root known (a record without `cwd`) a set value cannot be
 /// resolved and the default applies.
 pub(crate) fn plans_dir(project_root: Option<&Path>) -> PathBuf {
