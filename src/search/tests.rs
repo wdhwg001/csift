@@ -87,6 +87,7 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
         a.siblings,
         &spawn_map,
         false,
+        false,
     );
     exchanges
 }

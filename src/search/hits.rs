@@ -251,7 +251,14 @@ pub(crate) fn collect_record_hits(
     //    record-text class (user.message, harness markers, compaction, a subagent-opener inbox)
     //    renders ONE richest-label hit. The §1 fix (teammate → inbox) + the `<task-notification>`
     //    → harness.notification reparent flow straight from `classify`. ──
-    let sections = rec.record_text_sections(ctx);
+    // A superseded draft keeps its single `user.unsent` view whatever its shape: a
+    // sectioned draft (a pulse- or relay-shaped text) must not fan out into per-section
+    // classes the record's own `labels[]` does not carry (v0.10.2).
+    let sections = if superseded {
+        Vec::new()
+    } else {
+        rec.record_text_sections(ctx)
+    };
     if sections.is_empty() {
         if let Some((class, text)) = record_text_emission(rec, &labels, filter, plan_index) {
             let dir = if is_comm_class(class) {

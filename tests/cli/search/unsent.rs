@@ -167,3 +167,53 @@ fn role_selector_excludes_drafts_and_the_glob_reaches_them() {
         census.stdout
     );
 }
+
+#[test]
+fn a_sectioned_draft_keeps_the_single_unsent_label() {
+    // A superseded draft shaped like a sectioned text (a pulse) must not fan out into
+    // per-section classes its own labels[] does not carry (v0.10.2): one hit, class
+    // and labels both `user.unsent`, and the notification selector never sees it.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"d1","parentUuid":"p0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n<summary>Background command finished the reef census</summary>\n</task-notification>"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"p0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"chart the reef and the harbor"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted both"}]}}"#, "\n",
+        ),
+    );
+    let j = h.run(&[
+        "search",
+        "reef census",
+        &at(SESS),
+        "-t",
+        "user.unsent",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let hits: Vec<serde_json::Value> = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|r| r["kind"] == "exchange")
+        .flat_map(|r| r["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    assert_eq!(hits.len(), 1, "{}", j.stdout);
+    assert_eq!(hits[0]["label"], "user.unsent", "{}", j.stdout);
+    assert_eq!(
+        hits[0]["labels"],
+        serde_json::json!(["user.unsent"]),
+        "{}",
+        j.stdout
+    );
+    let none = h.run(&[
+        "search",
+        "reef census",
+        &at(SESS),
+        "-t",
+        "harness.notification",
+        "-c",
+    ]);
+    assert_eq!(none.stdout.trim(), "0", "{}", none.stdout);
+}

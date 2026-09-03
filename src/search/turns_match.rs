@@ -17,6 +17,7 @@ pub(crate) fn reconstruct_and_match(
     want_siblings: bool,
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
+    head_is_fork: bool,
 ) -> (Vec<Exchange>, usize, usize) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
@@ -57,10 +58,16 @@ pub(crate) fn reconstruct_and_match(
     let spawn_lookup = spawn_map
         .get(&discovery_root_for(path))
         .and_then(|o| o.as_deref());
-    let first_opener_line = records
-        .iter()
-        .find(|k| k.rec.opens_turn())
-        .map(|k| k.line_no);
+    // The spawn-prompt seed is the FIRST turn-opener of a genuine subagent transcript. A
+    // `/fork` clone has none: its openers are the parent's own human messages (v0.10.2).
+    let first_opener_line = if head_is_fork {
+        None
+    } else {
+        records
+            .iter()
+            .find(|k| k.rec.opens_turn())
+            .map(|k| k.line_no)
+    };
     let env = ClassifyEnv {
         owner_id: &session_id,
         is_subagent,

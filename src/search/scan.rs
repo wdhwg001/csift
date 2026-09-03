@@ -248,6 +248,13 @@ pub(crate) fn search_one_file(
         }
     }
 
+    // A `/fork` child's line 1 is a `fork-context-ref` record: the transcript is a CLONE
+    // of its parent's, so its first turn-opener is the parent's human message, not a
+    // spawn-prompt seed (v0.10.2). The value substring is the R13-safe needle.
+    let head_end = memchr::memchr(b'\n', bytes)
+        .unwrap_or(bytes.len())
+        .min(4096);
+    let head_is_fork = memchr::memmem::find(&bytes[..head_end], b"fork-context-ref").is_some();
     let (mut exchanges, turn_count, superseded_drafts) = reconstruct_and_match(
         path,
         &records,
@@ -259,6 +266,7 @@ pub(crate) fn search_one_file(
         want_siblings,
         spawn_map,
         inner_parallel,
+        head_is_fork,
     );
 
     // `--raw`: backfill each hit's VERBATIM source line from this file's mmap - one pass
