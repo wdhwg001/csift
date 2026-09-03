@@ -238,8 +238,10 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
-| end-to-end | 440 | 84.3% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| specimen-only | 48 | 9.2% | observed on disk or live; the writer not traced (or traced only in part) (37 of them with a partly traced writer) |
+| end-to-end | 418 | 80.1% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| &nbsp;&nbsp;of which chain traced and adversarially re-read | 205 | 39.3% | the three hops quoted at byte offsets in `producer_chain`, every excerpt re-read by an independent verifier |
+| &nbsp;&nbsp;of which audit-graded, chain not yet traced | 213 | 40.8% | graded end-to-end from the release-audit checks (writer offsets cited there) before the three-hop tracing existed; the next audit traces them |
+| specimen-only | 70 | 13.4% | observed on disk or live; the writer not traced (or traced only in part) (57 of them with a partly traced writer) |
 | producer-only | 32 | 6.1% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 2 | 0.4% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |

@@ -24,8 +24,11 @@
 //!    closed set end-to-end | producer-only | specimen-only | by-elimination: whether
 //!    the producing code was traced in the shipped binary and whether a specimen was
 //!    observed) and, unless end-to-end, lists the `open_legs` an audit still has to
-//!    close. A by-elimination claim can never carry a `holds` verdict: with neither leg
-//!    traced, "nothing changed" is exactly the conclusion an audit is not entitled to.
+//!    close; an end-to-end claim carries NO open leg (a non-gap note goes to
+//!    `residue`). A by-elimination claim can never carry a `holds` verdict: with
+//!    neither leg traced, "nothing changed" is exactly the conclusion an audit is not
+//!    entitled to.
+//! 8. The README's ledger tally table equals the ledger's per-attribution counts.
 
 use std::collections::{HashMap, HashSet};
 
@@ -267,6 +270,13 @@ fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>
     if attribution != "end-to-end" && !legs_named {
         failures.push(format!(
             "{id}: attribution `{attribution}` without a non-empty `open_legs` entry"
+        ));
+    }
+    // The closure rule: an open leg is a leg that is open, so an end-to-end claim
+    // carries none. A non-gap note for a later audit lives in `residue`.
+    if attribution == "end-to-end" && legs_named {
+        failures.push(format!(
+            "{id}: end-to-end with a non-empty `open_legs` (close the leg, or move a non-gap note to `residue`)"
         ));
     }
     if attribution == "by-elimination"
