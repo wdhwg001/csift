@@ -165,6 +165,7 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
     if !mutation_re.is_match(&readme) {
         failures.push("README has no mutation-score badge".to_string());
     }
+    check_readme_tally(claims, &readme, &mut failures);
 
     assert!(
         failures.is_empty(),
@@ -174,15 +175,60 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
     );
 }
 
-/// Rule 7: attribution completeness is stated, open legs are listed, and a claim
-/// attributed by elimination never holds.
-fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>) {
-    // Rule 7: attribution completeness is stated, open legs are listed, and a claim
-    // attributed by elimination never holds.
-    const ATTRIBUTIONS: [&str; 4] = [
+/// Rule 8: the README's ledger tally (the table between the `ledger-tally` markers)
+/// carries one row per attribution value plus a total, and every count equals the
+/// ledger's - the table is regenerated from the ledger, never typed.
+fn check_readme_tally(claims: &[serde_json::Value], readme: &str, failures: &mut Vec<String>) {
+    let Some(start) = readme.find("<!-- ledger-tally:begin -->") else {
+        failures.push("README has no ledger-tally table".to_string());
+        return;
+    };
+    let block = &readme[start..];
+    let block = &block[..block
+        .find("<!-- ledger-tally:end -->")
+        .unwrap_or(block.len())];
+    let row_re = regex::Regex::new(r"(?m)^\| ([a-z-]+) \| (\d+) \|").unwrap();
+    let mut rows: HashMap<String, usize> = HashMap::new();
+    for cap in row_re.captures_iter(block) {
+        rows.insert(cap[1].to_string(), cap[2].parse().unwrap_or(usize::MAX));
+    }
+    for key in [
         "end-to-end",
         "producer-only",
         "specimen-only",
+        "partial-producer",
+        "by-elimination",
+    ] {
+        let expected = claims
+            .iter()
+            .filter(|c| c["attribution"].as_str() == Some(key))
+            .count();
+        match rows.get(key) {
+            Some(n) if *n == expected => {}
+            Some(n) => failures.push(format!(
+                "README tally row `{key}` says {n} but the ledger has {expected}"
+            )),
+            None => failures.push(format!("README tally has no `{key}` row")),
+        }
+    }
+    match rows.get("total") {
+        Some(n) if *n == claims.len() => {}
+        _ => failures.push(format!(
+            "README tally total does not equal the ledger's {} claims",
+            claims.len()
+        )),
+    }
+}
+
+/// Rule 7: attribution completeness is stated, open legs are listed, the attribution
+/// agrees with the two legs when they are recorded, and a claim attributed by
+/// elimination never holds.
+fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>) {
+    const ATTRIBUTIONS: [&str; 5] = [
+        "end-to-end",
+        "producer-only",
+        "specimen-only",
+        "partial-producer",
         "by-elimination",
     ];
     let attribution = c["attribution"].as_str().unwrap_or("");
@@ -190,6 +236,29 @@ fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>
         failures.push(format!(
             "{id}: `attribution` `{attribution}` is not in {ATTRIBUTIONS:?}"
         ));
+    }
+    // The legs, when recorded, DERIVE the attribution: complete+observed = end-to-end,
+    // complete+none = producer-only, partial|none+observed = specimen-only,
+    // partial+none = partial-producer, none+none = by-elimination.
+    if let (Some(producer), Some(specimen)) = (c["producer_trace"].as_str(), c["specimen"].as_str())
+    {
+        let derived = match (producer, specimen) {
+            ("complete", "observed") => "end-to-end",
+            ("complete", "none") => "producer-only",
+            ("partial" | "none", "observed") => "specimen-only",
+            ("partial", "none") => "partial-producer",
+            ("none", "none") => "by-elimination",
+            _ => "",
+        };
+        if derived.is_empty() {
+            failures.push(format!(
+                "{id}: legs producer_trace `{producer}` / specimen `{specimen}` are not from the closed sets"
+            ));
+        } else if derived != attribution {
+            failures.push(format!(
+                "{id}: attribution `{attribution}` does not follow from the legs (`{producer}` + `{specimen}` = `{derived}`)"
+            ));
+        }
     }
     let open_legs = c["open_legs"].as_array().cloned().unwrap_or_default();
     let legs_named = open_legs

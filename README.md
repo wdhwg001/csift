@@ -231,6 +231,23 @@ It doesn't replace the summary. It extends the post-compaction context with the 
 
 csift never loads a whole transcript when it doesn't have to: it **mmaps** each `.jsonl`, scans newlines with SIMD (`memchr`), runs a cheap byte/regex **prefilter**, and only `serde_json`-parses candidate lines; `list` reads just the head and tail; `rayon` fans out across files. The hard part isn't speed. It's the _semantics_ of Claude Code's log: a `role:"user"` record is usually a tool result, not a human turn; a pending question is never written to disk; compaction has a specific shape; subagents sit flat on disk and their topology is reconstructed from the spawning tool call. All of it is documented, with the empirical grounding, in **[SPEC.md](SPEC.md)**.
 
+## How much of this is verified
+
+csift rests on hundreds of small facts about what Claude Code writes. Each one is a claim in [`INTROSPECTION.json`](./INTROSPECTION.json), and each claim records how completely it is attributed: whether the code that writes the fact was traced in the shipped Claude Code binary, and whether a specimen of the fact was observed. The table is regenerated from the ledger and checked by the pre-commit gate; the numbers are what they are.
+
+<!-- ledger-tally:begin -->
+| attribution | claims | share | meaning |
+|---|---:|---:|---|
+| end-to-end | 440 | 84.3% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| specimen-only | 48 | 9.2% | observed on disk or live; the writer not traced (or traced only in part) (37 of them with a partly traced writer) |
+| producer-only | 32 | 6.1% | the writer traced in full; no specimen exists in the corpus or could be produced here |
+| partial-producer | 2 | 0.4% | a template or field located without its gate and trigger; no specimen |
+| by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
+| total | 522 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
+<!-- ledger-tally:end -->
+
+A claim that is not end-to-end lists the exact instrument that would close it, and a claim attributed by elimination can never be marked as holding. The ledger is re-audited against the Claude Code version the badge names before every release.
+
 ## Documentation
 
 There is none, in the human sense. This repository is written and maintained entirely by Claude Code, and the three reference files are the corpus the maintaining agent works from:
