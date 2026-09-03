@@ -217,8 +217,8 @@ impl Record {
 
     /// True when this is an AUQ-answer carrier: a `type:"user"` record carrying a
     /// `tool_result` block whose textual content is a synthesized AUQ-answer string
-    /// (any known marker, §4.4 - both `"User has answered your questions: …"` and
-    /// `"Your questions have been answered: …"`). Such a record is surfaced under the
+    /// (any marker in `AUQ_ANSWER_MARKERS`, §4.4 - the three shipped phrasings; the
+    /// unanswered branch is never one). Such a record is surfaced under the
     /// `user` category even though it rides on a carrier.
     #[must_use]
     pub fn is_auq_answer(&self) -> bool {

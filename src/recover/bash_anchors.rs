@@ -276,11 +276,13 @@ fn clean_result(records: &[(usize, Record)], idxs: &[usize], id: &str) -> bool {
     false
 }
 
-/// The COMPLETENESS-gated stdout of a Bash result: the carrier record in this turn
-/// whose `toolUseResult` echoes the command output. `None` when the carrier is
-/// absent (subagent lanes), stderr is non-empty, the command was interrupted, or
-/// the output was externalized to a persisted file (the inline text is not the
-/// whole stdout then).
+/// The COMPLETENESS-gated stdout of a Bash result: the FIRST carrier record in this
+/// turn answering the tool_use id, whose `toolUseResult` echoes the command output.
+/// `None` when that carrier lacks the echo (workflow lanes never carry it; built-in
+/// and teammate lanes and the main lane do - the module doc has the measurement),
+/// stderr is non-empty, the command was interrupted, or the output was externalized
+/// to a persisted file (the inline text is not the whole stdout then). The gate is
+/// data-driven: no lane predicate, and no second carrier is tried.
 fn gated_stdout(
     records: &[(usize, Record)],
     idxs: &[usize],

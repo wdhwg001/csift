@@ -171,7 +171,8 @@ impl Class {
     ///
     /// v0.10.0 adds the promoted non-record line types, all invisible by the same
     /// instrument as the boundary: ZERO of them carries a `message{}` field (measured
-    /// over 24 non-record types; every user/assistant record does), and Claude Code's
+    /// over every non-record line type in the corpus; every user/assistant record
+    /// does), and Claude Code's
     /// own source labels them REPL-render internals. DAG threading is NOT the
     /// instrument here - later user records name a `turn_duration` uuid as parentUuid
     /// (chain continuity), and `preservedMessages` lists these uuids at the same rate

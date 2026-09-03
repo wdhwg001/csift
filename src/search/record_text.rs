@@ -181,7 +181,8 @@ pub(crate) fn system_record_text(rec: &Record) -> Option<String> {
 /// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`
 ///   line per hook (the commands are the record's only text);
 /// - snapshot: `[file-history snapshot at <ts>: <path>@vN, …]` (paths sorted) or
-///   `[file-history delta at <ts>: <path>@vN backup=<name>]`.
+///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix
+///   only when the delta carries a non-null `backupFileName`).
 ///
 /// `None` for a non-promoted record.
 pub(crate) fn promoted_record_text(rec: &Record) -> Option<String> {
@@ -396,7 +397,7 @@ pub(crate) fn resolve_persisted_text(path: &str, inline: &str) -> String {
 }
 
 /// The synthesized AUQ-answer string from a carrier's `tool_result` (§4.4). Matches
-/// any known AUQ-answer marker (both shipped phrasings, see `model::AUQ_ANSWER_MARKERS`).
+/// any known AUQ-answer marker (every shipped phrasing, see `model::AUQ_ANSWER_MARKERS`).
 /// Test-only: production now surfaces the AUQ answer via the model's reconstructed unit
 /// ([`Record::reconstructed_user_text`] → [`Record::auq_exchange`]), which prefers the
 /// clean structured `toolUseResult.answers`; this helper backs the legacy-shape tests.

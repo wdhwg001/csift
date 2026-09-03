@@ -18,6 +18,8 @@
 //!    silently orphaning the claim.
 //! 5. The README also carries the mutation-score badge (a version-independent shape
 //!    check; the score itself is the census's business).
+//! 6. Every claim cites at least one code site: a claim with no site names a behavior
+//!    csift does not demonstrably depend on, and the audit could never anchor it.
 
 use std::collections::{HashMap, HashSet};
 
@@ -108,6 +110,12 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
                     ));
                 }
             }
+        }
+        // Rule 6: at least one code site per claim.
+        if c["code"].as_array().is_none_or(|a| a.is_empty()) {
+            failures.push(format!(
+                "{id}: no code site (every claim cites at least one)"
+            ));
         }
         // Rule 4: every code site is real and its snippet still exists verbatim.
         for site in c["code"].as_array().cloned().unwrap_or_default() {

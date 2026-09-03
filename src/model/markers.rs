@@ -1,15 +1,16 @@
 //! Marker constants + tiny string predicates for CC's synthetic record shapes.
 
 /// The synthesized prefixes Claude Code writes into the `tool_result` answering an
-/// `AskUserQuestion` (§4.4). CC has shipped (at least) TWO phrasings for the same
-/// synthesized answer - verified across real `~/.claude/projects` data:
+/// `AskUserQuestion` (§4.4). CC has shipped THREE phrasings for the same synthesized
+/// answer - verified across real `~/.claude/projects` data and the 2.1.258 binary:
 ///
 /// - `"User has answered your questions: \"<q>\"=\"<a>\". …"`
 /// - `"Your questions have been answered: \"<q>\"=\"<a>\". …"`  (the dominant form
-///   in current data; a single hardcoded marker missed it entirely)
+///   in older data; a single hardcoded marker missed it entirely)
+/// - `"The user answered: \"<q>\"=\"<a>\". Read the answers carefully …"` (2.1.258)
 ///
-/// Some sessions span a version transition and contain BOTH forms, so an AUQ
-/// answer must be recognised if it carries EITHER prefix. Used to surface AUQ
+/// Some sessions span a version transition and contain several forms, so an AUQ
+/// answer must be recognised if it carries ANY listed prefix. Used to surface AUQ
 /// answers under the `user` category without re-parsing `toolUseResult`.
 pub const AUQ_ANSWER_MARKERS: &[&str] = &[
     "User has answered your questions",

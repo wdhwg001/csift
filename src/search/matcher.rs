@@ -456,7 +456,7 @@ fn set_strength(set: &[String]) -> (usize, std::cmp::Reverse<usize>) {
 /// - `<task-notification>` - `automation_label` fabricates the kind slug
 ///   (`subagent`/`background-command`/…), a `completed` status fallback, and `[…]`
 ///   scaffolding; the G1 inbox view normalizes the `<result>` body.
-/// - `"answers"` + the two synthesized answer markers - the ANSWER carrier's
+/// - `"answers"` + the three synthesized answer markers - the ANSWER carrier's
 ///   `auq_exchange` render fabricates the `[AskUserQuestion · N question(s)]` scaffold,
 ///   `Q1/A1` labels and option lists that appear verbatim nowhere in the raw line.
 ///   (The QUESTION-side `tool_use` needs no needle: its matchable text is
