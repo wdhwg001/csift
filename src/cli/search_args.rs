@@ -152,10 +152,10 @@ use super::*;
         THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 34 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
         role's LLM-VISIBLE leaves - the conversation as the model receives/produces\n  \
-        it. Exactly two leaves are invisible and need naming or a glob: `user.unsent`\n  \
+        it. Eight leaves are invisible and need naming or a glob: `user.unsent`\n  \
         (a superseded draft is not in the surviving conversation - CC's own\n  \
-        preservedMessages accounting excludes every draft) and\n  \
-        `harness.compaction.boundary` (a metrics-only system record). The glob form\n  \
+        preservedMessages accounting excludes every draft), `harness.compaction.boundary`\n  \
+        (a metrics-only system record), and the six gated leaves below. The glob form\n  \
         `-t 'user.*'` selects EVERY leaf under the prefix, visibility ignored; an\n  \
         intermediate prefix (`-t harness.compaction`) or an exact leaf path is a\n  \
         deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \

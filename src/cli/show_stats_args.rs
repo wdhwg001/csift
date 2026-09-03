@@ -81,9 +81,11 @@ pub struct ShowArgs {
 
     /// 0-based TURN index/range: the `tN` `search` prints, in the SAME grammar as `--line`
     /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end, so `-3..` = the last 3 turns,
-    /// `42..` = turn 42 → the end). Fetches EVERY record of the named turns (reads a turn's
-    /// whole back-and-forth), and the turn numbering matches the `·t<N>` in `search`'s
-    /// exchange headers exactly.
+    /// `42..` = turn 42 → the end). Fetches every user and assistant record of the named
+    /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn
+    /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong
+    /// to no turn fetch: address them by `--line`/`--uuid`, or `search -t harness.meta`.
+    /// The turn numbering matches the `·t<N>` in `search`'s exchange headers exactly.
     /// Mutually exclusive with `--line`/`--uuid` (pick ONE addressing mode).
     #[arg(
         long,
