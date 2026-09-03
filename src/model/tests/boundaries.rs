@@ -438,3 +438,18 @@ fn a_freeform_response_carrier_is_an_answer_boundary_and_renders_the_response() 
     assert!(!rec.has_auq_response());
     assert!(!rec.is_auq_answer_boundary());
 }
+
+#[test]
+fn a_questionless_answer_map_still_renders_its_notes() {
+    // The rare carrier without a `questions[]` array lists the answers map directly and
+    // still surfaces a non-empty note; an empty note string renders no note line.
+    let raw = r#"{"type":"user","uuid":"r2","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ask2","content":"The user answered: \"Which route?\"=\"south\" notes: via the coast"}]},"toolUseResult":{"answers":{"Which route?":"south"},"annotations":{"Which route?":{"notes":"via the coast"}}}}"#;
+    let rec = crate::parse::parse_line(raw.as_bytes()).unwrap().unwrap();
+    let unit = rec.auq_exchange().unwrap();
+    assert!(unit.contains("Q1: Which route?"), "{unit}");
+    assert!(unit.contains("A1: south"), "{unit}");
+    assert!(unit.contains("note: via the coast"), "{unit}");
+    let blank = raw.replace(r#""notes":"via the coast""#, r#""notes":"""#);
+    let rec = crate::parse::parse_line(blank.as_bytes()).unwrap().unwrap();
+    assert!(!rec.auq_exchange().unwrap().contains("note:"));
+}
