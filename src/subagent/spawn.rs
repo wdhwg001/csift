@@ -90,16 +90,24 @@ impl ParentSpawnIndex {
     }
 
     /// Fold `other` INTO `self` - used by [`build_global_spawn_index`] to merge the per-subagent
-    /// LOCAL indexes built in parallel back into the global one. The unique-keyed maps
-    /// (`spawns`/`tool_results`/`issuer`, all keyed by a globally-unique tool_use id) take
-    /// `other`'s value on any collision - LATER-wins, matching the old serial accumulation where a
-    /// later transcript's insert overwrote an earlier one. The `by_name` lists are APPENDED (self's
-    /// entries first), so - since callers merge locals in the deterministic `subs` order - the final
-    /// per-name order is byte-identical to the old serial scan (main, then each sub in order).
+    /// LOCAL indexes built in parallel back into the global one. The id-keyed maps
+    /// (`spawns`/`tool_results`/`issuer`) are FIRST-wins (v0.10.2): a tool_use id is unique
+    /// per SPAWN, but a `/fork` child is a clone of its parent's transcript and repeats every
+    /// spawn record the parent had issued before the fork, so a later-wins fold would
+    /// re-parent those siblings onto the clone. The main transcript is folded first and the
+    /// subs follow in the deterministic discovery order, so the original issuer keeps the
+    /// entry and a clone's copy never displaces it. The `by_name` lists are APPENDED (self's
+    /// entries first), keeping the per-name order byte-identical to a serial scan.
     pub(crate) fn merge(&mut self, other: ParentSpawnIndex) {
-        self.spawns.extend(other.spawns);
-        self.tool_results.extend(other.tool_results);
-        self.issuer.extend(other.issuer);
+        for (k, v) in other.spawns {
+            self.spawns.entry(k).or_insert(v);
+        }
+        for (k, v) in other.tool_results {
+            self.tool_results.entry(k).or_insert(v);
+        }
+        for (k, v) in other.issuer {
+            self.issuer.entry(k).or_insert(v);
+        }
         for (name, mut vals) in other.by_name {
             self.by_name.entry(name).or_default().append(&mut vals);
         }

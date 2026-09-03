@@ -325,3 +325,35 @@ fn fork_child_carrying_its_own_spawn_never_parents_itself() {
     let k = nodes.iter().find(|n| n.agent_id == "kkk111").unwrap();
     assert_eq!(k.parent_agent_id, None, "{k:?}");
 }
+
+#[test]
+fn spawn_index_merge_keeps_the_first_issuer_for_a_repeated_tool_use_id() {
+    // A `/fork` clone repeats every spawn record its parent issued before the fork.
+    // The main transcript folds first; a later local carrying the same tool_use id
+    // must NOT displace the original issuer (v0.10.2: FIRST-wins), while ids only the
+    // local carries still join.
+    let mut main = crate::subagent::ParentSpawnIndex::default();
+    main.issuer.insert("toolu_shared".to_string(), None);
+    main.tool_results
+        .insert("toolu_shared".to_string(), "from main".to_string());
+    let mut clone = crate::subagent::ParentSpawnIndex::default();
+    clone
+        .issuer
+        .insert("toolu_shared".to_string(), Some("clone111".to_string()));
+    clone
+        .tool_results
+        .insert("toolu_shared".to_string(), "from clone".to_string());
+    clone
+        .issuer
+        .insert("toolu_own".to_string(), Some("clone111".to_string()));
+    main.merge(clone);
+    assert_eq!(main.issuer.get("toolu_shared"), Some(&None));
+    assert_eq!(
+        main.tool_results.get("toolu_shared").map(String::as_str),
+        Some("from main")
+    );
+    assert_eq!(
+        main.issuer.get("toolu_own"),
+        Some(&Some("clone111".to_string()))
+    );
+}
