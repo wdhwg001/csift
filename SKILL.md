@@ -19,7 +19,7 @@ description: >-
 
 # csift — ripgrep for Claude Code session transcripts
 
-Surface: **v0.10.1** (must == `csift --version`). MECHANICAL GUARD: at first use after any compaction or context restore, run `csift --version` — if it differs from this Surface line, the copy you are reading is a stale in-context echo, and the installed SKILL.md is the one that matches the binary: Read it before anything else. Same diagnosis when an invocation you were CONFIDENT about errors (an older surface from prefill/summary/habit); never fall back to hand-parsing the jsonl.
+Surface: **v0.10.2** (must == `csift --version`). MECHANICAL GUARD: at first use after any compaction or context restore, run `csift --version` — if it differs from this Surface line, the copy you are reading is a stale in-context echo, and the installed SKILL.md is the one that matches the binary: Read it before anything else. Same diagnosis when an invocation you were CONFIDENT about errors (an older surface from prefill/summary/habit); never fall back to hand-parsing the jsonl.
 
 Rust CLI over CC session `.jsonl` under `~/.claude/projects/<encoded-cwd>/`. Built for an LLM consumer: token-lean text, uniform JSON, pure regex (RE2-class, linear-time; no backrefs/lookaround — they fail to compile by design). Smart-case: a pattern is case-insensitive unless it carries an uppercase; `-i` forces insensitive. `csift <cmd> --help` is the authoritative flag manual. Flag order is genuinely free — before/after the subcommand, before/after positionals, all equivalent.
 

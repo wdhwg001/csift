@@ -5,6 +5,52 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.10.2] - 2026-09-03
+
+The first re-read of the introspection ledger after 0.10.1: the 17 claims that had no
+code site were anchored, every site the release had moved was relocated, and the
+reading turned up the defects below. Each fix carries its claim update with the
+instrument that measured it.
+
+### Fixed
+
+- `wait --until notification` never fired on a completion absorbed mid-turn. Claude
+  Code delivers a `<task-notification>` as a user record only when the session is idle;
+  a pulse that lands mid-turn exists only on a `queue-operation` enqueue line and a
+  `queued_command` attachment (this corpus: 3218 pulse-bearing user records against
+  5893 enqueue lines). The condition and the wait activity census now read the same
+  three carriers the background section joins; a queue remove or dequeue repeats the
+  enqueue's pulse and counts nothing.
+- `plan`: the slug-only binding resolved `plansDirectory` against the slug record's
+  own `cwd`, which follows the tracked shell cwd and can already sit in a
+  subdirectory, so the plan file was joined under that subdirectory and a
+  project-scope `plansDirectory` was silently dropped. Claude Code memoizes the
+  directory at its first access early in the session, so csift now binds against the
+  transcript's first recorded cwd and reads the settings scopes from that root.
+- `search`: a subagent transcript that is a `/fork` clone (line 1 is a
+  `fork-context-ref` record) had its first turn-opener labeled as the spawn-prompt seed
+  (`agent.communication.inbox`) although it is the parent's own human message; 10 of
+  the 42 clones in this corpus carry such a record. A clone now has no seed.
+- `agents`: the global spawn index folded subagent locals later-wins, so a clone's
+  copy of a sibling's spawn record could re-parent that sibling onto the clone. The
+  fold is first-wins (main first, then discovery order).
+- `search`: a superseded draft whose text is sectioned (a pulse or relay shape) fanned
+  out into per-section classes its own `labels[]` did not carry; it keeps the single
+  `user.unsent` view now.
+- Two shipped strings had lost their line-continuation backslashes and printed runs of
+  spaces: the `wait` timeout-guard message and a `recover` bash-append boundary detail.
+
+### Changed
+
+- `show --turn` help says what the fetch omits: the gated non-record lines a turn carries
+  (turn-duration, stop-hooks, away-summary, queue, snapshot, system) are addressed by
+  `--line`/`--uuid` or `search -t harness.meta`, never by a turn range.
+- `search --help` names the eight LLM-invisible leaves (the two of 0.9.4 plus the six
+  gated leaves) instead of "exactly two".
+- The ledger gate requires at least one code site per claim; AGENTS.md section 7.1
+  documents the ledger schema, the verdict semantics, the six gate rules and the four
+  procedures.
+
 ## [0.10.1] - 2026-09-03
 
 Verified against a real Claude Code 2.1.258 session on Windows 11 ARM64 (a Sonnet 5
