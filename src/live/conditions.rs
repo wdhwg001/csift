@@ -113,13 +113,24 @@ pub(crate) fn record_matches(cond: &Cond, rec: &crate::model::Record, is_main: b
             if !is_main {
                 return false;
             }
-            let Some(label) = rec.automation_label() else {
-                return false;
-            };
+            // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY
+            // on a queue-operation enqueue line and a queued_command attachment
+            // (v0.10.2: the three carriers `background_scan` joins, not the user
+            // record alone - the agents-stopped notice stays a user-record label).
+            let mut labels = crate::live::delivered_pulse_labels(rec);
+            if labels.is_empty() {
+                let Some(label) = rec.automation_label() else {
+                    return false;
+                };
+                labels.push(label);
+            }
             re.as_ref().is_none_or(|r| {
-                r.is_match(&label)
+                labels.iter().any(|l| r.is_match(l))
                     || rec
                         .reconstructed_user_text(None)
+                        .as_deref()
+                        .is_some_and(|t| r.is_match(t))
+                    || crate::live::carrier_text(rec)
                         .as_deref()
                         .is_some_and(|t| r.is_match(t))
             })

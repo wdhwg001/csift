@@ -182,17 +182,7 @@ pub(crate) fn after_marker(text: &str, marker: &str) -> Option<String> {
 /// `queue-operation` line, or a `queued_command` attachment, each holding one or more
 /// `<task-notification>` sections; plus the unjoinable agents-stopped notice.
 pub(crate) fn ingest_carriers(rec: &Record, carriers: &mut Vec<Carrier>, notes: &mut Vec<String>) {
-    let text: Option<String> = if rec.is_type("queue-operation") {
-        rec.content_str().map(str::to_string)
-    } else if rec.attachment_type().as_deref() == Some("queued_command") {
-        rec.attachment_value()
-            .and_then(|v| v.get("prompt")?.as_str().map(str::to_string))
-    } else if let Some(Content::Text(s)) = rec.message.as_ref().and_then(|m| m.content.as_ref()) {
-        Some(s.clone())
-    } else {
-        None
-    };
-    let Some(text) = text else {
+    let Some(text) = carrier_text(rec) else {
         return;
     };
     if crate::model::is_agents_stopped_notice(&text) {
@@ -224,6 +214,46 @@ pub(crate) fn ingest_carriers(rec: &Record, carriers: &mut Vec<Carrier>, notes: 
             orphan_summary: orphan,
         });
     }
+}
+
+/// The text a main-lane record carries as a possible notification carrier: a user
+/// string record, a `queue-operation` line's `content`, or a `queued_command`
+/// attachment's `prompt`. A pulse absorbed mid-turn exists ONLY on the queue line and
+/// the attachment (measured at 2.1.258 over the main transcripts of this corpus: 3218
+/// pulse-bearing user records against 5893 queue enqueue lines), so a reader of
+/// user records alone misses roughly every other completion.
+pub(crate) fn carrier_text(rec: &Record) -> Option<String> {
+    if rec.is_type("queue-operation") {
+        rec.content_str().map(str::to_string)
+    } else if rec.attachment_type().as_deref() == Some("queued_command") {
+        rec.attachment_value()
+            .and_then(|v| v.get("prompt")?.as_str().map(str::to_string))
+    } else if let Some(Content::Text(s)) = rec.message.as_ref().and_then(|m| m.content.as_ref()) {
+        Some(s.clone())
+    } else {
+        None
+    }
+}
+
+/// The `<task-notification>` pulses a freshly appended main-lane record delivers, as
+/// their rendered labels: a user record (the idle delivery), a queue-operation ENQUEUE
+/// line, or a `queued_command` attachment (the mid-turn delivery). A queue `remove`
+/// or `dequeue` line repeats a pulse the enqueue already carried, so it delivers none.
+pub(crate) fn delivered_pulse_labels(rec: &Record) -> Vec<String> {
+    if rec.is_type("queue-operation") && rec.operation.as_deref() != Some("enqueue") {
+        return Vec::new();
+    }
+    let Some(text) = carrier_text(rec) else {
+        return Vec::new();
+    };
+    text.split(TASK_NOTIFICATION_PREFIX)
+        .skip(1)
+        .map(|section| {
+            crate::model::automation_label_for_section(&format!(
+                "{TASK_NOTIFICATION_PREFIX}{section}"
+            ))
+        })
+        .collect()
 }
 
 /// Every `<tag>…</tag>` value in order (an orphan summary carries several).

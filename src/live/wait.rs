@@ -37,7 +37,10 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
     // (a dev server, a watcher), so an unbounded wait on `stop` is a bug, not a wait.
     let Some(timeout_secs) = args.timeout else {
         bail!(
-            "wait needs --timeout <SECS>: a background task can be designed never to return              (a dev server, a watcher), so a wait without a bound never ends. Pick a bound,              branch on exit 124, and read the at-exit report; narrow what counts with              --background-since now / --ignore-background <RE>"
+            "wait needs --timeout <SECS>: a background task can be designed never to return \
+             (a dev server, a watcher), so a wait without a bound never ends. Pick a bound, \
+             branch on exit 124, and read the at-exit report; narrow what counts with \
+             --background-since now / --ignore-background <RE>"
         );
     };
     let is_subagent_target = crate::subagent::is_subagent_path(&main);

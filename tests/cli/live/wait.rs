@@ -321,3 +321,66 @@ fn p12_no_subagents_scopes_the_watch_and_the_verdict() {
     );
     assert_eq!(code, Some(124), "child lanes out of watch scope: {stdout}");
 }
+
+#[test]
+fn p12_notification_fires_on_a_queue_enqueue_line_not_on_its_remove() {
+    // A pulse absorbed mid-turn never becomes a user record: it lives on a
+    // queue-operation ENQUEUE line (and a queued_command attachment). `--until
+    // notification` fires on that carrier (v0.10.2); the later REMOVE line for the
+    // same pulse is not a second delivery.
+    let h = Home::new();
+    let main = live_eot_main(&h);
+    let target = at(LIVE_SESS);
+    let pulse = r#"<task-notification>\n<task-id>b7</task-id>\n<status>completed</status>\n<summary>Background command finished</summary>\n</task-notification>"#;
+    let (code, stdout) = drive_wait(
+        &h,
+        &[
+            "wait",
+            &target,
+            "--until",
+            "notification",
+            "--interval",
+            "25",
+            "--timeout",
+            "2",
+        ],
+        || {
+            let mut f = std::fs::File::options().append(true).open(&main).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"queue-operation","operation":"remove","reason":"absorbed_mid_turn","timestamp":"2026-06-07T05:05:00.000Z","sessionId":"{LIVE_SESS}","content":"{pulse}"}}"#
+            )
+            .unwrap();
+        },
+    );
+    assert_eq!(code, Some(124), "a remove line alone never fires: {stdout}");
+    let (code, stdout) = drive_wait(
+        &h,
+        &[
+            "wait",
+            &target,
+            "--until",
+            // A regex only the RAW carrier text satisfies (the rendered label carries no
+            // XML tag): the regex is tried against the carrier text too, not only
+            // against the fabricated label.
+            "notification:<status>completed</status>",
+            "--interval",
+            "25",
+            "--timeout",
+            "30",
+        ],
+        || {
+            let mut f = std::fs::File::options().append(true).open(&main).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"queue-operation","operation":"enqueue","timestamp":"2026-06-07T05:06:00.000Z","sessionId":"{LIVE_SESS}","content":"{pulse}"}}"#
+            )
+            .unwrap();
+        },
+    );
+    assert_eq!(code, Some(0), "the enqueue carrier fires: {stdout}");
+    assert!(
+        stdout.contains("notifications 1"),
+        "the activity census counts the queue-carried pulse once:\n{stdout}"
+    );
+}

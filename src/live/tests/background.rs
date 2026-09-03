@@ -178,7 +178,21 @@ fn activity_census_and_tail_state_words() {
     // A tool_result carrier (agent.tool.result, outside every counted arm) changes no
     // counter but the record total.
     act.fold(&parse(LAUNCH_RESULT), "main");
-    assert_eq!(act.records, 6);
+    // A pulse absorbed mid-turn lands on a queue ENQUEUE line (counted) and again on
+    // the queue REMOVE line (the same pulse, not counted) - v0.10.2.
+    act.fold(
+        &parse(
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"t","sessionId":"s","content":"<task-notification>\n<task-id>b2</task-id>\n<status>completed</status>\n<summary>Background command finished</summary>\n</task-notification>"}"#,
+        ),
+        "main",
+    );
+    act.fold(
+        &parse(
+            r#"{"type":"queue-operation","operation":"remove","reason":"absorbed_mid_turn","timestamp":"t","sessionId":"s","content":"<task-notification>\n<task-id>b2</task-id>\n<status>completed</status>\n<summary>Background command finished</summary>\n</task-notification>"}"#,
+        ),
+        "main",
+    );
+    assert_eq!(act.records, 8);
     assert_eq!(act.lanes.len(), 2);
     assert_eq!(act.tools.get("Bash"), Some(&1));
     assert_eq!(act.tools.get("Read"), Some(&1));
@@ -189,18 +203,18 @@ fn activity_census_and_tail_state_words() {
             act.user_prompts,
             act.notifications
         ),
-        (1, 1, 1, 1)
+        (1, 1, 1, 2)
     );
     assert_eq!(
         act.summary_line(),
-        "6 record(s) in 2 lane(s): tools Bash x1 Read x1 · thinking 1 · messages 1 · prompts 1 · notifications 1"
+        "8 record(s) in 2 lane(s): tools Bash x1 Read x1 · thinking 1 · messages 1 · prompts 1 · notifications 2"
     );
     assert_eq!(
         Activity::default().summary_line(),
         "nothing landed after the baseline"
     );
     let j = act.json();
-    assert_eq!(j["records"], 6);
+    assert_eq!(j["records"], 8);
     assert_eq!(j["tools"]["Bash"], 1);
 
     // Tail-state words.

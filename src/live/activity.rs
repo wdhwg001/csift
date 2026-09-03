@@ -23,6 +23,13 @@ impl Activity {
     pub(crate) fn fold(&mut self, rec: &Record, lane: &str) {
         self.records += 1;
         self.lanes.insert(lane.to_string());
+        // A pulse absorbed mid-turn is a queue enqueue line / a queued_command
+        // attachment, never a labeled record (v0.10.2): count those deliveries too, so
+        // the census agrees with what `--until notification` can fire on.
+        if rec.is_type("queue-operation") || rec.attachment_type().is_some() {
+            self.notifications += crate::live::delivered_pulse_labels(rec).len();
+            return;
+        }
         let labels = rec.classify(&crate::model::ClassifyCtx::top_level());
         for c in &labels {
             match c {
