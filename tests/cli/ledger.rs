@@ -20,6 +20,12 @@
 //!    check; the score itself is the census's business).
 //! 6. Every claim cites at least one code site: a claim with no site names a behavior
 //!    csift does not demonstrably depend on, and the audit could never anchor it.
+//! 7. Every claim states how completely its behavior is ATTRIBUTED (`attribution`, the
+//!    closed set end-to-end | producer-only | specimen-only | by-elimination: whether
+//!    the producing code was traced in the shipped binary and whether a specimen was
+//!    observed) and, unless end-to-end, lists the `open_legs` an audit still has to
+//!    close. A by-elimination claim can never carry a `holds` verdict: with neither leg
+//!    traced, "nothing changed" is exactly the conclusion an audit is not entitled to.
 
 use std::collections::{HashMap, HashSet};
 
@@ -117,6 +123,7 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
                 "{id}: no code site (every claim cites at least one)"
             ));
         }
+        check_attribution(id, c, &mut failures);
         // Rule 4: every code site is real and its snippet still exists verbatim.
         for site in c["code"].as_array().cloned().unwrap_or_default() {
             let path = site["path"].as_str().unwrap_or("");
@@ -165,4 +172,41 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
         failures.len(),
         failures.join("\n  ")
     );
+}
+
+/// Rule 7: attribution completeness is stated, open legs are listed, and a claim
+/// attributed by elimination never holds.
+fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>) {
+    // Rule 7: attribution completeness is stated, open legs are listed, and a claim
+    // attributed by elimination never holds.
+    const ATTRIBUTIONS: [&str; 4] = [
+        "end-to-end",
+        "producer-only",
+        "specimen-only",
+        "by-elimination",
+    ];
+    let attribution = c["attribution"].as_str().unwrap_or("");
+    if !ATTRIBUTIONS.contains(&attribution) {
+        failures.push(format!(
+            "{id}: `attribution` `{attribution}` is not in {ATTRIBUTIONS:?}"
+        ));
+    }
+    let open_legs = c["open_legs"].as_array().cloned().unwrap_or_default();
+    let legs_named = open_legs
+        .iter()
+        .any(|l| l.as_str().is_some_and(|s| !s.trim().is_empty()));
+    if attribution != "end-to-end" && !legs_named {
+        failures.push(format!(
+            "{id}: attribution `{attribution}` without a non-empty `open_legs` entry"
+        ));
+    }
+    if attribution == "by-elimination"
+        && c["checks"]
+            .as_array()
+            .is_some_and(|ks| ks.iter().any(|k| k["verdict"].as_str() == Some("holds")))
+    {
+        failures.push(format!(
+            "{id}: a by-elimination claim carries a `holds` verdict (trace the producer or the specimen first)"
+        ));
+    }
 }
