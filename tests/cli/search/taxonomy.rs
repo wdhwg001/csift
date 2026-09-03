@@ -515,3 +515,36 @@ fn harness_role_excludes_the_boundary_and_the_drilldown_keeps_it() {
     let glob = h.run(&["search", "", &at(SESS), "-t", "harness.*"]);
     assert!(glob.stdout.contains("trigger=auto"), "{}", glob.stdout);
 }
+
+#[test]
+fn a_freeform_askuserquestion_response_is_a_user_answer() {
+    // A carrier whose toolUseResult carries `response` and an empty `answers` map (the
+    // harness's `The user responded:` branch) is a user.answer hit rendering the
+    // response, and the marker text is prefilter-safe under the whole-file gate.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "45454545-5656-4767-8878-989898989898";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"pick a route"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"ask1","name":"AskUserQuestion","input":{"questions":[{"question":"Which harbor?","header":"Harbor","options":[{"label":"north","description":"a"},{"label":"south","description":"b"}],"multiSelect":false}]}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","parentUuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ask1","content":"The user responded: skip the harbor, go by land"}]},"toolUseResult":{"questions":[{"question":"Which harbor?","header":"Harbor","options":[{"label":"north","description":"a"},{"label":"south","description":"b"}],"multiSelect":false}],"answers":{},"response":"skip the harbor, go by land"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"r1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"by land it is"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["search", "go by land", &at(sess), "-t", "user.answer"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("user.answer")
+            && out.stdout.contains("response: skip the harbor, go by land"),
+        "{}",
+        out.stdout
+    );
+    let count = h.run(&["search", "", &at(sess), "-t", "user.answer", "-c"]);
+    assert_eq!(count.stdout.trim(), "1", "{}", count.stdout);
+    // The synthesized head alone (never a raw substring of the line beyond the marker)
+    // still matches: the marker is a verifiable synth needle.
+    let head = h.run(&["search", "AskUserQuestion · 1 question", &at(sess), "-c"]);
+    assert_eq!(head.stdout.trim(), "1", "{}", head.stdout);
+}

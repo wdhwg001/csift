@@ -19,6 +19,10 @@ pub const AUQ_ANSWER_MARKERS: &[&str] = &[
     // carefully ...`); the fourth branch `The user did not answer the questions.` is
     // the UNANSWERED case and must never open a turn, so it stays out.
     "The user answered:",
+    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer
+    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch
+    // (`No response after Ns ...`) is not an answer and stays out.
+    "The user responded:",
 ];
 
 /// True when `text` (a `tool_result`'s rendered content) is a synthesized

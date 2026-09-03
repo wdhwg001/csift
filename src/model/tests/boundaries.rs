@@ -405,3 +405,36 @@ fn plan_index_skips_pointer_without_path() {
     let index = PlanIndex::from_records([&r]);
     assert!(index.plan_path("p1").is_none());
 }
+
+#[test]
+fn a_freeform_response_carrier_is_an_answer_boundary_and_renders_the_response() {
+    // The `The user responded:` branch (v0.10.3): `answers` is empty and the whole
+    // message is `toolUseResult.response`. The carrier opens a turn like any other
+    // answer, and the exchange renders the questions asked plus the response.
+    let raw = r#"{"type":"user","uuid":"r1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"ask1","content":"The user responded: skip the harbor, go by land"}]},"toolUseResult":{"questions":[{"question":"Which harbor?","header":"Harbor","options":[{"label":"north","description":"a"},{"label":"south","description":"b"}],"multiSelect":false}],"answers":{},"response":"skip the harbor, go by land"}}"#;
+    let rec = crate::parse::parse_line(raw.as_bytes()).unwrap().unwrap();
+    assert!(rec.has_auq_response());
+    assert!(!rec.has_auq_answers());
+    assert!(rec.is_auq_answer_boundary());
+    assert!(rec.opens_turn());
+    let unit = rec.auq_exchange().unwrap();
+    assert!(unit.starts_with("[AskUserQuestion · 1 question]"), "{unit}");
+    assert!(unit.contains("Q1 Which harbor?"), "{unit}");
+    assert!(
+        unit.contains("response: skip the harbor, go by land"),
+        "{unit}"
+    );
+    // A blank response beside an empty answers map is not an answer.
+    let blank = raw
+        .replace(
+            r#""response":"skip the harbor, go by land""#,
+            r#""response":"  ""#,
+        )
+        .replace(
+            "The user responded: skip the harbor, go by land",
+            "The user did not answer the questions.",
+        );
+    let rec = crate::parse::parse_line(blank.as_bytes()).unwrap().unwrap();
+    assert!(!rec.has_auq_response());
+    assert!(!rec.is_auq_answer_boundary());
+}

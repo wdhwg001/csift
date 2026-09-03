@@ -309,6 +309,11 @@ pub(crate) struct TurProbe {
     #[serde(rename = "isAsync")]
     pub(crate) is_async: Option<serde_json::Value>,
     pub(crate) answers: Option<serde_json::Value>,
+    /// AskUserQuestion's freeform answer (v0.10.3): the text an answerer typed instead
+    /// of a structured option. Written beside an EMPTY `answers` map, synthesized as
+    /// `The user responded: <text>`; the TUI dialog never writes it (its Other entry
+    /// lands in `answers`), so it comes from an answerer outside the dialog.
+    pub(crate) response: Option<serde_json::Value>,
 }
 
 /// `message.content` is polymorphic: a plain string or a list of blocks.

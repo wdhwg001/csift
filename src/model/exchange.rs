@@ -125,6 +125,30 @@ impl Record {
             }
             return Some(out);
         }
+        // The freeform branch (v0.10.3): `answers` is empty and the user's whole message
+        // is `toolUseResult.response` - render the questions asked, then the response.
+        let response = tur
+            .as_ref()
+            .and_then(|t| t.get("response"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.trim().is_empty());
+        if let Some(resp) = response {
+            let questions = tur
+                .as_ref()
+                .and_then(|t| t.get("questions"))
+                .and_then(serde_json::Value::as_array);
+            let n = questions.map_or(0, Vec::len);
+            let mut out = format!("[AskUserQuestion · {n} question{}]", plural(n));
+            for (i, q) in questions.into_iter().flatten().enumerate() {
+                let question = q
+                    .get("question")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default();
+                out.push_str(&format!("\nQ{} {}", i + 1, normalize_line(question)));
+            }
+            out.push_str(&format!("\nresponse: {}", normalize_line(resp)));
+            return Some(out);
+        }
         // Fallback path: the synthesized marker string is the whole exchange.
         self.auq_answer_marker_text()
             .map(|t| format!("[AskUserQuestion] {}", normalize_line(&t)))

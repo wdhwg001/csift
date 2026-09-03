@@ -4492,8 +4492,8 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "271-279",
-          "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`.\n        if self.has_auq_answers() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
+          "lines": "271-281",
+          "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes\n        // the text there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
         }
       ],
       "instrument": "`csift search \"\" @<session> -t user.answer --format json | jq -r .hits[].line`, fetch each with `csift show @<session> --line <n> --raw`, and check every one has `\"answers\":{` with at least one key and no `\"is_error\":true`. Counting rule: AUQ tool_result carriers, split by the three signals.",
@@ -4524,7 +4524,7 @@
       "id": "ELI-004",
       "area": "elicitation",
       "behavior": "Claude Code 2.1.258 synthesizes the AskUserQuestion tool_result from a five-way branch. 'User has answered your questions' is gone from the binary and never appears as a real marker in this corpus. The two live prefixes are 'Your questions have been answered: ' (every question answered by clicking a listed option, no notes) and 'The user answered: ' (anything else - notes attached, or an answer that is not one of the offered labels); the other three are 'The user responded: ' (freeform text), 'The user did not answer the questions.' and the idle path 'No response after Ns ...' optionally followed by 'Before going idle the user had selected: ...'.",
-      "depends": "csift recognises an AUQ answer by START-anchored prefix (`trim_start` + `starts_with`) against a LIST of markers, three since v0.10.1: the retired `User has answered your questions` (kept for historical transcripts), `Your questions have been answered`, and 2.1.258's `The user answered:`. A single hardcoded marker missed the dominant form entirely and silently dropped real `user.answer` turns, while a `contains` check false-positived on any tool result that merely QUOTES a marker (which relabeled whole documentation files as `user.answer`). The list is the FALLBACK for records without `toolUseResult` (the primary boundary signal is a non-empty `toolUseResult.answers`); the `The user did not answer the questions.` branch is deliberately excluded because it opens no turn. All three phrasings are also verifiable synth markers in the search prefilter.",
+      "depends": "csift recognises an AUQ answer by START-anchored prefix (`trim_start` + `starts_with`) against a LIST of markers, four since v0.10.3: the retired `User has answered your questions` (kept for historical transcripts), `Your questions have been answered`, 2.1.258's `The user answered:`, and the freeform `The user responded:` (v0.10.3; ELI-026). A single hardcoded marker missed the dominant form entirely and silently dropped real `user.answer` turns, while a `contains` check false-positived on any tool result that merely QUOTES a marker (which relabeled whole documentation files as `user.answer`). The list is the FALLBACK for records without `toolUseResult` (the primary boundary signals are a non-empty `toolUseResult.answers` or, since v0.10.3, a non-blank `toolUseResult.response`); the `The user did not answer the questions.` branch is deliberately excluded because it opens no turn. All four phrasings are also verifiable synth markers in the search prefilter.",
       "code": [
         {
           "path": "src/model/markers.rs",
@@ -4538,23 +4538,23 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "34-38",
+          "lines": "38-42",
           "snippet": "#[must_use]\npub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
           "path": "src/search/matcher.rs",
-          "lines": "493",
+          "lines": "494",
           "snippet": "// The agents-stopped kill notice renders a fabricated `[subagent stopped]` head."
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "15-22",
-          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n];"
+          "lines": "15-26",
+          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/search/matcher.rs",
-          "lines": "487-495",
-          "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
+          "lines": "487-496",
+          "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
       "instrument": "`rg -c 'User has answered your questions' ~/.claude/projects -g '*.jsonl'` versus `rg -c 'Your questions have been answered'`; both must be non-zero over a corpus spanning versions, and a file carrying both spans the transition. Counting rule: one per tool_result content STARTING with the marker, which `csift search \"\" -t user.answer -c` reports directly.",
@@ -19536,23 +19536,23 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "35-38",
+          "lines": "39-42",
           "snippet": "pub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "15-22",
-          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n];"
+          "lines": "15-26",
+          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "34-38",
+          "lines": "38-42",
           "snippet": "#[must_use]\npub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
         },
         {
           "path": "src/search/matcher.rs",
-          "lines": "487-495",
-          "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
+          "lines": "487-496",
+          "snippet": "    let mut verifiable: Vec<&[u8]> = vec![\n        b\"<task-notification>\",\n        br#\"\"answers\"\"#,\n        b\"User has answered your questions\",\n        b\"Your questions have been answered\",\n        b\"The user answered:\",\n        b\"The user responded:\",\n        // The agents-stopped kill notice renders a fabricated `[subagent stopped]` head.\n        b\"stopped by the user\",\n    ];"
         }
       ],
       "instrument": "`rg -c 'User has answered your questions' ~/.claude/projects -g '*.jsonl'` versus `rg -c 'Your questions have been answered' ...` - both non-zero over a corpus spanning versions, a file carrying both spans a transition - then `csift search '' @<id> -t user.answer -c`. Counting rule: one per tool_result carrier whose content STARTS with the marker.",
@@ -20756,17 +20756,27 @@
       "id": "ELI-026",
       "area": "elicitation",
       "behavior": "Claude Code 2.1.258 synthesizes the AskUserQuestion tool_result in `mapToolResultToToolResultBlockParam` from the result object `{questions, answers, response?, annotations?, afkTimeoutMs?}` (the tool's `call()` copies these from the answered tool input; `response` and `afkTimeoutMs` are written only when set) by a fixed branch order: `afkTimeoutMs` set -> `No response after Ns - the user may be away from keyboard ...`, plus `Before going idle the user had selected: <pairs>.` when any answer pair exists; else `response` non-blank -> `The user responded: <response>`; else any answer pair -> `Your questions have been answered: <pairs>. You can now continue with these answers in mind.` when every question was answered by a listed label with no notes, otherwise `The user answered: <pairs>. Read the answers carefully - they may request clarification, changes, or that you not proceed - and follow what they actually say.`; else `The user did not answer the questions.` A pair renders `\"q\"=\"a\"`, or `\"q\"=(no option selected)` when `answers[q]` is the sentinel `(notes only)`, with ` notes: ...` and `selected preview: ...` suffixes from `annotations[q]`. The TUI dialog's submit function returns `updatedInput = {...input, answers, annotations, afkTimeoutMs?}` and never writes `response`: the `Other` entry stores the typed text as `answers[q]`, a notes-only submission stores the `(notes only)` sentinel, `Chat about this` is not an answer at all (it denies the tool use with the `The user wants to clarify these questions.` template, recorded as an `is_error` tool_result), and the idle path is armed by the `askUserQuestionTimeout` setting / `CLAUDE_AFK_TIMEOUT_MS` (default never).",
-      "depends": "csift recognises an AskUserQuestion answer by a non-empty `toolUseResult.answers` first and by the start-anchored text markers as the fallback, so every shape the TUI can produce (a label, an `Other` text, a notes-only sentinel, a partial selection at idle timeout) classifies `user.answer` and opens a turn, and the `Chat about this` deny classifies `user.rejection`. The `response`-only shape (`answers` = {} and the text `The user responded: ...`) is NOT recognised in 0.10.2: it would classify `agent.tool.result` and open no turn - a correctness gap for whichever answerer sets `response`.",
+      "depends": "csift recognises an AskUserQuestion answer by EITHER structured signal - a non-empty `toolUseResult.answers` (`has_auq_answers`) OR a present, non-blank `toolUseResult.response` (`has_auq_response`, v0.10.3) - and by the start-anchored text markers as the fallback for carriers without `toolUseResult`; so every shape the TUI produces (a label, an `Other` text, a notes-only sentinel, a partial selection at idle timeout) AND the `response`-only shape (`answers` = {} and the text `The user responded: ...`) classify `user.answer` and open a turn, the `response` shape rendering the questions asked plus a `response:` line in the AUQ unit, and the `Chat about this` deny classifies `user.rejection`. The idle-timeout text with no answer pair (`No response after ...`, `afkTimeoutMs` set) matches no marker and opens no turn. 0.10.0-0.10.2 required a non-empty `answers` and lacked the `The user responded:` prefix, so the `response`-only carrier classified `agent.tool.result` and opened no turn.",
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "15-22",
-          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n];"
+          "lines": "15-26",
+          "snippet": "pub const AUQ_ANSWER_MARKERS: &[&str] = &[\n    \"User has answered your questions\",\n    \"Your questions have been answered\",\n    // CC 2.1.258's third branch (`The user answered: \"<q>\"=\"<a>\". Read the answers\n    // carefully ...`); the fourth branch `The user did not answer the questions.` is\n    // the UNANSWERED case and must never open a turn, so it stays out.\n    \"The user answered:\",\n    // The freeform branch (v0.10.3): `The user responded: <text>` when the answerer\n    // wrote `toolUseResult.response` instead of an option; the idle-timeout branch\n    // (`No response after Ns ...`) is not an answer and stays out.\n    \"The user responded:\",\n];"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "35-38",
+          "lines": "39-42",
           "snippet": "pub fn is_auq_answer_text(text: &str) -> bool {\n    let head = text.trim_start();\n    AUQ_ANSWER_MARKERS.iter().any(|m| head.starts_with(m))\n}"
+        },
+        {
+          "path": "src/model/predicates.rs",
+          "lines": "286-292",
+          "snippet": "    pub(crate) fn has_auq_response(&self) -> bool {\n        self.tur_probe()\n            .as_ref()\n            .and_then(|p| p.response.as_ref())\n            .and_then(serde_json::Value::as_str)\n            .is_some_and(|s| !s.trim().is_empty())\n    }"
+        },
+        {
+          "path": "src/model/exchange.rs",
+          "lines": "128-151",
+          "snippet": "        // The freeform branch (v0.10.3): `answers` is empty and the user's whole message\n        // is `toolUseResult.response` - render the questions asked, then the response.\n        let response = tur\n            .as_ref()\n            .and_then(|t| t.get(\"response\"))\n            .and_then(serde_json::Value::as_str)\n            .filter(|s| !s.trim().is_empty());\n        if let Some(resp) = response {\n            let questions = tur\n                .as_ref()\n                .and_then(|t| t.get(\"questions\"))\n                .and_then(serde_json::Value::as_array);\n            let n = questions.map_or(0, Vec::len);\n            let mut out = format!(\"[AskUserQuestion · {n} question{}]\", plural(n));\n            for (i, q) in questions.into_iter().flatten().enumerate() {\n                let question = q\n                    .get(\"question\")\n                    .and_then(serde_json::Value::as_str)\n                    .unwrap_or_default();\n                out.push_str(&format!(\"\\nQ{} {}\", i + 1, normalize_line(question)));\n            }\n            out.push_str(&format!(\"\\nresponse: {}\", normalize_line(resp)));\n            return Some(out);\n        }"
         }
       ],
       "instrument": "Read the shipped binary's AskUserQuestion tool: the result schema (the five field descriptions), `call()`, `mapToolResultToToolResultBlockParam` (the branch order), the dialog submit function (its `updatedInput` keys) and the `Chat about this` handler; then produce each TUI shape live in a session (a listed label, Other text, notes-only, Chat about this) and read the resulting records with `csift show --line --raw`. Counting rule: one branch = one template string in the binary; one TUI exit = one distinct `updatedInput` key set.",
@@ -20791,6 +20801,16 @@
           "observed": "branch order afk > response > answers (every-listed-label -> `Your questions have been answered`, else `The user answered`) > `did not answer`; `call()` returns `{questions, answers, ...response, ...annotations, ...afkTimeoutMs}`; the submit function's updatedInput carries `answers`, `annotations`, optional `afkTimeoutMs`, never `response`; Other text landed in `answers` and synthesized `The user answered:` (csift user.answer); notes-only landed as `(no option selected) notes: ...` under `The user answered:`; Chat about this produced an is_error deny with the clarify template (csift user.rejection)",
           "rule": "one template = one branch; one live trial = one `toolUseResult` read raw from disk",
           "note": "csift 0.10.2 does not recognise the `response`-only shape (a non-empty `toolUseResult.response` with empty `answers`): the fix is to accept `response` as a structured answer signal, render it as the answer unit, and add `The user responded:` to AUQ_ANSWER_MARKERS and the verifiable synth needles - scheduled for the next release. The answerer that writes `response` remains untraced (open_legs); this claim must not be marked holds until that leg is closed with a traced producer and a specimen."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.3",
+          "date": "2026-09-03",
+          "verdict": "refined",
+          "instrument": "the binary's `call()` and `mapToolResultToToolResultBlockParam` (readable JS at offset 164278626 of 2.1.258; branch order afk > response > answers > did-not-answer, `response` a sibling of `answers` in the result object) re-read against the 0.10.3 code paths: `Record::has_auq_response`, `is_auq_answer_boundary`, `auq_exchange`'s response branch, `AUQ_ANSWER_MARKERS` and the verifiable synth needles; then `cargo test a_freeform_response_carrier_is_an_answer_boundary_and_renders_the_response` (unit) and `cargo test a_freeform_askuserquestion_response_is_a_user_answer` (e2e) over a carrier shaped exactly as the branch writes it: `toolUseResult:{questions:[1], answers:{}, response:\"<text>\"}` with content `The user responded: <text>`",
+          "observed": "the `response`-only carrier now classifies `user.answer`, opens a turn, and renders `[AskUserQuestion · 1 question]` / `Q1 <question>` / `response: <text>`; `search -t user.answer -c` counts it once; a blank `response` beside an empty `answers` is not a boundary; the synthesized head `AskUserQuestion · 1 question` matches through the whole-file gate (the `The user responded:` needle is verifiable). Producer leg unchanged: the branch and its template are the binary's, but the answerer that writes `response` remains untraced (0 corpus specimens), so the specimen leg stays open and the attribution stays producer-only",
+          "rule": "one test = one carrier shape read as the binary writes it; the unit asserts the boundary predicates and the rendered unit, the e2e asserts the label, the count and the gate; the drifted verdict of 0.10.2 is superseded by this refined one (csift now covers the shape; the CC behavior itself is unchanged)",
+          "note": "the 0.10.2 `drifted` check named the gap; this check records the fix. Open legs unchanged."
         }
       ]
     }

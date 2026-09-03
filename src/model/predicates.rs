@@ -271,12 +271,24 @@ impl Record {
         if !has_non_errored_tool_result {
             return false;
         }
-        // Primary signal: structured, non-empty `toolUseResult.answers`.
-        if self.has_auq_answers() {
+        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform
+        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes
+        // the text there and leaves `answers` empty).
+        if self.has_auq_answers() || self.has_auq_response() {
             return true;
         }
         // Fallback (older records without `toolUseResult`): the synthesized marker.
         self.is_auq_answer()
+    }
+
+    /// The freeform `toolUseResult.response` test (v0.10.3): present AND non-blank. The
+    /// harness writes it only when set, beside an empty `answers` map.
+    pub(crate) fn has_auq_response(&self) -> bool {
+        self.tur_probe()
+            .as_ref()
+            .and_then(|p| p.response.as_ref())
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|s| !s.trim().is_empty())
     }
 
     /// Parse the raw `toolUseResult` blob into a full `Value` tree ON DEMAND - for the
