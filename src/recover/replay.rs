@@ -392,7 +392,8 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                         timestamp_utc: e.timestamp_utc.clone(),
                         kind: "bash_append_unplaced",
                         confidence: Confidence::Heuristic,
-                        detail: "bash append with byte-known content, but the buffer is                                  not a complete newline-terminated file here - the                                  append point is unknowable, so it stays a boundary"
+                        detail: "bash append with byte-known content, but the buffer is not a \
+                                 complete newline-terminated file here - the append point is unknowable, so it stays a boundary"
                             .to_string(),
                     });
                     seg_open = None;
