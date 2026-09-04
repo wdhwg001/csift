@@ -457,3 +457,50 @@ fn the_last_section_prints_with_only_a_prompt_on_disk() {
         out.stdout
     );
 }
+
+#[test]
+fn a_blocked_or_unknown_completion_status_is_its_own_bucket() {
+    // Claude Code's remote-agent notifier writes a fifth terminal value, `blocked`
+    // (ledger BG-011, traced in the 2.1.258 binary); an unknown literal must be
+    // disclosed rather than booked as completed (v0.10.3).
+    let h = Home::new();
+    let blocked = r#"{"type":"user","uuid":"n1","parentUuid":"a2","timestamp":"2026-06-07T05:00:09.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b1a2b3c4d</task-id>\n<tool-use-id>t1</tool-use-id>\n<status>blocked</status>\n<summary>Background command \"Serve the harbor app\" is blocked: waiting on input</summary>\n</task-notification>"}}"#;
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{PROMPT}\n{LAUNCH}\n{LAUNCH_RESULT}\n{EOT}\n{blocked}\n"),
+    );
+    let out = h.run(&["status", &at(SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("background 0 open; 0 completed, 0 failed, 0 killed, 0 stopped, 1 blocked"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("verdict  idle-eot"),
+        "a blocked task is not open:\n{}",
+        out.stdout
+    );
+    let json = h.run(&["status", &at(SESS), "--format", "json"]);
+    assert!(
+        json.stdout.contains("\"blocked\":1") && json.stdout.contains("\"other\":0"),
+        "{}",
+        json.stdout
+    );
+    // an unknown literal: disclosed under its own count, never `completed`
+    let odd = blocked
+        .replace("<status>blocked</status>", "<status>paused</status>")
+        .replace("\"n1\"", "\"n2\"");
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{PROMPT}\n{LAUNCH}\n{LAUNCH_RESULT}\n{EOT}\n{odd}\n"),
+    );
+    let out = h.run(&["status", &at(SESS)]);
+    assert!(
+        out.stdout
+            .contains("0 completed, 0 failed, 0 killed, 0 stopped, 1 with an unknown status"),
+        "{}",
+        out.stdout
+    );
+}

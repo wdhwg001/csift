@@ -166,8 +166,15 @@ fn helpers_parse_the_result_text_and_locate_the_main_transcript() {
         std::path::PathBuf::from("/p/-enc/1111-2222.jsonl")
     );
     assert_eq!(BgState::from_status(Some("stopped")), BgState::Stopped);
-    assert_eq!(BgState::from_status(Some("weird")), BgState::Completed);
+    // v0.10.3: a fifth harness value and an unknown literal are their own buckets, never
+    // booked as completed (the remote-agent notifier writes `blocked`).
+    assert_eq!(BgState::from_status(Some("blocked")), BgState::Blocked);
+    assert_eq!(BgState::from_status(Some("weird")), BgState::Other);
+    assert_eq!(BgState::from_status(Some("completed")), BgState::Completed);
+    assert_eq!(BgState::from_status(Some(" ")), BgState::Completed);
     assert_eq!(BgState::from_status(None), BgState::Completed);
+    assert_eq!(BgState::Blocked.slug(), "blocked");
+    assert_eq!(BgState::Other.slug(), "other");
     for (st, slug) in [
         (BgState::Open, "open"),
         (BgState::Completed, "completed"),

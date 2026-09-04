@@ -131,6 +131,7 @@ pub(crate) fn render_last_text(session_id: &str, last: &LastMessages) {
 
 pub(crate) fn background_json(b: &BackgroundReport) -> serde_json::Value {
     let (c, f, k, s, t) = b.closed_counts();
+    let (blocked, other) = b.rare_counts();
     json!({
         "open": b.open_counted(),
         "ignored": b.open_ignored(),
@@ -139,6 +140,8 @@ pub(crate) fn background_json(b: &BackgroundReport) -> serde_json::Value {
         "killed": k,
         "stopped": s,
         "timed_out": t,
+        "blocked": blocked,
+        "other": other,
         "scanned_files": b.scanned_files,
         "tasks": b.tasks.iter().filter(|t| t.is_open()).map(|t| json!({
             "kind": t.kind.slug(),

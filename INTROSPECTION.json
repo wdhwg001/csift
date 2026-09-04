@@ -595,17 +595,17 @@
       "id": "BG-011",
       "area": "background-tasks",
       "behavior": "The terminal `<status>` values form a small OPEN set: `completed`, `failed` (its summary ends `failed with exit code N`), `killed` (summary `Background command \"X\" was stopped`) and `stopped`.",
-      "depends": "csift maps those four literals onto its background state enum with `completed` as the fallback, so a NEW status value would silently be booked as completed rather than surfaced.",
+      "depends": "csift maps the completion pulse's `<status>` onto a closed enum: completed (also an absent or blank status), failed, killed, stopped, blocked (v0.10.3), and `other` for any literal it does not know, so a new harness value is disclosed in the status summary and JSON (`blocked`, `other`) instead of being booked as a clean completion; the orphan-summary sentinel maps to stopped and a Monitor timeout event to timed-out.",
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "44-74",
-          "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out …]` event).\n    TimedOut,\n}"
+          "lines": "44-49",
+          "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgKind {\n    Shell,\n    Agent,\n    Monitor,\n}"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "89-96",
-          "snippet": "    pub(crate) fn from_status(status: Option<&str>) -> Self {\n        match status {\n            Some(\"failed\") => BgState::Failed,\n            Some(\"killed\") => BgState::Killed,\n            Some(\"stopped\") => BgState::Stopped,\n            _ => BgState::Completed,\n        }\n    }"
+          "lines": "98-106",
+          "snippet": "    pub(crate) fn from_status(status: Option<&str>) -> Self {\n        match status.map(str::trim) {\n            None | Some(\"\") | Some(\"completed\") => BgState::Completed,\n            Some(\"failed\") => BgState::Failed,\n            Some(\"killed\") => BgState::Killed,\n            Some(\"stopped\") => BgState::Stopped,\n            Some(\"blocked\") => BgState::Blocked,\n            Some(_) => BgState::Other,\n        }"
         }
       ],
       "instrument": "The ledger's `rg -o '<status>[a-z]*</status>' ~/.claude/projects | sort | uniq -c` over-reads. Run over a single project directory it returns a FIFTH value, <status>running</status> x8, and every one of those is a csift unit-test fixture quoted inside a tool_result or an assistant message in a dev transcript. Parse the three carrier fields (a type:\"user\" string content, a queue-operation content, a queued_command attachment prompt) instead of grepping raw bytes.",
@@ -625,6 +625,16 @@
           "observed": "Delivered type:\"user\" notification sections corpus-wide: <status>completed</status> 1808, failed 83, killed 80, stopped 5 - no fifth value (all three carriers together: completed 8693, failed 412, killed 195, stopped 10). Summary shapes per status: 79 of 83 failed end \"failed with exit code N\"; 78 of 80 killed end '\" was stopped'; 1366 completed end \"completed (exit code N)\", 132 are 'Agent \"X\" finished', 111 open with \"Monitor\". Binary: function ka({taskId:e,toolUseId:n,taskType:r,outputFile:o,status:d,summary:f,body:_,trailing:v}){let C=[[Use,e],[jdr,n],[qBe,r],[Gdr,o],[zx,d],[j0,f]]  - the emitter takes status as a free-form string and writes the tag only when it is truthy, so the set is genuinely open rather than a typed enum.",
           "rule": "One observation per <task-notification> section inside a delivered type:\"user\" string record, so the queue-operation and attachment echoes of the same delivery are not counted three times. A section with no <task-id> is prose that merely quotes the marker and is dropped.",
           "note": "The behavior text needed no change: four values, and open by construction. The corpus cannot distinguish an open set from a closed one, but the binary can, and it shows a free-string status - which is what makes csift's `_ => BgState::Completed` fallback in from_status a silent-mislabel risk rather than a safe default. Both code snippets (src/live/background.rs:62-74 and 89-96) are verbatim in the current file."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.3",
+          "date": "2026-09-04",
+          "verdict": "drifted",
+          "instrument": "csift 0.10.2 `BgState::from_status` read (`_ => BgState::Completed`); the fleet's producer trace of the remote-agent notifier's status switch (completed/failed/blocked/killed) re-read at its offset; corpus: `rg -o '<status>[a-z_-]+</status>'` over every jsonl, bucketed by value, and every `blocked` hit read in place",
+          "observed": "the harness emits a fifth terminal value, `blocked`, from the remote-agent poll branch; csift mapped every value outside failed/killed/stopped to Completed, so a blocked (or any future) status was booked as a clean completion. Corpus buckets: completed 9566, failed 477, killed 220, stopped 87; every `blocked` (2) and `running` (37) hit is a quoted string inside a csift development transcript (self-echo), so the shape has no on-disk specimen on this host",
+          "rule": "one count per `<status>` tag over every jsonl line; a hit is a specimen only when the tag sits in a delivered carrier, not in quoted text",
+          "note": "fixed in 0.10.3: `BgState::Blocked` and `BgState::Other` (an unknown literal, disclosed as `N with an unknown status`, JSON `blocked`/`other`); e2e `a_blocked_or_unknown_completion_status_is_its_own_bucket`. Producer-only for the blocked value until a remote agent runs on this host."
         }
       ],
       "attribution": "end-to-end",
@@ -1132,8 +1142,8 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "44-74",
-          "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out …]` event).\n    TimedOut,\n}"
+          "lines": "44-49",
+          "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgKind {\n    Shell,\n    Agent,\n    Monitor,\n}"
         },
         {
           "path": "src/live/background_scan.rs",
@@ -1434,8 +1444,8 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "44-74",
-          "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out …]` event).\n    TimedOut,\n}"
+          "lines": "44-49",
+          "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgKind {\n    Shell,\n    Agent,\n    Monitor,\n}"
         }
       ],
       "instrument": "Read the constant from the installed Claude Code binary's orphan-reconciliation strings (`strings <binary> | grep 172800000`), and corpus-side look for a second launch in the same agent lane after a gap. Counting rule: one constant, one comparison site.",

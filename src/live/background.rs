@@ -71,6 +71,13 @@ pub(crate) enum BgState {
     Stopped,
     /// A Monitor whose timeout fired (the `[Monitor timed out …]` event).
     TimedOut,
+    /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;
+    /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk
+    /// in a local-only corpus; a producer-only claim in the ledger (BG-011).
+    Blocked,
+    /// A status literal csift does not know. Rendered as its own bucket so a new harness
+    /// value is disclosed instead of being booked as completed (v0.10.3).
+    Other,
 }
 
 impl BgState {
@@ -83,15 +90,19 @@ impl BgState {
             BgState::Killed => "killed",
             BgState::Stopped => "stopped",
             BgState::TimedOut => "timed-out",
+            BgState::Blocked => "blocked",
+            BgState::Other => "other",
         }
     }
 
     pub(crate) fn from_status(status: Option<&str>) -> Self {
-        match status {
+        match status.map(str::trim) {
+            None | Some("") | Some("completed") => BgState::Completed,
             Some("failed") => BgState::Failed,
             Some("killed") => BgState::Killed,
             Some("stopped") => BgState::Stopped,
-            _ => BgState::Completed,
+            Some("blocked") => BgState::Blocked,
+            Some(_) => BgState::Other,
         }
     }
 }
@@ -171,9 +182,22 @@ impl BackgroundReport {
         )
     }
 
+    /// `(blocked, other)`: the two buckets outside the classic five, rendered only when
+    /// non-zero.
+    pub(crate) fn rare_counts(&self) -> (usize, usize) {
+        let n = |st: BgState| self.tasks.iter().filter(|t| t.state == st).count();
+        (n(BgState::Blocked), n(BgState::Other))
+    }
+
     /// The one-line evidence value for the verdict table.
     pub(crate) fn summary_line(&self) -> String {
         let (c, f, k, s, t) = self.closed_counts();
+        let (b, o) = self.rare_counts();
+        let rare = [(b, "blocked"), (o, "with an unknown status")]
+            .iter()
+            .filter(|(n, _)| *n > 0)
+            .map(|(n, w)| format!(", {n} {w}"))
+            .collect::<String>();
         let ignored = self.open_ignored();
         let ignored = if ignored > 0 {
             format!(" (+{ignored} ignored by the lens)")
@@ -186,7 +210,7 @@ impl BackgroundReport {
             String::new()
         };
         format!(
-            "{} open{ignored}; {c} completed, {f} failed, {k} killed, {s} stopped{timed}",
+            "{} open{ignored}; {c} completed, {f} failed, {k} killed, {s} stopped{timed}{rare}",
             self.open_counted()
         )
     }
