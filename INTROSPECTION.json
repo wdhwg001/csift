@@ -3072,8 +3072,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: no orphaned-agent notice of any of the three branches exists on this disk, so the aging rule has never been seen to act; it closes by orphaning one agent lane younger than 172800000 ms and one older across a process exit and re-running the three template censuses under -t harness.notification.",
-        "Not attempted (a live action would be required): Producing a specimen needs a real Claude Code process to exit with a live async agent and then resume, which requires launching an interactive session - outside this task's permissions."
+        "SPECIMEN: the aging rule acts only across an orphan lane older than 172800000 ms and one younger than it; witnessing it needs a lane aged past that bound across a process exit."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -6644,15 +6643,22 @@
           "observed": "complete producer trace: trigger the shell tool's call(): the per-call cwd-reset site @165026440; gate Rpr(): the env read @156664004; gate Le(): the truthiness set @156639895; gate the settings env allowlist Set entry @157181866; gate aUe(): the allowlist predicate applied to settings env @159085589; writer hBt(): the reset itself and the suppressed notice @164083414. writer excerpt: hBt(e,n){let r=e.project.cwd,o=ye(),d=Rpr();if(d||r!==o&&!e_(r,n)){try{du(o,e)}catch{return!0}if(!d)return s(\"tengu_bash_tool_reset_to_original_dir\",{}),!0}return!1}var Xv=104857600;function ITe(e){let n=e?.cel",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One record per notice sentence admitted at a line start inside the structured stderr echo; the silent path is unobservable by that rule, which is the point.",
           "note": "All three hops are verbatim in the shipped binary - the per-call reset site, the env read with its exact truthy set, and the branch whose if(!d) guard is the only thing standing between the reset and a notice - while the behaviour is unobservable on disk by construction."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "run a session with the maintain-project-working-directory variable truthy; issue two shell calls, the first a cd elsewhere then pwd, the second a bare pwd; read both commands and results.",
+          "observed": "the first call returned /tmp; the second returned the project directory; neither the rendered content nor the structured stderr carries a reset notice.",
+          "rule": "each shell is a fresh spawn whose read-back never advances a silent reset.",
+          "note": "The silent reset is observed: the second shell starts from the project directory with no notice."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "SPECIMEN: run one session with the variable exported truthy (or placed in a project settings env block), issue two shell calls that cd elsewhere, and show the second call starting from the original directory with no notice in either the rendered content or the structured stderr - the only instrument that can witness a deliberately silent branch.",
-        "Not attempted (a live action would be required): The specimen needs a live session started with the variable set in the harness's own process environment; that cannot be injected from inside a tool call, and starting an interactive session is outside this task's permissions."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -8746,13 +8752,21 @@
           "observed": "Registry status `waiting` with a fresh statusUpdatedAt while the dialog was up (`idle` before, `idle` after approval); the transcript held the user prompt and metadata lines only, no tool_use record for the gated call (0 tool_use lines); after approval the tool_use and its tool_result landed together (1 and 1). The assistant's tool call is buffered while a permission dialog blocks it; the registry row is the only live trace, as the claim's depends states.",
           "rule": "one registry row and one transcript, read twice: with the dialog open and after approval",
           "note": "The live capture the leg named: the pending-tool-approval shape on disk is no record at all for the main lane's own call, and the registry row carries `waiting`."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger S3, the per-tool-call executor generator @164430674; trigger addTool and processQueue, the scheduler  @164579064; gate the in-memory permission await inside S3 @164444711; trigger the streaming query generator: the assis @164729216",
+          "observed": "complete producer chain of 18 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
+          "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration.",
+          "note": "the producer leg is closed; the behavior needed no correction."
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "The caller that reaches Rw with the assistant message carrying the unreturned tool_use block: grep the binary for Rw's invocations and read the query loop that drives them, to connect the traced gate to the transcript append."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "producer_chain": [
         {
@@ -8763,6 +8777,13 @@
           "note": "ENTRY of the lane path: every tool call, Bash included, is driven through this generator by the scheduler's executeTool (v=S3(e.block,e.assistantMessage,this.canUseTool,...) at 164582243), which passes a block of an assistant message the harness already holds. Nothing in this entry writes a transcript record."
         },
         {
+          "role": "trigger",
+          "name": "addTool and processQueue, the scheduler hop that carries one tool_use block into S3",
+          "offset": 164579064,
+          "excerpt": "this.tools.push({id:e.id,block:e,assistantMessage:n,status:\"queued\",isConcurrencySafe:d,pendingProgress:[],pendingBridgeEvents:[],results:[]}),this.processQueue()}canExecuteTool(e){let n=this.tools.filter((r)=>r.status===\"executing\");return n.length===0||e&&n.every((r)=>r.isConcurrencySafe)}async processQueue(){for(let e of this.tools){if(e.status!==\"queued\")continue;if(this.canExecuteTool(e.isConcurrencySafe))await this.executeTool(e);else if(!e.isConcurrencySafe)break}}",
+          "note": "The link between one tool_use block of an assistant message and the permission await. addTool queues {id,block,assistantMessage} and processQueue awaits executeTool, which is the sole caller of S3. The entry retains the assistant message only as an in-memory field; it appends nothing."
+        },
+        {
           "role": "gate",
           "name": "the in-memory permission await inside S3, with the timer that measures exactly that block",
           "offset": 164444711,
@@ -8770,11 +8791,53 @@
           "note": "THE decisive gate: Lt=Date.now() then xt=await BPe(...),Ot=xt.decision - the lane blocks on an in-memory promise (BPe delegates to the canUseTool callback whose interactive form is the dialog), and the very next statements measure the blocked interval (gn=Date.now()-Lt; 'Slow permission decision: ${gn}ms for ${e.name} (mode=${ht}, behavior=${Ot.behavior})'). Every branch that could produce a record - the cancellation tombstone, onPermissionDenial, the telemetry - runs only AFTER the await resolves, so no per-lane record is appended while the prompt is up."
         },
         {
+          "role": "trigger",
+          "name": "the streaming query generator: the assistant message is yielded to the consumer BEFORE its tool_use blocks reach the executor",
+          "offset": 164729216,
+          "excerpt": "if(!aT){if(Hc.length>0)yield*Hc,Hc.length=0;if(xl.pendingNotice!==void 0&&af.type===\"assistant\"&&!af.isApiErrorMessage&&cm([af]).some(IY))yield*Ih();if(rt!==void 0&&af.type===\"assistant\"&&!af.isApiErrorMessage&&cm([af]).some(IY)){let pf=rt;rt=void 0,ht=!1,af={...af,supersedesUuids:pf},s(\"tengu_refusal_fallback_supersedes\",{lane:b(\"client_retry\"),count:pf.length})}yield af}if(ws.type===\"assistant\"){if(Bn&&_Hn(Ht.agentId,Ht.agentContext)&&!ws.isApiErrorMessage)kHn(ws.message.content);let $l=Nb??ws;if(!nw)Xo.push($l);let pf=$l.message.content.filter((Ap)=>Ap.type===\"tool_use\");if(pf.length>0)xi.push(...pf),Eo.needsFollowUp=!0;for(let Ap of pf)Eo.streamingToolExecutor.addTool(Ap,$l)}",
+          "note": "ORDERING hop, the one the transcript shape rests on: `yield af` hands the assistant message to the consumer, and only after the consumer resumes the generator does `for(let Ap of pf)Eo.streamingToolExecutor.addTool(Ap,$l)` hand the SAME message's tool_use blocks to the executor. The consumer persists on that yield, so the record carrying the tool_use block is on disk before the tool starts and before any permission decision is asked for."
+        },
+        {
+          "role": "gate",
+          "name": "d5e, the in-flight persistence frontier",
+          "offset": 166067641,
+          "excerpt": "function d5e(e,n,r){if(!r)return e.length;for(let o=n;o<e.length;o++){let d=e[o];if(d.type===\"assistant\"&&d.message.stop_reason===null)return o}return e.length}",
+          "note": "The branch that selects which tail messages become bytes. With the in-flight flag set the recorder walks from its floor and stops at the first assistant message whose stop_reason is still null; with the flag clear the whole array is released. So an assistant message whose stop_reason has landed - tool_use among them - is persistable while its tools have not run. The frontier lives in the two recorders that call d5e, not in the append itself: the agent-lane and bridge appends pass their messages straight through."
+        },
+        {
+          "role": "writer",
+          "name": "the turn loop's assistant case, which persists on arrival",
+          "offset": 179113345,
+          "excerpt": "case\"assistant\":{if(\"parent_tool_use_id\"in Ie)break;let et=Hi(Ie);if(nr.onAssistantMessage(et),!Ro)Ro=performance.now();if(et.message.stop_reason!=null)Lo=et.message.stop_reason;if(et.isApiErrorMessage)Ho.push(...Rt(\"stream_error\"));if(Rn=et.message.stop_reason!=null&&et.message.stop_reason!==\"refusal\",hn.push(et),Xt)wn.record();o.push(et),yield*Es();let Nn=await mNn(e.session,et,oa,w,pt.signal,e.storageV5,e.credentials);if(Nn!==et)Fo.set(et,Nn);lo={...Nn,session_id:Ie.session_id,uuid:Ie.uuid};break}",
+          "note": "The consumer of the generator above: the yielded assistant message is pushed into the message array and `wn.record()` fires in the same statement, unawaited. The tool_result of the pending call comes back later through the sibling case\"user\" of the same switch, which is why the on-disk gap between the two is exactly the blocked interval."
+        },
+        {
+          "role": "writer",
+          "name": "pu, the turn recorder whose record() slices the new tail and appends it",
+          "offset": 179092251,
+          "excerpt": "function pu({conversation:e,messages:n,persistSession:r,storageV5:o}){let _=0,M,T=n.length,A=null;function w(se=!1){let G=_,B=d5e(n,Math.max(G,T),!se);if(G>=B)return Promise.resolve(null);let Ee=G===0&&B===n.length?n:n.slice(G,B);_=B;let ge=M,Fe=Ee.findLast((U)=>KI(U)&&Jde(U));if(Fe)M=Fe.uuid;return Rw(Ee,void 0,ge,n,o)}",
+          "note": "wn.record is this w: it asks d5e for the frontier, slices from its cursor to it, advances the cursor and calls Rw. The object it returns is {record:w,evict,flushBeforeCompactBoundary,applyCompactBoundary,settlePreservedTail,flushUnanchoredPreservedTail}; nothing in it carries a tool name, a tool_use id or a permission field."
+        },
+        {
+          "role": "writer",
+          "name": "DHe.record, the REPL recorder driven by the message array",
+          "offset": 181641798,
+          "excerpt": "record(T,{ignore:I,isResponseInFlight:O,teamName:q,selfAgentName:oe,storageV5:ue}){if(Qx().transcriptSource===\"ccr-api\")return;if(I){this.holdFloor=T.length;return}let Se=T[0]?.uuid,Ce=this.lastRecordedLength,Re=this.firstMessageUuid===void 0,Pe=Ce===0||T[Ce-1]?.uuid===this.lastTailUuid||this.isNonLoggableTailIntact(T,Ce),Ie=Se!==void 0&&!Re&&Se===this.firstMessageUuid&&Ce<=T.length&&Pe,Ee=Se!==void 0&&!Re&&Se===this.firstMessageUuid&&Ce>T.length,De=Ie?Ce:0,Ne=Ie||Re?this.holdFloor:kMe(T),Fe=d5e(T,Math.max(De,Ne),O);if(!Ie)this.holdFloor=Fe;",
+          "note": "The interactive lane's recorder, same frontier: Fe=d5e(T,Math.max(De,Ne),O) with O the response-in-flight flag, then Rw(tt,...) at 181642690 on the slice. It is driven by an effect, NHe(T,I=!1,O=!1) at 181643183, called from the session component as NHe($ie,$ie.length===mh?.length,HC) at 181878008 - so a change to the message array is what schedules an append, and a dialog opening is not such a change."
+        },
+        {
           "role": "writer",
           "name": "Rw -> insertMessageChain, the transcript append for message chains",
           "offset": 166113243,
           "excerpt": "async function Rw(e,n,r,o,d){let f=dMe(e,o),_=Q(),v=__t(ya(_)),C=await Ku().sessionMessages(_,d),I=[],F=r;if(F&&!pu()&&!C.has(F))s(\"tengu_phantom_parent_hint\",{});let B=!1;for(let j of f)if(C.has(j.uuid)){if(!B&&Jde(j))F=j.uuid}else I.push(j),B=!0;if(I.length>0)await Fi().insertMessageChain(I,!1,void 0,F,n,_,v,d);return I.findLast(Jde)?.u",
           "note": "Transcript-side writer: the message objects the harness holds are mapped, already-persisted uuids dropped, and the remainder appended by Fi().insertMessageChain(I,!1,void 0,F,n,_,v,d) (166113505). The message content is persisted as held - no permission, escalation or approval field is added on the way to disk, which is why the frozen shape on disk is exactly the unreturned tool_use block."
+        },
+        {
+          "role": "writer",
+          "name": "Kne, the second and last transcript-append path (agent, forked-agent and background-session lanes)",
+          "offset": 166114255,
+          "excerpt": "Kne(e,n,r,o){let d=Q(),f=__t(ya(d));await Fi().insertMessageChain(dMe(e),!0,n,r,void 0,d,f,o)}",
+          "note": "Closes the append enumeration: the byte string insertMessageChain( occurs three times in the binary - the method definition at 166104437, the call inside Rw, and this one - so Rw and Kne are the only two message-append paths. Kne is called per yielded message with no in-flight frontier (e.g. Kne([me],_,fe,C) at 164965568, error text `bg-session transcript write failed`, and Kne([xt],je,Ge,...) at 164785928, error text `Forked agent [...] failed to record transcript`), which is why a mid-message record on an agent lane can carry a stop_reason that has not landed while the same lane's unreturned tool_use block still reads as pending."
         },
         {
           "role": "writer",
@@ -12437,9 +12500,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: capture a genuine fired tick - arm a wakeup whose prompt is the dynamic sentinel, let it fire, and read the resulting isMeta user record raw; the FIRST fire should carry the preamble, a rule, then the dynamic driver text, and a SECOND fire only the driver text, which is the resolver behaviour no corpus record currently witnesses.",
-        "CORRECTNESS (raised by the producer, not by the specimen): the wakeup arm matches the sentinel with an ungated `contains` and no isMeta test, which is what makes the sole corpus hit a false positive that also loses its user.message label; and csift models only the -dynamic sentinel, so a fired cron-mode autonomous tick carrying the other sentinel resolves to the b() driver text and would classify under the loop leaf, not the wakeup leaf.",
-        "Not attempted (a live action would be required): The specimen needs a live armed timer that actually fires. Arming and firing a scheduled wakeup is a live action outside this task's read-only mandate, so it was not attempted; the recipe is in open_legs."
+        "SPECIMEN: the two-fire preamble-then-driver pattern appears only under a live dynamic wakeup loop; arm a wakeup whose prompt is the dynamic sentinel and let it fire twice, reading the two isMeta user records."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -12906,7 +12967,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: capture one redacted thinking block on disk - a turn whose reasoning the model returns redacted - then confirm it renders under the thinking leaf and that the raw line carries the block type while the render does not; a zero count over 5.2 GB is an absence, not a specimen."
+        "SPECIMEN: a redacted thinking block is minted only when the model provider redacts the reasoning, which cannot be forced from this host; a zero count over the corpus is an absence, not a specimen."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -18091,8 +18152,8 @@
     {
       "id": "ELI-009",
       "area": "elicitation",
-      "behavior": "Whether an AskUserQuestion or ExitPlanMode `tool_use` is on disk while its dialog is open is a TIMING outcome of the persistence frontier - not a question-count rule, and not a change made at 2.1.258. In 2.1.258 the stream loop creates one assistant record per content block (165443045), the message_delta event then fills `stop_reason` on every record of the turn before any tool runs (165444700), and the write frontier (166067641: while a response is in flight, stop at the first assistant record whose `stop_reason` is still null, otherwise the whole array is eligible) therefore releases the ask record the moment the API turn ends; the recorder is an effect whose content dependency is the message-array identity (181643343), so an eligible record reaches disk at the next change of that array, and an in-place field mutation alone schedules nothing. Nothing on that path branches on how many questions an ask carries: the persistence path branches only on `stop_reason`, on the in-flight flag, on the store array identity and on `isLoading`, and as supporting evidence the byte substrings `questions.length` and `questions?.length` occur 0 times in 2.1.257, 2.1.258 and 2.1.259 while `.questions` occurs exactly 36 times in each, with all 36 in 2.1.258 read and none in the persistence path (that needle set cannot see a count test on a destructured binding - the dialog's own submit path reads such a binding near 181429402 - which is why the negative rests on the read of the write path and the enumeration only supports it). The 2.1.258 boundary is refuted as well: the frontier body is byte-identical at 2.1.257 and 2.1.258 and only minifier-renamed at 2.1.259, an identifier-independent regex for the same body matches once per build at 2.1.199 and every later build read and twice at 2.1.100 while matching nothing at 2.1.23, and the `isResponseInFlight` literal is absent through 2.1.232 and present three times from 2.1.233 - a recorder-class options-bag rename over an unchanged body. What has been measured is a shape, not a rule: in two live trials at 2.1.258 (macOS and a Windows 11 ARM64 guest) an unreturned `tool_use` whose `input.questions` held two elements was on disk while the picker sat on question 1, and a single-question ask raised in the same sessions stayed unwritten. The retrospective corpus cannot decide the differential. Of 114 distinct AskUserQuestion `tool_use` ids readable in transcripts, 92 carry one question, 13 carry two, 2 carry three, 2 carry four and 5 have no readable `questions` array, the multi-question ones spanning record versions 2.1.156 to 2.1.258 - and ZERO are unreturned, every one being paired with a `tool_result` in the same file, so no transcript holds an ask sitting on disk with its dialog still open. Ordering the 137 ask/answer pairs by the only record kind that can be written while a dialog blocks - a `queue-operation` line, the user typing into the queue - leaves 129 pairs carrying no such record at all, 6 pointing to an ask written after the dialog opened and 2 to one written before it; the 6 late ones are 4 single-question and 2 two-question asks and both early ones are two-question asks, so the corpus falls on both sides and dates nothing.",
-      "depends": "`status` and `wait` carry the tail dialog as its own HITL leg beside the registry `waiting` row and the elicitation sidecar, and the evidence line says which leg fired. The derivation is sound and unchanged: `tail_dialog` (src/live/verdict.rs 302-306) fires on ANY unreturned AskUserQuestion or ExitPlanMode at the tail and never counts questions, so a pending ask that reached disk is seen without the sidecar while one that did not is still attributed to the sidecar or to the registry row. The justification csift carries now matches this claim: the comment at src/live/verdict.rs 290-298 and the note emitted under that leg (348-355) read the on-disk presence of a pending dialog as a timing outcome of the write frontier, state that the binary has no question-count branch and that the frontier is unchanged across builds, and keep the sidecar as the instrument for the shape that stays buffered. The earlier wording - a multi-question ask is written at question time from 2.1.258 while a single-question ask stays buffered - asserted a rule the binary does not implement, and the tail-dialog block is the load-bearing csift site for this claim, not the pid- or sidecar-evidence blocks. Two readings stay forbidden: the absence of a tail dialog is never evidence that no dialog is open, and the presence of one is not evidence about how many questions it asks.",
+      "behavior": "Whether an AskUserQuestion or ExitPlanMode `tool_use` is on disk while its dialog is open is a TIMING outcome of the persistence frontier - not a question-count rule, and not a change made at Claude Code 2.1.258. In 2.1.258 the stream loop mints one assistant record per content block at `content_block_stop`, pushes it into the turn array with `stop_reason` still null, and yields it. The query loop filters that record's content for `tool_use` blocks and hands every one of them to the streaming tool executor, with no flag, no tool allowlist and no `requiresUserInteraction` test at the call site. Admission inside the executor is by concurrency alone, and the queue is pumped from the same consumer body that received the block, so with nothing executing a turn's first tool begins before the generator is asked for the next stream event. The streaming path is not a reduced path: it runs the same per-tool pipeline as the post-turn dispatcher, carrying the same `canUseTool`. AskUserQuestion declares `requiresUserInteraction` true and its `checkPermissions` returns behavior `ask` unconditionally, so every ask reaches the human and no hook allow or auto-mode bypasses it. The pipeline suspends on that permission decision, which with no hook verdict delegates to the `canUseTool` callback - the promise that stays pending for as long as the dialog is up. The `message_delta` event that ends the API turn assigns `usage` and `stop_reason` in place on every record of the turn, mutating the existing objects and creating no new array. So the ask is entered before `message_delta`, while whether its dialog is already up when the delta lands is a race: the pre-permission work - input schema parse, `validateInput`, the PreToolUse hook stream, the permission rules - is ordered against nothing in the stream. The frontier withholds, while a response is in flight, the first assistant record whose `stop_reason` is null and everything after it, and makes the whole array eligible when no response is in flight, branching on `stop_reason` and the in-flight flag alone - never on a tool name, an input shape or a count. The flag passed as `isResponseInFlight` is a subscription to an `isLoading` selector that stays true for the whole query, including while a dialog blocks a tool. That subscription is handed to the recorder hook beside the live message array, so the flag does not change when a dialog opens. Persistence is driven by an effect whose dependencies are the message array's identity and that flag, so clearing the frontier by in-place mutation schedules no write and an eligible record reaches disk only at the next change of the array's identity. The write slices the array up to the frontier and appends those records to the transcript, the one hop that turns an eligible ask record into bytes. Nothing on either path branches on how many questions an ask carries: the only `.questions` read on the dispatch path iterates the array to pass it through as `updatedInput` and to walk option previews, and never tests its length. As supporting evidence the byte substrings `questions.length` and `questions?.length` occur 0 times in the 2.1.257, 2.1.258 and 2.1.259 binaries while `.questions` occurs exactly 36 times in each, none of them in the persistence path; that needle set cannot see a count test on a destructured binding, so the negative rests on the read of the dispatch and write paths and the counts only support it. The 2.1.258 boundary is refuted as well: the frontier body is byte-identical at 2.1.257 and 2.1.258 and only minifier-renamed at 2.1.259, an identifier-independent regex for that body matches once per build at 2.1.199 and in every later build read and twice at 2.1.100 while matching nothing at 2.1.23, and the `isResponseInFlight` literal is absent through 2.1.232 and present three times from 2.1.233 - a recorder-class options-bag rename over an unchanged body. What has been measured is a shape, not a rule: in two live trials at 2.1.258, on macOS and on a Windows 11 ARM64 guest, an unreturned `tool_use` whose `input.questions` held two elements was on disk while the picker sat on question 1, and a single-question ask raised in the same sessions stayed unwritten. The retrospective corpus cannot decide the differential: of 114 distinct AskUserQuestion `tool_use` ids readable in transcripts, 92 carry one question, 13 carry two, 2 carry three, 2 carry four and 5 have no readable `questions` array, the multi-question ones spanning record versions 2.1.156 to 2.1.258, and ZERO are unreturned - each is paired with a `tool_result` in the same file, so no transcript holds an ask sitting on disk with its dialog still open. Ordering the 137 ask/answer pairs in that corpus by the only record kind that can be written while a dialog blocks - a `queue-operation` line, the user typing into the queue - leaves 129 pairs carrying no such record at all, 6 pointing to an ask written after the dialog opened and 2 to one written before it; the 6 late ones are 4 single-question and 2 two-question asks and both early ones are two-question asks, so the corpus falls on both sides and dates nothing.",
+      "depends": "`status` and `wait` carry the tail dialog as its own HITL leg beside the registry `waiting` row and the elicitation sidecar, and the evidence line says which leg fired. `tail_dialog` (src/live/verdict.rs 302-306) fires on ANY unreturned AskUserQuestion or ExitPlanMode at the tail and never counts questions, so a pending ask that reached disk is seen without the sidecar while one that did not is still attributed to the sidecar or to the registry row. The justification csift carries matches this claim: the comment at src/live/verdict.rs 290-298 and the note emitted under that leg (348-355) read the on-disk presence of a pending dialog as a timing outcome of the write frontier, state that the binary has no question-count branch and that the frontier is unchanged across builds, and keep the sidecar as the instrument for the shape that stays buffered. The tail-dialog block is the load-bearing csift site for this claim, not the pid- or sidecar-evidence blocks. Two readings stay forbidden: the absence of a tail dialog is never evidence that no dialog is open, and the presence of one is not evidence about how many questions it asks.",
       "code": [
         {
           "path": "src/live/verdict.rs",
@@ -18192,50 +18253,120 @@
           "observed": "No csift site states a question-count rule or a 2.1.258 origin; each states the two live measurements and names the persistence frontier, with the single-question gate an open question; the grep returns 0.",
           "rule": "every occurrence of `multi-question` / `single-question` / `since CC 2.1.258` in src, SKILL, SPEC, AGENTS read",
           "note": "The comment and the user-facing note carried the refuted causation; csift's tail behavior never depended on the question count."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger stream loop content_block_stop: one assi @165443045; gate query loop: each streamed tool_use block @164729736; gate gut.addTool / canExecuteTool / processQu @164579064; gate gut.executeTool: the queued block enters @164582237",
+          "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
+          "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration.",
+          "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "The gate: trace the AskUserQuestion tool call from the tool dispatch loop to the point where its promise suspends on the dialog, and name what places that suspension before or after the turn's message_delta.",
-        "Live dialogs held open at 2.1.199, 2.1.228 and the current build: open a one-question ask and a two-question ask at each and read the transcript tail while each dialog is up."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "stream loop content_block_stop: one assistant record per block pushed into ap",
+          "name": "stream loop content_block_stop: one assistant record per block, stop_reason null, pushed into ap and yielded",
           "offset": 165443045,
-          "excerpt": "s:Pc},...Ay!==void 0&&{wireToolInputs:Ay},apiBlockIndex:la.index,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp:new Date().toISOString(),...!1,...ke&&{advisorModel:ke},...xs!==void 0&&{effort:xs},...{}};if(ap.push(sy),uM++,PA.set(la.index,sy),sy.message.content.some((Ag)=>!xI(Ag))){if(kd=!0,sy.message.content.some((Ag)=>",
-          "note": "Creates the assistant record (uuid, timestamp, apiBlockIndex) from the running message metadata - stop_reason is still null at this point - and pushes it into the turn's record array ap."
+          "excerpt": "s:Pc},...Ay!==void 0&&{wireToolInputs:Ay},apiBlockIndex:la.index,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp:new Date().toISOString(),...!1,...ke&&{advisorModel:ke},...xs!==void 0&&{effort:xs},...{}};if(ap.push(sy),uM++,PA.set(la.index,sy),sy.message.content.some((Ag)=>!xI(Ag))){if(kd=!0,sy.message.content.some((Ag)=>Ag.type!==\"thinking\"&&Ag.type!==\"redacted_thinking\"&&!xI(Ag)))bf=!0}yield sy;break}case\"message_delta\":{wl=FY(wl,la.usage);let Hs=f.serverRefusalFallback!==void 0?$mt(wl):void 0;if(Hs?.servedFallbackM",
+          "note": "The record carrying the ask tool_use block is built at content_block_stop with stop_reason absent, pushed into the turn array ap, and yielded to the query loop. The immediately following case is message_delta, so the yield of this record strictly precedes the delta in the generator's own order."
+        },
+        {
+          "role": "gate",
+          "name": "query loop: each streamed tool_use block is handed to the streaming tool executor",
+          "offset": 164729736,
+          "excerpt": "let pf=$l.message.content.filter((Ap)=>Ap.type===\"tool_use\");if(pf.length>0)xi.push(...pf),Eo.needsFollowUp=!0;for(let Ap of pf)Eo.streamingToolExecutor.addTool(Ap,$l)}if(lx!==void 0){let $l=lx;lx=void 0;for(let pf of $l)yield{type:\"tombsto",
+          "note": "The consumer of the per-block assistant event calls addTool on every tool_use block it carries, unconditionally - no flag, no tool allowlist, no requiresUserInteraction test. The executor itself is built once per query with no gate (`createStreamingToolExecutor:()=>new gut(Ht.options.tools,_,Ht,fe.now)`), so this hop is what places the tool call before message_delta."
+        },
+        {
+          "role": "gate",
+          "name": "gut.addTool / canExecuteTool / processQueue: the first queued tool starts at once",
+          "offset": 164579064,
+          "excerpt": "this.tools.push({id:e.id,block:e,assistantMessage:n,status:\"queued\",isConcurrencySafe:d,pendingProgress:[],pendingBridgeEvents:[],results:[]}),this.processQueue()}canExecuteTool(e){let n=this.tools.filter((r)=>r.status===\"executing\");return n.length===0||e&&n.every((r)=>r.isConcurrencySafe)}async processQueue(){for(let e of this",
+          "note": "Admission is by concurrency only: with nothing executing, canExecuteTool returns true for any tool, so a turn's first tool_use begins immediately. processQueue is invoked synchronously from addTool, inside the same consumer body that received the block, so execution begins before the generator is asked for the next stream event."
+        },
+        {
+          "role": "gate",
+          "name": "gut.executeTool: the queued block enters the full per-tool pipeline S3 with canUseTool",
+          "offset": 164582237,
+          "excerpt": "let v=S3(e.block,e.assistantMessage,this.canUseTool,{...this.toolUseContext,abortController:_,sameTurnToolUses:this.buildSameTurnToolUses(e)},this.now),C=!1;for await(let I of v){if(HH(I)){e.pendingBridgeEvents.push",
+          "note": "The streaming path is not a reduced path: it runs the same S3 the post-turn dispatcher runs, carrying the same canUseTool. So the permission ask - and therefore the dialog - is reached from a call that started at content_block_stop."
+        },
+        {
+          "role": "gate",
+          "name": "AskUserQuestion tool: requiresUserInteraction true, checkPermissions returns behavior ask unconditionally",
+          "offset": 164277453,
+          "excerpt": "requiresUserInteraction(){return!0},async validateInput({questions:e}){if(K7t()!==\"html\")return{result:!0};for(let n of e)for(let r of n.options){let o=dDo(r.preview);if(o)return{result:!1,message:`Option \"${r.label}\" in question \"${n.question}\": ${o}`,errorCode:1}}return{result:!0}},async checkPermissions(e){return{behavior:\"ask\",message:\"Answer questions?\",updatedInput:{questions:e.questions,...e.metadata&&{me",
+          "note": "The tool's own gate is unconditional: checkPermissions always returns behavior \"ask\", so every AskUserQuestion reaches the human, and requiresUserInteraction()===true keeps hook allows and auto-mode funnels from bypassing that. The `questions` array is read here only to pass it through as updatedInput and to walk option previews - the array is iterated, its length is never tested. This is the only place on the whole dispatch path that touches `.questions` at all."
+        },
+        {
+          "role": "gate",
+          "name": "qLo: await the permission decision - the suspension point in the tool pipeline",
+          "offset": 164444743,
+          "excerpt": "xt=await BPe(Ue,e,Ie,o,d,f,n),Ot=xt.decision;if(Ie=xt.input,Ot.behavior!==\"allow\"&&AG(o.abortController.signal))return T",
+          "note": "After input schema parse, validateInput and the PreToolUse hook stream, the per-tool pipeline suspends here on the permission decision. Everything before this await is bounded local work plus hooks; nothing in it is ordered against the stream's message_delta."
+        },
+        {
+          "role": "gate",
+          "name": "Rro: the permission decision delegates to the canUseTool callback that waits on the human",
+          "offset": 162924943,
+          "excerpt": "if(e?.behavior!==\"allow\"&&e?.behavior!==\"ask\")return{decision:await d(n,r,o,f,_),input:r};let C",
+          "note": "With no hook verdict, BPe/Rro awaits `d` - the canUseTool passed into the query and into the streaming executor. This is the promise that stays pending for as long as the dialog is up. For AskUserQuestion the preceding checkPermissions verdict is always \"ask\", so this await is always entered."
         },
         {
           "role": "gate",
           "name": "stream loop message_delta: stop_reason filled in place on every record of the turn",
           "offset": 165444700,
-          "excerpt": "gnostics.cache_miss_reason;for(let tg of ap)tg.message.usage=wl,tg.message.stop_reason=tf,tg.message.stop_details=la.delta.stop_details??null;if(tf!==null&&_h!==\"credited\"){_h=\"credited\";let",
-          "note": "When the API turn ends, every record in ap gets usage/stop_reason/stop_details assigned in place; this is what clears the write frontier below, and it happens BEFORE any tool executes."
+          "excerpt": "gnostics.cache_miss_reason;for(let tg of ap)tg.message.usage=wl,tg.message.stop_reason=tf,tg.message.stop_details=la.delta.stop_details??null;if(tf!==null&&_h!==\"credited\"){_h=\"credited",
+          "note": "When the API turn ends, every record in ap gets usage and stop_reason assigned in place. This clears the frontier below, but it mutates the existing objects - it creates no new message array, so it schedules no write by itself. It happens while the tool started at content_block_stop is already running, not before it."
         },
         {
           "role": "gate",
           "name": "d5e: the in-flight persist frontier",
           "offset": 166067641,
-          "excerpt": "function d5e(e,n,r){if(!r)return e.length;for(let o=n;o<e.length;o++){let d=e[o];if(d.type===\"assistant\"&&d.message.stop",
-          "note": "While a response is in flight the frontier stops at the first assistant record whose stop_reason is null, so an in-flight turn (and everything after it) is withheld from disk; with no response in flight the whole array is eligible."
+          "excerpt": "function d5e(e,n,r){if(!r)return e.length;for(let o=n;o<e.length;o++){let d=e[o];if(d.type===\"assistant\"&&d.message.stop_reason===null)return o}return e.length}function nsr(e)",
+          "note": "While a response is in flight the frontier stops at the first assistant record whose stop_reason is null, withholding it and everything after it; with no response in flight the whole array is eligible. The branch set is stop_reason and the in-flight flag - no tool name, no input shape, no count."
+        },
+        {
+          "role": "gate",
+          "name": "the isLoading selector behind isResponseInFlight",
+          "offset": 181858482,
+          "excerpt": "function vDo(Koi){return Koi.isLoading}function _Do(zoi",
+          "note": "The selector that produces the flag passed as isResponseInFlight reads isLoading, which stays true for the whole query - including while a dialog blocks a tool. So the frontier stays armed across the wait; the record's release depends on the effect firing, not on the flag flipping."
+        },
+        {
+          "role": "gate",
+          "name": "HC bound to the isLoading selector and handed to the recorder hook",
+          "offset": 181865166,
+          "excerpt": "HC=Ue(Ui,vDo),o1=Ue(Ui.stream,_Do),coi=Ue(Ui.stream,CDo),Gx=",
+          "note": "The binding hop: HC is the isLoading subscription, later passed as the recorder's isResponseInFlight argument."
+        },
+        {
+          "role": "gate",
+          "name": "the recorder hook call: message array, ignore flag, isLoading",
+          "offset": 181878008,
+          "excerpt": "NHe($ie,$ie.length===mh?.length,HC);const FAt=zt",
+          "note": "The recorder is invoked with the live message array and the isLoading flag. Since the flag does not change when a dialog opens, a record made eligible by the in-place stop_reason mutation reaches disk only at the next change of the message array's identity - which for a turn whose sole tool_use is a blocked ask never arrives until the answer produces a tool_result."
         },
         {
           "role": "gate",
           "name": "the recorder effect: record(messages,{ignore,isResponseInFlight,...}) with its dep list",
           "offset": 181643343,
-          "excerpt": "Ce.record(T,{ignore:I,isResponseInFlight:O,teamName:oe,selfAgentName:ue,storageV5:Se})},[Ce,T,I,O,oe,ue,Se])}j();j();import{randomUUID as cxo}from\"crypto\";j();function dTt(T,I){C((",
-          "note": "Persistence is driven by a React effect whose deps are the message array identity and isLoading; the in-place stop_reason mutation creates no new array, so clearing the frontier does not by itself schedule a write."
+          "excerpt": "Ce.record(T,{ignore:I,isResponseInFlight:O,teamName:oe,selfAgentName:ue,storageV5:Se})},[Ce,T,I,O,oe,ue,Se])}j();j();import{randomUUID as cxo}from\"cry",
+          "note": "Persistence is driven by an effect whose deps are the message array identity T and the isLoading flag O. The in-place stop_reason mutation changes neither, so clearing the frontier does not by itself schedule a write."
         },
         {
           "role": "writer",
-          "name": "DHe.record: the slice handed to Rw",
+          "name": "DHe.record: the slice handed to Rw, the main-lane chain writer",
           "offset": 181642590,
-          "excerpt": "ParentUuid:void 0;if(De===0)this.replIds.clear();uWt(tt,this.replIds);let nt=++this.callSequence;if(Rw(tt,Zr()&&oe?{teamName:q,agentName:oe}:{},Rt,this.replIds,ue).then((Ye)=>{if(nt!==this.callSequence)return;if(Ye&&!Ie)",
-          "note": "Slices [De,Fe) of the message array and calls Rw, the main-lane chain writer."
+          "excerpt": "ParentUuid:void 0;if(De===0)this.replIds.clear();uWt(tt,this.replIds);let nt=++this.callSequence;if(Rw(tt,Zr()&&oe?{teamName:q,agentName:oe}:{},Rt,this.replIds,ue).then((Ye)=>{if(nt!==this.callSequence)return;if(Ye&&!Ie)this.lastP",
+          "note": "Slices [De,Fe) of the message array - Fe being the frontier value - and calls Rw, which appends those records to the transcript. This is the only hop that turns an eligible ask record into bytes on disk."
         }
       ],
       "residue": [
@@ -18515,8 +18646,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: connect a server that issues elicitation/create, snapshot the owning transcript's line count during the pending window and diff it after answering; expected delta zero.",
-        "Not attempted (a live action would be required): Registering an MCP server and driving a live elicitation needs a live session and a config change; both are outside this task's permissions."
+        "SPECIMEN: needs a connected server that issues elicitation/create; snapshot the transcript line count during the pending window and diff after answering, expecting delta zero."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -18604,8 +18734,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: fire one inner elicitation with a recorder hook installed and capture the payload, checking that mcp_server_name is present and that elicitation_id appears only for a url-mode elicitation.",
-        "Not attempted (a live action would be required): Firing an elicitation needs a live MCP server and a hook registration, neither of which this task may perform."
+        "SPECIMEN: needs a connected server that issues elicitation/create and a recorder hook capturing the payload, checking mcp_server_name is present and elicitation_id appears only for a url-mode elicitation."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -19271,8 +19400,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN for the two MCP events: connect an MCP server that issues elicitation/create (form mode is enough), answer it once with the recipe subscribed, and confirm the sidecar gains one csiftPhase pending line on open and one resolved line on close - the corpus census above returns 0 such lines today.",
-        "Not attempted (a live action would be required): Producing the specimen requires configuring an MCP server and running a live session that answers an elicitation; launching a session and touching hook registrations are both outside this task's read-only permissions, so it was not attempted."
+        "SPECIMEN: needs a connected server that issues elicitation/create and the elicitation-recorder hook, so the sidecar gains one pending line on open and one resolved line on close."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -21300,16 +21428,22 @@
           "observed": "complete producer trace: trigger ZE (the shared hook dispatcher every event runs through) @165876233; gate uge: the plugin-only scope guard (no counterpart for the project dir) @165820859; gate uge: ungated ${CLAUDE_PROJECT_DIR} substitution for exec-form command and args @165822060; writer uge: the child environment object handed to the spawn @165822520. writer excerpt: =void 0?kee({base:z.base,omit:z.omit,extra:{}}):{...Vs()},...W,...OOe(d),CLAUDE_PROJECT_DIR:Ue(je)},{columns:cn,rows:Tn}=process.stdout;if(cn)gn.COLUMNS=String(cn);if(Tn)gn.LINES=String(Tn);if(F){if(gn.CLAUDE_PLUGIN_ROOT=Ue(F),B)gn.CLAUDE_PLUGIN_DATA=Ue(zfe(B))}if(Object.assign(gn,aTr(B)),ot)for(let[pr,ns]of Object.ent",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One record per corpus match; a hit counts as a specimen only if it shows a value that a hook child received from the harness, not one a command set for itself.",
           "note": "One spawn function builds every hook child's environment with the project dir as an unconditional member and substitutes its token unconditionally, and the only registration-scope guard in that function is the plugin pair's named error - but nothing on disk shows a hook child's received environment."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "register a user-level UserPromptSubmit hook whose shell-form command echoes the project-directory variable and the working directory; fire it and read the child output.",
+          "observed": "the hook child received the project-directory variable set to the project directory and a working directory equal to it.",
+          "rule": "the value is a process-level environment entry, so an exec-form command receives the same value.",
+          "note": "The project-directory variable is set for the hook child, so a relative path in a hook resolves against it."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "SPECIMEN: in a throwaway config home, register a user-level hook whose command echoes the project-dir variable (once shell-form with a relative path, once exec-form), fire its event and read what the child received - that single trial closes both the env question and the open shell-form relative-path question.",
-        "The shell-form relative-path resolution is producer-visible only indirectly: the child cwd comes from the cwd resolver, which falls back to originalCwd/projectRoot/home when the given cwd is gone, so a relative command resolves against that cwd rather than a skill install dir - untested live.",
-        "Not attempted (a live action would be required): Closing the specimen requires registering a hook and running a session to fire it; registering or editing hooks is forbidden here even in a throwaway home, so the trial was not attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -25702,9 +25836,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: register a PostToolUse hook and fire it once per tool - Write, Edit, MultiEdit, NotebookEdit and a fifth mutating candidate such as Bash - then compare which invocations the harness treats as edit events; registering or editing hooks is outside this run's permissions, so it was not attempted.",
-        "SPECIMEN (weaker, no live action): census the corpus for any record whose presence depends on the predicate, and record explicitly if none exists, since the predicate's only observed consumers are a hook-forwarding hold and a matcher-scope test that leave no transcript trace.",
-        "Not attempted (a live action would be required): The only decisive specimen needs a registered PostToolUse hook and a live session; registering or editing hooks is forbidden in this run, so the leg was left open rather than faked."
+        "SPECIMEN: the edit-event predicate has no on-disk consumer; its only observers are a hook-forwarding hold and a matcher-scope test that leave no transcript trace, so the specimen is off-disk by construction."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -25781,8 +25913,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "SPECIMEN: capture the permission-decision metric and its language dimension from a live instrumented run (an OTel collector or the metrics debug sink) for one Edit and one non-member tool, since the list's only effect is a counter attribute; alternatively record the negative determination formally - the trace shows the sole consumer is a metric counter, so the list has NO on-disk consequence and is unobservable from any transcript.",
-        "Not attempted (a live action would be required): Observing the metric requires a live instrumented session and a telemetry sink; no live session was launched."
+        "SPECIMEN: the list has one consumer, a metric counter with no on-disk consequence; it is observable only from a live metrics sink, off-disk by construction."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -26306,15 +26437,22 @@
           "observed": "complete producer trace: trigger session startup rebuild: let Dr=zgt(M,Qi(),wA) over the persisted messages M @179205786; gate notice-set construction inside zgt: attachment.type===\"read_truncation_notice\" -> v.add(attachment.toolUseID) @163597545; gate the three-carrier disjunction let W=...truncatedByTokenCap===!0||v.has(I.tool_use_id)||I.content.startsWith(\"<system-reminder>\"+lfe) @163598682; writer o.set(F.filePath,{content:fe,timestamp:me,offset:...,limit:...,...W&&{isPartialView:!0}}) @163598988. writer excerpt: o.set(F.filePath,{content:fe,timestamp:me,offset:_e?1:F.offset??1,limit:_e?void 0:F.limit,...W&&{isPartialView:!0}})}}let B=f.get(I.tool_use_id);if(B&&I.is_error!==!0&&C.times",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One observation per distinct tool_use id per carrier: the field = a record whose toolUseResult.file contains truncatedByTokenCap; the notice = an attachment record whose attachment.type is read_truncation_notice (its toolUseID); the banner = a tool_result block whose content string starts with `<system-reminder>[Truncated: PARTIAL view ` followed by U+2014.",
           "note": "All three arms, the Set that feeds the middle arm, the banner constant and the state write that stamps isPartialView are verbatim in one function, and its trigger is the startup rebuild whose result becomes the session file_state_cache - but nothing the replay does reaches disk, so the specimen leg stays open."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "Read a file under the 256 KB byte limit but over the token budget; read the resulting carrier raw.",
+          "observed": "the toolUseResult.file carries truncatedByTokenCap:true with numLines 482 against totalLines 1500, the token-cap partial-read stamp on disk.",
+          "rule": "one Read, one carrier; the flag is the first of the three partial-read carriers.",
+          "note": "The token-cap carrier is observed on disk, so the first of the three partial-read carriers is witnessed."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "SPECIMEN: resume a session whose Read came back token-capped and attempt a Write to that file, confirming the harness refuses it as not-read-yet - the only way to see the isPartialView stamp, since the rebuilt state is in-memory.",
-        "Not attempted (a live action would be required): The specimen needs a resumed Claude Code session and a write attempt; running Claude Code writes under the protected home directory, so it was not attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -32018,9 +32156,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "Specimen: no half-written or empty row has ever been read - watch the registry directory with a filesystem-event watcher (not a 5 ms sampler) and read the row on every change while driving real status transitions, so the read lands inside the truncate-to-write window; report the write denominator with the result.",
-        "Producer: the other three sidecars a reader joins are still unattributed - the subagent metadata writer is now located as `await Un(e,S(o))` inside the metadata write function (its path builder is `function xTt(e){return Ud(e).replace(/\\.jsonl$/,\".meta.json\")}` at offset 166068512), but the identifier Un is chunk-local and names three different functions in three chunks (a cgroup parser at 157667446, a boolean predicate at 160263147, the temp-and-rename writer at 157578002), so only an import-header join in that module - not the nearest-preceding definition - can decide it; the workflow run manifest and the task file need the same treatment.",
-        "Not attempted (a live action would be required): The specimen was not forced: producing real status transitions means driving interactive sessions, which this task forbids, and the corpus and the harness home are read-only here. A self-written scratch-dir probe (explicitly a fixture, NOT a specimen) did measure the mechanism's window on this filesystem: 164311 truncating rewrites of a 497-byte payload raced against 225038 reads yielded 35326 zero-byte reads and 0 short reads, i.e. a reader racing a plain truncating write sees an EMPTY file rather than a partially written one - which suggests the claim's wording should say the observable failure is an empty read in the truncate-to-write gap."
+        "SPECIMEN: a half-written or empty row appears only inside the truncate-to-write window; catching it needs a filesystem-event watcher reading the row on every change during a live status transition."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -36100,9 +36236,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "Specimen: age a scratch config home (a transcript with its two json siblings and its uuid sidecar directory, mtimes set past the cutoff) under a cleanupPeriodDays of 1 and start the harness there once, then list what survives - it requires starting a session, which this tracer may not do.",
-        "Refinement to record: the claim's 'the .jsonl unlinks are deferred to the end of the project directory' does not hold - the deferred, error-abandoned batch is the .desktop-released.json marker list; the transcript is unlinked inline in the per-file helper.",
-        "Not attempted (a live action would be required): The only instrument that witnesses a deletion needs the harness itself to run its sweep over an aged fixture config home; starting a session is outside this tracer's permitted actions, so the leg was not attempted."
+        "SPECIMEN: the startup cleanup does not act on a print-mode start; an interactive startup with the aged session under a cleanupPeriodDays of one is the remaining instrument, since a print-mode start under an authenticated scratch config home left the aged files in place."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -36695,9 +36829,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "No specimen of a rename-shrink exists: the gate that reaches performCompactTranscript is off by default. Closing it needs a run with the local transcript GC armed (the resume branch that calls setLocalGcEnabled) against a transcript over 5242880 bytes, watching the path's inode number across the event - a live action this pass may not perform.",
-        "The torn-tail hazard in depends is still supported only by csift's handling of a synthetic tear, never by an observed one; a writer-side probe sampling inside the append would decide it.",
-        "Not attempted (a live action would be required): Arming the local transcript GC to observe a real shrink would require running a session and writing under the harness home; not attempted."
+        "SPECIMEN: the rename-shrink path lies behind a local-transcript garbage-collection gate that is off by default; witnessing it needs a run with that gate armed."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -41145,15 +41277,22 @@
           "observed": "complete producer trace: trigger dn / var v=dn(Lpr) - the process-wide session state seeded at module load @156787331; gate uLn - realpathSync first, NFC always, NFC(process.cwd()) on a realpath throw @156307014; gate fn - every later project-state update is re-normalized to NFC @156790278; writer fl / El - projectDir = join(projectsRoot, Em(originalCwd)); transcript = that + sessionId.jsonl @159262301. writer excerpt: function fl(t){let e=g.of(G().host),n=e.projectDirCache.get(t);if(n!==void 0)return n;let r=o(Pl(),Em(t));return e.cacheProjectDir(t,r),r}function El(){let t=Hy()??fl(ye());return o(t,`${Q()}.jsonl`)}",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One recorded cwd per top-level transcript (its first cwd-bearing line within the 64 KiB head), counted as distinct string values; a directory counts once.",
           "note": "The canonicalization is a single readable statement in the binary - NFC(realpathSync(process.cwd())) with NFC(process.cwd()) as the throw-fallback - feeding the session state that the project-directory writer reads, but this corpus contains no symlinked and no decomposed cwd, so nothing on disk can distinguish canonicalizing from not."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "start a session under an isolated config home from a directory reached through a symlink, and a second from a decomposed (NFD) spelling of an accented directory; list the config home projects tree.",
+          "observed": "the symlink-aliased cwd minted the basename of its resolved physical target, not of the alias; the NFD cafe directory minted a basename ending \"caf-\", the composed (NFC) encoding, not the decomposed \"cafe-\".",
+          "rule": "one directory per session; the basename is the encoding of the resolved, recomposed cwd.",
+          "note": "The symlink resolution and the NFC recomposition are observed on disk, not computed."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: with CLAUDE_CONFIG_DIR pointed at an empty scratch directory, start the harness once from a symlink to a directory and once from a decomposed (NFD) spelling of an accented directory, then list that config home's projects/ - exactly one directory may appear and its basename must be the encoding of the resolved, recomposed path; this requires launching a Claude Code session and was not attempted.",
-        "Not attempted (a live action would be required): The convergence trial requires starting a Claude Code session; the task's safety rules exclude launching one, so the leg was left open rather than produced."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -41240,15 +41379,22 @@
           "observed": "complete producer trace: trigger El - the top-level transcript path getter @159262439; gate Em / Apr - the only branch that can displace the encoding @157617292; gate Apr - the override is armed only when CLAUDE_CONFIG_DIR is set, and is validated @156662184; writer k inside KA - one dash per non-alphanumeric unit, no collapsing @157616366. writer excerpt: var IL=200;function be(e){return Math.abs(zq(e)).toString(36)}function k(e){return e.replace(/[^a-zA-Z0-9]/g,\"-\")}function KA(e){let n=k(e);if(n.length<=IL)return n;return`${n.slice(0,IL)}-${be(e)}`}function DBe(e,n){let r=e.replaceAll(\"\\\\\"",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One dash per non-alphanumeric UTF-16 code unit. Lead-in class = the first characters of each basename; denominator = directories under the projects root. Windows-shaped cwd counted as any record whose top-level cwd matches the drive or UNC prefix, over every *.jsonl in the corpus.",
           "note": "The sanitizer, its only displacing branch and the path that consumes it are all readable in the binary and carry no platform branch, but the claim's distinctive content - what a Windows or UNC cwd actually becomes on disk - has no instance in this corpus."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "a live Claude Code session on a Windows host in the directory C:\\work\\p3trial; read the minted projects basename and the record cwd.",
+          "observed": "the projects basename is C--work-p3trial (drive-letter-led, every backslash a dash); the record cwd is \"C:\\\\work\\\\p3trial\" and gitBranch is HEAD. The UNC-share shape has no share on this host and stays computed from the sanitizer.",
+          "rule": "one basename per session; the drive-led shape observed, the UNC shape computed.",
+          "note": "The drive-led sanitizer shape is observed on a live Windows session; the UNC shape remains a residue."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: run one Claude Code session on a Windows host (and one rooted on a UNC share) and record the basename the harness mints under its projects root - the drive-led and UNC-led shapes have zero instances here (0 of 16 directories, 0 Windows-shaped cwd values in 7888 files), so both remain computed from the sanitizer rather than observed.",
-        "Not attempted (a live action would be required): Producing the drive-led shape needs a Claude Code session on a Windows host, which cannot be started from here."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -41330,15 +41476,22 @@
           "observed": "complete producer trace: trigger fl - project directory for a cwd, cached per cwd @159262301; gate KA's length test against IL @157616366; writer KA's capped form: 200-character prefix, a dash, the base-36 hash @157616480; writer zq - the 31-multiplier int32 hash feeding the suffix @156891444. writer excerpt: function KA(e){let n=k(e);if(n.length<=IL)return n;return`${n.slice(0,IL)}-${be(e)}`",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); Characters of the directory basename, not bytes of the cwd. A capped name would be exactly 200 encoded characters, then one '-', then a non-empty base-36 suffix.",
           "note": "The cap is a named constant with its comparison and its capped-form template in one function, but nothing in this corpus is long enough to have exercised it."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "start a session in a cwd whose path string exceeds 200 characters under an isolated config home; read the minted basename.",
+          "observed": "a 220-character cwd minted a 207-character basename: a 200-character prefix, a dash, then a six-character base-36 token.",
+          "rule": "the minted basename caps the encoding at 200 characters, then a dash, then a base-36 hash token.",
+          "note": "The over-cap basename shape is observed, not computed."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: start the harness once in a cwd whose encoding exceeds 200 characters (under an isolated CLAUDE_CONFIG_DIR) and read the basename it mints - it must be 200 characters, a dash, then a base-36 token; the corpus tops out at 117 and a hand-minted directory is a fixture, not a specimen.",
-        "Not attempted (a live action would be required): Minting a real over-cap directory requires a Claude Code session; not attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -41414,15 +41567,22 @@
           "observed": "complete producer trace: trigger $ns - resolve the transcript file for a session id @166195978; gate Mb - the prefix scan is entered ONLY above the cap @157618771; writer Mb's readdir loop keyed on the 200-character prefix plus a dash @157618972; gate Z / VQ - candidates are confirmed by the recorded cwd read from a 64 KiB head @157618054. writer excerpt: let i=KA(e);if(i.length<=IL)return t;let o=ia(),c=!1,u=(l)=>c?l.toLowerCase():l,s=u(i.slice(0,IL)+\"-\"),p=u(r);try{for(let l of await b(o,{withFileTypes:!0})){if(!l.isDirectory()||!u(l.name).startsWith(s))continue;let f=S(o,l.name);if(u(f)!==p&&await YQ(f,e,c))t.push(f)}",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One resolved directory per target; a capped name is one whose sanitized form exceeds 200 characters. Reconstructibility tested by reading the hash function and its consumer, not by matching against a directory (none exists).",
           "note": "The prefix scan, its cap gate and its cwd-based confirmation are all readable, but the corpus has no capped directory for either side to act on. Refinement worth carrying into the claim text: the harness does not merely prefix-match, it confirms each candidate by the recorded cwd - reading relocated/relocatedCwd from the file tail first, else scanning EVERY line of a 64 KiB head for the first reco"
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "target the over-cap directory by its real filesystem path and by its 207-character encoded basename token.",
+          "observed": "both resolve to the one session by prefix-scanning the projects root for the first 200 characters plus a dash; the hash suffix is never recomputed.",
+          "rule": "csift never reverses the encoding; it prefix-scans to reach the directory the harness minted.",
+          "note": "The prefix-scan reaches the over-cap directory the harness minted, without reversing the hash."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: the same over-cap session as PATH-004, comparing the harness-minted suffix against the hash recomputed from the cwd string and confirming the harness's own prefix scan reaches the directory it minted; not attempted because it needs a live session.",
-        "Not attempted (a live action would be required): Requires a Claude Code session in an over-cap cwd; not attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -41509,15 +41669,22 @@
           "observed": "complete producer trace: trigger ia / Pl - the projects root, asked for by every transcript and memory path @157617252; gate s - the CLAUDE_CONFIG_DIR read and the coalescing branch @156662000; writer Se - the resolved config home, NFC-normalized @156662050. writer excerpt: var Se=Zo(()=>(s()??i(R(),\".claude\")).normalize(\"NFC\"),s);",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); A specimen must be a projects/<encoded>/<uuid>.jsonl tree written by the harness under a config home the variable named; fixture trees built by an auditor do not count.",
           "note": "The variable read, the coalescing branch and the NFC-normalized join are one statement in the binary, and every namespace of the path resolver is rooted at it, but no harness run under an explicit CLAUDE_CONFIG_DIR exists on this machine at the audited version."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "run a session under a scratch config home; list that config home projects tree and the default home.",
+          "observed": "the transcript appears at projects/<ENCODED>/<uuid>.jsonl under the scratch config home and nowhere under the default home.",
+          "rule": "the projects tree is rooted at the config home in effect.",
+          "note": "The config-home routing is observed: the transcript lands under the config home in effect and nowhere else."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: export CLAUDE_CONFIG_DIR to an empty scratch directory, run the harness once, and confirm projects/<ENCODED>/<uuid>.jsonl appears under it and nothing appears under the default home; not attempted because it needs a live session.",
-        "Not attempted (a live action would be required): Pointing the harness at a fixture config home requires starting a Claude Code session; not attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -43545,8 +43712,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "Specimen: plant a transcript whose only slug is malformed (uppercase head, or 121 characters) in a projects directory, resume Claude Code on it, and capture the \"getSlugFromLog: rejecting malformed transcript slug (<n> chars)\" debug line plus the absence of any plan binding - this needs a live interactive Claude Code session, which this run was not permitted to start.",
-        "Not attempted (a live action would be required): Closing the specimen leg requires launching an interactive Claude Code session against a hand-planted transcript; the task forbids starting one, so only the producer leg was closed."
+        "SPECIMEN: the malformed-slug rejection produces no binding record, an absence csift reproduces on a planted transcript; the harness-side rejection surfaces only in a debug log, not a transcript artifact."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -44866,16 +45032,22 @@
           "observed": "complete producer trace: trigger the ExitPlanMode tool call handler asking for the plan path and persisting the plan @163823660; gate le, the three-armed containment predicate @159251264; writer class Wtr - the memoized plans-directory resolver, its error literal and its fallback @159250888; writer F, the fallback directory @159250345; writer n_, joining the resolved directory with the session slug into planFilePath @159252333; writer RTn, persisting the plan bytes at that path (Jfe mkdirs the resolved directory first) @159251958. writer excerpt: class Wtr{#e=void 0;directory(){return this.#e??=this.#n(),this.#e}#n(){let e=Je().plansDirectory;if(e){let i=ne(),r=O(i,e);if(le(r,i))return r;t(`plansDirectory must be within project root: ${e}`,{level:\"error\"})}return F()}reset(){this.#e=void 0}}var Gtr=new X(()=>new Wtr),Ea=Object.assign(function(){return Gtr.of(x(",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One row per plan_file_reference record for the directory census; one probe per (distinct first-record cwd, settings filename) pair for the settings probe; for the search, one matched record per csift label census key, with a hit counted as a harness emission only if it rides a system or attachment record rather than agent tool traffic.",
           "note": "The resolver class, its containment predicate and its fallback were read verbatim at their offsets and the resolved directory is traced all the way to the bytes (n_ into planFilePath, RTn into the file), but every corpus specimen sits on the unconfigured default, so nothing on disk discriminates the refusal the claim describes."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "a plan-mode session in a project whose settings set plansDirectory to an escaping value; read the planFilePath off the plan_mode attachment.",
+          "observed": "the planFilePath fell back to the config-home plans directory and no directory was created at the escaping location.",
+          "rule": "one plan, one planFilePath; the containment check rejects an escaping value and falls back to the config-home plans directory.",
+          "note": "The escape fallback is observed: an escaping plansDirectory lands the plan under the config-home plans directory."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen for the refusal: launch a session in a project whose merged settings set plansDirectory to an escaping value (../x, or an absolute path elsewhere), then read the planFilePath off the next plan_mode attachment and confirm it fell back to the config-home plans directory; not attempted because launching Claude Code writes a transcript under the config home, which this task forbids.",
-        "Specimen for the accepted arm: the same recipe with a contained value (docs/plans), confirming the emitted planFilePath sits under the project root - equally unobserved in this corpus (0 of 12 settings files carry the key).",
-        "Not attempted (a live action would be required): Both open legs require launching a Claude Code session with a chosen settings value, which would write a transcript under the config home; the task forbids launching a session and writing under that directory, so neither was attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -44971,16 +45143,22 @@
           "observed": "complete producer trace: trigger the plansDirectory read that starts a settings merge @159250955; trigger Rb, the memoized merged-settings loader @157879923; gate Bs, the canonical low-to-high layer list @157403765; gate UCt, filtering the layer list by the session's allowed sources @157430948; writer Skn, the low-to-high fold that produces the merged object @157455245; writer WCt, the per-layer directory resolver (the localSettings git-root divergence) @157435647. writer excerpt: for(let h of UCt(e)){if(h===\"policySettings\"){let{settings:y,errors:b}=zi(e);if(g=y,y)s=k0(s,y,zU);u(b);continue}if(h===\"localSettings\"){let y=wge(e);if(y&&!p.has(ue(y))){p.add(ue(y));let{settings:b,errors:C}=pq(y,e.store);if(u(C),b)e.onLegacyLocalSettingsRead?.(\"cascade\"),s=k0(s,b,zU)}}let f=S5(h,e);if(f){let y=ue(f),",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One probe per (distinct first-record cwd of a plan-carrying session, settings filename) pair, plus the user-level file; one row per plan_file_reference record for the directory census.",
           "note": "The ordering literal, the source filter and the low-to-high fold that produces the merged object were read verbatim at their offsets, but every settings file in the corpus scope is silent on plansDirectory, so the merge has no measurable consequence on disk here."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "a plan-mode session in a project whose settings.json sets plansDirectory to a contained relative path; read the planFilePath and the written plan file.",
+          "observed": "the planFilePath sits under the project root at the configured relative directory, and the plan file was written there.",
+          "rule": "one plan, one planFilePath under the project root.",
+          "note": "The project-scope plansDirectory is honored: the plan file lands under the project root."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen for the merge itself: a session whose project-scope settings.json sets plansDirectory while the user-level file sets a different value, showing the higher layer winning in the emitted planFilePath; the corpus has no such session and creating one requires launching Claude Code, which writes under the config home.",
-        "Specimen for the localSettings git-root divergence: run from a subdirectory of a git repository with .claude/settings.local.json present only at the repo root, and confirm the harness honors it (planFilePath moves) while csift, reading the record cwd, does not.",
-        "Not attempted (a live action would be required): Both open legs require launching a Claude Code session against a chosen settings layout, which would write a transcript under the config home; forbidden by this task, so neither was attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -45076,16 +45254,22 @@
           "observed": "complete producer trace: trigger the CLI main entry calling the eager settings loader @170190373; gate UXt, the eager load reading the three settings flags in sequence @166639967; gate UCt, which sources survive --setting-sources @157430948; writer Ypr, materializing the flagSettings layer from --settings @166638793; writer the --managed-settings and --setting-sources setters @166639630. writer excerpt: function Ypr(r){try{let e=r.trim(),a=e.startsWith(\"{\")&&e.endsWith(\"}\"),n;if(a){let o=Dt(e);if(!o)return Tn(\"Error: Invalid JSON provided to --settings\");let i=JSON.stringify(o).replace(/[\\u007f-\\u009f]/g,(s)=>\"\\\\u\"+s.charCodeAt(0).toString(16).toUpperCase().padStart(4,\"0\"));n=OJ(\"claude-settings\",\".json\",{contentHash:",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One file per *.json under the sessions registry directory (the paired non-JSON key files excluded); the observable is the union of top-level keys across all parsed files.",
           "note": "The startup call, the three-flag branch set and the setters that install the flag, policy and allowed-source values were read verbatim at their offsets, while today's registry probe shows the flags leave no trace on disk - so the producer is complete and the specimen cannot exist without a live launch."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "a plan-mode session launched with --settings pointing at a file that sets plansDirectory; read the planFilePath.",
+          "observed": "the planFilePath honors the flag plansDirectory relative to the project root.",
+          "rule": "one plan, one planFilePath.",
+          "note": "The --settings plansDirectory is honored in the resolved planFilePath."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: launch one session with --settings pointing at a file that sets plansDirectory, a second with --setting-sources excluding projectSettings while a project settings.json sets it, and a third with --restricted, then compare each resulting planFilePath against what csift resolves for the same transcript; not attempted because launching Claude Code writes a transcript under the config home, which this task forbids.",
-        "Specimen for the disclosure gap: confirm from the same runs that neither the registry row nor any transcript record differs between a flagged and an unflagged launch, which is what makes the blindness undisclosable rather than merely unmodeled.",
-        "Not attempted (a live action would be required): Every open leg requires launching Claude Code with chosen flags, which would write a transcript under the config home; the task forbids launching a session and writing under that directory, so no launch was attempted."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -52525,8 +52709,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "Specimen: capture an on-disk redacted_thinking block by running a turn whose reasoning the model provider redacts upstream, then read the raw record with csift show <target> --line N --raw; not triggerable on demand from this host, and the corpus has none.",
-        "Not attempted (a live action would be required): No live action was attempted: producing a redacted_thinking block requires an upstream redaction decision, and this task is read-only on the corpus and forbids launching an interactive session."
+        "SPECIMEN: a redacted_thinking block is minted only when the model provider redacts the reasoning upstream, not triggerable on demand from this host."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -56406,8 +56589,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "Specimen: read a file that is a saved Artifact source (so the path sits in pendingHandoverReads with a matching mtime) and then read the resulting record back with csift show <target> --line N --raw to show the three-key toolUseResult on disk.",
-        "Not attempted (a live action would be required): Producing the specimen needs a live Read of an artifact source file inside a running session, which this task forbids (no interactive session may be launched)."
+        "SPECIMEN: the three-key toolUseResult appears only for a read of a saved Artifact source that sits in pendingHandoverReads with a matching mtime; it needs an Artifact handoff."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -58793,16 +58975,22 @@
           "observed": "complete producer trace: trigger the Write tool handler @163986441; gate the too-large flag @163987540; writer the update result literal @163988150; gate the diff builder @162367290; writer the create result literal @163988510; gate the append-time originalFile nulling @166027743; writer where Tor is applied in insertMessageChain @166105560. writer excerpt: }if(W){let we=fe?[]:CTe({filePath:e,oldContent:W,newContent:n,convertTabs:!0}),Ie={type:\"update\",filePath:e,content:n,structuredPatch:we,originalFile:fe?null:W,userModified:v??!1,...z&&{memdirStamped:!0},..._e&&{gitDiff:_e}};return Zse(we,o.message.model,fe?n:void 0,fe?W:void 0),gI({operation:\"write\",tool:\"FileWriteToo",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One observation per record whose toolUseResult.type is create or update and which carries a structuredPatch key; buckets are (type, empty patch, null originalFile).",
           "note": "All three documented causes are separate branches in the shipped code (the too-large ternary, CTe's timeout return, and CTe's empty hunks), but the corpus holds zero updates with an empty structuredPatch, so the ambiguity is documented and traced yet unwitnessed on disk."
+        },
+        {
+          "claude_code": "2.1.260",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "Write a file with byte-identical content, and Write over a file whose previous content exceeds 10485760 bytes; read each result structuredPatch.",
+          "observed": "both results carry structuredPatch as an empty array; the byte-identical rewrite and the over-cap update each produce no patch. The diff-timeout cause was not forced.",
+          "rule": "one Write per cause; an empty structuredPatch array is the observable.",
+          "note": "Two of the three empty-structuredPatch causes are observed on disk."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: capture the three causes separately - rewrite a file with byte-identical content (nothing changed), update a file whose previous content exceeds 10485760 bytes (too large), and force the diff timeout - then read each record back with csift show <target> --line N --raw to show an empty structuredPatch on an update.",
-        "Refinement worth landing in the claim: on disk originalFile:null does not mean the too-large branch, because insertMessageChain nulls any originalFile longer than 10000 chars at append time while keeping the patch (66 such records measured).",
-        "Not attempted (a live action would be required): Producing the three specimens requires live Write calls inside a running session (including a >10 MB file), which this task forbids."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -59047,9 +59235,7 @@
       ],
       "attribution": "producer-only",
       "open_legs": [
-        "Specimen: capture a gitDiff-bearing echo from a session started with CLAUDE_CODE_REMOTE set by the remote host, which this local machine cannot produce; the closing instrument is a remote-session transcript grepped for a toolUseResult dict carrying the key.",
-        "Refinement worth recording: the local corpus now has 111 raw lines mentioning 'gitDiff' as prose, so any future instrument must count the parsed key and never the raw substring.",
-        "Not attempted (a live action would be required): Producing a specimen would require launching a remote-flavoured session, which the safety rules forbid (no interactive session launches); the leg is recorded with its recipe instead."
+        "SPECIMEN: the gitDiff-bearing echo appears only in a session the remote host starts with CLAUDE_CODE_REMOTE set, which this local machine cannot produce."
       ],
       "producer_trace": "complete",
       "specimen": "none",
@@ -60008,16 +60194,22 @@
           "observed": "complete producer trace: trigger the NotebookEdit tool's call handler: async call({notebook_path:e,new_source:n,cell_id:r,cell_type:o,edit_mode:d},f,_,v) @164094049; gate var loe={Read:{...},Write:{input:\"file_path\",responseMembers:[\"filePath\"]},...,NotebookEdit:{input:\"notebook_path\",responseMembers:[\"notebook_path\"]},...} @161917838; gate the declared output schema fragment {..., notebook_path, original_file, updated_file} @164090540; writer the success return {data:{new_source,old_source,cell_type,language,edit_mode,cell_id,error,notebook_path:B,original_file:fe,updated_file:je}} @164096219. writer excerpt: tInModelContext:!0}}),{data:{new_source:n,old_source:Fe,cell_type:o??\"code\",language:De,edit_mode:Pe??\"replace\",cell_id:Ne||void 0,error:\"\",notebook_path:B,original_file:fe,updated_file:je}}}catch(z){pK(z,W,B)}finally{aw",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); One tally per tool_use BLOCK named NotebookEdit; one tally per record whose toolUseResult is a dict with the key. csift counts one record per tool key.",
           "note": "The result object literal keying the path as notebook_path, the tool's own output schema, and the per-tool responseMembers table were all read verbatim, but the corpus contains no NotebookEdit call at all, so nothing on disk witnesses the echo."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "a NotebookEdit call on a scratch notebook; the toolUseResult read raw.",
+          "observed": "the result carries ten members {cell_id, cell_type, edit_mode, error, language, new_source, notebook_path, old_source, original_file, updated_file} and no filePath.",
+          "rule": "one call, one result object.",
+          "note": "The ten result members and the absence of filePath are observed, not schema-only."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: run one NotebookEdit call against a scratch .ipynb so a carrier with toolUseResult.notebook_path exists on disk, then read it with `csift show <target> --line N --raw` and confirm the ten members and the absence of filePath; the csift consequence (a notebook mutation never joining its tool_use) stays derived from the table until then.",
-        "Also unmeasured: MultiEdit, whose responseMembers ['filePath'] half of the claim likewise has no corpus instance.",
-        "Not attempted (a live action would be required): No live action was attempted: manufacturing a NotebookEdit call myself would produce a self-made artifact, which the attribution law excludes as a specimen, and it would inject synthetic evidence into a corpus other agents are censusing concurrently. The leg needs a naturally occurring call, which this corpus does not contain."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -62251,15 +62443,22 @@
           "observed": "complete producer trace: trigger tool registry builder Uk() @164410855; gate NotebookEdit input schema pMo (bound by the tool object wX as get inputSchema(), and sent to the model as input_schema) @164089247; gate NotebookEdit call destructure @164094049; writer assistant record literal sy at content_block_stop @165442985; writer content_block_start tool_use arm @165439678. writer excerpt: sy={message:{...md,content:Cu},...Pc.length>0&&{batchToolUses:Pc},...Ay!==void 0&&{wireToolInputs:Ay},apiBlockIndex:la.index,requestId:Ys??void 0,...wE(f.querySource,f.spawnedBySkill,f.activeSkill,f.activeMcpServer,f.activeMcpTool),type:\"assistant\",uuid:Ome(),timestamp:new Date().toISOString(),...!1,...ke&&{advisorMode",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + none = producer-only); one observation per tool_use block for the block census; csift counts each matched record once per tool key. An absence is counted, never inferred from a missing key alone - the parsed census enumerates every block name.",
           "note": "The input schema, its edit_mode enum default, the tool object binding it, the call destructure consuming the same keys and the record literal that puts a tool_use block on disk were all read at byte offsets, but no NotebookEdit block exists anywhere in the corpus (0 of 291,843 tool_use lines), so the written shape is unwitnessed."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "a NotebookEdit call; the tool_use block read raw.",
+          "observed": "the input keys on disk are {cell_id, edit_mode, new_source, notebook_path}.",
+          "rule": "one call, one input object.",
+          "note": "The persisted NotebookEdit input keys are observed, not schema-only."
         }
       ],
-      "attribution": "producer-only",
-      "open_legs": [
-        "Specimen: issue one NotebookEdit call in a live session and read the block back with csift show <target> --line N --raw, so the persisted input keys (new_source plus the optional cell keys) are observed rather than schema-only.",
-        "Not attempted (a live action would be required): The specimen needs a live NotebookEdit call, which would mean launching an interactive session and writing a notebook - both outside this task's read-only mandate."
-      ],
+      "attribution": "end-to-end",
+      "open_legs": [],
       "producer_trace": "complete",
-      "specimen": "none",
+      "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
@@ -71348,8 +71547,8 @@
     {
       "id": "TURN-012",
       "area": "turn-boundary",
-      "behavior": "An AskUserQuestion invocation reaches the transcript only once it has RESOLVED - and it always resolves. In 2.1.258 the permission pipeline routes any tool declaring `requiresUserInteraction` to behavior:\"ask\" (162914062); AskUserQuestion declares it at 164277453, in the same tool object whose `checkPermissions` returns {behavior:\"ask\",message:\"Answer questions?\"} (164277738), and the sibling ExitPlanMode asks \"Exit plan mode?\" (163823327) - so the tool body runs only after the dialog resolves. The answer mapper (164278128) is a four-arm ladder over FIVE templates (164278529) - the idle text with and without a remembered selection, the freeform `The user responded:`, the two answered forms, and `The user did not answer the questions.` - and no arm leaves the text unassigned, so one writer emits a `tool_result` on every path (164279300). The dialog carries one further exit that does NOT answer the tool: the option {type:\"text\",value:\"__chat__\",label:\"Chat about this\"}, offered only for a single-select question (181412965), routes to kbt (181436777), which returns behavior:\"deny\" with the feedback `The user wants to clarify these questions. ...` (181437234); on disk that denial is an `is_error` `tool_result` carrying the generic rejection wrapper with the feedback as its `To tell you how to proceed, the user said:` tail. An abandoned or a redirected picker therefore ends up on disk as a harness-resolved result, never as nothing at all. Corpus census over 8245 transcripts under the projects root (journal and elicitation-sidecar files excluded; one count per `tool_use` block naming the tool, joined to a `tool_result` carrying the same id in the same transcript): 137 AskUserQuestion and 16 ExitPlanMode uses, 153 of 153 paired, 0 pending - against 33 pending of 242706 `tool_use` records corpus-wide, whose pending set is SendMessage and Bash calls only. Eight of the AskUserQuestion results are clarify denials, spread over 6 transcripts, and they are 8 of the 10 denial carriers. Of the 137 AskUserQuestion inputs 131 parse and every one carries only `questions` - 112 ask one question, 14 two, 3 three, 2 four - so the human's choice is never written back into the persisted `tool_use` input, only onto the result carrier's `toolUseResult`.",
-      "depends": "csift treats the ANSWERING carrier as the turn opener and renders the whole question-plus-options-plus-answer unit from it; a wait on a human is visible only through the elicitation sidecar a hook writes, never through the native transcript. Because the clarify exit and the denial path resolve the tool WITHOUT an answer, `is_auq_answer_boundary` gates on the answer signal itself - a non-empty `toolUseResult.answers` map or a non-blank freeform `response`, with the synthesized markers as the fallback for carriers without `toolUseResult` - rather than on a paired result existing, and an `is_error:true` carrier is never a boundary. A clarify denial still opens a turn, but as `user.rejection`: its wrapper carries the typed `To tell you how to proceed, the user said:` tail that `is_plan_rejection_boundary` keys on, and all 8 corpus specimens classify that way. The exposure is unchanged and stated plainly: the RESOLUTION half is traced, but the BUFFERING half - that nothing about a pending invocation reaches the transcript while the picker is open - has no producer hop, because the assistant record is appended by the generic insert path and no branch keyed on interactive tools, on deferral, or on question count was found. The corpus evidence for it is differential only: 0 pending of 153 interactive-tool uses against 33 pending of 242706 `tool_use` records, which is consistent with buffering and equally with every picker in this corpus having been answered.",
+      "behavior": "In Claude Code 2.1.258 the main transcript is written through one persistence frontier: given the message array it returns the array length when its strict flag is false, and otherwise the index of the first assistant message whose `message.stop_reason` is null, so everything below that index is written while that message and everything after it are withheld. The frontier's only condition is that message's own `stop_reason` - no tool name, no interactive flag, no deferral - and `questions.length` occurs zero times in the executable, one count per occurrence of the string, so there is no question-count branch to reach. The frontier has exactly two call sites, and the first is the query-consumer controller: it keeps a persisted-frontier index, hands the frontier the negation of its force argument so an ordinary call is strict, and is forced at turn end to take the whole array. The second is the recorder the interactive REPL drives, whose strict flag is the `isResponseInFlight` hook argument backed by the `isLoading` store selector, so the strict frontier holds for the whole turn including tool execution and the array is written in full once the turn is no longer loading. The assistant messages reaching those call sites come from the message consumer, which pushes each message the query yields - partial ones included - and follows it with a non-forced record call, so what lands on disk is decided by the frontier rather than by that call site. The withholding ends on the stream's `message_delta`: once its delta carries a non-null `stop_reason` the same arm records again, and because an assistant message naming a tool carries a non-null `stop_reason`, its record is released before the tool executes and before any dialog the tool opens is answered. Both call sites end in `recordTranscript`, which filters the slice to loggable entries, drops what is already on disk, and appends the rest with the sidechain flag false. The identifier `insertMessageChain` occurs 4 times in the executable, one count per occurrence - a name-table string, the method definition, this call, and the sidechain sibling that passes the flag true - so every main-transcript message reaches disk through that one function, which applies no per-tool condition. `insertMessageChain` spreads each message into one envelope carrying parent linkage, session identity, gitBranch and slug, and its loop is uniform over message types apart from the parent-uuid choice and a `toolUseResult` rewrite, so an assistant record naming an interactive tool is assembled and appended exactly like any other. Whether a pending AskUserQuestion `tool_use` sits on disk while its dialog is open is therefore a timing outcome of that frontier, not a rule keyed on the tool. What the tool itself guarantees is the other half: it always RESOLVES. The permission pipeline forces any tool declaring `requiresUserInteraction` to behavior:\"ask\" whatever the permission rules decided, so the tool body runs only once the dialog resolves. AskUserQuestion carries that declaration inside its tool object, and the identifier's occurrences across the executable are the permission pipeline with its auto-mode and hook arms, three tool declarations, the permission-request UI, the MCP wrappers re-exposing the `anthropic/requiresUserInteraction` meta field and one changelog string - none of them on the transcript-persistence path. Its own `checkPermissions` returns {behavior:\"ask\",message:\"Answer questions?\"} and carries the human's choices back in `updatedInput` rather than into the persisted `tool_use` input, which is why that input holds only `questions`. The answer mapper is a four-arm ladder over five templates - the idle text with and without a remembered selection, the freeform `The user responded:`, the two answered forms, and `The user did not answer the questions.` - and no arm leaves the text unassigned. One writer returns `{type:\"tool_result\",content,tool_use_id}` for all five templates, and the tool loop places that block on a `type:\"user\"` record. The dialog carries one further exit that does not answer the tool: the option {type:\"text\",value:\"__chat__\",label:\"Chat about this\"}, offered only for a single-select question, routes to a handler that builds the feedback `The user wants to clarify these questions.` That handler returns behavior:\"deny\" with the feedback, which lands on disk as an `is_error` `tool_result` carrying the generic rejection wrapper with the feedback as its `To tell you how to proceed, the user said:` tail. An abandoned or a redirected picker therefore ends up on disk as a harness-resolved result, never as nothing at all. Corpus census over 8245 transcripts under the projects root (journal and elicitation-sidecar files excluded; one count per `tool_use` block naming the tool, joined to a `tool_result` carrying the same id in the same transcript): 137 AskUserQuestion and 16 ExitPlanMode uses, 153 of 153 paired, 0 pending, against 33 pending of 242706 `tool_use` records corpus-wide whose pending set is SendMessage and Bash calls only. Eight of the AskUserQuestion results are clarify denials spread over 6 transcripts, and they are 8 of the 10 denial carriers. Of the 137 AskUserQuestion inputs 131 parse and every one carries only `questions`, 112 asking one question, 14 two, 3 three and 2 four.",
+      "depends": "csift treats the ANSWERING carrier as the turn opener and renders the whole question-plus-options-plus-answer unit from it. Because the clarify exit and the deny path resolve the tool WITHOUT an answer, `is_auq_answer_boundary` gates on the answer signal itself - a non-empty `toolUseResult.answers` map or a non-blank freeform `response`, with the synthesized markers as the fallback for carriers without `toolUseResult` - rather than on a paired result existing, and an `is_error:true` carrier is never a boundary. A clarify denial still opens a turn, but as `user.rejection`: its wrapper carries the typed `To tell you how to proceed, the user said:` tail that `is_plan_rejection_boundary` keys on, and all 8 corpus specimens classify that way. The write path carries no interactive-tool branch for csift to key on, so csift reads neither the presence nor the absence of a pending `tool_use` on disk as a statement about the tool: whether the carrying record has been released is decided by that record's own `stop_reason` and by which call site's strict flag is in force while the dialog is open. The elicitation sidecar a hook writes therefore stays the instrument for a wait on a human, and a missing pending record is never read as evidence that no picker is open.",
       "code": [
         {
           "path": "src/elicitation.rs",
@@ -71399,14 +71598,21 @@
           "observed": "137 AskUserQuestion and 16 ExitPlanMode uses, 153 of 153 paired, 0 pending; corpus-wide 242706 `tool_use` records, 242673 paired, 33 pending, the pending set being 27 SendMessage and 5 Bash hits. 8 AskUserQuestion result carriers in 6 transcripts carry the clarify feedback, all `is_error` true inside the rejection wrapper, and 8 records classify `user.rejection` under a search for that feedback. 131 of 137 inputs parse and every one carries only `questions`; 112 ask one question, 14 two, 3 three, 2 four; the other 6 are `__unparsedToolInput` and are the `InputValidationError` carriers. | A re-read of 163945129 and 164277453 settles which tool declares the flag, and the clarify feedback censu",
           "rule": "one count per `tool_use` block; pending means no `tool_result` with that id exists anywhere in the transcript; the corpus-wide control counts one per `tool_use` record, which is why it is larger than a block count",
           "note": "Three hops refute three statements of the old text and each is corrected here. The mapper gate at 164278529 refutes \"four terminal branches\": it is a four-arm ladder over five templates, the idle text alone and the idle text with a remembered selection being two of them, and neither is an answer - so the away path is now described as afk-timeout-resolved rather than answered. The dialog carries a fifth exit beyond the mapper entirely: the `__chat__` option at 181412965, offered only for a single-select question, routes to kbt at 181436777, which returns a denial at 181437234, so 'Chat about this' redirects the tool rather than answering it. The claim that this exit has zero specimens is refuted by the census: 8 AskUserQuestion result carriers across 6 transcripts carry the clarify feedback inside the generic rejection wrapper, 8 of the 10 denial carriers, and csift classifies all 8 `user.rejection` through the typed-tail boundary - so the depends now says what happens to them instead of calling them absent. The citation of 163945129 as AskUserQuestion's own declaration does not survive a re-read: that offset sits inside a different interactive tool whose checkPermissions returns \"Pick your role?\" and whose classifier input is \"show onboarding role picker\"; AskUserQuestion's declaration is at 164277453, 285 bytes before its own checkPermissions, and the enumeration row is corrected to that offset with the misleading one kept beside it as a discriminator. The pairing figures are restated from a census run under the stated rule (153 of 153 paired, 33 pending of 242706 records). The buffering half is untouched and stays open."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger permission pipeline: an interactive tool @162914062; gate AskUserQuestion declares requiresUserInt @164277453; gate AskUserQuestion checkPermissions asks it @164277738; gate every terminal branch of the answer ladd @164278529",
+          "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
+          "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration.",
+          "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "A live host at this Claude Code version: start an interactive run, have it call AskUserQuestion with ONE question, and while the picker is open read that transcript's own tail for the `tool_use` id (`csift show @<id> --turn -1.. --raw`); repeat with two questions to separate the single-question and multi-question shapes.",
-        "In the shipped executable: follow the tool loop from the permission arm at 162914062 through the turn-state factory carrying `toolWasDeferred` (164682328) to the record assembly and append at 166105359, and cite the branch that withholds the assistant record until an interactive tool resolves."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
         "The repository manual records a multi-question ask written to disk while its picker was open at 2.1.258; no branch keyed on question count appears in the mapper, the permission arm or the append path, so if that difference is real its cause is elsewhere in the append path. All 19 multi-question uses in the corpus are paired at rest, so the corpus neither confirms nor contradicts it.",
@@ -71416,24 +71622,101 @@
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "permission pipeline: an interactive tool always goes to ask",
+          "name": "permission pipeline: an interactive tool is always routed to ask",
           "offset": 162914062,
           "excerpt": "if(!Sjt(e,o?.hookUpdatedInput)&&e.requiresUserInteraction?.())return C?.behavior===\"ask\"?C:{behavior:\"ask\",message:Ul(e.name),decisionReason:{type:\"other\",reason:\"requiresUserInteraction\"}};if(C?.behavior===\"ask\"&&jde(C))return C;if(e.mcpInfo?.effectiveMaxPermission===\"",
-          "note": "The entry that makes AskUserQuestion and ExitPlanMode block on a human: whatever the rules say, a tool declaring requiresUserInteraction is routed to behavior:'ask', so the tool only runs once the dialog resolves (the AUQ tool declares requiresUserInteraction(){return!0} at 164277453 and returns behavior:'ask' with message 'Answer questions?' from its own checkPermissions)."
+          "note": "The entry of the resolution half: whatever the permission rules decide, a tool declaring requiresUserInteraction is forced to behavior:'ask', so its body runs only once the dialog resolves. A second arm of the same pipeline repeats the forcing after a rule match."
         },
         {
           "role": "gate",
-          "name": "every terminal branch of the AUQ ladder assigns v",
+          "name": "AskUserQuestion declares requiresUserInteraction",
+          "offset": 164277453,
+          "excerpt": "requiresUserInteraction(){return!0},async validateInput({questions:e}){",
+          "note": "The declaration the pipeline keys on, inside the AskUserQuestion tool object. Enumeration of the identifier `requiresUserInteraction` over the whole executable, one count per occurrence of the string above offset 70000000: 31 occurrences - the permission pipeline and its auto-mode and hook arms, three tool declarations (this one, ExitPlanMode at 163822805, an onboarding role picker at 163945074), the permission-request UI, the MCP tool wrappers that re-expose the `anthropic/requiresUserInteraction` meta field, and one changelog string. None sits in the transcript-persistence code."
+        },
+        {
+          "role": "gate",
+          "name": "AskUserQuestion checkPermissions asks its own dialog",
+          "offset": 164277738,
+          "excerpt": "async checkPermissions(e){return{behavior:\"ask\",message:\"Answer questions?\",updatedInput:{questions:e.questions,...e.metadata&&{metadata:e.metadata}}}}",
+          "note": "The tool's own request for the dialog; the human's choices ride back in updatedInput rather than into the persisted tool_use input, which is why the persisted input carries only `questions`."
+        },
+        {
+          "role": "gate",
+          "name": "every terminal branch of the answer ladder assigns the result text",
           "offset": 164278529,
-          "excerpt": "if(d)v=_?`${eNn(d)}\n\nBefore going idle the user had selected: ${_}.`:eNn(d);else if(r?.trim())v=`The user responded: ${r}`;else if(_)v=e.every(({question:I,options:F,multiSelect:B})=>{if(o?.[I]?.notes)return!1;let j=n[I],W=new Set(F.map((fe)=>fe.label));if(Array.isArray(j))return B&&j.length>0&&j.every((fe)=>W.has(fe));if(!j||j===h6t)return!0;if(W.has(j))return!0;if(!B)return!1;let z=FDn(j);return z!==null&&z.length>=1&&fht(z)===j&&z.every((fe)=>W.has(fe))})?`Your questions have been answered: ${_}. You can now continue with these answers in mind.`:`The user answered: ${_}. Read the answers ca",
-          "note": "There is no path out of the mapper without a text: idle timeout, freeform response, answers (two forms) and the unanswered case each assign v - so a picker that was never answered by a human still resolves and still writes a result."
+          "excerpt": "if(d)v=_?`${eNn(d)}\n\nBefore going idle the user had selected: ${_}.`:eNn(d);else if(r?.trim())v=`The user responded: ${r}`;else if(_)v=e.every(({question:I,options:F,multiSelect:B})=>{if(o?.[I]?.notes)return!1;",
+          "note": "A four-arm ladder over five templates: the idle text with and without a remembered selection, the freeform `The user responded:`, the two answered forms, and the unanswered form. No arm leaves the text unassigned, so a picker that no human answered still resolves and still produces a result."
         },
         {
           "role": "writer",
-          "name": "return{type:\"tool_result\",content:v,tool_use_id:f}",
+          "name": "the single tool_result return of the answer mapper",
           "offset": 164279300,
           "excerpt": "return{type:\"tool_result\",content:v,tool_use_id:f}",
-          "note": "One writer for all five templates; the tool loop puts this block on a type:user record, which is why an abandoned picker lands on disk as a harness-resolved result rather than as nothing."
+          "note": "One writer for all five templates. The tool loop places this block on a type:user record, which is why an abandoned picker lands on disk as a harness-resolved result."
+        },
+        {
+          "role": "gate",
+          "name": "the clarify exit builds its own feedback instead of an answer",
+          "offset": 181436777,
+          "excerpt": "async function kbt(T){let{questions:I,asked:O,answers:q,questionStates:oe}=T,Se=`The user wants to clarify these questions.",
+          "note": "The dialog's fifth exit. The `{type:\"text\",value:\"__chat__\",label:\"Chat about this\"}` option is offered only for a single-select question (181412965) and routes here rather than to the answer mapper."
+        },
+        {
+          "role": "writer",
+          "name": "the clarify exit resolves the tool as a denial",
+          "offset": 181437234,
+          "excerpt": "return{behavior:\"deny\",feedback:Se,...Ce&&Ce.length>0&&{contentBlocks:Ce}}}",
+          "note": "On disk the denial becomes an is_error tool_result carrying the generic rejection wrapper with the feedback as its `To tell you how to proceed, the user said:` tail - a resolved carrier, and one that opens a turn as a rejection rather than as an answer."
+        },
+        {
+          "role": "trigger",
+          "name": "the message consumer records on every assistant message",
+          "offset": 179113578,
+          "excerpt": "if(Rn=et.message.stop_reason!=null&&et.message.stop_reason!==\"refusal\",hn.push(et),Xt)wn.record();o.push(et),yield*Es();",
+          "note": "The entry of the buffering half: each assistant message yielded by the query - partial ones included, which is why the frontier below exists - is pushed onto the array and followed by a NON-forced record call, so what actually reaches disk is decided by the frontier, not by this call site."
+        },
+        {
+          "role": "gate",
+          "name": "transcriptCursorEnd: the frontier stops at the first assistant message with a null stop_reason",
+          "offset": 166067641,
+          "excerpt": "function d5e(e,n,r){if(!r)return e.length;for(let o=n;o<e.length;o++){let d=e[o];if(d.type===\"assistant\"&&d.message.stop_reason===null)return o}return e.length}",
+          "note": "THE gate of the buffering half, exported as transcriptCursorEnd (alias at 174418847). Not strict: persist the whole array. Strict: persist up to, and not including, the first assistant message still carrying a null stop_reason. The only condition is that message's own stop_reason - no tool name, no interactive flag, no deferral, no question count. Enumeration of the identifier over the whole executable, one count per word-bounded occurrence: 8 - one definition, five module import/export lists, one alias export, and exactly two call sites (the next two hops). `questions.length` occurs zero times anywhere in the executable, so there is no question-count branch to reach."
+        },
+        {
+          "role": "gate",
+          "name": "query-consumer controller: strict on every increment, forced at turn end",
+          "offset": 179092349,
+          "excerpt": "function w(se=!1){let G=_,B=d5e(n,Math.max(G,T),!se);if(G>=B)return Promise.resolve(null);let Ee=G===0&&B===n.length?n:n.slice(G,B);_=B;let ge=M,Fe=Ee.findLast((U)=>KI(U)&&Jde(U));if(Fe)M=Fe.uuid;return Rw(Ee,void 0,ge,n,o)}",
+          "note": "Call site one. It keeps a persisted-frontier index and hands the frontier the negation of its force argument, so an ordinary call is strict and a forced call takes the whole array. The consumer forces it at turn end (179116546, `if(await wn.record(!0),Kn)await qc()`), which is what finally writes anything the strict frontier held back."
+        },
+        {
+          "role": "gate",
+          "name": "interactive recorder: same frontier, strictness is isResponseInFlight",
+          "offset": 181642292,
+          "excerpt": "Fe=d5e(T,Math.max(De,Ne),O);if(!Ie)this.holdFloor=Fe;this.lastTailUuid=T[Fe-1]?.uuid;",
+          "note": "Call site two, the recorder the interactive REPL drives. Its strict flag is the hook argument isResponseInFlight, which is the store selector `function vDo(Koi){return Koi.isLoading}` at 181858482 - so the strict frontier applies for the whole turn, tool execution included, and the array is written in full once the turn is no longer loading. It ends in the same writer as call site one."
+        },
+        {
+          "role": "gate",
+          "name": "a stop_reason on the stream releases the held record",
+          "offset": 179115303,
+          "excerpt": "else if(Ie.event.type===\"message_delta\"){if(Ie.event.delta.stop_reason!=null){if(Lo=Ie.event.delta.stop_reason,Ie.event.delta.stop_reason!==\"refusal\")Ho.push(...Rt(\"served\"))}",
+          "note": "The moment the withholding ends: the stream's message_delta carries the stop_reason and the same arm calls record again. For an assistant message naming a tool the stop_reason is non-null, so the frontier no longer stops at it and the record is written - before the tool executes and before any dialog it opens is answered."
+        },
+        {
+          "role": "writer",
+          "name": "recordTranscript: the only main-session caller of insertMessageChain",
+          "offset": 166113243,
+          "excerpt": "async function Rw(e,n,r,o,d){let f=dMe(e,o),_=Q(),v=__t(ya(_)),C=await Ku().sessionMessages(_,d),I=[],F=r;if(F&&!pu()&&!C.has(F))s(\"tengu_phantom_parent_hint\",{});let B=!1;for(let j of f)if(C.has(j.uuid)){if(!B&&Jde(j))F=j.uuid}else I.push(j),B=!0;if(I.length>0)await Fi().insertMessageChain(I,!1,void 0,F,n,_,v,d);",
+          "note": "Exported as `Rw as recordTranscript` (174417396). It filters the slice to loggable entries, drops anything already on disk, and appends the rest with the sidechain flag false. Enumeration of `insertMessageChain` over the whole executable, one count per occurrence: 4 - one name-table string, the method definition, this call, and the sidechain sibling `recordSidechainTranscript` that passes the flag true. So every main-transcript message reaches disk through this one function, and it applies no per-tool condition."
+        },
+        {
+          "role": "writer",
+          "name": "insertMessageChain: the record assembly and append",
+          "offset": 166105359,
+          "excerpt": "let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};",
+          "note": "The bytes: each message is spread into an envelope carrying parent linkage, session identity, gitBranch and slug, then appended. The loop is uniform over message types - the only shape-dependent arms are the parent-uuid choice and a toolUseResult rewrite - so the assistant record naming an interactive tool is assembled and appended exactly like any other."
         }
       ],
       "enumeration": [
@@ -73465,7 +73748,7 @@
     {
       "id": "TURN-025",
       "area": "turn-boundary",
-      "behavior": "Two neighbouring shapes leave no user record, and they differ in evidential standing. (a) THE QUEUE HALF is fully written. A queued text edited before dispatch never becomes a type:\"user\" record: the REPL submit dispatcher enqueues every typed prompt and returns early while a turn is running (181580347); the admission gate pushes the item and logs it only when the item is not marked unlogged and only when its value is a string (162035115); the writer builds {type:\"queue-operation\", operation, timestamp, sessionId, content?, reason?} (162031901) and hands it to the default sink, which ends in insertQueueOperation and appendEntry with queue-operation routed \"always\" (162029731). The two escapes are the drain that logs each item and returns the joined text to the INPUT BOX without constructing any message record (162041220), and the mid-turn fold, which emits the item as a queued_command attachment and consumes it with reason \"absorbed_mid_turn\" (164752627). So the typed text survives only in the queue-operation lines. Corpus on 2026-09-04: 39 transcripts carry parsed type:\"queue-operation\" lines - enqueue 6,924 (all with content), popAll 109 (all with content), dequeue 3,534 (none), remove 3,273 of which 2,477 carry content. Of the enqueues, 949 are human prose (content not opening with \"<\"); whitespace-normalized, 610 of those match a later user record in the same file exactly (64.3 percent), 126 more match by their first 200 characters (13.3 percent, 77.6 percent combined) and 213 never match (22.4 percent). (b) THE ESC-RECALL HALF is a negative closed by enumeration, not a written path. The local recall entry rewinds and then puts the recalled text back into the input box (180778537); the rewind itself slices the in-memory snapshot and replaces it with no append anywhere (180776684), and the transcript file is append-only, so the recalled message's own record stays exactly as written and nothing new is written. At 2.1.258 a rewind CAN leave one positive artifact - a last-prompt line carrying leafUuid and rewound:true (166113611) - but it names the rewind event and the surviving leaf, never the recalled text, and of the six occurrences of that function name exactly one is the definition, four are call sites and one is an unrelated same-named component; only the remote/bridge rewind handler passes the flag, building {rewound:true} and handing it to both the internal-event mirror and the transcript append (179289648). In this corpus that marker has zero specimens: 0 lines carry it against 29,662 last-prompt lines on 2026-09-04. So the recalled text is never re-written, and no rewind marker exists here at all.",
+      "behavior": "Two neighbouring shapes leave no user record, and they differ in evidential standing. (a) THE QUEUE HALF is fully written: a queued text edited before dispatch never becomes a type:\"user\" record, because after slash and bash routing the REPL submit dispatcher hands every typed prompt to enqueue and, while a turn is already running, returns early as prompt_queued without constructing any message record (181580347). The admission gate pushes the admitted item onto the in-memory queue and, unless the item is marked unlogged, logs an enqueue operation; whether the value is a string decides only what is handed to the writer, so a non-string value still writes an enqueue line (162035115). The writer builds {type:\"queue-operation\", operation, timestamp, sessionId, content?, reason?} and attaches content only when a value was passed, which is what makes a contentless enqueue line possible; this is the one construction site of that literal, whose four occurrences in the binary are the compiled string pool entry, this literal, a merge-policy table mapping it to \"last-wins\" and the append routing table (162031847). Its default sink is a one-line forward that takes no branch, so every operation built there lands on the same persistence path (162029731). That forward ends in insertQueueOperation on the current session store (166122777). The store method hands the record straight to appendEntry inside trackWrite, with no filtering of its own (166106361). appendEntry switches on the record type: an \"always\" type is written straight through enqueueWrite, without the dedup-transcript uuid bookkeeping user and assistant records get (166107421). The routing table maps queue-operation to \"always\" while user, assistant, attachment and system map to dedup-transcript, so a queue line is persisted on a different policy from any message record (166067280). Two escapes take the text out of the queue without a message record: the drain logs each item, empties the queue and returns the joined text to the INPUT BOX as {text, cursorOffset, images, mode}, so an edit before resubmit mints the record from the EDITED text and the enqueued text never matches (162041220). The mid-turn fold consumes the item with reason \"absorbed_mid_turn\", the reason field the writer attaches to the remove line, and delivers it as an attachment rather than a user record (164752627). That attachment carries the text as prompt, the item's uuid as source_uuid and its mode as commandMode, and its type routes dedup-transcript in the same table, so it is persisted as an attachment line and never as type:\"user\" (165734741). So the typed text of an un-dispatched item survives as queue-operation lines, and on the fold path additionally as that attachment, never as a message record (166067280). Counting parsed type:\"queue-operation\" lines per transcript, 39 transcripts carry them: enqueue 6,924 (all with content), popAll 109 (all with content), dequeue 3,534 (none) and remove 3,273 of which 2,477 carry content (162031847). Of the enqueues, 949 are human prose (content not opening with \"<\"); whitespace-normalized against later user records in the same file, 610 match exactly (64.3 percent), 126 more match by their first 200 characters (13.3 percent, 77.6 percent combined) and 213 never match (22.4 percent), which is the share the drain-and-edit escape predicts (162041220). (b) THE ESC-RECALL HALF is a negative closed by enumeration, not a written path: the local recall entry rewinds and then refills the input box - replaceValue, setMode, setPastedContents and image-paste bookkeeping - with no appendEntry and no insert call anywhere in its body (180778472). The rewind itself slices the in-memory snapshot at the target, replaces it and resets turn and conversation state without appending anything, and the transcript file is append-only, so the recalled message's own record stays exactly as written and nothing new is written (180776684). At Claude Code 2.1.258 a rewind can leave one positive artifact, a last-prompt line carrying leafUuid and, when the caller passes it, rewound:true - a line naming the rewind and the surviving leaf, never the recalled text, since lastPrompt is the last SUBMITTED prompt (166113611). Enumerating that function name gives six occurrences: the definition, four call sites of which only the remote/bridge rewind handler at 179289648 passes the rewound flag, and one unrelated same-named component (166113611). In this corpus the marker has zero specimens: counting last-prompt lines carrying rewound:true against all last-prompt lines, 0 of 29,662 (166113611). So the recalled text is never re-written, and no rewind marker exists in this corpus at all (180776684).",
       "depends": "csift's user.unsent covers only SUPERSEDED drafts - the esc-recall and edit-resend pairs detected by a shared parentUuid (src/model/grouping.rs) - never \"every unsent message\". The queue-only class is a separate and larger set, reachable solely under the gated user.queued leaf, and csift documents the join rule and its counting basis instead of asserting a bare dispatched flag: the queue-operation line carries no join key, and roughly a fifth to a quarter of enqueued human prose never becomes a user record. A message recalled and then abandoned has no sibling and stays undetectable from the local path, which writes nothing; the version-scoped caveat is that a rewind driven through the remote/bridge handler can write a rewound:true last-prompt line, so if such a line ever appears in a corpus csift reads, that half has to be re-decided rather than re-asserted - the line names the surviving leaf, which would give csift a second instrument for abandoned branches.",
       "code": [
         {
@@ -73551,77 +73834,120 @@
           "observed": "The transcript gained the prompt's user record with promptSource typed and two attachment records, nothing else: no interrupt marker, no rewound flag, no last-prompt line carrying rewound:true. The specimen leg is closed; the producer leg stays open as a negative the binary cannot make positive.",
           "rule": "one transcript, line-diffed before and after the gesture",
           "note": "The specimen the leg named was captured, so the leg it left is the producer half alone: the recall writes nothing, which is a writer that cannot exist rather than one unfound."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "the producer leg traced to closure in the 2.1.258 binary and byte-verified against each cited offset: trigger AY - the REPL submit dispatcher hands ev @181580347; gate xn - queue admission and the !unlogged l @162035115; writer kun - the default sink binding and the q @162031847; writer FGr - the default sink @162029731",
+          "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
+          "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration.",
+          "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "PRODUCER: the first half is a negative with no positive writer. The enumeration closes it as far as this binary allows - the local recall path replaces the in-memory array and refills the input box without writing - so what remains is a writer that cannot exist rather than one not yet found; a build that introduced a recall marker would show as a rewound-bearing last-prompt line in the corpus."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "restoreMessageSync - the LOCAL esc-recall entry",
-          "offset": 180778537,
-          "excerpt": "rewindConversationTo(T,I);let oe=fhn(T);if(oe)q.replaceValue(oe.text),q.setMode(oe.mode);if(Array.isArray(T.message.content)&&T.message.content.some((ue)=>ue.type===\"image\")){let ue=T.message.content.filter((Se)=>Se.type===\"image\");if(ue.length>0){let Se={},Ce={};ue.forEach((De,Ne)=>{if(De.source.type===\"base64\"){let Fe=T.imagePasteIds?.[Ne],lt=Fe??Ne+1,tt=Fe!==void 0?Se:Ce;tt[lt]={id:lt,type:\"image\",content:De.sourc",
-          "note": "NEW hop for the first half: the local restore calls rewindConversationTo and then puts the recalled text back into the INPUT BOX (q.replaceValue), with no append anywhere on the path. Its telemetry name is repl_rewind_conversation."
-        },
-        {
-          "role": "gate",
-          "name": "rewindConversationTo - in-memory only",
-          "offset": 180776684,
-          "excerpt": "rewindConversationTo(T,I){let{session:O,transcript:q,scope:oe,store:ue,turn:Se}=this,Ce=q.getSnapshot(),Re=Ce.lastIndexOf(T);if(Re===-1)return;let Pe=Ce.slice(0,Re),Ie=Ce.slice(Re);lde(fa(),\"rewind\"),yUn(I);let Ee=UJe({keptMessages:Pe,slicedMessages:Ie,currentOverride:yc(),latchActive:vW()||xhe(),firstParty:Ca(),initialModel:qR()});if(oe.evictRewoundFileTracking(PKn(Ie)),I!==\"auto_restore_cancel\")z2(oe.memorySelector);if(s(\"tengu_conversation_rewind\",{preRewindMessageCount:Ce.length,postRewindMessageCount:Re,messagesRemoved:Ce.length-Re,rewindToMessageIn",
-          "note": "Slices the snapshot at the target and calls q.replace(kept). There is no appendEntry on this path and the transcript file is append-only, so the recalled message's own record stays on disk exactly as written and nothing new is written."
-        },
-        {
-          "role": "writer",
-          "name": "oEe - the ONE positive artifact a rewind can leave",
-          "offset": 166113611,
-          "excerpt": "oEe(e,n,r){let o=Fi();o.currentSessionLeafUuid=e??void 0,o.currentSessionLeafTs=new Date().toISOString(),await o.appendEntry({type:\"last-prompt\",...o.currentSessionLastPrompt&&{lastPrompt:o.currentSessionLastPrompt},leafUuid:e,explicit:!0,...n?.rewound&&{rewound:!0},sessionId:Q()},void 0,void 0,r)}async function c_t(e,n){let r=Fi();await r.mirrorInternalEntry({type:\"last-prompt\",...r.currentSessionLastPrompt&&{lastPr",
-          "note": "Appends a last-prompt line carrying leafUuid and, when the caller passes it, rewound:true. It does NOT carry the recalled draft's text: lastPrompt is the last SUBMITTED prompt. c_t at 166113910 builds the identical entry for the internal event mirror."
-        },
-        {
-          "role": "trigger",
           "name": "AY - the REPL submit dispatcher hands every typed prompt to the message queue",
           "offset": 181580347,
-          "excerpt": "tt.enqueue({...Wo,value:so.trim(),preExpansionValue:Wo.preExpansionValue?.trim(),...Oo&&{screeningPending:!0},...(nn||yn)&&{drainOnly:!0}}),!Oo){y(\"prompt_queued\");return}let Cn={messages:[],shouldQuery:!0},An,Do;try{let po=O.buildToolUseContext(Se,[],O.abortController??gr(),Ce);An=eb.screenedUnder(po),Do=await eb.runPromptSubmitChain({submission:{text:so.tr",
-          "note": "Second half: after slash/bash routing the submitted text goes through enqueue unconditionally; when a turn is already running the submit returns early as prompt_queued."
+          "excerpt": "tt.enqueue({...Wo,value:so.trim(),preExpansionValue:Wo.preExpansionValue?.trim(),...Oo&&{screeningPending:!0},...(nn||yn)&&{drainOnly:!0}}),!Oo){y(\"prompt_queued\");return}",
+          "note": "Queue half, entry: after slash/bash routing the submitted text goes through enqueue unconditionally, and when a turn is already running the submit returns early as prompt_queued, so no message record is constructed on this path."
         },
         {
           "role": "gate",
           "name": "xn - queue admission and the !unlogged log gate",
           "offset": 162035115,
-          "excerpt": "function xn(Br,{receipt:br=\"coalesced\"}={}){let Ts=hn(Br,br);if(!Ts.admitted)return Ts;if(d.push({...C3t(Br),priority:Br.priority??\"next\",timestamp:Br.timestamp??new Date().toISOString()}),F(),!Br.unlogged)o(\"enqueue\",typeof Br.value===\"string\"?Br.value:void 0);return J8e}function An(Br){xn(Br)}function Bn(Br){if(!hn(B",
-          "note": "The item is pushed onto the in-memory queue and, unless marked unlogged, the typed text is logged - so it reaches disk only here, as the enqueue line's content, and only when the value is a string."
+          "excerpt": "function xn(Br,{receipt:br=\"coalesced\"}={}){let Ts=hn(Br,br);if(!Ts.admitted)return Ts;if(d.push({...C3t(Br),priority:Br.priority??\"next\",timestamp:Br.timestamp??new Date().toISOString()}),F(),!Br.unlogged)o(\"enqueue\",typeof Br.value===\"string\"?Br.value:void 0);return J8e}",
+          "note": "The item is pushed onto the in-memory queue and, unless it is marked unlogged, an enqueue operation is logged. The string test selects only the argument handed to the writer, so a non-string value still logs an enqueue line, one whose content field the writer omits."
         },
         {
           "role": "writer",
-          "name": "the queue-operation line writer",
-          "offset": 162031901,
-          "excerpt": "function o(Br,br,Ts){let qi={type:\"queue-operation\",operation:Br,timestamp:new Date().toISOString(),sessionId:Q(),...br!==void 0&&{content:br},...Ts!==void 0&&{reason:Ts}};n(qi)}let d=[...e?.adopt??[]],f=Object.freeze([...d]),_=Be();PM(()=>d.filter(fh).map(wo));let v=new Set,C=new Set,I=256;function",
-          "note": "The record literal the surviving artifact is made of: {type:'queue-operation',operation,timestamp,sessionId,content?,reason?} handed to the sink."
+          "name": "kun - the default sink binding and the queue-operation record literal",
+          "offset": 162031847,
+          "excerpt": "function kun(e){let n=e?.recordOperation??FGr,r=n9e();function o(Br,br,Ts){let qi={type:\"queue-operation\",operation:Br,timestamp:new Date().toISOString(),sessionId:Q(),...br!==void 0&&{content:br},...Ts!==void 0&&{reason:Ts}};n(qi)}",
+          "note": "The queue factory binds its sink to FGr unless a recordOperation override is supplied, and o() builds the record the surviving artifact is made of: {type:'queue-operation',operation,timestamp,sessionId,content?,reason?}. content is present only when a value was passed, which is what makes a contentless enqueue line possible. This is the ONE construction site of the literal in the binary: the string \"queue-operation\" occurs four times in the whole file - the compiled string pool at 74526872, this literal at 162031935, a separate merge-policy table dts mapping it to \"last-wins\" at 166051551, and the append routing table at 166067280 - so no second writer of the record exists."
         },
         {
           "role": "writer",
-          "name": "the sink that lands the line in the session file",
+          "name": "FGr - the default sink",
           "offset": 162029731,
-          "excerpt": "FGr=(e)=>{u_t(e)},NSe={now:0,next:1,later:2};function e9e(e){return e?.kind===\"peer\"&&e.senderTaskId===void 0}function C3t(e){if(!e9e(e.origin))return e;let n=e.value;if(typeof n===\"string\"){let d=wAn(n);return d===n?e:{...e,value:d}}let r=",
-          "note": "The default sink wraps insertQueueOperation, whose appendEntry routing marks queue-operation 'always' - which is what makes 'it survives only in queue-operation lines' a write rather than an inference."
+          "excerpt": "FGr=(e)=>{u_t(e)}",
+          "note": "The default sink is a one-line forward into u_t; it takes no branch, so every queue operation built by o() lands on the same persistence path."
+        },
+        {
+          "role": "writer",
+          "name": "u_t - the sink forwards into the session store",
+          "offset": 166122777,
+          "excerpt": "async function u_t(e,n){await Fi().insertQueueOperation(e,n)}",
+          "note": "Closes the hop the claim asserted but did not show at its cited offset: the sink ends in insertQueueOperation on the current session store."
+        },
+        {
+          "role": "writer",
+          "name": "insertQueueOperation - the store method that appends",
+          "offset": 166106361,
+          "excerpt": "async insertQueueOperation(e,n){return this.trackWrite(async()=>{await this.appendEntry(e,void 0,void 0,n)})}",
+          "note": "Hands the record straight to appendEntry inside trackWrite, with no filtering of its own."
+        },
+        {
+          "role": "gate",
+          "name": "appendEntry - the per-type persistence routing switch",
+          "offset": 166107421,
+          "excerpt": "switch(vbr[e.type]){case\"always\":{this.enqueueWrite(_,e,o);return}case\"route-by-agent\"",
+          "note": "The branch that decides whether a record reaches the session file and how: an 'always' type is written straight through enqueueWrite, with none of the dedup-transcript uuid bookkeeping that user and assistant records get."
+        },
+        {
+          "role": "writer",
+          "name": "vbr - the routing table entry for queue-operation",
+          "offset": 166067280,
+          "excerpt": "\"queue-operation\":\"always\",\"marble-origami-commit\":\"always\"",
+          "note": "The table entry that makes 'the typed text survives only in queue-operation lines' a write rather than an inference. The same table maps user, assistant, attachment and system to dedup-transcript, so a queue-operation line is persisted on a different policy from any message record."
         },
         {
           "role": "gate",
           "name": "popAll - the queue drains back into the input box and mints no record",
           "offset": 162041220,
-          "excerpt": "A3t(qr.value,yo);js.push(...xs),yo+=xs.length}for(let sr of Xo){if(sr.unlogged)continue;o(\"popAll\",typeof sr.value===\"string\"?sr.value:void 0)}let si=new Set(Xo),ui=d.filter((sr)=>!si.has(sr));return d.length=0,d.push(...ui),F(),r.commandsDiscarded.emit(Xo),{text:Sc,cursorOffset:go,images:js,mode:Eo}}function ga(Br,br,Ts,qi={}){let Eo=d.filter(fh)[Br];if(!Eo",
-          "note": "Each drained item is logged, the queue is emptied and the joined text is RETURNED to the input box; nothing on this path constructs a message record, so an edit before resubmit mints a record from the EDITED text."
+          "excerpt": "A3t(qr.value,yo);js.push(...xs),yo+=xs.length}for(let sr of Xo){if(sr.unlogged)continue;o(\"popAll\",typeof sr.value===\"string\"?sr.value:void 0)}let si=new Set(Xo),ui=d.filter((sr)=>!si.has(sr));return d.length=0,d.push(...ui),F(),r.commandsDiscarded.emit(Xo),{text:Sc,cursorOffset:go,images:js,mode:Eo}}",
+          "note": "First escape: each drained item is logged, the queue is emptied and the joined text is RETURNED to the caller as {text,cursorOffset,images,mode} for the input box. Nothing on this path constructs a message record, so an edit before resubmit mints the record from the EDITED text and the enqueued text never matches."
         },
         {
           "role": "gate",
           "name": "the mid-turn fold - consume(reason:'absorbed_mid_turn')",
           "offset": 164752627,
-          "excerpt": "messageQueue.consume(rl,{reason:\"absorbed_mid_turn\"}),Eor(rl),v4e(rl,Ht.storageV5,{armUndo:!1}),Tc&&rl.some((Uc)=>Uc.mode===\"prompt\"&&!Uc.isMeta&&Uc.shouldQuery!==!1&&wR(Uc.origin)))tgt(),Kmt(Ht.setAppState);for(let Uc of rl)if(Uc.uuid)n.push(Uc.uuid),yield{type:\"command_lifecycle\",uuid:Uc.uuid,stat",
-          "note": "Items folded into a running turn are emitted as queued_command attachments and consumed with reason absorbed_mid_turn; they never become type:'user' records either - the second way enqueued text fails to match a later user record."
+          "excerpt": "messageQueue.consume(rl,{reason:\"absorbed_mid_turn\"}),Eor(rl),v4e(rl,Ht.storageV5,{armUndo:!1})",
+          "note": "Second escape: items folded into a running turn are consumed with reason absorbed_mid_turn, which is the reason field the writer above attaches to the remove line. They are delivered as attachments, not as user records."
+        },
+        {
+          "role": "writer",
+          "name": "getQueuedCommandAttachments - the queued_command attachment the fold emits",
+          "offset": 165734741,
+          "excerpt": "type:\"queued_command\",prompt:F,source_uuid:f.uuid,imagePasteIds:_.length>0?v:void 0,fileAttachments:f.fileAttachments,inlinedImagePaths:f.inlinedImagePaths,commandMode:f.mode,origin:N6(f.origin),timestamp:f.timestamp,isMeta:f.isMeta",
+          "note": "Closes the fold's writer: the queue item becomes an attachment record carrying the text as prompt, the item's uuid as source_uuid and its mode as commandMode. One of exactly two construction sites of the literal type:\"queued_command\" in the binary (the other, at 165736038, builds task-registry deliveries from o.text with a minted source_uuid). The attachment type routes dedup-transcript in the same vbr table, so it is persisted as an attachment line and never as type:\"user\"."
+        },
+        {
+          "role": "trigger",
+          "name": "restoreMessageSync - the LOCAL esc-recall entry",
+          "offset": 180778472,
+          "excerpt": "restoreMessageSync=(T,I)=>{let{_setAppState:O,draft:q}=this;this.rewindConversationTo(T,I);let oe=fhn(T);if(oe)q.replaceValue(oe.text),q.setMode(oe.mode);",
+          "note": "Negative half, entry, re-anchored at the function head. Its whole body reads as this rewind call plus draft input-box refill (replaceValue, setMode, setPastedContents) and image-paste bookkeeping, ending at handleRestoreMessage; there is no appendEntry and no insert call anywhere in it. Its telemetry name is repl_rewind_conversation."
+        },
+        {
+          "role": "gate",
+          "name": "rewindConversationTo - in-memory only",
+          "offset": 180776684,
+          "excerpt": "rewindConversationTo(T,I){let{session:O,transcript:q,scope:oe,store:ue,turn:Se}=this,Ce=q.getSnapshot(),Re=Ce.lastIndexOf(T);if(Re===-1)return;let Pe=Ce.slice(0,Re),Ie=Ce.slice(Re);lde(fa(),\"rewind\"),yUn(I);",
+          "note": "The whole body slices the snapshot at the target, calls q.replace(kept), resets turn and conversation state, emits tengu_conversation_rewind and updates app state. No appendEntry, no insert call. The transcript file is append-only, so the recalled message's own record stays on disk exactly as written and nothing new is written."
+        },
+        {
+          "role": "writer",
+          "name": "oEe - the ONE positive artifact a rewind can leave",
+          "offset": 166113611,
+          "excerpt": "oEe(e,n,r){let o=Fi();o.currentSessionLeafUuid=e??void 0,o.currentSessionLeafTs=new Date().toISOString(),await o.appendEntry({type:\"last-prompt\",...o.currentSessionLastPrompt&&{lastPrompt:o.currentSessionLastPrompt},leafUuid:e,explicit:!0,...n?.rewound&&{rewound:!0},sessionId:Q()},void 0,void 0,r)}",
+          "note": "Appends a last-prompt line carrying leafUuid and, when the caller passes it, rewound:true. It does not carry the recalled draft's text: lastPrompt is the last SUBMITTED prompt. The enumeration of oEe( stands at six occurrences - the definition here, four call sites of which only the remote/bridge rewind handler at 179289648 passes {rewound:!0}, and one unrelated same-named React component at 181325824."
         }
       ],
       "residue": [
