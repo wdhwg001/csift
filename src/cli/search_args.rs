@@ -225,12 +225,17 @@ use super::*;
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
         labels:[…], line, uuid, excerpt, tool_name, pairing, \
-        from, to, ts_utc, ts_local, queue_operation, queue_reason, refetch}, …]}: `label` is the \
-        matched dotted path, `labels` \
+        from, to, ts_utc, ts_local, queue_operation, queue_reason, refetch, refetch_uuid}, …]}: \
+        `label` is the matched dotted path, `labels` \
         the record's full label set, `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
-        when the hit is `agent.communication.*`, and `refetch` is the ready-to-run `csift show` \
-        command addressed at the RIGHT id (run it verbatim). With `--count-by <axis>` the rows are `census` \
+        when the hit is `agent.communication.*`, `refetch` is the ready-to-run `csift show` \
+        command addressed at the RIGHT id (run it verbatim), and `refetch_uuid` its \
+        uuid-addressed twin: a line number is a durable address only while the transcript \
+        is append-only, and Claude Code rewrites a live transcript in place on a stream \
+        tombstone, a local compaction rewrite and a remote-ingress resume, shifting the lines \
+        above the cut so a kept `--line` pointer resolves silently to another record; a \
+        pointer held across a live session refetches by uuid. With `--count-by <axis>` the rows are `census` \
         objects instead. The \
         id trio rides EVERY hit object too (so bare `.hits[]` flattening keeps real ids); \
         `refetch` stays the preferred single-record path. With `--siblings`, the \

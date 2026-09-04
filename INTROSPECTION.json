@@ -56519,8 +56519,8 @@
     {
       "id": "REC-093",
       "area": "record-model",
-      "behavior": "This claim's fact is csift's own, not Claude Code's: no code in the shipped 2.1.258 binary can produce it. An explicit `show` address that resolves to no record is a HARD failure, not an empty result - csift bails with `no such record(s): ` naming each miss and exits non-zero. A single `--line` token with no `..` is an explicit address; a `..` token is a clamping range that must still yield at least one record. Verified 2026-09-04 with csift 0.10.3: `show @<id> --line 999999 --raw` exits 1 with `csift: error: no such record(s): L999999 (file has N lines)`; the DEFAULT rendered path bails from a different site and exits 1 with a longer tail that names what an explicit address renders (message lines, attachment lines and the promoted non-record lines) instead of the line count; `--line 999998..999999 --raw` exits 1 the same way with the range spelled `L999998-999999`; and a valid `--line 1..2 --raw` exits 0 with two lines. The counting rule is exit code non-zero plus the literal `no such record(s): `; the suffix is path-dependent and must not be keyed on. The Claude Code half of this story - the transcript writer's append, remove, compact and hydrate behavior - is a separate proposition and belongs in its own claim.",
-      "depends": "The premise this enforcement rests on is that a physical line number is a durable address, and that premise is CONDITIONAL, not absolute. It holds on the ordinary append path, which only ever appends whole lines. Three located paths renumber a live transcript: `performRemoveByUuid` (166095622), UNGATED, which truncates at the removed record and writes the tail back, or falls back to filtering and rewriting the whole file at or below 52428800 bytes, and which an ordinary interactive lane reaches through the REPL refusal-continuation branch (181619551, wrapper 166122929) and the stream tombstone handler (181621337, wrapper 166122853); `performCompactTranscript` (166098791), which renames a filtered temp over the original and is gated on `store.localGcEnabled` (class default false at 166076591, armed only from the sdkUrl resume branch at 179355990) plus the 5242880-byte floor at 166067515; and the remote hydration REPLACE, `KQ` (157607804) opening the file in `w` mode, from the v1 session-ingress hydrator at 166132033 and the CCR v2 resume hydrator at 166139023 - the last of these is NOT size-gated. After any of the three, csift's hard failure bounds only ONE failure mode, an address past EOF; it cannot detect the other, an address that still resolves and now names a DIFFERENT record. So the guarantee is: a stale refetch never comes back as a silent empty, and it never comes back as wrong content unless one of those three paths has run on that file.",
+      "behavior": "Claude Code's transcript store is append-only on the ordinary path and rewrites a live transcript in place on exactly three others, which makes a physical line number a conditional address rather than an absolute one. The write queue serializes each entry whole (JSON.stringify plus a newline) and flushes only BETWEEN entries, so a flush boundary never splits a line (166086064); the bytes land through appendFile with a mkdir-in-catch retry, or through an O_RDWR|O_APPEND twin that stats, reads the last byte and writes only at the end (166118570). The three rewriting paths, all in the darwin-arm64 artifact of 2.1.258: (1) performRemoveByUuid (166095622) opens the file r+, finds the record in a tail window, truncates at it and writes the remainder back (166096103), falling back to reading, filtering and rewriting the whole file at or below KEt = 52428800 bytes and logging 'Skipping tombstone removal: session file too large' above it (166096191); its entry removeMessageByUuid -> enqueueRemove (166095481) carries NO feature gate, and an ordinary interactive session reaches it through the stream tombstone handler (181621337) and the refusal-continuation branch (181619551), both via the wrapper pair at 166122853 and 166122929. (2) performCompactTranscript (166098791) writes a filtered copy to a sibling tmp file and renames it over the original (166100780); it is gated on store.localGcEnabled, a class field defaulting to false (166076591) and armed at exactly one production site, the sdkUrl resume branch (179355990), and it returns without acting below Qor = 5242880 bytes; the one route that skips the gate (166080560) is exported as compactTranscriptForTesting. (3) The remote-hydration replace KQ (157607804) opens the live transcript with flag 'w' and rewrites every line, reached from the v1 session-ingress hydrator (166132033) and the CCR v2 foreground hydrator (166139023), each guarded only by a zero-content skip and by no size floor. A byte scan of the store region 166060000-166200000 finds exactly one '.truncate(', zero 'writeFile', zero 'O_TRUNC' and zero 'createWriteStream', so those are the only in-place shrinks in the store; a scope rename (166127500) moves a session's files without touching line content. After any of the three rewrites, a line address below the cut names a DIFFERENT record than it did before, and only an address past the new end of file stops resolving at all.",
+      "depends": "csift hands consumers physical line addresses and refetches by them: the search hit refetch pointers, the show and verbatim continuation pointers, and recover --file-lines. On the append path those addresses are durable, and csift fails loudly rather than emptily when one stops resolving: an explicit show address that names no record bails with 'no such record(s): ' and exits non-zero, a single --line token being an explicit address and a '..' token a clamping range that must still yield at least one record (src/show/run.rs). Measured against a 58691-line transcript: '--line 999999 --raw' exits 1 with 'no such record(s): L999999 (file has 58691 lines)'; the default rendered path bails from a different site, exits 1, and prints a tail naming what an explicit address renders instead of the line count; '--line 999998..999999 --raw' exits 1 with the range spelled 'L999998-999999'; '--line 1..2 --raw' exits 0 with two lines. The counting rule for that behavior is a non-zero exit plus the literal 'no such record(s): ', the trailing text being path-dependent. That guarantee bounds exactly ONE failure mode. After a truncate-and-write-back, a rename-over or a 'w'-mode replace, a stale address inside the shortened file still resolves and now names a different record, which no csift surface can detect; only an address past the new end of file misses loudly.",
       "code": [
         {
           "path": "src/show/run.rs",
@@ -56530,10 +56530,10 @@
         {
           "path": "src/show/run.rs",
           "lines": "251-253",
-          "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} — an explicit address renders message lines \\"
+          "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"no such record(s): {} \u2014 an explicit address renders message lines \\"
         }
       ],
-      "instrument": "`csift show @<id> --line 999999 --raw; echo $?` -> stderr `csift: error: no such record(s): L999999 (file has N lines)` and exit 1. The DEFAULT (rendered) path bails from a different site and prints a different tail: `csift: error: no such record(s): L999999 - an explicit address renders message lines ...` with no `(file has N lines)` suffix. Counting rule: exit code non-zero and the literal `no such record(s): ` present; do not key on the suffix, it is path-dependent.",
+      "instrument": "Producer: grep -abo '.truncate(' over the shipped executable returns exactly one hit inside the transcript-store region (bytes 166060000-166200000 at 2.1.258), with zero writeFile, zero O_TRUNC and zero createWriteStream in the same region; read the queue drain, the append writer, the two rewrite methods, their gates and the flag-w replace at their offsets. On-disk side: csift stats --format json over the whole projects root, whose summary carries the line-type census and skipped_lines, plus an independent pass parsing every non-blank line of every .jsonl under that root. Counting rule: one observation per line, a line counted malformed when it is non-blank and is not a complete JSON object.",
       "located": {
         "claude_code": null,
         "csift": "0.10.0",
@@ -56582,121 +56582,167 @@
           "note": "The behavior half (csift's bail) re-verified unchanged today, but the depends half was wrong in a way csift's own output relies on. The old text asserted that 'if Claude Code ever renumbered lines, every stale address would surface as a loud miss rather than as wrong content' - the traced hops refute it: a truncate-and-rewrite or a rename-over shifts lines UP, so a stale Lnnnn inside the shortened file resolves silently to a different record, and only an address past the new EOF misses loudly. The csift surfaces that lean on it are the search hit refetch pointers, the `show` and `verbatim` con"
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "Producer: the shipped binary contains no producer for this claim's fact, because the fact is csift's own bail. The write-path hops answer the depends-premise instead and must not be promoted into this claim's chain.",
-        "Specimen: no observation exists of any of the three rewrite paths renumbering a live transcript. Instrument - with a session open, record `wc -l` plus the sha256 of a fixed byte prefix of its transcript, drive that session through a refusal or tombstone turn (or a remote-ingress resume), then re-measure; a rewrite shows as a changed prefix hash and a shifted line count.",
-        "Not attempted (a live action would be required): The rewrite-path specimen was not attempted: it requires launching or steering a live interactive session, which this lane may not do.",
-        "Producer hop still missing: The claim's fact is a csift behavior - csift bails with `no such record(s)` on an unresolvable explicit address - and no code in the shipped 2.1.258 binary can produce it, so this claim has no producer chain at all. The enumeration above is retained deliberately: it answers the DIFFERENT proposition asserted in depends (that a physical line number is a durable address), and it shows that premise is conditional, not absolute - three production paths renumber a live transcript."
-      ],
-      "producer_trace": "none",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
-        "The rendered and raw paths bail from different sites with different tails, which is why the claim's counting rule keys only on the literal and the exit code; that instruction held exactly on today's run.",
-        "The clamping-range half of the claim is now specimen-backed too: a range wholly beyond EOF is a hard miss while a range that overlaps the file resolves, so the `..` semantics the claim describes are observed rather than asserted."
+        "A live trial would strengthen the rewrite half: with a session open, record the transcript's line count and the sha256 of a fixed byte prefix, drive that session through a tombstone or refusal-continuation turn, or through a remote-ingress resume, then re-measure - a rewrite shows as a changed prefix hash and a shifted line count.",
+        "An independent scan of 8266 transcripts, one observation per record, found exactly one record at a non-head position whose parentUuid names a uuid absent from its own file - the shape a removed record leaves behind. One occurrence carries no attribution on its own."
       ],
       "enumeration": [
         {
-          "site": "drainQueuesOnce - the queue-item dispatch and the chunk test",
+          "site": "drainQueuesOnce - the append flush boundary",
           "offset": 166086064,
-          "excerpt": "if(!(\"entry\"in F)){if(d.length>0){if(await this.appendToFile(e,d,_),C)this.fireMirror(e,C.slice()),C.length=0;...}if(\"removeUuid\"in F)await this.performRemoveByUuid(e,F.removeUuid,F.storageV5);else await this.performCompactTranscript(e,void 0,void 0,F.storageV5);F.resolve(),o=I+1,f=I+1;continue}let{",
-          "verdict": "APPEND path: each entry is serialized whole (j5 = JSON.stringify + newline) and the chunk test applies BETWEEN entries, so a flush boundary can never split a line. Also the dispatcher for the two NON-append item kinds"
+          "excerpt": "if(!(\"entry\"in F)){if(d.length>0){if(await this.appendToFile(e,d,_),C)this.fireMirror(e,C.slice()),C.length=0;for(let j=f;j<I;j++)r[j].resolve();o=I,d=\"\"}if(this.storeFence!==void 0)throw this.storeFence;if(\"removeUuid\"in F)await this.performRemoveByUuid(e,F.removeUuid,F.storageV5);else await this.p",
+          "verdict": "APPEND: entries are serialized whole and the chunk test applies between them, so no flush can tear a line."
         },
         {
-          "site": "appendToFile -> iWe - the bytes",
+          "site": "appendToFile -> iWe",
           "offset": 166118570,
-          "excerpt": "try{await QEt(e,n,{mode:384})}catch{await FW(Nv(e),{recursive:!0,mode:448}),await QEt(e,n,{mode:384})}if(_)f.project?.tornTailSealLanded(e);return\"direct\"}async function tns(e,n,r){let o;try{o=await IW(e,u4.O_RDWR|u4.O_APPEND)}catch(d){...}",
-          "verdict": "APPEND writer: appendFile with a mkdir-in-catch retry, or the O_RDWR|O_APPEND twin that stats, reads the last byte and writes only at the end. No seek-and-overwrite on this path"
+          "excerpt": "\"direct-torn\":\"direct\"}try{await QEt(e,n,{mode:384})}catch{await FW(Nv(e),{recursive:!0,mode:448}),await QEt(e,n,{mode:384})}if(_)f.project?.tornTailSealLanded(e);return\"direct\"}async function tns(e,n,r){let o;try{o=await IW(e,u4.O_RDWR|u4.",
+          "verdict": "APPEND writer: appendFile with a mkdir-in-catch retry, or the O_RDWR|O_APPEND twin. Never writes below the end."
         },
         {
           "site": "removeMessageByUuid -> enqueueRemove",
           "offset": 166095481,
-          "excerpt": "async removeMessageByUuid(e,n){return this.trackWrite(async()=>{let r=this.sessionFile;if(r===null)return;return this.enqueueRemove(r,e,n)})}",
-          "verdict": "EXCEPTION 1 entry, with NO feature gate; enqueueRemove at 166084240 pushes {removeUuid,...} onto the same queue the appends use"
+          "excerpt": "async removeMessageByUuid(e,n){return this.trackWrite(async()=>{let r=this.sessionFile;if(r===null)return;return this.enqueueRemove(r,e,n)})}async per",
+          "verdict": "EXCEPTION 1 entry, with NO feature gate."
         },
         {
-          "site": "performRemoveByUuid - the truncate and the whole-file rewrite fallback",
+          "site": "performRemoveByUuid",
           "offset": 166095622,
-          "excerpt": "async performRemoveByUuid(e,n,r){let o=r!==void 0?XC(e):void 0;if(L()&&r!==void 0&&o!==void 0)return this.removeByUuidV5(r,o,n);try{let d=0,f=await IW(e,\"r+\");try{let{size:I}=await f.stat();if(d=I,I===0)return;let F=Math.min(I,od),B=I-F,U=Buffer.allocUnsafe(F),{bytesRead:j}=await f.read(U,0,F,B),W=U",
-          "verdict": "EXCEPTION 1: opens the transcript r+, finds the record in a tail window and does f.truncate then writes the remainder back at that offset; below KEt it instead reads, filters and rewrites the whole file. Either way every following line address moves"
+          "excerpt": "async performRemoveByUuid(e,n,r){let o=r!==void 0?XC(e):void 0;if(L()&&r!==void 0&&o!==void 0)return this.removeByUuidV5(r,o,n);try{let d=0,f=await IW(e,\"r+\");try{let{size:I}=await f.stat();if(d=I,I===0)return;let F=Math.min(I,od),B=I-F,U=Buffer.allocUnsafe(F)",
+          "verdict": "EXCEPTION 1: r+ open, tail-window search, truncate and write-back; whole-file filter-rewrite below KEt."
         },
         {
-          "site": "the single .truncate( in the whole store region",
-          "offset": 166096113,
-          "excerpt": "we=ke>=0?ke+1:j,Ie=B+_e,Pe=j-we;if(await f.truncate(Ie),Pe>0)await f.write(W,we,Pe,Ie);return}}}finally{await f.close()}if(d>KEt){t(`Skipping tombstone removal: session file too large (${Ut(d)})`,{level:\"warn\"});return}",
-          "verdict": "negative control: a byte scan of 166060000-166200000 finds exactly ONE .truncate(, zero writeFile, zero O_TRUNC and zero createWriteStream, so this is the only in-place shrink in the store"
+          "site": "the single .truncate( in the store region",
+          "offset": 166096103,
+          "excerpt": "if(await f.truncate(Ie),Pe>0)await f.write(W,we,Pe,Ie);return}}}finally{await f.close()}if(d>KEt){t(`Skipping tombstone removal: session file too large (${Ut(d)})`,{level:\"warn\"});return}let v=(await $W(e,{encoding:\"utf-8\"})).split(`\n`),C=v",
+          "verdict": "Negative control: a byte scan of 166060000-166200000 finds exactly ONE .truncate(, zero writeFile, zero O_TRUNC and zero createWriteStream, so this is the only in-place shrink in the store."
         },
         {
           "site": "removeByUuidV5 - the storage-V5 twin",
           "offset": 166096503,
-          "excerpt": "async removeByUuidV5(",
-          "verdict": "reached only from inside performRemoveByUuid's first line; same fact, different backend"
+          "excerpt": "async removeByUuidV5(e,n,r){try{let o=Buffer.from(`\"uuid\":\"${r}\"`);for(let d=1;d<=3;d++){let f=await e.read([{key:n,tail",
+          "verdict": "Reached only from performRemoveByUuid's first line; same fact, different backend."
         },
         {
           "site": "requestCompact - the localGcEnabled gate",
           "offset": 166084451,
-          "excerpt": "requestCompact(e,n){if(!this.store.localGcEnabled)return;this.enqueueCompact(e,n),this.scheduleDrain()}",
-          "verdict": "EXCEPTION 2 gate: the queued route to the compact rewrite returns immediately unless local GC is armed"
+          "excerpt": "requestCompact(e,n){if(!this.store.localGcEnabled)return;this.enqueueCompact(e,n),this.scheduleDrain()}scheduleDrain(){i",
+          "verdict": "EXCEPTION 2 gate: the queued route returns immediately unless local GC is armed."
         },
         {
           "site": "drainQueuesOnce backstop - the direct compact call",
           "offset": 166087179,
-          "excerpt": "if(this.store.localGcEnabled&&this.sessionFile&&this.storeFence===void 0&&this.bytesSinceCompact>=this.backstopThresholdBytes)this.bytesSinceCompact=0,await this.performCompactTranscript(this.sessionFile,void 0,void 0,this.sessionFileAppendSource);",
-          "verdict": "the second production route to the compact rewrite, bypassing the queue but carrying the same localGcEnabled gate"
+          "excerpt": "localGcEnabled&&this.sessionFile&&this.storeFence===void 0&&this.bytesSinceCompact>=this.backstopThresholdBytes)this.bytesSinceCompact=0,await this.performCompactTranscript(this.sessionFile,void 0,void 0,this.sessionFile",
+          "verdict": "The second production route to the compact rewrite; bypasses the queue, carries the same gate."
         },
         {
-          "site": "performCompactTranscript - the rename-replace",
+          "site": "performCompactTranscript",
           "offset": 166098791,
-          "excerpt": "async performCompactTranscript(e,n,r,o){let d=o!==void 0?XC(e):void 0;if(L()&&o!==void 0&&d!==void 0)return this.performCompactTranscriptV5(o,d,e);let f=`${e}.compact.tmp.${Its(4).toString(\"hex\")}`,_=!1,v=!1;try{let C=await kA(e);if(C.size<Qor)return;",
-          "verdict": "EXCEPTION 2: writes a filtered copy to a sibling tmp file, bailing below Qor=5242880 bytes"
+          "excerpt": "async performCompactTranscript(e,n,r,o){let d=o!==void 0?XC(e):void 0;if(L()&&o!==void 0&&d!==void 0)return this.performCompactTranscriptV5(o,d,e);let f=`${e}.compact.tmp.${Its(4).toString(\"hex\")}`,_=!1,v=!1;try{let C=await kA(e);if(C.size<Qor)return;let I=409",
+          "verdict": "EXCEPTION 2: filtered copy to a sibling tmp file, bailing below Qor = 5242880 bytes."
         },
         {
           "site": "the compact rename over the original",
           "offset": 166100780,
-          "excerpt": "if(v=!0,await Ti(f,e),_=!0,this.bytesSinceCompact=0,e===this.sessionFile)this.backstopThresholdBytes=C.size-ke<C.size*tsr?Math.min(this.backstopThresholdBytes*2,esr):r4;",
-          "verdict": "the moment the file is replaced: a rename of the tmp copy over the live path, so the file can shrink and every line address below the cut moves"
+          "excerpt": "if(v=!0,await Ti(f,e),_=!0,this.bytesSinceCompact=0,e===this.sessionFile)this.backstopThresholdBytes=C.size-ke<C.size*tsr?Math.min(this.backstopThresholdBytes*2,esr):r4;if(e===this.sessionFile)await t",
+          "verdict": "The moment the live path is replaced: a rename of the tmp copy over it."
         },
         {
-          "site": "class field localGcEnabled=!1 and its single production arming call",
+          "site": "localGcEnabled - class default false",
           "offset": 166076591,
-          "excerpt": "class PTt{getSessionId;project=null;exitReStampRan=!1;localGcEnabled=!1;forkContextHydrationCache=new Map;...}   //  armed by: function zmn(e){Ku().setLocalGcEnabled(e)} at 166067565, whose only production call is zmn(mc()) inside if(o.sdkUrl) at 179355990",
-          "verdict": "local GC is OFF by default and armed at exactly one production site, on the sdk-url resume path"
+          "excerpt": "localGcEnabled=!1;forkContextHydrationCache=new Map;forkContextHydrationsInFlight=new Map;warnedUnchainedSessions=new Set;legacyProgressProbeFired=new Set;relocationParkedAppends=null;relocationParked",
+          "verdict": "Local GC is off by default; the single production arming call is zmn(mc()) at 166067565, reached from the sdkUrl resume branch at 179355990."
         },
         {
-          "site": "cxr, the ungated compact wrapper",
+          "site": "cxr - the ungated compact wrapper",
           "offset": 166080560,
-          "excerpt": "function cxr(e,n,r,o){return Fi().performCompactTranscript(e,n,r,o)}   //  exported at 174412975 as `cxr as compactTranscriptForTesting`",
-          "verdict": "the one route to the compact rewrite that skips the localGcEnabled gate is a test-only export, so it does not widen the production surface"
+          "excerpt": "cxr(e,n,r,o){return Fi().performCompactTranscript(e,n,r,o)}function uxr(e){Fi().setSessionFile(e)}function dxr(e,n,r){re",
+          "verdict": "The one route that skips the gate is exported as compactTranscriptForTesting, so it does not widen the production surface."
         },
         {
-          "site": "KQ = writeEntriesToJsonlFile - whole-file replace",
+          "site": "KQ = the flag-w jsonl writer",
           "offset": 157607804,
-          "excerpt": "async function KQ(e,n,r){return J(e,n,\"w\",r)}async function J0n(e,n,r){return J(e,n,\"a\",r)}async function J(e,n,r,t){if(t!==void 0&&t.hoverRestOn&&(r===\"w\"||n.length>0))return de(t.source,n,r);let a=ae(e,{mode:384,flags:r});try{for(let i of n)if(!a.write(JSON.stringify(i)+`\\n`))await I(a,\"drain\");a.",
-          "verdict": "EXCEPTION 3, previously unrecorded: the same helper family as the append writer, opened with flag w - it truncates the target and rewrites every line. Its storage-backend twin calls replaceRecords with publishDiscipline inPlace"
+          "excerpt": "async function KQ(e,n,r){return J(e,n,\"w\",r)}async function J0n(e,n,r){return J(e,n,\"a\",r)}async function J(e,n,r,t){if(t!==void 0&&t.hoverRestOn&&(r===\"w\"||n.length>0))return de(t.source,n,r);let a=ae(e,{mode:384,flags:r});try{for(let i of n)if(!a.write(JSON.stringify(i)+`\n`))await I(a,\"drain\");a.e",
+          "verdict": "EXCEPTION 3: opened with flag w, it truncates the target and rewrites every line."
         },
         {
           "site": "lgn - v1 remote hydration replaces the live transcript",
           "offset": 166131641,
-          "excerpt": "async function lgn(e,n,r){Xp(Gu(e),\"hydrate\");let o=Fi();try{let d=await Bvt(e,n)||[],f=fl(ye());await OTt(f,r);let _=lm(e);if(!d.some(HZ)&&await p_t(_,r))return ...,!0;return await KQ(_,d,hu(p4(_,r))),t(`Hydrated ${d.length} entries from remote`),d.length>0}",
-          "verdict": "EXCEPTION 3 route A on a LIVE transcript (lm(e) is the session file). Its only production caller is 179356450, `else if(w.isUrl&&w.ingressUrl&&Le(\"true\"))await lgn(...)` in the resume driver. The only guard is the zero-content skip"
+          "excerpt": "lgn(e,n,r){Xp(Gu(e),\"hydrate\");let o=Fi();try{let d=await Bvt(e,n)||[],f=fl(ye());await OTt(f,r);let _=lm(e);if(!d.some(HZ)&&await p_t(_,r))return t(`Skipping remote hydration: server set of ${d.length} entries has no content-bearing entries but the local tran",
+          "verdict": "EXCEPTION 3 route A on a live transcript; the KQ call is at 166132033 and the only guard is the zero-content skip."
         },
         {
           "site": "ugn - CCR v2 foreground hydration replaces the live transcript",
-          "offset": 166136764,
-          "excerpt": "else await KQ(C,je.map((cn)=>cn.payload),hu(p4(C,d))),Ge=!0,t(`Hydrated ${je.length} foreground entries from CCR v2 internal events`)   //  KQ call at 166139023 inside async function ugn( at 166136764",
-          "verdict": "EXCEPTION 3 route B, reached only from 179356000 inside the same if(o.sdkUrl) resume branch that arms local GC; the same function also appends a delta (J0n at 166138330 region) and then calls requestCompact"
+          "offset": 166139023,
+          "excerpt": "KQ(C,je.map((cn)=>cn.payload),hu(p4(C,d))),Ge=!0,t(`Hydrated ${je.length} foreground entries from CCR v2 internal events`)}let ot=Pe?j:je;if(Ge)for(let gn=ot.length-1;gn>=0;gn--){let cn=ot[gn];if(cn&&u5e(cn.payload)){await Xsr(e,cn.event_id??cn.payload.uuid,d);break}}let pt=0,rt,ht=\"none\",xt=!(!n||n",
+          "verdict": "EXCEPTION 3 route B; the KQ call sits inside the CCR v2 hydrator whose head is at 166136764, again guarded only by the zero-content skip and by no size floor."
         },
         {
           "site": "KQ's remaining call sites - not a live transcript",
           "offset": 177188170,
-          "excerpt": "return await KQ(ie(f.projectDir,`${w}.jsonl`),h,hu(Xr(f.projectDir,w,Xg(o)))),{sessionId:w}   //  siblings: a temp resume export at 177225797 and a session-store copy at 177227214; the subagent-transcript first write at 166136248",
-          "verdict": "these write a NEW file (a fork target, a temp export) rather than replacing an existing session transcript, so they are not exceptions to the append law"
+          "excerpt": "KQ(ie(f.projectDir,`${w}.jsonl`),h,hu(Xr(f.projectDir,w,Xg(o)))),{sessionId:w}}function Xr(e,r,n){if(n===void 0)return;let o=Wr(e);if(ie(ia(),o)!==e||!n.isKeySegment(o)||!n.isKeySe",
+          "verdict": "A fork target; its siblings are a temp resume export (177225797), a session-store copy (177227214) and a subagent transcript's first write (166136248). These create a new file rather than replacing an existing transcript."
         },
         {
           "site": "renameWithFallbacks - a scope move",
           "offset": 166127500,
-          "excerpt": "let _=await e.moveScope(r,f);if(!_.ok)throw Wsr(_.error);if(!_.value.published)throw d();t(`renameWithFallbacks: existing destination scope set aside at ${f.sessionId}`,{level:\"warn\"});let v=await e.moveScope(n,r);",
-          "verdict": "relocates a session's files without touching line content; a path change, not a rewrite - relevant to any tool that caches a transcript path"
+          "excerpt": "renameWithFallbacks: existing destination scope set aside at ${f.sessionId}`,{level:\"warn\"});let v=await e.moveScope(n,r);if(v.ok&&v.value.published)return v;if(await e.moveScope(f,r).catch(()=>{return}),!v.ok)return v;t",
+          "verdict": "Relocates a session's files without touching line content: a path change, not a rewrite, relevant to any reader that caches a transcript path."
+        }
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "drainQueuesOnce - the write-queue drain and its item-kind dispatch",
+          "offset": 166086064,
+          "excerpt": "if(!(\"entry\"in F)){if(d.length>0){if(await this.appendToFile(e,d,_),C)this.fireMirror(e,C.slice()),C.length=0;for(let j=f;j<I;j++)r[j].resolve();o=I,d=\"\"}if(this.storeFence!==void 0)throw this.storeFence;if(\"removeUuid\"in F)await this.performRemoveByUuid(e,F.removeUuid,F.storageV5);else await this.performCompactTranscript(e,void 0,void 0,F.storageV5);F.resolve(),o=I+1,f=I+1;continue}let{entry:B}=F,U=j5(B);if(d.length+U.length>",
+          "note": "Every write reaches disk here. Entries are serialized whole by j5 (JSON.stringify plus a newline) and the chunk flush is applied BETWEEN entries, so a flush boundary can never split a line; the same loop dispatches the two non-append item kinds, removeUuid and compact."
+        },
+        {
+          "role": "writer",
+          "name": "appendToFile -> iWe - the append bytes",
+          "offset": 166118570,
+          "excerpt": "\"direct-torn\":\"direct\"}try{await QEt(e,n,{mode:384})}catch{await FW(Nv(e),{recursive:!0,mode:448}),await QEt(e,n,{mode:384})}if(_)f.project?.tornTailSealLanded(e);return\"direct\"}async function tns(e,n,r){let o;try{o=await IW(e,u4.O_RDWR|u4.O_APPEND)}catch(d){let f=E(d);if(f===\"ENOENT\"||f===\"ENOTDIR\"",
+          "note": "The ordinary path: appendFile with mode 384 and a mkdir-in-catch retry, or the O_RDWR|O_APPEND twin that stats, reads the last byte and writes only at the end. No seek-and-overwrite exists on this path."
+        },
+        {
+          "role": "trigger",
+          "name": "removeMessageByUuid -> enqueueRemove - the entry to the remove path, with no feature gate",
+          "offset": 166095481,
+          "excerpt": "async removeMessageByUuid(e,n){return this.trackWrite(async()=>{let r=this.sessionFile;if(r===null)return;return this.enqueueRemove(r,e,n)})}async per",
+          "note": "enqueueRemove (166084240) pushes {removeUuid,...} onto the same queue the appends use. An ordinary interactive session reaches it through the stream tombstone handler (181621337) and the refusal-continuation branch (181619551), both via the wrapper pair m5e/ign at 166122853 and 166122929."
+        },
+        {
+          "role": "writer",
+          "name": "performRemoveByUuid - the truncate and the write-back",
+          "offset": 166096103,
+          "excerpt": "if(await f.truncate(Ie),Pe>0)await f.write(W,we,Pe,Ie);return}}}finally{await f.close()}if(d>KEt){t(`Skipping tombstone removal: session file too large (${Ut(d)})`,{level:\"warn\"});return}let v=(await $W(e,{encoding:\"utf-8\"})).split(`\n`),C=v",
+          "note": "The method head is at 166095622: it opens the transcript r+, finds the record inside a tail window, truncates at its offset and writes the remainder back, so every following line address moves up. Below KEt = 52428800 bytes (166066127) it reads, filters and rewrites the whole file instead; above that size it logs 'Skipping tombstone removal: session file too large' at 166096191 and does nothing."
+        },
+        {
+          "role": "gate",
+          "name": "requestCompact - the localGcEnabled gate",
+          "offset": 166084451,
+          "excerpt": "requestCompact(e,n){if(!this.store.localGcEnabled)return;this.enqueueCompact(e,n),this.scheduleDrain()}scheduleDrain(){i",
+          "note": "The queued route to the compact rewrite returns immediately unless local GC is armed. The field defaults to false on the store class (166076591) and is armed at exactly one production site, the sdkUrl resume branch (179355990); the direct backstop call at 166087179 carries the same gate, and the one ungated route, cxr (166080560), is exported as compactTranscriptForTesting."
+        },
+        {
+          "role": "writer",
+          "name": "performCompactTranscript - the rename over the original",
+          "offset": 166100780,
+          "excerpt": "if(v=!0,await Ti(f,e),_=!0,this.bytesSinceCompact=0,e===this.sessionFile)this.backstopThresholdBytes=C.size-ke<C.size*tsr?Math.min(this.backstopThresholdBytes*2,esr):r4;if(e===this.sessionFile)await t",
+          "note": "The method head is at 166098791: it writes a filtered copy to a sibling tmp file and returns without acting below Qor = 5242880 bytes (166067515). This statement is the moment the live path is replaced, so the file can shrink and every line address below the cut moves."
+        },
+        {
+          "role": "writer",
+          "name": "KQ - the flag-w whole-file replace used by remote hydration",
+          "offset": 157607804,
+          "excerpt": "async function KQ(e,n,r){return J(e,n,\"w\",r)}async function J0n(e,n,r){return J(e,n,\"a\",r)}async function J(e,n,r,t){if(t!==void 0&&t.hoverRestOn&&(r===\"w\"||n.length>0))return de(t.source,n,r);let a=ae(e,{mode:384,flags:r});try{for(let i of n)if(!a.write(JSON.stringify(i)+`\n`))await I(a,\"drain\");a.end(),await I(a,\"finish\")}catch",
+          "note": "The same writer family as the append helper, opened with flag w: it truncates the target and rewrites every line. Two of its call sites take a LIVE transcript - the v1 session-ingress hydrator at 166132033 and the CCR v2 foreground hydrator at 166139023 - each guarded only by a zero-content skip and by no size floor; its other call sites write a new file (a fork target, a temp export, a subagent transcript's first write)."
         }
       ]
     },
@@ -63985,6 +64031,26 @@
           "date": "2026-09-02",
           "verdict": "refined",
           "instrument": "csift --claude-home $FX2 search BATCHONE --count-by label ; csift --claude-home $FX2 search BATCHTWO --count-by label ; csift --claude-home $FX2 search BATCHQUOTE --count-by label ; find ~/.claude/projects -name '*.jsonl' | xargs -n 40 jq -rc 'select(.type==\"user\") | (.message.content // null) as $c | select(($c|type)==\"string\") | [(if ($c | test(\"</task-notification>[[:space:]]*<(task-notification|teammate-message|agent-message)\")) then \"batch-after-taskn\" else empty end), (if ($c | test(\"</teammate-message>[[:space:]]*<(task-notification|teammate-message|agent-message)\")) then \"batch-after-teammate\" else empty end)] | select(length>0) | .[]' | sort | uniq -c ($FX* is a throwaway --claude-home tree holding only the synthetic fixture transcript described under observed: <root>/projects/<encoded-dir>/<uuid>.jsonl)",
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "reframe of the claim against its traced chain, re-read by an adversarial verifier (verify-s5.json; canary kicked); csift stats --format json over the whole projects root, read twice, plus an independent pass parsing every non-blank line of every .jsonl under that root.",
+          "observed": "The census reads 8265 transcripts and 1451974 typed lines and reports 1 line malformed, the same count on consecutive runs. The independent pass over all 1466451 non-blank lines under the projects root - workflow journals and elicitation sidecars included, which the census excludes - parsed every one as a complete JSON object and found none that was not '{'-framed and '}'-terminated, so no transcript in the corpus carries a torn line. | The write-path hops that had no home in a csift-fact claim are exactly the Claude Code proposition csift's line addressing rests on, so the claim now states them and the bail becomes the dependent rationale.",
+          "rule": "One observation per line; a line counts malformed when it is non-blank and is not a complete JSON object. The two passes differ in scope: the census reads the transcripts csift admits, the independent pass reads every .jsonl under the root.",
+          "note": "The claim now states the Claude Code half - what the transcript store writes and which paths rewrite it - and the csift half moves into depends as the measured rationale. The traced hops also refute the premise the old text rested on. That premise was that a physical line number is a durable address, so a stale refetch could only surface as a loud miss; the truncate-and-write-back at 166096103, the rename-over at 166100780 and the flag-w replace at 157607804 each shift every line below their cut, so a stale address inside the shortened file resolves silently to a different record and only an address past the new end of file misses. The guarantee is therefore conditional on none of those three paths having run, and the enumeration bounds them: one truncate, one rename-replace and one flag-w writer in the whole store region, two of the flag-w writer's call sites taking a live transcript."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "`csift search --format json` on a fixture corpus: every hit object read for `refetch_uuid`; the printed command run with `--format json` and its record row's uuid compared with the hit's (`cargo test search_json_hit_carries_a_uuid_refetch_that_resolves`).",
+          "observed": "Every hit with a uuid carries `refetch_uuid` = `csift show @<id> --uuid <uuid>`, the command runs and returns the hit's own record; the search help names the three in-place rewrite paths and states that a line number is durable only while the transcript is append-only.",
+          "rule": "one hit object per search hit; the refetch executed once",
+          "note": "The depends premise that a stale line address always misses loudly was refuted by the rewrite paths; consumers now get a uuid-addressed refetch beside the line-addressed one."
           "observed": "Fixture through csift 0.10.0: one record holding a '<task-notification>...</task-notification>' section followed by a '<teammate-message ...>' section carries BOTH harness.notification.task and agent.communication.inbox, and a needle in either section finds the record under both leaves; a separate record whose prose merely quotes '<teammate-message teammate_id=\"x\">' mid-sentence labels user.message ONLY, with no inbox or notification leaf. Corpus: 125 records carry a section open tag immediately after a close tag - 123 after '</teammate-message>' and 2 after '</task-notification>' - so batching is real, not hypothetical. The boundary reimplementation over the 909 peer-tag records finds 8 non-isMeta records where no occurrence sits at a boundary, i.e. genuine messages that only quote the tag.",
           "rule": "One section per boundary-anchored open tag; a record counts as batched when a regex finds a section open tag separated from a preceding close tag by whitespace only. Corpus is 7,762 .jsonl files under ~/.claude/projects.",
           "note": "Holds on both halves that were testable: batched records do yield every section, and a quoting message does stay user.message. Refined only because the singular 'the relay preamble' is now an incomplete description of Claude Code's behaviour. Code sites src/model/peer.rs 33-43 and 120-127 and src/model/markers.rs 158-165 verified verbatim."

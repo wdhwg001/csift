@@ -409,6 +409,20 @@ pub(crate) fn refetch_json(session_id: &str, h: &Hit) -> serde_json::Value {
     }
 }
 
+/// The uuid-addressed twin of [`refetch_json`] (v0.10.5, ledger REC-093): a physical
+/// line number is a durable address only on the append path. Three harness paths
+/// rewrite a live transcript in place (a stream tombstone truncates and rewrites the
+/// tail, a local compaction rewrite, a remote-ingress resume), and each shifts the
+/// lines ABOVE the cut so a stale `Lnnnn` resolves silently to a different record;
+/// only an address past the new end misses loudly. The record uuid survives every
+/// rewrite, so a consumer that keeps a pointer across a live session refetches by it.
+pub(crate) fn refetch_uuid_json(session_id: &str, h: &Hit) -> serde_json::Value {
+    match &h.uuid {
+        Some(u) => serde_json::json!(format!("csift show @{session_id} --uuid {u}")),
+        None => serde_json::Value::Null,
+    }
+}
+
 pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
     let session_id: &str = &ex.session_id;
     // Comm direction (GOLD §4): `from`/`to` only for an `agent.communication.*` hit, else null.
@@ -458,6 +472,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // RIGHT transcript (this row's session_id; a parent uuid + a subagent line number
         // fetches the wrong record).
         "refetch": refetch_json(session_id, h),
+        "refetch_uuid": refetch_uuid_json(session_id, h),
     })
 }
 

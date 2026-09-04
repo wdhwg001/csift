@@ -26,6 +26,45 @@ fn search_text_subagent_hit_carries_exact_refetch() {
 }
 
 #[test]
+fn search_json_hit_carries_a_uuid_refetch_that_resolves() {
+    // A line number is durable only while the transcript is append-only; the uuid twin
+    // survives an in-place rewrite, and it must run as printed.
+    let h = populated_home();
+    let out = h.run(&["search", "carry", "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let hit = out
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap())
+        .filter(|o| o["kind"] == "exchange")
+        .flat_map(|o| o["hits"].as_array().cloned().unwrap_or_default())
+        .find(|hit| hit["uuid"].is_string())
+        .expect("a hit with a uuid");
+    let refetch = hit["refetch_uuid"]
+        .as_str()
+        .expect("refetch_uuid")
+        .to_string();
+    assert!(
+        refetch.starts_with("csift show @") && refetch.contains(" --uuid "),
+        "{refetch}"
+    );
+    let mut args: Vec<&str> = refetch.split_whitespace().skip(1).collect();
+    args.extend(["--format", "json"]);
+    let shown = h.run(&args);
+    assert!(shown.success, "the uuid refetch must run: {}", shown.stderr);
+    let uuid = hit["uuid"].as_str().unwrap();
+    assert!(
+        shown
+            .stdout
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .any(|o| o["kind"] == "record" && o["uuid"] == uuid),
+        "the refetched record is the hit's own ({uuid}):\n{}",
+        shown.stdout
+    );
+}
+
+#[test]
 fn search_truncated_excerpt_emits_reader_caution() {
     let h = Home::new();
     let enc = "-Users-test-Projects-trunc";
