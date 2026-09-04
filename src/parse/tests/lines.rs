@@ -227,4 +227,10 @@ fn read_range_and_read_tail_are_plain_reads_that_tolerate_a_shrink() {
         .unwrap();
     assert_eq!(read_range(&p, 0, 18).unwrap(), b"0123");
     assert!(read_range(&p, 11, 18).unwrap().is_empty());
+    // a missing file is an error with the path in its context, never a fault
+    let missing = std::env::temp_dir().join("csift-read-range-missing-7d3a.jsonl");
+    let e = read_range(&missing, 0, 10).unwrap_err();
+    assert!(format!("{e:#}").contains("cannot open"), "{e:#}");
+    let e = read_tail(&missing, 10).unwrap_err();
+    assert!(format!("{e:#}").contains("cannot stat"), "{e:#}");
 }

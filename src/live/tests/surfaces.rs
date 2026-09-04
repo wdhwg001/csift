@@ -378,3 +378,18 @@ fn children_report_settles_a_lane_whose_completion_pulse_landed() {
     assert_eq!(report.live_count, 0);
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn tail_shape_window_without_a_newline_yields_no_records() {
+    // The 512 KB tail window is a plain positional read (v0.10.4). When the cut lands
+    // inside one giant final line and no newline follows, the aligned window is empty
+    // and the shape carries no records; nothing is parsed from a torn slice.
+    let mut giant = String::from(
+        r#"{"type":"user","uuid":"g0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"x"}}"#,
+    );
+    giant.push('\n');
+    giant.push_str(&"y".repeat(700 * 1024)); // one unterminated line past the window
+    let f = TempJsonl::new(&giant);
+    let shape = tail_shape(&f.0).unwrap();
+    assert_eq!(shape.records_seen, 0, "{shape:?}");
+}

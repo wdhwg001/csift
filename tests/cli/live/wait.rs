@@ -472,8 +472,54 @@ fn p18_a_transcript_that_shrinks_mid_wait_is_reported_and_keeps_being_watched() 
         Some(0),
         "the pulse appended after the shrink fires: {stdout}"
     );
+    let lost = before - before / 2;
     assert!(
-        stdout.contains("transcript shrank 1 time(s)") && stdout.contains("baseline moved"),
-        "the shrink is disclosed in the activity line:\n{stdout}"
+        stdout.contains(&format!(
+            "transcript shrank 1 time(s) ({LIVE_SESS}: -{lost} bytes)"
+        )) && stdout.contains("baseline moved"),
+        "the shrink is disclosed with its byte count:\n{stdout}"
+    );
+}
+
+#[test]
+fn p19_two_appends_in_separate_polls_advance_the_cursor_exactly() {
+    // The cursor advances by the bytes consumed (base + pos); a wrong advance would read
+    // the next poll's append from the wrong offset or mistake it for a shrink.
+    let h = Home::new();
+    let main = live_eot_main(&h);
+    let target = at(LIVE_SESS);
+    let (code, stdout) = drive_wait(
+        &h,
+        &[
+            "wait",
+            &target,
+            "--until",
+            "notification:second append",
+            "--interval",
+            "25",
+            "--timeout",
+            "30",
+        ],
+        || {
+            let mut f = std::fs::File::options().append(true).open(&main).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"user","uuid":"m1","timestamp":"2026-06-07T05:10:00.000Z","message":{{"role":"user","content":"a plain prompt, not a notification"}}}}"#
+            )
+            .unwrap();
+            drop(f);
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            let mut f = std::fs::File::options().append(true).open(&main).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"user","uuid":"m2","timestamp":"2026-06-07T05:10:01.000Z","message":{{"role":"user","content":"<task-notification>\n<task-id>b6</task-id>\n<status>completed</status>\n<summary>Background command \"second append\" completed (exit code 0)</summary>\n</task-notification>"}}}}"#
+            )
+            .unwrap();
+        },
+    );
+    assert_eq!(code, Some(0), "the second append fires: {stdout}");
+    assert!(
+        stdout.contains("2 record(s)") && !stdout.contains("shrank"),
+        "both appends counted once, no false shrink:\n{stdout}"
     );
 }
