@@ -247,7 +247,8 @@ pub struct RecoverArgs {
     /// row per stored checkpoint (backup instant, bytes, @vN, store path), ordered by
     /// backup instant. The store key is sha256 of the absolute path (first 16 hex), so
     /// `--file` must be a literal absolute path (`@plan` cannot be hashed). Provenance
-    /// bounds, verified against the live store: written at the TOOL layer only (bash and
+    /// bounds, verified against the live store and the binary: written by the structured
+    /// file tools and by an approved in-place `sed` preview only (other shell writes and
     /// manual edits never land here), PRUNED over time, and `@vN` counters reset per
     /// session dir (never an order key) - so absence proves nothing and a listing is
     /// NOT a history. Listing only: csift never merges checkpoint content into a

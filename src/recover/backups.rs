@@ -5,8 +5,11 @@
 //! <top-level-session-uuid>/<hash>@v<N>`, where `<hash>` is the first 16 hex chars of
 //! sha256(absolute file path) and the file content is the PLAIN checkpoint snapshot
 //! (no JSON wrapper). Facts that bound what a listing may claim:
-//! - the write path is TOOL-LAYER ONLY (the rewind feature): bash and manual edits
-//!   never land here, so absence proves nothing about a file's history;
+//! - the write path is the STRUCTURED FILE LAYER (the rewind feature): the Edit, Write
+//!   and NotebookEdit tools, plus ONE shell shape - an approved in-place `sed` preview,
+//!   which the shell tool applies through the same checkpoint path instead of running
+//!   the command (ledger FH-024); every other shell write and every manual edit never
+//!   lands here, so absence proves nothing about a file's history;
 //! - the store is PRUNED: old checkpoints get deleted wholesale (`@v1` often gone);
 //! - `@vN` counters RESET per session dir and are reused across dirs, so `vN` is NOT
 //!   an order key: only the backup instant (the store file's mtime) orders entries.
@@ -160,7 +163,8 @@ fn render_text(
             println!("  store directory absent (the file-history feature may be disabled)");
         }
         println!(
-            "  the store is tool-layer only (bash and manual edits never land here) and \
+            "  the store is written by the structured file tools and by an approved in-place \
+             sed preview only (other shell writes and manual edits never land here) and \
              PRUNED: absence here is NOT evidence the file was never edited. The \
              transcript is the ground truth: csift recover <target> --file {file} --coverage"
         );
@@ -184,8 +188,9 @@ fn render_text(
         sessions
     );
     println!(
-        "  provenance: Claude Code's own rewind checkpoint store, tool-layer only (bash \
-         and manual edits never land here) and pruned over time, so this listing is NOT \
+        "  provenance: Claude Code's own rewind checkpoint store, written by the structured \
+         file tools and by an approved in-place sed preview only (other shell writes and \
+         manual edits never land here) and pruned over time, so this listing is NOT \
          a history. csift never merges checkpoint content into a reconstruction; copy a \
          store path yourself to inspect one."
     );

@@ -94,9 +94,10 @@ pub struct BackgroundLensArgs {
         `waiting`, which the harness sets for any blocking dialog: a question, a \
         permission prompt, a plan approval, a sandbox or worker request), and that row is \
         transition-written, so a stale one is refuted only by the pid probe; a \
-        multi-question AskUserQuestion is written to the transcript at question time and \
+        multi-question AskUserQuestion was measured on disk while its dialog was open and \
         the tail reads it as hitl, while a single-question one stays buffered until \
-        answered (the sidecar covers that shape); the registry covers top-level sessions \
+        answered (a timing outcome of the write frontier, not a question-count rule; the \
+        sidecar covers the buffered shape); the registry covers top-level sessions \
         only (a subagent target degrades to tail + pid evidence, never a fabricated row); \
         the pid probe is `ps` (+ `/proc` on Linux) on unix and PowerShell `Get-Process` \
         (+ `tasklist`) on Windows, where `procStart` is a FILETIME tick count; a row \

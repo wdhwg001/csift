@@ -224,20 +224,26 @@ pub(crate) fn any_teammate(nodes: &[SubagentNode]) -> bool {
 /// teammates, so it is the natural place to point at the CORRECT control tool - a real session
 /// burned ~30 min trying to `TaskStop` / `pkill` a runaway teammate (feeding it the name, the
 /// `Name@team` form, AND the exact `aName-<hash>` agentId csift prints) before discovering the
-/// mechanism. The ids were not wrong; the TOOL was. Stated from the verified `SendMessage`
-/// contract (address by NAME; `message:{type:"shutdown_request"}` terminates), not a guess.
-/// Read-only csift cannot act - it only names the tool that can.
+/// mechanism - on a build where TaskStop rejected every teammate form. From Claude Code 2.1.198
+/// TaskStop's resolver ALSO matches a teammate by its name and by the `name@team` identity
+/// (the teammate-aware resolver is absent in 2.1.197 and present in 2.1.198; ledger SUB-020);
+/// the `aName-<hex>` transcript id csift prints is never a task id on any build. Stated from
+/// the verified `SendMessage` contract (address by NAME; `message:{type:"shutdown_request"}`
+/// terminates) and the binary's TaskStop resolver, not a guess. Read-only csift cannot act -
+/// it only names the tools that can.
 pub(crate) const TEAMMATE_CONTROL_HINT_L1: &str = "note: teammate rows are in-process Agent subagents — address one BY NAME (the `(@name)` shown) \
 via SendMessage to steer it, and `message:{\"type\":\"shutdown_request\"}` to terminate it.";
 pub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =
-    "      A teammate is NOT a background task (TaskStop / a `task_id` will not find it) and has no \
-separate OS process (it shares the orchestrator PID — `pkill` won't help).";
+    "      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier \
+builds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \
+teammate has no separate OS process (it shares the orchestrator PID — `pkill` won't help).";
 
 /// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2` - emitted as a teammate
 /// node's `control_hint` field so a `--format json` consumer gets the same pointer.
 pub(crate) const TEAMMATE_CONTROL_HINT_JSON: &str =
     "in-process teammate: SendMessage to `name` to steer; \
-message {type:\"shutdown_request\"} terminates. Not a TaskStop background task; shares the \
+message {type:\"shutdown_request\"} terminates; TaskStop by `name` or `name@team` also stops it \
+from Claude Code 2.1.198 (never by the aName-<hex> transcript id); shares the \
 orchestrator PID (no separate process to kill).";
 
 pub(crate) fn axis_label(axis: AgentTimeAxis) -> &'static str {

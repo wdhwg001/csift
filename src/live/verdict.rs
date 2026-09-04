@@ -291,8 +291,11 @@ fn rank_verdict(
     // Two HITL legs beside the sidecar: the registry's `waiting` status (the binary sets
     // it whenever a dialog blocks the session: a question, a permission prompt, a plan
     // approval, a sandbox/worker request), and an unreturned AskUserQuestion/ExitPlanMode
-    // at the tail (a MULTI-question ask is written at question time since CC 2.1.258;
-    // a single-question ask stays buffered until answered - the sidecar's shape).
+    // at the tail. Whether a pending dialog's record reaches disk is a TIMING outcome of
+    // the persistence frontier (the binary has no question-count branch and the frontier
+    // is unchanged across builds): measured live, a multi-question ask was on disk while
+    // its dialog was open and a single-question ask was not, so the sidecar stays the
+    // instrument for the shape that stays buffered (ledger ELI-009).
     let registry_waiting = registry
         .and_then(|r| r.status.as_deref())
         .is_some_and(|s| s == "waiting");
@@ -344,9 +347,10 @@ fn rank_verdict(
         }
         if tail_dialog {
             notes.push(
-                "the tail holds an unreturned AskUserQuestion/ExitPlanMode call: a \
-                 multi-question ask is written at question time, a single-question ask \
-                 stays buffered until answered (the sidecar covers that shape)"
+                "the tail holds an unreturned AskUserQuestion/ExitPlanMode call: whether a \
+                 pending dialog reaches disk is a timing outcome of the write frontier \
+                 (measured: a multi-question ask lands, a single-question ask stays \
+                 buffered until answered; the sidecar covers the buffered shape)"
                     .to_string(),
             );
         }

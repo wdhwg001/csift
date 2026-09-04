@@ -76,7 +76,8 @@ fn list_backups_orders_by_mtime_not_version_token() {
         out.stdout
             .contains("2 checkpoint(s) across 2 session dir(s)")
             && out.stdout.contains("NOT an order key")
-            && out.stdout.contains("tool-layer only"),
+            && out.stdout.contains("structured file tools")
+            && out.stdout.contains("in-place sed preview"),
         "count + provenance disclosure:\n{}",
         out.stdout
     );
