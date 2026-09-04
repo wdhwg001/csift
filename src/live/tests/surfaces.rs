@@ -102,6 +102,43 @@ fn probe_pid_own_process_guard_states() {
     }
 }
 
+/// The probe pins `LC_ALL=C` and `TZ=UTC` on its own `ps` call, so the instant it
+/// returns is the C/UTC rendering parsed as UTC - whatever locale or zone the caller
+/// inherited (a German or French `LC_TIME` renders `Fr  4 Sep` / `Ven  4 sep`, which
+/// no English pattern parses; ledger MISC-024).
+#[cfg(unix)]
+#[test]
+fn ps_probe_instant_is_the_c_utc_rendering_parsed_as_utc() {
+    let me = std::process::id();
+    let pinned = std::process::Command::new("ps")
+        .args(["-p", &me.to_string(), "-o", "lstart="])
+        .env("LC_ALL", "C")
+        .env("TZ", "UTC")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&pinned.stdout).trim().to_string();
+    if text.is_empty() {
+        return; // a ps without lstart (busybox): the /proc arm is covered elsewhere
+    }
+    let expected = parse_registry_proc_start(&text).expect("the C/UTC rendering parses as UTC");
+    match ps_probe(me) {
+        PsProbe::Alive(Some(act)) => assert!(
+            (act.as_second() - expected.as_second()).abs() <= 1,
+            "probe {act} vs pinned rendering {expected} ({text})"
+        ),
+        other => panic!("expected a parsed instant, got {}", probe_word(&other)),
+    }
+}
+
+fn probe_word(p: &PsProbe) -> &'static str {
+    match p {
+        PsProbe::NoProcess => "NoProcess",
+        PsProbe::Alive(Some(_)) => "Alive(Some)",
+        PsProbe::Alive(None) => "Alive(None)",
+        PsProbe::Unavailable => "Unavailable",
+    }
+}
+
 #[test]
 fn tail_shape_reads_pairing_stop_reason_and_holds_torn_tails() {
     // Empty file: nothing seen, nothing claimed.

@@ -15,8 +15,10 @@
 //! integer (100ns ticks since 1601-01-01, e.g. `134328101803820142`). `pidDomain` names
 //! the pid space the row was written in (`darwin`, `linux`, or `win32:<hostname>`); a row
 //! from another domain cannot be probed here and the verdict says so. `ps lstart` renders
-//! in the LOCAL zone - a naive string/local comparison flags pid reuse on EVERY row.
-//! Parse both sides to instants and compare with a small tolerance; when either side is
+//! under the caller's locale and zone (the harness pins `LC_ALL=C` and `TZ=UTC` for its
+//! own acquisition, and so does csift's probe - an inherited locale changes the field
+//! order and the weekday and month names, an inherited zone shifts the clock). Parse
+//! both sides to UTC instants and compare with a small tolerance; when either side is
 //! absent or unparseable, degrade to a pid-only probe AND say so in the evidence (the
 //! reuse guard was skipped, honest, never silent).
 
@@ -69,10 +71,11 @@ pub(crate) fn registry_row_for(session_id: &str) -> Result<Option<RegistryRow>> 
                 .and_then(|n| u32::try_from(n).ok()),
             status: str_field("status"),
             status_updated_at_ms: v.get("statusUpdatedAt").and_then(serde_json::Value::as_i64),
-            // The 2.1.258 schema carries TWO keys and every reader in the binary is
-            // `procStartFt ?? procStart` (a platform splitter writes exactly one of
-            // them; the Windows session measured live wrote the FILETIME under
-            // `procStart`, so both spellings are read and both renderings parse).
+            // The ROW writer stamps `procStart` unconditionally on every platform (the
+            // Windows session measured live carried the FILETIME under that key); the
+            // two-key `procStartFt` schema belongs to the `<pid>.<hash>.key` companion,
+            // not to the row. Reading `procStartFt` first is a harmless superset of
+            // what the row writer emits, and both renderings parse (ledger WIN-007).
             proc_start: str_field("procStartFt").or_else(|| str_field("procStart")),
             pid_domain: str_field("pidDomain"),
         }));
@@ -199,12 +202,21 @@ pub(crate) fn filetime_to_timestamp(ticks: u64) -> Option<jiff::Timestamp> {
 }
 
 /// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success
-/// yields the start instant when the LOCAL-rendered format parses (two observed field
-/// orders tried), else `Alive(None)` - the caller then skips the reuse guard AND says so.
+/// yields the start instant when the rendering parses, else `Alive(None)` - the caller
+/// then skips the reuse guard AND says so. The call PINS `LC_ALL=C` and `TZ=UTC`,
+/// exactly as the harness pins its own `procStart` acquisition: `lstart` is the
+/// platform utility's `%c` under the caller's `LC_TIME`, so an inherited locale
+/// renders a different field order and non-English names (de_DE gives `Fr  4 Sep`,
+/// fr_FR `Ven  4 sep`), and the guard was silently skipped on every such host
+/// (v0.10.5, ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in
+/// UTC, the same clock the registry's `procStart` is written in; the second field
+/// order is kept as a belt for a `C` locale that still renders day-first.
 #[cfg(unix)]
 pub(crate) fn ps_probe(pid: u32) -> PsProbe {
     let Ok(out) = std::process::Command::new("ps")
         .args(["-p", &pid.to_string(), "-o", "lstart="])
+        .env("LC_ALL", "C")
+        .env("TZ", "UTC")
         .output()
     else {
         return PsProbe::Alive(None); // ps itself unavailable: never claim dead on that
@@ -221,11 +233,10 @@ pub(crate) fn ps_probe(pid: u32) -> PsProbe {
         }
         return PsProbe::NoProcess;
     }
-    let local = crate::timez::local_tz();
     for fmt in ["%a %b %e %H:%M:%S %Y", "%a %e %b %H:%M:%S %Y"] {
         if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {
             if let Ok(dt) = bd.to_datetime() {
-                if let Ok(z) = dt.to_zoned(local.clone()) {
+                if let Ok(z) = dt.to_zoned(jiff::tz::TimeZone::UTC) {
                     return PsProbe::Alive(Some(z.timestamp()));
                 }
             }

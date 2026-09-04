@@ -27595,13 +27595,13 @@
     {
       "id": "REG-010",
       "area": "live-registry",
-      "behavior": "On unix hosts the registry's `procStart` is the owner process's creation instant rendered as an asctime-like string in the C locale and in UTC (`Sun Aug 16 09:04:23 2026`). The row writer stamps it unconditionally - `N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),...})` (158819054) - and that helper (158135801) delegates to a runner that executes `ps` with `[\"-o\",\"lstart=\",\"-p\",String(e)]` and `env:{...,LC_ALL:\"C\",TZ:\"UTC\"}` (158136222); the synchronous twin carries the same command as one shell string, `LC_ALL=C TZ=UTC ps -o lstart= -p ${e}` (158134674). A bare `ps -o lstart=` names the SAME instant in the machine's local zone AND in the machine's locale, so the two strings can differ in FIELD ORDER as well as in offset: measured 2026-09-04 on a UTC+10 host, 4 of 4 live rows gave a 0.0 s residual once the registry value was parsed as UTC and the bare `ps` value as local, while the raw strings differed by the full 10 hours and by field order (registry `Thu Sep 3 00:16:07 2026` against bare `ps` `Thu 3 Sep 10:16:07 2026`) - which is what the C-locale pinning buys: a fixed parse format. The Windows FILETIME (100-nanosecond ticks since 1601-01-01) is carried in a SEPARATE string key `procStartFt`, and three facts about that pair are readable here: the platform helper returns exactly one of the two keys (`function OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}`, 158135690), the platform reader REFUSES a `procStart` value on the FILETIME platform (158135600), the row parser accepts both keys (159697157) and consumers read `procStartFt ?? procStart` (159693134). Which key a Windows registry ROW actually carries is UNDETERMINED from this binary: the row writer never calls that helper, and all seven occurrences of the helper name are its definition (158135699) plus six call sites - the messaging-auth key file (158809990, 158810361), a pid-probe record (162121127), a worktree lock reason (163535163), a background-job record (167589560) and a job-holder record (168563787) - none of them the row writer. The audited bundle is a per-platform darwin build (`DD_SOURCEMAP_GROUP:\"darwin\"`, 156312375) whose platform predicate is constant-folded to `function c(){return!1}` (158132377), so the Windows arm of both the helper and the ps runner is dead code here rather than absent, and no FILETIME producer exists in this build to read.",
-      "depends": "csift reads `procStartFt` first and falls back to `procStart` (src/live/registry.rs:76), mirroring the harness's own `procStartFt ?? procStart`, and its parser accepts either rendering off whichever key answered: an all-digit string is read as a FILETIME, anything else as an asctime instant in UTC (`parse_registry_proc_start`). It then compares INSTANTS against the local `ps` value with a 2-second tolerance for its pid-reuse guard; comparing the two as strings or as same-zone values flags pid reuse on every row and turns every live session into a stale-dead verdict. Because csift consults both keys, it is safe under either answer to the undetermined Windows-key question. Two further consequences of the C-locale pinning: csift's fixed `%a %b %e %H:%M:%S %Y` parse works on the registry value precisely because the harness pins the locale, and a bare local `ps` string must never be substituted for it - on this host the unpinned rendering is day-before-month and the fixed format would not parse it. When either side is absent or unparseable csift degrades to a pid-only probe and discloses that the reuse guard was skipped.",
+      "behavior": "On unix hosts the registry's `procStart` is the owner process's creation instant rendered as an asctime-like string in the C locale and in UTC (`Sun Aug 16 09:04:23 2026`). The row writer stamps it unconditionally - `N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),...})` (158819054) - and that helper delegates to a runner that executes `ps` with `[\"-o\",\"lstart=\",\"-p\",String(e)]` and `env:{...,LC_ALL:\"C\",TZ:\"UTC\"}` (158136222). A bare `ps -o lstart=` names the SAME instant in the machine's local zone AND in the machine's locale, so the two strings can differ in FIELD ORDER as well as in offset: on a UTC+10 host, 3 of 3 live rows gave a 0.0 s residual once the registry value was parsed as UTC and the bare `ps` value as local, while the raw strings differed by the full ten hours and by field order (registry `Thu Sep  3 00:15:49 2026` against bare `ps` `Thu  3 Sep 10:15:49 2026`) - which is what the C-locale pinning buys: a fixed parse format. On Windows the SAME key carries a different rendering rather than a different key: the win32 artifact of this version stamps `procStart: await gl(process.pid)` in the identical row literal (174703780), and that acquisition (174020355) returns the kernel32 GetProcessTimes creation FILETIME - 100-nanosecond ticks since 1601-01-01, epoch constant 116444736000000000n - as a decimal string when the in-process kernel32 binding loads, and otherwise the value of a powershell `(Get-CimInstance Win32_Process -Filter \"ProcessId=<pid>\").CreationDate.Ticks` read, which is a .NET tick count on the year-1 epoch. The second key `procStartFt` exists but is produced by a platform SPLITTER the row writer never calls: `A1`/`OU` returns exactly one of the two keys, and its six call sites in each artifact are other records - the messaging-auth key file (twice), a pid-probe record, a worktree lock reason, a background-job record and a job-holder record. The row PARSER accepts either key (159697157 darwin, 175494533 win32) and row consumers read `procStartFt ?? procStart` (159693134 darwin, 175490112 win32), while the paired platform READER is not that coalesce: on the FILETIME platform it refuses a record carrying `procStart` and returns `procStartFt` only. The audited darwin bundle constant-folds the platform predicate to `function c(){return!1}` (158132377), so its FILETIME arm is dead code there rather than absent.",
+      "depends": "csift reads `procStartFt` first and falls back to `procStart` (src/live/registry.rs:76), mirroring the harness's own row consumers, and its parser accepts either rendering off whichever key answered: an all-digit string is read as a FILETIME, anything else as an asctime instant in UTC (`parse_registry_proc_start`). It then compares INSTANTS against the local `ps` value with a 2-second tolerance for its pid-reuse guard; comparing the two as strings or as same-zone values flags pid reuse on every row and turns every live session into a stale-dead verdict. Because a Windows row carries the tick count under `procStart` and csift consults both keys, the dual read is what makes it correct there. Two further consequences of the C-locale pinning: csift's fixed `%a %b %e %H:%M:%S %Y` parse works on the registry value precisely because the harness pins the locale, and a bare local `ps` string must never be substituted for it - on a host whose unpinned rendering is day-before-month the fixed format would not parse it. csift's FILETIME conversion assumes the 1601 epoch, which matches the kernel32 rendering and not the powershell fallback's year-1 tick count; the two renderings are the subject of WIN-007. When either side is absent or unparseable csift degrades to a pid-only probe and discloses that the reuse guard was skipped.",
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "13-21",
-          "snippet": "//! `procStart` is the OWNER PROCESS's creation instant in a PLATFORM-SPECIFIC rendering:\n//! on unix an asctime string in UTC (`Sun Aug 16 09:04:23 2026`), on Windows a FILETIME\n//! integer (100ns ticks since 1601-01-01, e.g. `134328101803820142`). `pidDomain` names\n//! the pid space the row was written in (`darwin`, `linux`, or `win32:<hostname>`); a row\n//! from another domain cannot be probed here and the verdict says so. `ps lstart` renders\n//! in the LOCAL zone - a naive string/local comparison flags pid reuse on EVERY row.\n//! Parse both sides to instants and compare with a small tolerance; when either side is\n//! absent or unparseable, degrade to a pid-only probe AND say so in the evidence (the\n//! reuse guard was skipped, honest, never silent)."
+          "lines": "13-23",
+          "snippet": "//! `procStart` is the OWNER PROCESS's creation instant in a PLATFORM-SPECIFIC rendering:\n//! on unix an asctime string in UTC (`Sun Aug 16 09:04:23 2026`), on Windows a FILETIME\n//! integer (100ns ticks since 1601-01-01, e.g. `134328101803820142`). `pidDomain` names\n//! the pid space the row was written in (`darwin`, `linux`, or `win32:<hostname>`); a row\n//! from another domain cannot be probed here and the verdict says so. `ps lstart` renders\n//! under the caller's locale and zone (the harness pins `LC_ALL=C` and `TZ=UTC` for its\n//! own acquisition, and so does csift's probe - an inherited locale changes the field\n//! order and the weekday and month names, an inherited zone shifts the clock). Parse\n//! both sides to UTC instants and compare with a small tolerance; when either side is\n//! absent or unparseable, degrade to a pid-only probe AND say so in the evidence (the\n//! reuse guard was skipped, honest, never silent)."
         },
         {
           "path": "src/live/registry.rs",
@@ -27653,108 +27653,148 @@
           "note": "The unix half is unchanged and reproduces; the Windows sentence is qualified. The old text asserted that the FILETIME is carried in `procStartFt` beside `procStart` 'not in procStart itself' as a fact about a registry ROW. The refuting hop is the row writer at 158819054, which emits `procStart:await ja(process.pid)` unconditionally and never calls the two-key platform helper; the enumeration closes it - the helper name occurs seven times, its definition plus six call sites, and I read all six (two messaging-auth key writes, a pid-probe record, a worktree lock reason, a background-job record, a"
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "The Windows half has no producer here: read the same registration function and the process-start helper in a Windows-built binary of the same generation (the platform predicate is a live branch there rather than the constant false it is folded to at 158132377), or read one <pid>.json written by a session on a Windows host, and record which key carries the FILETIME in a REGISTRY ROW.",
-        "Not attempted (a live action would be required): No live action was attempted for the Windows leg: reading a Windows-written registry row would require starting a session on a Windows host, which is outside this agent's read-only remit.",
-        "Producer hop still missing: No hop writes procStartFt into a session-registry ROW. All seven call sites of the platform helper were read and none of them is the row writer; the row writer emits procStart unconditionally, and the platform predicate is constant-folded to false in this darwin build, so the Windows arm of both the helper and the ps runner is unreadable here. Closing it needs a Windows-built binary or one <pid>.json written by a session on a Windows host."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
-        "The FILETIME magnitude test the binary uses is a threshold comparison against 3e17 (a same-side-of-the-threshold check on both values), which is consistent with 100-nanosecond ticks since 1601 but does not by itself pin the epoch; the epoch clause in the claim is still untraced.",
-        "The unix rendering is worth re-checking on a host whose ps ships a different lstart field order, since the C-locale forcing is what keeps the registry string parseable by a fixed format."
+        "The FILETIME magnitude test the binary uses is a threshold comparison against 3e17, consistent with 100-nanosecond ticks since 1601 but not by itself a proof of the epoch; the epoch clause rests on the 116444736000000000n constant beside the read.",
+        "The unix rendering is worth re-checking on a host whose ps ships a different lstart field order, since the C-locale pinning is what keeps the registry string parseable by a fixed format.",
+        "No row written by a Windows session through the powershell fallback has been observed; a host without the kernel32 binding would show whether the year-1 tick count reaches a registry row in practice."
       ],
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "the registry row literal asks the process-start helper for procStart",
-          "offset": 158819054,
-          "excerpt": "N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),version:{IS",
-          "note": "procStart:await ja(process.pid) - the row writer names the field unconditionally; this is the entry for the value."
+          "name": "the session-registration entry that writes the row (win32 artifact)",
+          "offset": 174703095,
+          "excerpt": "}function OEn(e){let n=LV(),r=ace(n,e);return n.registration=r,r}async function ace(e,n){if(!Qz())return!1;let r=Promise.withResolvers();e.setPidFileWriteChain(r.promise);let o=Rz()??\"interactive\";e.bornSpare=o===\"bg\"&&a.CLAUDE_BG_SOURCE===\"spare\";let d=e.bornSpare&&!await eF(n),f=a.CLAUDE_CODE_SESSION_NAME?ds(a.CLAUDE_CODE_SESSION_NAME)||void 0:void 0,y=VF(),R=kt(y,`${process.pid}.json`);process.on(\"exit\",()=>{try{Q",
+          "note": "One registration per OS process: it names the row <sessions-dir>/<pid>.json, acquires the proc-start and writes the row. The darwin twin is the same two-function shape."
         },
         {
           "role": "gate",
-          "name": "async function ja(e,t): the cached process-start lookup",
-          "offset": 158135801,
-          "excerpt": "async function ja(e,t){let n=Date.now(),r=wEr.of(G().host);if(t?.env!==void 0)return m(e,t.env);if(!t?.skipCache){let a=r.get(e),u=a?.miss?y:w;if(a&&n-a.at<u)return a.p}let o=m(e),",
-          "note": "Caches per pid and delegates to the ps runner; the only source of a procStart value on this platform."
+          "name": "the FFI-availability predicate over the kernel32 loader (win32 artifact)",
+          "offset": 174014790,
+          "excerpt": "function m(){if(l!==void 0)return l;try{l=Ce(\"bun:ffi\").dlopen(\"kernel32.dll\",{OpenProcess:{args:[\"u32\",\"i32\",\"u32\"],returns:\"ptr\"},GetProcessTimes:{args:[\"ptr\",\"ptr\",\"ptr\",\"ptr\",\"ptr\"],returns:\"i32\"},CloseHandle:{args:[\"ptr\"],returns:\"i32\"}}).symbols,t(\"[win32-proc-times] bun:ffi loaded, using procStartFt\")}catch(e){t(`[win32-proc-times] bun:ffi unavailable, falling back to spawn: ${e instanceof Error?e.message:String(e)}`),l=null}return l}class p{#e=!1;get forcedUnavailable(){return this.#e}forceUnavailable(e){this.#e=e}}var x=new p;function f(){return!x.forcedUnavailable&&m()!==null}var C=4096,I=116444736000000000n;function d(e){if(!Number.isInteger(e)||e<=0)return;let n=m();if(n==null)re",
+          "note": "The branch every Windows proc-start path keys on: the loader dlopens OpenProcess, GetProcessTimes and CloseHandle and its own log line names the tick-count key; the predicate is 'not forced unavailable and the loader returned symbols'."
+        },
+        {
+          "role": "gate",
+          "name": "the paired reader and the two-key splitter (win32 artifact)",
+          "offset": 174019733,
+          "excerpt": "function tT(e){if(f())return e.procStart!==void 0?void 0:e.procStartFt;return e.procStart}function A1(e){return f()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var A=60000,N=5000;async function gl(e,n){let r=Date.now(),i=Yvr.of(W().host);if(n?.env!==void 0)return S(e,n.env);if(!n?.skipCache){let a=i.get(e),c=a?.miss?N:A;if(a&&r-a.at<c)return a.p}let s=S(e),o={at:r,p:s};i.set(e,o);let u=await s;i",
+          "note": "The splitter decides which key carries the value for the records that use it; the reader refuses a record carrying procStart on the FILETIME platform. Neither is called by the row writer."
         },
         {
           "role": "writer",
-          "name": "the ps invocation that renders the string",
+          "name": "the registry row literal: one key, unconditional (win32 artifact)",
+          "offset": 174703780,
+          "excerpt": "I=b({pid:process.pid,sessionId:Q(),cwd:_e(),startedAt:Date.now(),procStart:await gl(process.pid),version:{ISSUES_EXPLAINER:\"report the issue at https://github.com/anthropics/claude-code/issues\",PACKAGE_URL:\"@anthropic-ai/claude-code\",README_URL:\"https://code.claude.com/docs/en/overview\",VERSION:\"2.1.258\",FEEDBACK_CHANNEL:\"https://github.com/anthropics/claude-code/issues\",BUILD_TIME:\"2026-09-01T21:54:40Z\",GIT_SHA:\"b3c",
+          "note": "The row stamps procStart with the acquisition's return value whatever the platform, so a Windows row carries the tick count under procStart and no procStartFt."
+        },
+        {
+          "role": "writer",
+          "name": "the acquisition with both Windows renderings and the unix arm (win32 artifact)",
+          "offset": 174020355,
+          "excerpt": "async function S(e,n){let r=n===void 0?{}:{env:n,extendEnv:!1};try{{if(f())return d(e)?.toString();let o=n===void 0?\"powershell.exe\":ktt(\"powershell.exe\",kd(n,\"PATH\")??\"\");if(o===null)return;let u=await Ve(o,[\"-NoProfile\",\"-Command\",`(Get-CimInstance Win32_Process -Filter \"ProcessId=${e}\").CreationDate.Ticks`],{timeout:1000,...r});return u.code===0&&u.stdout?.trim()?u.stdout.trim():void 0}let i=n===void 0?\"ps\":ktt(\"ps\",kd(n,\"PATH\")??\"\");if(i===null)return;let s=await Ve(i,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...r,env:{...n??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return s.code===0&&s.stdout?s.stdout.trim():void 0}catch{return}}async function YRe(e){try{{if(f()){let o=d(e);return o===void",
+          "note": "Returns the FILETIME decimal string when the binding loads, otherwise the powershell CreationDate.Ticks value; the unix arm below is the ps -o lstart= call with the pinned locale and zone."
+        },
+        {
+          "role": "writer",
+          "name": "the FILETIME read itself, with the 1601 epoch constant (win32 artifact)",
+          "offset": 174015383,
+          "excerpt": "var C=4096,I=116444736000000000n;function d(e){if(!Number.isInteger(e)||e<=0)return;let n=m();if(n==null)return;let r=n.OpenProcess(C,0,e);if(!r)return;try{let i=new Uint8Array(8),s=new Uint8Array(8),o=new Uint8Array(8),u=new Uint8Array(8);if(n.GetProcessTimes(r,i,s,o,u)===0)return;return new DataView(i.buffer).getBigUint64(0,!0)}catch{return}finally{n.CloseHandle(r)}}function b(e){return Number((e-I)/10000n)}function rs(e){if(e<=1)return!1;try{return process.kill(e,0),!0}catch{return!1}}async function E6t(e){if(D(",
+          "note": "OpenProcess plus GetProcessTimes, the creation time taken as an unsigned 64-bit little-endian value; the constant beside it is the 1601-to-1970 offset used to convert to unix milliseconds."
+        },
+        {
+          "role": "writer",
+          "name": "the darwin row literal and its ps runner",
+          "offset": 158819054,
+          "excerpt": "N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),version:{ISSUES_EXPLAINER:\"report the issue at https://github.com/anthropics/claude-code/issues\",PACKAGE_URL:\"@anthropic-ai/claude-code\",README_URL:\"https://code.claude.com/docs/en/overview\",VERSION:\"2.1.258\",FEEDBACK_CHANNEL:\"https://github.com/anthropics/claude-code/issues\",BUILD_TIME:\"2026-09-01T21:54:40Z\",GIT_SHA:\"b3c",
+          "note": "The same row shape on the audited platform, stamping procStart from the cached process-start helper."
+        },
+        {
+          "role": "writer",
+          "name": "the darwin ps invocation that renders the string",
           "offset": 158136222,
-          "excerpt": "async function m(e,t){let n=t===void 0?{}:{env:t,extendEnv:!1};try{let r=t===void 0?\"ps\":dkt(\"ps\",Bd(t,\"PATH\")??\"\");if(r===null)return;let o=await Ve(r,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...n,env:{...t??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return o.code===0&&o.stdout?o.stdout.trim():void 0}",
-          "note": "ps -o lstart= -p <pid> with env forced to LC_ALL=C and TZ=UTC - so the stored string IS ps lstart in the C locale rendered in UTC, which is exactly why a bare local ps lstart differs by the machine's offset while naming one instant."
+          "excerpt": "async function m(e,t){let n=t===void 0?{}:{env:t,extendEnv:!1};try{let r=t===void 0?\"ps\":dkt(\"ps\",Bd(t,\"PATH\")??\"\");if(r===null)return;let o=await Ve(r,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...n,env:{...t??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return o.code===0&&o.stdout?o.stdout.trim():void 0}catch{return}}async function Jve(e){try{let t=await Ve(\"ps\",[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,env:{...proces",
+          "note": "ps -o lstart= -p <pid> with LC_ALL=C and TZ=UTC in the child environment - the pinning that makes the value parseable by a fixed format."
+        },
+        {
+          "role": "gate",
+          "name": "the darwin platform predicate, constant-folded",
+          "offset": 158132377,
+          "excerpt": "function c(){return!1}function os(e){if(e<=1)return!1;try{return process.kill(e,0),!0}catch{return!1}}async function HVt(e){if(D()!==\"linux\"&&D()!==\"wsl\")return;if(!dsr(e))return;try{let t=await ce().readFile(`/proc/${e}/stat`,{encoding:\"utf8\"});return Get(t)}catch{return}}async function JCn(e){retu",
+          "note": "The audited bundle folds the platform test to a constant false, which is why no tick-count producer can be found in it."
         },
         {
           "role": "writer",
-          "name": "the synchronous twin",
-          "offset": 158134674,
-          "excerpt": "function Eie(e){try{let t=DQ(`LC_ALL=C TZ=UTC ps -o lstart= -p ${e}`,{timeout:1000});return t?t.trim():void 0}catch{return}}function wAt(e,t){if(t===v",
-          "note": "The same command as one shell string, LC_ALL=C TZ=UTC ps -o lstart= -p <pid> - the literal the claim quotes."
+          "name": "the row parser that accepts either key (darwin)",
+          "offset": 159697157,
+          "excerpt": "procStart:typeof o.procStart===\"string\"?o.procStart:void 0,...typeof o.procStartFt===\"string\"&&{procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"derived\"||o.nameSource===\"collision\"||o.nameSource===\"auto\"||o.nameSource===\"hook\"?o.nameSource:void 0,formerNames:Xe(o.formerNames),kind:Ge(o.kind),sessionId:typeof o.sessionId===",
+          "note": "Reads procStart when it is a string and spreads procStartFt when that is a string, so a row of either shape parses."
+        },
+        {
+          "role": "gate",
+          "name": "the row consumers that coalesce the two keys (darwin)",
+          "offset": 159693134,
+          "excerpt": "let n=e.procStartFt??e.procStart;if(n===void 0||nh(e.pid))return!1;return await DA(e.pid,n)===!0}function ge(e){let n=S(e),r=Gor+n.length+1;if(r>w7e)throw se(r,w7e);return n}async function Ye(e){let n=pS(e);if(n===void 0)return!1;for(let r of await O()){if(!r.sock||pS(r.sock)!==n)continue;if(nh(r.pi",
+          "note": "Liveness and socket lookups take procStartFt ?? procStart, which is the reading csift mirrors."
         }
       ],
       "enumeration": [
         {
-          "site": "the platform helper OU(e)",
-          "offset": 158135690,
-          "excerpt": "function OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var w=60000,y=5000",
-          "verdict": "returns EITHER {procStart} OR {procStartFt}, never both - the 'writes exactly one of them' half of the claim"
+          "site": "splitter call site 1 of 6: the messaging-auth key file (win32)",
+          "offset": 174694716,
+          "excerpt": "A1(await ME()),pidDomain:await GV()}),384),f}async function jle(e,n,r){let o=Bz(process.pid,n),d=await e.ensureScope({namespace:\"session\"});if(!d.ok)throw t(`[uds-auth] sessions scope unavailable: ${Ye(d.error)}`),Error(\"messaging key folder could not be made through storage\");try{await e.delete(Ee.",
+          "verdict": "Writes peerToken, the platform pair and pidDomain into <pid>.<hex>.key - not the session-registry row."
         },
         {
-          "site": "the platform predicate in this build",
-          "offset": 158132377,
-          "excerpt": "function c(){return!1}function",
-          "verdict": "function c(){return!1} - constant-folded in the darwin build, so the FILETIME arm is dead code here and no Windows behavior can be read from this binary"
+          "site": "splitter call site 2 of 6: the same key file through storage (win32)",
+          "offset": 174695087,
+          "excerpt": "A1(await ME()),pidDomain:await GV()}),{publishDiscipline:\"atomic\",mode:384,exactMode:384});if(!f.ok)throw t(`[uds-auth] key publish failed: ${Ye(f.error)}`),Error(\"messaging key could not be published through storage\");return eo(VF(),o)}async function vi(e){try{let n=await Da(e,Cl);if(n===null)retur",
+          "verdict": "The atomic publish arm of the same key file."
         },
         {
-          "site": "OU call site: the messaging-auth key file",
-          "offset": 158809940,
-          "excerpt": " kg(f)}catch{}return await Un(f,S({peerToken:n,...OU(await LA()),pidDomain:await YG()}),384),f}async function Qle(e,n,r){let o=Fz(process.pid,n),d=await e.ensureScope({namespace:\"session\"});",
-          "verdict": "writes procStart/procStartFt into <pid>.<64hex>.key, NOT into the session-registry row"
+          "site": "splitter call site 3 of 6: a pid probe record (win32)",
+          "offset": 177931623,
+          "excerpt": "A1(await ME())})}async function _Ee(e,n){let r=en(),o=N()&&n!==void 0;if(await cL(e)){let R=s9t(e);if(R===void 0)return!1;let I=wS(R,String(process.pid));for(let B=1;;B++)try{let U=await sKr(R);if(U===\"pruned\"&&B<g8e)continue;if(U!==\"ours\")return t(U",
+          "verdict": "A standalone {pid, procStart|procStartFt} object, not a registry row."
         },
         {
-          "site": "OU call site: the same key file through storage",
-          "offset": 158810320,
-          "excerpt": " e.write(Ae.session(o),S({peerToken:r,...OU(await LA()),pidDomain:await YG()}),{publishDiscipline:\"atomic\",mode:384,exactMode:384});if(!f.ok)throw t(`[uds-auth] key publish failed:",
-          "verdict": "same key file, atomic publish arm"
+          "site": "splitter call site 4 of 6: a worktree lock reason (win32)",
+          "offset": 179345714,
+          "excerpt": "A1(await ME()).procStart,f=d?`claude ${o} ${r} (pid ${process.pid} start ${d})`:`claude ${o} ${r} (pid ${process.pid})`,y=()=>Ve(it(),[...dn,\"worktree\",\"lock\",\"--reason\",f,e],{cwd:n,env:pi()}),k=await y();if(k.code===0)return!0;let R;try{R=await Tde(e,n)}catch(B){return t(`[worktree] failed to lock ",
+          "verdict": "Reads the procStart member to build a human-readable lock reason string."
         },
         {
-          "site": "OU call site: a pid+procStart probe record",
-          "offset": 162121060,
-          "excerpt": "undeterminable\"}}async function D9e(){return S({pid:process.pid,...OU(await LA())})}async function Kke(e,n){let r=en(),o",
-          "verdict": "a standalone {pid, procStart|procStartFt} object, not a registry row"
+          "site": "splitter call site 5 of 6: a background-job record (win32)",
+          "offset": 183480440,
+          "excerpt": "A1(te),launchTarget:q?.target,processWrapper:rx()},Y=await y$n(z,E);if(!Y){let d=await sM(E);if(d){let j=!1,ie=null;try{process.kill(d.pid,0),j=await vit(d.pid)&&await Nze(d.pid,tT(d),Hye)}catch(we){if(T(we)!==\"ESRCH\"){if(ie=await Tit(d),j=ie===null,",
+          "verdict": "Spreads the platform pair into a job record beside jsonPath, startedAt and origin."
         },
         {
-          "site": "OU call site: a worktree lock reason string",
-          "offset": 163535100,
-          "excerpt": "turn o.lockReason;return}async function YVe(e,n,r,o){try{let d=OU(await LA()).procStart,f=d?`claude ${o} ${r} (pid ${process.pid} start ${d})`:`claude",
-          "verdict": "reads .procStart off the helper to build a human-readable lock reason"
+          "site": "splitter call site 6 of 6: a job-holder record (win32)",
+          "offset": 184448174,
+          "excerpt": "A1(e);return G({holderPid:process.pid,holderJob:U(t),holderProcStart:n,holderProcStartFt:o,holderPidSpace:cQe().slice(0,160)})}function Vrn(){return ME()}function bct(e,t){let n=st(),o=n.envelope.safeParse(e);if(!o.success)return g(\"artifact_live_subscribe\",\"comment_monitor_intent_invalid\"),null;if(",
+          "verdict": "Destructures the pair into holderProcStart and holderProcStartFt. That is the sixth and last call site; the three remaining byte hits of the name are a terminal cell-diff helper and a string-format validator, different functions."
         },
         {
-          "site": "OU call site: a background-job record",
-          "offset": 167589520,
-          "excerpt": "edAt:Date.now(),origin:n,spawnedBy:i,...OU(te),launchTarget:q?.target,processWrapper:cx()},J=await MFn(z,A);if",
-          "verdict": "spreads the platform pair into a job record, not into a registry row"
+          "site": "the darwin splitter and its six call sites",
+          "offset": 158135631,
+          "excerpt": "procStart!==void 0?void 0:e.procStartFt;return e.procStart}function OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var w=60000,y=5000;async function ja(e,t){let n=Date.now(),r=wEr.of(G().host);if(t?.env!==void 0)return m(e,t.env);if(!t?.skipCache){let a=",
+          "verdict": "The same enumeration on the audited platform: definition here, call sites at 158809990 and 158810361 (the messaging-auth key file), 162121127 (a pid-probe record), 163535163 (a worktree lock reason), 167589560 (a background-job record) and 168563787 (a job-holder record). The row writer is not among them on either platform."
         },
         {
-          "site": "OU call site: a job-holder record",
-          "offset": 168563730,
-          "excerpt": "{8}$/.test(U(t)))return{};let{procStart:n,procStartFt:o}=OU(e);return G({holderPid:process.pid,holderJob:U(t),holderProcStart:n,holderProcStartFt:o,holderPidSpace:TQe().slice(0,160",
-          "verdict": "renames the pair to holderProcStart/holderProcStartFt; again not a registry row"
+          "site": "the win32 row parser",
+          "offset": 175494533,
+          "excerpt": "procStartFt===\"string\"&&{procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"derived\"||o.nameSource===\"collision\"||o.nameSource===\"auto\"||o.nameSource===\"hook\"?o.nameSource:void 0,formerNames:Xe(o.formerNames",
+          "verdict": "Accepts procStart as a string and spreads procStartFt when present, exactly like the darwin parser - so either shape round-trips."
         },
         {
-          "site": "the row parser accepts BOTH keys",
-          "offset": 159697157,
-          "excerpt": "procStart:typeof o.procStart===\"string\"?o.procStart:void 0,...typeof o.procStartFt===\"string\"&&{procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSour",
-          "verdict": "procStart typed as string, procStartFt spread in when it is a string - the reader tolerance the claim describes"
-        },
-        {
-          "site": "consumers prefer the FILETIME key",
-          "offset": 159693134,
-          "excerpt": "let n=e.procStartFt??e.procStart;if(n===void 0||nh(e.pid))re",
-          "verdict": "procStartFt ?? procStart, the preference the claim describes"
+          "site": "the win32 row consumers",
+          "offset": 175490112,
+          "excerpt": "procStartFt??r.procStart}}return}async function ebn(e){let n=te(e),r=new Map;if(n.length===0)return r;let i=VF(),f=(await Promise.all(n.map((u)=>q(i,`${u}.json`)))).filter((u)=>u!==null&&Boolean(u.sock)),p=await Promise.all(f.map((u)=>z(u)));return f.forEach((u,d)=>{if(p[d]&&u.sock)r.set(u.pid,u.soc",
+          "verdict": "Take procStartFt ?? procStart for the liveness check and for the peer record, the same coalesce as the darwin consumers."
         }
       ]
     },
@@ -27766,8 +27806,8 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "201-203",
-          "snippet": "/// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success\n/// yields the start instant when the LOCAL-rendered format parses (two observed field\n/// orders tried), else `Alive(None)` - the caller then skips the reuse guard AND says so."
+          "lines": "204-215",
+          "snippet": "/// One `ps -p PID -o lstart=` call: a failing/empty result = no such process; success\n/// yields the start instant when the rendering parses, else `Alive(None)` - the caller\n/// then skips the reuse guard AND says so. The call PINS `LC_ALL=C` and `TZ=UTC`,\n/// exactly as the harness pins its own `procStart` acquisition: `lstart` is the\n/// platform utility's `%c` under the caller's `LC_TIME`, so an inherited locale\n/// renders a different field order and non-English names (de_DE gives `Fr  4 Sep`,\n/// fr_FR `Ven  4 sep`), and the guard was silently skipped on every such host\n/// (v0.10.5, ledger MISC-024). Under `C`/`UTC` the rendering is the asctime form in\n/// UTC, the same clock the registry's `procStart` is written in; the second field\n/// order is kept as a belt for a `C` locale that still renders day-first.\n#[cfg(unix)]\npub(crate) fn ps_probe(pid: u32) -> PsProbe {"
         },
         {
           "path": "src/live/registry.rs",
@@ -27851,8 +27891,8 @@
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "224-234",
-          "snippet": "    let local = crate::timez::local_tz();\n    for fmt in [\"%a %b %e %H:%M:%S %Y\", \"%a %e %b %H:%M:%S %Y\"] {\n        if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {\n            if let Ok(dt) = bd.to_datetime() {\n                if let Ok(z) = dt.to_zoned(local.clone()) {\n                    return PsProbe::Alive(Some(z.timestamp()));\n                }\n            }\n        }\n    }\n    PsProbe::Alive(None)"
+          "lines": "236-245",
+          "snippet": "    for fmt in [\"%a %b %e %H:%M:%S %Y\", \"%a %e %b %H:%M:%S %Y\"] {\n        if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {\n            if let Ok(dt) = bd.to_datetime() {\n                if let Ok(z) = dt.to_zoned(jiff::tz::TimeZone::UTC) {\n                    return PsProbe::Alive(Some(z.timestamp()));\n                }\n            }\n        }\n    }\n    PsProbe::Alive(None)"
         }
       ],
       "instrument": "Compare `LC_ALL=C ps -p $$ -o lstart=` against `LC_ALL=en_AU.UTF-8 ps -p $$ -o lstart=` on ONE host (macOS shows both orders, glibc procps-ng shows one), then confirm the guard still binds by reading the `pid` evidence row of `csift status @<session-uuid> --format json` under each locale.",
@@ -31052,6 +31092,16 @@
         }
       ],
       "writer_literal_floor": {
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "finish of the claim against its traced chain, re-read by an adversarial verifier (verify2-g3.json; canary kicked); For every row file under the session registry directory of a live unix host, read `pid`, `procStart` and `procStartFt`, run `ps -p <pid> -o lstart=`, parse the registry value as UTC and the ps value in the machine's local zone, and take the absolute difference in seconds. The Windows half is the row recorded in WIN-007's check: one row file listed and typed on a Windows host while its session was running.",
+          "observed": "3 of 3 live rows resolved to a running process; each gave a 0.0 s residual after zone assignment, while the raw strings differ by ten hours and by field order (registry `Thu Sep  3 00:15:49 2026` against `ps` `Thu  3 Sep 10:15:49 2026`); none of the three carried a procStartFt key at all. The Windows row recorded under WIN-007 carries an 18-digit value under `procStart` and no `procStartFt`, which is the rendering the win32 acquisition produces when the kernel32 binding loads. | The win32 artifact of 2.1.258, checksum-matched to its release manifest, shows the registry row stamping the acquisition's value under procStart unconditionally while the two-key splitter serves six other records, so",
+          "rule": "One paired reading per live pid; seconds between the two parsed instants after zone assignment, expecting 2 or fewer. Agreement in a UTC+0 zone would be evidence of nothing - the host measured is UTC+10, so both the ten-hour string gap and the zero-second instant gap are meaningful. One classification per row file: an all-ASCII-digit value is the tick-count rendering, anything else the asctime form.",
+          "note": "The win32 artifact of the same version settles what the text left undetermined, and refutes the sentence that the FILETIME is carried in a separate key: the row literal stamps procStart with the acquisition's value on both platforms and never calls the two-key splitter, whose six call sites in each artifact are other records. The row parser accepts either key and row consumers coalesce procStartFt then procStart, which is exactly why csift's dual read is correct on a Windows row. The acquisition also has two Windows renderings, and the powershell fallback's tick count sits on a different epoch than the FILETIME csift converts; that pair is stated in depends as a consequence and is owned in full by WIN-007."
         "literal": ".outputTaskId)try{let",
         "lowest_present": "2.1.100",
         "highest_absent": "2.1.23",
@@ -33673,16 +33723,16 @@
     {
       "id": "MISC-024",
       "area": "misc",
-      "behavior": "`ps -o lstart=` has exactly one format in the platform process-status utility - the started column's only format is a bare `%c` - so the rendering is whatever the caller's LC_TIME date-and-time entry expands `%c` to: both the FIELD ORDER and the weekday and month names follow the locale, not the host family. Measured on one macOS host on 2026-09-04 against one live pid: C and en_US.UTF-8 both give `Fri Sep  4 11:58:02 2026` (month first), en_GB.UTF-8 and en_AU.UTF-8 both give `Fri  4 Sep 11:58:02 2026` (day first), de_DE.UTF-8 gives `Fr  4 Sep 11:58:02 2026` and fr_FR.UTF-8 gives `Ven  4 sep 11:58:02 2026` - four renderings from one machine, two of them with non-English weekday names and one with a lowercase month. Claude Code removes the ambiguity for its own registry field by PINNING the environment: the session registration stamps `procStart: await ja(process.pid)` (byte 158819100), ja delegates to the async probe at byte 158136390, which spawns ps with `env:{...,LC_ALL:'C',TZ:'UTC'}`, and the sync twin Eie (byte 158134612) shells the same pin as a string, `LC_ALL=C TZ=UTC ps -o lstart= -p <pid>` (a third lstart probe beside them, at byte 158136613, pins the same pair and parses the result as UTC). A stored procStart is therefore always the C-locale order rendered in UTC, whatever the user's locale, and a probe that inherits the caller's locale sees whichever of the four that locale selects. The harness's own reuse guard fails open in the same direction as csift's: wAt (byte 158134798) returns true when the stored token is undefined, so an unavailable or unparseable probe never declares reuse.",
-      "depends": "csift's `ps_probe` (src/live/registry.rs) runs `ps -p <pid> -o lstart=` with the caller's inherited environment and tries exactly two strftime patterns, `%a %b %e %H:%M:%S %Y` then `%a %e %b %H:%M:%S %Y`, before falling through to `PsProbe::Alive(None)`. That covers the two English orders and nothing else, so on a host whose locale renders a non-English weekday the pid-reuse guard is skipped: measured today at csift 0.10.3 against one live registry row, the `pid` evidence row reads `alive (start-time guard matched)` under C and en_GB.UTF-8 and degrades to `alive (pid only)` under both de_DE.UTF-8 and fr_FR.UTF-8. The degradation is disclosed in the evidence row but its cause is not, and the reuse guard is off for that whole family of hosts. Pinning `LC_ALL=C TZ=UTC` on csift's own ps call, the way the harness does for procStart, would reduce the tolerated set to one pattern and close the hole.",
+      "behavior": "Every `ps -o lstart=` probe in the shipped binary pins the child environment to `LC_ALL=C` and `TZ=UTC`, so the process start-time token the client stores and later compares is always the C-locale asctime rendering in UTC whatever the caller's locale. The per-process registration `fce` (byte 158818434) builds the `<claude-home>/sessions/<pid>.json` row literal whose `procStart` field is `await ja(process.pid)` (byte 158819054, written by `await Mg(v,N)` at byte 158820225); `ja` (byte 158135807) caches over `async function m(e,t)` (byte 158136222), which spawns ps with `env:{...,LC_ALL:\"C\",TZ:\"UTC\"}`. Five further lstart readers carry the same pin: the sync twin `Eie` (byte 158134674) shells it as one string, `LC_ALL=C TZ=UTC ps -o lstart= -p <pid>`; the async twin `Jve` (byte 158136536) reads its result with `Date.parse(<stdout> UTC)`; the process-tree kill guard (byte 160220331) inlines the pair; and the two process scanners `li` (byte 166455531) and `pi` (byte 166456045) take it from `Br()` (byte 166455446). Those six are every lstart call site in the binary - the two remaining byte occurrences of the keyword are constant-table copies. The comparison side fails OPEN twice: `wAt(e,t)` returns true when the stored token is undefined, and `p(e,t)` returns true when the probe result is undefined or when the two values sit in different time domains (byte 158134798), so an unavailable or unparseable probe never declares pid reuse. The rendering itself is not the client's to choose: the platform process-status utility gives its started column exactly one format, a bare `%c`, expanded by the caller's LC_TIME date-and-time entry, so the same pid read WITHOUT the pin comes back with a different field order, with a non-English weekday abbreviation, with a lowercase month abbreviation, or with a three-byte non-Latin weekday abbreviation followed by a numeric month and day in place of a month name.",
+      "depends": "csift's `ps_probe` (src/live/registry.rs) is the reader of that token, and it pins its own `ps -p <pid> -o lstart=` child to `LC_ALL=C` and `TZ=UTC` exactly as the client pins its acquisition. `probe_pid` then parses the stored `procStart` with the single asctime pattern `%a %b %e %H:%M:%S %Y` under UTC (or as a FILETIME integer for a Windows row), parses the probe rendering with that pattern plus `%a %e %b %H:%M:%S %Y` as a belt, and reports the reuse guard matched when the two instants are within two seconds; either parse failing yields `PsProbe::Alive(None)` or `ReuseGuard::Skipped`, which the `pid` evidence row discloses as `alive (pid only)`. An empty or failing probe is checked against `/proc/<pid>` before the no-such-process verdict, because a minimal-userland ps rejects `-p` and `lstart` for a live pid too, and a row from another pid domain is never probed. The pin, not a larger pattern set, is what makes two patterns sufficient: one host answering for one live pid under seven locales gives five distinct renderings - the month-first asctime form under C and en_US.UTF-8, the day-first form under en_GB.UTF-8 and en_AU.UTF-8, the day-first form with a German weekday abbreviation under de_DE.UTF-8, the day-first form with a French weekday abbreviation and a lowercase month under fr_FR.UTF-8, and under ja_JP.UTF-8 a three-byte non-Latin weekday abbreviation followed by a numeric month and day - one rendering per locale, and only the first two parse under either tolerated pattern - so an inherited locale silently disables the reuse guard on every host outside the two English orders.",
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "224-234",
-          "snippet": "    let local = crate::timez::local_tz();\n    for fmt in [\"%a %b %e %H:%M:%S %Y\", \"%a %e %b %H:%M:%S %Y\"] {\n        if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {\n            if let Ok(dt) = bd.to_datetime() {\n                if let Ok(z) = dt.to_zoned(local.clone()) {\n                    return PsProbe::Alive(Some(z.timestamp()));\n                }\n            }\n        }\n    }\n    PsProbe::Alive(None)"
+          "lines": "236-245",
+          "snippet": "    for fmt in [\"%a %b %e %H:%M:%S %Y\", \"%a %e %b %H:%M:%S %Y\"] {\n        if let Ok(bd) = jiff::fmt::strtime::parse(fmt, &text) {\n            if let Ok(dt) = bd.to_datetime() {\n                if let Ok(z) = dt.to_zoned(jiff::tz::TimeZone::UTC) {\n                    return PsProbe::Alive(Some(z.timestamp()));\n                }\n            }\n        }\n    }\n    PsProbe::Alive(None)"
         }
       ],
-      "instrument": "`for L in C en_US.UTF-8 en_GB.UTF-8 en_AU.UTF-8; do LC_ALL=$L ps -p <pid> -o lstart=; done` on a single host, then the same four locales around `csift status @<id> --format json | jq '.evidence[]|select(.surface==\"pid\").value'`. Counting rule: one rendering per locale; every order must yield `alive (start-time guard matched)`, because a strftime parse that falls through both patterns degrades to `alive (pid only)` and silently disables the pid-reuse guard.",
+      "instrument": "`for L in C en_US.UTF-8 en_GB.UTF-8 en_AU.UTF-8 de_DE.UTF-8 fr_FR.UTF-8 ja_JP.UTF-8; do LC_ALL=$L ps -o lstart= -p <pid>; done` on one host, piping each rendering through `od -c` so a multi-byte weekday abbreviation is read as bytes rather than as a replacement glyph, then `LC_ALL=C TZ=UTC ps -o lstart= -p <pid>` compared byte for byte against that pid's `procStart` in `<claude-home>/sessions/<pid>.json`, then `csift status @<id> --format json | jq '.evidence[]|select(.surface==\"pid\").value'` under each of those locales. Counting rule: one rendering per locale on one host against one live pid, and one comparison per registry row whose pid is alive; the pinned rendering must equal the stored token on every such row, and the evidence row must read `alive (start-time guard matched)` under every locale, since csift pins its own probe.",
       "located": {
         "claude_code": null,
         "csift": "0.9.0",
@@ -33723,74 +33773,90 @@
       ],
       "attribution": "specimen-only",
       "open_legs": [
-        "The producer of the field-order fact is not in the Claude Code binary and cannot be; closing that leg means treating the platform utility and the locale database as the producer, which is what the enumeration above does. If the ledger requires a Claude Code producer, the claim should be split into a Claude Code claim (procStart is pinned to C/UTC) and a platform claim (lstart follows LC_TIME).",
-        "Producer hop still missing: There is no Claude Code producer for the ps field-order fact and there cannot be one: the renderer is the platform process-status utility (a single %c) plus the LC_TIME database, both cited above at their own offsets. The chain read out of the shipped Claude Code binary covers only the pinning clause of the claim's behavior text."
+        "A Windows host at this Claude Code version: read a `<claude-home>/sessions/<pid>.json` row written there for `procStartFt` and confirm no lstart probe runs on that platform, since every probe enumerated here is a unix ps child."
       ],
       "producer_trace": "partial",
       "specimen": "observed",
       "residue": [
-        "The harness's own reuse guard fails open in exactly the same direction as csift's (wAt at 158134798 returns true when the token is undefined), so an unavailable or unparseable probe never declares reuse in either implementation - a shared and deliberate bias worth stating beside the claim.",
-        "The follow-up the 2026-09-02 check floated is now backed by a measurement rather than a hypothesis: pinning LC_ALL=C TZ=UTC on csift's own ps call would reduce the tolerated set to one pattern and remove the third-order hole entirely."
+        "The client's comparison and csift's degrade in the same direction: an undefined stored token or an unparseable probe never asserts reuse, so a skipped guard is a disclosed pid-only verdict rather than a false match."
       ],
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "the registration stamping procStart, the only field this fact reaches in the harness",
-          "offset": 158819100,
-          "excerpt": "artedAt:Date.now(),procStart:await ja(process.pid),version:{ISSUES_EXPLAINER:\"report the issue at https://github.com/ant",
-          "note": "procStart:await ja(process.pid) inside the session registration row literal. This is the Claude Code half of the claim: the value csift later compares against."
+          "name": "session registration fce, the one row-writing path per process",
+          "offset": 158818434,
+          "excerpt": "async function fce(e,n){if(!qz())return!1;let r=Promise.withResolvers();e.setPidFileWriteChain(r.promise);let o=Ij()??\"interactive\";e.bornSpare=o===\"bg\"&&a.CLAUDE_BG",
+          "note": "The entry that starts the path: one registration per OS process, building the <claude-home>/sessions/<pid>.json row whose procStart field carries the start-time token."
         },
         {
           "role": "gate",
-          "name": "the async probe m, which PINS LC_ALL=C and TZ=UTC on the ps child",
-          "offset": 158136390,
-          "excerpt": "\"-p\",String(e)],{timeout:1000,...n,env:{...t??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return o.code===0&&o.stdout?o.stdout.trim():void 0}catch{return}}async function Jve(e){try{let t=await Ve(\"ps\",[\"-o\",\"lstart=\",\"-p\",String(",
-          "note": "The branch that decides the rendering: by forcing the C locale and UTC, the stored token is always the month-first order in UTC, whatever the user's locale. The sync twin Eie (158134612) embeds the same pin in its shell string."
+          "name": "the pinned lstart probe m",
+          "offset": 158136222,
+          "excerpt": "async function m(e,t){let n=t===void 0?{}:{env:t,extendEnv:!1};try{let r=t===void 0?\"ps\":dkt(\"ps\",Bd(t,\"PATH\")??\"\");if(r===null)return;let o=await Ve(r,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...n,env:{...t??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return o.code===0&&o.stdout?o.stdout.trim():void 0}catch{return}}async function Jve(e){try{",
+          "note": "The branch that fixes the rendering: the ps child is spawned with env {...,LC_ALL:\"C\",TZ:\"UTC\"}, so the token is the C-locale asctime form in UTC whatever the caller's locale. ja (byte 158135807) is a caching wrapper over this function and is what the row literal awaits."
         },
         {
           "role": "writer",
-          "name": "Eie, the shelled ps invocation whose stdout becomes the token",
-          "offset": 158134612,
-          "excerpt": "Q(n,{timeout:1000});return r?r.trim():null}catch{return null}}function Eie(e){try{let t=DQ(`LC_ALL=C TZ=UTC ps -o lstart= -p ${e}`,{timeout:1000});return t?t.trim():void 0}catch{re",
-          "note": "`LC_ALL=C TZ=UTC ps -o lstart= -p ${e}` - the harness's own copy of the probe csift runs unpinned. Verified byte-identical today: the pinned command and the stored row both read the same C-locale UTC token while the unpinned local rendering was ten hours ahead."
+          "name": "the registry row literal, procStart field",
+          "offset": 158819054,
+          "excerpt": "N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),version:",
+          "note": "The field that becomes the bytes: procStart:await ja(process.pid) inside the row object literal, written to <pid>.json by await Mg(v,N) at byte 158820225."
         }
       ],
       "enumeration": [
         {
-          "site": "the platform process-status utility, keyword table (NOT the Claude Code binary; NUL separators rendered as single spaces)",
-          "offset": 35076,
-          "excerpt": "gname lstart STARTED majflt MAJFLT minfl",
-          "verdict": "maps the lstart keyword to the STARTED column - the entry point for the field the claim is about."
+          "site": "the procStart probe m",
+          "offset": 158136222,
+          "excerpt": "async function m(e,t){let n=t===void 0?{}:{env:t,extendEnv:!1};try{let r=t===void 0?\"ps\":dkt(\"ps\",Bd(t,\"PATH\")??\"\");if(r===null)return;let o=await Ve(r,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...n,env:{...t??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return o.code===0&&o.stdout?o.stdout.trim",
+          "verdict": "Pins LC_ALL C and TZ UTC on the ps child; its stdout, trimmed, is the stored token."
         },
         {
-          "site": "the same utility's format table, where lstart's single format lives (NUL separators rendered as single spaces)",
-          "offset": 35745,
-          "excerpt": "%c ?? %d/%d %*s  %*.*s%c %l:%M%p %k:%M   %a%I%p %a%H   %e%b%y %c %ld-%02ld:%02ld",
-          "verdict": "the only format for the started column is the literal %c, so the utility itself imposes NO field order; a second copy of the table sits at 103089-103151."
+          "site": "the async twin Jve",
+          "offset": 158136536,
+          "excerpt": "async function Jve(e){try{let t=await Ve(\"ps\",[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,env:{...process.env,LC_ALL:\"C\",TZ:\"UTC\"}});if(t.code!==0||!t.stdout?.trim())return null;let n=Date.parse(`${t.stdout.trim()} UTC`);return Numbe",
+          "verdict": "Same pin, and the result is read as UTC by Date.parse of the stdout with a UTC suffix."
         },
         {
-          "site": "the LC_TIME date-and-time entry for the en_US locale (the locale database, not any binary)",
-          "offset": 237,
-          "excerpt": "%H:%M:%S | %m/%d/%Y | %a %b %e %X %Y",
-          "verdict": "%c expands month-first, giving 'Thu Sep  3 10:16:07 2026' - csift's first pattern."
+          "site": "the sync twin Eie",
+          "offset": 158134674,
+          "excerpt": "function Eie(e){try{let t=DQ(`LC_ALL=C TZ=UTC ps -o lstart= -p ${e}`,{timeout:1000});return t?t.trim():void 0}catch{return}}functi",
+          "verdict": "Shells the same pin as one string; this is the probe the reuse comparison runs."
         },
         {
-          "site": "the LC_TIME date-and-time entry for the en_GB locale",
-          "offset": 237,
-          "excerpt": "%H:%M:%S | %d/%m/%Y | %a %e %b %X %Y",
-          "verdict": "%c expands day-first, giving 'Thu  3 Sep 10:16:07 2026' - csift's second pattern. Same host, same pid: the discriminator is LC_TIME, not the host family, exactly as the claim says."
+          "site": "the process-tree kill guard probe",
+          "offset": 160220331,
+          "excerpt": "async function d(n){let r=new Map,{stdout:o}=await Ve(\"ps\",[\"-o\",\"pid=\",\"-o\",\"lstart=\",\"-p\",n.join(\",\")],{timeout:f,cwd:\"/\",env:{USER_TYPE:\"external\",NODE_ENV:\"production\",LC_ALL:\"C\",TZ:\"UTC\"},stripFinalNewline:!1});for(let e of o.spli",
+          "verdict": "Reads pid and lstart for a batch of pids with LC_ALL C and TZ UTC inlined in its env."
         },
         {
-          "site": "the LC_TIME date-and-time entry for the de_DE locale, with its own abbreviated weekday names",
-          "offset": 232,
-          "excerpt": "%a %e %b %X %Y with day names So Mo Di Mi Do Fr Sa",
-          "verdict": "a THIRD rendering, 'Do  3 Sep 10:16:07 2026', which matches NEITHER csift pattern - the enumeration of orders the guard tolerates is therefore not the enumeration of orders that occur."
+          "site": "the full-table scanner li",
+          "offset": 166455531,
+          "excerpt": "async function li(e){let t=await Ve(\"ps\",[\"-A\",\"-o\",\"pid=\",\"-o\",\"ppid=\",\"-o\",\"pgid=\",\"-o\",\"stat=\",\"-o\",\"lstart=\"],{timeout:e,env:Br(),cwd:\"/\",stripFinalNewline:!1}),n=fi(t.stdout);retur",
+          "verdict": "ps -A with an lstart column; its env comes from Br(), which carries the same pair."
         },
         {
-          "site": "the Claude Code reuse guard that degrades to a pass when the token is unavailable",
+          "site": "the per-pid scanner pi",
+          "offset": 166456045,
+          "excerpt": "async function pi(e,t){let n=await Ve(\"ps\",[\"-o\",\"pid=\",\"-o\",\"pgid=\",\"-o\",\"stat=\",\"-o\",\"lstart=\",\"-p\",e.join(\",\")],{timeout:t,env:Br(),cwd:\"/\",stripFinalNewline:!1});return hi(n.stdout)}function ",
+          "verdict": "Per-pid form of the same scan, same Br() env."
+        },
+        {
+          "site": "the scanner env helper Br",
+          "offset": 166455446,
+          "excerpt": "function Br(){return{USER_TYPE:\"external\",NODE_ENV:\"production\",LC_ALL:\"C\",",
+          "verdict": "The pin for both scanners: USER_TYPE, NODE_ENV, LC_ALL C, TZ UTC."
+        },
+        {
+          "site": "the constant-table copy of the shelled command",
+          "offset": 76944888,
+          "excerpt": "LC_ALL=C TZ=UTC ps -o lstart= -p ",
+          "verdict": "One of the two remaining lstart byte occurrences (the other is at byte 76315976); both are table copies of code strings, not call sites. A byte grep of the keyword returns exactly 8 offsets - 76315976, 76944910, 158134726, 158136381, 158136589, 160220409, 166455635, 166456133 - so with the six probes above this closes the enumeration: no unpinned lstart probe exists in the binary."
+        },
+        {
+          "site": "the fail-open reuse comparison",
           "offset": 158134798,
-          "excerpt": "function wAt(e,t){if(t===void 0)return!0;return p(t,Eie(e))}function wQe(e,t){if(t===e)return!0;return!1}funct",
-          "verdict": "wAt returns true when the stored token is undefined, and p treats an undefined probe as a match - the harness's own guard fails open the same way csift's does, which is why the pinning matters."
+          "excerpt": "function wAt(e,t){if(t===void 0)return!0;return p(t,Eie(e))}function wQe(e,t){if(t===e)return!0;return!1}function p(e,t){return t===void 0||t===e||S(e,t)}function S(e,t){if(!c())return!1;let",
+          "verdict": "wAt passes when the stored token is undefined and p passes when the probe result is undefined, so a missing or unparseable rendering never declares reuse."
         }
       ]
     },
@@ -36988,13 +37054,13 @@
           "note": "El takes fl(ye()) - the originalCwd slot - while the record template Gjt stamps cwd: ne() - the tracked cwd, and the corpus still shows 34 distinct record cwds against 17 directories with 19 values having none; but the enumeration of the slot's writers turned up relocateSessionTranscript, which mkdirs a new project directory and moves the transcript, refuting the claim's 'START cwd alone' clause."
         }
       ],
-      "attribution": "specimen-only",
+      "attribution": "upstream",
       "open_legs": [
         "TEXT: the directory is keyed by the session's originalCwd SLOT, which is seeded from the start cwd and re-keyed only by explicit re-anchors (EnterWorktree, ExitWorktree, the directory move, a deep-link launch, a worktree resume, a warm-spare claim); on a re-key the harness mkdirs the new project directory and MOVES the transcript into it, so 'a directory implies the start cwd of its files' does not survive a relocation. The operative half is unchanged and confirmed: an in-session cd lands in a different slot (setCwd/Kse) and a subagent inherits the parent key, so neither ever mints a directory, and an observed record cwd need not have one.",
         "Producer hop still missing: No hop produces the claim's leading clause 'keyed by the session's START cwd alone': the directory is keyed by the originalCwd SLOT, and the enumeration finds ten writers of that slot plus a relocation writer that mkdirs the new directory and moves the transcript into it. The chain and the enumeration are complete for the corrected statement; the written one is refuted in that clause, which is why the producer leg is not marked complete.",
         "Text rewrite rejected on 2026-09-04 by the adversarial verifier (One sentence asserts a count I can refute in one grep, and the two sites it drops are the two the TEXT line named first. The rewrite says setOriginalCwd (DS, byte 156790400) 'is called from ten launch-or-anchor sites - four worktree-resume arms, a deep-link launch, a direct-arg repo selection, the worktree tool path, a worktree chdir at startup, and the directory-move flow plus its rollback'. A wo); the text stays as it was and the claim stays below end-to-end until a rewrite passes."
       ],
-      "producer_trace": "partial",
+      "producer_trace": "upstream",
       "specimen": "observed",
       "residue": [
         "/add-dir mints a project directory for the added path containing only a .session-aliases pointer file and no transcript - a second way a directory can exist with no transcript beside the memory-only case. No corpus instance exists here (0 .session-aliases files).",
@@ -37516,6 +37582,26 @@
           "note": "The filename builder: project dir = join(projectsRoot, Em(cwd)); the session file = join(that dir, `${Q()}.jsonl`). Hy is aliased getSessionProjectDir in the same export table."
         },
         {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "reframe of the claim against its traced chain, re-read by an adversarial verifier (verify2-s3.json; canary kicked); Seven locales around `ps -o lstart= -p <pid>` for one live pid on one host, each rendering also read through `od -c`, then, for every `<claude-home>/sessions/<pid>.json` row whose pid is alive, `LC_ALL=C TZ=UTC ps -o lstart= -p <pid>` compared byte for byte with that row's stored `procStart`.",
+          "observed": "Five distinct renderings from seven locales for one live pid: C and en_US.UTF-8 give `Thu Sep  3 10:16:07 2026`, en_GB.UTF-8 and en_AU.UTF-8 give `Thu  3 Sep 10:16:07 2026`, de_DE.UTF-8 gives `Do  3 Sep 10:16:07 2026`, fr_FR.UTF-8 gives `Jeu  3 sep 10:16:07 2026`, and ja_JP.UTF-8 gives a rendering whose first field is a three-byte CJK weekday abbreviation followed by `  9/ 3 10:16:07 2026` - od -c shows the three bytes in the weekday slot and a numeric month and day where the other locales carry a month abbreviation. All three registry rows whose pid is alive carry a `procStart` byte-identical to the pinned probe's stdout for that pid (`Thu Sep  3 00:15:49 2026`, `Thu Sep  3 00:16:07 2026`, ",
+          "rule": "One rendering per locale on one host against one live pid; one comparison per registry row whose pid is alive, byte for byte between the pinned probe's stdout and the stored token.",
+          "note": "The claim's headline was the platform utility's field order, whose producer is the utility's single `%c` plus the LC_TIME database and can never be a hop in this binary. Tracing what the binary does decide moves the headline onto the client: `m` pins `LC_ALL=C` and `TZ=UTC` on the ps child, and the enumeration of every lstart call site shows all six probes carry the same pin, so a stored `procStart` has one rendering by construction and the locale question belongs to the reader that inherits an environment. The old `depends` is superseded on its own terms: it described `ps_probe` as running with the caller's inherited environment and proposed the pin as a fix, and the cited code now sets `LC_ALL` and `TZ` on the child and parses under UTC, so the two-pattern set is a belt rather than the tolerated universe. The four-rendering count in the old text is also low: seven locales on one host give five, the fifth keeping a weekday field but rendering it as a three-byte non-Latin abbreviation and replacing the month name with a number, a shape neither tolerated pattern parses."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "`ps -p <live pid> -o lstart=` under LC_ALL in {C, en_US.UTF-8, en_AU.UTF-8, de_DE.UTF-8, fr_FR.UTF-8}, each with and without TZ=UTC, on this host; then `cargo test ps_probe_instant_is_the_c_utc_rendering_parsed_as_utc`.",
+          "observed": "Four renderings: month-first under C and en_US, day-first under en_AU, `Fr  4 Sep` under de_DE and `Ven  4 sep` under fr_FR (the non-English names parse under neither English pattern); TZ=UTC shifts the clock to UTC. The probe now pins LC_ALL=C and TZ=UTC on its own `ps` call and parses the result as UTC; the unit test asserts the probe's instant equals the pinned rendering parsed as UTC.",
+          "rule": "one ps call per locale setting on one live pid",
+          "note": "The probe inherited the caller's locale, so a German or French host silently skipped the pid-reuse guard; it now pins the locale and zone exactly as the harness pins its own acquisition."
+        },
+        {
           "role": "writer",
           "name": "lm (session file for an arbitrary session id)",
           "offset": 166068377,
@@ -37529,7 +37615,8 @@
           "excerpt": "async function sMe(e){let n=L()&&e!==void 0?e:void 0,r=Q(),o=fl(ye()),d=Fi(),f=d.sessionFile;if(f===null||pu()){d.currentSessionRelocatedCwd=ye(),Xp(r,\"cd\",o);return}let _=Uf(o,`${r}.jsonl`);if(f===_){Xp(r,\"cd\",o);let v=ye();if(d.currentSessionRelocatedCwd!==v",
           "note": "The one code path that MOVES a live transcript (a cwd change to another project): the destination is recomputed as join(newProjectDir, `${Q()}.jsonl`), so a relocation changes the directory and preserves the basename - it cannot produce a file named other than its session id."
         }
-      ]
+      ],
+      "upstream_reason": "The rendering of the started column is produced outside the binary, by the platform process-status utility (whose only format for that column is a bare `%c`) and the caller's LC_TIME date-and-time entry; the client's treatment of it is to pin `LC_ALL=C` and `TZ=UTC` on every probe it spawns."
     },
     {
       "id": "PATH-013",
@@ -65859,13 +65946,13 @@
     {
       "id": "WIN-007",
       "area": "windows",
-      "behavior": "The session registry row <claude-home>/sessions/<pid>.json stamps the owner process's creation instant under ONE key, unconditionally: the row literal is {pid, sessionId, cwd, startedAt, procStart: await <procStartGetter>(process.pid), version, ...} in both artifacts of 2.1.258 (win32 @174703780, darwin @158819044). The row writer never calls the two-key splitter. The RENDERING is platform- and capability-dependent, and on Windows there are TWO incompatible ones: the acquisition (win32 @174020355) returns the raw creation FILETIME as a decimal string (100ns ticks since 1601-01-01, read from OpenProcess + GetProcessTimes through an in-process foreign-function binding to kernel32, epoch constant 116444736000000000n @174015383) when that binding loads, and otherwise spawns powershell with (Get-CimInstance Win32_Process -Filter \"ProcessId=<pid>\").CreationDate.Ticks, which renders .NET ticks since year 1 - roughly 6.4e17 today against the FILETIME's 1.34e17. The darwin acquisition (@158136222) has only the ps -o lstart= -p <pid> arm with LC_ALL=C and TZ=UTC, so it yields the asctime form (Sun Aug 16 09:04:23 2026); the darwin capability predicate is the constant false at @158132377, which is why that build contains no tick producer at all. The binary encodes the two-rendering fact itself: a tolerance treats two proc-start values on opposite sides of 3e17 as the SAME process (win32 @174018881), gated on the same capability predicate. A SECOND key, procStartFt, does exist, but on OTHER payloads: a platform-conditional splitter (win32 @174019832, darwin @158135690) writes the value to exactly one of procStart/procStartFt and has exactly six call sites, none of them the registry row - two messaging key-companion writers, an in-use marker payload, a worktree lock-reason string that reads only the procStart half, a daemon/supervisor lock record, and a job-holder identity that renames the pair to holderProcStart/holderProcStartFt. Its paired reader is NOT procStartFt ?? procStart: on the FILETIME-capable platform it REFUSES a record carrying procStart and returns procStartFt only, otherwise it returns procStart (win32 @174019733, darwin @158135600), and its eleven win32 call sites inherit that refusal. What does accept both keys is the registry row READER (darwin @159696721, field handling at ~@159697150: procStart taken when it is a string, procStartFt spread in when it is one). Specimen: a Windows 11 ARM64 session at 2.1.258 wrote an 18-digit value under procStart with no procStartFt and pidDomain 'win32:<host>'; decoded as a FILETIME it lands 166.3 s before that row's own startedAt, decoded as .NET ticks it lands in year 427, so that row came from the FILETIME path. On this unix host, 2026-09-04: 4 of 4 rows carry the asctime form, 0 all-digit, 0 procStartFt (counting rule: one classification per <pid>.json row file; an all-ASCII-digit value is a tick rendering).",
-      "depends": "csift reads procStartFt first and falls back to procStart - a superset of what the row writer emits, so the read order stays safe even though the binary's own paired reader is not a ?? fallback - then parses the value into an instant and compares it with the probed process start within a 2-second tolerance: an all-ASCII-digit value is decoded as a FILETIME, anything else through the asctime parse. That mapping covers the unix asctime form and the Windows FILETIME form, and it is WRONG for the Windows PowerShell-fallback rendering: .NET ticks decoded as a FILETIME land about sixteen centuries out, blow the 2-second tolerance, and make probe_pid return Reused, which the verdict layer renders as 'pid reused by another process' - a live session reported dead, on exactly the Windows hosts where the foreign-function binding does not load. The code that relies on the old mapping: parse_registry_proc_start and filetime_to_timestamp (src/live/registry.rs 175-199), the comparison arm at src/live/registry.rs 143-152, the module doc at src/live/registry.rs 13-21 whose platform story is one rendering per platform, and the row-read comment at src/live/registry.rs 72-77, which states that every reader in the binary is procStartFt ?? procStart. Reading a single key, or parsing a single format, would still silently degrade a Windows row to a disclosed pid-only probe; the new failure the trace exposes is worse than a degrade, because a mis-decoded value is not unparseable and so is not disclosed at all.",
+      "behavior": "The session registry row <claude-home>/sessions/<pid>.json stamps the owner process's creation instant under ONE key, unconditionally: the row literal is {pid, sessionId, cwd, startedAt, procStart: await <procStartGetter>(process.pid), version, ...} in both 2.1.258 artifacts (win32 @174703780, darwin @158819044), and the row writer never calls the two-key splitter. The RENDERING is platform- and capability-dependent, and on Windows there are TWO incompatible ones chosen by a single predicate. The acquisition (win32 @174020355) returns d(pid)?.toString() - the raw creation FILETIME as a decimal string, 100ns ticks since 1601-01-01, read through an in-process bun:ffi binding to kernel32 OpenProcess / GetProcessTimes / CloseHandle with the epoch constant 116444736000000000n (@174015383) - when that binding loads; otherwise it spawns powershell.exe -NoProfile -Command with (Get-CimInstance Win32_Process -Filter \"ProcessId=<pid>\").CreationDate.Ticks, whose value is .NET DateTime ticks: 100-nanosecond intervals since 0001-01-01, exactly 504911232000000000 higher than the FILETIME for the same instant, so about 6.4e17 against the FILETIME's 1.34e17. The predicate is f() = !forcedUnavailable && dlopen(\"kernel32.dll\") !== null (@174015331), and its loader logs [win32-proc-times] bun:ffi loaded, using procStartFt on one branch and [win32-proc-times] bun:ffi unavailable, falling back to spawn on the other (@174014790). Both renderings are all-ASCII-digit strings and both land under the row's procStart key; the acquisition is memoized for 60s, 5s after a miss (@174019920). The darwin acquisition (@158136222) carries only the ps -o lstart= -p <pid> arm with LC_ALL=C and TZ=UTC, so it yields the asctime form (Sun Aug 16 09:04:23 2026); the darwin capability predicate is the constant function c(){return!1} (@158132377), which is why that artifact contains no tick producer at all. The binary encodes the two-rendering fact itself: the binary carries TWO comparisons of that shape. The predicate at @174018881 is UNGATED - it returns true whenever the two values straddle 3e17, whatever the platform - and it is what the liveness classifier at @174016912 and the async prove at @174019388 call. Its twin at @174019085 opens with if(!f())return!1, so the chain reached through @174019036 (n===void 0||n===e||E(e,n)) degrades to exact equality where the binding does not load. A SECOND key, procStartFt, exists on OTHER payloads: a platform-conditional splitter (win32 @174019832, darwin @158135690) writes the value to exactly one of procStart / procStartFt and has exactly six call sites in each artifact, none of them the registry row - two messaging key-companion writers, an in-use marker payload, a worktree lock-reason string that reads only the procStart half, a daemon/supervisor lock record, and a job-holder identity that renames the pair to holderProcStart / holderProcStartFt. Its paired reader is NOT procStartFt ?? procStart: on the FILETIME-capable platform it REFUSES a record carrying procStart and returns procStartFt only, otherwise it returns procStart (win32 @174019733, darwin @158135600), and its eleven call sites in each artifact inherit that refusal. What accepts both keys is the registry row PARSER (win32 @175494533, darwin @159697228): procStart taken when it is a string, procStartFt spread in when it is one. Two further registry readers take procStart alone and ship in both artifacts - a row-ordering comparator (darwin @159701761, win32 @175499066) and a live-row name filter (darwin @159701901, win32 @175499206). Specimen: a Windows ARM64 session at 2.1.258 wrote a row carrying pid 4708, an 18-digit procStart of 134328101803820142, no procStartFt, pidDomain win32:<host>, a drive-letter cwd and version 2.1.258, with one <pid>.<64hex>.key companion beside it; decoded as a FILETIME the value lands 166.29 s before that row's own startedAt, decoded as .NET ticks it lands in year 426, so that row came from the binding path. On a unix host: 4 of 4 rows carry the asctime form, 0 all-digit, 0 procStartFt (counting rule: one classification per <pid>.json row file; an all-ASCII-digit value is a tick rendering).",
+      "depends": "csift reads procStartFt first and falls back to procStart - a superset of what the row writer emits, so the read order stays safe even though the binary's own paired reader is not a ?? fallback - then parses the value into an instant and compares it with the probed process start within a 2-second tolerance: an all-ASCII-digit value is decoded as a FILETIME, anything else through the asctime parse. That mapping covers the unix asctime form and the Windows binding rendering, and it is WRONG for the Windows spawn-fallback rendering: .NET ticks decoded as a FILETIME land past the year 3600, blow the 2-second tolerance, and make probe_pid return Reused, which the verdict layer renders as 'pid reused by another process' - a live session reported dead on exactly the Windows hosts where the kernel32 binding does not load. The code that relies on the single-rendering mapping: parse_registry_proc_start and filetime_to_timestamp (src/live/registry.rs 178-202), whose all-digit branch has no upper bound, so an out-of-range value decodes instead of failing; the comparison arm at src/live/registry.rs 146-155; and the module doc at src/live/registry.rs 13-23, whose platform story is one rendering per platform. The row read itself (src/live/registry.rs 74-79) is correct as written: procStartFt first, procStart second, with the comment already naming the row writer's single key. Reading one key, or parsing one format, would degrade a Windows row to a disclosed pid-only probe; the failure the trace exposes is worse than a degrade, because a mis-decoded value is not unparseable and so is never disclosed. The remedy the binary itself suggests is its own 3e17 straddle: read a value above that threshold as the ticks rendering, or refuse an out-of-range decode and skip the reuse guard rather than declaring reuse.",
       "code": [
         {
           "path": "src/live/registry.rs",
-          "lines": "13-21",
-          "snippet": "//! `procStart` is the OWNER PROCESS's creation instant in a PLATFORM-SPECIFIC rendering:\n//! on unix an asctime string in UTC (`Sun Aug 16 09:04:23 2026`), on Windows a FILETIME\n//! integer (100ns ticks since 1601-01-01, e.g. `134328101803820142`). `pidDomain` names\n//! the pid space the row was written in (`darwin`, `linux`, or `win32:<hostname>`); a row\n//! from another domain cannot be probed here and the verdict says so. `ps lstart` renders\n//! in the LOCAL zone - a naive string/local comparison flags pid reuse on EVERY row.\n//! Parse both sides to instants and compare with a small tolerance; when either side is\n//! absent or unparseable, degrade to a pid-only probe AND say so in the evidence (the\n//! reuse guard was skipped, honest, never silent)."
+          "lines": "13-23",
+          "snippet": "//! `procStart` is the OWNER PROCESS's creation instant in a PLATFORM-SPECIFIC rendering:\n//! on unix an asctime string in UTC (`Sun Aug 16 09:04:23 2026`), on Windows a FILETIME\n//! integer (100ns ticks since 1601-01-01, e.g. `134328101803820142`). `pidDomain` names\n//! the pid space the row was written in (`darwin`, `linux`, or `win32:<hostname>`); a row\n//! from another domain cannot be probed here and the verdict says so. `ps lstart` renders\n//! under the caller's locale and zone (the harness pins `LC_ALL=C` and `TZ=UTC` for its\n//! own acquisition, and so does csift's probe - an inherited locale changes the field\n//! order and the weekday and month names, an inherited zone shifts the clock). Parse\n//! both sides to UTC instants and compare with a small tolerance; when either side is\n//! absent or unparseable, degrade to a pid-only probe AND say so in the evidence (the\n//! reuse guard was skipped, honest, never silent)."
         },
         {
           "path": "src/live/registry.rs",
@@ -65879,11 +65966,11 @@
         },
         {
           "path": "src/live/registry.rs",
-          "lines": "72-77",
-          "snippet": "            // The 2.1.258 schema carries TWO keys and every reader in the binary is\n            // `procStartFt ?? procStart` (a platform splitter writes exactly one of\n            // them; the Windows session measured live wrote the FILETIME under\n            // `procStart`, so both spellings are read and both renderings parse).\n            proc_start: str_field(\"procStartFt\").or_else(|| str_field(\"procStart\")),\n            pid_domain: str_field(\"pidDomain\"),"
+          "lines": "74-80",
+          "snippet": "            // The ROW writer stamps `procStart` unconditionally on every platform (the\n            // Windows session measured live carried the FILETIME under that key); the\n            // two-key `procStartFt` schema belongs to the `<pid>.<hash>.key` companion,\n            // not to the row. Reading `procStartFt` first is a harmless superset of\n            // what the row writer emits, and both renderings parse (ledger WIN-007).\n            proc_start: str_field(\"procStartFt\").or_else(|| str_field(\"procStart\")),\n            pid_domain: str_field(\"pidDomain\"),"
         }
       ],
-      "instrument": "Read `procStart` from every row under `~/.claude/sessions/*.json` and classify it: an all-ASCII-digit value is the Windows FILETIME rendering, anything else is the unix asctime form. Measured 2026-09-02 on this machine: 9 rows, 9 asctime, 0 FILETIME (a unix host). Counting rule: one classification per row file; a FILETIME row requires a registry written by a Windows session.",
+      "instrument": "Read procStart from every row under <claude-home>/sessions/*.json and classify it: an all-ASCII-digit value is a tick rendering (a FILETIME near 1.3e17, .NET ticks near 6.4e17), anything else the unix asctime form; cross-check a tick value against the same row's startedAt, which the creation instant precedes by seconds. Counting rule: one classification per row file. For the producer side, read the proc-start module whole in the win32 artifact of the same version - the kernel32 binding loader and its predicate, the acquisition's two Windows branches, the FILETIME reader's epoch constant, the splitter and its paired reader with every call site, and the registry row literal - and compare each against its darwin twin; artifacts are identified by the sha256 and size in the version's own release manifest.",
       "located": {
         "claude_code": "2.1.258",
         "csift": "0.10.1",
@@ -65922,38 +66009,66 @@
           "note": "Drifted on all three of the claim's assertions, and the drift reaches csift's code. (1) The writer hop at @174703780 (darwin twin @158819044) shows the registry row stamping procStart unconditionally; the splitter's six call sites, enumerated by the conflict adjudication and re-read in the win32 artifact, are all other payloads, so the sentence 'the row schema declares both optional, a platform-conditional splitter writes the value to exactly one of them' was attributing another subsystem's schema to the row. (2) The gate hop at @174019733 (darwin @158135600) shows the paired reader doing the "
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "Producer: the tick-count acquisition is absent from this artifact - close it by reading the same version's Windows build for the platform branch of the proc-start helper (grep the tick-count conversion and the process-query it wraps), since this bundle self-identifies as darwin.",
-        "Specimen: read one <pid>.<64hex>.key companion on a Windows host to decide whether the splitter really writes the value under the tick-count key THERE while the row keeps `procStart` - the row specimen above shows the row half only.",
-        "Refinement for the claim text: the two-key schema and the splitter belong to the .key companion, not to the <pid>.json row, whose writer stamps `procStart` unconditionally; and the platform reader refuses a procStart value on the tick-count platform rather than falling back to it.",
-        "Not attempted (a live action would be required): Closing the producer leg needs a differently-built binary (the Windows artifact of the same version), which is not present on this host; the .key specimen needs a live Windows session's key file.",
-        "Producer hop still missing: The tick-count rendering has no producer in this build. The only proc-start acquisition is the async form at 158136222 and its sync twin at 158134674, both unconditionally `ps -o lstart= -p <pid>` with LC_ALL=C and TZ=UTC; ToFileTimeUtc has 0 hits and Get-CimInstance 0 hits, and all 5 Get-Process plus 6 tasklist literals are an alias table, a permission-prompt placeholder, an addRules comparison, IDE detection and two command allowlists. The bundle self-identifies as the darwin artifact (156312375), so the Windows acquisition is in a binary I cannot read here.",
-        "Round-two tracing on 2026-09-04 was rejected on adversarial re-read (Every factual part of this retrace verifies and I re-read all of it myself. I re-fetched the upstream per-version manifest for the audited version and confirmed the Windows arm64 artifact's sha256 and size against it, so the second artifact is genuine. All 61 cited offsets (7 chain hops plus 54 enumeration rows) sit at delta 0 in the artifact each names. The chain is genuinely connected rather tha); the leg stays open until a chain passes that re-read."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "zAn / fce - session registration",
-          "offset": 158818370,
-          "excerpt": "function zAn(e){let n=BG(),r=fce(n,e);return n.registration=r,r}async function fce(e,n){if(!qz())return!1;let r=Promise.",
-          "note": "One registration per OS process writes the <pid>.json row; this is the entry that acquires and stamps the proc-start."
+          "name": "OEn / ace - the session-registration entry (win32 artifact)",
+          "offset": 174703095,
+          "excerpt": "}function OEn(e){let n=LV(),r=ace(n,e);return n.registration=r,r}async function ace(e,n){if(!Qz())return!1;let r=Promise.withResolvers();e.setPidFileWriteChain(r.promise);let o=Rz()??\"interactive\";e.bornSpare=o===\"bg\"&&a.CLAUDE_BG_SOURCE===\"spare\";let d=e.bornSpare&&!await eF(n),f=a.CLAUDE_CODE_SESS",
+          "note": "One registration per OS process. OEn installs it, ace does the work: inside ace the row path is built as R=kt(VF(),`${process.pid}.json`) (offset 174703465), the proc-start is acquired and the row object is written. The darwin twin zAn / fce is the same two-function shape at 158818370, so the row-writing entry is identical in both artifacts."
         },
         {
           "role": "gate",
-          "name": "eE / OU - the platform reader and splitter",
-          "offset": 158135600,
-          "excerpt": "function eE(e){if(c())return e.procStart!==void 0?void 0:e.procStartFt;return e.procStart}function OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:v",
-          "note": "OU is the platform-conditional splitter and eE the paired reader - and eE is NOT `procStartFt ?? procStart`: on the tick-count platform it REFUSES a procStart value and returns the tick-count key only. A windows-only numeric tolerance sits beside them (S at 158134952) comparing two proc-start values across a 3e17 threshold, which is itself evidence that the platform rendering is numeric."
+          "name": "m() the kernel32 binding loader and f() the capability predicate over it (win32)",
+          "offset": 174014790,
+          "excerpt": "function m(){if(l!==void 0)return l;try{l=Ce(\"bun:ffi\").dlopen(\"kernel32.dll\",{OpenProcess:{args:[\"u32\",\"i32\",\"u32\"],returns:\"ptr\"},GetProcessTimes:{args:[\"ptr\",\"ptr\",\"ptr\",\"ptr\",\"ptr\"],returns:\"i32\"},CloseHandle:{args:[\"ptr\"],returns:\"i32\"}}).symbols,t(\"[win32-proc-times] bun:ffi loaded, using procStartFt\")}catch(e){t(`[win32-proc-times] bun:ffi unavailable, falling back to spawn: ${e instanceof Error?e.message:String(e)}`),l=null}return l}class p{#e=!1;get forcedUnavailable(){return this.#e}forceUnavailable(e){this.#e=e}}var x=new p;function f(){return!x.forcedUnavailable&&m()!==null}var C=4096,I=116444736000000000n;function d(e){if(!Number.isInteger",
+          "note": "The predicate that chooses between the two Windows renderings. m() dlopens kernel32.dll for OpenProcess/GetProcessTimes/CloseHandle and caches the symbols or null; f() is !forcedUnavailable && m()!==null. Its own log lines name the second key on the loaded branch and announce the spawn fallback on the other. The darwin twin is the constant function c(){return!1} at 158132377, which is why that artifact carries no tick producer."
         },
         {
           "role": "writer",
-          "name": "the row object literal",
+          "name": "S() - the acquisition, both Windows branches and the unix branch (win32)",
+          "offset": 174020355,
+          "excerpt": "async function S(e,n){let r=n===void 0?{}:{env:n,extendEnv:!1};try{{if(f())return d(e)?.toString();let o=n===void 0?\"powershell.exe\":ktt(\"powershell.exe\",kd(n,\"PATH\")??\"\");if(o===null)return;let u=await Ve(o,[\"-NoProfile\",\"-Command\",`(Get-CimInstance Win32_Process -Filter \"ProcessId=${e}\").CreationDate.Ticks`],{timeout:1000,...r});return u.code===0&&u.stdout?.trim()?u.stdout.trim():void 0}let i=n===void 0?\"ps\":ktt(\"ps\",kd(n,\"PATH\")??\"\");if(i===null)return;let s=await Ve(i,[\"-o\",\"lstart=\",\"-p\",String(e)],{timeout:1000,...r,env:{...n??process.env,LC_ALL:\"C\",TZ:\"UTC\"}});return s.code===0&&s.stdout?s.stdout.trim():void 0}catch{return}}async function YRe(e){try{{if(f()){let o=d(e);return o===void",
+          "note": "The bytes that become the row's procStart value. On the capable branch it returns d(pid)?.toString(), the raw creation FILETIME as a decimal string. Otherwise it spawns powershell.exe -NoProfile -Command with (Get-CimInstance Win32_Process -Filter \"ProcessId=<pid>\").CreationDate.Ticks, whose value is .NET DateTime ticks since 0001-01-01 - a different, larger rendering of the same instant. The last arm is the unix ps -o lstart= form. The memoizing wrapper gl(e,n) sits at 174019920 with a 60s cache and a 5s miss cache."
+        },
+        {
+          "role": "writer",
+          "name": "d() - the creation FILETIME read through the kernel32 binding (win32)",
+          "offset": 174015383,
+          "excerpt": "var C=4096,I=116444736000000000n;function d(e){if(!Number.isInteger(e)||e<=0)return;let n=m();if(n==null)return;let r=n.OpenProcess(C,0,e);if(!r)return;try{let i=new Uint8Array(8),s=new Uint8Array(8),o=new Uint8Array(8),u=new Uint8Array(8);if(n.GetProcessTimes(r,i,s,o,u)===0)return;return new DataView(i.buffer).getBigU",
+          "note": "Reads the creation FILETIME with GetProcessTimes into an 8-byte buffer and returns getBigUint64 little-endian; I=116444736000000000n is the 1601-to-1970 epoch constant used by the sibling converter b(e). The BigInt is what S() renders with toString(), so the FFI rendering is 100ns ticks since 1601-01-01."
+        },
+        {
+          "role": "writer",
+          "name": "the registry row object literal - ONE key, unconditional (win32)",
+          "offset": 174703780,
+          "excerpt": "I=b({pid:process.pid,sessionId:Q(),cwd:_e(),startedAt:Date.now(),procStart:await gl(process.pid),version:{ISSUES_EXPLAINER:\"report the issue at https://github.com/anthropics/claude",
+          "note": "The row stamps procStart: await gl(process.pid) with no platform branch and no call to the splitter, so whichever rendering the acquisition produced lands under that single key. The darwin twin is byte-identical in shape at 158819044."
+        },
+        {
+          "role": "writer",
+          "name": "the registry row object literal (darwin artifact)",
           "offset": 158819044,
-          "excerpt": "\"}:void 0,N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),ver",
-          "note": "The row stamps ONE key unconditionally: `procStart: await ja(process.pid)`. The two-key schema (Uz at 158809116) and the splitter belong to the sibling <pid>.<64hex>.key companion, not to the row - OU's only call sites are the key writers at 158809990 and 158810361. The row reader (159696721) does accept both keys."
+          "excerpt": "\"}:void 0,N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),version:{ISSUES_EXPLAINER:\"report the issue at https://github.c",
+          "note": "The same literal in the other artifact, stamping procStart: await ja(process.pid); ja is the darwin name of the acquisition wrapper. Both artifacts write one key."
+        },
+        {
+          "role": "gate",
+          "name": "tT / A1 - the paired reader and the two-key splitter (win32)",
+          "offset": 174019733,
+          "excerpt": "function tT(e){if(f())return e.procStart!==void 0?void 0:e.procStartFt;return e.procStart}function A1(e){return f()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var A=60000,N=5000;async function gl(e",
+          "note": "A1 is the platform-conditional splitter: on the capable platform it writes {procStart:void 0, procStartFt:e}, otherwise {procStart:e, procStartFt:void 0}. tT is its paired reader and is NOT procStartFt ?? procStart: on the capable platform it returns undefined for a record carrying procStart and yields procStartFt only. The darwin twins OU / eE are at 158135690 / 158135600."
+        },
+        {
+          "role": "gate",
+          "name": "pQe / E - the straddle tolerance that reconciles the two Windows renderings (win32)",
+          "offset": 174018881,
+          "excerpt": "function pQe(e,n){if(n===e)return!0;let r=Number(e),i=Number(n);return Number.isFinite(r)&&Number.isFinite(i)&&r>300000000000000000!==i>300000000000000000}function h(e,n){return n===void 0||n===e||E(e,n)}function E(e,n){if(!f())return!1;let r=Number(e),i=Number(n);return Number.isFinite(r)&&Number.isFinite(i)&&r>300000000000000000!==i>300000000000000000}async function Gm(e,n){if(n===void 0)return!0;return h(n,await g",
+          "note": "Both compare two proc-start values as numbers and treat them as the SAME process when they fall on opposite sides of 3e17 - the gap between a FILETIME (about 1.34e17) and .NET ticks (about 6.4e17) for a current instant. E is gated on f(), so on a host taking the spawn fallback the reuse comparison h(e,n) reduces to exact equality."
         }
       ],
       "writer_literal_floor": {
@@ -66840,7 +66955,607 @@
         "lowest_present": "2.1.198",
         "highest_absent": "2.1.196",
         "ladder": "every eighth build 2.1.150..2.1.259 plus 46 cached builds; a literal dates itself, not the behavior"
-      }
+      },
+      "enumeration": [
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 174019832,
+          "excerpt": "A1(e){return f()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var A=60000,N=5000;async function gl(e,n){let r=Date.now(),i=Yvr.of(W().host);if(n?.env!==void 0)return S(e",
+          "verdict": "definition: on the capable platform it returns {procStart:void 0, procStartFt:e}, otherwise the mirror"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 174694716,
+          "excerpt": "A1(await ME()),pidDomain:await GV()}),384),f}async function jle(e,n,r){let o=Bz(process.pid,n),d=await e.ensureScope({namespace:\"session\"});if(!d.ok)throw t(`[uds-auth] sessions scope unavai",
+          "verdict": "call 1 - messaging <pid>.<64hex>.key writer on the filesystem path; writes the pair into the key file, not the row"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 174695087,
+          "excerpt": "A1(await ME()),pidDomain:await GV()}),{publishDiscipline:\"atomic\",mode:384,exactMode:384});if(!f.ok)throw t(`[uds-auth] key publish failed: ${Ye(f.error)}`),Error(\"messaging key could not be",
+          "verdict": "call 2 - the same key payload through the storage backend; still the key file"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 177931623,
+          "excerpt": "A1(await ME())})}async function _Ee(e,n){let r=en(),o=N()&&n!==void 0;if(await cL(e)){let R=s9t(e);if(R===void 0)return!1;let I=wS(R,String(process.pid));for(let B=1;;B++)try{let U=await sKr",
+          "verdict": "call 3 - the in-use marker payload {pid, ...split}; a marker file, not the row"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 179345714,
+          "excerpt": "A1(await ME()).procStart,f=d?`claude ${o} ${r} (pid ${process.pid} start ${d})`:`claude ${o} ${r} (pid ${process.pid})`,y=()=>Ve(it(),[...dn,\"worktree\",\"lock\",\"--reason\",f,e],{cwd:n,env:pi()",
+          "verdict": "call 4 - the worktree lock-reason string; reads only the .procStart half, so on the capable platform the reason renders without a start"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 183480440,
+          "excerpt": "A1(te),launchTarget:q?.target,processWrapper:rx()},Y=await y$n(z,E);if(!Y){let d=await sM(E);if(d){let j=!1,ie=null;try{process.kill(d.pid,0),j=await vit(d.pid)&&await Nze(d.pid,tT(d),Hye)}c",
+          "verdict": "call 5 - the daemon/supervisor lock record; spreads the pair into the lock json"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 184448174,
+          "excerpt": "A1(e);return G({holderPid:process.pid,holderJob:U(t),holderProcStart:n,holderProcStartFt:o,holderPidSpace:cQe().slice(0,160)})}function Vrn(){return ME()}function bct(e,t){let n=st(),o=n.env",
+          "verdict": "call 6 - the job-holder identity; renames the pair to holderProcStart / holderProcStartFt"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 183744698,
+          "excerpt": "A1(n,o,u,c,m,p,b,S){for(let E=m;E<p;E++,u+=2){if(n[u]===0&&n[u|1]===0)continue;if(Fl(o,u,b),S(E,c,void 0,b))return!0}return!1}function N1(n,o,u,c,m,p,b){let S=n.cells,E=o.cells,{width:x,heig",
+          "verdict": "unrelated homonym: an eight-argument grid walker definition"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 183745176,
+          "excerpt": "A1(E,o,z,F,u,_,H,b))return!0}z+=T}return!1}function _1(n,o,u,c,m,p,b){let S=n.width,E=o.width,x=n.cells,C=o.cells,N={char:\" \",styleId:0,width:0,hyperlink:void 0},T={char:\" \",styleId:0,width:",
+          "verdict": "unrelated homonym: the call site of that grid walker"
+        },
+        {
+          "site": "win32 A1( census (10 of 10) - the splitter closure",
+          "offset": 193950610,
+          "excerpt": "A1(e){return O._ulid(g.ZodULID,e)}g.ZodXID=O.$constructor(\"ZodXID\",(e,t)=>{O.$ZodXID.init(e,t),g.ZodStringFormat.init(e,t)});function R1(e){return O._xid(g.ZodXID,e)}g.ZodKSUID=O.$constructo",
+          "verdict": "unrelated homonym: a schema-library ULID string-format factory"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 158135699,
+          "excerpt": "OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var w=60000,y=5000;async function ja(e,t){let n=Date.now(),r=wEr.of(G().host);if(t?.env!==void 0)return m(e",
+          "verdict": "definition, the darwin twin of A1"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 158809990,
+          "excerpt": "OU(await LA()),pidDomain:await YG()}),384),f}async function Qle(e,n,r){let o=Fz(process.pid,n),d=await e.ensureScope({namespace:\"session\"});if(!d.ok)throw t(`[uds-auth] sessions scope unavai",
+          "verdict": "call 1 - messaging key writer on the filesystem path"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 158810361,
+          "excerpt": "OU(await LA()),pidDomain:await YG()}),{publishDiscipline:\"atomic\",mode:384,exactMode:384});if(!f.ok)throw t(`[uds-auth] key publish failed: ${Xe(f.error)}`),Error(\"messaging key could not be",
+          "verdict": "call 2 - messaging key writer through the storage backend"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 162121127,
+          "excerpt": "OU(await LA())})}async function Kke(e,n){let r=en(),o=L()&&n!==void 0;if(await DL(e)){let C=C8t(e);if(C===void 0)return!1;let I=pS(C,String(process.pid));for(let F=1;;F++)try{let B=await YVr",
+          "verdict": "call 3 - the in-use marker payload"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 163535163,
+          "excerpt": "OU(await LA()).procStart,f=d?`claude ${o} ${r} (pid ${process.pid} start ${d})`:`claude ${o} ${r} (pid ${process.pid})`,_=()=>Ve(st(),[...dn,\"worktree\",\"lock\",\"--reason\",f,e],{cwd:n,env:di()",
+          "verdict": "call 4 - the worktree lock-reason string, reading only the .procStart half"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 167589560,
+          "excerpt": "OU(te),launchTarget:q?.target,processWrapper:cx()},J=await MFn(z,A);if(!J){let c=await hO(A);if(c){let F=!1,ie=null;try{process.kill(c.pid,0),F=await xit(c.pid)&&await qje(c.pid,eE(c),V_e)}c",
+          "verdict": "call 5 - the daemon/supervisor lock record"
+        },
+        {
+          "site": "darwin OU( census (7 of 7) - the splitter closure",
+          "offset": 168563787,
+          "excerpt": "OU(e);return G({holderPid:process.pid,holderJob:U(t),holderProcStart:n,holderProcStartFt:o,holderPidSpace:TQe().slice(0,160)})}function Brn(){return LA()}function bct(e,t){let n=st(),o=n.env",
+          "verdict": "call 6 - the job-holder identity renaming the pair to the holder keys"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 174019742,
+          "excerpt": "tT(e){if(f())return e.procStart!==void 0?void 0:e.procStartFt;return e.procStart}function A1(e){return f()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void ",
+          "verdict": "definition of the paired reader; refuses a procStart value on the capable platform"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 174696659,
+          "excerpt": "tT(U);if(z!==void 0){let j=await gl(I.pid,{skipCache:!0});if(j!==void 0&&!pQe(z,j))return{kind:\"dead-owner\"}}}return{kind:\"token\",token:U.peerToken}}let P;for(let{file:I,",
+          "verdict": "call 1 - messaging key, requireLiveOwner path: reads the pair off a key record and compares it with a fresh proc-start through the straddle test"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 174696906,
+          "excerpt": "tT(z),F=B===void 0?void 0:await gl(U,{skipCache:!0});if(B===void 0||F===void 0)j=1;else j=pQe(B,F)?2:0}if(P===void 0||j>P.rank)P={rank:j,peerToken:z.peerToken}}if(P===voi",
+          "verdict": "call 2 - messaging key sweep: same read per key file"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 177936926,
+          "excerpt": "tT(R.data))){o=!0;continue}await uc(f)}return o}async function lKr(e,n,r){let o=(I)=>Ee.pluginCache(n.marketplace,n.plugin,n.version,[Mu,I]),d=[],f=new Map,y;do{let I=awa",
+          "verdict": "call 3 - in-use marker sweep: hands the pair to the liveness comparison"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 177938285,
+          "excerpt": "tT(me.data))){k=!0;continue}await e.delete(o(j)).then(()=>{},()=>{})}}return k}var V8t=64;async function cKr(e,n){let r=(f)=>Buffer.from(f).toString(\"utf8\"),o=await e.rea",
+          "verdict": "call 4 - in-use marker sweep through the storage backend"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 182721308,
+          "excerpt": "tT(e);if(r!==void 0){let o=await OE(e.pid,r);if(o===!0)return null;if(o===!1)return\"pid_recycled\"}return v(e)?\"predates_boot\":null}function MPe(e){return tT(e)!==void 0}f",
+          "verdict": "call 5 - daemon lock staleness probe; returns pid_recycled when the live start disagrees"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 182721462,
+          "excerpt": "tT(e)!==void 0}function S$n(){return`Stop it with \\`claude daemon stop --any\\` (a graceful, socket-based stop); if nothing is running at that pid, delete ${Zw()}`}async f",
+          "verdict": "call 6 - the has-an-identity predicate over the pair"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 182721783,
+          "excerpt": "tT(o),e))return null;return o}async function Lze(e){let r=await Hh(1,e).catch(()=>null);if(!r)return{kind:\"none\"};switch(r.origin){case\"service\":return{kind:\"service\",loc",
+          "verdict": "call 7 - daemon lock read before accepting a lock record"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 183356829,
+          "excerpt": "tT(e),1).catch(()=>!1)?S(\"other_alive\"):S(\"other_dead\"),...o}}import{randomBytes as nn}from\"crypto\";import{unlink as Ut}from\"fs/promises\";import{createServer as on}from\"n",
+          "verdict": "call 8 - lock-at-deadline probe"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 183480618,
+          "excerpt": "tT(d),Hye)}catch(we){if(T(we)!==\"ESRCH\"){if(ie=await Tit(d),j=ie===null,ie!==null)a.write(\"supervisor\",`daemon.lock names pid=${d.pid}, which this user cannot signal, but",
+          "verdict": "call 9 - supervisor lock identity check before signalling another daemon"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 183503009,
+          "excerpt": "tT(L),me=oe!==void 0&&ne!==void 0;if(!X||me&&ne!==oe)F=L.pid;else if(me)W=L,B=L;else B=L}}if(!a&&B&&!c.includes(\"--any\"))return U(W?`no background service is installed, b",
+          "verdict": "call 10 - supervisor pid scan comparing the pair with the live start"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 196181274,
+          "excerpt": "tT({...ct.holderProcStart!==void 0&&{procStart:ct.holderProcStart},...ct.holderProcStartFt!==void 0&&{procStartFt:ct.holderProcStartFt}}),jobDirExists:(ct)=>Be(\"dir:\"+ct,",
+          "verdict": "call 11 - identityOf rebuilds the pair from the holder keys and reads it through this reader, inheriting the refusal"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 193583413,
+          "excerpt": "tT(e,t=0){if(e.aborted===!0)return!0;for(let n=t;n<e.issues.length;n++)if(e.issues[n]?.continue===!1)return!0;return!1}function rT(e,t){return t.map((n)=>{var i;return(i=",
+          "verdict": "unrelated homonym: a validator-library abort helper"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 22566192,
+          "excerpt": "tT(\u0094\u00e0\u0003\u0014\u00aa\u00d2 \u00b2\u0097`\u009aG\u00f9\u007f\u009a\u0007\u00f9 \u0002\u0000\u00b4\b @\u00b9\b\u0005\u0000q@\u0001\u0000T\b \u0000\u00b9\f\u0000\u0000\u0014\u00e0\u0003\u0014\u00aa\u00c8\u008a\u00fe\u0097\u00e0\u0003\u0014\u00aa\u00c6 \u00b2\u0097tnP\u00f9\u00d4\u00f0\u00ff\u00b5\u00a4\u00ff\u00ff\u0017\b\u0000@\u00f9!\u0000\u0080R\b\u001d@\u00f9\u0000\u0001?\u00d6\u00e0\u0003\u0013\u00aa\u00fd\u00fbB\u00a9\u00f7\u0013@\u00f9\u00f5[A\u00a9\u00f3S\u00c4\u00a8\u0088\u0089\u001a\u0014\u00ea\u0003\u001f\u00aa+y\u007f\u0092\fa\u0000\u0091m\u0000\u0080R\u0005\u0000\u0000\u0014J\t\u0000\u0091\u008c\u0081\u0000\u0091\u007f\u0001\n\u00eb\u00a0\u00e8\u00ffT\u008e\u0081^\u00f8\u00df\t\u0000\u00b1\u00a0\u0000\u0000T\u008e\u0001_\u00f8n\u0000\u0000\u00b4\u00cd\u0005",
+          "verdict": "non-JS section: the three bytes fall inside compiled data, surrounding bytes not printable"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 70279634,
+          "excerpt": "tT(\u001dbN\u00d4a\u00e0G<\u00e0\u001a\u008f\u00f8\u0016i\t\u00e0f\u00f9,\u00a8\u00e1&K\u009b\u00dc\f\u00d3K\u0085\u007f9]\u00e3!\u00ce\u00f0\u000b\u0082~.w\u00a2.\u00e0$[\u000e)\u00d3\u00a2w\u00ca\u00f3\u00952\r\u00dc\u00de\u00e1\u00cf\u00ac\u00be\u00f8\u0086\u00dex\u00b3\u0004\u00fc\u0005\u00aaw\u00f4\u0093\u00e3\u00fb\u0005\u0087\u00ac\u00e5\u00c8X^\u00a2\u0007p?\u00bcAb\u0007m\u00beGY\b\u00a1\fV/\u0012[\u00ff\u001a\u00cb6N\r\u00b6\u00ff\u00da\u0018\u00cc3Kt\u0097\u00e5\u00827\u00d2~\u00d5dw\u00fa0\u00daE|\u00a6\u0096\u009f\u00e0\u00abY\u00d5j\u00ce6\u00cb\u00e5^Y:\u00dfp\u00fc(\u00e5f}N6g`\u00d9\u00c1$\u00e9\u00b9-\u00b4\u00d9\u00cc\u00f3\u00fb",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 122789019,
+          "excerpt": "tT(\u0089\u00f4\u009f\u0000\u0000<\u009f\u0080aE\u009f\u0088\u0001\u0084\u009f@\u00a04\u009f\u0083\u00e3\u001b\u009f\u0014\u00f2:\u009f\u0014\u0002L\u009f\u0014\u0002\u00c4\u009f\u0005\u00b0s\u009f\u0005\u0000L\u009f\u0005\u0000l\u009f\u0005\u0000\u00d4#\u0000\u0000\u00f0\u009f\u0005\u0000\u0004\u009f\u00c0p\u009e\u009f\u00c7\u0000\u0084\u009f\u0080\u00b0L\u009f\u008c\u0000\u0084\u009f\u0090\u00d33\u009f\u00c0@=\u009f@ \u0084\u009f@ \u001c\u009f\u00c5\u00c0\u001b\u009f@p,\u009fG\u0000\u0004\u009f@\u00904\u009f@0\u0004\u009f\u0005\u00b2\u0003\u00b4\u00ff\u00ff\u00f0\u009f\u0014\u0002\u00b49\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f\u0001@\r\u009f@\u00105\u009f@\u0010n\u009fb\u00f01\u009f@pG\u009f@\u0010n\u009fb\u00f01\u009f@\u0080G\u009f@\u00f0m\u009f",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 122789367,
+          "excerpt": "tT(\u0089\u00f4\u009f\u0000\u0000<\u009f@\u0090\u0014#\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f@\u00f1\f\u009fH\u0001\u0084\u009f@\u00a04\u009fC\u00e3\u001b\u009f@\u00f1T\u009f@\u00b0\u009d\u009fJ\u0000\u0004\u009f\u0080\u00d0e\u009f\u008a\u0000\u0084\u009f@\u00d0L\u009f\u0003\u00e4\u001bI\u00ac\u00f7\u00f4\u009f@\u0001tT(\u0089\u00f4\u009f\u0000\u0000<\u009f@\u00f0,\u009f\u0084\u00c0\u001b\u009f\u0084\u0000L\u009f\u0084\u0000\u00c4\u009f\u00c0 \u00a5\u009f\u00c7\u0000\u0084\u009f\u0080\u00b0L\u009f\u008c\u0000\u0084\u009f\u0090\u00d33\u009f\u00c0@=\u009f@ \u0084\u009f@ \u001c\u009f\u00c5\u00c0\u001b\u009f@p,\u009fG\u0000\u0004\u009f\u0005r4\u009f@p4\u009fC\u00e3\u001b\u00bf\u00ff\u00ff\u00f0\u009f\u0084\u0000\u00ac\f\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 122789439,
+          "excerpt": "tT(\u0089\u00f4\u009f\u0000\u0000<\u009f@\u00f0,\u009f\u0084\u00c0\u001b\u009f\u0084\u0000L\u009f\u0084\u0000\u00c4\u009f\u00c0 \u00a5\u009f\u00c7\u0000\u0084\u009f\u0080\u00b0L\u009f\u008c\u0000\u0084\u009f\u0090\u00d33\u009f\u00c0@=\u009f@ \u0084\u009f@ \u001c\u009f\u00c5\u00c0\u001b\u009f@p,\u009fG\u0000\u0004\u009f\u0005r4\u009f@p4\u009fC\u00e3\u001b\u00bf\u00ff\u00ff\u00f0\u009f\u0084\u0000\u00ac\f\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f\u00c0\u00b0\f\u009f\u00c0p\u0084\u009f\u00c8\u0000\u0084\u009f@\u00b0L\u009f@ \u001c\u009f\u00c5\u00c3\u001b\u009f\u00c0\u00c0<\u009f\u00c8\u0000\u0084\u009f@\u00b0L\u009f@ \u001c\u009f\u00c5\u00c3\u001b\u009f\u00eb\u00b09j\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f@P%\u009fH\u0000\u0004\u009fI\u00824\u009f@\u00e04\u009f",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 123690859,
+          "excerpt": "tT(\u0089\u00f4\u009f\u0000\u0000<\u0006\u0000\u0000\u0000\u0000\u0000\u0000\u0000@\u0000\u0000\u00f0\u00bd\u0004\u0080\u00f0\u009f\u0000\u0000\u0004\u009f\u0000\u0000\u00cc\u009f\u0000\u0000\u0084\u009f\u0000\u0000\u0084\u000b\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u001e\u0000\u0000\u00f0\u009f\u00c0\u00a1\u0004\u009f\u00c6\u0001\u0084\u009f@\u00803\u009f@\u0000\u0004DE\u0006\u00f4\u009f\u0000\u0000\u0004\u009f\u0000\u0000\u00cc\u009f\u0000\u0000\u0084\u009f\u0000\u0000\u0084\u009f\u0000\u0000\u00e4\u0011\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f@ \u00cc\u009f@\u0000\u0004\u009f@ \\\u009f@\u0000\u0004\u009f\u00c0\u00a1\u0084\u009f\u00c6\u0001\u0084\u009f@\u00803\u009f@\u0000\u0004\u009f@ \u0085\u009f@\u00e0\u0083\u009f@\u0000\u0004;E\u0006\u00f4\u009f\u0000\u0000\u0004\u009f\u0000\u0000\u00cc\u009f\u0000\u0000\u0084\u009f\u0000\u0000\u0084\u009f\u0000\u0000\u00e4\u0006",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 139569719,
+          "excerpt": "tT(\u0089\u00f4\u009f\u0000\u0000<\u009f@`\u0014\u009f@\u00d0\u001c\u009f@ \u0084\u009fC\u00e13\u009f@\u00b0L\u009f\u00800\u0084\u009fD\u00d1\u009b\u009f@\u00e0<\u009f\u00800\u0084\u009fD\u00d1\u009b\u009f@\u00e0T\u009f\u00800\u0084\u009fD\u00d1\u009b\u009f@\u0080T\u009f@ \u0084\u009fC\u00e0\u001b\u009f@p<\u009f@@\u001c\u009fG\u0000\u0004\u009f@\u0090,\u009fB\u0000\u0004\u009f\u0000`3\u009f\u0000\u00004\u009fQ\u00d03\u009f@0M\u009fB\u0000\u0004\u009f@pL\u009f@P\u0084\u009f@ \u0004\u009f\u0000\u00d0\u0083\u009f\u0000\u00d0#\u009f@\u00b0$\u009f@ \u0084\u009f\u0000\u00d0\u0003\u009f@PD\u009fQ\u0000\u001b\u009f\u00d6\u00b03\u009f@\u00b05\u009f@0\u001c\u009fK\u0000\u001c\u009f",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 139764899,
+          "excerpt": "tT(\u0089\u00f4\u009f\u0000\u0000<\u009f\n\u00b1,\u009f\u0082\u00a34\u009f@`<\u009f@PD\u009fC\u0000\u0004\u009f@\u00f0|\u009f@0\u0084\u009fM\u00d0{*\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u009f\n\u00d1\u00c4\u009f\u0082\u00a34\u009f\u0011\u0001U\u009fB\u00155\u009f\fqT\u009f\u0002\u00c44\u009f\rqT\u009fB\u00d44\u00bb\u00ff\u00ff\u00f0\u009f\u0007\u0000l\u009f\u0007\u0000L\u009f\u0007\u0000l\u009f\u0007\u0000\u00d4\u009f\u0007\u0000\u00d4#\u0000\u0000\u00f0\u009f\u0007\u0000\u0004R\u0000\u0080\u00f0\u009f\u0001\u0000\u0084\u009f@\u00105\u009f\u0000\u00c0\u0003\u009f@`D\u009f\u0001\u0090\u001c\u009f@\u00005\u009f@0\u001c\u009f@0\u001c\u009f@@\u0004\u009fC\u0000\u0004\u009f\u0000\u00d03\u009fH\u00f03\u009f@\u00a0D\u009f",
+          "verdict": "non-JS section"
+        },
+        {
+          "site": "win32 tT( census (22 of 22) - the paired-reader closure",
+          "offset": 205971005,
+          "excerpt": "tT(u\u0096\u00f1\u00de\u0014 6\u00db\u00daI<\u007f*\u00c0\u00d3\u00a9\u00eb\u00a4]\u00edk\u0088w\u00a7\u0000k\u00ac\u00ea\u00f8\u001bT\u00ac\u00b9F^,}\u00d9\u00ef[\u00bf\b]j\u00f2\u00b9\u00eb\u00ba#\u00ff\u00b4\u00b4\u00a7\u009e\u00bfN\u009a\u00cb\u00a3\u0098\u009b\u00b2=\u00e9R\u001f\u00fb1\u00d4\u00c6\u00f0\u00b2\u001c\u00bc3e\u008e!FU\u00a2\u00cd\u00eay\u001b\u00a5U'i%!\u0098\u0091\u000et\u0088\u00a9\u00ee4g\u00f6\u0018\r@\u00a2\u00a9}\u00ee\u00c0p\u0093t8\u00e2q\u00f0z\u00d7o\u00c0zl\u0004\u00d1\u000e\u009d\u00e3R\u00ef\u0089\u0017x\u00a0\u00a8\u00f4\u00dbO\u00ffQ\u00bf\u00f6\u00af\u00baY\u0006\u00ee\u00dd\u00035!\u0090\u00e2\u00b6\u00e3,h{\u00e0-\u00bc\u00b2\u00ba\u00be\u00c5\u00e7\u00e3e",
+          "verdict": "not an occurrence: the bytes sit at the tail of a longer token in a non-JS section"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 158135609,
+          "excerpt": "eE(e){if(c())return e.procStart!==void 0?void 0:e.procStartFt;return e.procStart}function OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void ",
+          "verdict": "definition, the darwin twin of tT"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 158811933,
+          "excerpt": "eE(U);if(z!==void 0){let j=await ja(N.pid,{skipCache:!0});if(j!==void 0&&!wQe(z,j))return{kind:\"dead-owner\"}}}return{kind:\"token\",token:U.peerToken}}let I;for(let{file:N,",
+          "verdict": "call 1 - messaging key, requireLiveOwner path"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 158812180,
+          "excerpt": "eE(z),F=B===void 0?void 0:await ja(U,{skipCache:!0});if(B===void 0||F===void 0)j=1;else j=wQe(B,F)?2:0}if(I===void 0||j>I.rank)I={rank:j,peerToken:z.peerToken}}if(I===voi",
+          "verdict": "call 2 - messaging key sweep"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 162126430,
+          "excerpt": "eE(C.data))){o=!0;continue}await uc(f)}return o}async function JVr(e,n,r){let o=(I)=>Ae.pluginCache(n.marketplace,n.plugin,n.version,[Du,I]),d=[],f=new Map,_;do{let I=awa",
+          "verdict": "call 3 - in-use marker sweep"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 162127789,
+          "excerpt": "eE(me.data))){v=!0;continue}await e.delete(o(j)).then(()=>{},()=>{})}}return v}var h8t=64;async function ZVr(e,n){let r=(f)=>Buffer.from(f).toString(\"utf8\"),o=await e.rea",
+          "verdict": "call 4 - in-use marker sweep through the storage backend"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 166745499,
+          "excerpt": "eE(e);if(r!==void 0){let o=await DA(e.pid,r);if(o===!0)return null;if(o===!1)return\"pid_recycled\"}return P(e)?\"predates_boot\":null}function NHe(e){return eE(e)!==void 0}f",
+          "verdict": "call 5 - daemon lock staleness probe"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 166745653,
+          "excerpt": "eE(e)!==void 0}function $Fn(){return`Stop it with \\`claude daemon stop --any\\` (a graceful, socket-based stop); if nothing is running at that pid, delete ${ZT()}`}async f",
+          "verdict": "call 6 - the has-an-identity predicate"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 166745974,
+          "excerpt": "eE(o),e))return null;return o}async function zje(e){let r=await Bh(1,e).catch(()=>null);if(!r)return{kind:\"none\"};switch(r.origin){case\"service\":return{kind:\"service\",loc",
+          "verdict": "call 7 - daemon lock read"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 167386991,
+          "excerpt": "eE(e),1).catch(()=>!1)?b(\"other_alive\"):b(\"other_dead\"),...o}}import{randomBytes as hn}from\"crypto\";import{unlink as Jt}from\"fs/promises\";import{createServer as _n}from\"n",
+          "verdict": "call 8 - lock-at-deadline probe"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 167589738,
+          "excerpt": "eE(c),V_e)}catch(we){if(E(we)!==\"ESRCH\"){if(ie=await Hit(c),F=ie===null,ie!==null)a.write(\"supervisor\",`daemon.lock names pid=${c.pid}, which this user cannot signal, but",
+          "verdict": "call 9 - supervisor lock identity check"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 167612158,
+          "excerpt": "eE(O),me=oe!==void 0&&ne!==void 0;if(!X||me&&ne!==oe)N=O.pid;else if(me)W=O,B=O;else B=O}}if(!a&&B&&!d.includes(\"--any\"))return U(W?`no background service is installed, b",
+          "verdict": "call 10 - supervisor pid scan"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 180719482,
+          "excerpt": "eE({...lt.holderProcStart!==void 0&&{procStart:lt.holderProcStart},...lt.holderProcStartFt!==void 0&&{procStartFt:lt.holderProcStartFt}}),jobDirExists:(lt)=>Fe(\"dir:\"+lt,",
+          "verdict": "call 11 - identityOf over the holder keys"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 174442866,
+          "excerpt": "eE(e){return!!e&&typeof e==\"object\"}function tE(e){return typeof e==\"string\"||!ZC(e)&&eE(e)&&XC.call(e)==QC}Hf.exports=tE});var qf=T(function(LH,Gf){var rE=\"Expected a fu",
+          "verdict": "unrelated homonym: a utility-library isObject"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 174442952,
+          "excerpt": "eE(e)&&XC.call(e)==QC}Hf.exports=tE});var qf=T(function(LH,Gf){var rE=\"Expected a function\",$f=1/0,nE=17976931348623157000000000000000000000000000000000000000000000000000",
+          "verdict": "unrelated homonym: the isString that calls it"
+        },
+        {
+          "site": "darwin eE( census (15 of 15) - the paired-reader closure",
+          "offset": 188341245,
+          "excerpt": "eE(e,t){var r,i,s,n,a;let o=parseInt(e.request.socket_id,10),l=it.socket.getElementByKey(o);if(l===void 0){t({code:Fr.Status.NOT_FOUND,details:\"No socket data found for i",
+          "verdict": "unrelated homonym: a socket-request handler"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 87353336,
+          "excerpt": "procStartFt\u0000\u0004\u0000\u0000\u0080\u00b5\u0095\f\u0000dir:\b\u0000\u0000\u0080j\u00a0\u00a5\u0000touched:\b\u0000\u0000\u0080\u00ab?b\u0000present:\b\u0000\u0000\u0080p\u00e4^\u0000consent:\u001a\u0000\u0000\u0080\u0010|\u001d\u0000[wakeRouter] dispatch for \u0000\u0000\"\u0000\u0000\u0080V.X\u0000ms; releasing inFlight reservation\u0000\u0000\u0012\u0000\u0000\u0080\u00e93Y\u0000delivered_",
+          "verdict": "non-JS string-constant table beside holderProcStart and holderProcStartFt; not code"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 93345965,
+          "excerpt": "procStartFt?\u0000\u0000\u0080\u00b4R\u00f0\u0000[win32-proc-times] bun:ffi unavailable, falling back to spawn: \u0000\u000b\u0000\u0000\u0080\u00a2\u00ec\b\u0000OpenProcess\u0000\u000f\u0000\u0000\u00804\u00bf\u0081\u0000GetProcessTimes\u0000\u000b\u0000\u0000\u0080R\u00f2\u0098\u0000CloseHandle\u0000W\u0000\u0000\u0080\u00f1\u00cc\\\u0000powershell.exe ",
+          "verdict": "non-JS chunk-metadata table carrying the two proc-times log lines; not code"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 174015086,
+          "excerpt": "procStartFt\")}catch(e){t(`[win32-proc-times] bun:ffi unavailable, falling back to spawn: ${e instanceof Error?e.message:String(e)}`),l=null}return l}class p{#e=!1;get for",
+          "verdict": "inside the binding loader's success log line; names the key, does not read or write it"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 174019792,
+          "excerpt": "procStartFt;return e.procStart}function A1(e){return f()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var A=60000,N=5000;async function gl(e,n){let r",
+          "verdict": "the paired reader's return of the key"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 174019867,
+          "excerpt": "procStartFt:e}:{procStart:e,procStartFt:void 0}}var A=60000,N=5000;async function gl(e,n){let r=Date.now(),i=Yvr.of(W().host);if(n?.env!==void 0)return S(e,n.env);if(!n?.",
+          "verdict": "the splitter's capable branch, writing the value under the second key"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 174019895,
+          "excerpt": "procStartFt:void 0}}var A=60000,N=5000;async function gl(e,n){let r=Date.now(),i=Yvr.of(W().host);if(n?.env!==void 0)return S(e,n.env);if(!n?.skipCache){let a=i.get(e),c=",
+          "verdict": "the splitter's other branch, leaving the second key undefined"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 174693904,
+          "excerpt": "procStartFt:i().optional(),pidDomain:i().optional()}));function $Tt(){return D()===\"windows\"}function hor(){return{peerToken:hz(Cg).toString(\"hex\"),childToken:hz(Cg).toSt",
+          "verdict": "the messaging .key schema declares both keys optional; declarative"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175490112,
+          "excerpt": "procStartFt??r.procStart}}return}async function ebn(e){let n=te(e),r=new Map;if(n.length===0)return r;let i=VF(),f=(await Promise.all(n.map((u)=>q(i,`${u}.json`)))).filte",
+          "verdict": "READER: peer lookup, procStartFt ?? procStart"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175490447,
+          "excerpt": "procStartFt??e.procStart;if(n===void 0||eh(e.pid))return!1;return await OE(e.pid,n)===!0}function ge(e){let n=b(e),r=Sor+n.length+1;if(r>yYe)throw se(r,yYe);return n}asyn",
+          "verdict": "READER: the liveness helper, procStartFt ?? procStart"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175490757,
+          "excerpt": "procStartFt??r.procStart)!==void 0){if(await z(r))return!0;continue}if(rs(r.pid))return!0}return!1}async function Se(e,n,r,{noFollowSymlink:i=!1,expectPeerPid:s,expectPee",
+          "verdict": "READER: the socket-owner check, (procStartFt ?? procStart) !== undefined"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175494533,
+          "excerpt": "procStartFt===\"string\"&&{procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"d",
+          "verdict": "the <pid>.json row parser takes procStart when it is a string"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175494558,
+          "excerpt": "procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"derived\"||o.nameSource===\"",
+          "verdict": "the row parser's conditional spread key for the second key"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175494572,
+          "excerpt": "procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"derived\"||o.nameSource===\"collision\"||o.",
+          "verdict": "the spread value; so the row parser accepts BOTH keys"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 175496814,
+          "excerpt": "procStartFt??S.procStart)))),u=await sie(),d=u?await GV():\"\",o=[];for(let S=0;S<r.length;S++){let{file:R,...h}=r[S];if(p[S])o.push(h);else if(u&&HTt(h,d)&&eh(h.pid))ye(R,",
+          "verdict": "READER: the registry sweep, procStartFt ?? procStart"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 177928195,
+          "excerpt": "procStartFt:v.string().optional()}));async function eKr(e){await Promise.all(Array.from(e.ownInUseMarkerPaths).map(async(n)=>{if(!await nKr(SG(n)))return;let r=e.ownInUse",
+          "verdict": "the in-use marker schema declares both keys optional; declarative"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 184448159,
+          "excerpt": "procStartFt:o}=A1(e);return G({holderPid:process.pid,holderJob:U(t),holderProcStart:n,holderProcStartFt:o,holderPidSpace:cQe().slice(0,160)})}function Vrn(){return ME()}f",
+          "verdict": "the job-holder identity writer destructures the splitter output into the holder keys"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 184514448,
+          "excerpt": "procStartFt??d.procStart;if(l===void 0){t=!0;continue}let f=await e.isSameProcess(d.pid,l);if(f===!0)n.push(d);else if(f===void 0)t=!0}n.sort((d,l)=>Number(gct(l.kind))-N",
+          "verdict": "READER: the job/park reconciler, procStartFt ?? procStart over registry-shaped records"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 196181376,
+          "excerpt": "procStartFt:ct.holderProcStartFt}}),jobDirExists:(ct)=>Be(\"dir:\"+ct,async()=>{if(M!==void 0)return!0;try{return await IJe(Re(ct)),!0}catch(tt){if(V(tt))return!1;throw tt}",
+          "verdict": "identityOf rebuilds the pair from the holder keys and reads it through the paired reader"
+        },
+        {
+          "site": "win32 procStartFt census (19 of 19) - every site naming the second key",
+          "offset": 201090560,
+          "excerpt": "procStartFt??r.procStart;if(i===void 0||!rs(r.pid))continue;let k=await gl(r.pid,{skipCache:!0});if(k===void 0){t(`[bridge:repl] pid ${r.pid} advertises bridge session ${",
+          "verdict": "READER: the bridge-session resume guard, procStartFt ?? procStart over registry rows"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 70824716,
+          "excerpt": "procStartFt\u0000\u0004\u0000\u0000\u0080\u00b5\u0095\f\u0000dir:\b\u0000\u0000\u0080j\u00a0\u00a5\u0000touched:\b\u0000\u0000\u0080\u00ab?b\u0000present:\b\u0000\u0000\u0080p\u00e4^\u0000consent:\u001a\u0000\u0000\u0080\u0010|\u001d\u0000[wakeRouter] dispatch for \u0000\u0000\"\u0000\u0000\u0080V.X\u0000ms; releasing inFlight reservation\u0000\u0000\u0012\u0000\u0000\u0080\u00e93Y\u0000delivered_",
+          "verdict": "non-JS string-constant table; not code"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 158135659,
+          "excerpt": "procStartFt;return e.procStart}function OU(e){return c()?{procStart:void 0,procStartFt:e}:{procStart:e,procStartFt:void 0}}var w=60000,y=5000;async function ja(e,t){let n",
+          "verdict": "the paired reader's return of the key"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 158135734,
+          "excerpt": "procStartFt:e}:{procStart:e,procStartFt:void 0}}var w=60000,y=5000;async function ja(e,t){let n=Date.now(),r=wEr.of(G().host);if(t?.env!==void 0)return m(e,t.env);if(!t?.",
+          "verdict": "the splitter's capable branch"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 158135762,
+          "excerpt": "procStartFt:void 0}}var w=60000,y=5000;async function ja(e,t){let n=Date.now(),r=wEr.of(G().host);if(t?.env!==void 0)return m(e,t.env);if(!t?.skipCache){let a=r.get(e),u=",
+          "verdict": "the splitter's other branch"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 158809178,
+          "excerpt": "procStartFt:i().optional(),pidDomain:i().optional()}));function KEt(){return D()===\"windows\"}function Uor(){return{peerToken:Dz(Og).toString(\"hex\"),childToken:Dz(Og).toSt",
+          "verdict": "the messaging .key schema; declarative"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159692807,
+          "excerpt": "procStartFt??r.procStart}}return}async function lSn(e){let n=te(e),r=new Map;if(n.length===0)return r;let i=e1(),f=(await Promise.all(n.map((u)=>q(i,`${u}.json`)))).filte",
+          "verdict": "READER: peer lookup, procStartFt ?? procStart"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159693142,
+          "excerpt": "procStartFt??e.procStart;if(n===void 0||nh(e.pid))return!1;return await DA(e.pid,n)===!0}function ge(e){let n=S(e),r=Gor+n.length+1;if(r>w7e)throw se(r,w7e);return n}asyn",
+          "verdict": "READER: the liveness helper"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159693452,
+          "excerpt": "procStartFt??r.procStart)!==void 0){if(await z(r))return!0;continue}if(os(r.pid))return!0}return!1}async function Se(e,n,r,{noFollowSymlink:i=!1,expectPeerPid:s,expectPee",
+          "verdict": "READER: the socket-owner check"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159697228,
+          "excerpt": "procStartFt===\"string\"&&{procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"d",
+          "verdict": "the row parser takes procStart when it is a string"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159697253,
+          "excerpt": "procStartFt:o.procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"derived\"||o.nameSource===\"",
+          "verdict": "the row parser's conditional spread key"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159697267,
+          "excerpt": "procStartFt},name:typeof o.name===\"string\"?o.name:void 0,nameSource:o.nameSource===\"user\"||o.nameSource===\"peer\"||o.nameSource===\"derived\"||o.nameSource===\"collision\"||o.",
+          "verdict": "the spread value; the row parser accepts BOTH keys"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 159699509,
+          "excerpt": "procStartFt??b.procStart)))),u=await pie(),d=u?await YG():\"\",o=[];for(let b=0;b<r.length;b++){let{file:R,...h}=r[b];if(p[b])o.push(h);else if(u&&YEt(h,d)&&nh(h.pid))ye(R,",
+          "verdict": "READER: the registry sweep"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 162117699,
+          "excerpt": "procStartFt:w.string().optional()}));async function GVr(e){await Promise.all(Array.from(e.ownInUseMarkerPaths).map(async(n)=>{if(!await qVr(jG(n)))return;let r=e.ownInUse",
+          "verdict": "the in-use marker schema; declarative"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 168563772,
+          "excerpt": "procStartFt:o}=OU(e);return G({holderPid:process.pid,holderJob:U(t),holderProcStart:n,holderProcStartFt:o,holderPidSpace:TQe().slice(0,160)})}function Brn(){return LA()}f",
+          "verdict": "the job-holder identity writer"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 168630061,
+          "excerpt": "procStartFt??d.procStart;if(l===void 0){t=!0;continue}let f=await e.isSameProcess(d.pid,l);if(f===!0)n.push(d);else if(f===void 0)t=!0}n.sort((d,l)=>Number(hct(l.kind))-N",
+          "verdict": "READER: the job/park reconciler"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 180719584,
+          "excerpt": "procStartFt:lt.holderProcStartFt}}),jobDirExists:(lt)=>Fe(\"dir:\"+lt,async()=>{if(I!==void 0)return!0;try{return await bJe(Pe(lt)),!0}catch(tt){if(V(tt))return!1;throw tt}",
+          "verdict": "identityOf through the paired reader"
+        },
+        {
+          "site": "darwin procStartFt census (17 of 17) - every site naming the second key",
+          "offset": 185476354,
+          "excerpt": "procStartFt??r.procStart;if(i===void 0||!os(r.pid))continue;let b=await ja(r.pid,{skipCache:!0});if(b===void 0){t(`[bridge:repl] pid ${r.pid} advertises bridge session ${",
+          "verdict": "READER: the bridge-session resume guard"
+        },
+        {
+          "site": "procStart-alone registry readers (4 of 4, both artifacts)",
+          "offset": 159701761,
+          "excerpt": "procStart??\"\",i=n.procStart??\"\";if(s!==i)return s<i;return e.pid<n.pid}function ETr(e,n,s){return n.filter((i)=>i.pid!==s&&i.name!==void 0&&i.procStart!==void 0&&yr(i.nam",
+          "verdict": "the registry row ordering comparator reads procStart ALONE with an empty-string default on both sides"
+        },
+        {
+          "site": "procStart-alone registry readers (4 of 4, both artifacts)",
+          "offset": 159701901,
+          "excerpt": "i.procStart!==void 0&&yr(i.name)===e)}function _(e){return new Set(e.flatMap((n)=>n.name===void 0?[]:[yr(n.name)]))}function ATr(e,n,s=PU){let i=(r)=>`${le(e,OA-r.length-",
+          "verdict": "the live-row name filter is a second procStart-alone reader: a presence test picking name-colliding live rows"
+        },
+        {
+          "site": "procStart-alone registry readers (4 of 4, both artifacts)",
+          "offset": 175499066,
+          "excerpt": "procStart??\"\",i=n.procStart??\"\";if(s!==i)return s<i;return e.pid<n.pid}function YSr(e,n,s){return n.filter((i)=>i.pid!==s&&i.name!==void 0&&i.procStart!==void 0&&_r(i.nam",
+          "verdict": "the identical ordering comparator ships in the Windows artifact"
+        },
+        {
+          "site": "procStart-alone registry readers (4 of 4, both artifacts)",
+          "offset": 175499206,
+          "excerpt": "i.procStart!==void 0&&_r(i.name)===e)}function A(e){return new Set(e.flatMap((n)=>n.name===void 0?[]:[_r(n.name)]))}function JSr(e,n,s=I1){let i=(r)=>`${le(e,IE-r.length-",
+          "verdict": "the identical live-row name filter in the Windows artifact"
+        }
+      ],
+      "residue": [
+        "A <pid>.<64hex>.key companion read on a Windows host would show the second key in use on that payload while the row keeps procStart; the row specimen proves the binding path was active there, and the splitter's branch is read verbatim, so the key content only strengthens what is already traced.",
+        "No corpus row carries the spawn-fallback rendering: producing one needs a Windows host where the kernel32 binding does not load (or the forcedUnavailable switch set), then reading its <pid>.json row."
+      ]
     }
   ]
 }
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "re-read of every byte the second adversarial verifier named, in the shipped binary of this version (and for the Windows claim in the win32 artifact of the same version, sha256 42675c43... at 209548960 bytes), followed by the correction of exactly the sentence, count or hop it named",
+          "observed": "The Windows row reads back raw with pid 4708, procStart \"134328101803820142\" (18 digits), no procStartFt, pidDomain win32:<host>, cwd on a drive letter, version 2.1.258, and one 4708.<64hex>.key companion listed beside it; startedAt 1788336746668 ms puts the FILETIME decode 166.29 s earlier, while a .NET-ticks decode of the same digits lands in year 426. Unix host: 4 rows, 4 asctime, 0 all-digit, 0 procStartFt.",
+          "rule": "One classification per <pid>.json row file; an all-ASCII-digit procStart is a tick rendering, anything else the asctime form; a tick value is assigned to a rendering by which decode places it before its own row's startedAt.",
+          "note": "Two corrections re-read in the win32 artifact of this version: the .NET-ticks decode of the specimen row lands in year 426, and the binary carries two straddle comparisons, one ungated and one behind the capability predicate, where the text asserted a single gated one."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "Re-read the registry row reader's comment and code (src/live/registry.rs) against the claim's traced row writer.",
+          "observed": "The comment now states that the row writer stamps `procStart` unconditionally on every platform and that the two-key `procStartFt` schema belongs to the `<pid>.<hash>.key` companion; the reader keeps reading both keys as a harmless superset and parses both renderings.",
+          "rule": "one comment block and one field read",
+          "note": "The comment attributed the companion file's two-key splitter to the row; the code was already a safe superset."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "On a Windows 11 ARM64 host at the audited version: a print-mode session started in the background and the sessions directory listed while it ran, the newest companion file and the newest row dumped; listed again after exit.",
+          "observed": "While the session ran the directory held ONE file, `<pid>.<64hex>.key`, 115 bytes: `{\"peerToken\":\"<32hex>\",\"procStartFt\":\"<FILETIME ticks>\",\"pidDomain\":\"win32:<host>\"}`; no `<pid>.json` row existed for the print-mode session; after exit the directory was empty. The two-key `procStartFt` schema belongs to the companion, as the trace states.",
+          "rule": "one session, the directory listed at one instant mid-run and once after exit",
+          "note": "The .key companion specimen: procStartFt lives there, the row keeps procStart."
