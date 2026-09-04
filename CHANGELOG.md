@@ -5,6 +5,50 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.10.5] - 2026-09-05
+
+A correction release for the introspection ledger and for four csift defects the ledger's
+own drift verdicts had named and the previous release shipped around.
+
+### Fixed
+
+- `image` joins the `#N` handle by NUMBER. A record's `imagePasteIds` lists the ids in the
+  order of its image blocks, while the `[Image #N]` markers keep the operator's text order;
+  the two diverge on 18 of 662 corpus records, and the positional zip gave those a silently
+  wrong handle. Without the array the positional zip stays, under its count guard.
+- `recover` no longer replays a Read echo that carries no text. Claude Code blanks the text
+  of a tool result older than its retention window before persisting it (320 such echoes in
+  the reference corpus, `content` empty with the line counts intact), and four result arms
+  never carry a text; a blanked echo of a complete read used to replay as a whole-file
+  snapshot of nothing. Each is now a counted `blanked-read` with a soft annotation boundary.
+- The `status`/`wait` pid probe pins `LC_ALL=C` and `TZ=UTC` on its own `ps` call, as the
+  harness does for its `procStart`; under a German or French locale the rendering parsed
+  under neither English pattern and the pid-reuse guard was silently skipped.
+- Search hits carry `refetch_uuid` beside `refetch`: a line number is a durable address only
+  while the transcript is append-only, and three harness paths rewrite a live transcript in
+  place; the uuid survives them.
+- Four statements csift printed or taught were wrong at 2.1.258 and are corrected with
+  their dates: TaskStop resolves a teammate by its name or `name@team` from Claude Code
+  2.1.198 (the agents footer, the JSON control hint, the SKILL rows and hook recipe said it
+  rejects every form); the file-history store is also written by an approved in-place `sed`
+  preview (`recover --list-backups` said bash edits never land there); the pending
+  AskUserQuestion split is a timing outcome of the write frontier, not a question-count
+  rule and not a 2.1.258 change (a comment, a note, the help and three documents said
+  otherwise).
+
+### Changed
+
+- Ledger schema: the attribution `upstream` (the producer lies outside the shipped binary by
+  construction: the model or API side, the operating system, a native runtime binding, with
+  the client-side treatment traced), and three new gate rules: a claim's latest check is
+  never `drifted`, no open leg is an unconsumed text correction or a recorded rejection,
+  and every claim below end-to-end carries its leg fields. Ledger text now follows the
+  prose law: no dates, no csift versions, no audit narrative; the commit and the release
+  carry those.
+- README: the verification section states what the project will never publish (the
+  method, a mechanical ledger comparison, any corpus) and why the ledger is re-verified
+  periodically rather than for every Claude Code release.
+
 ## [0.10.4] - 2026-09-04
 
 ### Fixed
