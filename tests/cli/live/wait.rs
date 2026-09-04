@@ -428,3 +428,52 @@ fn p17_notification_delivered_in_a_child_lane_fires() {
     assert_eq!(code, Some(0), "a child-lane delivery fires: {stdout}");
     assert!(stdout.contains("fired"), "{stdout}");
 }
+
+#[test]
+fn p18_a_transcript_that_shrinks_mid_wait_is_reported_and_keeps_being_watched() {
+    // Claude Code rewrites a transcript in place (a rewind tombstone truncates and
+    // rewrites the tail). A memory map of the file would fault with SIGBUS on the
+    // first page touched past the new end; `wait` reads its increments with plain
+    // positional reads instead, moves the baseline to the new end, says so, and still
+    // fires on what lands afterwards (v0.10.4).
+    let h = Home::new();
+    let main = live_eot_main(&h);
+    let target = at(LIVE_SESS);
+    let before = std::fs::metadata(&main).unwrap().len();
+    let pulse = r#"<task-notification>\n<task-id>b8</task-id>\n<status>completed</status>\n<summary>Background command \"after the rewrite\" completed (exit code 0)</summary>\n</task-notification>"#;
+    let (code, stdout) = drive_wait(
+        &h,
+        &[
+            "wait",
+            &target,
+            "--until",
+            "notification:after the rewrite",
+            "--interval",
+            "25",
+            "--timeout",
+            "30",
+        ],
+        || {
+            // the in-place rewrite: cut the file below the baseline, then append
+            let f = std::fs::File::options().write(true).open(&main).unwrap();
+            f.set_len(before / 2).unwrap();
+            drop(f);
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let mut f = std::fs::File::options().append(true).open(&main).unwrap();
+            writeln!(
+                f,
+                r#"{{"type":"user","uuid":"n9","timestamp":"2026-06-07T05:09:00.000Z","message":{{"role":"user","content":"{pulse}"}}}}"#
+            )
+            .unwrap();
+        },
+    );
+    assert_eq!(
+        code,
+        Some(0),
+        "the pulse appended after the shrink fires: {stdout}"
+    );
+    assert!(
+        stdout.contains("transcript shrank 1 time(s)") && stdout.contains("baseline moved"),
+        "the shrink is disclosed in the activity line:\n{stdout}"
+    );
+}

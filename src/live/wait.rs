@@ -126,16 +126,26 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
         let mut anything_grew = false;
         for cur in &mut cursors {
             let len = std::fs::metadata(&cur.path).map(|m| m.len()).unwrap_or(0);
-            if len <= cur.offset {
+            if len < cur.offset {
+                // The file SHRANK: Claude Code rewrote it in place (a rewind tombstone
+                // truncates and rewrites the tail; an armed local GC rewrites on
+                // compaction). Bytes before the new end were already read; the
+                // baseline moves to the new end and the report says so (v0.10.4).
+                activity.note_shrink(&cur.lane, cur.offset - len);
+                cur.offset = len;
+                continue;
+            }
+            if len == cur.offset {
                 continue;
             }
             anything_grew = true;
-            let Some(mmap) = mmap_bytes(&cur.path)? else {
-                continue;
-            };
-            let bytes: &[u8] = &mmap;
-            let start_at = usize::try_from(cur.offset).unwrap_or(0).min(bytes.len());
-            let mut pos = start_at;
+            // A plain positional read of the appended bytes, never a memory map: a map
+            // of a file another process truncates faults with SIGBUS on the first page
+            // touched past the new end, and a poll loop over a live transcript is
+            // exactly where that race lives (v0.10.4).
+            let bytes = read_range(&cur.path, cur.offset, len)?;
+            let base = cur.offset;
+            let mut pos = 0usize;
             while pos < bytes.len() {
                 let Some(nl) = memchr::memchr(b'\n', &bytes[pos..]) else {
                     break; // torn tail: hold the cursor here
@@ -152,7 +162,7 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                     }
                 }
             }
-            cur.offset = pos as u64;
+            cur.offset = base + pos as u64;
         }
 
         // ── Verdict-class conditions: re-join the surfaces (bounded tail work). ──

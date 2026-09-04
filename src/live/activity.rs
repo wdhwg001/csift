@@ -16,9 +16,17 @@ pub(crate) struct Activity {
     pub(crate) agent_messages: usize,
     pub(crate) user_prompts: usize,
     pub(crate) notifications: usize,
+    /// One entry per SHRINK seen while waiting (`<lane>: -<bytes>`): the harness rewrote
+    /// the transcript in place, so the baseline moved to the new end (v0.10.4).
+    pub(crate) shrinks: Vec<String>,
 }
 
 impl Activity {
+    /// Record that `lane`'s transcript lost `bytes` bytes between two polls.
+    pub(crate) fn note_shrink(&mut self, lane: &str, bytes: u64) {
+        self.shrinks.push(format!("{lane}: -{bytes} bytes"));
+    }
+
     /// Fold one post-baseline record (any lane).
     pub(crate) fn fold(&mut self, rec: &Record, lane: &str) {
         self.records += 1;
@@ -54,8 +62,17 @@ impl Activity {
     /// `12 record(s) in 2 lane(s): tools Bash x7 Read x3 · thinking 4 · messages 2 ·
     /// prompts 0 · notifications 1`; `nothing landed` when the baseline never moved.
     pub(crate) fn summary_line(&self) -> String {
+        let shrank = if self.shrinks.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " · transcript shrank {} time(s) ({}): rewritten in place, baseline moved",
+                self.shrinks.len(),
+                self.shrinks.join(", ")
+            )
+        };
         if self.records == 0 {
-            return "nothing landed after the baseline".to_string();
+            return format!("nothing landed after the baseline{shrank}");
         }
         let tools = if self.tools.is_empty() {
             "no tools".to_string()
@@ -73,7 +90,7 @@ impl Activity {
         };
         format!(
             "{} record(s) in {} lane(s): {tools} · thinking {} · messages {} · prompts {} · \
-             notifications {}",
+             notifications {}{shrank}",
             self.records,
             self.lanes.len(),
             self.thinking,
@@ -92,6 +109,7 @@ impl Activity {
             "agent_messages": self.agent_messages,
             "user_prompts": self.user_prompts,
             "notifications": self.notifications,
+            "shrinks": self.shrinks,
         })
     }
 }

@@ -7,6 +7,45 @@ use super::*;
 /// observed 400 KB single-line max).
 pub(crate) const TAIL_CHUNK: usize = 64 * 1024;
 
+/// Plain positional read of `path[start..end)` into a `Vec` - the LIVE-FILE reader
+/// (v0.10.4). A memory map of a file another process truncates faults with SIGBUS the
+/// moment a page past the new end is touched, and there is no `Result` to catch it;
+/// Claude Code rewrites a transcript in place on a rewind tombstone (truncate + tail
+/// rewrite) and, when its local GC is armed, on compaction. So the repeated readers
+/// (`wait`'s per-poll increment, the `status` tail window) read through `pread`-style
+/// I/O: a shrink returns fewer bytes, never a fault. The one-shot full scans keep the
+/// mmap contract of SPEC section 7a. `end` is clamped to the current length; a `start`
+/// past the end yields an empty buffer.
+pub(crate) fn read_range(path: &Path, start: u64, end: u64) -> Result<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    let len = file
+        .metadata()
+        .with_context(|| format!("cannot stat {}", path.display()))?
+        .len();
+    let end = end.min(len);
+    if start >= end {
+        return Ok(Vec::new());
+    }
+    file.seek(SeekFrom::Start(start))
+        .with_context(|| format!("cannot seek {}", path.display()))?;
+    let mut buf = Vec::with_capacity(usize::try_from(end - start).unwrap_or(0));
+    file.take(end - start)
+        .read_to_end(&mut buf)
+        .with_context(|| format!("cannot read {}", path.display()))?;
+    Ok(buf)
+}
+
+/// The last `window` bytes of `path` (or the whole file when shorter), plus the file
+/// offset the returned buffer starts at. Same plain-read contract as [`read_range`].
+pub(crate) fn read_tail(path: &Path, window: u64) -> Result<(Vec<u8>, u64)> {
+    let len = std::fs::metadata(path)
+        .with_context(|| format!("cannot stat {}", path.display()))?
+        .len();
+    let start = len.saturating_sub(window);
+    Ok((read_range(path, start, len)?, start))
+}
+
 /// Open + memory-map a file read-only and hand back the [`Mmap`] for the caller to
 /// borrow a `&[u8]` from (used by `search`, which needs to retain records borrowed
 /// against the live map for the whole scan). Returns `Ok(None)` for an empty file.
@@ -27,12 +66,16 @@ pub(crate) fn mmap_file(path: &Path) -> Result<Option<Mmap>> {
     if len == 0 {
         return Ok(None);
     }
-    // SAFETY: read-only mmap of a file we just opened. The documented hazard is a
-    // concurrent truncation by another writer; we never write through the map and
-    // treat its length as fixed-at-open, which is the SPEC's accepted contract
-    // (§7a). The crate lints `unsafe_code = "deny"` (unsafe forbidden crate-wide);
-    // mmap is irreducibly unsafe and SPEC-mandated, so this is the single audited
-    // call site that explicitly allows it.
+    // SAFETY: read-only mmap of a file we just opened; we never write through the map
+    // and treat its length as fixed-at-open. The one hazard the map cannot contain is a
+    // concurrent TRUNCATION by another writer: touching a page past the new end faults
+    // with SIGBUS, and no Result catches it. Claude Code does rewrite a transcript in
+    // place (a rewind tombstone; an armed local GC on compaction), so the readers that
+    // run repeatedly against a live file - `wait`'s poll and the `status` tail window -
+    // use `read_range`/`read_tail` instead (v0.10.4); the one-shot full scans keep the
+    // map, whose sub-second life bounds the exposure (SPEC section 7a). The crate lints
+    // `unsafe_code = "deny"`; mmap is irreducibly unsafe and SPEC-mandated, so this is
+    // the single audited call site that explicitly allows it.
     #[allow(unsafe_code)]
     let mmap =
         unsafe { Mmap::map(&file) }.with_context(|| format!("cannot mmap {}", path.display()))?;

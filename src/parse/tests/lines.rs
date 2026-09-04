@@ -193,3 +193,38 @@ fn role_marker_is_serialization_tolerant() {
         br#"{"a":{"role":"admin"},"message":{"role": "user"}}"#
     ));
 }
+
+#[test]
+fn read_range_and_read_tail_are_plain_reads_that_tolerate_a_shrink() {
+    // The live-file readers (v0.10.4): a positional read past a shrunk end returns fewer
+    // bytes instead of faulting; `end` is clamped, a start past the end is empty.
+    let f = tmp_jsonl(&["0123456789", "abcdef"]);
+    let p = f.path().to_path_buf();
+    assert_eq!(read_range(&p, 11, 18).unwrap(), b"abcdef\n");
+    assert_eq!(
+        read_range(&p, 11, 1000).unwrap(),
+        b"abcdef\n",
+        "end is clamped"
+    );
+    assert!(
+        read_range(&p, 500, 600).unwrap().is_empty(),
+        "start past the end"
+    );
+    let (tail, start) = read_tail(&p, 7).unwrap();
+    assert_eq!((tail.as_slice(), start), (&b"abcdef\n"[..], 11));
+    let (whole, start) = read_tail(&p, 10_000).unwrap();
+    assert_eq!(
+        (whole.len(), start),
+        (18, 0),
+        "a short file is returned whole"
+    );
+    // another writer shrinks the file below a previous read's end
+    std::fs::File::options()
+        .write(true)
+        .open(&p)
+        .unwrap()
+        .set_len(4)
+        .unwrap();
+    assert_eq!(read_range(&p, 0, 18).unwrap(), b"0123");
+    assert!(read_range(&p, 11, 18).unwrap().is_empty());
+}

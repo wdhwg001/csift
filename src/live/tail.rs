@@ -33,18 +33,22 @@ pub(crate) struct TailShape {
 /// Read + classify the tail window of `path`.
 pub(crate) fn tail_shape(path: &Path) -> Result<TailShape> {
     let mut shape = TailShape::default();
-    let Some(mmap) = mmap_bytes(path)? else {
+    // A plain positional read, never a memory map: this window is re-read on every
+    // `wait` poll of a LIVE transcript, and Claude Code rewrites a transcript in place
+    // (a rewind tombstone truncates and rewrites the tail), which would fault a map
+    // with SIGBUS (v0.10.4).
+    let (buf, start) = read_tail(path, TAIL_WINDOW_BYTES as u64)?;
+    if buf.is_empty() {
         return Ok(shape);
-    };
-    let bytes: &[u8] = &mmap;
-    let start = bytes.len().saturating_sub(TAIL_WINDOW_BYTES);
+    }
+    let bytes: &[u8] = &buf;
     // Align to a line start (skip the partial line the cut landed in), unless we have
     // the whole file.
     let window = if start == 0 {
         bytes
     } else {
-        match memchr::memchr(b'\n', &bytes[start..]) {
-            Some(nl) => &bytes[start + nl + 1..],
+        match memchr::memchr(b'\n', bytes) {
+            Some(nl) => &bytes[nl + 1..],
             None => &bytes[bytes.len()..],
         }
     };
