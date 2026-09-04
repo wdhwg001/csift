@@ -13,7 +13,9 @@ pub(crate) enum Cond {
     Hitl,
     /// The elicitation sidecar gains an unanswered question (or a native AUQ ask lands).
     Auq,
-    /// A task-notification lands in the MAIN transcript (they never land in children),
+    /// A task-notification is delivered (normally to the MAIN transcript; a child lane
+    /// receives one when the harness routes it to the owning agent - 2 of 2906
+    /// delivered records in the reference corpus at Claude Code 2.1.258, v0.10.3),
     /// optionally payload-matched.
     Notification(Option<regex::Regex>),
     /// A `tool_use` of NAME appears whose serialized input matches (any watched lane).
@@ -105,14 +107,13 @@ pub(crate) fn parse_condition(s: &str) -> Result<Cond> {
     }
 }
 
-/// Match a freshly appended RECORD line against the record-event conditions. `is_main`
-/// scopes the notification carrier (they persist only in the main transcript).
-pub(crate) fn record_matches(cond: &Cond, rec: &crate::model::Record, is_main: bool) -> bool {
+/// Match a freshly appended RECORD line against the record-event conditions (every
+/// watched lane; v0.10.3 dropped the main-only scope on the notification carrier).
+pub(crate) fn record_matches(cond: &Cond, rec: &crate::model::Record) -> bool {
     match cond {
         Cond::Notification(re) => {
-            if !is_main {
-                return false;
-            }
+            // Any watched lane: the harness normally delivers to the main transcript, but
+            // a pulse addressed to the owning agent lands in that agent's lane (v0.10.3).
             // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY
             // on a queue-operation enqueue line and a queued_command attachment
             // (v0.10.2: the three carriers `background_scan` joins, not the user

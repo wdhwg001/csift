@@ -15,7 +15,6 @@ const TIMEOUT_EXIT: u8 = 124;
 struct Cursor {
     path: PathBuf,
     offset: u64,
-    is_main: bool,
     /// The transcript's own id (activity is censused per lane).
     lane: String,
 }
@@ -48,28 +47,23 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
     // ── Baselines: snapshot every currently-watched file's length. Only bytes appended
     //    AFTER these offsets are events; history is `search`'s job. ──
     let mut cursors: Vec<Cursor> = Vec::new();
-    let seed = |path: PathBuf, is_main: bool, cursors: &mut Vec<Cursor>| {
+    let seed = |path: PathBuf, cursors: &mut Vec<Cursor>| {
         if cursors.iter().any(|c| c.path == path) {
             return;
         }
         let offset = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         let lane = crate::subagent::session_id_from_path(&path);
-        cursors.push(Cursor {
-            path,
-            offset,
-            is_main,
-            lane,
-        });
+        cursors.push(Cursor { path, offset, lane });
     };
-    seed(main.clone(), true, &mut cursors);
+    seed(main.clone(), &mut cursors);
     if args.want_subagents() && !is_subagent_target {
         for sub in crate::subagent::subagent_transcript_files(&main).unwrap_or_default() {
-            seed(sub, false, &mut cursors);
+            seed(sub, &mut cursors);
         }
     }
     if !is_subagent_target {
         if let Some(sc) = crate::elicitation::sidecar_path(&main) {
-            seed(sc, true, &mut cursors);
+            seed(sc, &mut cursors);
         }
     }
 
@@ -104,7 +98,6 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                     cursors.push(Cursor {
                         path: sub,
                         offset: 0,
-                        is_main: false,
                         lane,
                     });
                 }
@@ -121,7 +114,6 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                     cursors.push(Cursor {
                         path: sc,
                         offset: 0,
-                        is_main: true,
                         lane,
                     });
                 }
@@ -155,7 +147,7 @@ pub fn run_wait(args: &WaitArgs) -> Result<()> {
                 };
                 activity.fold(&rec, &cur.lane);
                 for (raw, cond) in &conds {
-                    if record_matches(cond, &rec, cur.is_main) {
+                    if record_matches(cond, &rec) {
                         return finish(args, raw, &main, &lens, &activity, start.elapsed());
                     }
                 }

@@ -384,3 +384,47 @@ fn p12_notification_fires_on_a_queue_enqueue_line_not_on_its_remove() {
         "the activity census counts the queue-carried pulse once:\n{stdout}"
     );
 }
+
+#[test]
+fn p17_notification_delivered_in_a_child_lane_fires() {
+    // The harness normally delivers a pulse to the main transcript, but one addressed to
+    // the owning agent lands in that agent's lane (2 of 2906 delivered records in the
+    // reference corpus at Claude Code 2.1.258). `--until notification` watches every
+    // lane (v0.10.3); a child born mid-wait starts at baseline 0.
+    let h = Home::new();
+    let _main = live_eot_main(&h);
+    let target = at(LIVE_SESS);
+    let child = h
+        .root
+        .join(".claude/projects")
+        .join(LIVE_ENC)
+        .join(LIVE_SESS)
+        .join("subagents")
+        .join("agent-a1b2c3d4e5f6a7b8c.jsonl");
+    let (code, stdout) = drive_wait(
+        &h,
+        &[
+            "wait",
+            &target,
+            "--until",
+            "notification:child-only job",
+            "--interval",
+            "25",
+            "--timeout",
+            "30",
+        ],
+        || {
+            std::fs::create_dir_all(child.parent().unwrap()).unwrap();
+            std::fs::write(
+                &child,
+                format!(
+                    "{}\n",
+                    r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:07:00.000Z","message":{"role":"user","content":"<task-notification>\n<task-id>b9</task-id>\n<status>completed</status>\n<summary>Background command \"child-only job\" completed (exit code 0)</summary>\n</task-notification>"}}"#
+                ),
+            )
+            .unwrap();
+        },
+    );
+    assert_eq!(code, Some(0), "a child-lane delivery fires: {stdout}");
+    assert!(stdout.contains("fired"), "{stdout}");
+}

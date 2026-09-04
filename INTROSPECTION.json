@@ -979,17 +979,17 @@
       "id": "BG-015",
       "area": "background-tasks",
       "behavior": "A Monitor armed by a SUBAGENT is delivered into that subagent's conversation (the emitter passes the owning agent id), but its <task-notification> is persisted ONLY in the parent MAIN transcript, as a queue-operation enqueue + remove/absorbed_mid_turn pair. Measured at CC 2.1.258 by arming one, and across 39 subagent-lane arms in the corpus: zero monitor notifications in any child transcript.",
-      "depends": "csift joins every completion through the three carriers `background_scan::carrier_text` reads - a user string record (the idle delivery), a `queue-operation` enqueue line and a `queued_command` attachment (the mid-turn delivery) - and since v0.10.2 `wait --until notification` and the wait activity census read the same three carriers through `delivered_pulse_labels`; a queue `remove`/`dequeue` repeats the enqueue's pulse and delivers nothing. Before v0.10.2 the condition matched only `automation_label`, which requires a `message{}` string, so a pulse absorbed mid-turn (roughly every other completion) could never fire it.",
+      "depends": "csift's `wait --until notification` and the activity census read the three pulse carriers in EVERY watched lane (v0.10.3): the harness normally delivers a pulse to the main transcript, but one addressed to the owning agent lands in that agent's lane (2 of 2906 delivered records in the reference corpus at 2.1.258), so a main-only scope silently missed those; the background section still joins completions from every lane by tool_use id.",
       "code": [
         {
           "path": "src/live/conditions.rs",
-          "lines": "16-18",
-          "snippet": "    /// A task-notification lands in the MAIN transcript (they never land in children),\n    /// optionally payload-matched.\n    Notification(Option<regex::Regex>),"
+          "lines": "16-20",
+          "snippet": "    /// A task-notification is delivered (normally to the MAIN transcript; a child lane\n    /// receives one when the harness routes it to the owning agent - 2 of 2906\n    /// delivered records in the reference corpus at Claude Code 2.1.258, v0.10.3),\n    /// optionally payload-matched.\n    Notification(Option<regex::Regex>),"
         },
         {
           "path": "src/live/conditions.rs",
-          "lines": "111-115",
-          "snippet": "    match cond {\n        Cond::Notification(re) => {\n            if !is_main {\n                return false;\n            }"
+          "lines": "201-206",
+          "snippet": "    match cond {\n        Cond::Stop => matches!(verdict, Verdict::IdleEot | Verdict::StaleDead),\n        Cond::Hitl => verdict == Verdict::WaitingHitl,\n        Cond::VerdictIs(v) => verdict == *v,\n        _ => false,\n    }"
         },
         {
           "path": "src/model/predicates.rs",
@@ -1003,8 +1003,8 @@
         },
         {
           "path": "src/live/conditions.rs",
-          "lines": "112-126",
-          "snippet": "        Cond::Notification(re) => {\n            if !is_main {\n                return false;\n            }\n            // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY\n            // on a queue-operation enqueue line and a queued_command attachment\n            // (v0.10.2: the three carriers `background_scan` joins, not the user\n            // record alone - the agents-stopped notice stays a user-record label).\n            let mut labels = crate::live::delivered_pulse_labels(rec);\n            if labels.is_empty() {\n                let Some(label) = rec.automation_label() else {\n                    return false;\n                };\n                labels.push(label);\n            }"
+          "lines": "114-127",
+          "snippet": "        Cond::Notification(re) => {\n            // Any watched lane: the harness normally delivers to the main transcript, but\n            // a pulse addressed to the owning agent lands in that agent's lane (v0.10.3).\n            // The idle delivery is a user record; a pulse absorbed mid-turn lands ONLY\n            // on a queue-operation enqueue line and a queued_command attachment\n            // (v0.10.2: the three carriers `background_scan` joins, not the user\n            // record alone - the agents-stopped notice stays a user-record label).\n            let mut labels = crate::live::delivered_pulse_labels(rec);\n            if labels.is_empty() {\n                let Some(label) = rec.automation_label() else {\n                    return false;\n                };\n                labels.push(label);\n            }"
         }
       ],
       "instrument": "Arm a Monitor from inside a subagent and let it fire, then `rg -c '<task-notification>' <that subagents/agent-*.jsonl>` - a nonzero count refutes the main-only law. Counting rule: one carrier per matching line inside a subagent transcript; for background-shell completions the same count is zero corpus-wide.",
@@ -1034,6 +1034,16 @@
           "observed": "3218 pulse-bearing user records, 5893 queue enqueue lines, 2315 other queue operations, 4480 attachment carriers: the enqueue count exceeds the user-record count by 2675, the pulses absorbed mid-turn",
           "rule": "one line = one carrier; a pulse with an enqueue line and no user record was absorbed mid-turn",
           "note": "csift 0.10.2: Cond::Notification and the wait activity census read the enqueue line and the queued_command attachment through live::delivered_pulse_labels (a remove/dequeue counts nothing); pinned by the e2e p12_notification_fires_on_a_queue_enqueue_line_not_on_its_remove and the activity unit test"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.3",
+          "date": "2026-09-04",
+          "verdict": "drifted",
+          "instrument": "`csift search \"\" -t harness.notification -c` over every project with and without `--no-subagents` (the classifier's own count of delivered pulse records per lane); the code comment at src/live/conditions.rs and the `if !is_main { return false; }` gate in `record_matches`",
+          "observed": "2906 delivered notification records across all lanes against 2904 in top-level transcripts: 2 delivered pulses sit in subagent lanes (plus queued_command attachment carriers the tracer counted: 28), so `they never land in children` was false at 2.1.258 and `wait --until notification` could never fire on them",
+          "rule": "one delivered record = one `harness.notification.*` label on a user record; the subagent count is the difference between the spanning and the top-level census",
+          "note": "fixed in 0.10.3: the notification condition matches in every watched lane (the main-only parameter removed from `record_matches`); e2e `p17_notification_delivered_in_a_child_lane_fires`."
         }
       ],
       "attribution": "end-to-end",
@@ -10353,8 +10363,8 @@
         },
         {
           "path": "src/live/wait.rs",
-          "lines": "113-129",
-          "snippet": "        // ── Sidecar discovery: the sidecar DIR is typically born mid-wait (the first\n        //    pending ask creates it), and its path resolves only once the dir exists -\n        //    so re-attempt each poll. A file born after start is wholly post-start, so\n        //    baseline 0 is exact. ──\n        if !is_subagent_target {\n            if let Some(sc) = crate::elicitation::sidecar_path(&main) {\n                if !cursors.iter().any(|c| c.path == sc) {\n                    let lane = crate::subagent::session_id_from_path(&main);\n                    cursors.push(Cursor {\n                        path: sc,\n                        offset: 0,\n                        is_main: true,\n                        lane,\n                    });\n                }\n            }\n        }"
+          "lines": "106-119",
+          "snippet": "        // ── Sidecar discovery: the sidecar DIR is typically born mid-wait (the first\n        //    pending ask creates it), and its path resolves only once the dir exists -\n        //    so re-attempt each poll. A file born after start is wholly post-start, so\n        //    baseline 0 is exact. ──\n        if !is_subagent_target {\n            if let Some(sc) = crate::elicitation::sidecar_path(&main) {\n                if !cursors.iter().any(|c| c.path == sc) {\n                    let lane = crate::subagent::session_id_from_path(&main);\n                    cursors.push(Cursor {\n                        path: sc,\n                        offset: 0,\n                        lane,\n                    });\n                }"
         }
       ],
       "instrument": "Run `csift wait @<uuid> --until auq --timeout 60 --interval 50` against a session that has no sidecar directory yet, then trigger the session's first AskUserQuestion: the condition must fire rather than time out. Counting rule: one discovery attempt per poll, one wait per ask. The e2e test `p10_wait_sees_a_sidecar_ask_that_lands_mid_wait` in tests/cli/live/wait.rs pins the mid-wait discovery.",

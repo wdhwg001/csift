@@ -75,26 +75,25 @@ fn condition_parse_error_forms_name_the_problem() {
 }
 
 #[test]
-fn notification_condition_scopes_to_main_and_matches_payload() {
+fn notification_condition_matches_in_every_lane_and_matches_payload() {
     let pulse: crate::model::Record = serde_json::from_str(
         r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b497m4ncp</task-id>\n<status>completed</status>\n<summary>Background command \"build venvs\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
     )
     .unwrap();
     let any = parse_condition("notification").unwrap();
-    assert!(record_matches(&any, &pulse, true));
-    assert!(
-        !record_matches(&any, &pulse, false),
-        "notifications persist in MAIN only; a child line never fires the condition"
-    );
+    // v0.10.3: the carrier is matched in every watched lane - the harness normally
+    // delivers to the main transcript, but a pulse addressed to the owning agent lands
+    // in that agent's lane (2 of 2906 delivered records in the reference corpus).
+    assert!(record_matches(&any, &pulse));
     let hit = parse_condition("notification:build venvs").unwrap();
-    assert!(record_matches(&hit, &pulse, true));
+    assert!(record_matches(&hit, &pulse));
     let miss = parse_condition("notification:some other job").unwrap();
-    assert!(!record_matches(&miss, &pulse, true));
+    assert!(!record_matches(&miss, &pulse));
     // A plain user message is not a notification even on main.
     let plain: crate::model::Record =
         serde_json::from_str(r#"{"type":"user","message":{"role":"user","content":"hello"}}"#)
             .unwrap();
-    assert!(!record_matches(&any, &plain, true));
+    assert!(!record_matches(&any, &plain));
 }
 
 #[test]
@@ -104,23 +103,23 @@ fn auq_condition_matches_sidecar_pending_and_native_ask() {
         r#"{"csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"toolu_1","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"AskUserQuestion","input":{}}]}}"#,
     )
     .unwrap();
-    assert!(record_matches(&auq, &pending, true));
+    assert!(record_matches(&auq, &pending));
     let resolved: crate::model::Record = serde_json::from_str(
         r#"{"csift":"elicitation-marker-v1","csiftPhase":"resolved","csiftKind":"AskUserQuestion","csiftKey":"toolu_1","type":"csift-elicitation-resolved"}"#,
     )
     .unwrap();
-    assert!(!record_matches(&auq, &resolved, true));
+    assert!(!record_matches(&auq, &resolved));
     // The native ask (an answered AUQ's buffered turn landing) fires too.
     let native: crate::model::Record = serde_json::from_str(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"AskUserQuestion","input":{"questions":[]}}]}}"#,
     )
     .unwrap();
-    assert!(record_matches(&auq, &native, true));
+    assert!(record_matches(&auq, &native));
     let text_only: crate::model::Record = serde_json::from_str(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"no ask"}]}}"#,
     )
     .unwrap();
-    assert!(!record_matches(&auq, &text_only, true));
+    assert!(!record_matches(&auq, &text_only));
 }
 
 #[test]
@@ -132,13 +131,11 @@ fn tool_and_write_condition_edge_arms() {
     .unwrap();
     assert!(record_matches(
         &parse_condition("tool:Read").unwrap(),
-        &bare,
-        true
+        &bare
     ));
     assert!(!record_matches(
         &parse_condition("tool:Read:handover").unwrap(),
-        &bare,
-        true
+        &bare
     ));
     // write: notebook_path is a path source; a path miss never consults the line regex.
     let nb: crate::model::Record = serde_json::from_str(
@@ -147,13 +144,11 @@ fn tool_and_write_condition_edge_arms() {
     .unwrap();
     assert!(record_matches(
         &parse_condition("write:lab\\.ipynb").unwrap(),
-        &nb,
-        true
+        &nb
     ));
     assert!(!record_matches(
         &parse_condition("write:other\\.md:x = 1").unwrap(),
-        &nb,
-        true
+        &nb
     ));
     // A non-write tool never satisfies a write condition.
     let read: crate::model::Record = serde_json::from_str(
@@ -162,8 +157,7 @@ fn tool_and_write_condition_edge_arms() {
     .unwrap();
     assert!(!record_matches(
         &parse_condition("write:lab\\.ipynb").unwrap(),
-        &read,
-        true
+        &read
     ));
 }
 
@@ -190,25 +184,21 @@ fn record_conditions_match_the_right_events() {
     )
     .unwrap();
     let tool = parse_condition("tool:Read:handover").unwrap();
-    assert!(record_matches(&tool, &read, true));
+    assert!(record_matches(&tool, &read));
     let other = parse_condition("tool:Write").unwrap();
-    assert!(!record_matches(&other, &read, true));
+    assert!(!record_matches(&other, &read));
 
     let write: crate::model::Record = serde_json::from_str(
         r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Write","input":{"file_path":"/p/notes/final.md","content":"alpha\nDONE beacon\n"}}]}}"#,
     )
     .unwrap();
     let w = parse_condition("write:final\\.md:DONE").unwrap();
-    assert!(record_matches(&w, &write, true));
+    assert!(record_matches(&w, &write));
     let w_miss = parse_condition("write:final\\.md:ABSENT").unwrap();
-    assert!(!record_matches(&w_miss, &write, true));
+    assert!(!record_matches(&w_miss, &write));
 
     // stop/hitl/verdict are assessment-level, never record-level.
-    assert!(!record_matches(
-        &parse_condition("stop").unwrap(),
-        &read,
-        true
-    ));
+    assert!(!record_matches(&parse_condition("stop").unwrap(), &read));
     assert!(verdict_matches(
         &parse_condition("stop").unwrap(),
         Verdict::StaleDead
@@ -228,5 +218,5 @@ fn notification_regex_matches_the_synthesized_label_alone() {
     )
     .unwrap();
     let label_only = parse_condition("notification:\\[background-command b497m4ncp").unwrap();
-    assert!(record_matches(&label_only, &pulse, true));
+    assert!(record_matches(&label_only, &pulse));
 }
