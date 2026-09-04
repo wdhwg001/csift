@@ -13770,7 +13770,7 @@
       "id": "IMG-002",
       "area": "images",
       "behavior": "An image reaches the transcript through one of two carriers: a direct `{type:\"image\"}` content block (the user-sent / assistant case) or an `{type:\"image\"}` element nested inside a `tool_result` block's `content` ARRAY (a tool screenshot).",
-      "depends": "csift walks both carriers in document order under a single 1-based running ordinal, so the `L<line>i<n>` locator stays stable across the two shapes; handling only the direct block makes tool screenshots invisible to `image` and to `image --out`.",
+      "depends": "csift's image walker reads three carriers (v0.10.3): a direct image block on a user or assistant record, an image element nested in a tool_result content array, and the image blocks of a `queued_command` attachment's `prompt[]` (a prompt queued and then edited or recalled never becomes a user record, so its pasted image exists only there: 45 of 52 such blocks in the reference corpus); the `[Image #N]` marker zip applies to each carrier in document order.",
       "code": [
         {
           "path": "src/image/refs.rs",
@@ -13800,6 +13800,16 @@
           "observed": "Direct carrier: `{\"type\":\"user\",\"role\":\"user\",\"blocks\":[{\"t\":\"text\"},{\"t\":\"image\",\"src\":\"base64\",\"mt\":\"image/jpeg\"}, ... 5 more image blocks]}`. Nested carrier, in the same transcript: `{\"type\":\"user\",\"role\":\"user\",\"blocks\":[{\"t\":\"tool_result\",\"nested\":[\"image\"]}]}` - a `tool_result` block whose `content` is an ARRAY holding an `image` element. Claude Code 2.1.258 binary emits exactly that second shape: `return{tool_use_id:n,type:\"tool_result\",content:[{type:\"image\",source:{type:\"base64\",media_type:o,data:r.data}}]}`. csift's JSON gave the direct-carrier record img_index 1..6 (a 1-based running ordinal) and the nested-carrier record img_index 1.",
           "rule": "One image per `{type:\"image\"}` object, counted per record in document order across both carrier shapes; carrier shape read off the parsed block tree, not a text match.",
           "note": "Code sites verified verbatim: src/image/refs.rs:231-234 (the doc comment) and src/image/refs.rs:255-259 (the `Block::ToolResult { content: Some(content), .. }` arm). The nested carrier is not hypothetical here - the three consecutive unnumbered images in the measured transcript (seq null, one per record) are all tool-result screenshots, and a listing that walked only direct blocks would have dropped them."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.3",
+          "date": "2026-09-04",
+          "verdict": "drifted",
+          "instrument": "a python walk of every `{type:\"image\"}` object over every jsonl line carrying the literal, recording its json path; for the `queued_command` attachment carrier, the base64 head of each image compared against every message-block image in the same file",
+          "observed": "image blocks sit at four paths: message.content[], message.content[].content[] (tool results), toolUseResult (the Read image result) and attachment.prompt[] on queued_command attachment records; 52 blocks in 11 transcripts under the fourth path, 45 of which have no copy in any message block of their transcript (a prompt edited or recalled before dispatch never becomes a user record), so `csift image` listed none of them",
+          "rule": "one block per `{type:image}` object with a base64 source; an orphan is a queued block whose base64 head appears in no message block of the same file",
+          "note": "fixed in 0.10.3: `record_images` walks a queued_command attachment's `prompt[]` (`queued_prompt_images`) with the same positional `[Image #N]` zip; e2e `image_lists_a_queued_command_attachment_image`. The toolUseResult copy of a Read image duplicates its tool_result block and stays uncounted."
         }
       ],
       "attribution": "end-to-end",

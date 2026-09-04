@@ -235,7 +235,7 @@ pub(crate) fn parse_image_markers(text: &str, out: &mut Vec<usize>) {
 pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     let mut out = Vec::new();
     let Some(blocks) = rec.blocks() else {
-        return out;
+        return queued_prompt_images(rec, with_data);
     };
     // `[Image #N]` markers across the record's text blocks, in document order.
     let mut markers: Vec<usize> = Vec::new();
@@ -275,6 +275,49 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
     // Assign `#N` by POSITIONAL zip - only when the marker count matches the image count
     // (CC guarantees `[Image #N]` is unique within a prompt; a mismatch means a back-
     // reference to a compressed-out image, so we leave `seq = None` rather than misassign).
+    if markers.len() == out.len() {
+        for (r, &n) in out.iter_mut().zip(markers.iter()) {
+            r.seq = Some(n);
+        }
+    }
+    out
+}
+
+/// The third carrier (v0.10.3, ledger IMG-002): a `queued_command` attachment record
+/// keeps the queued prompt's blocks under `attachment.prompt[]`, image blocks included.
+/// A prompt edited or recalled before dispatch never becomes a user record, so its
+/// pasted image exists ONLY here (45 of 52 such blocks in the reference corpus had no
+/// copy in any message block of their transcript). Same document-order walk and the
+/// same positional `[Image #N]` zip as a user record.
+fn queued_prompt_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
+    let mut out = Vec::new();
+    if rec.attachment_type().as_deref() != Some("queued_command") {
+        return out;
+    }
+    let Some(att) = rec.attachment_value() else {
+        return out;
+    };
+    let Some(prompt) = att.get("prompt").and_then(Value::as_array) else {
+        return out;
+    };
+    let mut markers: Vec<usize> = Vec::new();
+    for el in prompt {
+        if el.get("type").and_then(Value::as_str) == Some("text") {
+            if let Some(text) = el.get("text").and_then(Value::as_str) {
+                parse_image_markers(text, &mut markers);
+            }
+        }
+    }
+    for el in prompt {
+        if el.get("type").and_then(Value::as_str) == Some("image") {
+            if let Some(src) = el.get("source") {
+                if let Some(mut r) = image_ref_from_source(src, with_data) {
+                    r.img_index = out.len() + 1;
+                    out.push(r);
+                }
+            }
+        }
+    }
     if markers.len() == out.len() {
         for (r, &n) in out.iter_mut().zip(markers.iter()) {
             r.seq = Some(n);

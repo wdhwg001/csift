@@ -432,3 +432,57 @@ fn image_ambiguous_hash_n_errors_with_occurrence_list() {
     assert!(two.success, "stderr: {}", two.stderr);
     assert!(two.stdout.contains("L1i2"), "{}", two.stdout);
 }
+
+#[test]
+fn image_lists_a_queued_command_attachment_image() {
+    // The third image carrier (v0.10.3): a prompt queued and then edited or recalled
+    // never becomes a user record, so its pasted image lives only in the
+    // `queued_command` attachment's `prompt[]`. The walker reads it like a user record,
+    // markers included; a prompt-less attachment carries nothing.
+    let h = Home::new();
+    let r0 = serde_json::json!({
+        "type":"user","uuid":"u0","sessionId":SESS,"cwd":"/Users/testuser/Projects/foo",
+        "version":"2.1.0","timestamp":"2026-06-07T05:00:00.000Z",
+        "message":{"role":"user","content":"start"}
+    });
+    let queued = serde_json::json!({
+        "type":"attachment","uuid":"q1","sessionId":SESS,"timestamp":"2026-06-07T05:00:03.000Z",
+        "attachment":{"type":"queued_command","commandMode":"prompt",
+            "prompt":[{"type":"text","text":"look at [Image #3]"}, img_block("image/png", PNG_GREEN)]}
+    });
+    let other = serde_json::json!({
+        "type":"attachment","uuid":"q2","sessionId":SESS,"timestamp":"2026-06-07T05:00:04.000Z",
+        "attachment":{"type":"hook_success","content":"","stdout":""}
+    });
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!("{r0}\n{queued}\n{other}\n"),
+    );
+    let out = h.run(&["image", at(SESS).as_str(), "--no-subagents"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("#3"),
+        "the queued image carries its marker:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("L2i1"),
+        "locator names the attachment line:\n{}",
+        out.stdout
+    );
+    let json = h.run(&[
+        "image",
+        at(SESS).as_str(),
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let rows: Vec<serde_json::Value> = json
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .filter(|v: &serde_json::Value| v.get("kind").and_then(|k| k.as_str()) == Some("image"))
+        .collect();
+    assert_eq!(rows.len(), 1, "{}", json.stdout);
+    assert_eq!(rows[0]["line"], 2);
+}
