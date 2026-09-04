@@ -28,6 +28,14 @@ pub(crate) enum EventKind {
         lines: Vec<String>,
         total_lines: usize,
     },
+    /// A Read echo that carries NO content: the harness blanks the text of a tool result
+    /// older than its retention window before persisting it (`content` is the empty
+    /// string while `numLines`/`totalLines` still count the lines it once had - 320
+    /// such echoes in the reference corpus), and four result arms (`file_unchanged`,
+    /// `pdf`, `parts`, `notebook`) never carry a text at all (ledger FH-048). Replaying
+    /// such an echo as a read of N empty lines, or as a one-line file, fabricates
+    /// content; it is COUNTED and disclosed, never spliced.
+    BlankedRead { total_lines: Option<usize> },
     /// An Edit/MultiEdit applied old→new. `structured_patch` (when present) gives exact
     /// line positions; `original_file` (when present) is used ONLY to cross-check for a
     /// boundary, never to paper over drift.

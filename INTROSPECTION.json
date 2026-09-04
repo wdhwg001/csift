@@ -21487,8 +21487,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "64-75",
-          "snippet": "            let start_line = file\n                .get(\"startLine\")\n                .and_then(serde_json::Value::as_u64)\n                .unwrap_or(1) as usize;\n            let total_lines = file\n                .get(\"totalLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);\n            let num_lines = file\n                .get(\"numLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);"
+          "lines": "162-164",
+          "snippet": "    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/recover/carriers.rs",
@@ -23411,7 +23411,7 @@
       "id": "FH-048",
       "area": "freshness-file-history",
       "behavior": "A Read result whose file object carries a filePath but NO content string drives csift's push_read_event to observed = 0 and total = 1, producing a PartialRead that reports the file as one line long. The Read tool's output schema is a six-arm union (@164895929 text, @164896711 image, @164897303 notebook, @164897442 pdf, @164897625 parts, @164898619 file_unchanged) and FOUR of the arms carry a filePath with no content string: file_unchanged, parts (the PDF page-extraction result), pdf, and notebook - file:{filePath,cells}, reachable in the shipped build, whose writer emits {type:\"notebook\",file:{filePath,cells}} (@164908163) and whose stripForStorage arm preserves the shape by replacing cells with a same-length hole array (@164901155). Corpus 2026-09-04, one count per record whose toolUseResult.file is an object with a string filePath: file_unchanged 120, parts 26, pdf 4, notebook 0. A FIFTH shape is not contentless yet carries no lines: the stripForStorage TEXT arm blanks file.content to the empty string while numLines, startLine and totalLines survive (case\"text\":if(e.file.content===\"\")return e;return{...e,file:{...e.file,content:\"\"}}, @164900907), and the harness applies it to every tool result older than the newest 200 messages (the sweeper at @166028181 computes d = e.length - 200 and rewrites each older record's toolUseResult through the owning tool's stripForStorage). Corpus 2026-09-04: 8,724 text results carry a content string, 319 of them the empty string, and 198 of those declare totalLines greater than 1 (largest 15,359).",
-      "depends": "SparseBuffer::splice raises seen_total_lines with a .max() against the existing value, so the bogus total of 1 from a CONTENTLESS echo cannot shrink a real total learned from an earlier read - that .max() is the only thing standing between a file_unchanged echo and a wrong recover --coverage denominator. It does NOT cover the blanked-text shape, and that shape fails worse: recover::carriers reads file.content with unwrap_or_default and passes the empty string on, push_read_event takes observed from the reported line count rather than from the content it was handed (observed = num_lines.unwrap_or(lines.len())), so a swept whole-file read satisfies !truncated && start_line == 1 && observed >= total && total > 0 and classifies as a FullSnapshot with EMPTY content; SparseBuffer::reset_to_full then clears every known line and sets seen_total_lines to the reported total, so coverage collapses to 0 of T instead of merely mis-counting, and every line learned earlier is discarded. 194 of the 319 blanked text echoes in the corpus satisfy that test today.",
+      "depends": "`recover` treats a Read echo with no text as a counted `BlankedRead`, never as content: the `content` key absent (the `file_unchanged`, `pdf`, `parts` and `notebook` result arms) or `content` blanked to the empty string while `numLines`/`totalLines` still count the lines the file had. Each is disclosed as an annotation boundary (`blanked_read`, soft, authoritative) and in the coverage counts (`blanked-read` in text, `events.blanked_read` in JSON); nothing is spliced and no whole-file snapshot is taken from it, so a known buffer survives the echo unchanged. A genuinely empty file (`totalLines` 0, or no counts at all with an empty text) stays an ordinary read. What breaks if the fact moves: a build that blanked the text to a placeholder string instead of the empty string would pass the blank test and be replayed as content; the corpus census of empty-text echoes with positive counts, and of any placeholder literal inside a `file` object, is the instrument.",
       "code": [
         {
           "path": "src/recover/buffer.rs",
@@ -25658,18 +25658,18 @@
     {
       "id": "IMG-012",
       "area": "images",
-      "behavior": "A `Read` of a PDF that Claude Code splits into page images writes a `toolUseResult` whose top-level `type` is `parts` and whose `file` object is exactly `{count, filePath, originalSize, outputDir}` - it NAMES an on-disk output directory instead of carrying the pages in `file`; a top-level `firstPage` rides beside it only on results written by Claude Code 2.1.251 and later (2 of 26 observed, and both of those are the 2.1.251 records).",
-      "depends": "csift's `recover` Read arm keys on the presence of a `file` object with a matching `filePath`, and a `parts` result carries one (the PDF path), so it enters the same path as a text Read but supplies no `content` (the `unwrap_or_default()` yields an empty string). The `total > 0` gate in `push_read_event` is what stops that contentless variant from being minted as a FULL snapshot: the event still lands, on the `else` arm, as a zero-line windowed read, so `recover --file <the pdf>` reports `0/1 lines (0%)` with `1 read (0 full, 1 windowed)` rather than a false full read.",
+      "behavior": "A Read of a PDF that carries a validated pages range writes a toolUseResult whose top-level type is parts and whose file object is exactly {count, filePath, originalSize, outputDir} - it NAMES an on-disk output directory instead of carrying the pages in file. In 2.1.258 the sole writer of the shape is mHn (@157745640, the only occurrence of the literal type:\"parts\" in the build, at 157748522), and it has exactly two call sites: the pages branch (@164909039), whose result is returned, and the whole-PDF path (@164911003), whose result is read only by the tengu_pdf_page_extraction telemetry call and never returned. So a parts record is reachable ONLY through the pages branch (@164908897): a Read without a pages parameter takes the whole-PDF path, which returns a type:\"pdf\" result instead (the literal @157744814, declared as its own schema variant @164897445), and the page extraction that path runs when the model cannot read whole PDFs or the file is over the size threshold keeps its result only for telemetry, which is why parts records are rare. A top-level firstPage rides beside the file object, and its arrival is a BINARY boundary rather than a corpus floor: firstPage is ABSENT from the parts result at 2.1.240 and PRESENT at 2.1.243, where the reader returns {...be,firstPage:B.firstPage,pages:Z} (@206257210) and the output schema declares the member (@206266608), so it was introduced in the window (2.1.240, 2.1.243]. At 2.1.240 the twelve byte occurrences of firstPage belong to the page-range machinery and to unrelated text - the range parser (289049247, 289049362, 289049502), the range formatter (298636554), the pdftoppm argument builder (298638866, 298638897), the range validator (298770629), a constant-table entry (93308160), a destructure-error message (133423037) and three inside an unrelated firstPageId snippet in a bundled client asset (62836782, 62836833, 62837433) - each read, none of them a member of a result object, and that build's parts writer (@298640976) returns the four file members with no firstPage beside them. The ladder instrument is the schema describe texts, which are stable across minification: \"Document page number of the first extracted page\" counts 0 at 2.1.240, 2 at 2.1.243 and 2 at 2.1.258, while \"Directory containing extracted page images\" counts 2 in all three - so the parts result itself predates the window and only firstPage moved. Closing the window to adjacent releases needs the 2.1.241 and 2.1.242 builds. 2.1.251 is only the earliest build that wrote such a record into THIS corpus, which holds no parts record at all from 2.1.232 through 2.1.250. Corpus census over 8324 transcript files (journal.jsonl excluded; one observation per record whose toolUseResult has an object file and type == \"parts\"): 26 parts results in 26 distinct record uuids; file key set exactly {count, filePath, originalSize, outputDir} on 26 of 26; top-level key set {file, type} on 24 and {file, firstPage, type} on 2, those two being exactly the two records written by 2.1.251 (the other 24 by 2.1.196 once, 2.1.207 twice, 2.1.220 fifteen times and 2.1.231 six times). The 2.1.258 schema declares the same four file members with firstPage optional at the top level (@164897625, the optional member at @164897878).",
+      "depends": "csift's recover Read arm keys on the presence of a file object with a matching filePath, and a parts result carries one (the PDF path), so it enters the same path as a text Read but supplies no content (the unwrap_or_default() yields an empty string). The total > 0 gate in push_read_event is what stops that contentless variant from being minted as a FULL snapshot: the event still lands, on the else arm, as a zero-line windowed read, so recover --file <the pdf> reports 0/1 lines (0%) with 1 read (0 full, 1 windowed) rather than a false full read. Nothing in csift reads firstPage, so the version boundary changes no csift behaviour - it only dates the field for anyone reading a parts record's key set, and it is the reason the key set must be treated as version-dependent rather than fixed.",
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "59-63",
-          "snippet": "            let content = file\n                .get(\"content\")\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default()\n                .to_string();"
+          "lines": "156-164",
+          "snippet": "    let content = file.get(\"content\").and_then(serde_json::Value::as_str);\n    let count = |k: &str| {\n        file.get(k)\n            .and_then(serde_json::Value::as_u64)\n            .map(|n| n as usize)\n    };\n    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "72-81",
-          "snippet": "            let num_lines = file\n                .get(\"numLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);\n            let truncated = file\n                .get(\"truncatedByTokenCap\")\n                .and_then(serde_json::Value::as_bool)\n                .unwrap_or(false);\n            push_read_event(\n                line_no,"
+          "lines": "164-186",
+          "snippet": "    let num_lines = count(\"numLines\");\n    let counted = num_lines.unwrap_or(0).max(total_lines.unwrap_or(0));\n    let blanked = match content {\n        None => true,\n        Some(\"\") => counted > 0,\n        Some(_) => false,\n    };\n    if blanked {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::BlankedRead {\n                total_lines: total_lines.or(num_lines),\n            },\n        });\n        return;\n    }\n    let truncated = file\n        .get(\"truncatedByTokenCap\")\n        .and_then(serde_json::Value::as_bool)\n        .unwrap_or(false);\n    push_read_event("
         },
         {
           "path": "src/recover/carriers.rs",
@@ -25677,7 +25677,7 @@
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
-      "instrument": "Measured 2026-09-02 over the 7,814 transcript files under ~/.claude/projects with a python3 walk that json-parses every line carrying `toolUseResult` and keeps the ones whose `toolUseResult.file` is an object, filtered to `type == 'parts'` and tallying both the `file` key set and the top-level key set. Counting rule: one observation per record with an object `file`. Result: 26 `parts` results; `file` key set exactly `{count, filePath, originalSize, outputDir}` on 26 of 26; top-level key set `{file, type}` on 24 and `{file, firstPage, type}` on 2.",
+      "instrument": "python3 walk over every *.jsonl under the projects root (journal.jsonl excluded) that json-parses each line carrying toolUseResult, keeps the records whose toolUseResult.file is an object and whose type is \"parts\", and tallies the file key set, the top-level key set and the record's own version field. Counting rule: one observation per such record. For the field's version boundary, count the schema describe texts \"Document page number of the first extracted page\" and \"Directory containing extracted page images\" in each cached native build, and read the reader's parts return in the builds that bracket the change. For the csift half, csift recover @<session> --file <the PDF> --coverage.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -25706,16 +25706,15 @@
           "note": "Every hop is in hand - the pages-parameter gate, the mHn literal that writes the four file members, the vGo return that adds firstPage, the kjn strip and the record mint - and the corpus reproduces the key sets exactly; the label is held below end-to-end only because a binary-ladder hop refutes the claim's 2.1.251 version floor, and no specimen in this corpus can decide that floor."
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "TEXT: the version sentence is a corpus floor, not the behaviour. 'a top-level firstPage rides beside it only on results written by Claude Code 2.1.251 and later' should read: firstPage is absent from the parts result at 2.1.240 and present at 2.1.243 (both read in the shipped binaries), so it was introduced in (2.1.240, 2.1.243]; 2.1.251 is only the earliest build that wrote such a record into THIS corpus, which holds no parts record from 2.1.232 through 2.1.250. Closing the boundary to adjacent releases needs the 2.1.241 and 2.1.242 builds, which are published but not cached here.",
-        "Text rewrite rejected on 2026-09-04 by the adversarial verifier (Everything load-bearing reproduces: I re-read the parts writer 157748522, the whole-PDF pdf-result literal 157744814, the pdf and parts schema variants at 164897445/164897625 with firstPage optional at 164897878, the pages gate 164908897 and the strip 164898866, and I confirmed independently that the second mHn call (164911003) uses its result only for telemetry, so 'reachable ONLY through the pag); the text stays as it was and the claim stays below end-to-end until a rewrite passes."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
-        "In 2.1.258 a parts result is reachable ONLY through a Read that carried a pages parameter: the whole-PDF path returns a type pdf result, and the extraction under if(!W7e()||size>threshold) discards its own result after firing tengu_pdf_page_extraction telemetry. Worth stating in the behaviour text, since it explains why parts records are rare.",
-        "The outputDir is created under the session tool-results store as pdf-<uuid> and filled by pdftoppm -jpeg -r 100, hence the page-N.jpg names the claim relies on."
+        "The window's edges are unnamed because the 2.1.241 and 2.1.242 builds are published but not cached here; fetching either and counting the describe text \"Document page number of the first extracted page\" closes the boundary to adjacent releases.",
+        "The corpus cannot decide the floor on its own: it holds 26 parts records, written by 2.1.196, 2.1.207, 2.1.220, 2.1.231 and 2.1.251, and none by any build in the window where the member actually appeared.",
+        "The outputDir is created under the session tool-results store as pdf-<uuid> and filled by pdftoppm -jpeg -r 100, hence the page-N.jpg names the claim relies on.",
+        "The production site can attach a top-level v5SidecarScope:{...,pageNames} beside the four file members (@157748522); the persisted union does not declare that member and it appears on 0 of the 26 records."
       ],
       "producer_chain": [
         {
@@ -25777,28 +25776,112 @@
       ],
       "enumeration": [
         {
-          "site": "version ladder: the parts-result firstPage is ABSENT at 2.1.240",
-          "offset": 289049247,
-          "excerpt": "firstPage:i,lastPage:1/0}}let r=t.indexOf(\"-\");if(r===-1){let i=parseInt(t,10);if(isNaN(i)||i<1)return null;return{firstPage:i,lastPage:i}}let n=parse",
-          "verdict": "At 2.1.240 the only firstPage occurrences (4) are the page-range parser and a range formatter; the result carries none, and type!==\"parts\"||e.pages===void 0 occurs 0 times."
+          "site": "2.1.258: mHn, the only writer of the parts result",
+          "offset": 157745610,
+          "excerpt": "ble();return o}async function mHn(e,r,n){try{let o=await ct(e,oe(\"darwin\")),i=await o.stat().finally(()=>o.close());if(!i.isFile())return{success:!1,error:{reason:\"corrupted\",messa",
+          "verdict": "The literal type:\"parts\" occurs EXACTLY once in the build, at 157748522, inside this function; no other site can emit the shape."
         },
         {
-          "site": "version ladder: the parts-result firstPage is PRESENT at 2.1.243",
+          "site": "2.1.258: mHn call site, the pages branch",
+          "offset": 164908999,
+          "excerpt": "es parameter\");let hn=pn.range,fn=await mHn((await U()).ioPath,hn,F.storageV5);if(!fn.success)throw rmn(fn.error);s(\"tengu_pdf_page_extraction\",{success:!0,pageCount:fn.data.file.count,fileS",
+          "verdict": "One of exactly two call sites of mHn in the build. Its result is returned to the executor and becomes the tool result, so this is the reachable path."
+        },
+        {
+          "site": "2.1.258: mHn call site, the whole-PDF path",
+          "offset": 164910961,
+          "excerpt": "et\")}if(!W7e()||Tn.size>vcr){let pn=await mHn((await U()).ioPath,void 0,F.storageV5);if(pn.success)s(\"tengu_pdf_page_extraction\",{success:!0,pageCount:pn.data.file.count,fileSize:pn.data.file.originalSi",
+          "verdict": "The other call site. The result is read only by the tengu_pdf_page_extraction telemetry call and is never returned, so it produces no parts record - which is what makes the shape rare."
+        },
+        {
+          "site": "2.1.240: firstPageId in a bundled client asset",
+          "offset": 62836718,
+          "excerpt": "\ninterface Page {\n  css: string[];\n  element: unknown;\n}\n\nconst firstPageId = Date.now();\n{\n  history.replaceState(firstPage",
+          "verdict": "Occurrence 1 of 12. A local const in an unrelated page-cache source asset; not a result member."
+        },
+        {
+          "site": "2.1.240: firstPageId used in history.replaceState",
+          "offset": 62836793,
+          "excerpt": " = Date.now();\n{\n  history.replaceState(firstPageId, \"\", location.href);\n  rscPayload.then(result => {\n    if (lastNavig",
+          "verdict": "Occurrence 2 of 12. Same asset; not a result member."
+        },
+        {
+          "site": "2.1.240: firstPageId used as a cache key",
+          "offset": 62837391,
+          "excerpt": " is performed.\n    }\n\n    cachedPages.set(firstPageId, {\n      css: currentCssList!,\n      element: result,\n    ",
+          "verdict": "Occurrence 3 of 12. Same asset; not a result member."
+        },
+        {
+          "site": "2.1.240: constant-table entry",
+          "offset": 93308160,
+          "excerpt": "firstPage",
+          "verdict": "Occurrence 4 of 12. A length-prefixed string-pool entry: the nine bytes at this offset are followed by 23 padding bytes and then the entry lastPage at 93308192, with no code on either side; not a result member."
+        },
+        {
+          "site": "2.1.240: destructure-error message",
+          "offset": 133423008,
+          "excerpt": "Cannot destructure property 'firstPage' from null or undefined value",
+          "verdict": "Occurrence 5 of 12. An error string naming the property; not a result member."
+        },
+        {
+          "site": "2.1.240: page-range parser, open-ended form",
+          "offset": 289049177,
+          "excerpt": "{let i=parseInt(t.slice(0,-1),10);if(isNaN(i)||i<1)return null;return{firstPage:i,lastPage:1/0}}let r=t.indexOf(\"-\");if(r===-1){let i=parseInt(t,10);if(isNaN(i)||i<1)return null;return{first",
+          "verdict": "Occurrence 6 of 12. LIa returns a RANGE object {firstPage,lastPage}; not a result member."
+        },
+        {
+          "site": "2.1.240: page-range parser, single-page form",
+          "offset": 289049322,
+          "excerpt": "10);if(isNaN(i)||i<1)return null;return{firstPage:i,lastPage:i}}let n=parseInt(t.slice(0,r),10),o=parseInt(t.slice(r+1),10);if(isNaN(n)||isNaN(o)||n<1||o<1||o<n",
+          "verdict": "Occurrence 7 of 12. The same parser, single-page branch; a range object, not a result member."
+        },
+        {
+          "site": "2.1.240: page-range parser, closed form",
+          "offset": 289049477,
+          "excerpt": "||o<n)return null;return{firstPage:n,lastPage:o}}function pzr(){return!$i().toLowerCase().includes(\"claude-3-haiku\")}function fzr(e){let t=e.startsWith(\".\"",
+          "verdict": "Occurrence 8 of 12. The same parser, closed-range branch; a range object, not a result member."
+        },
+        {
+          "site": "2.1.240: range formatter",
+          "offset": 298636524,
+          "excerpt": "cre2\"])});function MUT(e){let{firstPage:t,lastPage:r}=e??{};if(t===void 0)return\"page range\";if(r===void 0||r===1/0)return`pages ${t}-`;if(t===r)return`page ${t}`;return`pages ${t}-${r}`}async function jLm(e){t",
+          "verdict": "Occurrence 9 of 12. Destructures a range object to build the display text \"page N\" / \"pages N-M\"; reads, never writes a result."
+        },
+        {
+          "site": "2.1.240: pdftoppm argument builder, condition",
+          "offset": 298638826,
+          "excerpt": "(l,\"page\"),d=[\"-jpeg\",\"-r\",\"100\"];if(t?.firstPage)d.push(\"-f\",String(t.firstPage));if(t?.lastPage&&t.lastPage!==1/0)d.push(\"-l\",String(t.lastPage));d.push(e,u);let{code:p,stderr:f,exitCode:m",
+          "verdict": "Occurrence 10 of 12. Reads the range to decide whether to pass -f; not a result member."
+        },
+        {
+          "site": "2.1.240: pdftoppm argument builder, value",
+          "offset": 298638827,
+          "excerpt": "l,\"page\"),d=[\"-jpeg\",\"-r\",\"100\"];if(t?.firstPage)d.push(\"-f\",String(t.firstPage));if(t?.lastPage&&t.lastPage!==1/0)d.push(\"-l\",String(t.lastPage));d.push(e,u);let{code:p,stderr:f,exitCode:m}=await ao(\"pdftoppm\"",
+          "verdict": "Occurrence 11 of 12. The same statement, passing String(firstPage) as the -f value; not a result member."
+        },
+        {
+          "site": "2.1.240: page-range validator",
+          "offset": 298770569,
+          "excerpt": "exed.`,errorCode:7};if((a.lastPage===1/0?ytt+1:a.lastPage-a.firstPage+1)>ytt)return{result:!1,message:`Page range \"${t}\" exceeds maximum of ${ytt} pages per request. Please use a smaller range.`,errorCode:8}}let n=rs(e);if(TS(n,yn(r),\"read\"",
+          "verdict": "Occurrence 12 of 12. Reads firstPage in the page-count ceiling check inside validateInput; not a result member."
+        },
+        {
+          "site": "2.1.240: the parts writer itself",
+          "offset": 298640906,
+          "excerpt": "es. The PDF may be invalid.\"}};let y=h.length;return{success:!0,data:{type:\"parts\",file:{filePath:e,originalSize:i,outputDir:l,count:y},...c!==void 0&&{v5SidecarScope:{...c,pageNames:h}}}}}catch(n){let o=n&&typeof n===\"object\"&&\"path\"in n?n.path:void 0;if(FI(n",
+          "verdict": "The returned object is {type:\"parts\",file:{filePath,originalSize,outputDir,count}} plus an optional v5SidecarScope, with no firstPage anywhere - which, with the twelve occurrences above, closes the negative for this build."
+        },
+        {
+          "site": "2.1.243: the reader returns firstPage",
           "offset": 206257210,
           "excerpt": "firstPage:B.firstPage,pages:Z}}}let ie=await NOe(r);if(ie!==null&&ie>O6e)throw YFt({reason:\"too_many_pages\",message:`This PDF has ${ie} page",
-          "verdict": "At 2.1.243 the reader already returns {...be,firstPage:B.firstPage,pages:Z} and the schema declares firstPage at 206266608 - so the field was introduced at or before 2.1.243, not at 2.1.251."
+          "verdict": "The parts return is {...be,firstPage:B.firstPage,pages:Z}, so the member is present at this build."
         },
         {
-          "site": "published versions between the two cached builds",
-          "offset": 0,
-          "excerpt": "2.1.241 and 2.1.242 are published versions with no cached build here, so the boundary is (2.1.240, 2.1.243] rather than a pair of adjacent releases",
-          "verdict": "Bounds the introduction point; closing it to adjacent releases needs those two builds."
-        },
-        {
-          "site": "corpus writer versions for parts records",
-          "offset": 0,
-          "excerpt": "26 parts records written by 2.1.196 (1), 2.1.207 (2), 2.1.220 (15), 2.1.231 (6) and 2.1.251 (2); nothing between 2.1.232 and 2.1.250",
-          "verdict": "The corpus cannot decide the floor: it holds no parts record from any build in the window where the field actually appeared."
+          "site": "2.1.243: the schema declares firstPage",
+          "offset": 206266592,
+          "excerpt": "page images\")}),firstPage:De().optional().describe(\"Document page number of the first extracted page (1 when no range was requested); labels the page images in the model-facing tool_result\"),pages:We(ge({base64:D().describe(\"Base64-encoded page image; empty when the page coul",
+          "verdict": "The parts variant declares firstPage as an optional number with the describe text that the ladder counts; present here, absent at 2.1.240."
         }
       ]
     },
@@ -26726,6 +26809,26 @@
           "name": "the merge write itself",
           "offset": 158821035,
           "excerpt": "let f=K(await ace(r,\"utf8\"));return await Mg(r,S({...f,...e})),!0}catch(f){return t(`[conc",
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "rg over every transcript: (a) Read `file` objects with `\"content\":\"\"` and a positive `numLines`; (b) `file` objects with no `content` key; (c) the binary's cleared-content placeholder literal inside a `file` object. Then `cargo test extract_blanked_or_contentless_read` (unit) and `a_blanked_read_echo_is_counted_and_never_replayed_as_content` (e2e: a full read, a blanked echo and a `file_unchanged` echo leave the three known lines intact, coverage says 1 read and 2 blanked-read, JSON events.blanked_read 2, soft_boundaries 2).",
+          "observed": "(a) 320 blanked echoes with positive counts; (b) 0 contentless `file` objects in this corpus (the four arms exist in the binary's schema, not on disk here); (c) 0 placeholder literals inside a `file` object (every occurrence on disk is prose quoting the binary). Before the fix a blanked echo of a complete read replayed as a full snapshot of empty text.",
+          "rule": "one per `file` object, matched by the JSON key order the writer emits (filePath, content, numLines, startLine, totalLines)",
+          "note": "A blanked echo of a complete read (empty text, `numLines` == `totalLines`, `startLine` 1) satisfied the whole-file test and replayed as a snapshot of nothing, replacing known content; the echo is now a counted annotation."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "A live Read of a notebook file at the audited version; the result echo read from the transcript.",
+          "observed": "toolUseResult `{type: notebook, file: {filePath, cells}}` with no `content` string (the notebook arm), while the tool_result block carried the rendered cells as text; recover books it as a contentless BlankedRead.",
+          "rule": "one Read result object",
+          "note": "The notebook arm, absent from the reference corpus, observed live: a `file` object with no text."
           "note": "await Mg(r,S({...f,...e})) - the bytes that land on disk for every patch, status or not."
         }
       ],
@@ -29095,6 +29198,16 @@
           "rule": "One census row per transcript; a census key that is not uuid-shaped is a subagent transcript. For the raw cross-check, one observation per line containing the tag, classified content-start versus embedded by testing whether the reconstructed message text begins with the tag.",
           "note": "The classifier is decisive: 999 delivered notification records over two project directories, 100% in main transcripts, 0 in child lanes. The raw byte count looks like a counter-example until it is parsed - every subagent hit is a quotation of the tag inside prose (this corpus contains sessions that discuss the tag), which is exactly the section-boundary distinction the classifier applies. Growth in a child lane therefore still means the child itself wrote something. Code site src/live/children.rs:8-10 matches verbatim."
         },
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "rewrite of the claim against its traced chain, re-read by an adversarial verifier (verify2-t3.json; canary kicked); python3 walk over every *.jsonl under the projects root (journal.jsonl excluded), filtered to records whose toolUseResult has an object file and type \"parts\", tallying the file key set, the top-level key set and the record's version field; plus the describe-text counts in the cached native builds 2.1.240, 2.1.243 and 2.1.258 and the byte offsets of firstPage in 2.1.240.",
+          "observed": "8324 transcript files: 26 parts results in 26 distinct record uuids; file key set {count, filePath, originalSize, outputDir} on 26 of 26; top-level key set {file, type} on 24 and {file, firstPage, type} on 2, both of the latter written by 2.1.251, the other 24 by 2.1.196 (1), 2.1.207 (2), 2.1.220 (15) and 2.1.231 (6); v5SidecarScope on 0 of 26. Describe-text ladder: \"Document page number of the first extracted page\" 0 / 2 / 2 and \"Directory containing extracted page images\" 2 / 2 / 2 at 2.1.240 / 2.1.243 / 2.1.258; twelve firstPage occurrences at 2.1.240, each read and none a result member. | Reading all twelve firstPage occurrences at 2.1.240 plus that build's parts writer replaces the enum",
+          "rule": "One observation per record whose toolUseResult has an object file and type \"parts\", over every *.jsonl under the projects root, journal.jsonl excluded; binary counts are occurrences of the literal, not lines.",
+          "note": "The behaviour holds in substance and three statements change. The version sentence pinned firstPage to results written by 2.1.251 and later, which is a statement about this corpus rather than about Claude Code: the member is absent from the parts result at 2.1.240 and present at 2.1.243 (@206257210, schema @206266608), so the boundary is the window (2.1.240, 2.1.243], and 2.1.251 is merely the earliest build that wrote such a record here, the corpus holding none at all from 2.1.232 through 2.1.250. The parenthetical that the 2.1.240 occurrences of firstPage are only the page-range parser is refuted by reading them: there are twelve, three in the parser, one in the range formatter, two in the pdftoppm argument builder, one in the range validator, one constant-table entry, one destructure-error message and three in an unrelated firstPageId snippet - none a member of a result object, and that build's own parts writer returns the four file members and nothing else. The rarity clause is now carried by an enumeration instead of an assertion: the literal type:\"parts\" occurs once in the 2.1.258 build, inside mHn, and mHn has exactly two call sites, one returning its result and one handing it to telemetry. The corpus census reproduces at 26 records with the same key-set split and the same writer versions."
         {
           "claude_code": "2.1.258",
           "csift": "0.10.3",
@@ -50195,8 +50308,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "64-71",
-          "snippet": "            let start_line = file\n                .get(\"startLine\")\n                .and_then(serde_json::Value::as_u64)\n                .unwrap_or(1) as usize;\n            let total_lines = file\n                .get(\"totalLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);"
+          "lines": "162-164",
+          "snippet": "    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/recover/carriers.rs",
@@ -50452,8 +50565,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "59-63",
-          "snippet": "            let content = file\n                .get(\"content\")\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default()\n                .to_string();"
+          "lines": "156-164",
+          "snippet": "    let content = file.get(\"content\").and_then(serde_json::Value::as_str);\n    let count = |k: &str| {\n        file.get(k)\n            .and_then(serde_json::Value::as_u64)\n            .map(|n| n as usize)\n    };\n    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/recover/diff.rs",
@@ -50462,8 +50575,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "59-64",
-          "snippet": "            let content = file\n                .get(\"content\")\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default()\n                .to_string();\n            let start_line = file"
+          "lines": "156-164",
+          "snippet": "    let content = file.get(\"content\").and_then(serde_json::Value::as_str);\n    let count = |k: &str| {\n        file.get(k)\n            .and_then(serde_json::Value::as_u64)\n            .map(|n| n as usize)\n    };\n    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         }
       ],
       "instrument": "For every `text` Read echo carrying a string `file.content`, classify its FIRST line by whether it matches a digits-then-tab or digits-then-arrow gutter. Counting rule: one tally per echo. Measured 2026-09-02 over the 120 most-recently-modified top-level transcripts: none 5699, tab 0, arrow 0; a corpus-wide sweep read 0 gutter-shaped of 8608.",
@@ -50634,8 +50747,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "56-63",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {\n            let content = file\n                .get(\"content\")\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default()\n                .to_string();"
+          "lines": "56-59",
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {\n            push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);"
         }
       ],
       "instrument": "Tally `tuple(sorted(tur))`, `tuple(sorted(tur['file']))` and (tur.get('source'), tool_result render prefix) for every `toolUseResult` whose `type` is `file_unchanged`. Counting rule: one tally per record. Measured 2026-09-02 over every *.jsonl under ~/.claude/projects: 120 records, `('filePath',)` on all 120 file objects and zero carrying `content`; 116 keyed ('file','type') opening the Wasted-call text, 4 keyed ('file','source','type') with source=='seeded' opening the already-in-your-context reminder; observed on Claude Code 2.1.156 through 2.1.231. Binary cross-check: `rg -c -F 'file unchanged since your last Read'` over the 2.1.258 strings returns 1.",
@@ -50729,13 +50842,13 @@
     {
       "id": "REC-047",
       "area": "record-model",
-      "behavior": "A Read result clipped by the token cap carries toolUseResult.file.truncatedByTokenCap:true, and the flag is set in the same object literal that writes the start line: let ht={type:\"text\",file:{filePath:n,content:De,numLines:Ne,startLine:Ue!==void 0?Math.max(1,f):f,totalLines:ke,...Ue!==void 0&&{truncatedByTokenCap:!0}},...} at 164914065 in the 2.1.258 binary. The cap can only fire on a WHOLE-file read - the gate at 164912181 is Ge=(f??1)<=1&&_===void 0&&v===void 0 (offset at most 1, no limit, no pages) and Ue, the only source of the flag, is assigned nowhere but inside that catch - so a flagged echo always reports startLine 1, the Math.max clamping an explicit offset 0 up on exactly this path. The flag does NOT imply numLines < totalLines. The variable that carries it is assigned by a TERNARY, not a guard: Ue=!je&&Ne<ke?<line banner>:<character banner> at 164912900, so a banner - and with it the flag - is emitted on BOTH the line-truncation branch and the character-truncation branch (je true: a file whose lines are too long to paginate). On the character branch numLines is recomputed from the truncated slice, Ne=je?_n(nt,newline)+1:yn, which for a file with no newline is 1 while totalLines stays 1, so numLines can EQUAL totalLines. Measured 2026-09-04 over the whole projects root (8222 transcripts, 1431604 lines), one tally per Read echo whose toolUseResult.file.truncatedByTokenCap is truthy, keyed by lane, startLine and numLines against totalLines: 180 capped echoes (101 top-level, 79 in child transcripts), startLine 1 on 180 of 180, numLines < totalLines on 179, and one record stamped version 2.1.258 with numLines == totalLines == 1 on a single-line file.",
-      "depends": "csift recover reads truncatedByTokenCap on the Read carrier since 0.10.3 (src/recover/carriers.rs extracts the flag beside numLines/totalLines and hands it to push_read_event, whose test is is_full = !truncated && start_line == 1 && observed >= total && total > 0): a flagged read is therefore never a FullSnapshot; its whole lines still anchor as a PartialRead; on the character branch (truncated && observed >= total) the cut final line is dropped and no event is pushed at all when nothing whole remains. Before 0.10.3 the full-read test was start_line == 1 && observed >= total with the flag unread, so the one live character-branch record satisfied it and a partial first page was replayed as the whole file. Unit extract_token_capped_read_is_never_a_full_snapshot pins the fix.",
+      "behavior": "A Read result clipped by the token cap carries toolUseResult.file.truncatedByTokenCap:true, and the flag is set in the same object literal that writes the start line: `let ht={type:\"text\",file:{filePath:n,content:De,numLines:Ne,startLine:Ue!==void 0?Math.max(1,f):f,totalLines:ke,...Ue!==void 0&&{truncatedByTokenCap:!0}},...}` at 164914065 in the 2.1.258 binary. The cap can only fire on a WHOLE-file read - the gate at 164912181 is `Ge=(f??1)<=1&&_===void 0&&v===void 0` (offset at most 1, no limit, no pages) and Ue, the only source of the flag, is assigned nowhere but inside that catch - so a flagged echo always reports startLine 1, the Math.max clamping an explicit offset 0 up on exactly this path. The flag does NOT imply numLines < totalLines. The variable that carries it is assigned by a TERNARY, not a guard: `Ue=!je&&Ne<ke?<line banner>:<character banner>` at 164912900, so a banner - and with it the flag - is emitted on BOTH the line-truncation branch and the character-truncation branch (je true: a file whose lines are too long to paginate). On the character branch numLines is recomputed from the truncated slice, `Ne=je?_n(nt,newline)+1:yn`, which for a file with no newline is 1 while totalLines stays 1, so numLines can EQUAL totalLines. Census over the whole projects root (8,435 *.jsonl files, 1,455,676 records parsed), one tally per Read echo whose toolUseResult.file.truncatedByTokenCap is truthy, keyed by transcript kind, startLine and numLines against totalLines: 181 capped echoes (102 in top-level transcripts, 79 in subagent transcripts), startLine 1 on 181 of 181, numLines < totalLines on 180, and one record stamped version 2.1.258 with numLines == totalLines == 1 on a single-line file.",
+      "depends": "csift recover reads truncatedByTokenCap on the Read carrier (src/recover/carriers.rs extracts the flag beside numLines/totalLines and hands it to push_read_event, whose test is `is_full = !truncated && start_line == 1 && observed >= total && total > 0`): a flagged read is therefore never a FullSnapshot; its whole lines still anchor as a PartialRead; on the character branch (`truncated && observed >= total`) the cut final line is dropped and no event is pushed at all when nothing whole remains. Without the flag the test would be `start_line == 1 && observed >= total`, which the one live character-branch record satisfies, so a partial first page would replay as the whole file. Unit extract_token_capped_read_is_never_a_full_snapshot (src/recover/tests/events.rs) pins the behavior.",
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "68-75",
-          "snippet": "            let total_lines = file\n                .get(\"totalLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);\n            let num_lines = file\n                .get(\"numLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);"
+          "lines": "182-186",
+          "snippet": "    let truncated = file\n        .get(\"truncatedByTokenCap\")\n        .and_then(serde_json::Value::as_bool)\n        .unwrap_or(false);\n    push_read_event("
         },
         {
           "path": "src/recover/types.rs",
@@ -50743,7 +50856,7 @@
           "snippet": "    /// Full ground-truth content (an anchor): a Write result, a full Read\n    /// (`startLine==1 && numLines==totalLines`), or a `file` attachment.\n    FullSnapshot {\n        content: String,\n        total_lines: usize,\n        source: SnapSource,\n    },"
         }
       ],
-      "instrument": "python3 - <<'EOF'\nimport json,glob,os,collections\nfiles=sorted(glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl')),key=lambda p:-os.path.getmtime(p))[:120]\nk=collections.Counter()\nfor f in files:\n  for line in open(f,errors='replace'):\n    if 'truncatedByTokenCap' not in line: continue\n    try: t=json.loads(line).get('toolUseResult')\n    except Exception: continue\n    fo=t.get('file') if isinstance(t,dict) else None\n    if isinstance(fo,dict) and fo.get('truncatedByTokenCap'): k[(fo.get('startLine'),fo.get('numLines')==fo.get('totalLines'))]+=1\nprint(k)\nEOF\nCounting rule: one tally per Read echo with `file.truncatedByTokenCap` truthy, keyed by `(startLine, numLines==totalLines)`. Measured 2026-09-02: `(1, False)` 99 records, no other key.",
+      "instrument": "python3 over the whole projects root: walk every *.jsonl, parse each line, and for every record whose toolUseResult.file.truncatedByTokenCap is truthy tally (startLine, numLines == totalLines, subagent-or-not, version). Counting rule: one tally per Read echo. The newest-120-files sample form reproduces the startLine invariant but misses the equality counterexample, which lives in a single record - only the whole-root walk decides the numLines clause.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -50792,14 +50905,13 @@
           "note": "Drifted, not merely refined: the second half of the old behavior sentence - that a capped read keeps startLine 1 while making numLines strictly less than totalLines - has no producer, and csift's recover relied on exactly that implication. The refuting hop is the ternary at 164912900: Ue is assigned on both arms, so the flag rides the character-truncation branch too, where Ne is recomputed from the truncated slice and can equal totalLines; the corpus carries the counterexample (1 of 180 capped echoes today, a 2.1.258 record on a single-line file). The startLine half is fully chained and unchan"
         }
       ],
-      "attribution": "specimen-only",
-      "open_legs": [
-        "Producer hop still missing: No gate or writer produces 'numLines strictly less than totalLines'. All three hops were read and they fully determine the corrected behavior, but for the claim AS WRITTEN the producer leg does not close: the ternary at 164912900 refutes it, and the corpus carries the counterexample. Nothing further to look for."
-      ],
-      "producer_trace": "partial",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
-        "The banner text itself distinguishes the two branches ('showing lines 1-N of M total' versus 'showing the first N of M characters'), so a text-side discriminator exists in the paired read_truncation_notice attachment even without the flag."
+        "The banner text itself distinguishes the two branches ('showing lines 1-N of M total' versus 'showing the first N of M characters'), so a text-side discriminator exists in the paired read_truncation_notice attachment even without the flag.",
+        "The single equality record is the whole specimen for the character branch; a second one would come from reading a file with one very long line under a token cap and censusing that transcript's Read echoes."
       ],
       "producer_chain": [
         {
@@ -50840,8 +50952,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "64-67",
-          "snippet": "            let start_line = file\n                .get(\"startLine\")\n                .and_then(serde_json::Value::as_u64)\n                .unwrap_or(1) as usize;"
+          "lines": "162-164",
+          "snippet": "    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/recover/carriers.rs",
@@ -50919,7 +51031,7 @@
         {
           "path": "src/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // ── (1a) Read result: toolUseResult.file = {filePath, content, startLine, …} ──\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // \u2500\u2500 (1a) Read result: toolUseResult.file = {filePath, content, startLine, \u2026} \u2500\u2500\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
         }
       ],
       "instrument": "Structural census over every *.jsonl under ~/.claude/projects: count records whose parsed `toolUseResult` has `artifactRead` as a KEY. Measured 2026-09-02: 0 of 9202 file-bearing echoes; the toolUseResult key tuples observed are ('file','type') 9196, ('file','source','type') 4, ('file','firstPage','type') 2. A raw `grep artifactRead` over the corpus is NOT this measurement - it returns prose mentions from sessions that discussed the key. Schema authority: the `artifactRead:c({slug:i(),ver:i()}).optional()` member of the `text` variant in the Read-result zod union of the Claude Code 2.1.258 binary, plus the emit site `...pt&&{artifactRead:pt}`.",
@@ -56121,6 +56233,16 @@
       "code": [
         {
           "path": "src/search/scan.rs",
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.5",
+          "date": "2026-09-04",
+          "verdict": "refined",
+          "instrument": "rewrite of the claim against its traced chain, re-read by an adversarial verifier (verify-t6.json; canary kicked); python full-parse walk of every *.jsonl under the projects root, tallying each record whose toolUseResult.file.truncatedByTokenCap is truthy by startLine, by numLines == totalLines, by transcript kind and by the record's own version",
+          "observed": "181 capped Read echoes over 8,435 files: 102 in top-level transcripts and 79 in subagent transcripts; startLine is 1 on 181 of 181; numLines < totalLines on 180; exactly one record has numLines == totalLines == 1 and is stamped version 2.1.258. | The ternary at 164912900 assigns the banner - and with it the flag - on both truncation branches, and the corpus holds a 2.1.258 record with numLines == totalLines == 1, so the strict-inequality clause is refuted by hop and specimen together.",
+          "rule": "one tally per Read echo whose toolUseResult.file.truncatedByTokenCap is truthy; startLine, numLines and totalLines read from that same file object",
+          "note": "The second half of the old behavior sentence - that a capped read keeps startLine 1 while making numLines strictly less than totalLines - has no producer, and csift recover relied on exactly that implication. The refuting hop is the ternary at 164912900: Ue is assigned on BOTH arms, so the flag rides the character-truncation branch too, where Ne is recomputed from the truncated slice as `_n(nt,newline)+1` and can equal totalLines; the corpus carries the counterexample, 1 of 181 capped echoes, a 2.1.258 record on a single-line file. The startLine half is fully chained and unchanged - the whole-file gate at 164912181 and the clamped startLine in the same literal as the flag at 164914065 - and the census reproduces it at 181 of 181, so only the numLines clause is withdrawn. On the csift side the defect is already closed: push_read_event refuses a FullSnapshot whenever the flag is set and drops the cut last line on the character branch, so the depends now describes the shipped behavior and keeps the flag-less test only as the reason the correction matters. Counts are restated from a whole-root walk; the earlier 99 and 174 figures were a top-level-only half and a newest-files sample of the same shape. The csift correction it names ships with this change: the token-capped read."
           "lines": "20-21",
           "snippet": "    let address = AddressSet { lines, uuids };\n    let use_address = !(address.lines.is_empty() && address.uuids.is_empty());"
         },

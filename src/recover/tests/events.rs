@@ -49,6 +49,72 @@ fn extract_windowed_read_is_partial() {
 }
 
 #[test]
+fn extract_blanked_or_contentless_read_is_counted_never_replayed() {
+    // Three echoes for the same file: content blanked to "" with its counts intact (the
+    // harness clears older tool results before persisting), a file object with no
+    // content key at all (the contentless result arms), and a genuinely empty file.
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"user","toolUseResult":{"file":{"filePath":"/p/a.rs","content":"","numLines":5,"startLine":1,"totalLines":5}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"ok"}]}}"#,
+        r#"{"type":"user","toolUseResult":{"type":"file_unchanged","file":{"filePath":"/p/a.rs"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r2","content":"ok"}]}}"#,
+        r#"{"type":"user","toolUseResult":{"file":{"filePath":"/p/a.rs","content":"","numLines":0,"startLine":1,"totalLines":0}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r3","content":"ok"}]}}"#,
+    ]);
+    let ev = extract_events(&recs, "/p/a.rs");
+    assert_eq!(ev.len(), 3);
+    assert!(
+        matches!(
+            ev[0].kind,
+            EventKind::BlankedRead {
+                total_lines: Some(5)
+            }
+        ),
+        "blanked text with counts: {:?}",
+        ev[0].kind
+    );
+    assert!(
+        matches!(ev[1].kind, EventKind::BlankedRead { total_lines: None }),
+        "contentless arm: {:?}",
+        ev[1].kind
+    );
+    assert!(
+        matches!(ev[2].kind, EventKind::PartialRead { total_lines: 0, .. }),
+        "an empty file is an ordinary read and never a whole-file snapshot: {:?}",
+        ev[2].kind
+    );
+    // With no counts at all the window's own extent is the only total the echo supports:
+    // the last line it saw is start_line + lines - 1, never a product of the two.
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        r#"{"type":"user","toolUseResult":{"file":{"filePath":"/p/a.rs","content":"l5\nl6","startLine":5}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r9","content":"ok"}]}}"#,
+    ]);
+    let ev2 = extract_events(&recs, "/p/a.rs");
+    assert!(
+        matches!(
+            &ev2[0].kind,
+            EventKind::PartialRead {
+                start_line: 5,
+                total_lines: 6,
+                lines,
+            } if lines.len() == 2
+        ),
+        "the extent is start_line + lines - 1: {:?}",
+        ev2[0].kind
+    );
+
+    // Replayed, the blanked echoes contribute a count and an annotation, no lines.
+    let rep = replay(&ev, None);
+    assert_eq!(rep.counts.blanked_read, 2);
+    assert!(rep.final_buffer.known.is_empty());
+    assert_eq!(
+        rep.boundaries
+            .iter()
+            .filter(|b| b.kind == "blanked_read")
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn extract_write_create_is_full_snapshot_write() {
     let recs = numbered(&[
         r#"{"type":"user","message":{"role":"user","content":"go"}}"#,

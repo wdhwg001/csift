@@ -96,6 +96,9 @@ pub(crate) fn fmt_counts(c: &EventCounts) -> String {
     if c.stale_recovered > 0 {
         parts.push(format!("{} stale-recovered", c.stale_recovered));
     }
+    if c.blanked_read > 0 {
+        parts.push(format!("{} blanked-read", c.blanked_read));
+    }
     if parts.is_empty() {
         "0".to_string()
     } else {
@@ -353,6 +356,7 @@ pub(crate) fn counts_json(c: &EventCounts) -> serde_json::Value {
         "integrity_error": c.integrity_error,
         "stale_hint": c.stale_hint,
         "stale_recovered": c.stale_recovered,
+        "blanked_read": c.blanked_read,
     })
 }
 

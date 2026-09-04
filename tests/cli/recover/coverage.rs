@@ -347,6 +347,82 @@ fn recover_coverage_groups_multiple_sessions_with_separator() {
 }
 
 #[test]
+fn a_blanked_read_echo_is_counted_and_never_replayed_as_content() {
+    // A full read, then the harness's blanked echo of a later read (content "" with the
+    // counts intact) and a contentless `file_unchanged` echo: neither may turn the known
+    // file into an empty one or into three empty lines; both are counted and disclosed.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"read it"}}"#, "\n",
+            r#"{"type":"user","uuid":"c1","timestamp":"2026-06-07T05:00:01.000Z","toolUseResult":{"file":{"filePath":"/p/bl.md","content":"a\nb\nc","startLine":1,"numLines":3,"totalLines":3}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r1","content":"ok"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c2","timestamp":"2026-06-07T05:00:02.000Z","toolUseResult":{"file":{"filePath":"/p/bl.md","content":"","startLine":1,"numLines":3,"totalLines":3}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r2","content":"ok"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"c3","timestamp":"2026-06-07T05:00:03.000Z","toolUseResult":{"type":"file_unchanged","file":{"filePath":"/p/bl.md"}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r3","content":"ok"}]}}"#, "\n",
+        ),
+    );
+    let cov = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/bl.md",
+        "--coverage",
+        "--no-subagents",
+    ]);
+    assert!(cov.success, "stderr: {}", cov.stderr);
+    assert!(
+        cov.stdout.contains("1 read (1 full, 0 windowed)") && cov.stdout.contains("2 blanked-read"),
+        "the blanked echoes are their own count, never reads: {}",
+        cov.stdout
+    );
+    let at_latest = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/bl.md",
+        "--at",
+        "@latest",
+        "--no-subagents",
+    ]);
+    assert!(at_latest.success, "stderr: {}", at_latest.stderr);
+    assert!(
+        ["1  a", "2  b", "3  c"]
+            .iter()
+            .all(|l| at_latest.stdout.contains(l)),
+        "the known content survives the blanked echoes: {}",
+        at_latest.stdout
+    );
+    let json = h.run(&[
+        "recover",
+        at(SESS).as_str(),
+        "--file",
+        "/p/bl.md",
+        "--coverage",
+        "--no-subagents",
+        "--format",
+        "json",
+    ]);
+    let cov_row: serde_json::Value = json
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .find(|o: &serde_json::Value| o["kind"] == "coverage")
+        .expect("a coverage row");
+    assert_eq!(cov_row["events"]["blanked_read"], 2, "{cov_row}");
+    assert_eq!(cov_row["events"]["read_full"], 1, "{cov_row}");
+    assert_eq!(cov_row["soft_boundaries"], 2, "{cov_row}");
+    assert_eq!(cov_row["hard_boundaries"], 0, "{cov_row}");
+    assert!(
+        cov_row["boundaries"].as_array().is_some_and(|b| b
+            .iter()
+            .filter(|x| x["cause"] == "blanked_read")
+            .count()
+            == 2),
+        "both echoes are disclosed as annotation boundaries: {cov_row}"
+    );
+}
+
+#[test]
 fn coverage_splits_full_and_windowed_read_counts() {
     let h = Home::new();
     h.write(

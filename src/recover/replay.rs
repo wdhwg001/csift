@@ -326,6 +326,13 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                         .to_string(),
                 });
             }
+            EventKind::BlankedRead { total_lines } => {
+                // COUNTED, never spliced: the echo carries no text (blanked by the
+                // harness after the fact, or a contentless result arm), so nothing is
+                // known and nothing is invalidated - a disclosed annotation only.
+                out.counts.blanked_read += 1;
+                out.boundaries.push(blanked_read_boundary(e, *total_lines));
+            }
             EventKind::BashWindowRead { start_line, lines } => {
                 out.counts.bash_read_anchor += 1;
                 if seg_open.is_none() {
@@ -547,54 +554,4 @@ pub(crate) fn buffer_disagrees_with_original(buf: &SparseBuffer, original_file: 
     // when we compared enough to be meaningful (avoid a single fluke). A mismatch ratio
     // over a small threshold is a real disagreement.
     compared > 0 && mismatches > 0 && (mismatches * 4 >= compared)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Unified diff (in-crate, safe Rust)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// What a snapshot marker means for the replay - the PURE decision half of the
-/// marker arm (the effects live in `replay`):
-/// - verified content that DISAGREES with the replayed known lines (or a complete
-///   buffer with a different length) => `Rebase` - valid across a generation reset
-///   too, since the bytes are mtime-verified against THIS marker's backupTime;
-/// - no content, but a same-generation version JUMP with no mutation event since
-///   the previous marker => `ContentlessBoundary` (the silence signal is
-///   generation-bound: a version DECREASE is a counter restart, not a write);
-/// - anything else => `Nothing`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SnapAction {
-    Rebase,
-    ContentlessBoundary,
-    Nothing,
-}
-
-fn snapshot_action(
-    last_version: Option<u64>,
-    version: Option<u64>,
-    content: Option<&str>,
-    buf: &SparseBuffer,
-    writes_since_marker: bool,
-) -> SnapAction {
-    if let Some(snap_content) = content {
-        let snap_lines = split_lines(snap_content);
-        let known_disagrees = buf
-            .known
-            .iter()
-            .any(|(n, cell)| snap_lines.get(n - 1).is_none_or(|l| *l != cell.text));
-        let complete_len_differs = buf
-            .seen_total_lines
-            .is_some_and(|t| buf.known.len() == t && t != snap_lines.len());
-        if !buf.known.is_empty() && (known_disagrees || complete_len_differs) {
-            return SnapAction::Rebase;
-        }
-        return SnapAction::Nothing;
-    }
-    let jumped = matches!((last_version, version), (Some(p), Some(v)) if v > p);
-    let reset = matches!((last_version, version), (Some(p), Some(v)) if v < p);
-    if jumped && !reset && !writes_since_marker {
-        SnapAction::ContentlessBoundary
-    } else {
-        SnapAction::Nothing
-    }
 }

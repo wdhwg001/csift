@@ -56,39 +56,7 @@ pub(crate) fn extract_from_tool_use_result(
     if let Some(file) = tur.get("file").and_then(|v| v.as_object()) {
         let path = file.get("filePath").and_then(serde_json::Value::as_str);
         if path_matches(target_file, path.unwrap_or_default()) {
-            let content = file
-                .get("content")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let start_line = file
-                .get("startLine")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(1) as usize;
-            let total_lines = file
-                .get("totalLines")
-                .and_then(serde_json::Value::as_u64)
-                .map(|n| n as usize);
-            let num_lines = file
-                .get("numLines")
-                .and_then(serde_json::Value::as_u64)
-                .map(|n| n as usize);
-            let truncated = file
-                .get("truncatedByTokenCap")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            push_read_event(
-                line_no,
-                turn_index,
-                ts,
-                &content,
-                start_line,
-                num_lines,
-                total_lines,
-                truncated,
-                SnapSource::FullRead,
-                events,
-            );
+            push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);
             return;
         }
     }
@@ -165,6 +133,68 @@ pub(crate) fn extract_from_tool_use_result(
             },
         });
     }
+}
+
+/// The Read `file` object (`{filePath, content, numLines, startLine, totalLines,
+/// truncatedByTokenCap}`) from a `toolUseResult` or a `file` attachment: a content-
+/// bearing echo becomes a snapshot or a partial read via [`push_read_event`]; an echo
+/// with NO text becomes a counted [`EventKind::BlankedRead`] (ledger FH-048). Two
+/// contentless shapes exist: the `content` key absent (the `file_unchanged`, `pdf`,
+/// `parts` and `notebook` result arms), and `content` blanked to the empty string
+/// while `numLines`/`totalLines` still count the lines the file had (the harness
+/// clears the text of a tool result older than its retention window before
+/// persisting it). A genuinely empty file (`totalLines` 0, or no counts at all with an
+/// empty text) still goes through the ordinary path.
+pub(crate) fn push_read_file_object(
+    line_no: usize,
+    turn_index: usize,
+    ts: &Option<String>,
+    file: &serde_json::Map<String, serde_json::Value>,
+    source: SnapSource,
+    events: &mut Vec<FileEvent>,
+) {
+    let content = file.get("content").and_then(serde_json::Value::as_str);
+    let count = |k: &str| {
+        file.get(k)
+            .and_then(serde_json::Value::as_u64)
+            .map(|n| n as usize)
+    };
+    let start_line = count("startLine").unwrap_or(1);
+    let total_lines = count("totalLines");
+    let num_lines = count("numLines");
+    let counted = num_lines.unwrap_or(0).max(total_lines.unwrap_or(0));
+    let blanked = match content {
+        None => true,
+        Some("") => counted > 0,
+        Some(_) => false,
+    };
+    if blanked {
+        events.push(FileEvent {
+            line_no,
+            turn_index,
+            timestamp_utc: ts.clone(),
+            kind: EventKind::BlankedRead {
+                total_lines: total_lines.or(num_lines),
+            },
+        });
+        return;
+    }
+    let truncated = file
+        .get("truncatedByTokenCap")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    push_read_event(
+        line_no,
+        turn_index,
+        ts,
+        content.unwrap_or_default(),
+        start_line,
+        num_lines,
+        total_lines,
+        truncated,
+        source,
+        events,
+    );
 }
 
 /// Push a Read event as either a `FullSnapshot` (whole file seen) or a `PartialRead`.
@@ -268,39 +298,16 @@ pub(crate) fn extract_from_attachment(
     {
         let path = file.get("filePath").and_then(serde_json::Value::as_str);
         if path_matches(target_file, path.unwrap_or_default()) {
-            let content = file
-                .get("content")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let start_line = file
-                .get("startLine")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(1) as usize;
-            let total_lines = file
-                .get("totalLines")
-                .and_then(serde_json::Value::as_u64)
-                .map(|n| n as usize);
-            let num_lines = file
-                .get("numLines")
-                .and_then(serde_json::Value::as_u64)
-                .map(|n| n as usize);
-            let truncated = file
-                .get("truncatedByTokenCap")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            push_read_event(
-                line_no,
-                turn_index,
-                ts,
-                &content,
-                start_line,
-                num_lines,
-                total_lines,
-                truncated,
-                SnapSource::FileAttachment,
-                events,
-            );
+            if let Some(obj) = file.as_object() {
+                push_read_file_object(
+                    line_no,
+                    turn_index,
+                    ts,
+                    obj,
+                    SnapSource::FileAttachment,
+                    events,
+                );
+            }
         }
     }
 }
