@@ -73,6 +73,10 @@ pub(crate) fn extract_from_tool_use_result(
                 .get("numLines")
                 .and_then(serde_json::Value::as_u64)
                 .map(|n| n as usize);
+            let truncated = file
+                .get("truncatedByTokenCap")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
             push_read_event(
                 line_no,
                 turn_index,
@@ -81,6 +85,7 @@ pub(crate) fn extract_from_tool_use_result(
                 start_line,
                 num_lines,
                 total_lines,
+                truncated,
                 SnapSource::FullRead,
                 events,
             );
@@ -163,6 +168,15 @@ pub(crate) fn extract_from_tool_use_result(
 }
 
 /// Push a Read event as either a `FullSnapshot` (whole file seen) or a `PartialRead`.
+///
+/// `truncated` is the carrier's `truncatedByTokenCap` (Claude Code 2.1.145+): the Read
+/// tool cut the content at its token budget. On the line-truncation branch the kept
+/// lines are whole and `numLines < totalLines`; on the CHARACTER-truncation branch (a
+/// file whose lines are too long to paginate) `numLines` is recomputed from the cut
+/// slice and can EQUAL `totalLines`, so a capped read looked like a whole-file read
+/// (v0.10.3, ledger REC-047). A truncated read is never a full snapshot, and when its
+/// line count reaches the total the last line is the cut one and is dropped; nothing
+/// is pushed when no whole line remains.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn push_read_event(
     line_no: usize,
@@ -172,13 +186,21 @@ pub(crate) fn push_read_event(
     start_line: usize,
     num_lines: Option<usize>,
     total_lines: Option<usize>,
+    truncated: bool,
     source: SnapSource,
     events: &mut Vec<FileEvent>,
 ) {
-    let lines: Vec<String> = split_lines(content);
+    let mut lines: Vec<String> = split_lines(content);
     let observed = num_lines.unwrap_or(lines.len());
     let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));
-    let is_full = start_line == 1 && observed >= total && total > 0;
+    if truncated && observed >= total {
+        // the character branch: the final kept line is cut mid-line
+        lines.pop();
+        if lines.is_empty() {
+            return;
+        }
+    }
+    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;
     if is_full {
         events.push(FileEvent {
             line_no,
@@ -263,6 +285,10 @@ pub(crate) fn extract_from_attachment(
                 .get("numLines")
                 .and_then(serde_json::Value::as_u64)
                 .map(|n| n as usize);
+            let truncated = file
+                .get("truncatedByTokenCap")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
             push_read_event(
                 line_no,
                 turn_index,
@@ -271,6 +297,7 @@ pub(crate) fn extract_from_attachment(
                 start_line,
                 num_lines,
                 total_lines,
+                truncated,
                 SnapSource::FileAttachment,
                 events,
             );

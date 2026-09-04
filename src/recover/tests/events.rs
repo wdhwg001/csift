@@ -411,3 +411,46 @@ fn path_matches_basename_suffix_accepts_windows_separator() {
     assert!(!path_matches(Some("x.md"), r"C:\plans\ax.md"));
     assert!(!path_matches(Some("x.md"), "/plans/ax.md"));
 }
+
+#[test]
+fn extract_token_capped_read_is_never_a_full_snapshot() {
+    // `truncatedByTokenCap` (Claude Code 2.1.145+): the Read tool cut the content at its
+    // token budget. On the CHARACTER branch (lines too long to paginate) `numLines` is
+    // recomputed from the cut slice and can equal `totalLines`, so a capped read used to
+    // replay as a whole-file snapshot (v0.10.3, ledger REC-047).
+    let long = "x".repeat(200);
+    let recs = numbered(&[
+        r#"{"type":"user","message":{"role":"user","content":"go"}}"#,
+        &format!(
+            r#"{{"type":"user","toolUseResult":{{"file":{{"filePath":"/p/a.rs","content":"{long}","startLine":1,"numLines":1,"totalLines":1,"truncatedByTokenCap":true}}}},"message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"r1","content":"ok"}}]}}}}"#
+        ),
+        // the line branch: whole lines kept, numLines < totalLines - a partial read as before
+        r#"{"type":"user","toolUseResult":{"file":{"filePath":"/p/a.rs","content":"l1\nl2","startLine":1,"numLines":2,"totalLines":9,"truncatedByTokenCap":true}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r2","content":"ok"}]}}"#,
+        // the character branch on a multi-line file: the last kept line is the cut one
+        r#"{"type":"user","toolUseResult":{"file":{"filePath":"/p/a.rs","content":"a\nb\ncut","startLine":1,"numLines":3,"totalLines":3,"truncatedByTokenCap":true}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r3","content":"ok"}]}}"#,
+        // an uncapped whole-file read still anchors in full
+        r#"{"type":"user","toolUseResult":{"file":{"filePath":"/p/a.rs","content":"a\nb\nc","startLine":1,"numLines":3,"totalLines":3,"truncatedByTokenCap":false}},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"r4","content":"ok"}]}}"#,
+    ]);
+    let ev = extract_events(&recs, "/p/a.rs");
+    assert_eq!(ev.len(), 3, "the single cut line yields no anchor: {ev:?}");
+    match &ev[0].kind {
+        EventKind::PartialRead {
+            start_line, lines, ..
+        } => {
+            assert_eq!(*start_line, 1);
+            assert_eq!(lines, &["l1".to_string(), "l2".to_string()]);
+        }
+        other => panic!("expected PartialRead, got {other:?}"),
+    }
+    match &ev[1].kind {
+        EventKind::PartialRead { lines, .. } => {
+            assert_eq!(
+                lines,
+                &["a".to_string(), "b".to_string()],
+                "the cut line is dropped"
+            );
+        }
+        other => panic!("expected PartialRead, got {other:?}"),
+    }
+    assert!(matches!(ev[2].kind, EventKind::FullSnapshot { .. }));
+}

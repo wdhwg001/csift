@@ -12392,8 +12392,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "178-182",
-          "snippet": "    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;\n    if is_full {"
+          "lines": "193-204",
+          "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {"
         },
         {
           "path": "src/recover/types.rs",
@@ -12431,8 +12431,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "179-181",
-          "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "194-203",
+          "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "`grep -o '.\\{450\\}truncatedByTokenCap.\\{450\\}'` over `strings -a` of the 2.1.258 binary shows the single construction site with the `{truncatedByTokenCap:!0}` spread. Corpus check: over every jsonl under ~/.claude/projects, count the distinct JSON values of the key, one observation per echo carrying it - measured now: 174 occurrences, value `true` on 174, `false` on 0.",
@@ -12475,8 +12475,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "178-181",
-          "snippet": "    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "193-203",
+          "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "Corpus: for every line containing `Truncated: PARTIAL view`, split on the em-dash-space and test whether the remainder starts with `showing`; count separately for `attachment.banner` and for `tool_result` content. One observation per carrier occurrence. Measured now: attachment banners 170 path-bearing / 0 pathless; tool_result copies 4 path-bearing / 528 pathless.",
@@ -13058,8 +13058,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "181",
-          "snippet": "    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "203",
+          "snippet": "    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "Corpus: for every echo carrying `truncatedByTokenCap`, count `startLine != 1`; one observation per echo. Measured now over all of ~/.claude/projects: 0 of 174. Binary: the `let ht={type:\"text\",file:{filePath:n,content:De,numLines:Ne,startLine:Ue!==void 0?Math.max(1,f):f` construction, reachable via `python3 -c` seeking that literal in a `strings -a` dump.",
@@ -13092,8 +13092,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "179-181",
-          "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "194-203",
+          "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "`strings -a <the Claude Code 2.1.258 executable> | grep -o 'var gYr=[0-9]*'` prints `var gYr=25000`; the same grep for `var nhe=[0-9]*` prints `var nhe=262144`. The env override appears as `let e=a.CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS;if(e!==void 0&&e>0)return e` in the `hYr` function.",
@@ -13171,8 +13171,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "177-178",
-          "snippet": ") {\n    let lines: Vec<String> = split_lines(content);"
+          "lines": "192-193",
+          "snippet": ") {\n    let mut lines: Vec<String> = split_lines(content);"
         }
       ],
       "instrument": "Seek the literal `De=nt,Ne=je?` in a raw byte read of the 2.1.258 executable and print the surrounding ~1400 bytes; the two branches, the six-retry loops and the `je` flag are one expression. Corpus evidence that the character branch fires: count records whose `attachment.type` is `read_truncation_notice` and whose text carries the banner `this file has very long lines and cannot be paginated by line` - measured 2026-09-02: 31, all at CC 2.1.211, plus 3 older `tool_result` string carriers (2.1.159, 2.1.177, 2.1.231).",
@@ -13205,8 +13205,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "178-182",
-          "snippet": "    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;\n    if is_full {"
+          "lines": "193-204",
+          "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {"
         },
         {
           "path": "src/recover/types.rs",
@@ -13299,8 +13299,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "176-183",
-          "snippet": "    events: &mut Vec<FileEvent>,\n) {\n    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;\n    if is_full {\n        events.push(FileEvent {"
+          "lines": "191-205",
+          "snippet": "    events: &mut Vec<FileEvent>,\n) {\n    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {\n        events.push(FileEvent {"
         }
       ],
       "instrument": "Seek the literal `let W=C.toolUseResult?.file?.truncatedByTokenCap===!0||v.has(I.tool_use_id)||I.content.startsWith(` in a `strings -a` dump of the 2.1.258 binary; the surrounding function rebuilds `readFileState` from persisted messages and sets `isPartialView` from that disjunction.",
@@ -13384,8 +13384,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "176-181",
-          "snippet": "    events: &mut Vec<FileEvent>,\n) {\n    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "191-203",
+          "snippet": "    events: &mut Vec<FileEvent>,\n) {\n    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "Corpus: bucket by the record's `version` field, counting one observation per echo carrying `truncatedByTokenCap` and one per record whose `attachment.type` is `read_truncation_notice`. Measured now: the key appears at 2.1.150 (2), 2.1.156 (2), 2.1.159 (10) and onward; the attachment first at 2.1.206 (9).",
@@ -13623,8 +13623,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "178-181",
-          "snippet": "    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "193-203",
+          "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "Read the csift unit test `src/recover/tests/coverage.rs` for the coverage arithmetic, then re-derive by hand: with `content` empty, `split_lines` returns an empty vector (pinned by `split_lines_drops_only_trailing_newline` in `src/recover/tests/render.rs`), so `observed=0` and `total = 0.max(1+0) = 1`, and `is_full` is false because `0 >= 1` is false.",
@@ -14595,13 +14595,13 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "72-77",
-          "snippet": "            let num_lines = file\n                .get(\"numLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);\n            push_read_event(\n                line_no,"
+          "lines": "72-81",
+          "snippet": "            let num_lines = file\n                .get(\"numLines\")\n                .and_then(serde_json::Value::as_u64)\n                .map(|n| n as usize);\n            let truncated = file\n                .get(\"truncatedByTokenCap\")\n                .and_then(serde_json::Value::as_bool)\n                .unwrap_or(false);\n            push_read_event(\n                line_no,"
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "178-181",
-          "snippet": "    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "193-203",
+          "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "Measured 2026-09-02 over the 7,814 transcript files under ~/.claude/projects with a python3 walk that json-parses every line carrying `toolUseResult` and keeps the ones whose `toolUseResult.file` is an object, filtered to `type == 'parts'` and tallying both the `file` key set and the top-level key set. Counting rule: one observation per record with an object `file`. Result: 26 `parts` results; `file` key set exactly `{count, filePath, originalSize, outputDir}` on 26 of 26; top-level key set `{file, type}` on 24 and `{file, firstPage, type}` on 2.",
@@ -31279,8 +31279,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "179-181",
-          "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "194-203",
+          "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
       "instrument": "Parse every jsonl line under ~/.claude/projects whose `toolUseResult.file` is an object and tally `tuple(sorted(file))`. Counting rule: one tally per echo. Measured 2026-09-02 over the 120 most-recently-modified top-level transcripts: the modal tuple is `('content','filePath','numLines','startLine','totalLines')` with 5600 records, the next is the same tuple plus `truncatedByTokenCap` (99). A second sweep over 20 sampled transcripts of 500 KB-25 MB: 433 five-key, 30 six-key, 29 `('filePath',)` (the `file_unchanged` variant), 1 `('count','filePath','originalSize','outputDir')` (the `parts` variant). Schema authority: the Read-result zod union in <the Claude Code 2.1.258 binary> declares only `truncatedByTokenCap` optional.",
@@ -31318,8 +31318,8 @@
         },
         {
           "path": "src/recover/carriers.rs",
-          "lines": "178-181",
-          "snippet": "    let lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    let is_full = start_line == 1 && observed >= total && total > 0;"
+          "lines": "193-203",
+          "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         },
         {
           "path": "src/model/mutation.rs",
@@ -31534,8 +31534,8 @@
       "code": [
         {
           "path": "src/recover/carriers.rs",
-          "lines": "181-188",
-          "snippet": "    let is_full = start_line == 1 && observed >= total && total > 0;\n    if is_full {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::FullSnapshot {\n                content: content.to_string(),"
+          "lines": "203-210",
+          "snippet": "    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::FullSnapshot {\n                content: content.to_string(),"
         },
         {
           "path": "src/recover/carriers.rs",
@@ -31569,7 +31569,7 @@
       "id": "REC-047",
       "area": "record-model",
       "behavior": "A `Read` clipped by the token cap sets `toolUseResult.file.truncatedByTokenCap:true` and, in every observed case, keeps `startLine:1` while making `numLines` strictly less than `totalLines`.",
-      "depends": "csift `recover` does not read `truncatedByTokenCap`; it relies entirely on `numLines >= totalLines` to decide a full-file anchor, so a token-capped Read staying `numLines < totalLines` is what keeps a partial file from being replayed as ground truth.",
+      "depends": "csift's recover reads `truncatedByTokenCap` on the Read carrier (v0.10.3): a capped read never becomes a full-file snapshot, its whole lines still anchor as a partial read, and on the character branch (numLines equal to totalLines) the cut final line is dropped; before 0.10.3 the full-read test `startLine == 1 and numLines >= totalLines` replayed such a read as the whole file.",
       "code": [
         {
           "path": "src/recover/carriers.rs",
@@ -31609,6 +31609,16 @@
       "area": "record-model",
       "behavior": "`startLine` is echoed back verbatim from the caller's `offset` when the read was not truncated, so it can be `0` - observed on two Read echoes at Claude Code 2.1.211 with `startLine:0, numLines:55, totalLines:601`.",
       "depends": "csift's `is_full` demands `start_line == 1` exactly, so a `startLine:0` whole-file read is demoted to a partial (the safe direction) and `PartialRead` clamps the splice base with `start_line.max(1)`; a future rule keying on `startLine <= 1` would flip that safety.",
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.10.3",
+          "date": "2026-09-04",
+          "verdict": "drifted",
+          "instrument": "`rg -o '\"numLines\":N,\"startLine\":N,\"totalLines\":N,\"truncatedByTokenCap\":true'` over every jsonl (one observation per Read result carrying the flag) bucketed by numLines >= totalLines; csift 0.10.2 `push_read_event` read (`is_full = start_line == 1 && observed >= total`, the flag unread)",
+          "observed": "180 Read results carry `truncatedByTokenCap:true`; 1 of them has numLines >= totalLines (the character-truncation branch: a single 66000-character line recounted as 1 of 1), which csift's full-read test accepted as a whole-file snapshot of truncated content",
+          "rule": "one observation per Read result carrying the flag; the dangerous shape is numLines >= totalLines with the flag set",
+          "note": "fixed in 0.10.3: a flagged read is never a full snapshot; when its line count reaches the total the cut last line is dropped, and no anchor is pushed when nothing whole remains; unit `extract_token_capped_read_is_never_a_full_snapshot`."
       "code": [
         {
           "path": "src/recover/carriers.rs",
