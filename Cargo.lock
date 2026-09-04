@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "csift"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "aho-corasick",
  "anyhow",

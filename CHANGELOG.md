@@ -5,6 +5,55 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.10.3] - 2026-09-04
+
+The attribution push: every claim in the introspection ledger now states how its
+behavior was traced (the producing code in the shipped Claude Code binary, a specimen
+on disk or in a live trial, both, or neither), the README carries the tally as a
+gate-generated table, and the five defects the tracing found in csift are fixed.
+
+### Fixed
+
+- `search`/`verbatim`/`show`: an AskUserQuestion answered through the freeform
+  `toolUseResult.response` field (the binary's `The user responded: ...` branch, which
+  leaves `answers` empty) classifies as `user.answer` and opens a turn like every
+  other answer. The AUQ unit renders the questions asked and a `response:` line. The
+  marker joins the answer prefixes and the verifiable synth needles, so the whole-file
+  gate stays sound. The idle-timeout branch (`No response after ...`) is not an answer
+  and still opens no turn.
+- `status`/`wait`: a completion pulse whose status is `blocked` (Claude Code's
+  remote-agent notifier writes it) or any literal csift does not know is its own bucket
+  (`N blocked`, `N with an unknown status`; JSON `blocked`, `other`) instead of being
+  booked as a clean completion.
+- `wait --until notification` fires in every watched lane. Claude Code normally delivers a
+  pulse to the main transcript, but one addressed to the owning agent lands in that
+  agent's lane (2 of 2906 delivered records in the reference corpus), and the main-only
+  scope could never fire on it.
+- `recover`: a Read cut at its token budget (`truncatedByTokenCap`) is never replayed as
+  a whole-file snapshot. On a file whose lines are too long to paginate the harness
+  recounts `numLines` from the cut slice, so it can equal `totalLines` and the old
+  full-read test accepted truncated content as the whole file.
+- `image` lists the images of a `queued_command` attachment: a prompt queued and then
+  edited or recalled never becomes a user record, so its pasted images existed only
+  there (45 of 52 such blocks in the reference corpus had no other copy).
+
+### Changed
+
+- `INTROSPECTION.json`: every claim carries `producer_trace` (`complete` | `partial` |
+  `none`), `specimen` (`observed` | `none`) and the derived `attribution` (`end-to-end`
+  | `producer-only` | `specimen-only` | `partial-producer` | `by-elimination`), plus
+  `open_legs` naming the instrument that would close each missing leg. A complete
+  producer trace is three hops in the binary, quoted verbatim at byte offsets: the
+  trigger, the gate and the writer. A negative ("nothing else writes this") closes only
+  by an `enumeration` of every site in the binary, each read; a claim whose text a hop
+  refuted was rewritten, not annotated; an end-to-end claim carries no open leg (a
+  non-gap note lives in `residue`). Version floors were checked against historical
+  builds fetched by version and bisected on string literals. The gate refuses a
+  by-elimination claim that `holds`, a leg pair that disagrees with its attribution, an
+  end-to-end claim with an open leg, and a README tally that disagrees with the ledger.
+- README: a "How much of this is verified" section with the tally table, regenerated
+  from the ledger and checked by the gate.
+
 ## [0.10.2] - 2026-09-03
 
 The first re-read of the introspection ledger after 0.10.1: the 17 claims that had no
