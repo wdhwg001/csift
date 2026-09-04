@@ -5,6 +5,22 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.10.4] - 2026-09-04
+
+### Fixed
+
+- `wait` and the `status`/`wait` tail window no longer memory-map a live transcript. A
+  mapped file that another process truncates faults with SIGBUS on the first page
+  touched past the new end, and nothing catches it; Claude Code does rewrite a
+  transcript in place (a rewind tombstone truncates and rewrites the tail, an armed
+  local GC rewrites on compaction), so a long `wait` polling a live file every few
+  hundred milliseconds carried that risk on every poll. Both readers now use plain
+  positional reads, which return fewer bytes on a shrink and never fault. The one-shot
+  full scans keep the memory map, whose sub-second life bounds the exposure.
+- `wait` detects a transcript that shrank between two polls, moves its baseline to the
+  new end and reports it (`transcript shrank N time(s)` in the activity line, JSON
+  `shrinks`); before, a shrunk file was skipped silently.
+
 ## [0.10.3] - 2026-09-04
 
 The attribution push: every claim in the introspection ledger now states how its
