@@ -46,10 +46,13 @@ pub struct BackgroundLensArgs {
         REPL's \"N shell still running\" lives in process memory; the end-of-turn record \
         carries a duration and a message count, and its pending counts cover background \
         AGENTS only). `status` therefore scans the whole main transcript (launches from \
-        every lane, completions land only in the main file) and lists every OPEN task: \
+        every lane; completions normally land in the main file, and one addressed to the \
+        owning agent lands in that agent's lane, read too) and lists every OPEN task: \
         kind (shell | agent | monitor), id, launch instant and age, description or \
         command, the output file's size and last write, and the state of every closed one \
-        folded to counts (completed / failed / killed / stopped / timed out). A Monitor is \
+        folded to counts (completed / failed / killed / stopped / timed out, plus blocked - \
+        the remote-agent notifier's fifth value - and any unknown status, disclosed rather \
+        than booked as completed). A Monitor is \
         armed as an immediately-paired tool call and shares the shell id namespace; event \
         pulses never close it, only its termination notice or timeout does, and a \
         PERSISTENT monitor never returns by design - name it with --ignore-background. NOT RETURNED IS NOT PROOF OF \
@@ -112,7 +115,7 @@ pub struct BackgroundLensArgs {
         evidence:[{surface, value, age_secs}], children:[{session_id, state, detail} - \
         live lanes only], settled_children, tasks:[{id, subject, status, blocked_by}] \
         (null when the session has no tasks dir), tasks_completed, \
-        pending:[...], background:{open, ignored, completed, failed, killed, stopped, \
+        pending:[...], background:{open, ignored, completed, failed, killed, stopped, timed_out, blocked, other, \
         scanned_files, tasks:[{kind, id, tool_use_id, lane, state, description, command, \
         launched_utc, launched_local, age_secs, output_file, output_bytes, \
         output_age_secs, ignored_by} - open tasks only], notes:[...]}, \
@@ -174,7 +177,7 @@ impl StatusArgs {
         elapse and read the report)\n  \
           hitl                      verdict becomes waiting-hitl\n  \
           auq                       the elicitation sidecar gains an unanswered question\n  \
-          notification[:REGEX]      a task-notification lands in the MAIN transcript\n  \
+          notification[:REGEX]      a task-notification lands in any watched lane\n  \
           tool:NAME[:REGEX]         a tool_use of NAME whose serialized input matches\n  \
           write:PATH_RE[:LINE_RE]   a Write/Edit whose path matches (and content line, if given)\n  \
           verdict:V                 any verdict from the status table\n\n\

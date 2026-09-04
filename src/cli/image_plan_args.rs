@@ -6,7 +6,8 @@ use super::*;
 #[command(
     about = "List + extract the images a session carries (inline base64 blocks → files)",
     long_about = "List and EXTRACT the images a session carries. A pasted/attached image (and a \
-        tool-result screenshot) is stored INLINE on a record as a base64 image block, so `image` \
+        tool-result screenshot, or a picture pasted into a prompt that was queued and then \
+        edited or recalled, which survives only in the queued_command attachment) is stored INLINE on a record as a base64 image block, so `image` \
         decodes it straight back to a file; nothing was externalised.\n\n\
         TWO ADDRESSES: `#N`: the session's own `[Image #N]` handle (`verbatim`/`search` show it \
         inline; an ambiguous `#N` errors with the occurrence list, disambiguate via `--since`/\
