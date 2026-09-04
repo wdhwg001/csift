@@ -145,6 +145,75 @@ fn seq_extracted_by_positional_zip_of_image_markers() {
 }
 
 #[test]
+fn a_tool_result_screenshot_is_collected_in_document_order() {
+    // The second carrier: an {type:"image"} element nested in a tool_result's content
+    // ARRAY. It shares the record's 1-based `img_index` run with any direct block, so
+    // the `L<line>i<n>` locator stays stable.
+    let r: Record = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":[
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}},
+                {"type":"tool_result","tool_use_id":"t1","content":[
+                    {"type":"text","text":"shot"},
+                    {"type":"image","source":{"type":"base64","media_type":"image/webp","data":"aGVsbG8="}},
+                    {"type":"image","source":{"type":"base64","media_type":"image/gif","data":"eWVz"}}
+                ]}
+            ]}}"#,
+        )
+        .unwrap();
+    let imgs = record_images(&r, false);
+    assert_eq!(imgs.len(), 3, "the direct block and both nested elements");
+    assert_eq!(
+        imgs.iter().map(|i| i.img_index).collect::<Vec<_>>(),
+        vec![1, 2, 3],
+        "one ascending run across both carriers"
+    );
+    assert_eq!(
+        imgs.iter()
+            .map(|i| i.media_type.as_str())
+            .collect::<Vec<_>>(),
+        vec!["image/png", "image/webp", "image/gif"],
+        "document order, and the nested types are read from their own source"
+    );
+    // A non-image element of the same array contributes nothing.
+    let r2: Record = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":[
+                {"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"no image here"}]}
+            ]}}"#,
+        )
+        .unwrap();
+    assert!(record_images(&r2, false).is_empty());
+}
+
+#[test]
+fn seq_follows_image_paste_ids_not_marker_text_order() {
+    // The operator typed the markers out of order; the image blocks (and imagePasteIds)
+    // are in ascending id order, so the join is by NUMBER, not by marker position.
+    let r: Record = serde_json::from_str(
+            r#"{"type":"user","imagePasteIds":[28,29,30],"message":{"role":"user","content":[
+                {"type":"text","text":"compare [Image #30] with [Image #28] and [Image #29]"},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}},
+                {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"eWVz"}}
+            ]}}"#,
+        )
+        .unwrap();
+    let seqs: Vec<Option<usize>> = record_images(&r, false).iter().map(|i| i.seq).collect();
+    assert_eq!(seqs, vec![Some(28), Some(29), Some(30)]);
+    // An id array that does not cover every image block falls back to the positional
+    // zip (under its own count guard); here the counts agree, so the markers win.
+    let r2: Record = serde_json::from_str(
+            r#"{"type":"user","imagePasteIds":[7],"message":{"role":"user","content":[
+                {"type":"text","text":"[Image #5] then [Image #4]"},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}},
+                {"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}}
+            ]}}"#,
+        )
+        .unwrap();
+    let seqs: Vec<Option<usize>> = record_images(&r2, false).iter().map(|i| i.seq).collect();
+    assert_eq!(seqs, vec![Some(5), Some(4)]);
+}
+
+#[test]
 fn url_source_has_no_bytes() {
     let r = image_ref_from_source(
         &json!({"type":"url","url":"https://example.test/x.png","media_type":"image/png"}),

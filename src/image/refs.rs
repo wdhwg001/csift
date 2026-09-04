@@ -272,15 +272,32 @@ pub(crate) fn record_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
             _ => {}
         }
     }
-    // Assign `#N` by POSITIONAL zip - only when the marker count matches the image count
-    // (CC guarantees `[Image #N]` is unique within a prompt; a mismatch means a back-
-    // reference to a compressed-out image, so we leave `seq = None` rather than misassign).
+    // Assign `#N` by NUMBER. The record's `imagePasteIds` lists the ids in the order of
+    // its image blocks (the submit path builds both arrays in one ascending-id pass),
+    // while the `[Image #N]` markers keep the operator's TEXT order - the two orders
+    // diverge on 18 of 662 corpus records, so a positional marker-to-block zip gave a
+    // silently wrong `#N` there (v0.10.5, ledger IMG-005). Without the array (older
+    // records) the positional zip stays, and only when the marker count matches the
+    // image count (a mismatch means a back-reference to a compressed-out image, so
+    // `seq` stays `None` rather than misassign).
+    assign_image_seq(&mut out, rec.image_paste_ids.as_deref(), &markers);
+    out
+}
+
+/// The `#N` join: by the record's `imagePasteIds` (block order) when it is present and
+/// covers every image block, else the positional marker zip under the count guard.
+fn assign_image_seq(out: &mut [ImageRef], ids: Option<&[u64]>, markers: &[usize]) {
+    if let Some(ids) = ids.filter(|ids| ids.len() == out.len()) {
+        for (r, &n) in out.iter_mut().zip(ids.iter()) {
+            r.seq = usize::try_from(n).ok();
+        }
+        return;
+    }
     if markers.len() == out.len() {
         for (r, &n) in out.iter_mut().zip(markers.iter()) {
             r.seq = Some(n);
         }
     }
-    out
 }
 
 /// The third carrier (v0.10.3, ledger IMG-002): a `queued_command` attachment record
@@ -318,11 +335,13 @@ fn queued_prompt_images(rec: &Record, with_data: bool) -> Vec<ImageRef> {
             }
         }
     }
-    if markers.len() == out.len() {
-        for (r, &n) in out.iter_mut().zip(markers.iter()) {
-            r.seq = Some(n);
-        }
-    }
+    // A queued prompt carries its ids beside the blocks when the attachment has them;
+    // the same by-number join applies, with the positional zip as the fallback.
+    let ids: Option<Vec<u64>> = att
+        .get("imagePasteIds")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_u64).collect());
+    assign_image_seq(&mut out, ids.as_deref(), &markers);
     out
 }
 

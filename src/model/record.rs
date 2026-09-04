@@ -60,6 +60,13 @@ pub struct Record {
     #[serde(default, rename = "contextLength")]
     pub context_length: Option<u64>,
 
+    /// The pasted-image ids of a user prompt, in the ORDER OF ITS IMAGE BLOCKS (the
+    /// submit path builds the block array and this array together in one ascending-id
+    /// pass, while the `[Image #N]` markers keep the operator's text order; ledger
+    /// IMG-005). Absent on every other record. Tolerant.
+    #[serde(default, rename = "imagePasteIds")]
+    pub image_paste_ids: Option<Vec<u64>>,
+
     #[serde(default, rename = "isSidechain")]
     pub is_sidechain: Option<bool>,
 
