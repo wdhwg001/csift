@@ -29,6 +29,21 @@
 //!    neither leg traced, "nothing changed" is exactly the conclusion an audit is not
 //!    entitled to.
 //! 8. The README's ledger tally table equals the ledger's per-attribution counts.
+//! 9. A claim's LATEST check is never `drifted`: a drift is a correctness task for the
+//!    same release, so the fix (or the retirement) appends its own check after it, and
+//!    a ledger whose last word on a claim is "drifted" is not releasable.
+//! 10. No open leg is an unconsumed text instruction: a leg starting with `TEXT` is a
+//!     claim-text correction a traced hop demanded, and a leg recording a rejected
+//!     rewrite is the old, refuted text still shipping; both are consumed by rewriting
+//!     the text, never released around.
+//! 11. Every claim below end-to-end carries both leg fields (`producer_trace`,
+//!     `specimen`), so rule 7's derivation always runs: an attribution with no legs
+//!     recorded is an opinion, not a derivation.
+//!
+//! The attribution set gained `upstream` (v0.10.5): the producer lies OUTSIDE the
+//! shipped binary by construction (the model or API side, the operating system, a
+//! native runtime binding) while the client-side treatment is traced and a specimen is
+//! observed; `producer_trace: upstream` + `specimen: observed` derives it.
 
 use std::collections::{HashMap, HashSet};
 
@@ -127,6 +142,7 @@ fn ledger_gate_ledger_is_consistent_and_backs_the_readme_badges() {
             ));
         }
         check_attribution(id, c, &mut failures);
+        check_latest_verdict_and_leg_hygiene(id, c, &checks, &mut failures);
         // Rule 4: every code site is real and its snippet still exists verbatim.
         for site in c["code"].as_array().cloned().unwrap_or_default() {
             let path = site["path"].as_str().unwrap_or("");
@@ -201,6 +217,7 @@ fn check_readme_tally(claims: &[serde_json::Value], readme: &str, failures: &mut
         "specimen-only",
         "partial-producer",
         "by-elimination",
+        "upstream",
     ] {
         let expected = claims
             .iter()
@@ -223,16 +240,48 @@ fn check_readme_tally(claims: &[serde_json::Value], readme: &str, failures: &mut
     }
 }
 
+/// Rules 9 and 10: the last word on a claim is never `drifted`, and no open leg is an
+/// unconsumed text instruction or a record of a rejected rewrite.
+fn check_latest_verdict_and_leg_hygiene(
+    id: &str,
+    c: &serde_json::Value,
+    checks: &[serde_json::Value],
+    failures: &mut Vec<String>,
+) {
+    if let Some(last) = checks.last() {
+        if last["verdict"].as_str() == Some("drifted") {
+            failures.push(format!(
+                "{id}: the latest check is `drifted` with no fix or retirement check after it (a drift is a same-release correctness task)"
+            ));
+        }
+    }
+    for leg in c["open_legs"].as_array().cloned().unwrap_or_default() {
+        let s = leg.as_str().unwrap_or("").trim_start();
+        if s.starts_with("TEXT") {
+            failures.push(format!(
+                "{id}: an open leg is an unconsumed text correction (`TEXT ...`): rewrite the claim text"
+            ));
+        } else if s.starts_with("Text rewrite rejected")
+            || s.contains("was rejected on adversarial re-read")
+        {
+            failures.push(format!(
+                "{id}: an open leg records a rejected rewrite, so the refuted text is still shipping: rewrite it to acceptance, split, or retire"
+            ));
+        }
+    }
+}
+
 /// Rule 7: attribution completeness is stated, open legs are listed, the attribution
 /// agrees with the two legs when they are recorded, and a claim attributed by
-/// elimination never holds.
+/// elimination never holds. Rule 11: below end-to-end the legs are always recorded.
 fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>) {
-    const ATTRIBUTIONS: [&str; 5] = [
+    const ATTRIBUTIONS: [&str; 6] = [
         "end-to-end",
         "producer-only",
         "specimen-only",
         "partial-producer",
         "by-elimination",
+        "upstream",
     ];
     let attribution = c["attribution"].as_str().unwrap_or("");
     if !ATTRIBUTIONS.contains(&attribution) {
@@ -251,6 +300,7 @@ fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>
             ("partial" | "none", "observed") => "specimen-only",
             ("partial", "none") => "partial-producer",
             ("none", "none") => "by-elimination",
+            ("upstream", "observed") => "upstream",
             _ => "",
         };
         if derived.is_empty() {
@@ -262,21 +312,37 @@ fn check_attribution(id: &str, c: &serde_json::Value, failures: &mut Vec<String>
                 "{id}: attribution `{attribution}` does not follow from the legs (`{producer}` + `{specimen}` = `{derived}`)"
             ));
         }
+    } else if attribution != "end-to-end" {
+        // Rule 11: below end-to-end an attribution without its legs is an opinion.
+        failures.push(format!(
+            "{id}: attribution `{attribution}` with no `producer_trace`/`specimen` legs recorded"
+        ));
     }
     let open_legs = c["open_legs"].as_array().cloned().unwrap_or_default();
     let legs_named = open_legs
         .iter()
         .any(|l| l.as_str().is_some_and(|s| !s.trim().is_empty()));
-    if attribution != "end-to-end" && !legs_named {
+    // An open leg is a leg that is open. `end-to-end` has none by definition. `upstream`
+    // closes the PRODUCER leg by construction (the producer is outside the shipped binary
+    // and `upstream_reason` names the domain), so it needs no leg either - but it may
+    // still carry one for a specimen or a sub-fact that a live capture would settle.
+    if !matches!(attribution, "end-to-end" | "upstream") && !legs_named {
         failures.push(format!(
             "{id}: attribution `{attribution}` without a non-empty `open_legs` entry"
         ));
     }
-    // The closure rule: an open leg is a leg that is open, so an end-to-end claim
-    // carries none. A non-gap note for a later audit lives in `residue`.
     if attribution == "end-to-end" && legs_named {
         failures.push(format!(
             "{id}: end-to-end with a non-empty `open_legs` (close the leg, or move a non-gap note to `residue`)"
+        ));
+    }
+    if attribution == "upstream"
+        && c["upstream_reason"]
+            .as_str()
+            .is_none_or(|s| s.trim().is_empty())
+    {
+        failures.push(format!(
+            "{id}: attribution `upstream` without an `upstream_reason` naming the producer domain"
         ));
     }
     if attribution == "by-elimination"
