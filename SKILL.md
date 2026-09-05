@@ -3,18 +3,16 @@ name: csift
 description: >-
   Read, search and analyze Claude Code session transcripts (the .jsonl under
   ~/.claude/projects), and message another running lane. Use this INSTEAD of
-  grep/ripgrep/cat/jq/python: the format has documented traps that return plausible
-  wrong answers, no error (a user-role filter overcounts human turns 3x; a sixth of
-  human turns hide inside tool_result payloads). Reach for it when you would
-  hand-scan a session jsonl or shadow session facts in a state file - and BEFORE
-  asserting something was never done or re-deriving a harness mechanism from
-  binaries: past sessions usually derived it already. Search any regex across ALL
-  sessions; read records by line, turn or uuid; what a session is doing now; tools,
-  tokens, models, files changed; extract pasted images; recover a deleted file or
-  plan; restore the turns a compaction clipped. Message another session or
-  subagent, or orient one you spawned, when the official tool cannot reach it.
-  Sub-second, hook-safe, pure regex, not semantic search; writes only its own
-  sidecar.
+  grep/ripgrep/cat/jq/python: the format has documented traps that return plausible wrong
+  answers, no error (a user-role filter overcounts human turns 3x; a sixth of human turns
+  hide inside tool_result payloads, AskUserQuestion answers included). Reach for it when
+  you would hand-scan a session jsonl or shadow session facts in a state file - and BEFORE
+  asserting something was never done or re-deriving a harness mechanism from binaries:
+  past sessions usually derived it already. Search any regex across ALL sessions; read
+  records by line, turn or uuid; what a session is doing now; tools, tokens, models, files
+  changed; extract pasted images; recover a deleted file or plan; restore the turns a
+  compaction clipped. Message another session or subagent the official tool cannot reach.
+  Sub-second, hook-safe, pure regex, not semantic search; writes only its own sidecar.
 ---
 
 # csift — ripgrep for Claude Code session transcripts

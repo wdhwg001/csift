@@ -79,9 +79,9 @@ fn run(cli: Cli) -> Result<()> {
         Command::Image(args) => image::run_image(&args),
         Command::Status(args) => live::run_status(&args),
         Command::Wait(args) => live::run_wait(&args),
+        Command::Send(args) => live::channel::run_send(&args),
         Command::Msg(args) => live::channel::run_msg(&args),
         Command::Ack(args) => live::channel::run_ack(&args),
-        Command::Send(args) => live::channel::run_send(&args),
         // The hidden rename tombstone (cli.rs): always the pointed error, never a run.
         Command::Turns(_) => anyhow::bail!(
             "`csift turns` was RENAMED to `csift verbatim` in v0.5 — same command, same \

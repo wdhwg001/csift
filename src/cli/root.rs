@@ -21,8 +21,8 @@ use super::*;
           show     FETCH the record(s) you name: `--line` / `--turn` / `--uuid` of ONE transcript\n           \
                    (`--turn -3..` = the last 3 turns, the live-tail peek), rendered full or `--raw` bytes\n  \
           stats    one-scan aggregates per session: tokens by model, tool calls, turns, span\n  \
-          agents   list a session's subagents (kind, start/completion, status) + time-window filter\n  \
           whoami   identify the calling CC session via $CLAUDE_CODE_SESSION_ID\n  \
+          agents   list a session's subagents (kind, start/completion, status) + time-window filter\n  \
           files    which files/dirs a session modified, when (Edit/Write/Notebook + heuristic Bash)\n  \
           recover  reconstruct a file's history from the transcript: segmented diff-patches,\n           \
                    point-in-time partial snapshot, or coverage scoping\n  \
@@ -218,9 +218,13 @@ pub enum Command {
     Image(ImageArgs),
     Status(StatusArgs),
     Wait(WaitArgs),
+    // The channel four, in the order the hand-written SUBCOMMANDS block reads them and in the
+    // order a caller meets them: queue one, ask whether it landed, say you read it, and the
+    // hook that carries it. clap lists subcommands by variant position, so the two lists
+    // agree only while this order holds (`cli::tests::docs` pins that).
+    Send(SendArgs),
     Msg(MsgArgs),
     Ack(AckArgs),
-    Send(SendArgs),
     // HIDDEN catch-all for the REMOVED `turns` name (→ `verbatim`, v0.5). Exists only so
     // the rename gets the pointed successor error the `-t thinking` legacy values get,
     // instead of clap's teach-nothing "unrecognized subcommand". Never works, always bails

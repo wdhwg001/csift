@@ -366,6 +366,8 @@ fn context(
         lane: receiver.lane.clone(),
         routing_id: receiver.routing_id.clone(),
         mode: Mode::parse(args.mode.as_str()).unwrap_or(Mode::Steer),
+        // A send really writes the queue, so its prediction speaks in the past tense.
+        queues: true,
         resume: args.resume,
         official_only: args.official_only,
         teams: GateVerdict::teams(

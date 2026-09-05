@@ -2,7 +2,8 @@
 //! channel file is written from.
 //!
 //! House rule (AGENTS.md section 4): JSON is hand-built with `serde_json::json!` in a
-//! per-type projector - there is no `derive(Serialize)` anywhere in `src/`. The READ side
+//! per-type projector - the Serialize derive appears nowhere in `src/`, and that rule is
+//! checked by grepping for it, so this line does not spell it either. The READ side
 //! is deliberately tolerant: a value the current schema cannot interpret yields `None`
 //! rather than an error, so a channel file written by a newer csift is skipped and
 //! counted by the caller instead of crashing a delivery.

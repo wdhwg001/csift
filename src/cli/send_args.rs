@@ -26,7 +26,7 @@ impl SendMode {
 
 #[derive(Args, Debug)]
 #[command(
-    about = "queue a message for one Claude Code lane, and say what will carry it",
+    about = "Queue a message for one Claude Code lane, and say what will carry it",
     long_about = "csift send - queue a message for ONE Claude Code lane (a top-level session, \
         an unnamed subagent, a teammate, a workflow lane), from another lane or from any \
         process outside Claude Code.\n\n\

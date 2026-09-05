@@ -106,6 +106,8 @@ pub(crate) fn send_context(
         lane: t.lane.clone(),
         routing_id: t.routing_id.clone(),
         mode: Mode::Steer,
+        // Nothing on this path writes, so the prediction says what WOULD be queued.
+        queues: false,
         resume: false,
         official_only: false,
         teams: GateVerdict::teams(

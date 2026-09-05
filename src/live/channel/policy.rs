@@ -144,6 +144,11 @@ pub(crate) struct SendContext {
     /// The teammate routing form `Name@Team`, when the receiver has one.
     pub(crate) routing_id: Option<String>,
     pub(crate) mode: Mode,
+    /// True when the CALLER will actually write the queue (a `csift send`); false for a
+    /// `whoami --to` prediction, which writes nothing. It changes only the TENSE of the csift
+    /// leg - `csift queued it too` against `csift would queue it too` - because a prediction
+    /// that says it queued the message is a receipt for a write that never happened.
+    pub(crate) queues: bool,
     pub(crate) resume: bool,
     pub(crate) official_only: bool,
     pub(crate) teams: GateVerdict,
@@ -468,18 +473,27 @@ fn csift_channel(ctx: &SendContext) -> &'static str {
 }
 
 /// The sentence appended when csift also queues the message: what will actually carry it.
+///
+/// The lead is the only part that changes with [`SendContext::queues`]. A `--to` prediction
+/// runs this same table and writes nothing, so it must say what WOULD happen; the rest of the
+/// sentence - which hook point carries part 1, and how many chunks fit there - is the same
+/// answer either way.
 fn csift_leg(ctx: &SendContext) -> String {
     let event = ctx.best_event.as_deref().unwrap_or("no configured event");
+    let lead = if ctx.queues {
+        "csift queued it too:"
+    } else {
+        "csift would queue it too:"
+    };
     match ctx.mode {
         Mode::Steer => format!(
-            "csift queued it too: the next `csift deliver` hook to run in this lane emits part \
-             1 ({} of {} chunk(s) fit at {event}).",
+            "{lead} the next `csift deliver` hook to run in this lane emits part 1 ({} of {} \
+             chunk(s) fit at {event}).",
             ctx.best_slots.min(ctx.chunks),
             ctx.chunks
         ),
         Mode::Queue => format!(
-            "csift queued it too: delivery waits for a turn boundary ({} of {} chunk(s) fit at \
-             {event}).",
+            "{lead} delivery waits for a turn boundary ({} of {} chunk(s) fit at {event}).",
             ctx.best_slots.min(ctx.chunks),
             ctx.chunks
         ),

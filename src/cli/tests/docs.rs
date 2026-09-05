@@ -109,6 +109,101 @@ fn help_examples_use_the_named_subcommands_own_flags() {
     }
 }
 
+/// The hand-written SUBCOMMANDS block in the root `long_about` is a SECOND list of the
+/// commands, kept because it explains each one in a sentence clap's own list has no room for.
+/// A second list drifts, so it is pinned against the enum: every visible subcommand appears
+/// exactly once as a block entry, in the same order clap prints them, and no entry names a
+/// command that does not exist. The count word in the module doc is checked against the same
+/// enum, because a spelled-out number is the one part of a doc nothing else contradicts.
+#[test]
+fn the_subcommands_block_matches_the_command_enum() {
+    use clap::CommandFactory;
+    let cmd = Cli::command();
+    let visible: Vec<String> = cmd
+        .get_subcommands()
+        .filter(|s| !s.is_hide_set())
+        .map(|s| s.get_name().to_string())
+        .collect();
+    let long = cmd
+        .get_long_about()
+        .expect("the root carries a long_about")
+        .to_string();
+    let block: Vec<&str> = long
+        .lines()
+        .skip_while(|l| l.trim() != "SUBCOMMANDS")
+        .skip(1)
+        .take_while(|l| !l.trim().is_empty())
+        .collect();
+    assert!(!block.is_empty(), "the SUBCOMMANDS block is missing");
+
+    // An ENTRY line opens a command's description: two spaces, the name, then more spaces.
+    // A continuation line is indented past the description column and names nothing.
+    let entries: Vec<String> = block
+        .iter()
+        .filter_map(|line| {
+            let rest = line.strip_prefix("  ")?;
+            let name = rest.split_whitespace().next()?;
+            (!rest.starts_with(' ') && visible.iter().any(|v| v == name)).then(|| name.to_string())
+        })
+        .collect();
+    assert_eq!(
+        entries, visible,
+        "the SUBCOMMANDS block must list every command exactly once, in clap's own order"
+    );
+    // No entry may name something clap does not offer: an entry whose head is not a command
+    // would have been dropped by the filter above, so count the entry-shaped lines instead.
+    let entry_shaped = block
+        .iter()
+        .filter(|line| {
+            line.strip_prefix("  ")
+                .is_some_and(|rest| !rest.starts_with(' '))
+        })
+        .count();
+    assert_eq!(
+        entry_shaped,
+        visible.len(),
+        "an entry-shaped line names no command: {block:?}"
+    );
+
+    // The spelled-out count in the module doc, which is where the number lives.
+    let doc = include_str!("../../cli.rs");
+    let words = [
+        "",
+        "One",
+        "Two",
+        "Three",
+        "Four",
+        "Five",
+        "Six",
+        "Seven",
+        "Eight",
+        "Nine",
+        "Ten",
+        "Eleven",
+        "Twelve",
+        "Thirteen",
+        "Fourteen",
+        "Fifteen",
+        "Sixteen",
+        "Seventeen",
+        "Eighteen",
+        "Nineteen",
+        "Twenty",
+    ];
+    let want = format!(
+        "{} subcommands",
+        words
+            .get(visible.len())
+            .copied()
+            .expect("extend the number words")
+    );
+    assert!(
+        doc.contains(&want),
+        "src/cli.rs must open with `{want}` - the enum has {} visible commands",
+        visible.len()
+    );
+}
+
 /// SKILL.md's surface stamp must match the crate version - forces the LLM-facing
 /// skill to be (at least) OPENED on every release, so the "re-read this file on an
 /// unexpected error" recovery path always lands on current truth.

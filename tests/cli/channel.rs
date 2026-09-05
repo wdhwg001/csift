@@ -2,6 +2,7 @@
 
 mod deliver;
 mod deliver_edges;
+mod help;
 mod msg;
 mod msg_lane_forms;
 mod msg_parts;

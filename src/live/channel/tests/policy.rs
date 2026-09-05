@@ -28,6 +28,8 @@ fn ctx() -> SendContext {
         lane: AGENT.to_string(),
         routing_id: None,
         mode: Mode::Steer,
+        // The baseline is a real send; the prediction-only form is varied where it matters.
+        queues: true,
         resume: false,
         official_only: false,
         teams: GateVerdict::teams(None, 0, 0),
@@ -470,6 +472,48 @@ fn official_only_queues_nothing_and_makes_no_csift_prediction() {
         !d.prediction.contains("csift queued it too"),
         "nothing was queued, so nothing is predicted: {}",
         d.prediction
+    );
+}
+
+#[test]
+fn the_csift_leg_speaks_in_the_tense_of_the_caller_that_asked() {
+    // A send WROTE the queue; a `whoami --to` prediction wrote nothing and says so in its own
+    // closing line, so the same clause claiming it queued the message would be a receipt for
+    // a write that never happened. Only the lead changes: which hook point carries part 1 is
+    // the same answer either way.
+    let sent = decide(&ctx());
+    assert!(
+        sent.prediction.contains(
+            "csift queued it too: the next `csift deliver` hook to run in this lane emits part \
+             1 (1 of 1 chunk(s) fit at SessionStart)."
+        ),
+        "{}",
+        sent.prediction
+    );
+    let predicted = decide(&SendContext {
+        queues: false,
+        ..ctx()
+    });
+    assert!(
+        predicted.prediction.contains(
+            "csift would queue it too: the next `csift deliver` hook to run in this lane emits \
+             part 1 (1 of 1 chunk(s) fit at SessionStart)."
+        ),
+        "{}",
+        predicted.prediction
+    );
+    // The queue mode's own sentence takes the same two leads.
+    let queue_mode = |queues| {
+        decide(&SendContext {
+            mode: Mode::Queue,
+            queues,
+            ..ctx()
+        })
+        .prediction
+    };
+    assert!(queue_mode(true).contains("csift queued it too: delivery waits for a turn boundary"));
+    assert!(
+        queue_mode(false).contains("csift would queue it too: delivery waits for a turn boundary")
     );
 }
 
