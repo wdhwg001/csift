@@ -23,7 +23,7 @@ use super::policy::{self, Decision, SendContext};
 use super::{
     append_inbox, append_outbox, channel_dir, expires_at, new_message_id, now_utc, read_armed,
     render, write_message, InboxLine, Message, MessageFrom, MessageTo, Mode, OfficialRef,
-    OutboxLine, Relation, SenderKind, TargetForm, Verdict, CHUNK_BUDGET,
+    OutboxLine, Relation, TargetForm, Verdict, CHUNK_BUDGET,
 };
 use crate::cli::{OutputFormat, SendArgs};
 use crate::path::settings::{self, Merged};

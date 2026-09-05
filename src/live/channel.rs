@@ -14,9 +14,11 @@
 //! (append-only outbox, per-lane ledger, dedupe by id, atomic append, chunking, slot
 //! ordering, block-cap awareness) lives in this binary instead of in the hook line.
 //!
-//! This module is the DATA LAYER only - the formats, their readers and writers, and the
-//! two coordination primitives (the armed marker and the slot chain). The commands that
-//! use it (`send`, `deliver`, `msg`, `ack`) live beside it.
+//! What is here: the DATA LAYER - the formats, their readers and writers, and the two
+//! coordination primitives (the armed marker and the slot chain) - and the commands built
+//! on it (`deliver`, `send`, `msg`, `ack`, and the `whoami` reach sections), each in its
+//! own file. The layer offers exactly what those commands need: a format csift writes but
+//! never reads back has a writer and no reader.
 //!
 //! Layout:
 //! - [`types`] the message, its endpoints, the closed enums, ids and expiry
@@ -30,13 +32,6 @@
 //! - [`reconcile`] the ledger-against-transcript join (intent versus fact)
 //! - [`msg`] the `msg` and `ack` commands built on that join
 //! - [`reach`] the `whoami` lane sections, the `--to` prediction and the peer census
-
-// The commands that consume this layer (`deliver`, `send`, `msg`, `ack`, and the
-// `whoami` reach prediction) land in the following commits of the same release. Until
-// they do, the formats and the re-exports below have no caller outside the unit tests,
-// which the dead-code and unused-import passes do not count. Scoped to this module, and
-// removed once the commands land.
-#![allow(dead_code, unused_imports)]
 
 mod caller;
 mod deliver;

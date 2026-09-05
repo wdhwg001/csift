@@ -78019,7 +78019,7 @@
       "code": [
         {
           "path": "src/live/channel/ledger.rs",
-          "lines": "353-368",
+          "lines": "285-301",
           "snippet": "pub(crate) fn consecutive_exit2_blocks(lines: &[LedgerLine]) -> usize {\n    let mut count = 0usize;\n    for line in lines.iter().rev() {\n        match line {\n            LedgerLine::Emit { vehicle, .. } => {\n                if *vehicle == Vehicle::Exit2 {\n                    count += 1;\n                } else {\n                    break;\n                }\n            }\n            LedgerLine::Ack { .. } => break,\n            _ => {}\n        }\n    }\n    count\n}"
         },
         {
@@ -78884,7 +78884,7 @@
       "code": [
         {
           "path": "src/live/channel/deliver_plan.rs",
-          "lines": "201-205",
+          "lines": "199-203",
           "snippet": "    match state {\n        // Never emitted: pending at any eligible event. A HELD message has exactly this\n        // shape, so a re-entry event delivers it with no separate rule.\n        None => Verdict::Send { redeliver: None },\n        Some(s) if !s.first_part_emitted() => Verdict::Send { redeliver: None },"
         }
       ],
@@ -79383,7 +79383,7 @@
       "code": [
         {
           "path": "src/live/channel/deliver_plan.rs",
-          "lines": "240-246",
+          "lines": "238-244",
           "snippet": "/// A steer message rides any eligible event; a queue message only a turn boundary.\nfn mode_eligible(mode: Mode, hook: &HookInput) -> bool {\n    match mode {\n        Mode::Steer => true,\n        Mode::Queue => is_queue_event(&hook.hook_event_name, hook.source.as_deref()),\n    }\n}"
         }
       ],
@@ -80008,7 +80008,7 @@
       "code": [
         {
           "path": "src/live/channel/caller.rs",
-          "lines": "258-261",
+          "lines": "347-350",
           "snippet": "/// What the lane is doing. A top-level session answers from the registry plus a pid probe (the\n/// only surface that knows a session is alive); a subagent lane answers from its own tail,\n/// with the harness's terminal word about it outranking both.\nfn receiver_state("
         }
       ],

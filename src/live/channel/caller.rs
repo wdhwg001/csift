@@ -197,7 +197,6 @@ pub(crate) fn teams_dirs() -> usize {
 /// Everything one send needs to know about the receiving lane.
 #[derive(Debug, Clone)]
 pub(crate) struct Receiver {
-    pub(crate) path: PathBuf,
     /// The transcript-form lane id (a session uuid, or the agent id for a subagent lane).
     pub(crate) lane: String,
     /// The owning top-level session uuid (== `lane` for a top-level receiver).
@@ -239,7 +238,6 @@ pub(crate) fn probe_receiver(path: &Path) -> Result<Receiver> {
     let state = receiver_state(path, &session_path, &lane, is_sub, row.as_ref())?;
 
     Ok(Receiver {
-        path: path.to_path_buf(),
         lane,
         session,
         session_path,

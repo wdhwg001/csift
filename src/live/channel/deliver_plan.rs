@@ -58,8 +58,6 @@ pub(crate) enum Bookkeeping {
 pub(crate) struct Plan {
     pub(crate) chunks: Vec<Chunk>,
     pub(crate) bookkeeping: Vec<Bookkeeping>,
-    /// Inbox and ledger lines the current schema could not read. Counted, never dropped.
-    pub(crate) skipped_lines: usize,
 }
 
 /// Read the ledger prefix every slot of this firing agrees on.
@@ -132,12 +130,12 @@ pub(crate) fn plan(
     ledger: &[LedgerLine],
     now_utc: &str,
 ) -> Result<Plan> {
-    let (inbox, inbox_skipped) = read_inbox(root, lane)?;
+    // The unreadable-line count is dropped here, as it is for the ledger prefix the caller
+    // folds: a hook prints one output object and no diagnostics, so there is no surface to
+    // disclose it on. `csift msg` reads the same two files and reports the count there.
+    let (inbox, _) = read_inbox(root, lane)?;
     let folded = states(ledger);
-    let mut out = Plan {
-        skipped_lines: inbox_skipped,
-        ..Plan::default()
-    };
+    let mut out = Plan::default();
     let mut seen: Vec<&str> = Vec::new();
     for line in &inbox {
         // The inbox is append-only, so one id re-enqueued is still one message.

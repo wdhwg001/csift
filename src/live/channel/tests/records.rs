@@ -1,5 +1,6 @@
 //! The three record files: the message source, the sender's outbox, the receiver's
-//! inbox. Each round-trips through its projection and counts what it cannot read.
+//! inbox. The two csift reads back round-trip through their projections and count what
+//! they cannot read; the write-only outbox is checked on the shape it writes.
 
 use super::*;
 
@@ -35,24 +36,19 @@ fn a_message_source_is_written_once_and_reads_back_whole() {
     assert_eq!(back.body, msg.body);
     assert_eq!(back.to.lane, msg.to.lane);
     assert_eq!(back.relation, msg.relation);
-    assert_eq!(message_ids(&fx.root), vec![MSG_ID.to_string()]);
 }
 
 #[test]
 fn an_absent_or_unreadable_message_source_reads_as_none_not_an_error() {
     let fx = Fixture::new();
     assert!(read_message(&fx.root, MSG_ID).unwrap().is_none());
-    assert!(message_ids(&fx.root).is_empty());
     let path = message_path(&fx.root, MSG_ID).unwrap();
     write_atomic(&path, "{ not json").unwrap();
     assert!(read_message(&fx.root, MSG_ID).unwrap().is_none());
-    // A stray file in the directory is ignored rather than reported as a message.
-    write_atomic(&fx.root.join("messages").join("notes.txt"), "hi").unwrap();
-    assert_eq!(message_ids(&fx.root), vec![MSG_ID.to_string()]);
 }
 
 #[test]
-fn the_outbox_round_trips_and_keeps_the_delegated_official_call() {
+fn the_outbox_writes_one_line_per_send_with_the_delegated_official_call() {
     let fx = Fixture::new();
     append_outbox(&fx.root, &outbox_line()).unwrap();
     let mut delegated = outbox_line();
@@ -65,14 +61,19 @@ fn the_outbox_round_trips_and_keeps_the_delegated_official_call() {
     };
     append_outbox(&fx.root, &delegated).unwrap();
 
-    let (lines, skipped) = read_outbox(&fx.root).unwrap();
-    assert_eq!(skipped, 0);
+    let written = std::fs::read_to_string(outbox_path(&fx.root)).unwrap();
+    let lines: Vec<&str> = written.lines().collect();
     assert_eq!(lines.len(), 2);
-    assert_eq!(lines[0], outbox_line());
-    assert_eq!(lines[1].verdict, Verdict::MayFail);
-    assert!(lines[1].official.delegated);
-    assert_eq!(lines[1].official.tool.as_deref(), Some("SendMessage"));
-    assert_eq!(lines[1].official.to_form.as_deref(), Some("Relay@beacon"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(lines[0]).unwrap(),
+        outbox_line().to_json()
+    );
+    let second: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+    assert_eq!(second["verdict"], "MAY-FAIL");
+    assert_eq!(second["channel"], "official-mailbox");
+    assert_eq!(second["official"]["delegated"], true);
+    assert_eq!(second["official"]["tool"], "SendMessage");
+    assert_eq!(second["official"]["to_form"], "Relay@beacon");
 }
 
 #[test]
@@ -105,21 +106,4 @@ fn a_line_the_current_schema_cannot_read_is_counted_not_dropped_silently() {
     let (lines, skipped) = read_inbox(&fx.root, RECEIVER).unwrap();
     assert_eq!(lines.len(), 1);
     assert_eq!(skipped, 1);
-
-    append_outbox(&fx.root, &outbox_line()).unwrap();
-    append_line(&outbox_path(&fx.root), "{\"id\":\"0123456789abcdef\"}").unwrap();
-    let (lines, skipped) = read_outbox(&fx.root).unwrap();
-    assert_eq!(lines.len(), 1);
-    assert_eq!(skipped, 1);
-}
-
-#[test]
-fn an_outbox_line_without_an_official_block_reads_as_not_delegated() {
-    let fx = Fixture::new();
-    let mut v = outbox_line().to_json();
-    v.as_object_mut().unwrap().remove("official");
-    append_line(&outbox_path(&fx.root), &serde_json::to_string(&v).unwrap()).unwrap();
-    let (lines, skipped) = read_outbox(&fx.root).unwrap();
-    assert_eq!(skipped, 0);
-    assert_eq!(lines[0].official, OfficialRef::none());
 }

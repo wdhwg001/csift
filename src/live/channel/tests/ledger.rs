@@ -39,15 +39,19 @@ fn all_kinds() -> Vec<LedgerLine> {
 #[test]
 fn every_ledger_kind_round_trips_through_its_projection() {
     for line in all_kinds() {
-        let back = LedgerLine::from_json(&line.to_json())
-            .unwrap_or_else(|| panic!("`{}` did not parse back", line.kind()));
+        let json = line.to_json();
+        let back = LedgerLine::from_json(&json)
+            .unwrap_or_else(|| panic!("{} did not parse back", json["kind"]));
         assert_eq!(back, line);
     }
 }
 
 #[test]
 fn the_kind_and_the_id_are_readable_without_matching_the_variant() {
-    let kinds: Vec<&str> = all_kinds().iter().map(LedgerLine::kind).collect();
+    let kinds: Vec<String> = all_kinds()
+        .iter()
+        .map(|l| l.to_json()["kind"].as_str().unwrap_or("?").to_string())
+        .collect();
     assert_eq!(
         kinds,
         vec!["emit", "held", "expired", "ack", "redelivered", "refused"]
@@ -102,12 +106,11 @@ fn the_fold_dedupes_by_id_and_a_repeated_part_counts_once() {
     assert_eq!(st.emitted_parts.len(), 2);
     assert_eq!(st.parts_expected, Some(2));
     assert!(st.first_part_emitted());
-    assert_eq!(st.phase(), Phase::Emitted);
     assert_eq!(st.first_ts_utc.as_deref(), Some("2026-06-07T05:00:05Z"));
 }
 
 #[test]
-fn the_phase_walks_pending_to_held_to_emitting_to_emitted() {
+fn a_hold_an_expiry_and_an_ack_land_on_the_state_the_verdict_reads() {
     let mut lines: Vec<LedgerLine> = Vec::new();
     // Nothing at all: the message is not in the ledger, so it has no state.
     assert!(states(&lines).is_empty());
@@ -117,32 +120,28 @@ fn the_phase_walks_pending_to_held_to_emitting_to_emitted() {
         reason: "block-cap".to_string(),
         ts_utc: ts("2026-06-07T05:00:05Z"),
     });
-    assert_eq!(states(&lines)[MSG_ID].phase(), Phase::Held);
+    let held = &states(&lines)[MSG_ID];
+    assert_eq!(held.held_reasons, vec!["block-cap".to_string()]);
+    assert!(!held.expired && !held.acked);
 
-    // An emit after a hold ends the hold: the message is moving again.
-    lines.push(emit(1, 2, Vehicle::AdditionalContext));
-    assert_eq!(states(&lines)[MSG_ID].phase(), Phase::Emitting);
+    // An emit after a hold does not erase it: the reason stays on the state and the
+    // verdict ladder is what decides that the hold is over.
+    lines.push(emit(1, 1, Vehicle::AdditionalContext));
     assert!(!states(&lines)[MSG_ID].held_reasons.is_empty());
 
-    lines.push(emit(2, 2, Vehicle::AdditionalContext));
-    assert_eq!(states(&lines)[MSG_ID].phase(), Phase::Emitted);
-}
-
-#[test]
-fn the_terminal_states_outrank_everything_before_them() {
-    let mut lines = vec![emit(1, 1, Vehicle::AdditionalContext)];
     lines.push(LedgerLine::Expired {
         id: MSG_ID.to_string(),
         ts_utc: ts("2026-06-07T05:00:07Z"),
     });
-    assert_eq!(states(&lines)[MSG_ID].phase(), Phase::Expired);
+    assert!(states(&lines)[MSG_ID].expired);
+
     lines.push(LedgerLine::Ack {
         id: MSG_ID.to_string(),
         ts_utc: ts("2026-06-07T05:00:08Z"),
     });
-    assert_eq!(states(&lines)[MSG_ID].phase(), Phase::Acked);
-    assert_eq!(Phase::Acked.as_str(), "acked");
-    assert_eq!(Phase::Pending.as_str(), "pending");
+    let acked = &states(&lines)[MSG_ID];
+    assert!(acked.acked);
+    assert_eq!(acked.last_ts_utc.as_deref(), Some("2026-06-07T05:00:08Z"));
 }
 
 #[test]
@@ -157,7 +156,7 @@ fn a_redelivery_is_recorded_with_its_source_and_does_not_reopen_the_state() {
     ];
     let st = &states(&lines)[MSG_ID];
     assert_eq!(st.redelivered, vec![RedeliverSource::Compact]);
-    assert_eq!(st.phase(), Phase::Emitted);
+    assert!(st.first_part_emitted());
     assert_eq!(
         RedeliverSource::parse("resume"),
         Some(RedeliverSource::Resume)

@@ -23,7 +23,6 @@ fn lane_caller(session: &str, lane: &str) -> Caller {
 fn receiver(session: &str, lane: &str) -> Receiver {
     let session_path = PathBuf::from("/p/-Users-dev-relay").join(format!("{session}.jsonl"));
     Receiver {
-        path: session_path.clone(),
         lane: lane.to_string(),
         session: session.to_string(),
         session_path,

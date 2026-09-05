@@ -323,10 +323,7 @@ pub(crate) fn reconcile(
     if inbox.is_none() && state.is_none() {
         return Ok(None);
     }
-    let state = state.unwrap_or_else(|| MessageState {
-        id: id.to_string(),
-        ..MessageState::default()
-    });
+    let state = state.unwrap_or_default();
     let emits = view.emits.get(id).cloned().unwrap_or_default();
     let verdict = verdict_for(&state, inbox.as_ref(), fact.as_ref(), &now_utc());
     Ok(Some(MsgReport {

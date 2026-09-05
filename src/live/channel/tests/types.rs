@@ -28,15 +28,8 @@ fn every_closed_enum_round_trips_through_its_string_form() {
     for v in [Vehicle::AdditionalContext, Vehicle::Exit2] {
         assert_eq!(Vehicle::parse(v.as_str()), Some(v));
     }
-    for v in [
-        Verdict::Ok,
-        Verdict::Full,
-        Verdict::MayFail,
-        Verdict::Unpredictable,
-        Verdict::Refused,
-    ] {
-        assert_eq!(Verdict::parse(v.as_str()), Some(v));
-    }
+    // `Verdict` is not here: it is written and printed, never read back, so it has no
+    // parse side. Its five spellings are pinned by the test below.
 }
 
 #[test]
@@ -44,7 +37,6 @@ fn unknown_enum_values_parse_to_none_rather_than_a_default() {
     assert_eq!(Mode::parse("steering"), None);
     assert_eq!(Relation::parse("cousin"), None);
     assert_eq!(Vehicle::parse("stdout"), None);
-    assert_eq!(Verdict::parse("ok"), None);
     assert_eq!(SenderKind::parse(""), None);
 }
 

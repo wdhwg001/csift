@@ -122,9 +122,7 @@ fn tree_caller(lane: &str) -> crate::live::channel::caller::Caller {
 
 /// One running lane of the [`spawn_tree`] session as a send receiver.
 fn tree_receiver(session_path: &Path, lane: &str) -> crate::live::channel::caller::Receiver {
-    let dir = session_path.with_extension("").join("subagents");
     crate::live::channel::caller::Receiver {
-        path: dir.join(format!("agent-{lane}.jsonl")),
         lane: lane.to_string(),
         session: SESSION.to_string(),
         session_path: session_path.to_path_buf(),

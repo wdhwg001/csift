@@ -89,17 +89,6 @@ pub(crate) enum LedgerLine {
 }
 
 impl LedgerLine {
-    pub(crate) fn kind(&self) -> &'static str {
-        match self {
-            LedgerLine::Emit { .. } => "emit",
-            LedgerLine::Held { .. } => "held",
-            LedgerLine::Expired { .. } => "expired",
-            LedgerLine::Ack { .. } => "ack",
-            LedgerLine::Redelivered { .. } => "redelivered",
-            LedgerLine::Refused { .. } => "refused",
-        }
-    }
-
     pub(crate) fn id(&self) -> Option<&str> {
         match self {
             LedgerLine::Emit { id, .. }
@@ -215,38 +204,10 @@ fn u32_field(v: &Value, key: &str) -> Option<u32> {
         .and_then(|n| u32::try_from(n).ok())
 }
 
-/// Where one message stands, read off the ledger alone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Phase {
-    /// Enqueued and untouched: no emit, no hold, no terminal line.
-    Pending,
-    /// Held for a stated reason with no later emit.
-    Held,
-    /// Some parts emitted, the part count not yet complete.
-    Emitting,
-    /// Every part emitted. Still INTENT: the receiver's transcript is the fact.
-    Emitted,
-    Expired,
-    Acked,
-}
-
-impl Phase {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Phase::Pending => "pending",
-            Phase::Held => "held",
-            Phase::Emitting => "emitting",
-            Phase::Emitted => "emitted",
-            Phase::Expired => "expired",
-            Phase::Acked => "acked",
-        }
-    }
-}
-
-/// The folded state of one message id.
+/// The folded state of one message id. Keyed by that id in [`states`], so the id itself is
+/// the map key rather than a field: the two can then never disagree.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct MessageState {
-    pub(crate) id: String,
     /// Part numbers emitted at least once. A set, so a redelivered part counts once.
     pub(crate) emitted_parts: BTreeSet<u32>,
     /// The part total the emits agreed on, or `None` before the first emit.
@@ -272,31 +233,6 @@ impl MessageState {
 
     pub(crate) fn has_exit2(&self) -> bool {
         self.exit2_emits > 0
-    }
-
-    /// The terminal states outrank the transient ones: an acked message is acked even
-    /// if it was held first, and an emit after a hold means the hold is over.
-    pub(crate) fn phase(&self) -> Phase {
-        if self.acked {
-            return Phase::Acked;
-        }
-        if self.expired {
-            return Phase::Expired;
-        }
-        if !self.emitted_parts.is_empty() {
-            let complete = self
-                .parts_expected
-                .is_some_and(|n| (1..=n).all(|k| self.emitted_parts.contains(&k)));
-            return if complete {
-                Phase::Emitted
-            } else {
-                Phase::Emitting
-            };
-        }
-        if !self.held_reasons.is_empty() {
-            return Phase::Held;
-        }
-        Phase::Pending
     }
 
     fn absorb(&mut self, line: &LedgerLine) {
@@ -334,11 +270,7 @@ pub(crate) fn states(lines: &[LedgerLine]) -> BTreeMap<String, MessageState> {
     let mut out: BTreeMap<String, MessageState> = BTreeMap::new();
     for line in lines {
         let Some(id) = line.id() else { continue };
-        let entry = out.entry(id.to_string()).or_insert_with(|| MessageState {
-            id: id.to_string(),
-            ..MessageState::default()
-        });
-        entry.absorb(line);
+        out.entry(id.to_string()).or_default().absorb(line);
     }
     out
 }

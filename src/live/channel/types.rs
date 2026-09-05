@@ -308,6 +308,9 @@ impl Vehicle {
 }
 
 /// The single verdict a send reports. Only `Refused` means "not queued".
+///
+/// One-way, unlike the enums that ride a record csift reads back: a verdict is printed to
+/// the caller and written to the write-only outbox, and never parsed from either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Verdict {
     Ok,
@@ -326,17 +329,6 @@ impl Verdict {
             Verdict::Unpredictable => "UNPREDICTABLE",
             Verdict::Refused => "REFUSED",
         }
-    }
-
-    pub(crate) fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "OK" => Verdict::Ok,
-            "FULL" => Verdict::Full,
-            "MAY-FAIL" => Verdict::MayFail,
-            "UNPREDICTABLE" => Verdict::Unpredictable,
-            "REFUSED" => Verdict::Refused,
-            _ => return None,
-        })
     }
 }
 
