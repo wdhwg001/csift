@@ -43782,13 +43782,13 @@
       "code": [
         {
           "path": "src/plan/slug.rs",
-          "lines": "82-96",
-          "snippet": "    let mut candidates: Vec<PathBuf> = vec![home.join(\"settings.json\")];\n    candidates.push(root.join(\".claude\").join(\"settings.json\"));\n    candidates.push(root.join(\".claude\").join(\"settings.local.json\"));\n    let mut value: Option<String> = None;\n    for p in candidates {\n        let Ok(raw) = std::fs::read_to_string(&p) else {\n            continue;\n        };\n        let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {\n            continue;\n        };\n        if let Some(d) = v.get(\"plansDirectory\").and_then(serde_json::Value::as_str) {\n            value = Some(d.to_string()); // later (more specific) scopes win\n        }\n    }"
+          "lines": "92-97",
+          "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         },
         {
           "path": "src/plan/slug.rs",
-          "lines": "97-107",
-          "snippet": "    let Some(d) = value else {\n        return default;\n    };\n    let joined = crate::path::lexical_normalize(&root.join(d));\n    let root_n = crate::path::lexical_normalize(root);\n    if joined.starts_with(&root_n) {\n        joined\n    } else {\n        default\n    }\n}"
+          "lines": "98-105",
+          "snippet": "    let joined = crate::path::lexical_normalize(&root.join(d));\n    let root_n = crate::path::lexical_normalize(root);\n    if joined.starts_with(&root_n) {\n        joined\n    } else {\n        default\n    }\n}"
         },
         {
           "path": "src/plan.rs",
@@ -45107,13 +45107,13 @@
       "code": [
         {
           "path": "src/plan/slug.rs",
-          "lines": "82-85",
-          "snippet": "    let mut candidates: Vec<PathBuf> = vec![home.join(\"settings.json\")];\n    candidates.push(root.join(\".claude\").join(\"settings.json\"));\n    candidates.push(root.join(\".claude\").join(\"settings.local.json\"));\n    let mut value: Option<String> = None;"
+          "lines": "76-80",
+          "snippet": "const PLAN_SCOPES: &[&str] = &[\n    crate::path::settings::SCOPE_USER,\n    crate::path::settings::SCOPE_PROJECT,\n    crate::path::settings::SCOPE_LOCAL,\n];"
         },
         {
           "path": "src/plan/slug.rs",
-          "lines": "93-95",
-          "snippet": "        if let Some(d) = v.get(\"plansDirectory\").and_then(serde_json::Value::as_str) {\n            value = Some(d.to_string()); // later (more specific) scopes win\n        }"
+          "lines": "92-97",
+          "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         }
       ],
       "instrument": "The cited literal ['policySettings','flagSettings',...['localSettings','projectSettings']...] exists, but it is a first-wins precedence walk for a DIFFERENT settings key (an auto-memory directory lookup: 'for(let r of n){let o=be(r)?.autoMemoryDirectory;if(o!=null)return{dir:o,source:r}}'), and its middle pair is behind a runtime conditional. Five distinct policySettings-led arrays exist, two of them in orders that contradict each other, so no single bracketed literal settles precedence. Grep for the low-to-high five-element list and its describe string instead.",
@@ -45218,13 +45218,13 @@
       "code": [
         {
           "path": "src/plan/slug.rs",
-          "lines": "86-92",
-          "snippet": "    for p in candidates {\n        let Ok(raw) = std::fs::read_to_string(&p) else {\n            continue;\n        };\n        let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {\n            continue;\n        };"
+          "lines": "72-80",
+          "snippet": "/// The three FILE scopes csift reads for the plan binding, in Claude Code's own order\n/// (later wins). The flag scope and the policy tier both outrank them in the harness, but\n/// the flag scope is per-invocation and unobservable, so binding on the policy tier alone\n/// would make the answer depend on half of a cascade csift cannot see.\nconst PLAN_SCOPES: &[&str] = &[\n    crate::path::settings::SCOPE_USER,\n    crate::path::settings::SCOPE_PROJECT,\n    crate::path::settings::SCOPE_LOCAL,\n];"
         },
         {
           "path": "src/plan/slug.rs",
-          "lines": "82-85",
-          "snippet": "    let mut candidates: Vec<PathBuf> = vec![home.join(\"settings.json\")];\n    candidates.push(root.join(\".claude\").join(\"settings.json\"));\n    candidates.push(root.join(\".claude\").join(\"settings.local.json\"));\n    let mut value: Option<String> = None;"
+          "lines": "92-97",
+          "snippet": "    let merged = crate::path::settings::merged(&home, Some(root));\n    let Some((d, _scope)) =\n        crate::path::settings::string_value_in(&merged, \"plansDirectory\", PLAN_SCOPES)\n    else {\n        return default;\n    };"
         }
       ],
       "instrument": "sort -u over the extracted spellings yields 13 distinct hits at CC 2.1.258, not the 4 listed. The two the claim names as error strings are both present. For a stable rerun, prefer the argv-table literal '\"--settings\":(e)=>{t.settings=e}' and the flagSettings->'--settings' mapping, which pin the flag's identity rather than counting prose.",
@@ -77055,6 +77055,856 @@
           "observed": "The check returns `{ok:!0,agentId:r,...}` with r = yx(name, team), while the de-duplicated name u reaches only registerName(u,c). agentNameRegistry 32 occurrences, allocateName 6. Case-folding literals: teamName.toLowerCase 0, team.toLowerCase 0, teamName?.toLowerCase 0, Name.toLowerCase 15 - all 15 unrelated to teams. Both team path builders interpolate n.team raw.",
           "rule": "Occurrences of the fixed byte string over the whole file for every count; verbatim byte reads for the excerpts.",
           "note": "The collision is real and unguarded, so the routing resolver fails loud with every matching transcript id instead of picking, and the exact comparison is case-sensitive on both halves."
+        }
+      ]
+    },
+    {
+      "id": "MSG-083",
+      "area": "messaging",
+      "behavior": "Claude Code 2.1.258 declares exactly five named settings scopes in ONE array whose order is the merge order, later winning: var Bs=[\"userSettings\",\"projectSettings\",\"localSettings\",\"flagSettings\",\"policySettings\"] at 157403765, with the same list returned by the default-allowed getter at 156776930. The enabled-source selector at 157405341 filters that array and FORCE-ADDS flagSettings and policySettings, so neither can be switched off from the command line. The direction is fixed by the reverse walk at 157879800, which reads the enabled list from its end and returns the first scope that defines a key. Each scope names one concrete file (the switch at 157438022, its anchor helper at 157435647, its basename helper at 157438233): user = the config home's settings.json (cowork_settings.json in a cowork host, 157437871), project = <cwd>/.claude/settings.json, local = <cwd-or-canonical-git-root>/.claude/settings.local.json, policy = the managed file, flag = the --settings path. The local scope canonicalises to the git root only when a POSIX uid-ownership probe passes; when it does not, the OTHER of the two local paths is folded in BELOW the canonical one as legacy local settings (157438381). The fold at 157454903 runs one accumulator over the enabled scopes in that order, with a plugin settings base merged in first.",
+      "depends": "csift's settings reader folds the file scopes in exactly that order and reports every path it tried, so a verdict can name the scope that set a value. The uid-ownership probe is not observable from disk, so the reader takes BOTH local paths - the project root's and, when a git root sits above it, the git root's - folding the git-root file FIRST so the deeper one wins the keys both set, and reporting both. The flag scope has no file to read and is named in the unobservable list instead of being silently dropped. If the array's order moved, every scope attribution csift prints would name the wrong file.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "139-151",
+          "snippet": "    // The plugin base sits BELOW the user scope, so it folds first.\n    read_plugin_hooks(claude_home, &mut fold);\n    fold.scope(SCOPE_USER, claude_home.join(\"settings.json\"));\n    if let Some(root) = project_root {\n        fold.scope(SCOPE_PROJECT, root.join(\".claude\").join(\"settings.json\"));\n        // The git-root local file folds BEFORE the project-root one so the deeper path\n        // wins the keys both set.\n        if let Some(git) = git_root_above(root) {\n            fold.scope(\n                SCOPE_LOCAL_GIT,\n                git.join(\".claude\").join(\"settings.local.json\"),\n            );\n        }"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "25-30",
+          "snippet": "/// The user scope: `<claude-home>/settings.json`.\npub(crate) const SCOPE_USER: &str = \"user\";\n/// The project scope: `<project-root>/.claude/settings.json`.\npub(crate) const SCOPE_PROJECT: &str = \"project\";\n/// The local scope at the project root: `<project-root>/.claude/settings.local.json`.\npub(crate) const SCOPE_LOCAL: &str = \"local\";"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: two settings files under one config home that set the same key, and a Claude Code session that reports the effective value, to observe the order rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the settings fold",
+          "offset": 157454903,
+          "excerpt": "function Skn(e){ ... let o=e.store.pluginBase,s={};if(o)s=k0(s,o,zU); ... for(let h of UCt(e)){",
+          "note": "one accumulator over the enabled scopes in array order, plugin base merged first"
+        },
+        {
+          "role": "gate",
+          "name": "the enabled-source selector",
+          "offset": 157405341,
+          "excerpt": "function Ci(){let e=Zse(),n=va();if(n.enabledSources?.allowed===e)return n.enabledSources.result;let o=new Set(e);o.add(\"flagSettings\"),o.add(\"policySettings\");let s=Bs.filter((r)=>o.has(r));n.enabledSources={allowed:e,result:s};return s}",
+          "note": "filters the declared array and force-adds the flag and policy scopes"
+        },
+        {
+          "role": "writer",
+          "name": "the ordered scope array",
+          "offset": 157403765,
+          "excerpt": "var Bs=[\"userSettings\",\"projectSettings\",\"localSettings\",\"flagSettings\",\"policySettings\"];",
+          "note": "the array whose order IS the merge order"
+        },
+        {
+          "role": "writer",
+          "name": "the scope-to-file switch",
+          "offset": 157438022,
+          "excerpt": "function S5(e,n){switch(e){case\"userSettings\":return he(WCt(e,n),Cg(n));case\"projectSettings\":case\"localSettings\":return he(WCt(e,n),I0(e));case\"policySettings\":return yg();case\"flagSettings\":return n.flagPath}}",
+          "note": "which file each scope names"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the scope array at 157403765, the enabled-source selector at 157405341, the reverse walk at 157879800, the default-allowed getter at 156776930, the scope-to-file switch at 157438022 with its anchor helper at 157435647 and basename helper at 157438233, the cowork filename map at 157437871 and the legacy-local helper at 157438381; plus whole-binary occurrence counts of the five scope names and the three settings filenames",
+          "observed": "the array reads userSettings, projectSettings, localSettings, flagSettings, policySettings in that order; the selector adds flagSettings and policySettings to the allowed set before filtering; the reverse walk iterates the enabled list from its end and returns the first scope whose object defines the key; the anchor helper resolves localSettings through the cwd-or-canonical-git-root pair while projectSettings and policySettings resolve at the cwd; counts: settings.json 337, settings.local.json 144, managed-settings.json 36, managed-settings.d 14, policySettings 227, userSettings 300, projectSettings 173, localSettings 243, flagSettings 143",
+          "rule": "occurrences of the fixed byte string over the whole binary; the five switch arms read end to end, one arm per scope",
+          "note": "the order is a declaration, not an inference from behaviour: the later-wins direction is fixed by the reverse walk that consumes the same array"
+        }
+      ]
+    },
+    {
+      "id": "MSG-084",
+      "area": "messaging",
+      "behavior": "The policy scope of Claude Code 2.1.258 is not one file but a composed tier: a server-managed cache over MDM (a macOS managed plist or a Windows registry tree) over the managed FILE tier, with --managed-settings and the per-user registry hive as separate lower slots that never take part. The managed directory is chosen by platform at 157406220 (/Library/Application Support/ClaudeCode on macOS, C:\\Program Files\\ClaudeCode on Windows, /etc/claude-code otherwise) and the managed file is that directory's managed-settings.json (157431322). Beside it, a managed-settings.d drop-in directory is listed, filtered to names ending .json and not starting with a dot, SORTED by name, and each drop-in is merged into the accumulator in that order (157431449). The server-managed cache is remote-settings.json in the config home (157386229, read at 157389344). The binary states the composition rule in prose at 157337690: every present source deep-merges with the fixed precedence server-managed over MDM over managed-settings.json, scalars taking the highest source's value and arrays unioning except fallbackModel, with the per-user registry hive and --managed-settings never taking part; the default behaviour is first-wins, so only the highest PRESENT source is the tier.",
+      "depends": "csift composes the policy tier the same way: the server-managed cache, when it parses, IS the tier and every managed file that exists is reported as present-but-not-composed rather than as missing; otherwise the managed file folds and then its drop-ins in sorted name order, so the last name wins the keys they share. csift never reads MDM and says so in the unobservable list, which is why the policy verdict is a floor, not a certainty: an MDM layer sits between the two sources csift can see. If the drop-in sort or the filter moved, csift would attribute a policy value to the wrong file.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "258-269",
+          "snippet": "fn read_policy_tier(claude_home: &Path, managed_dir: &Path, fold: &mut Fold) {\n    let remote = claude_home.join(\"remote-settings.json\");\n    match read_settings_file(&remote) {\n        FileRead::Ok(obj) => {\n            fold.report(SCOPE_POLICY_REMOTE, remote, true, None);\n            fold.fold(SCOPE_POLICY_REMOTE, &obj);\n            report_uncomposed_managed(managed_dir, fold);\n            return;\n        }\n        FileRead::Missing => fold.report(SCOPE_POLICY_REMOTE, remote, false, None),\n        FileRead::Bad(note) => fold.report(SCOPE_POLICY_REMOTE, remote, false, Some(note)),\n    }"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "302-312",
+          "snippet": "    let mut out: Vec<PathBuf> = rd\n        .flatten()\n        .map(|e| e.path())\n        .filter(|p| {\n            p.file_name()\n                .and_then(std::ffi::OsStr::to_str)\n                .is_some_and(|n| n.ends_with(\".json\") && !n.starts_with('.'))\n        })\n        .collect();\n    out.sort();\n    out"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: a host carrying both a managed-settings.json and a drop-in that set the same key, read back through a Claude Code session, to observe first-wins rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the policy arm of the settings fold",
+          "offset": 157444291,
+          "excerpt": "if(h===\"policySettings\"){let{settings:y,errors:b}=zi(e);if(g=y,y)s=k0(s,y,zU);u(b);continue}",
+          "note": "the fold delegates the policy scope to the composer instead of reading one file"
+        },
+        {
+          "role": "gate",
+          "name": "the managed-directory chooser",
+          "offset": 157406220,
+          "excerpt": "function yu(){let e=IRn();if(e!==void 0)return e;switch(D()){case\"macos\":return\"/Library/Application Support/ClaudeCode\";case\"windows\":return\"C:\\\\Program Files\\\\ClaudeCode\";default:return\"/etc/claude-code\"}}",
+          "note": "which directory the managed file and its drop-ins live in"
+        },
+        {
+          "role": "writer",
+          "name": "the drop-in listing and merge",
+          "offset": 157431449,
+          "excerpt": "let u=he(e,\"managed-settings.d\"); ... readdirSync(u).filter((f)=>(f.isFile()||f.isSymbolicLink())&&BCt(f.name)).map((f)=>f.name).sort(); for(let f of h){let{settings:y,errors:b}=pq(he(u,f),n,void 0,!0); ... s=k0(s,y,zU)}",
+          "note": "the sorted drop-in order, with the name filter BCt requiring .json and no leading dot"
+        },
+        {
+          "role": "writer",
+          "name": "the server-managed cache path",
+          "offset": 157386229,
+          "excerpt": "var HKt=\"remote-settings.json\"",
+          "note": "the cache file the highest policy source is read from, resolved at 157389344"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the managed-directory chooser at 157406220, the managed-file resolver at 157431322, the drop-in listing and merge loop at 157431449 with its name filter, the remote-settings constant at 157386229 and its resolver at 157389344, the MDM constants at 157128112 with the per-user preference paths at 157128407, and the composition-rule prose at 157337690; plus whole-binary occurrence counts for the managed filenames and the registry hive names",
+          "observed": "the drop-in listing filters on a name ending .json and not starting with a dot and then sorts, merging each file into the same accumulator; the composition prose names the fixed precedence server-managed over MDM over managed-settings.json with the per-user hive and --managed-settings excluded, and the default source behaviour is first-wins; counts: managed-settings.json 36, managed-settings.d 14, the macOS policy domain 9, the machine hive 12, the per-user hive 31",
+          "rule": "occurrences of the fixed byte string over the whole binary; the drop-in loop and the filter read end to end as one site",
+          "note": "an override hook for the managed path exists at the head of the chooser and returns nothing in this build, so the platform default is what a reader can rely on"
+        }
+      ]
+    },
+    {
+      "id": "MSG-085",
+      "area": "messaging",
+      "behavior": "The env block merges PER KEY across scopes in Claude Code 2.1.258, never as a whole block. The merge engine at 157400820 is a deep recursive merge with the customizer at 157454554, and that customizer has NO env branch, so env falls through to the default per-key deep merge: a later scope overrides only the keys it names. The same holds when the block is applied to the process environment: the post-trust pass at 159085995 walks the enabled scopes in order and assigns each scope's env object key by key. A SECOND, narrower pass exists for the pre-trust state (159084750): only the user, flag and policy scopes are applied wholesale, and project or local env reaches the process only for keys an allowlist admits (157188243). Inside the policy tier alone, env is UNIONED across the admin sources rather than taken from the highest one (157450793), with an environment variable to opt out.",
+      "depends": "csift's reader merges env per key and remembers, per key, the scope that set it, so a gate verdict can say 'enabled via settings env (<scope>)' and name a file. It reports the merged value of the whole cascade, which is what a POST-TRUST process would apply; the pre-trust narrowing and its allowlist are stated in the unobservable list, because the trust-dialog state is not on disk. Reading env as a whole-block override would drop every key a lower scope set and make csift under-report a gate that IS enabled.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "478-486",
+          "snippet": "    /// `env` merges PER KEY: a later scope overrides only the keys it names.\n    fn fold_env(&mut self, scope: &'static str, env: &Map<String, Value>) {\n        for (key, value) in env {\n            if let Some(text) = scalar_string(value) {\n                self.m.env.insert(key.clone(), text);\n                self.m.env_scope.insert(key.clone(), scope);\n            }\n        }\n    }"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "112-115",
+          "snippet": "    /// The merged `env` block (per key, later scope winning) and, per key, the scope that\n    /// set it, so a verdict can name a file instead of asserting.\n    pub env: BTreeMap<String, String>,\n    pub env_scope: BTreeMap<String, &'static str>,"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: two scopes each naming a different env key, read back from a running Claude Code process, to observe the per-key survival rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the post-trust env application",
+          "offset": 159085995,
+          "excerpt": "applyConfigEnvironmentVariables(){ ... for(let d of Ci())Object.assign(process.env,this.filterSettingsEnv(be(d)?.env,d)); ...}",
+          "note": "one assign per source, in enabled-scope order, per key"
+        },
+        {
+          "role": "gate",
+          "name": "the merge customizer",
+          "offset": 157454554,
+          "excerpt": "function zU(e,n,o){if(o===\"modelPicker\"&&n!==void 0)return Hi(n);if(Array.isArray(e)&&Array.isArray(n)){if(o===\"fallbackModel\")return n;return te([...e,...n])}if(o===\"extraKnownMarketplaces\"&&Re(e)&&Re(n))return IZe(e,n);return}",
+          "note": "four branches, none of them env, so env takes the engine's default per-key path"
+        },
+        {
+          "role": "writer",
+          "name": "the deep merge engine",
+          "offset": 157400820,
+          "excerpt": "var mu=wr(function(e,n,o,s){_r(e,n,o,s)}),k0=mu;",
+          "note": "the recursive merge the fold calls for every scope"
+        },
+        {
+          "role": "gate",
+          "name": "the pre-trust env pass and its allowlist",
+          "offset": 159084750,
+          "excerpt": "let n=new Map;for(let e of Ci()){let o=this.filterSettingsEnv(be(e)?.env,e);for(let[i,E]of Object.entries(o))n.set(i.toUpperCase(),{key:i,value:E})}for(let{key:e,value:o}of n.values())if(aUe(e,o))process.env[e]=o;",
+          "note": "before trust acceptance the project and local scopes reach the process only through the allowlist at 157188243"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the merge engine at 157400820, the customizer at 157454554, the post-trust env application at 159085995, the pre-trust variant at 159084750 with its restricted scope list at 159080258 and its allowlist predicate at 157188243, and the admin-tier env union at 157450793",
+          "observed": "the customizer enumerates four branches (a model-picker branch, an array branch with a fallbackModel exception, a marketplace branch, and a fallthrough) and none names env; the post-trust pass assigns per source in enabled-scope order; the pre-trust pass applies user, flag and policy wholesale and screens everything else through the allowlist; counts: the post-trust method name 8, the pre-trust method name 5",
+          "rule": "occurrences of the fixed byte string over the whole binary; both apply methods and the customizer's branches read end to end",
+          "note": "two passes exist and they differ in WHICH scopes reach the process, not in the per-key rule, which is the same in both"
+        }
+      ]
+    },
+    {
+      "id": "MSG-086",
+      "area": "messaging",
+      "behavior": "The hooks block merges by ARRAY CONCATENATION per event in Claude Code 2.1.258, deduplicated by object identity: the merge customizer's array branch at 157454554 returns the concatenation of both arrays passed through a Set-based deduplicator (156517560), with fallbackModel as the ONE named exception that replaces instead. Because hooks is an object of event name to array, the deep merge recurses into the object before the customizer sees an array, so a scope that names an event no lower scope named is simply assigned - the ADD case - and a scope that names the same event appends to it. Since two separately parsed JSON objects never share identity, the deduplicator removes nothing between scopes: an identical command listed in two scopes survives twice. What the runtime consumes is that merged set, read at 159749632. A plugin manifest declares its hooks in the same format, at <plugin-root>/hooks/hooks.json and in plugin.json's own hooks field (157245520).",
+      "depends": "csift's reader concatenates per event in fold order and records the scope each entry came from, so it can answer which scopes configured an event and add a project scope's entries to the user's rather than replacing them. It diverges on ONE point and does so deliberately: it deduplicates by CONTENT (matcher, command, timeout and the two async flags) rather than by identity, because one command text is one delivery point and counting it twice would over-report the slots configured on an event. Only type:\"command\" entries are modeled; a plugin's JS module hook carries no command line and nothing csift reads can predict what it does.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "488-499",
+          "snippet": "    /// `hooks` CONCATENATES per event. The event's value is an array of matcher groups,\n    /// each with its own `hooks` array; a bare entry in the event array is tolerated.\n    fn fold_hooks(&mut self, source: &str, hooks: &Map<String, Value>) {\n        for (event, groups) in hooks {\n            let Some(list) = groups.as_array() else {\n                continue;\n            };\n            for group in list {\n                let matcher = group\n                    .get(\"matcher\")\n                    .and_then(Value::as_str)\n                    .map(str::to_string);"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "528-535",
+          "snippet": "        let bucket = self.m.hooks.entry(event.to_string()).or_default();\n        // Claude Code dedupes the concatenated arrays by object IDENTITY, which two parsed\n        // objects never share, so it would run one command twice. csift dedupes by CONTENT:\n        // one command text is one delivery point, and counting it twice over-reports slots.\n        if bucket.iter().any(|h| same_hook(h, &entry)) {\n            return;\n        }\n        bucket.push(entry);"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: a user scope and a project scope each registering a hook on the same event, and a session that fires both, to observe the concatenation rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the hooks reader behind the snapshot",
+          "offset": 159749632,
+          "excerpt": "function l(){let t=be(\"policySettings\");if(t?.disableAllHooks===!0)return{};if(t?.allowManagedHooksOnly===!0||Or())return t?.hooks??{};if(Ou(\"hooks\"))return t?.hooks??{};let o=vn();if(o.disableAllHooks===!0)return t?.hooks??{};return o.hooks??{}}",
+          "note": "what the runtime consumes is the MERGED settings object, not one scope's block"
+        },
+        {
+          "role": "gate",
+          "name": "the customizer's array branch",
+          "offset": 157454554,
+          "excerpt": "if(Array.isArray(e)&&Array.isArray(n)){if(o===\"fallbackModel\")return n;return te([...e,...n])}",
+          "note": "the explicit fallbackModel exception proves the default for two arrays is concat, not replace"
+        },
+        {
+          "role": "writer",
+          "name": "the identity deduplicator",
+          "offset": 156517560,
+          "excerpt": "function te(n){return[...new Set(n)]}",
+          "note": "a Set over object references, so distinct parsed objects all survive"
+        },
+        {
+          "role": "writer",
+          "name": "the plugin hook manifest shape",
+          "offset": 157245520,
+          "excerpt": "The hooks provided by the plugin, in the same format as the one used for settings",
+          "note": "a plugin declares hooks in the settings format, at hooks/hooks.json and in plugin.json"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the customizer's array branch at 157454554, the deduplicator at 156517560, the hooks reader at 159749632 and the plugin manifest schema at 157245520; plus a whole-binary occurrence count of the manifest filename",
+          "observed": "the array branch returns the deduplicated concatenation of both arrays with fallbackModel replacing instead; the deduplicator is a Set over the concatenated list, i.e. identity, not content; the reader consumes the merged settings object; the manifest schema is {description?, hooks?, modules?} and plugin.json's hooks field is documented as additional to hooks/hooks.json; counts: the manifest filename 43, of which the plugin form accounts for 10",
+          "rule": "occurrences of the fixed byte string over the whole binary; the customizer's branches enumerated in one read",
+          "note": "the divergence csift takes is a narrowing, never a widening: content dedupe can only merge two entries Claude Code would have run twice, and the doubled run is not something a slot census should report as two slots"
+        }
+      ]
+    },
+    {
+      "id": "MSG-087",
+      "area": "messaging",
+      "behavior": "Plugin hooks do NOT travel through the settings merge in Claude Code 2.1.258. They are registered into a separate runtime list and unioned at read time by the process-global accessor at 161616476, which the per-event collector at 165843885 prepends to the per-agent registry entries for EVERY agent. A plugin declares them in the settings format in two places: <plugin-root>/hooks/hooks.json, whose manifest is {description?, hooks?, modules?}, and plugin.json's own hooks field, documented as additional to hooks/hooks.json when it exists (157245520). A plugin settings base also exists and is folded BELOW the user scope, with a warning when two plugins set the same key (165305480).",
+      "depends": "csift reads both plugin manifest forms under the config home's plugins tree and folds their hooks as one more source labelled plugin:<name>, below the user scope, so a slot census on an event counts a plugin-installed delivery hook. It does NOT model plugin settings VALUES, because the base is assembled from an installed plugin list csift cannot reconstruct from the manifests alone. The walk is bounded in depth and in the number of directories it visits, and says so on its report when the bound stops it, so a deep plugins tree degrades into a disclosed partial read rather than a silent one.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "315-324",
+          "snippet": "/// Plugin hook manifests: `<claude-home>/plugins/**/hooks/hooks.json` plus each plugin's\n/// own `plugin.json` `hooks` field. They bypass the settings merge in Claude Code and are\n/// unioned at read time, so they fold as one source labelled `plugin:<name>`.\nfn read_plugin_hooks(claude_home: &Path, fold: &mut Fold) {\n    let root = claude_home.join(\"plugins\");\n    if !root.is_dir() {\n        return;\n    }\n    let mut budget = PLUGIN_WALK_DIRS;\n    walk_plugins(&root, PLUGIN_WALK_DEPTH, &mut budget, fold);"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "366-373",
+          "snippet": "fn read_one_plugin(dir: &Path, fold: &mut Fold) {\n    let manifest = dir.join(\"plugin.json\");\n    let name = plugin_name(dir, &manifest);\n    let source = format!(\"plugin:{name}\");\n    // plugin.json's hooks are declared additional to hooks/hooks.json, which folds first.\n    fold.hooks_only(dir.join(\"hooks\").join(\"hooks.json\"), &source);\n    fold.hooks_only(manifest, &source);\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the process-global hook accessor at 161616476 to enumerate the sources it unions, which closes the gate hop this claim states from its caller instead.",
+        "Capture a specimen: a plugin carrying both manifest forms, and a session that fires both hooks, to observe the union rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the per-event hook collector",
+          "offset": 165843885,
+          "excerpt": "function jje(e,n,r,o){if(o?.managedHooksOnly){let v=be(\"policySettings\");if(v?.disableAllHooks===!0)return[];return[...v?.hooks?.[r]??[]]}let d=o?.managedHooksExcluded?jJo(MB(r),r):[...MB(r)]; ...",
+          "note": "the process-global union is prepended for every agent before any per-agent lookup"
+        },
+        {
+          "role": "writer",
+          "name": "the plugin hook manifest shape",
+          "offset": 157245520,
+          "excerpt": "hooks.json is {description?, hooks?, modules?} at <plugin-root>/hooks/hooks.json, plus plugin.json's own hooks field: Additional hooks (in addition to those in hooks/hooks.json, if it exists)",
+          "note": "the two manifest forms and the statement that plugin.json's field is additional"
+        },
+        {
+          "role": "writer",
+          "name": "the plugin settings base",
+          "offset": 165305480,
+          "excerpt": "function S5o(e){let n;for(let r of e){if(!r.settings)continue;if(!n)n={};for(let[o,d]of Object.entries(r.settings)){if(o in n)t(`Plugin \"${r.name}\" overrides setting \"${o}\" (previously set by another plugin)`);n[o]=d}}return n}",
+          "note": "the base folded below the user scope, and the warning when two plugins collide"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the per-event hook collector at 165843885, the plugin manifest schema at 157245520 and the plugin settings base builder at 165305480; plus a whole-binary occurrence count of the manifest filename split by the plugin form",
+          "observed": "the collector's first act is to spread the process-global union for the event, and the per-agent registry entries are pushed after it; the manifest schema names hooks and modules and states the settings format; plugin.json's hooks field is documented as additional to the dedicated manifest; the settings base warns when a second plugin sets a key a first one set; counts: the manifest filename 43, of which the plugin form accounts for 10",
+          "rule": "occurrences of the fixed byte string over the whole binary; the collector body read end to end as one site",
+          "note": "the union accessor's own body was not read, so the claim states the union from its caller; that is the open leg"
+        }
+      ]
+    },
+    {
+      "id": "MSG-088",
+      "area": "messaging",
+      "behavior": "Three settings sources of Claude Code 2.1.258 are per-invocation only and exist as no file a later reader can find. --settings takes a path OR inline JSON; the inline form is materialised into a temporary claude-settings file and the path form is read under a 2 MiB cap (166638793). --managed-settings carries a policy tier as JSON from a spawning parent and is kept in process-local host state (157433900). --setting-sources takes a comma-separated subset of user, project and local (parsed at 157405000) and --restricted is equivalent to an empty list, so both can EMPTY the scopes a reader does see, while the flag and policy scopes are force-added regardless. All three are consumed in one eager sequence at 166639447 before the normal load, and the resulting flag path and inline object live in process-local host state (156807157, 156807598). There is no environment variable that supplies settings in this build.",
+      "depends": "csift lists all three, plus the trust-dialog state and MDM, as unobservable on every merged read, so a caller reading a slot census or an env verdict knows the file scopes are a floor and not the whole cascade: a hook csift reports may have been disabled by --setting-sources, and a hook it does not report may have arrived through --settings. Stating them is the only honest answer available, since nothing on disk records the argv of a running session.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "56-64",
+          "snippet": "/// Inputs that decide the effective settings and leave NO trace a reader can find, listed\n/// so a verdict says \"unknown\" instead of implying the file scopes are all there is.\nconst UNOBSERVABLE: [&str; 5] = [\n    \"--settings (a file path or inline JSON, materialised per invocation)\",\n    \"--managed-settings (a spawning parent's policy tier, in memory only)\",\n    \"--setting-sources / --restricted (can empty the user, project and local scopes)\",\n    \"the trust-dialog state (before acceptance only user, flag and policy env applies in full)\",\n    \"MDM policy (a managed plist or a registry tree), which csift never reads\",\n];"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "108-111",
+          "snippet": "    /// Every file the reader tried, in read order.\n    pub sources: Vec<SourceReport>,\n    /// Inputs that change the outcome and leave no trace ([`UNOBSERVABLE`]).\n    pub unobservable: Vec<&'static str>,"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Enumerate every occurrence of the three flag literals in the binary and read each site, which is what closes the negative that none of them is ever persisted."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the eager flag sequence",
+          "offset": 166639447,
+          "excerpt": "function UXt(){ ... let e=OVt(\"--settings\");if(e)Ypr(e);let a=OVt(\"--managed-settings\");if(a)c(a);let n=OVt(\"--setting-sources\");if(n!==void 0)g(n);if(LR(\"--restricted\")||PW())g(\"\"),gnt(!0); ...}",
+          "note": "all three are consumed before the normal load, straight out of argv"
+        },
+        {
+          "role": "gate",
+          "name": "the --settings handler",
+          "offset": 166638793,
+          "excerpt": "function Ypr(r){try{let e=r.trim(),a=e.startsWith(\"{\")&&e.endsWith(\"}\"),n;if(a){let o=Dt(e); ... n=OJ(\"claude-settings\",\".json\",{contentHash:i}),OOn(i)}else{let{resolvedPath:o}=Po(ce(),r) ... }POn(n),Vl()}...}",
+          "note": "inline JSON becomes a temporary file, a path is read under a size cap"
+        },
+        {
+          "role": "writer",
+          "name": "the source-subset parser",
+          "offset": 157405000,
+          "excerpt": "function $ar(e){if(e===\"\")return[];let n=e.split(\",\").map((s)=>s.trim()),o=[];for(let s of n)switch(s){case\"user\":o.push(\"userSettings\");break;case\"project\":o.push(\"projectSettings\");break;case\"local\":o.push(\"localSettings\");break;default:throw Error(`Invalid setting source: ${s}. Valid options are: user, project, local`)}return o}",
+          "note": "the empty string yields an empty allowed set, which is what --restricted passes"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the eager flag sequence at 166639447, the --settings handler at 166638793 with its size cap at 157434790, the option declarations at 170225556 and 170226495, the source-subset parser at 157405000 and the two in-memory tier readers at 157434059 and 157433900; plus whole-binary occurrence counts of the three flag names and of a settings environment variable name",
+          "observed": "inline JSON is materialised into a temporary claude-settings file and a path form is read under a 2 MiB cap; --managed-settings is declared as SDK-only and hidden from help; the subset parser accepts only user, project and local and returns an empty list for an empty string; counts: --settings 95, --setting-sources 24, --managed-settings 10, and a settings environment variable 0",
+          "rule": "occurrences of the fixed byte string over the whole binary; the eager sequence and the handler read end to end",
+          "note": "the count of zero for a settings environment variable is a count, not an enumeration; the enumeration of the three flag literals is the open leg"
+        }
+      ]
+    },
+    {
+      "id": "MSG-089",
+      "area": "messaging",
+      "behavior": "The agent-teams gate of Claude Code 2.1.258 is a three-line module at 160375314 that reads exactly three inputs: the environment variable CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS through a live environment proxy, process.argv directly for --agent-teams, and a feature flag defaulting to true. It reads NO settings key of its own and keeps the flag in no parsed options object. The proxy at 156957949 defines every variable as a getter that re-reads the process environment on each access, so there is no captured snapshot and a value applied later is seen by a later call. The variable is itself in the allowlist at 157182164 that admits a settings env entry into the process environment before the trust dialog is accepted, so a settings env block CAN turn the gate on. The value the gate reads is the PARSED type, not the raw string, so a variable set to a falsy-looking value may parse false.",
+      "depends": "csift's gate verdict for teams is therefore settings-env-shaped and nothing more: it reports the merged env entry with the scope that set it when one exists, and otherwise reports unknown, because the shell environment of a running session and its argv are not observable from disk. Naming the scope is the whole value of the verdict, since 'enabled' with no file behind it would be a guess.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "188-194",
+          "snippet": "/// The winning value of one `env` key and the scope that set it.\n#[allow(dead_code)] // the channel commands are the consumers\npub(crate) fn env_value<'a>(m: &'a Merged, key: &str) -> Option<(&'a str, &'a str)> {\n    let value = m.env.get(key)?;\n    let scope = m.env_scope.get(key).copied().unwrap_or(\"unknown\");\n    Some((value.as_str(), scope))\n}"
+        },
+        {
+          "path": "src/path/tests/settings.rs",
+          "lines": "478-486",
+          "snippet": "    let m = merged_in(&home, None, &managed);\n    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\"),\n        Some((\"1\", SCOPE_USER))\n    );\n    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_HARBOR_KITE\"),\n        Some((\"0\", SCOPE_POLICY_MANAGED))\n    );"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Enumerate the entry paths into the gate function and read each, which closes the trigger hop; the module and its inputs are read, the callers are not.",
+        "The environment block is applied during init and re-applied after trust acceptance and on a settings change, but the relative order of the apply and the first gate call on the fleet-view path is two separately scheduled continuations: a live trial ordering the two is what settles whether an env-enabled gate is always seen."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the agent-teams gate module",
+          "offset": 160375314,
+          "excerpt": "function t(){return process.argv.includes(\"--agent-teams\")}function Zr(){if(!a.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS&&!t())return!1;if(!P(\"tengu_amber_flint\",!0))return!1;return!0}",
+          "note": "the whole gate: an environment variable, an argv scan, and a feature flag"
+        },
+        {
+          "role": "writer",
+          "name": "the live environment proxy",
+          "offset": 156957949,
+          "excerpt": "Object.defineProperty(_,E,{get:()=>{let s=process.env[E];if(s!==C)r=n.parse(s),C=s;return r},enumerable:!0,configurable:!0})",
+          "note": "every read hits the process environment fresh and returns the PARSED value"
+        },
+        {
+          "role": "gate",
+          "name": "the pre-trust env allowlist",
+          "offset": 157182164,
+          "excerpt": "the allowlist that admits an env key into the process environment before trust acceptance, which contains CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
+          "note": "why a settings env block can turn the gate on at all"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the whole gate module at 160375314 and of the environment proxy at 156957949, plus the allowlist membership at 157182164; whole-binary occurrence counts of the flag name, the environment variable and the feature-flag codename",
+          "observed": "the module is three functions and imports two chunks; the gate returns false unless the environment variable is set or --agent-teams is in argv, then consults a feature flag defaulting to true; the proxy defines each variable as a getter over the process environment with no snapshot; counts: --agent-teams 2 (one code site plus its constant-pool entry, both in this module), the environment variable 6, the feature-flag codename 2",
+          "rule": "occurrences of the fixed byte string over the whole binary; the module read whole, so the three inputs are the complete set for the gate body itself",
+          "note": "the gate body is closed - the module is small enough to read entirely - while the set of callers is not, which is why this is not stated end to end"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the gate module's own argv scan",
+          "offset": 160375349,
+          "excerpt": "function t(){return process.argv.includes(\"--agent-teams\")}",
+          "verdict": "the only code site of the flag literal; the flag is not in the option table, so it never lands in an options object"
+        },
+        {
+          "site": "the constant pool entry for the same literal",
+          "offset": 76000644,
+          "excerpt": "--agent-teams",
+          "verdict": "a pool entry backing the one code site, not a second reader"
+        }
+      ]
+    },
+    {
+      "id": "MSG-090",
+      "area": "messaging",
+      "behavior": "The teams gate OUTCOME of Claude Code 2.1.258 is never written to disk. It is consumed in memory by the chunks that import it and its only sink is a per-host snapshot object (170424434) holding a captured value and a command-line override, with no write path. The session registry row carries no teams field and no cross-session-messaging field either: the writer at 158819050 and the reader projection at 159696980 were read end to end and neither names one. What teams DO leave on disk are two artifacts that record team USE rather than the gate: a team_context attachment record naming the team, its config path and its task-list path (165770812), and the team config file itself under the config home's teams directory (157721696). The record builder returns nothing when there is no team name, so a session with the gate on and no team created writes neither: presence proves use, absence proves nothing about the gate. The one indirect leak is a gate INPUT, not the outcome: a feature-flag refresh caches flag values into the global config (158364144).",
+      "depends": "csift's teams verdict therefore never claims to read the gate. It reports the settings env entry with its scope when one exists, otherwise 'no settings-level enable; shell env and CLI flags are not observable, so unknown' - and points at the two artifacts as evidence of USE. The reader keeps the per-key scope attribution precisely so that half of the verdict can be a file path instead of an assertion.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "190-194",
+          "snippet": "pub(crate) fn env_value<'a>(m: &'a Merged, key: &str) -> Option<(&'a str, &'a str)> {\n    let value = m.env.get(key)?;\n    let scope = m.env_scope.get(key).copied().unwrap_or(\"unknown\");\n    Some((value.as_str(), scope))\n}"
+        },
+        {
+          "path": "src/path/tests/settings.rs",
+          "lines": "465-476",
+          "snippet": "fn settings_env_value_names_the_scope_that_set_the_key() {\n    let t = Tree::new();\n    let home = t.dir(\"home\");\n    let managed = t.dir(\"managed\");\n    t.write(\n        \"home/settings.json\",\n        r#\"{\"env\":{\"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\":\"1\"}}\"#,\n    );\n    t.write(\n        \"managed/managed-settings.json\",\n        r#\"{\"env\":{\"CLAUDE_CODE_HARBOR_KITE\":\"0\"}}\"#,\n    );"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read each of the chunks that import the gate and record what it does with the value, which is what exhausts the negative that no importer persists it."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "the teams snapshot object",
+          "offset": 170425834,
+          "excerpt": "class B3n{captured=null;cliOverride=null;setCliOverride(e){this.cliOverride=e}capture(e){this.captured=e}replaceWith(e){this.captured=e,this.cliOverride=null}}",
+          "note": "the only sink of the gate outcome: an in-memory object with no write path"
+        },
+        {
+          "role": "gate",
+          "name": "the team-context record builder",
+          "offset": 165770812,
+          "excerpt": "let v=Se(),C=`${v}/teams/${n}/config.json`,I=`${v}/tasks/${n}/`;return[{type:\"team_context\",agentId:r,agentName:o||r,teamName:n,teamConfigPath:C,taskListPath:I,hasTaskListTools:f}]",
+          "note": "an early return on a missing team name means no record at all, so the artifact tracks use, not the gate"
+        },
+        {
+          "role": "trigger",
+          "name": "the session registry row writer",
+          "offset": 158819050,
+          "excerpt": "N=S({pid:process.pid,sessionId:Q(),cwd:ye(),startedAt:Date.now(),procStart:await ja(process.pid),version: ... ,peerProtocol:Fzt,peerFeatures:Pwr(),kind:o,entrypoint:a.CLAUDE_CODE_ENTRYPOINT,pidDomain:await YG(), ... {messagingSocketPath:Nb.CLAUDE_CODE_MESSAGING_SOCKET}, ...})",
+          "note": "the row a reader would look in: its key set carries no teams field"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the snapshot module at 170424434, the team-context record builder at 165770812, the team config storage key at 157721696 and its writer side at 160349400, and the registry row writer at 158819050 with its reader projection at 159696980; plus a grep of the import statements naming the gate export",
+          "observed": "the snapshot class exposes capture, replaceWith and a command-line override and has no persistence; the record builder early-returns an empty list without a team name; the config path is the config home's teams directory slugged by a non-alphanumeric replacement; the registry writer's object and the reader's projection (32 keys) name no teams or messaging-gate field; counts: 11 importing chunks for the gate export, the snapshot capture function 8, team_context 10, teamName 131",
+          "rule": "occurrences of the fixed byte string over the whole binary for the counts; the registry key set enumerated by reading the single writer object and the single reader projection end to end",
+          "note": "the registry half of this negative is exhausted, because there is exactly one writer and one reader and both were read; the importer half is a count, which is the open leg"
+        }
+      ]
+    },
+    {
+      "id": "MSG-091",
+      "area": "messaging",
+      "behavior": "The cross-session messaging gate of Claude Code 2.1.258 is a whole module at 159674729: the environment variable CLAUDE_CODE_HARBOR_KITE wins outright when defined, else on Windows a platform feature flag defaulting to true can veto, else a feature flag defaulting to true decides. It reads no settings key and has no command-line flag. The outcome is not persisted, but it has a direct on-disk CONSEQUENCE: at the one bind site (182763055) the environment variables for the socket and its token are unset first, and the cross-session inbox is started only when the gate passes; the boundness signal is the socket environment variable itself (170021560) and the registry row copies that value verbatim (158819756). Two sibling environment variables exist and are separate gates, not part of this one. The gate can also late-bind after a flag refresh, and a bind failure or a remote thin client produces an empty value with the gate ON, so a non-empty socket path implies the gate passed while an empty one implies nothing.",
+      "depends": "csift's harbor verdict is the pair the binary allows: a non-empty messagingSocketPath on the registry row reads 'on and bound', and its absence reads 'unknown' - never 'off'. The settings half is the merged env entry for the variable with the scope that set it. csift keeps the value as text exactly as the file wrote it, including a bool or a number a hand-edited file may carry, because the gate parses the value rather than testing its presence and a reader that dropped a non-string would report a key as unset that IS set.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "393-402",
+          "snippet": "/// A settings value csift can carry as text. Claude Code's schema types `env` as a string\n/// map, but a hand-edited file can carry a number or a bool, and dropping one silently\n/// would report a key as unset that IS set.\nfn scalar_string(value: &Value) -> Option<String> {\n    match value {\n        Value::String(s) => Some(s.clone()),\n        Value::Bool(_) | Value::Number(_) => Some(value.to_string()),\n        _ => None,\n    }\n}"
+        },
+        {
+          "path": "src/path/tests/settings.rs",
+          "lines": "483-486",
+          "snippet": "    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_HARBOR_KITE\"),\n        Some((\"0\", SCOPE_POLICY_MANAGED))\n    );"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: a session started with the variable defined false and its registry row read back, to observe the empty socket path rather than infer it."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the cross-session messaging gate module",
+          "offset": 159674729,
+          "excerpt": "function Vo(){let e=a.CLAUDE_CODE_HARBOR_KITE;if(e!==void 0)return Le(e);if(D()===\"windows\"&&!P(\"tengu_harbor_kite_win\",!0))return!1;return P(\"tengu_harbor_kite\",!0)}",
+          "note": "the whole gate: an environment variable, a Windows-only veto flag, a default-true flag"
+        },
+        {
+          "role": "trigger",
+          "name": "the socket bind site",
+          "offset": 182763055,
+          "excerpt": "if(Nb.unset(\"CLAUDE_CODE_MESSAGING_SOCKET\"),Nb.unset(\"CLAUDE_CODE_MESSAGING_TOKEN\"),!fo()||w!==void 0)if(!Vo())if(!Mn()){ ... }else t(\"[uds-messaging] Skipped: cross-session messaging gate off\");else if(Mn())t(\"[uds-messaging] Skipped: remote thin client\");else{ ... let v=await f.startCrossSessionInbox(w,n); ...}",
+          "note": "the one place the gate decides whether the inbox binds, unsetting the variables first"
+        },
+        {
+          "role": "writer",
+          "name": "the registry row's socket field",
+          "offset": 158819756,
+          "excerpt": "...{messagingSocketPath:Nb.CLAUDE_CODE_MESSAGING_SOCKET}",
+          "note": "the row copies the boundness signal verbatim, which is the only on-disk consequence"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the whole gate module at 159674729, the socket bind site at 182762755, the boundness probe at 170021400 and the registry row's socket field at 158819756, plus the per-pid messaging key file writer at 158810100; whole-binary occurrence counts of the gate variable and its Windows sibling flag",
+          "observed": "the module is the gate plus one sibling flag getter and one message constant; the bind site unsets the socket and token variables before deciding and logs a distinct line for a gate-off skip and for a remote thin client; the boundness probe reads the socket environment variable's definedness; counts: the gate variable 12 (three constant-pool entries, three in the environment schema getter table alongside a cloud and a pacing sibling, three in passthrough lists, one in the gate, one in a pacing check, one in a cloud-peer check), the Windows sibling flag 2, the socket field 10, and 47 call sites of the gate across the tree",
+          "rule": "occurrences of the fixed byte string over the whole binary; the gate module read whole, so its inputs are the complete set",
+          "note": "the consequence is an inference in one direction only: a bound socket implies the gate passed, an empty one is consistent with a gate-off, a bind failure, a thin client and a late bind that has not happened yet"
+        }
+      ]
+    },
+    {
+      "id": "MSG-092",
+      "area": "messaging",
+      "behavior": "Hooks configuration in Claude Code 2.1.258 is read from the merged settings ONCE and kept as a process-level snapshot (159750661), not re-read per event; in a command-line process the snapshot key is a constant, so there is exactly ONE snapshot for the whole process (159749294). The snapshot is nevertheless refreshed without a restart: a watcher over the directory of every settings file, plus the drop-in directory, fires a change event (161789150), the path is mapped back to its scope (161797055), the settings cache is invalidated and the hooks snapshot is re-stored (159750429). So a session started before a hook was added to a settings file will fire that hook once the watcher lands the change. Four caveats bound the pickup: the watcher debounces and waits for a write to finish, it suppresses an edit it recognises as an echo of its own write, a registered ConfigChange hook can BLOCK the change, and it watches only the known scope directories plus the drop-in directory. The /hooks command is a viewer, not a loader (165662714).",
+      "depends": "csift's slot census answers 'configured', never 'armed'. It reads the files as they stand now, which is what a running process will converge on but need not be using yet, and the channel keeps a separate runtime record of the slots that actually fired for that reason. Without this fact a census would be read as a promise about the current process, and a freshly pasted hook block would be reported as live before any watcher picked it up.",
+      "code": [
+        {
+          "path": "src/path/settings_slots.rs",
+          "lines": "6-18",
+          "snippet": "/// The delivery slot numbers configured on one event: the `k` of every\n/// `csift deliver --slot k` command hook, sorted and deduplicated because a slot is a\n/// position in the delivery chain, so the same k under two matchers is one slot.\n#[allow(dead_code)] // the channel commands are the consumers\npub(crate) fn deliver_slots(m: &Merged, event: &str) -> Vec<u32> {\n    let mut out: Vec<u32> = hooks_for_event(m, event)\n        .iter()\n        .filter_map(|h| deliver_slot_of(&h.command))\n        .collect();\n    out.sort_unstable();\n    out.dedup();\n    out\n}"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "161-168",
+          "snippet": "/// The hooks registered for one event, in fold order.\n#[allow(dead_code)] // the channel commands are the consumers\npub(crate) fn hooks_for_event<'a>(m: &'a Merged, event: &str) -> Vec<&'a HookEntry> {\n    m.hooks\n        .get(event)\n        .map(|v| v.iter().collect())\n        .unwrap_or_default()\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: add a hook to a settings file while a session runs and record whether and when it fires, which measures the pickup this claim reads."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the hooks snapshot getter",
+          "offset": 159750661,
+          "excerpt": "function WY(){let t=a().current();if(t.initialHooksConfig===null)Vl(),t.initialHooksConfig=l(),UL();return t.initialHooksConfig}",
+          "note": "the read happens once and is cached per snapshot key"
+        },
+        {
+          "role": "gate",
+          "name": "the snapshot store and its key",
+          "offset": 159749294,
+          "excerpt": "class c{snapshotKey=()=>cJn;snapshotsBySessionId=new Map;setSnapshotKey(t){this.snapshotKey=t}current(){let t=this.snapshotKey(),o=this.snapshotsBySessionId.get(t);if(!o)o={initialHooksConfig:null},this.snapshotsBySessionId.set(t,o);return o}store(t){this.current().initialHooksConfig=t}evict(t){if(t===cJn)return;this.snapshotsBySessionId.delete(t)}}",
+          "note": "a constant key in a command-line process, so one snapshot for the whole process"
+        },
+        {
+          "role": "writer",
+          "name": "the settings watcher",
+          "offset": 161789150,
+          "excerpt": "let wo=hR.watch(Dr,{persistent:!0,ignoreInitial:!0,depth:0,awaitWriteFinish:{stabilityThreshold:n,pollInterval:r},ignored:(Di,na)=>{ ... if(Do.has(ga))return!1;if(pr&&ga.startsWith(pr+jy.sep)&&ga.endsWith(\".json\"))return!1;return!0},ignorePermissionErrors:!0,usePolling:!1,atomic:!0});F=wo; ... wo.on(\"change\",bn),wo.on(\"unlink\",Dn),wo.on(\"add\",Rn)",
+          "note": "what makes the snapshot refreshable without a restart, and why the pickup is not instant"
+        },
+        {
+          "role": "writer",
+          "name": "the snapshot re-store",
+          "offset": 159750429,
+          "excerpt": "function TD(t){Vl(t),a().store(l()),UL()}",
+          "note": "the settings cache is invalidated and the hooks snapshot re-read from the merged settings"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the snapshot getter at 159749200, the store class and its constant key at 159749294 and 159749151, the reader at 159749632, the watcher at 161788400, the path-to-scope mapper at 161797055, the change fan-out at 161795790, the subscription at 168941467, the reload at 168946802 with the re-store at 159750429, and the /hooks command descriptor at 165662714",
+          "observed": "the getter caches on first read and returns the cache afterwards; the store keys snapshots by a constant in a command-line process; the watcher is created with awaitWriteFinish and depth zero over the known scope directories plus the drop-in directory; the reload path invalidates the settings cache and re-stores the snapshot; the command descriptor is typed as a local view with the description View hook configurations for tool events; counts: the snapshot field 8 (one class field, one null-init and six inside the six accessors, so no other reader or writer exists), the change log line 2, the per-agent registry name 45",
+          "rule": "occurrences of the fixed byte string over the whole binary; the accessor set enumerated by the field count, which bounds the readers and writers of the snapshot",
+          "note": "the loader path and the viewer command are separate subsystems: the plugin JS module host has its own load functions and is not the settings-hooks reader"
+        }
+      ]
+    },
+    {
+      "id": "MSG-093",
+      "area": "messaging",
+      "behavior": "A subagent in Claude Code 2.1.258 consults the SAME settings hooks as its parent: the per-event collector at 165843885 prepends the process-global settings-and-plugin union for every agent before any per-agent lookup, so settings hooks cannot differ between agents. What CAN differ is a shared in-memory registry keyed per agent, whose entries come from an agent definition's own frontmatter hooks or from runtime registration (163729424), handed down at spawn (163777492) and cleared on refusal. The tool-event registry key builder at 162932024 adds a SECOND key only when a predicate holds (162244149), and that predicate is true for the built-in web-fetch agent alone (162243899) and only for the six tool events in its set: the dual [agentId, parentAgentId] key is NOT general, and every other agent is keyed by its own agent id alone.",
+      "depends": "csift reads the cascade ONCE per project root and reports the result for every agent of that session, which is correct precisely because settings hooks are process-global. It never claims to know a child's frontmatter or runtime-registered hooks, since those live in process memory and reach no file. This claim also bounds a wider reading of the dual key: a child's tool events consult a parent's registered hooks only for the built-in web-fetch agent, so csift must not present a parent's registry entries as reaching an arbitrary child.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "125-129",
+          "snippet": "/// The whole cascade for one project root (its first recorded cwd); with `None` only the\n/// home-anchored scopes are read.\npub(crate) fn merged(claude_home: &Path, project_root: Option<&Path>) -> Merged {\n    merged_in(claude_home, project_root, &managed_settings_dir())\n}"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "131-137",
+          "snippet": "/// [`merged`] with the managed-settings directory supplied explicitly: the platform\n/// directory is an absolute system path a test cannot write to.\npub(crate) fn merged_in(\n    claude_home: &Path,\n    project_root: Option<&Path>,\n    managed_dir: &Path,\n) -> Merged {"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: a hook that logs its event and agent id in a parent and in a spawned child, to observe the shared settings set rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the per-event hook collector",
+          "offset": 165843885,
+          "excerpt": "let d=o?.managedHooksExcluded?jJo(MB(r),r):[...MB(r)],f=typeof n===\"string\"?[n]:n;if(e===void 0||jyt())return d;for(let v of f){let C=e.get(v,r).get(r);if(C)d.push(...C)}",
+          "note": "the process-global union is added for every agent; the per-agent registry is additive on top"
+        },
+        {
+          "role": "gate",
+          "name": "the tool-event registry key builder",
+          "offset": 162932024,
+          "excerpt": "function bO(e,n,r){let o=e?.agentId??r,d=e?.agentContext;return d!==void 0&&ez(d)&&Oro.has(n)?[o,d.parentAgentId??r]:[o]}",
+          "note": "the second key is conditional on a predicate and on an event set, not general"
+        },
+        {
+          "role": "gate",
+          "name": "the predicate behind the second key",
+          "offset": 162244149,
+          "excerpt": "function ez(e){return e.agentType===\"subagent\"&&e.isBuiltIn===!0&&e.subagentName===Bh}",
+          "note": "true for the built-in web-fetch agent alone, with the name constant at 162243899"
+        },
+        {
+          "role": "writer",
+          "name": "the per-agent registry and its handoff",
+          "offset": 161534200,
+          "excerpt": "get(e,n){let r=new Map,o=this.sessions.get(e);if(!o)return r;for(let d of n?[n]:Hh){let f=o.hooks[d];if(f)r.set(d,Bur(f))}return r}",
+          "note": "one object with a per-key map, handed to a child at spawn and populated from frontmatter"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the per-event collector at 165843885, the key builder at 162932024 with its predicate at 162244149 and name constant at 162243899, the registry class at 161533300, the spawn handoff at 163777492 and the frontmatter registration at 163729424; plus whole-binary occurrence counts of the registry name and of the canonical hook-event list",
+          "observed": "the collector spreads the process-global union first and only then pushes the per-agent registry entries; the key builder returns a one-element key unless the predicate holds and the event is in a set of six tool events; the predicate tests for the built-in agent whose name is the web-fetch constant, with no module boundary between the two definitions; the registry is one object with a per-agent map, handed down at spawn and cleared on refusal; counts: the registry name 45 across 30 code sites, the property form 9, the canonical event list 33 entries parsed from its array",
+          "rule": "occurrences of the fixed byte string over the whole binary; the collector, the key builder and the predicate read end to end as one chain",
+          "note": "this corrects a wider reading of the dual key: it is web-fetch-only and event-set bounded, and settings hooks reach every agent identically because the union is prepended before any key lookup"
+        }
+      ]
+    },
+    {
+      "id": "MSG-094",
+      "area": "messaging",
+      "behavior": "Three switches can empty or replace the hooks any agent of Claude Code 2.1.258 sees, and they are evaluated at snapshot-read time so they apply to parent and child alike (159749632): a policy-scope disableAllHooks yields an EMPTY set; a policy-scope allowManagedHooksOnly yields the POLICY hooks only; and a disableAllHooks set outside the policy tier also yields the policy hooks only. The predicates at 159750050 spell the third case out - the merged settings disabling hooks while the policy tier does not counts as managed-only - and the per-agent registry lookup is SKIPPED entirely under either managed-only condition (165843960), so an agent definition's frontmatter hooks do not run either. A fourth path subtracts the policy entries from the global union when managed hooks are excluded (165843810).",
+      "depends": "csift applies the same three switches after folding, and reports which one fired. A switch reaches plugin manifests too, because it is evaluated where the whole set is read, so the reported hook set under a policy switch is the policy tier's alone. This matters directly for a delivery-slot census: with a switch in force a delivery hook pasted into a user or project scope will never run, and a census that ignored the switch would predict a delivery that cannot happen.",
+      "code": [
+        {
+          "path": "src/path/settings.rs",
+          "lines": "571-585",
+          "snippet": "    fn finish(mut self) -> Merged {\n        if self.policy_disable_all_hooks {\n            self.m.hooks.clear();\n            self.m.policy_switch = Some(SWITCH_DISABLE_ALL);\n        } else if self.policy_allow_managed_only || self.disable_all_hooks {\n            for entries in self.m.hooks.values_mut() {\n                entries.retain(|h| is_policy_scope(&h.source));\n            }\n            self.m.hooks.retain(|_, entries| !entries.is_empty());\n            self.m.policy_switch = Some(if self.policy_allow_managed_only {\n                SWITCH_MANAGED_ONLY\n            } else {\n                SWITCH_SETTINGS_DISABLE\n            });\n        }"
+        },
+        {
+          "path": "src/path/settings.rs",
+          "lines": "44-49",
+          "snippet": "/// The three policy switches, in the order they are evaluated: policy `disableAllHooks`\n/// leaves nothing, and either policy `allowManagedHooksOnly` or a `disableAllHooks` set\n/// outside the policy tier leaves the policy hooks alone.\nconst SWITCH_DISABLE_ALL: &str = \"policy disableAllHooks: no hooks run\";\nconst SWITCH_MANAGED_ONLY: &str = \"policy allowManagedHooksOnly: policy hooks only\";\nconst SWITCH_SETTINGS_DISABLE: &str = \"settings disableAllHooks: policy hooks only\";"
+        }
+      ],
+      "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Capture a specimen: a policy file setting each switch in turn against a user-scope hook, and a session that does or does not fire it, to observe the override rather than read it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the hooks reader behind the snapshot",
+          "offset": 159749632,
+          "excerpt": "function l(){let t=be(\"policySettings\");if(t?.disableAllHooks===!0)return{};if(t?.allowManagedHooksOnly===!0||Or())return t?.hooks??{};if(Ou(\"hooks\"))return t?.hooks??{};let o=vn();if(o.disableAllHooks===!0)return t?.hooks??{};return o.hooks??{}}",
+          "note": "all three switches are branches of the one read, so they reach every agent"
+        },
+        {
+          "role": "gate",
+          "name": "the managed-only predicates",
+          "offset": 159750050,
+          "excerpt": "function T_(){return Or()||aAe()}function aAe(){let t=be(\"policySettings\");if(t?.allowManagedHooksOnly===!0)return!0;if(vn().disableAllHooks===!0&&t?.disableAllHooks!==!0)return!0;return!1}function uR(){return be(\"policySettings\")?.disableAllHooks===!0}function jyt(){return uR()||aAe()}",
+          "note": "the third case: a non-policy disableAllHooks is managed-only, not empty"
+        },
+        {
+          "role": "writer",
+          "name": "the registry skip and the managed subtraction",
+          "offset": 165843810,
+          "excerpt": "function jJo(e,n){let r=new Set((be(\"policySettings\")?.hooks?.[n]??[]).map((o)=>g4.stableKey(o)));return e.filter((o)=>!r.has(g4.stableKey(o)))}",
+          "note": "with the skip at 165843960, which drops the per-agent registry under either managed-only condition"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": null,
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "byte-read of the hooks reader at 159749632 and of the predicate group at 159750050, plus the registry skip at 165843960 and the managed subtraction at 165843810",
+          "observed": "the reader has five branches: policy disableAllHooks returns an empty object, policy allowManagedHooksOnly or the managed-only predicate returns the policy hooks, a hooks-source check returns the policy hooks, a merged disableAllHooks returns the policy hooks, and otherwise the merged hooks; the predicate group makes a non-policy disableAllHooks equivalent to managed-only; the collector returns before consulting the per-agent registry when either managed-only condition holds",
+          "rule": "one reader function with all five branches read; the predicate group read end to end as one site",
+          "note": "the switches are evaluated where the whole set is read, which is why they reach plugin and frontmatter hooks and not only the settings scopes"
         }
       ]
     }

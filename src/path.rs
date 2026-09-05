@@ -39,6 +39,11 @@ mod project_dirs;
 mod resolver;
 mod routing;
 mod scope;
+// The settings cascade keeps its own namespace: `merged` / `Merged` / `SourceReport` are
+// generic names that would read as ambiguous flattened into `crate::path`, and every
+// caller spells `path::settings::merged(...)`.
+pub(crate) mod settings;
+mod settings_slots;
 mod targets;
 mod trap;
 
