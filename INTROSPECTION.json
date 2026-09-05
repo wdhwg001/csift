@@ -80584,6 +80584,205 @@
           "note": "Landed as the reason the resume row delegates instead of parsing a return value."
         }
       ]
+    },
+    {
+      "id": "MSG-029",
+      "area": "messaging",
+      "behavior": "One session registry row per Claude Code process carries `pid`, `sessionId`, `cwd`, `startedAt`, `procStart`, a four-value `kind` enum, `messagingSocketPath` and a background-only `jobId`. The schema sits at 158814901, the writer at 158818540, the row construction at 158819054, the kind stamp at 158819673, the socket field at 158819755, the jobId at 158819957, the gate at 158821487 and the re-stamp on a session change at 158820343. No row is written for an in-process teammate or for a tmux child, so a lane that is not a top-level session has none anywhere.",
+      "depends": "The reach surfaces read exactly those fields out of the registry directory and treat an absence as the closed question it is. A subagent lane is never looked up in the registry at all - its state comes from its own transcript tail - and a session with no row is reported unknown rather than dead. If the row lost a field csift reads, the affected half degrades to unknown instead of asserting: no socket path means the harbor gate is unknown rather than off, and no `entrypoint` means the receiver is not treated as headless.",
+      "code": [
+        {
+          "path": "src/live/channel/reach/peers.rs",
+          "lines": "61-75",
+          "snippet": "        out.push(RegistryFacts {\n            session: session.to_string(),\n            pid: v\n                .get(\"pid\")\n                .and_then(serde_json::Value::as_u64)\n                .and_then(|n| u32::try_from(n).ok()),\n            proc_start: str_of(&v, \"procStart\"),\n            pid_domain: str_of(&v, \"pidDomain\"),\n            status: str_of(&v, \"status\"),\n            socket_present: v\n                .get(\"messagingSocketPath\")\n                .and_then(serde_json::Value::as_str)\n                .is_some_and(|s| !s.trim().is_empty()),\n            headless: v.get(\"entrypoint\").and_then(serde_json::Value::as_str) == Some(\"sdk-cli\"),\n        });"
+        },
+        {
+          "path": "src/live/channel/reach/facts.rs",
+          "lines": "86-90",
+          "snippet": "    let reg = if is_sub {\n        None\n    } else {\n        registry_facts(&session).unwrap_or_default()\n    };"
+        }
+      ],
+      "instrument": "Read the excerpt at each offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Corpus side: parse every row file under the registry directory and count the rows carrying each field, one per file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the writer, its gate and the row constructor at the cited offsets as verbatim excerpts, so the field set is anchored to the code that writes it rather than to the rows it happened to leave."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Parse every row file under the registry directory of a live installation and count, per field name, the rows carrying it; one row per file.",
+          "observed": "3 of 3 rows carry pid, sessionId, cwd, startedAt, procStart, pidDomain, kind, status, statusUpdatedAt, updatedAt, entrypoint, version, messagingSocketPath and peerProtocol; 0 of 3 carry jobId, none of the three being a background job; every sessionId is a top-level session uuid and no row names a teammate or a subagent lane.",
+          "rule": "One row per `.json` file in the registry directory; a field counts once per row that carries it; the key files beside the rows are not rows.",
+          "note": "Landed with the reach registry reader, which takes pid, procStart, pidDomain, status, the socket path and the entrypoint and nothing else."
+        }
+      ]
+    },
+    {
+      "id": "MSG-062",
+      "area": "messaging",
+      "behavior": "`messagingSocketPath` and `peerProtocol` both enter the session registry row at Claude Code 2.1.124, with the highest cached build lacking either at 2.1.100, and neither has a truncated predecessor under another spelling.",
+      "depends": "The harbor gate verdict is the socket path's PRESENCE, so its absence has two readings that csift refuses to collapse: a build below the floor has no such field at all, and a build above it may simply not have published a socket. Both are reported as unknown, never as off, which is why the verdict names the field it read instead of asserting a gate state.",
+      "code": [
+        {
+          "path": "src/live/channel/reach/facts.rs",
+          "lines": "92-107",
+          "snippet": "    let mut facts = LaneFacts {\n        lane: lane.clone(),\n        session,\n        session_path,\n        path: path.to_path_buf(),\n        kind: ReceiverKind::TopLevel,\n        routing_id: None,\n        depth: None,\n        parent_agent_id: None,\n        state: ReceiverState::Unknown,\n        version,\n        cwd,\n        last_activity_utc: shape.last_ts_utc.clone(),\n        socket_present: reg.as_ref().is_some_and(|r| r.socket_present),\n        headless: reg.as_ref().is_some_and(|r| r.headless),\n    };"
+        }
+      ],
+      "instrument": "`grep -a -c -F` each literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.124",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the row constructor in a build at the floor, so the entering is anchored to the code that adds the two fields rather than to their literals.",
+        "SPECIMEN: a registry row written by a build at the floor would witness the entering; rows from the current build witness presence only."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the two field literals across the cached native builds, read beside a census of the rows a live installation currently holds.",
+          "observed": "Both literals are absent at 2.1.100 and present at 2.1.124, with no truncated predecessor for either; on the current build 3 of 3 rows carry both fields.",
+          "rule": "Lines carrying the literal per build for the ladder; one row per file for the presence census, which witnesses presence and not the floor.",
+          "note": "Landed as the socket read behind the harbor verdict, whose absent case stays unknown."
+        }
+      ]
+    },
+    {
+      "id": "MSG-063",
+      "area": "messaging",
+      "behavior": "`idle_notification` is present from Claude Code 2.1.23, with the highest cached build lacking it at 2.0.30. `notify_when_idle` and its camelCase twin enter together at 2.1.236 (absent 2.1.234) and coexist with the older name: an added control, not a rename.",
+      "depends": "A deliberate absence. csift never keys a reach answer on an idle-notification setting: two names for the control ship at once, so a reader keying on one of them would report a configured receiver as unconfigured. The prediction reports only what it can see in the cascade - the delivery slots configured per event, and whether a Stop hook asks for an async rewake - and leaves the notification control to the harness.",
+      "code": [
+        {
+          "path": "src/live/channel/reach/predict.rs",
+          "lines": "20-38",
+          "snippet": "impl ReachSlots {\n    pub(crate) fn read(m: &Merged) -> Self {\n        let mut out = ReachSlots::default();\n        for e in STEER_EVENTS {\n            let slots = settings::deliver_slots(m, e);\n            if slots.len() > out.best {\n                out.best = slots.len();\n                out.best_event = Some(e.to_string());\n            }\n            if !slots.is_empty() {\n                out.per_event.push((e.to_string(), slots));\n            }\n        }\n        out.async_rewake_on_stop = settings::hooks_for_event(m, \"Stop\")\n            .iter()\n            .any(|h| h.async_rewake);\n        out\n    }\n}"
+        }
+      ],
+      "instrument": "`grep -a -c -F` each of the three literals across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.23",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the consumer of each name in a build that carries both, so the coexistence is anchored to two live reads rather than to two literals.",
+        "SPECIMEN: a live trial setting each name in turn and watching which one changes the idle behaviour would settle whether the older name is still honoured."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the three idle-notification literals across the cached native builds.",
+          "observed": "The older name is absent at 2.0.30 and present at 2.1.23; the newer name and its camelCase twin are both absent at 2.1.234 and present at 2.1.236, and all three ship together at the current build.",
+          "rule": "Lines carrying the literal per build; a bracket names the highest cached ABSENT build, never an uncached one.",
+          "note": "Landed as the slot census, which reads delivery slots and the async rewake hook and asserts nothing about the notification control."
+        }
+      ]
+    },
+    {
+      "id": "MSG-064",
+      "area": "messaging",
+      "behavior": "Tag literals date the RENDERING, not the channel. The cross-session tag enters at Claude Code 2.1.152 (absent 2.1.150) while its bare token is already a string constant at 2.1.145; the teammate tag enters at 2.1.195 (absent 2.1.193) while its bare token is present at 2.1.191. The relay preamble naming another session enters at 2.1.168 (absent 2.1.160) while two older preambles are present from at least 2.1.145 and still ship, so three framings are in the field at once.",
+      "depends": "A deliberate absence. No reach answer takes a relay tag or a preamble as evidence that a channel exists, works, or has ever carried anything: the channel question is decided from the registry row, the settings cascade and the lane's own tail, all of which are the same facts on every build. A detector built on the tags would have to accept all three framings and would still date only the wording.",
+      "code": [
+        {
+          "path": "src/live/channel/reach/predict.rs",
+          "lines": "127-141",
+          "snippet": "/// `csift whoami --to @<target>`: predict, print, write nothing.\npub(crate) fn run_reach_to(target: &str, format: OutputFormat) -> Result<()> {\n    let caller = caller::classify(None)?;\n    let path = resolve_one(target)?;\n    let receiver = caller::probe_receiver(&path)?;\n    let merged = settings::merged(\n        &crate::path::claude_home()?,\n        receiver.cwd.as_deref().map(Path::new),\n    );\n    let slots = ReachSlots::read(&merged);\n    let armed = armed_slots(&receiver);\n    let relation = relation_of(&caller, &receiver);\n    let t = receiver_target(&receiver);\n    let ctx = send_context(&caller, &t, &merged, &slots, armed.len(), relation);\n    let decision = policy::decide(&ctx);"
+        }
+      ],
+      "instrument": "`grep -a -c -F` each tag literal, bare token and preamble across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the renderer that emits each framing in the build where its literal enters, so the wording floors are anchored to the code that writes them.",
+        "SPECIMEN: a corpus of inbound deliveries in all three framings would show which wordings a reader actually meets; the tag literals alone do not."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of each tag literal against its own bare token, and of the three preambles, across the cached native builds.",
+          "observed": "Each tag literal enters later than its bare token - the cross-session pair at 2.1.152 against 2.1.145, the teammate pair at 2.1.195 against 2.1.191 - and the newest preamble enters at 2.1.168 while two older ones ship from at least 2.1.145 through the current build.",
+          "rule": "Lines carrying the literal per build; a tag and its bare token are counted as two separate literals, which is what makes the gap visible.",
+          "note": "Landed with the prediction path, which reads the registry, the cascade and the tail and never a rendered tag."
+        }
+      ]
+    },
+    {
+      "id": "MSG-066",
+      "area": "messaging",
+      "behavior": "The `queued_command` literal predates the cached builds; its LINE count nearly doubles across the 2.1 range and then falls by 30 lines at Claude Code 2.1.246 while its presence never changes. The movement is a bundle reorganisation, and it is the standing proof that a line count is not a behavior signal.",
+      "depends": "Every count a reach answer prints states its counting rule and stands as EVIDENCE under a verdict, never as the verdict. The teams gate names the directories and the teammate lanes it counted while reporting the gate as unknown, and the slot line counts the configured entries per event rather than claiming a delivery will happen. A reader who is handed a bare number without its rule cannot tell a behavior change from a reorganisation.",
+      "code": [
+        {
+          "path": "src/live/channel/reach/render.rs",
+          "lines": "183-198",
+          "snippet": "pub(crate) fn slot_line(slots: &ReachSlots) -> String {\n    if slots.per_event.is_empty() {\n        return \"none configured on any delivery event\".to_string();\n    }\n    slots\n        .per_event\n        .iter()\n        .map(|(event, ks)| {\n            format!(\n                \"{event} {}\",\n                ks.iter().map(u32::to_string).collect::<Vec<_>>().join(\",\")\n            )\n        })\n        .collect::<Vec<_>>()\n        .join(\"  \")\n}"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds and read the counts as a series; the counting rule is LINES carrying the literal, which is not the number of occurrences.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the emitter of the literal in a build on each side of the fall, so the movement is anchored to a reorganisation rather than inferred from the series.",
+        "SPECIMEN: the queued-command records themselves are censused under their own claim; this one is about the counting rule and has no specimen of its own."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The line-count series of the literal across the cached native builds, read as a series rather than as a presence test.",
+          "observed": "The literal is present in the oldest cached build; the count nearly doubles across the 2.1 range and drops by 30 lines at 2.1.246 with presence unchanged on both sides.",
+          "rule": "Lines carrying the literal per build - not occurrences, which is a different number - and presence read as a separate yes or no.",
+          "note": "Landed as the rule every printed count obeys: the slot line names its event and its entries, and the gate evidence is reported under an unknown verdict."
+        }
+      ]
     }
   ]
 }

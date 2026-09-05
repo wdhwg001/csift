@@ -376,9 +376,17 @@ impl VerbatimArgs {
         instead returns the UPSTREAM CHAIN `{chain:[{session_id, is_subagent, parent_session_id, \
         depth, path}, …]}` (self first, top-level root last), so a subagent reads is_subagent / \
         parent_session_id directly, no `agents` round-trip.\n\n\
-        FLAG NOTE: whoami's only positional is the optional SELF token `@trap:<marker>` / `@main`; \
-        the `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes a \
-        general POSITIONAL `[PATH]...` / `@`-token; there is no target FLAG.",
+        REACH: after the identity output, whoami prints three sections about the lane it \
+        resolved - `self` (its id, both forms for a teammate, its kind and its depth), `parent` \
+        (the lane above it, whether that lane is alive, and which channel a reply would take) \
+        and `topology` (the live child lanes under it, then how many other live lanes exist). \
+        `--to @<target>` answers the reach question about ANOTHER lane instead, predicting the \
+        channel and the verdict WITHOUT sending anything; `--peers` lists every live lane as \
+        `id kind state` and nothing else. Nothing on this path writes: a prediction is a read of \
+        disk plus the policy table.\n\n\
+        FLAG NOTE: whoami's positional is the optional SELF token `@trap:<marker>` / `@main` / a \
+        LANE id; the `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes \
+        a general POSITIONAL `[PATH]...` / `@`-token; there is no target FLAG.",
     after_help = "SESSION-ID SOURCE\n  \
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
         its value IS the calling session's jsonl basename). If absent, csift falls back to \
@@ -408,8 +416,27 @@ impl VerbatimArgs {
           whoami takes an OPTIONAL positional SELF target: `@trap:<marker>` or `@main` ONLY; the \
         `path` line is ALWAYS printed. Every OTHER session-operating subcommand takes a general \
         POSITIONAL [PATH]... / `@`-token. There is no target flag anywhere.\n\n\
+        REACH\n  \
+          After the identity output come three sections about the resolved lane: `self` (id,\n  \
+          both forms for a teammate, kind, depth), `parent` (the lane above, alive or not, and\n  \
+          the channel a reply would take) and `topology` (live child lanes as `id kind state`,\n  \
+          then how many other live lanes exist). A LANE target answers them for another lane.\n  \
+          `--to @<target>` predicts reach WITHOUT sending: the channel, the teams and harbor\n  \
+          gate verdicts, the configured and armed delivery slots, and what a sender would be\n  \
+          told. An AGENT target adds the sentence naming what the prediction is made of - the\n  \
+          transcript tail and a pid probe, not the harness's own state - and the fallback\n  \
+          carrier. `--peers` lists every live lane as `id kind state` ONLY: no description, no\n  \
+          agent type, no name-as-role, because that is the material one lane uses to claim\n  \
+          standing over another. OUTSIDE Claude Code (no CLAUDE_CODE_SESSION_ID) whoami prints\n  \
+          the not-a-lane answer on stdout - the one channel out (`csift send`) and what a\n  \
+          receiver needs installed (`csift deliver --slot k` lines; print them with `csift\n  \
+          deliver --recipe`) - and still exits non-zero, because the identity question has no\n  \
+          answer and guessing one is the documented trap.\n\n\
         EXAMPLES\n  \
           csift whoami                  # the calling session's uuid + its jsonl path\n  \
+          csift whoami @<agent-id>      # the same three sections for another lane\n  \
+          csift whoami --to @<lane>     # would a message reach it? (nothing is sent)\n  \
+          csift whoami --peers          # every live lane: id, kind, state\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
           csift whoami @trap:<invent-a-fresh-3word-4digit-marker>   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root); the marker is YOURS to invent, never a copied literal\n  \
           # FALLBACK (no @trap): map this subagent's bare hex to its ROOT (read parent_session_id):\n  \
@@ -423,16 +450,40 @@ impl VerbatimArgs {
         to the top-level root. Select with `jq 'select(.kind==\"identity\")'`."
 )]
 pub struct WhoamiArgs {
-    /// Optional SELF target: `@trap:<marker>` or `@main` (nothing else). With NO target, identify
+    /// Optional SELF target: `@trap:<marker>`, `@main`, or a LANE id (`@<agent-id>` /
+    /// `@<Name>@<Team>`). With NO target, identify
     /// the calling session from `$CLAUDE_CODE_SESSION_ID` (the historical behavior; `@main` is its
     /// explicit spelling). `@trap:<marker>` answers "which SUBAGENT am I?": a running subagent
     /// (whose own id CC withholds from the env) embeds a unique, literal, one-shot marker in THIS
     /// very csift command and csift maps it to the subagent's bare hex and walks the UPSTREAM
     /// ancestry CHAIN up to the top-level root (the walk-UP mirror of `agents`' walk-DOWN);
     /// env-INDEPENDENT, so it is reliable for a built-in Task AND a workflow subagent (whose env id
-    /// is the PARENT). To inspect a DIFFERENT session, use `list`/`agents`, not `whoami`.
+    /// is the PARENT). A LANE id (`@<agent-id>`, or a teammate's routing form `@<Name>@<Team>`)
+    /// answers the same three sections for THAT lane. A session uuid is still refused: use
+    /// `list`/`agents` to inspect a different SESSION.
     #[arg(value_name = "SELF")]
     pub self_target: Option<String>,
+
+    /// REACH PREDICTION for one target lane, with NO message sent and nothing written: which
+    /// channel would carry a message (the same policy table `csift send` runs), the two gate
+    /// verdicts, the delivery slots configured in the receiver's settings cascade and the ones
+    /// that have actually run there, and the failure a sender would be told. For an AGENT target
+    /// the answer also names what it is made of: csift reads the lane's transcript tail and
+    /// probes a pid, never the harness's own memory, so the prediction is an inference and the
+    /// line names the carrier that remains when it is wrong. Takes any `@`-form csift accepts
+    /// (`@<uuid>`, a uuid prefix, `@<agent-id>`, `@<Name>@<Team>`, `@main`, `@trap:<marker>`).
+    #[arg(long = "to", value_name = "TARGET", conflicts_with_all = ["peers", "self_target"])]
+    pub to: Option<String>,
+
+    /// List every LIVE lane under the projects root as `id kind state` and nothing else. A
+    /// description, an agent type or a name read as a role is exactly the material one lane
+    /// would use to claim standing over another, so the census publishes none of it: it answers
+    /// who is alive, not who should be obeyed. Live means the owning session has a registry row
+    /// whose process answers a pid probe, and, for a child lane, its own tail is not settled (a
+    /// child of a dead session cannot be live). A top-level lane's state is the registry's own
+    /// word (`busy`/`shell`/`idle`/`waiting`); a child lane's is `in-flight`/`generating`.
+    #[arg(long = "peers", conflicts_with = "self_target")]
+    pub peers: bool,
 
     /// Emit JSON instead of text.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]

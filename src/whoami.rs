@@ -21,11 +21,20 @@
 //! trap. We error with actionable guidance instead. It is acceptable for whoami to
 //! often say "ambiguous, pass `@<uuid>`".
 
+//! ## Reach (v0.11.0)
+//!
+//! Identity is half the question a lane actually has: the other half is who is above it, what
+//! is live around it, and whether a message would arrive. Those sections are built by
+//! [`crate::live::channel`], which owns the readers the send path uses, and printed AFTER the
+//! identity output, which is unchanged. This file keeps the resolution and the envelope.
+
 use std::path::PathBuf;
 
 use anyhow::{bail, Result};
+use serde_json::json;
 
 use crate::cli::{OutputFormat, WhoamiArgs};
+use crate::live::channel;
 use crate::path;
 
 /// Primary env var Claude Code sets per session (verified 2026-06-07): its value
@@ -71,25 +80,50 @@ pub struct WhoAmI {
 }
 
 /// Entry point for `csift whoami`. With no target (or `@main`), identify the calling session from
-/// the environment; with `@trap:<marker>`, resolve which SUBAGENT the caller is (env-independent).
+/// the environment; with `@trap:<marker>`, resolve which SUBAGENT the caller is (env-independent);
+/// with an `@<agent-id>` / `@<Name>@<Team>` target, answer for THAT lane. `--to` and `--peers` are
+/// terminal reach modes that ask about other lanes instead of this one.
 pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
+    if args.peers {
+        return channel::run_peers(args.format);
+    }
+    if let Some(to) = args.to.as_deref() {
+        return channel::run_reach_to(to, args.format);
+    }
     match args.self_target.as_deref() {
         None | Some("@main") => run_whoami_env(args),
         Some(t) if t.starts_with("@trap:") => {
             run_whoami_trap(t.strip_prefix("@trap:").unwrap_or(""), args)
         }
+        Some(t) if is_lane_target(t) => run_whoami_lane(t, args),
         Some(other) => bail!(
-            "whoami accepts no target except `@trap:<marker>` (which SUBAGENT am I?) or `@main` \
-             (the calling top-level session — the default). Got `{other}`. To inspect a DIFFERENT \
-             session, use `csift list @<uuid>` / `csift agents @<uuid>`."
+            "whoami accepts no target except `@trap:<marker>` (which SUBAGENT am I?), `@main` \
+             (the calling top-level session — the default), or a LANE id `@<agent-id>` / \
+             `@<Name>@<Team>` (answer for that lane). Got `{other}`. A session uuid is not a \
+             whoami question: to inspect a DIFFERENT session, use `csift list @<uuid>` / \
+             `csift agents @<uuid>`."
         ),
     }
+}
+
+/// True for the two lane id forms `whoami` now answers for: the transcript form (a bare `a…`
+/// agent id or a name-embedded teammate id) and a teammate's routing form `Name@Team`. A session
+/// uuid is deliberately NOT one: `whoami` answers about a lane, and the session forms already
+/// have `list` / `agents`.
+fn is_lane_target(token: &str) -> bool {
+    let Some(id) = token.strip_prefix('@') else {
+        return false;
+    };
+    path::is_subagent_id(id) || path::is_teammate_routing_id(id)
 }
 
 /// `whoami` (env form): the calling session id from `$CLAUDE_CODE_SESSION_ID` + its jsonl path.
 fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
     let Some(session_id) = detect_session_id() else {
-        // SPEC §6.3 step 3: never guess - error with actionable guidance.
+        // Outside Claude Code there is no lane to name, and guessing one is the documented
+        // trap - so the channel answer (what a non-lane CAN do) goes to stdout and the
+        // identity question still fails loudly.
+        channel::external_answer(args.format)?;
         bail!("{AMBIGUOUS_GUIDANCE}");
     };
 
@@ -108,8 +142,64 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
     let me = WhoAmI { session_id, path };
     match args.format {
         OutputFormat::Text => render_text(&me),
-        OutputFormat::Json => render_json(&me)?,
+        OutputFormat::Json => render_json_head(&me)?,
     }
+    // The environment named the top-level session, not necessarily the CALLER, so the sections
+    // answer for that lane and say the identification was assumed.
+    let counts = match &me.path {
+        Some(p) => Some(sections_for(p, false, "env", args.format)?),
+        None => None,
+    };
+    finish_json(args.format, 1, counts)
+}
+
+/// Print the reach sections for one resolved lane.
+fn sections_for(
+    path: &std::path::Path,
+    exact: bool,
+    via: &'static str,
+    format: OutputFormat,
+) -> Result<(usize, usize)> {
+    channel::emit_lane_sections(
+        &channel::LaneRef {
+            path: path.to_path_buf(),
+            exact,
+            via,
+        },
+        format,
+    )
+}
+
+/// `whoami @<agent-id>` / `whoami @<Name>@<Team>`: answer for THAT lane. There is no identity
+/// row here - the `self` section carries the id in both forms, which is the answer the target
+/// form was asked for.
+fn run_whoami_lane(token: &str, args: &WhoamiArgs) -> Result<()> {
+    let path = channel::resolve_lane(token)?;
+    if matches!(args.format, OutputFormat::Json) {
+        println!("{}", crate::text::envelope_header("whoami", json!({})));
+    }
+    let counts = sections_for(&path, true, "target", args.format)?;
+    finish_json(args.format, 0, Some(counts))
+}
+
+/// Close a JSON stream with the shared summary. A text run prints nothing here.
+fn finish_json(
+    format: OutputFormat,
+    identities: usize,
+    counts: Option<(usize, usize)>,
+) -> Result<()> {
+    if !matches!(format, OutputFormat::Json) {
+        return Ok(());
+    }
+    let (live, others) = counts.unwrap_or((0, 0));
+    println!(
+        "{}",
+        crate::text::envelope_summary(json!({
+            "identities": identities,
+            "live_child_lanes": live,
+            "other_live_lanes": others,
+        }))
+    );
     Ok(())
 }
 
@@ -119,8 +209,6 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
 /// re-feedable lineage above it. Env-independent - reliable for a built-in Task AND a workflow
 /// subagent (whose env id is the PARENT, not itself).
 fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
-    use serde_json::json;
-
     let chain = path::resolve_trap_who(marker)?;
     match args.format {
         OutputFormat::Text => {
@@ -159,13 +247,15 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
                 });
                 println!("{}", serde_json::to_string(&obj)?);
             }
-            println!(
-                "{}",
-                crate::text::envelope_summary(json!({"identities": chain.len()}))
-            );
         }
     }
-    Ok(())
+    // @trap resolved the CALLER's own lane from a marker it carried, so the sections here are
+    // exact - the one form in which they are.
+    let counts = match chain.first().and_then(|n| n.path.as_ref()) {
+        Some(p) => Some(sections_for(p, true, "trap", args.format)?),
+        None => None,
+    };
+    finish_json(args.format, chain.len(), counts)
 }
 
 /// Locate `<id>.jsonl` under the projects root. First try the current cwd's encoded
@@ -208,8 +298,9 @@ fn render_text(me: &WhoAmI) {
     }
 }
 
-fn render_json(me: &WhoAmI) -> Result<()> {
-    use serde_json::json;
+/// The env form's JSON head: the envelope header and the one identity row. The summary is
+/// printed by [`finish_json`] once the reach sections have had their turn.
+fn render_json_head(me: &WhoAmI) -> Result<()> {
     println!("{}", crate::text::envelope_header("whoami", json!({})));
     let obj = json!({
         "kind": "identity",
@@ -222,10 +313,6 @@ fn render_json(me: &WhoAmI) -> Result<()> {
         "path": me.path.as_ref().map(|p| p.to_string_lossy().into_owned()),
     });
     println!("{}", serde_json::to_string(&obj)?);
-    println!(
-        "{}",
-        crate::text::envelope_summary(json!({"identities": 1}))
-    );
     Ok(())
 }
 

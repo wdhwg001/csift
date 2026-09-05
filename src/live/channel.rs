@@ -29,6 +29,7 @@
 //! - [`slots`] the temp-dir slot chain that orders concurrent hook processes
 //! - [`reconcile`] the ledger-against-transcript join (intent versus fact)
 //! - [`msg`] the `msg` and `ack` commands built on that join
+//! - [`reach`] the `whoami` lane sections, the `--to` prediction and the peer census
 
 // The commands that consume this layer (`deliver`, `send`, `msg`, `ack`, and the
 // `whoami` reach prediction) land in the following commits of the same release. Until
@@ -50,6 +51,7 @@ mod msg;
 mod outbox;
 mod paths;
 mod policy;
+mod reach;
 mod recipe;
 mod reconcile;
 mod send;
@@ -67,6 +69,13 @@ pub(crate) use marker::*;
 pub(crate) use msg::*;
 pub(crate) use outbox::*;
 pub(crate) use paths::*;
+// Named re-exports, not a glob: the reach surface carries lane vocabulary (`LaneRef`,
+// `Sections`) that only `whoami` needs, and flattening all of it into the channel namespace
+// would put two meanings of "lane" in one scope.
+pub(crate) use reach::{
+    emit_lane_sections, external_answer, resolve_one as resolve_lane, run_peers, run_reach_to,
+    LaneRef,
+};
 pub(crate) use recipe::*;
 pub(crate) use reconcile::*;
 pub(crate) use send::run_send;
