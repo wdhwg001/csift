@@ -13424,12 +13424,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "95-100",
-          "snippet": "    let reach = |c: Class| args.reaches_gated(c) || address.is_some();\n    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        queued: reach(Class::UserQueued),"
+          "lines": "104-110",
+          "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,\n        queued: reach(Class::UserQueued),\n        turn_duration: reach(Class::MetaTurnDuration),"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "395-399",
+          "lines": "419-423",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -20934,8 +20934,8 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "150-155",
-          "snippet": "        // Hook-injected additionalContext (a `type:\"attachment\"` record): harness machinery,\n        // not a message - labeled `harness.meta.hook`. Only `search --additional-context`\n        // (or an explicit `show --line`/`--uuid` address) ever parses these lines, so the\n        // label is unreachable elsewhere; the record never opens a turn.\n        if self.hook_additional_context_text().is_some() {\n            push_unique(&mut out, Class::MetaHook);"
+          "lines": "150-156",
+          "snippet": "        // Hook-injected additionalContext (a `type:\"attachment\"` record): harness machinery,\n        // not a message - `harness.meta.hook`, LED by `agent.communication.channel` when the\n        // injected text is a csift-channel delivery. Only `search --additional-context` (or an\n        // address, or the channel keep) parses these lines; the record never opens a turn.\n        if self.hook_additional_context_text().is_some() {\n            self.push_hook_classes(&mut out);"
         },
         {
           "path": "SKILL.md",
@@ -50290,13 +50290,13 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "312-319",
-          "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,\n    /// v0.10.0 (explicit selector or address): `queue-operation` lines."
+          "lines": "321-337",
+          "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "338-343",
-          "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;\n    // Every user/assistant record carries a `\"role\":\"user\"`/`\"role\":\"assistant\"`\n    // marker (genuine-user string content, tool carriers, assistant blocks all do)."
+          "lines": "347-352",
+          "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
       "instrument": "Compare `csift search '' --count-by label` with `csift search '' -t 'user.*' --count-by label` and `csift search '' -t harness.meta --count-by label`: the gated leaves are absent from the first and present in the others. Counting rule = matched records per leaf per invocation; a zero-match run with no reaching selector emits the stderr gated-leaves note and the JSON `gated_leaves_unreached` key. (The claim's `-c` form counts EXCHANGES, not records, so it cannot show a per-leaf admission.)",
@@ -78207,6 +78207,130 @@
           "observed": "8 word-boundary occurrences: 1 definition at 165809812 and 7 call sites at 165853188, 165853343, 165866160, 165871439, 165871972, 165872329 and 187316530, each passing one hook's single field. Between the accumulator push at 163198954 and the attachment build at 163199508 there is no threshold call, the nearest being 165853188; the PreToolUse inserter at 162928977 likewise carries content:W.additionalContexts with no call on the array. The bare fixed string returns 87 occurrences, contaminated by pipe( and unpipe(.",
           "rule": "Occurrences under the word-boundary regex for the enumeration (8), occurrences under the bare fixed string for the contaminated figure (87); the absence between the accumulator and the join is read as bytes between two offsets, not inferred.",
           "note": "The enumeration is what closes the negative: every occurrence of the helper name is read, so no eighth caller can be hiding over a joined value. Capacity is therefore additive across installed slots, which is the premise of one chunk per slot."
+        }
+      ]
+    },
+    {
+      "id": "MSG-011",
+      "area": "messaging",
+      "behavior": "Ten hook events insert a hook's `hookSpecificOutput.additionalContext` into the conversation as a `hook_additional_context` attachment record, each through its own inserter with its own hookName/toolUseID convention, and Stop and SubagentStop share one lane-selected inserter. At Claude Code 2.1.258 the inserters sit at byte offsets SessionStart 163199540, Setup 163200632, UserPromptSubmit 162720432, UserPromptExpansion 173533268, PreToolUse 162929090, PostToolUse 162921651, PostToolBatch 164749828, SubagentStart 163778093, Stop/SubagentStop 164633290 and PostModelSwitch 164703453.",
+      "depends": "csift reads a csift-channel delivery out of that attachment wherever it lands: the classifier keys on the attachment payload and on the injected text, never on the event that produced it, so a delivery injected at any of the ten events classifies `agent.communication.channel` beside `harness.meta.hook`. The delivery hook can therefore be registered on whichever of those events a receiver has configured. If one event stopped inserting, a delivery emitted at that event would leave no transcript record and the transcript half of the delivery evidence would be missing while the sender's ledger still recorded the emission.",
+      "code": [
+        {
+          "path": "src/model/classify_channel.rs",
+          "lines": "51-56",
+          "snippet": "    pub(crate) fn push_hook_classes(&self, out: &mut Vec<Class>) {\n        if self.csift_channel_text().is_some() {\n            push_unique(out, Class::CommChannel);\n        }\n        push_unique(out, Class::MetaHook);\n    }"
+        },
+        {
+          "path": "src/search/scan.rs",
+          "lines": "413-417",
+          "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
+        }
+      ],
+      "instrument": "Read the excerpt at each of the ten offsets in the Claude Code 2.1.258 binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte-for-byte; counting rule for a count = occurrences of the fixed byte string over the whole file. Corpus half: `csift search \"\" --additional-context -t harness.meta.hook --count-by attachment` over the projects root, one observation per record carrying the leaf.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the ten inserter offsets in the shipped binary as verbatim excerpts and record the trigger, gate and writer hop of at least one of them in `producer_chain`."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Byte-offset reads of the ten inserter constructions in the Claude Code 2.1.258 binary, paired with the corpus census of attachment-carried hook-context records.",
+          "observed": "Ten distinct inserter sites: SessionStart 163199540, Setup 163200632, UserPromptSubmit 162720432, UserPromptExpansion 173533268, PreToolUse 162929090, PostToolUse 162921651, PostToolBatch 164749828, SubagentStart 163778093, Stop/SubagentStop 164633290 (one lane-selected inserter for the pair) and PostModelSwitch 164703453; 88,889 attachment-carried hook-context records in the corpus.",
+          "rule": "One site per distinct inserter construction in the binary; one record per corpus record carrying the harness.meta.hook leaf.",
+          "note": "Landed with the `agent.communication.channel` leaf, which reads a delivery out of the attachment these ten events write."
+        }
+      ]
+    },
+    {
+      "id": "MSG-068",
+      "area": "messaging",
+      "behavior": "Hook-injected context lands in a subagent's own transcript and is addressable there: 89,090 corpus records carry the hook-context leaf, 7,869 of them in subagent lanes across 7,168 distinct subagent transcripts, and 88,889 of the 89,090 are carried by a `type:\"attachment\"` record.",
+      "depends": "The csift channel reaches a lane that no official transport can address - a workflow lane, an unnamed subagent's parent - only because the injected delivery is persisted in that lane's own transcript. csift keeps a delivery line under a DEFAULT scan in every lane, so `csift search` inside the receiving lane is the transcript half of the delivery evidence. If hook context stopped being persisted into a child's file, a delivery to a child lane would be unverifiable from disk and every reconciliation of it would have to read as intent-only.",
+      "code": [
+        {
+          "path": "src/search/scan.rs",
+          "lines": "96-103",
+          "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
+        }
+      ],
+      "instrument": "`csift search \"\" --additional-context -t harness.meta.hook --format json` over the projects root, cross-checked against `--count-by label` and `--count-by attachment` and against a raw grep of the attachment-type literal. Counting rule: one per record carrying the leaf, unscoped; the lane read from the record's own subagent flag.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the SubagentStart inserter and its isolatedContext gate in the shipped binary as verbatim excerpts to close the producer leg for the subagent-lane landing."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The three csift census queries over the projects root plus a raw grep of the `hook_additional_context` attachment-type literal.",
+          "observed": "89,090 records carry the hook-context leaf, 7,869 in subagent lanes across 7,168 distinct subagent transcripts, 88,889 attachment-carried, over 8,419 transcripts in scope.",
+          "rule": "One per record carrying the leaf, unscoped over 8,419 transcripts; the lane read from the record's own subagent flag; the attachment figure equals the raw grep of the type literal.",
+          "note": "Landed with the `agent.communication.channel` leaf: the default-on keep is what makes a delivery searchable in the lane that received it."
+        }
+      ]
+    },
+    {
+      "id": "MSG-069",
+      "area": "messaging",
+      "behavior": "A hook-context record's `hookName` and `hookEvent` are outside its searchable text: a query for the SubagentStart literal under the hook-context leaf returns 0 while 7,679 injection records name that event in their raw lines. Those fields are reachable only through the raw line, through the paired success attachment, or by a pattern that matches the injected content itself.",
+      "depends": "csift puts every fact a reader needs - the envelope id, the sender, the mode, the part counter - in the content string, and reads the sender back out of that same string, because the content array is the only part of the record a normal query can match. The candidate needle scans for a content-side literal rather than an event name for the same reason, and the leaf renders the first content string verbatim so the header a reader audits is the header that was delivered. Moving any of those facts into the hook metadata would make a delivery unmatchable by every default query, csift's own included.",
+      "code": [
+        {
+          "path": "src/model/classify_channel.rs",
+          "lines": "11-17",
+          "snippet": "    /// The RAW-BYTES candidate needle for the same envelope (the prefilter form, without\n    /// the opening bracket). Kept beside the prefix so the byte scan and the classifier\n    /// can never drift apart; a unit test pins that the needle is a run of the prefix.\n    /// Safe as a candidate needle by the SPEC 7d/R13 laws: it is a bare VALUE substring\n    /// of the injected content, carries no JSON-escaped character, and survives any\n    /// reserialization of the surrounding object.\n    pub(crate) const CSIFT_CHANNEL_NEEDLE: &'static str = \"csift-channel v1\";"
+        },
+        {
+          "path": "src/search/record_text.rs",
+          "lines": "91-95",
+          "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.meta.hook` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
+        }
+      ],
+      "instrument": "Two queries plus a grep: `csift search SubagentStart --additional-context -t harness.meta.hook -c` against `rg -c '\"hookEvent\":\"SubagentStart\"'` over the projects root. Counting rule: one per matched record for the query, one per matching line for the grep.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the attachment constructor and its renderer in the shipped binary as verbatim excerpts to confirm that hookName and hookEvent are carried outside the content array."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The hook-leaf query for the event literal against a raw grep of the `hookEvent` field over the same projects root.",
+          "observed": "0 records matched under the hook-context leaf; 7,679 raw lines carry the SubagentStart event field.",
+          "rule": "One per matched record for the query, one per matching line for the grep, same scope for both.",
+          "note": "Landed with the `agent.communication.channel` leaf, whose envelope carries its id, sender and mode in the content string for exactly this reason."
         }
       ]
     }

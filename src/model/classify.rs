@@ -148,11 +148,11 @@ impl Record {
         }
 
         // Hook-injected additionalContext (a `type:"attachment"` record): harness machinery,
-        // not a message - labeled `harness.meta.hook`. Only `search --additional-context`
-        // (or an explicit `show --line`/`--uuid` address) ever parses these lines, so the
-        // label is unreachable elsewhere; the record never opens a turn.
+        // not a message - `harness.meta.hook`, LED by `agent.communication.channel` when the
+        // injected text is a csift-channel delivery. Only `search --additional-context` (or an
+        // address, or the channel keep) parses these lines; the record never opens a turn.
         if self.hook_additional_context_text().is_some() {
-            push_unique(&mut out, Class::MetaHook);
+            self.push_hook_classes(&mut out);
             return out;
         }
 
@@ -589,6 +589,6 @@ impl Record {
             return Some((from, owner()));
         }
 
-        None
+        self.csift_channel_direction(ctx)
     }
 }

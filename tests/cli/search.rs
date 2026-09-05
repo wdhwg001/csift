@@ -1,6 +1,7 @@
 mod attachments;
 mod basics;
 mod census;
+mod channel;
 mod classify;
 mod diagnosis;
 mod filters;

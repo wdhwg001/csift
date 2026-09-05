@@ -22,7 +22,7 @@ use super::*;
         whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
         user.message | user.answer | user.rejection | user.unsent | user.queued | agent.message | \
         agent.thinking | agent.thinking.narration | agent.tool.use | agent.tool.result | \
-        agent.communication.{inbox,sent,signal} | \
+        agent.communication.{inbox,sent,signal,channel} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
         harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
@@ -149,7 +149,7 @@ use super::*;
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 34 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 35 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
         role's LLM-VISIBLE leaves - the conversation as the model receives/produces\n  \
         it. Eight leaves are invisible and need naming or a glob: `user.unsent`\n  \
@@ -194,7 +194,12 @@ use super::*;
         summary]\"; pure reasoning = -t agent.thinking\n                                   \
         -T agent.thinking.narration)\n           \
         .tool.use · .tool.result  tool traffic, paired by tool_use_id (the `▹` join)\n           \
-        .communication.{inbox,sent,signal}  peer messages, rendered `from ⇨ to`\n  \
+        .communication.{inbox,sent,signal}  peer messages, rendered `from ⇨ to`\n           \
+        .communication.channel  a csift-channel delivery: a message another lane (or a\n                                   \
+        sender outside Claude Code) had a hook inject into this\n                                   \
+        one. Rendered VERBATIM from its `[csift-channel v1 …]`\n                                   \
+        envelope, direction from the header's `from=`. The one\n                                   \
+        attachment leaf a DEFAULT scan sees\n  \
           harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
         .compaction.{summary,boundary} · .command.{invocation,stdout}\n           \
         .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop,attachment}\n           \

@@ -2,9 +2,12 @@
 
 use super::*;
 
-/// True for the three `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).
+/// True for the four `agent.communication.*` leaves (render `from ⇨ to`, GOLD §4).
 pub(crate) fn is_comm_class(c: Class) -> bool {
-    matches!(c, Class::CommInbox | Class::CommSent | Class::CommSignal)
+    matches!(
+        c,
+        Class::CommInbox | Class::CommSent | Class::CommSignal | Class::CommChannel
+    )
 }
 
 /// Render the transcript owner's own id as the literal `self` on either side of a comm direction
@@ -34,6 +37,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
             | Class::UserUnsent
             | Class::CommInbox
             | Class::CommSignal
+            | Class::CommChannel
             | Class::NotificationWorkflow
             | Class::NotificationMonitor
             | Class::NotificationSubagent
@@ -84,6 +88,11 @@ pub(crate) fn record_text_emission(
             Class::UserMessage | Class::UserUnsent | Class::CommInbox => {
                 rec.reconstructed_user_text(Some(plan_index))
             }
+            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +
+            // body), never a rewrite: the header is the receipt a reader audits, and a
+            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth
+            // marker. The `harness.meta.hook` view of the same record stays the joined form.
+            Class::CommChannel => rec.csift_channel_text(),
             // A teammate signal rides on the raw string; `reconstructed_user_text` returns it for a
             // teammate record (it flattens the content), with the raw text as the fallback.
             Class::CommSignal => rec

@@ -78,6 +78,14 @@ pub enum Class {
     CommSent,
     /// `agent.communication.signal` - a control/status comm (idle_notification, shutdown_*).
     CommSignal,
+    /// `agent.communication.channel` - a csift-channel delivery: a hook-injected
+    /// `hook_additional_context` attachment whose FIRST content string opens with the
+    /// envelope header `[csift-channel v1 …]`. It is a MESSAGE addressed at this lane by
+    /// another lane (or by a sender outside Claude Code), so it is the RICHEST view of a
+    /// record that also carries [`Class::MetaHook`] - and unlike that leaf it is admitted
+    /// by a DEFAULT scan: a delivery no ordinary query surfaces is a delivery nobody can
+    /// audit.
+    CommChannel,
     /// `harness.notification.workflow` - a `<task-notification>` for a dynamic/OMC workflow.
     NotificationWorkflow,
     /// `harness.notification.monitor` - a monitor/cron cadence completion pulse.
@@ -214,6 +222,7 @@ impl Class {
         Class::CommInbox,
         Class::CommSent,
         Class::CommSignal,
+        Class::CommChannel,
         Class::NotificationWorkflow,
         Class::NotificationMonitor,
         Class::NotificationSubagent,
@@ -254,6 +263,7 @@ impl Class {
             Class::CommInbox => "agent.communication.inbox",
             Class::CommSent => "agent.communication.sent",
             Class::CommSignal => "agent.communication.signal",
+            Class::CommChannel => "agent.communication.channel",
             Class::NotificationWorkflow => "harness.notification.workflow",
             Class::NotificationMonitor => "harness.notification.monitor",
             Class::NotificationSubagent => "harness.notification.subagent",
@@ -295,7 +305,8 @@ impl Class {
             | Class::AgentToolResult
             | Class::CommInbox
             | Class::CommSent
-            | Class::CommSignal => Role::Agent,
+            | Class::CommSignal
+            | Class::CommChannel => Role::Agent,
             Class::NotificationWorkflow
             | Class::NotificationMonitor
             | Class::NotificationSubagent

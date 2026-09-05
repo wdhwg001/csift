@@ -181,6 +181,67 @@ fn match_excerpt_full_budget_emits_whole_message() {
 }
 
 #[test]
+fn a_channel_delivery_renders_verbatim_as_a_message() {
+    // The record-text view of `agent.communication.channel` is the injected string
+    // VERBATIM (header line + body): the header is the receipt a reader audits, and a
+    // verbatim byte substring is what keeps the 7d/7f prefilter laws sound.
+    let rec: Record = serde_json::from_str(
+        r#"{"type":"attachment","uuid":"att1","attachment":{"type":"hook_additional_context","content":["[csift-channel v1 id=abc part=1/1 mode=steer from=aRelay-0123456789abcdef]\nthrottlebeacon the region queue","a second block"]}}"#,
+    )
+    .unwrap();
+    let labels = rec.classify(&crate::model::ClassifyCtx::top_level());
+    let (class, text) =
+        record_text_emission(&rec, &labels, LabelFilter::all(), &PlanIndex::default())
+            .expect("a channel delivery emits");
+    assert_eq!(class, Class::CommChannel, "the message view is the richest");
+    assert_eq!(
+        text,
+        "[csift-channel v1 id=abc part=1/1 mode=steer from=aRelay-0123456789abcdef]\nthrottlebeacon the region queue"
+    );
+    // Under a hook-only selector the SAME record renders the harness view instead: the
+    // joined content, exactly as every other hook context renders.
+    let include = vec!["harness.meta.hook".to_string()];
+    let hook_only = LabelFilter::new(&include, &[]);
+    let (class, text) =
+        record_text_emission(&rec, &labels, hook_only, &PlanIndex::default()).expect("hook view");
+    assert_eq!(class, Class::MetaHook);
+    assert!(
+        text.ends_with("\na second block"),
+        "the hook view is the joined content: {text:?}"
+    );
+    // A delivery renders as a message: the agent glyph, the comm direction, and no
+    // sibling cap (harness leaves are capped at 2 per turn; a message never is).
+    assert_eq!(role_glyph(Class::CommChannel), '▸');
+    assert_eq!(sibling_cap(Class::CommChannel), None);
+    let hit = Hit {
+        class: Class::CommChannel,
+        labels: vec!["agent.communication.channel", "harness.meta.hook"],
+        excerpt: String::new(),
+        timestamp_utc: None,
+        tool_name: None,
+        model: None,
+        attachment_type: Some("hook_additional_context".into()),
+        version: None,
+        is_error: None,
+        direction: Some(("aRelay-0123456789abcdef".into(), "self".into())),
+        tool_use_id: None,
+        pair: None,
+        line: 2,
+        uuid: None,
+        raw: None,
+        image_ids: Vec::new(),
+        from_sidecar: false,
+        queue_operation: None,
+        queue_reason: None,
+        truncated: false,
+    };
+    assert_eq!(
+        render_label(&hit),
+        "agent.communication.channel  aRelay-0123456789abcdef ⇨ self"
+    );
+}
+
+#[test]
 fn sibling_cap_policy_is_fixed_and_message_classes_uncapped() {
     // Message classes always render (None = uncapped); chattier machinery is capped.
     assert_eq!(sibling_cap(Class::UserMessage), None);

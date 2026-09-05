@@ -93,10 +93,19 @@ pub(crate) fn search_one_file(
     // reaches the leaf (`reaches_gated` - a bare no-`-t` scan never parses them) or an
     // address (`show --line`/`--uuid` renders an addressed line flag-free).
     let reach = |c: Class| args.reaches_gated(c) || address.is_some();
+    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not
+    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not
+    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any
+    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`
+    // short-circuit before the memmem and pay nothing (and never surface a delivery under
+    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by
+    // the two attachment gates above.
+    let needs_channel = args.label_filter().selected(Class::CommChannel.path());
     let gates = CandidateGates {
         compact_boundary: needs_compact_boundary,
         hook_context: needs_hook_context,
         attachments: needs_attachments,
+        channel: needs_channel,
         queued: reach(Class::UserQueued),
         turn_duration: reach(Class::MetaTurnDuration),
         away_summary: reach(Class::MetaAwaySummary),
@@ -228,6 +237,18 @@ pub(crate) fn search_one_file(
         }
     });
 
+    // v0.11.0: the channel needle is DEFAULT-ON and admits any line carrying the envelope
+    // literal, so an ordinary hook context that merely MENTIONS it reaches this point too.
+    // The hook leaf keeps its own flag (the gated-leaves law): such a record survives a
+    // default scan only as a delivery (its first content string opens with the header),
+    // never as bare `harness.meta.hook`. An address or either attachment flag admits it as
+    // before, so nothing an explicit query could reach is dropped here.
+    if !gates.hook_context && !gates.attachments && address.is_none() {
+        records.retain(|k| {
+            k.rec.hook_additional_context_text().is_none() || k.rec.csift_channel_text().is_some()
+        });
+    }
+
     // ── Transparent elicitation-sidecar merge (§3.10) ──
     // A TOP-LEVEL session may have a hook-written `elicitations.jsonl` carrying the
     // unresolved-pending AskUserQuestion/ExitPlanMode/MCP records that are MISSING from the
@@ -316,6 +337,10 @@ pub(crate) struct CandidateGates {
     pub(crate) hook_context: bool,
     /// `--attachments` / the attachment axis (or an address): every attachment line.
     pub(crate) attachments: bool,
+    /// v0.11.0 (a selector reaching `agent.communication.channel`, which a bare scan
+    /// does): a csift-channel delivery attachment. DEFAULT-ON, unlike every other
+    /// attachment keep - a delivery is a message, not machinery.
+    pub(crate) channel: bool,
     /// v0.10.0 (explicit selector or address): `queue-operation` lines.
     pub(crate) queued: bool,
     /// v0.10.0: `system`/`turn_duration` lines.
@@ -355,6 +380,12 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
     // survives a reserialize; R13).
     static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"attachment\""));
+    // v0.11.0 csift channel: the envelope needle is a bare VALUE substring of the injected
+    // content - ASCII, no JSON-escaped character - so it survives a reserialize (R13) and a
+    // decoded match implies a raw match. Shared with the classifier via one constant so the
+    // byte scan and the leaf can never drift.
+    static CHANNEL_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memmem::Finder::new(Record::CSIFT_CHANNEL_NEEDLE.as_bytes()));
     // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the
     // `type` values `"queue-operation"` and `"file-history-` (a prefix covering both
     // `-snapshot` and `-delta`), and the bare `subtype` values for the three system
@@ -391,6 +422,11 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // Opt-in FULL attachment keep (`search --attachments` / `--count-by attachment`, or an
         // explicit address). Same `&&`-gating law: a default scan pays ZERO.
         || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())
+        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on
+        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it
+        // still runs only on a line that failed both role checks, and a `-t` that cannot
+        // reach the leaf short-circuits before the memmem.
+        || (gates.channel && CHANNEL_FINDER.find(line).is_some())
         // v0.10.0 promoted lines, each behind its own explicit-selector gate.
         || (gates.queued && QUEUED_FINDER.find(line).is_some())
         || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())
