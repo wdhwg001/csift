@@ -103,7 +103,13 @@ use super::*;
         SEE ALSO\n  \
           search is the surface that PRINTS image handles (`[N image(s): #7]` / `L123i1`), so: \
         csift image <target> --id <ID> --out DIR extracts them to files you can then Read - pass a \
-        `#N` handle as the bare number. An image-bearing row is evidence, not a blank.\n\n\
+        `#N` handle as the bare number. An image-bearing row is evidence, not a blank.\n  \
+          search is also the FACT half of the csift channel: a delivered message lands in the \
+        receiving lane as an attachment carrying its envelope, so `csift search '<message id>' \
+        @<lane> --additional-context` proves the text reached that lane's context. \
+        `csift msg <ID>` runs that same join and adds csift's own ledger beside it. The \
+        delivery itself needs no flag: `agent.communication.channel` is the one attachment \
+        leaf a DEFAULT scan sees.\n\n\
         COUNT (`-c` / `--count-only`)\n  \
           `-c`/`--count-only` prints just the integer EXCHANGE total: matched round-trips, \
         the ripgrep `-c` idiom, honoring every filter (per-RECORD counts are `--count-by`). \
@@ -504,7 +510,9 @@ pub struct SearchArgs {
     /// UserPromptSubmit / … hook writes into the transcript. Off by default: injected context
     /// is harness machinery and often echoes prompts and files wholesale, drowning genuine
     /// hits. When enabled, these records surface under `harness.meta.hook`; an explicit
-    /// `show --line`/`--uuid` address always renders one, flag or not.
+    /// `show --line`/`--uuid` address always renders one, flag or not. ONE hook payload is
+    /// exempt and always scanned: a csift-channel delivery (`agent.communication.channel`),
+    /// because a message another lane sent this one is not machinery.
     #[arg(long)]
     pub additional_context: bool,
 

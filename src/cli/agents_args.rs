@@ -101,7 +101,8 @@ pub enum AgentKindFilter {
         started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
         depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
         pending_since_utc/_local, skipped_lines, fork_parent_last_uuid, \
-        fork_context_length} (+ control_hint on a teammate; the fork_* pair is non-null \
+        fork_context_length} (+ control_hint and routing_id on a teammate row, and only \
+        there; the fork_* pair is non-null \
         ONLY on a /fork child - the parent's last record uuid at fork time, feedable to \
         `csift show @<parent_session_id> --uuid <it>`, and the carried context length; \
         STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \
@@ -137,7 +138,21 @@ pub enum AgentKindFilter {
         (system-local ISO). The malformed-line count rides on each agent row's \
         `skipped_lines`: a head/tail WINDOW census like `list`'s (lifecycle reads only the \
         transcript's edges; full census: `csift stats @<agent-id>`). \
-        Idiom: jq 'select(.kind==\"agent\")' reaches every node."
+        Idiom: jq 'select(.kind==\"agent\")' reaches every node.\n\n\
+        A TEAMMATE HAS TWO IDS AND BOTH ARE PRINTED\n  \
+          Its node line carries `routing: <Name>@<Team>` beside the transcript id, and its \
+        JSON row carries `routing_id`. Both need a name AND a team in the meta; with either \
+        missing the text line is omitted and the JSON field is null, never fabricated. The \
+        routing form is what the official send tool takes; the `a<Name>-<hex>` form is what \
+        the hook payload and the transcript file carry. Only the routing form can collide, \
+        since two same-named teammates in one team share it, so csift keys on the \
+        transcript id and fails loud when a routing form matches more than one lane. Both \
+        are usable as an `@` target on every command.\n\n\
+        SEE ALSO\n  \
+          csift whoami @<agent-id>    the same lane seen from itself: self, parent, topology\n  \
+          csift whoami --peers        every LIVE lane in the projects root, all sessions\n  \
+          csift status @<uuid>        one live verdict with its evidence, not a tree\n  \
+          csift send @<agent-id> \"…\"  message one of these lanes on the csift channel"
 )]
 pub struct AgentsArgs {
     /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an

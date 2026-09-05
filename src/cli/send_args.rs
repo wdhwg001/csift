@@ -77,7 +77,14 @@ impl SendMode {
         top-level session, so without `--from @<lane>` the send is attributed to the session \
         and says so on stderr. Outside Claude Code the caller is EXTERNAL and `--from` is a \
         free label for the receipt - csift never fills it from your environment, and it is \
-        never a username."
+        never a username.\n\n\
+        SEE ALSO\n  \
+          csift msg <ID>              did it land? csift's ledger joined to the receiver's proof\n  \
+          csift ack <ID>              the receiver's own record that it read one\n  \
+          csift deliver --recipe      the hook block the RECEIVER's owner installs to get any\n  \
+          csift whoami --to @<lane>   the same prediction, with nothing queued and nothing written\n  \
+          csift status @<lane>        is that lane alive, and what is it doing right now\n  \
+          csift agents @<uuid>        the lane ids to address (a teammate prints both its forms)"
 )]
 pub struct SendArgs {
     /// The receiver lane, in any `@`-form csift accepts: `@<uuid>` (or its leading-hex
@@ -110,8 +117,8 @@ pub struct SendArgs {
     pub from: Option<String>,
 
     /// Permit the official RESUME of a completed lane. Without it a completed teammate or
-    /// unnamed subagent is REFUSED, because reaching one respawns it rather than delivering
-    /// to it.
+    /// unnamed subagent is REFUSED, because reaching one respawns the lane instead of
+    /// delivering to it.
     #[arg(long)]
     pub resume: bool,
 

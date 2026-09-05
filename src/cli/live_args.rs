@@ -121,7 +121,12 @@ pub struct BackgroundLensArgs {
         launched_utc, launched_local, age_secs, output_file, output_bytes, \
         output_age_secs, ignored_by} - open tasks only], notes:[...]}, \
         last:{user:{ts_utc, ts_local, text, truncated}|null, agent:{...}|null}, \
-        tail_state, notes:[...]} → {kind:\"summary\", verdict}."
+        tail_state, notes:[...]} → {kind:\"summary\", verdict}.\n\n\
+        SEE ALSO\n  \
+          csift whoami --peers        every live lane at once, as `id kind state` only\n  \
+          csift whoami --to @<lane>   liveness turned into a reach prediction for one lane\n  \
+          csift send @<lane> \"…\"      queue a message; this verdict is what it reasons over\n  \
+          csift agents @<uuid>        the lane tree below a session, live and settled alike"
 )]
 pub struct StatusArgs {
     /// ONE session: `@<uuid>` | `@<uuid-prefix>` | `@main` | `@<agent-id>` | a `*.jsonl`

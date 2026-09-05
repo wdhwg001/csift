@@ -447,7 +447,14 @@ impl VerbatimArgs {
           Envelope: header → {kind:\"identity\", session_id, is_subagent, parent_session_id, \
         depth, path} rows → a {kind:\"summary\", identities} terminator. One identity row for \
         a plain run; `@trap:<marker>` emits the full upstream chain, depth 0 (yourself) up \
-        to the top-level root. Select with `jq 'select(.kind==\"identity\")'`."
+        to the top-level root. Select with `jq 'select(.kind==\"identity\")'`.\n\n\
+        SEE ALSO\n  \
+          csift send @<lane> \"…\"      act on the prediction: queue a message for that lane\n  \
+          csift msg                   the calling lane's channel ledger, newest first\n  \
+          csift ack <ID>              record that this lane read a delivered message\n  \
+          csift deliver --recipe      the hook block a lane needs installed to be reachable\n  \
+          csift status @<lane>        the full live verdict for one lane, with its evidence\n  \
+          csift agents @<uuid>        the lanes BELOW a session (the walk-DOWN mirror)"
 )]
 pub struct WhoamiArgs {
     /// Optional SELF target: `@trap:<marker>`, `@main`, or a LANE id (`@<agent-id>` /

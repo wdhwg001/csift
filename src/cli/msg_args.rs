@@ -48,7 +48,18 @@ use super::*;
         expired, acked, refused_reasons, from, relation, enqueued_utc, enqueued_local, \
         expires_utc, expires_local, fact:{line, uuid}|null}. `fact` is null for every \
         verdict but DELIVERED and an acked delivery. Summary: {kind:\"summary\", messages, \
-        skipped_lines}."
+        skipped_lines}.\n\n\
+        THE FACT HALF ON ITS OWN\n  \
+          `csift search '<ID>' @<lane> --additional-context` is the transcript side of the \
+        join, and `msg` runs exactly that. The flag is harmless but not needed here: a \
+        csift-channel delivery is the ONE attachment payload a DEFAULT scan already parses, \
+        under the leaf `agent.communication.channel`, rendered verbatim from its envelope.\n\n\
+        SEE ALSO\n  \
+          csift ack <ID>              record that this lane read the message\n  \
+          csift send @<lane> \"…\"      queue one\n  \
+          csift deliver --recipe      the hook block a receiver needs to get any at all\n  \
+          csift status @<lane>        is the lane even alive to receive\n  \
+          csift whoami                which lane you are, when the lane to pass is unclear"
 )]
 pub struct MsgArgs {
     /// The 16-lowercase-hex message id csift printed when the message was sent. With no
@@ -91,14 +102,28 @@ pub struct MsgArgs {
         read it can say it acted on it.\n\n\
         THE CALLER MUST BE A CLAUDE CODE LANE. An ack is a receiver's claim about its own \
         context, so a process outside Claude Code (no $CLAUDE_CODE_SESSION_ID) cannot make it \
-        and csift refuses rather than writing a line nobody can attribute. Inside Claude Code, \
+        and csift refuses instead of writing a line nobody can attribute. Inside Claude Code, \
         the environment names the TOP-LEVEL session in every lane, so a subagent acking its own \
         deliveries passes `--lane @<its agent id>`.\n\n\
         The id must already be known to that lane (an inbox line or a ledger line): acking an \
         id the lane never received would write a record that joins to nothing, so it is a hard \
         error naming what the lane does hold.\n\n\
         csift writes only its own sidecar directory `<session>/csift-channel/`: never a \
-        transcript, never the team mailbox, never a settings file."
+        transcript, never the team mailbox, never a settings file.",
+    after_help = "EXAMPLES\n  \
+          csift ack 0123456789abcdef                     # this session's own lane read it\n  \
+          csift ack 0123456789abcdef --lane @<agent-id>  # ...a subagent acking its own\n  \
+          csift ack 0123456789abcdef --format json       # the machine receipt\n\n\
+        JSON (--format json)\n  \
+          The envelope's `{\"kind\":\"header\", command:\"ack\", lane, session}` line, ONE \
+        `{\"kind\":\"ack\", id, lane, session, ts_utc, ts_local, already_acked}` row, and the \
+        `{\"kind\":\"summary\", acked}` line. `already_acked` is true when the lane had acked \
+        this id before; the new line is still appended, so the ledger keeps every claim.\n\n\
+        SEE ALSO\n  \
+          csift msg <ID>              the verdict this ack turns into ACKED\n  \
+          csift send @<lane> \"…\"      queue a message for another lane\n  \
+          csift deliver --recipe      the hook block that delivers them\n  \
+          csift whoami                which lane you are, when you are unsure what to pass"
 )]
 pub struct AckArgs {
     /// The 16-lowercase-hex message id to acknowledge.

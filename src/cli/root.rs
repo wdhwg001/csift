@@ -1,4 +1,4 @@
-//! Cli root + the Command enum (13 subcommands + the hidden turns tombstone).
+//! Cli root + the Command enum (17 subcommands + the hidden turns tombstone).
 
 use super::*;
 
@@ -34,14 +34,14 @@ use super::*;
                    waiting-hitl / idle-eot / stale-dead / unknown, with the evidence named\n  \
           wait     block until a session condition fires (stop / hitl / auq / notification /\n           \
                    tool: / write: / verdict:), exit 124 on --timeout\n  \
-          deliver  hook entry; called by Claude Code through the installed hook, not by\n           \
-                   hand (except --recipe, which prints the block you paste)\n\n\
-          msg      reconcile a csift-channel message: the ledger's INTENT joined to the\n           \
-                   receiver transcript's FACT, one verdict; with no id, the lane's ledger\n  \
-          ack      record that the calling lane READ a channel message (appends an ack line)\n\n\
           send     queue a message for ONE lane on the csift channel (a user-installed\n           \
                    `csift deliver` hook carries it); one verdict per send, official sends\n           \
-                   are printed for you to make, never performed\n\n\
+                   are printed for you to make, never performed\n  \
+          msg      reconcile a csift-channel message: the ledger's INTENT joined to the\n           \
+                   receiver transcript's FACT, one verdict; with no id, the lane's ledger\n  \
+          ack      record that the calling lane READ a channel message (appends an ack line)\n  \
+          deliver  hook entry; called by Claude Code through the installed hook, not by\n           \
+                   hand (except --recipe, which prints the block you paste)\n\n\
         list/search/stats/files/recover/plan/image/status/wait span each session's subagent \
         transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
@@ -56,7 +56,10 @@ use super::*;
         TARGETING a session/agent (always positional): `@<uuid>` (or its \
         leading-hex prefix, e.g. `@13d9645a`) scopes to one session; `@<agent-id>` to one \
         subagent + its subtree (a bare hex ≥12 OR a teammate `aName-<hex>` id; exactly what \
-        `csift agents` prints); `@main` is the CALLING top-level session (read from \
+        `csift agents` prints); `@<Name>@<Team>` is a teammate's ROUTING form (the `routing:` \
+        field `agents` prints beside that transcript id, and the value the official send tool \
+        takes) and resolves to that one teammate, failing loud when two teammates share it; \
+        `@main` is the CALLING top-level session (read from \
         $CLAUDE_CODE_SESSION_ID); a `*.jsonl` path scopes to that one transcript. A BARE uuid \
         (no `@`) is NOT special. `--sessions-from <FILE|->` scopes to a LIST of ids (one per \
         line, e.g. piped from `search -l`) on every multi-target subcommand.\n\n\
@@ -152,12 +155,29 @@ use super::*;
         renders as-is), so piping text output through `head -N` can cut mid-record and\n    \
         hide the overflow pointers. The line-safe machine form is `--format json` (one\n    \
         object per line); the honest caps are `--max-count` and the built-in drop reports.\n\n\
+        THE CHANNEL (send / msg / ack / deliver)\n  \
+          A message channel between Claude Code lanes, and into one from any process\n  \
+        outside Claude Code. It exists because the official channel is structurally\n  \
+        absent for some receivers: a running workflow lane cannot be reached by the send\n  \
+        tool at all, an unnamed subagent cannot reach its parent subagent, nothing\n  \
+        reaches an idle top-level session that published no socket, and a sender outside\n  \
+        Claude Code holds no tool to call. `csift send @<lane> \"…\"` queues a message and\n  \
+        prints one verdict saying what will carry it (where an official transport exists\n  \
+        the receipt prints the call for YOU to make, since csift is a binary and those\n  \
+        are model tools). A `csift deliver --slot k` hook, which the RECEIVER's owner\n  \
+        pastes into settings.json, carries it in; `csift deliver --recipe` prints that\n  \
+        block. `csift msg <ID>` says whether it landed, joining csift's own ledger to the\n  \
+        receiver transcript's proof; `csift ack <ID>` is the receiver saying it read one.\n  \
+        `csift whoami --to @<lane>` runs the same prediction with nothing queued.\n\n\
         WHAT csift WILL NOT DO\n  \
           Semantic/BM25 search (regex is the tool; broaden the pattern, or census first);\n  \
         ad-hoc aggregation languages (the closed `--count-by` axes, `stats`, and\n  \
         `files --by` are the built-ins; anything else: `--raw | jq`); diffs (fetch both\n  \
-        sides with `show` / `recover --at`, diff outside); writing or terminating\n  \
-        anything. csift only reads.\n\n\
+        sides with `show` / `recover --at`, diff outside); terminating anything.\n  \
+          Every command reads. Three write, and only ever one directory: `send`,\n  \
+        `deliver` and `ack` write the csift-owned `<session>/csift-channel/`. Never a\n  \
+        transcript, never the team mailbox, never the messaging socket, never the session\n  \
+        registry, never a settings file. Arming the channel is an edit you make yourself.\n\n\
         RETENTION\n  \
           Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\n  \
         Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\n  \
