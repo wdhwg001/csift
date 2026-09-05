@@ -49,6 +49,7 @@ pub(crate) fn render_text(
         println!();
         println!("{TEAMMATE_CONTROL_HINT_L1}");
         println!("{TEAMMATE_CONTROL_HINT_L2}");
+        println!("{TEAMMATE_CONTROL_HINT_L3}");
     }
 }
 
@@ -179,6 +180,14 @@ pub(crate) fn print_node_block(n: &SubagentNode, view: &View, depth: usize) {
         head.push_str(&format!("  [{t}]"));
     }
     head.push_str(&format!("  {}", n.status.label()));
+    // A teammate answers to TWO ids: the transcript id leading this line and the ROUTING form
+    // the official SendMessage takes. Print both together so neither has to be guessed - they
+    // are minted apart at spawn, so one cannot be derived from the other.
+    if n.kind == SubagentKind::Teammate {
+        if let Some(rid) = crate::subagent::routing_id(n.name.as_deref(), n.team_name.as_deref()) {
+            head.push_str(&format!("  routing: {rid}"));
+        }
+    }
     println!("{head}");
 
     // A `/fork` child: name the fork point (the parent's last record uuid at fork

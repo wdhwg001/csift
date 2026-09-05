@@ -186,6 +186,14 @@ pub(crate) fn node_json(n: &SubagentNode, view: &View) -> serde_json::Value {
             "control_hint".to_string(),
             serde_json::Value::String(TEAMMATE_CONTROL_HINT_JSON.to_string()),
         );
+        // The teammate's OTHER id: `agent_id` above is the transcript form, this is the
+        // ROUTING form the official SendMessage addresses. Null when the meta carried no
+        // team name - the routing id is then unknowable, never fabricated.
+        map.insert(
+            "routing_id".to_string(),
+            crate::subagent::routing_id(n.name.as_deref(), n.team_name.as_deref())
+                .map_or(serde_json::Value::Null, serde_json::Value::String),
+        );
     }
     if view.want_returned {
         map.insert(

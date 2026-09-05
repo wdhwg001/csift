@@ -66,6 +66,34 @@ pub fn is_subagent_id(s: &str) -> bool {
     is_bare_subagent_hex(s) || is_teammate_agent_id(s)
 }
 
+/// True for the teammate ROUTING form `<Name>@<Team>` - the id the official SendMessage
+/// addresses (Claude Code mints it as `identity.agentId` by interpolating the requested name
+/// and the raw team name). A teammate therefore carries TWO ids, minted apart at spawn:
+/// this routing form and the `a<Name>-<16hex>` TRANSCRIPT form ([`is_teammate_agent_id`],
+/// `identity.resumableAgentId`, the jsonl stem) - neither is derivable from the other.
+/// Recognised as an `@`-target so the id the official tool wants is also a csift target.
+pub(crate) fn is_teammate_routing_id(s: &str) -> bool {
+    split_teammate_routing_id(s).is_some()
+}
+
+/// Split the routing form into `(name, team)`: `[A-Za-z0-9_-]+`, one `@`, `[A-Za-z0-9_-]+`.
+/// `None` when the shape does not match. The interior `@` is what makes the split
+/// unambiguous - every OTHER `@`-target shape (uuid, uuid prefix, agent id, `main`,
+/// `trap:<marker>`, an encoded project dir) is `@`-free after the sigil, and neither half may
+/// itself contain an `@`. The routing form is NOT unique: Claude Code de-duplicates only its
+/// own name-to-id registry key, never the minted id, so two live same-named teammates in one
+/// team share one routing form while their transcript ids differ - a caller resolving it must
+/// fail loud on more than one match rather than pick.
+pub(crate) fn split_teammate_routing_id(s: &str) -> Option<(&str, &str)> {
+    let (name, team) = s.split_once('@')?;
+    let part_ok = |p: &str| {
+        !p.is_empty()
+            && p.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    };
+    (part_ok(name) && part_ok(team)).then_some((name, team))
+}
+
 /// True for a session-uuid PREFIX in either emitted form:
 /// - the short dash-less run (`@13d9645a`, 4..=11 hex) - long enough to be near-collision-free
 ///   (a uuid's first segment is 8 hex = 4 billion), short enough that it is unambiguously

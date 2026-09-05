@@ -7,7 +7,8 @@ use super::*;
 ///
 /// This is the SINGLE shared target resolver for `list` / `search` / `agents` / `files` /
 /// `recover` / `turns` / `image`. There is NO `--session` flag - a session is targeted by a
-/// positional `@<uuid>` / `@<agent-hex>` / `@main` / `@trap:<marker>` token or a `*.jsonl` file; a real
+/// positional `@<uuid>` / `@<agent-hex>` / `@<name>@<team>` / `@main` / `@trap:<marker>` token or a
+/// `*.jsonl` file; a real
 /// path / encoded-dir token / `~/.claude/projects/<enc>` scopes to project dir(s). 0 `paths` ⇒
 /// every project under the projects root. The subagent transcripts of a selected session
 /// (built-in Task/Agent-tool + workflow / OMC agents under `subagents/**`) are gathered from
@@ -29,6 +30,7 @@ pub fn resolve_session_files(
         session_ids,
         session_prefixes,
         mut agent_hexes,
+        routing_teammates,
         project_paths,
         explicit_dirs,
         session_target,
@@ -43,6 +45,13 @@ pub fn resolve_session_files(
         // No project / encoded / jsonl target: scan every project (a uuid-only or `@main`
         // invocation searches all projects for that session).
         dirs = all_project_dirs()?;
+    }
+
+    // A teammate ROUTING form (`@<Name>@<Team>`) names a transcript only through the teammate
+    // metas on disk, so it resolves HERE - the first point where the project dirs are known -
+    // and from there dispatches exactly like an `@<agent-id>` target.
+    for (name, team) in &routing_teammates {
+        agent_hexes.push(resolve_teammate_routing(&dirs, name, team)?);
     }
 
     let _ = caller; // reserved for future subcommand-aware guidance
@@ -116,6 +125,9 @@ struct Targets {
     /// AGENT targets (`@<agent-hex>` / `@trap:<marker>`→agent / a subagent `*.jsonl`): each
     /// resolves to that subagent + (unless `--no-subagents`) its TOPOLOGICAL descendants.
     agent_hexes: Vec<String>,
+    /// Teammate ROUTING targets (`@<Name>@<Team>`) as `(name, team)`. Kept apart from
+    /// `agent_hexes` because the transcript id they name is on disk, not in the token.
+    routing_teammates: Vec<(String, String)>,
     project_paths: Vec<std::path::PathBuf>,
     /// Dirs resolved DIRECTLY from a token (an `@<encoded>` id or a `*.jsonl` file) - kept
     /// apart from `project_paths` so they don't trigger the all-projects scan.
@@ -130,6 +142,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
     let mut session_ids: Vec<String> = Vec::new();
     let mut session_prefixes: Vec<String> = Vec::new();
     let mut agent_hexes: Vec<String> = Vec::new();
+    let mut routing_teammates: Vec<(String, String)> = Vec::new();
     let mut project_paths: Vec<std::path::PathBuf> = Vec::new();
     let mut explicit_dirs: Vec<ProjectDir> = Vec::new();
     let mut session_target = false;
@@ -173,6 +186,14 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     session_target = true;
                 }
                 _ if is_subagent_id(id) => agent_hexes.push(id.to_string()),
+                // `@<Name>@<Team>` - a teammate's ROUTING form (the id the official SendMessage
+                // takes). It is the ONE shape carrying an interior `@`, so it is claimed before
+                // the encoded-dir arm (a name may lead with `-`), and resolved once the dirs are.
+                _ if is_teammate_routing_id(id) => {
+                    if let Some((name, team)) = split_teammate_routing_id(id) {
+                        routing_teammates.push((name.to_string(), team.to_string()));
+                    }
+                }
                 // A short dashless hex run (4..=11) is a uuid PREFIX (the first segment is 8),
                 // never a full uuid (32+dashes) or an agent hex (≥12) - resolve it uniquely.
                 _ if is_uuid_prefix(id) => {
@@ -203,9 +224,10 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     bail!(
                         "`@{id}` is not a recognized @-target — expected `@<uuid>` | \
                          `@<uuid-prefix>` (4-11 dashless leading hex) | `@<agent-id>` \
-                         (what `csift agents` prints) | `@main` | `@trap:<marker>` | \
-                         `@-Users-…` / `@C--Users-…` (an encoded project dir). A project \
-                         PATH is targeted without `@`."
+                         (what `csift agents` prints) | `@<name>@<team>` (a teammate's \
+                         routing form) | `@main` | `@trap:<marker>` | `@-Users-…` / \
+                         `@C--Users-…` (an encoded project dir). A project PATH is \
+                         targeted without `@`."
                     );
                 }
             }
@@ -253,11 +275,16 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         // mental model back to the caller. Catch the id SHAPE (unless a real path of
         // that name exists) and say the exact fix.
         if let Some(tok) = p.to_str() {
-            if (is_uuid(tok) || is_uuid_prefix(tok) || is_subagent_id(tok)) && !p.exists() {
+            if (is_uuid(tok)
+                || is_uuid_prefix(tok)
+                || is_subagent_id(tok)
+                || is_teammate_routing_id(tok))
+                && !p.exists()
+            {
                 bail!(
                     "'{tok}' looks like a session/agent id, not a project path — did you \
                      mean '@{tok}'? (ids are targeted with an `@` prefix: `@<uuid>` | \
-                     `@<uuid-prefix>` | `@<agent-id>`)"
+                     `@<uuid-prefix>` | `@<agent-id>` | `@<name>@<team>`)"
                 );
             }
         }
@@ -269,6 +296,7 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
         session_ids,
         session_prefixes,
         agent_hexes,
+        routing_teammates,
         project_paths,
         explicit_dirs,
         session_target,
@@ -543,7 +571,8 @@ pub(crate) fn top_level_jsonls(dir: &Path) -> Vec<PathBuf> {
 
 /// True when a TARGET token pins a SINGLE transcript/session (so `search`'s empty-pattern
 /// warning knows a session filter is present, and `show` can resolve one file): `@main`, a
-/// `@trap:<marker>` self-token, an `@<uuid>`/`@<agent-hex>`/`@<uuid-prefix>` id, or a `*.jsonl`
+/// `@trap:<marker>` self-token, an `@<uuid>`/`@<agent-hex>`/`@<uuid-prefix>` id, a teammate's
+/// `@<name>@<team>` routing form (it resolves to one transcript or bails), or a `*.jsonl`
 /// file. A plain path or encoded-dir token can span many sessions, so it does NOT pin.
 #[must_use]
 pub fn pins_single_session(token: &str) -> bool {
@@ -552,6 +581,7 @@ pub fn pins_single_session(token: &str) -> bool {
             || id.starts_with("trap:")
             || is_uuid(id)
             || is_subagent_id(id)
+            || is_teammate_routing_id(id)
             || is_uuid_prefix(id);
     }
     token.ends_with(".jsonl")

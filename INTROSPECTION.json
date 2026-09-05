@@ -76917,6 +76917,146 @@
         "The idle-with-pairs suffix would be produced by arming the idle timeout, answering one question of a multi-question ask and letting it expire; it has no corpus specimen and no fixture.",
         "The did-not-answer template would be produced by an answerer returning an updatedInput with an empty answers map and no response; it has no corpus specimen."
       ]
+    },
+    {
+      "id": "MSG-025",
+      "area": "messaging",
+      "behavior": "A teammate carries TWO ids, minted apart inside one spawn call, and the hook-visible `agent_id` is the transcript one. At 2.1.258 the in-process teammate spawn destructures the request and mints both at 176267713: `let{name:e,teamName:g,prompt:l,color:k,planModeRequired:d,model:P}=o,{taskRegistry:A}=s,r=yx(e,g),f=Yh(\"in_process_teammate\"),c=o.resumableAgentId??Oh(e);` then builds the identity `S={agentId:r,agentName:e,teamName:g,...}`. `r` comes from yx (158795040), `function yx(e,n){return `${e}@${n}`}` - the ROUTING form `Name@TeamName`, which becomes `identity.agentId`, the value the official send tool addresses. `c` comes from Oh (156730495), `function Oh(e){if(e&&!Qe.test(e))e=e.replace(/[^\\w-]/g,\"\").slice(0,63);let t=yn(8).toString(\"hex\");return e?`a${e}-${t}`:`a${t}`}` - the `a<Name>-<16 hex>` form, kept as `identity.resumableAgentId` and used as the transcript file stem. The hook payload's `agent_id` carries the resumableAgentId, not the routing form (176256059, 176267821). The two share no bytes beyond the name: one ends in 8 random hex bytes, the other in the requested team name, so neither can be derived from the other.",
+      "depends": "csift keys every id-shaped surface on the transcript form - `@<agent-id>` targeting, the `agent_id` row field, the refetch commands - and treats the routing form as a SEPARATE address that resolves to it through the teammate metas on disk. The `@<Name>@<Team>` target and the `routing_id` field exist because a caller holding one id cannot compute the other. If Claude Code ever put the routing form in the hook payload's `agent_id`, a lane id read from a hook would stop matching a transcript stem.",
+      "code": [
+        {
+          "path": "src/path/ids.rs",
+          "lines": "69-77",
+          "snippet": "/// True for the teammate ROUTING form `<Name>@<Team>` - the id the official SendMessage\n/// addresses (Claude Code mints it as `identity.agentId` by interpolating the requested name\n/// and the raw team name). A teammate therefore carries TWO ids, minted apart at spawn:\n/// this routing form and the `a<Name>-<16hex>` TRANSCRIPT form ([`is_teammate_agent_id`],\n/// `identity.resumableAgentId`, the jsonl stem) - neither is derivable from the other.\n/// Recognised as an `@`-target so the id the official tool wants is also a csift target.\npub(crate) fn is_teammate_routing_id(s: &str) -> bool {\n    split_teammate_routing_id(s).is_some()\n}"
+        },
+        {
+          "path": "src/subagent/routing.rs",
+          "lines": "31-40",
+          "snippet": "/// The routing id `<Name>@<Team>` for a teammate node, or `None` when the meta carried only\n/// one half (a teammate without a `teamName` has no routing form to print - fabricating one\n/// would name a teammate that cannot be addressed).\n#[must_use]\npub fn routing_id(name: Option<&str>, team: Option<&str>) -> Option<String> {\n    match (name, team) {\n        (Some(n), Some(t)) if !n.is_empty() && !t.is_empty() => Some(format!(\"{n}@{t}\")),\n        _ => None,\n    }\n}"
+        }
+      ],
+      "instrument": "Read the excerpts in the installed Claude Code binary at 176267713 (the spawn mint), 158795040 (yx) and 156730495 (Oh) with `tail -c +OFFSET+1 <binary> | head -c N` and confirm them byte for byte; the hook-payload half sits at 176256059 and 176267821. Counting rule for any count: occurrences of the fixed byte string over the whole file. Corpus side, the two id shapes are separable by pattern: a transcript stem matching `a<Name>-<16 hex>` against a routing string containing `@`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "SPECIMEN: a hook that logs its whole payload while a teammate turn runs, compared against the teammate transcript stem, shows which of the two ids `agent_id` carries.",
+        "The hook-payload half is carried as offsets 176256059 and 176267821 without excerpts; reading both with `tail -c +OFFSET+1 | head -c N` anchors that hop like the other three."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "spawnInProcessTeammate mint",
+          "offset": 176267713,
+          "excerpt": "let{name:e,teamName:g,prompt:l,color:k,planModeRequired:d,model:P}=o,{taskRegistry:A}=s,r=yx(e,g),f=Yh(\"in_process_teammate\"),c=o.resumableAgentId??Oh(e);",
+          "note": "One call site mints both ids: r = yx(name, team) is the routing form, c = the supplied resumableAgentId or a fresh Oh(name)."
+        },
+        {
+          "role": "writer",
+          "name": "yx",
+          "offset": 158795040,
+          "excerpt": "function yx(e,n){return `${e}@${n}`}",
+          "note": "The routing form: raw interpolation of the requested name and team into `Name@TeamName`, stored as identity.agentId."
+        },
+        {
+          "role": "writer",
+          "name": "Oh",
+          "offset": 156730495,
+          "excerpt": "function Oh(e){if(e&&!Qe.test(e))e=e.replace(/[^\\w-]/g,\"\").slice(0,63);let t=yn(8).toString(\"hex\");return e?`a${e}-${t}`:`a${t}`}",
+          "note": "The transcript form: the name sanitized to word characters and dashes, capped at 63, plus 8 random hex bytes - the resumableAgentId and the jsonl stem."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "resumableAgentId",
+        "lowest_present": "2.1.191",
+        "highest_absent": "2.1.176",
+        "ladder": "60 cached builds, counting lines carrying the literal; a literal dates its own wording, not the behavior"
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "tail -c +OFFSET+1 <binary> | head -c N at 176267713, 158795040 and 156730495, each excerpt compared byte for byte; the hook-payload sites 176256059 and 176267821 named but not re-read here.",
+          "observed": "176267713 carries the destructure and the pair `r=yx(e,g)` / `c=o.resumableAgentId??Oh(e)` followed by `S={agentId:r,agentName:e,teamName:g,...}`; 158795040 is `function yx(e,n){return `${e}@${n}`}`; 156730495 is the Oh minter producing `a${e}-${t}` with t = 8 random hex bytes. Two distinct id shapes from one call.",
+          "rule": "Verbatim byte reads; a count, where taken, is occurrences of the fixed byte string over the whole file.",
+          "note": "The routing form and the transcript form are landed as separate csift addresses because of this split: `@<Name>@<Team>` resolves through the teammate metas, and `routing_id` is printed beside `agent_id`."
+        }
+      ]
+    },
+    {
+      "id": "MSG-080",
+      "area": "messaging",
+      "behavior": "The duplicate-name check at the in-process teammate spawn never rejects a spawn, and the team half of the routing id is the raw team name. At 2.1.258, after the ids are minted, 176268532 reads the app state's name registry and, when the requested name already routes to a LIVE task, allocates a suffixed name for the REGISTRY KEY only: `let T=s.getAppState(),i=T.agentNameRegistry.get(e);if(i!==c){let m=i!==void 0?T.tasks[i]:void 0,u=i!==void 0&&(m?.status===\"running\"||fr(m)||Object.values(T.tasks).some((I)=>yd(I)&&I.status===\"running\"&&I.identity.resumableAgentId===i))?s.agentLifecycle.allocateName(e):e;if(u!==e)t(`[spawnInProcessTeammate] name \"${e}\" already routes to live ${i}; registry entry uses \"${u}\" instead`);s.agentLifecycle.registerName(u,c)}`. The allocator at 173268343 is `allocateName(s){let e=c(s),n=r(),a=n.agentNameRegistry,g=new Set(Object.values(n.teamContext?.teammates??{}).map((o)=>o.name));for(let o=1;;o++){let m=o===1?e:`${e}-${o}`;if(_0(m)||g.has(m))continue;let d=a.get(m);if(d===void 0||f(n.tasks,d)===void 0)return m}}` - suffixes -2, -3 and so on. The call still returns `{ok:!0,agentId:r,identity:S,taskId:f,...}`, r being the already-minted `Name@TeamName`, and registerName maps the de-duplicated NAME to the `a<Name>-<hex>` form c, never to the routing form. So two live same-named teammates in one team hold an identical identity.agentId while their transcript ids differ. No case folding touches that id: yx (158795040) interpolates raw, the literals `teamName.toLowerCase`, `team.toLowerCase` and `teamName?.toLowerCase` occur 0 times whole-binary, all 15 occurrences of `Name.toLowerCase` are unrelated to teams, and both team storage path builders interpolate the raw value - 157721696 `case\"team\":return r(t,\"teams\",n.team,\"config.json\");` and 157722465 `case\"mailbox\":return r(t,\"teams\",n.team,\"inboxes\",`${n.teammate}.json`);`.",
+      "depends": "csift resolves a `@<Name>@<Team>` target by matching a teammate meta's `name` and `teamName` byte-exactly, case included, and refuses to pick when several teammates match: `resolve_teammate_routing` bails naming every matching transcript id. Both halves of that behavior rest on this fact - case folding anywhere on the mint path would make the exact match miss a live teammate, and a spawn-time rejection of duplicates would make the ambiguity arm unreachable and the collision warning false.",
+      "code": [
+        {
+          "path": "src/subagent/routing.rs",
+          "lines": "15-29",
+          "snippet": "pub fn teammate_ids_by_routing(\n    session_jsonl: &Path,\n    name: &str,\n    team: &str,\n) -> Result<Vec<String>> {\n    Ok(discover_subagents(session_jsonl)?\n        .into_iter()\n        .filter(|s| {\n            s.kind == SubagentKind::Teammate\n                && s.name.as_deref() == Some(name)\n                && s.team_name.as_deref() == Some(team)\n        })\n        .map(|s| s.agent_id)\n        .collect())\n}"
+        },
+        {
+          "path": "src/path/routing.rs",
+          "lines": "38-45",
+          "snippet": "        many => bail!(\n            \"`@{name}@{team}` is AMBIGUOUS: {} teammates in scope share that routing id ({}). \\\n             The routing form CAN collide (two same-named teammates in one team share it); the \\\n             transcript id never does \u2014 target one of those directly.\",\n            many.len(),\n            many.join(\", \")\n        ),\n    }"
+        }
+      ],
+      "instrument": "Byte reads at 176267713 forward to 176270800 covering the whole spawn, plus 173268343 for the allocator and 157721696 / 157722465 for the team storage paths. Enumerations by `grep -a -o -b -F` over the whole binary: `agentNameRegistry` (32 occurrences, each read), `allocateName` (6), and the case-folding literals `teamName.toLowerCase`, `team.toLowerCase`, `teamName?.toLowerCase`, `Name.toLowerCase`. Counting rule: occurrences of the fixed byte string over the whole file for the enumerations; verbatim byte reads otherwise.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "SPECIMEN: spawning two teammates of the same name into one team and reading both identity.agentId values, plus their transcript stems, witnesses the collision directly.",
+        "The 15 `Name.toLowerCase` sites are recorded as a count with a verdict rather than as a per-site enumeration; listing each occurrence with its offset and excerpt closes the no-case-folding negative."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "spawnInProcessTeammate mint",
+          "offset": 176267713,
+          "excerpt": "let{name:e,teamName:g,prompt:l,color:k,planModeRequired:d,model:P}=o,{taskRegistry:A}=s,r=yx(e,g),f=Yh(\"in_process_teammate\"),c=o.resumableAgentId??Oh(e);",
+          "note": "The routing id is minted from the RAW requested name and team before any duplicate check runs."
+        },
+        {
+          "role": "gate",
+          "name": "the name-registry duplicate check",
+          "offset": 176268532,
+          "excerpt": "let T=s.getAppState(),i=T.agentNameRegistry.get(e);if(i!==c){let m=i!==void 0?T.tasks[i]:void 0,u=i!==void 0&&(m?.status===\"running\"||fr(m)||Object.values(T.tasks).some((I)=>yd(I)&&I.status===\"running\"&&I.identity.resumableAgentId===i))?s.agentLifecycle.allocateName(e):e;if(u!==e)t(`[spawnInProcessTeammate] name \"${e}\" already routes to live ${i}; registry entry uses \"${u}\" instead`);s.agentLifecycle.registerName(u,c)}",
+          "note": "Fires only when the name already routes to a live task, and its effect is confined to registerName: the returned agentId is still r."
+        },
+        {
+          "role": "writer",
+          "name": "allocateName",
+          "offset": 173268343,
+          "excerpt": "allocateName(s){let e=c(s),n=r(),a=n.agentNameRegistry,g=new Set(Object.values(n.teamContext?.teammates??{}).map((o)=>o.name));for(let o=1;;o++){let m=o===1?e:`${e}-${o}`;if(_0(m)||g.has(m))continue;let d=a.get(m);if(d===void 0||f(n.tasks,d)===void 0)return m}}",
+          "note": "Suffixes the NAME (-2, -3, ...) for the registry key; it never rewrites the minted routing id."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Byte reads at 176267713..176270800, 176268532, 173268343, 158795040, 157721696 and 157722465; whole-binary `grep -a -o -b -F` counts of agentNameRegistry, allocateName, teamName.toLowerCase, team.toLowerCase, teamName?.toLowerCase and Name.toLowerCase.",
+          "observed": "The check returns `{ok:!0,agentId:r,...}` with r = yx(name, team), while the de-duplicated name u reaches only registerName(u,c). agentNameRegistry 32 occurrences, allocateName 6. Case-folding literals: teamName.toLowerCase 0, team.toLowerCase 0, teamName?.toLowerCase 0, Name.toLowerCase 15 - all 15 unrelated to teams. Both team path builders interpolate n.team raw.",
+          "rule": "Occurrences of the fixed byte string over the whole file for every count; verbatim byte reads for the excerpts.",
+          "note": "The collision is real and unguarded, so the routing resolver fails loud with every matching transcript id instead of picking, and the exact comparison is case-sensitive on both halves."
+        }
+      ]
     }
   ]
 }

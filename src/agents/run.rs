@@ -238,13 +238,24 @@ pub(crate) const TEAMMATE_CONTROL_HINT_L2: &str =
 builds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a \
 teammate has no separate OS process (it shares the orchestrator PID — `pkill` won't help).";
 
-/// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2` - emitted as a teammate
-/// node's `control_hint` field so a `--format json` consumer gets the same pointer.
+/// The two-id rule, stated where the wrong id is about to be pasted into the wrong tool. A
+/// teammate's routing id and its transcript id are minted apart at spawn, so neither can be
+/// derived from the other, and only the routing form can collide - which is why csift keys
+/// its own targeting on the transcript id and prints both forms on the node line.
+pub(crate) const TEAMMATE_CONTROL_HINT_L3: &str =
+    "      the official SendMessage needs the routing id Name@Team (the `routing:` field above); the \
+hook payload and the transcript file carry a<Name>-<hex>; the routing id can collide (two same-named \
+teammates share it), the transcript id never does.";
+
+/// The compact JSON-surface twin of [`TEAMMATE_CONTROL_HINT_L1`]/`_L2`/`_L3` - emitted as a
+/// teammate node's `control_hint` field so a `--format json` consumer gets the same pointer.
 pub(crate) const TEAMMATE_CONTROL_HINT_JSON: &str =
     "in-process teammate: SendMessage to `name` to steer; \
 message {type:\"shutdown_request\"} terminates; TaskStop by `name` or `name@team` also stops it \
 from Claude Code 2.1.198 (never by the aName-<hex> transcript id); shares the \
-orchestrator PID (no separate process to kill).";
+orchestrator PID (no separate process to kill). Two ids, minted apart: SendMessage takes the \
+routing id `routing_id` (Name@Team, collides when two teammates share a name), while the hook \
+payload and the transcript file carry `agent_id` (a<Name>-<hex>, never ambiguous).";
 
 pub(crate) fn axis_label(axis: AgentTimeAxis) -> &'static str {
     match axis {
