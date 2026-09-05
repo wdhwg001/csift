@@ -68,9 +68,10 @@ const UNOBSERVABLE: [&str; 5] = [
 const PLUGIN_WALK_DEPTH: usize = 6;
 const PLUGIN_WALK_DIRS: usize = 512;
 
-/// One settings file the reader tried to open, and what came of it.
+/// One settings file the reader tried to open, and what came of it. Every field is part of
+/// the DISCLOSURE the channel receipts print, which is why none of them is dead: a verdict
+/// that rests on this cascade has to be able to say which files it rested on.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // fields are the reported surface; the channel commands read them
 pub(crate) struct SourceReport {
     /// The scope label (one of the `SCOPE_*` constants) and the path it was read from.
     pub scope: &'static str,
@@ -84,11 +85,12 @@ pub(crate) struct SourceReport {
 /// One command hook, flattened out of its matcher group. Only `type:"command"` entries
 /// are modeled: a plugin's JS module hook carries no command line and nothing in csift
 /// can predict what it does.
+///
+/// The registering EVENT is deliberately not a field: [`Merged::hooks`] is keyed by event, so
+/// an entry always arrives through the key that names it, and a second copy on the entry could
+/// only ever disagree with that key.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // the fields are read by the channel commands and the unit tests
 pub(crate) struct HookEntry {
-    /// The event name the entry is registered under (`SessionStart`, `Stop`, ...).
-    pub event: String,
     /// The matcher of the group this entry came from, when the group named one.
     pub matcher: Option<String>,
     /// The command line, verbatim, then the entry's `timeout` (seconds), `async` and
@@ -103,7 +105,6 @@ pub(crate) struct HookEntry {
 
 /// The folded cascade.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // `sources`/`unobservable`/`policy_switch` are read by the reporters
 pub(crate) struct Merged {
     /// Every file the reader tried, in read order.
     pub sources: Vec<SourceReport>,
@@ -494,7 +495,6 @@ impl Fold {
             return;
         };
         let entry = HookEntry {
-            event: event.to_string(),
             matcher,
             command: command.to_string(),
             timeout: entry.get("timeout").and_then(Value::as_u64),

@@ -270,8 +270,10 @@ live/channel/      # the v0.11.0 CHANNEL. Data layer: types (message + closed en
                    #   paths (the sidecar layout, lane-id validation, atomic append/rewrite),
                    #   envelope (chunk render + the detector + header parse), outbox, inbox,
                    #   ledger, marker (armed/<lane>.json), slots (the temp-dir slot chain),
-                   #   reconcile (intent vs fact). Commands: send + caller (caller classification,
-                   #   receiver probe, gate verdicts) + policy (the routing table, a PURE fn over
+                   #   reconcile (intent vs fact). Commands: send + send_render (the receipt's
+                   #   two projections) + caller (caller classification, receiver probe, gate
+                   #   verdicts + the settings disclosure every verdict names) + policy (the
+                   #   routing table, a PURE fn over
                    #   gathered facts); deliver + deliver_plan + deliver_emit + hook_input +
                    #   recipe; msg (msg + ack); reach/ (facts, predict, peers, render) behind
                    #   whoami's lane sections, --to and --peers

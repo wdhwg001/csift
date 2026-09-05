@@ -16,10 +16,12 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use serde_json::json;
 
-use super::caller::{self, teams_dirs, Caller, GateVerdict, Receiver, LANE_ASSUMED_NOTE};
+use super::caller::{
+    self, teams_dirs, Caller, GateVerdict, Receiver, SettingsDisclosure, LANE_ASSUMED_NOTE,
+};
 use super::policy::{self, Decision, SendContext};
+use super::send_render::{render_json, render_text, Receipt};
 use super::{
     append_inbox, append_outbox, channel_dir, expires_at, new_message_id, now_utc, read_armed,
     render, write_message, InboxLine, Message, MessageFrom, MessageTo, Mode, OfficialRef,
@@ -27,7 +29,6 @@ use super::{
 };
 use crate::cli::{OutputFormat, SendArgs};
 use crate::path::settings::{self, Merged};
-use crate::text;
 
 /// The env key whose value enables agent teams. Only a value csift can READ counts; the shell
 /// environment and the CLI flag that also enable it leave nothing on disk.
@@ -67,6 +68,7 @@ pub(crate) fn run_send(args: &SendArgs) -> Result<()> {
         receiver.cwd.as_deref().map(Path::new),
     );
     let slots = SlotCensus::read(&merged, mode);
+    let settings_read = SettingsDisclosure::of(&merged);
     let armed = armed_slots(&receiver)?;
 
     // Read once: resolving a subagent sender's parent rebuilds the session topology, and the
@@ -89,10 +91,19 @@ pub(crate) fn run_send(args: &SendArgs) -> Result<()> {
             decision.prediction
         );
     }
+    let receipt = Receipt {
+        msg: &msg,
+        receiver: &receiver,
+        ctx: &ctx,
+        decision: &decision,
+        slots: &slots,
+        armed: &armed,
+        settings: &settings_read,
+    };
     match args.format {
-        OutputFormat::Json => render_json(&msg, &receiver, &ctx, &decision, &slots, &armed),
+        OutputFormat::Json => render_json(&receipt),
         OutputFormat::Text => {
-            render_text(&msg, &receiver, &ctx, &decision, &slots, &armed);
+            render_text(&receipt);
             Ok(())
         }
     }
@@ -450,147 +461,4 @@ fn sender_root(caller: &Caller) -> Option<PathBuf> {
         [one] => Some(channel_dir(&sidecar_dir(one))),
         _ => None,
     }
-}
-
-fn render_text(
-    msg: &Message,
-    receiver: &Receiver,
-    ctx: &SendContext,
-    decision: &Decision,
-    slots: &SlotCensus,
-    armed: &[u32],
-) {
-    println!("csift channel · send");
-    println!("  id          {}", msg.id);
-    println!("  verdict     {}", decision.verdict.as_str());
-    println!("  channel     {}", decision.channel);
-    println!("  mode        {}", msg.mode.as_str());
-    println!(
-        "  queued      {}",
-        if decision.queued { "yes" } else { "no" }
-    );
-    println!(
-        "  receiver    {}{}",
-        receiver.lane,
-        receiver
-            .routing_id
-            .as_deref()
-            .map(|r| format!("  (routing {r})"))
-            .unwrap_or_default()
-    );
-    println!("    kind      {}", receiver.kind.as_str());
-    println!("    state     {}", receiver.state.as_str());
-    println!(
-        "    version   {}",
-        receiver.version.as_deref().unwrap_or("unknown")
-    );
-    println!("    session   {}", receiver.session);
-    println!("  gates       teams: {}", ctx.teams.verdict);
-    println!("              harbor: {}", ctx.harbor.verdict);
-    println!("  slots       {}", slot_line(slots));
-    println!("  armed       {}", armed_line(armed));
-    println!(
-        "  message     {} char(s), {} chunk(s) of {CHUNK_BUDGET}",
-        msg.body.chars().count(),
-        ctx.chunks
-    );
-    if decision.verdict == Verdict::Full {
-        println!("  full        {}", policy::full_note(ctx));
-    }
-    println!("  prediction  {}", decision.prediction);
-    for risk in &decision.risks {
-        println!("  risk        {risk}");
-    }
-    if let Some(o) = &decision.official {
-        println!("  official    {}", o.call);
-        println!(
-            "              csift never performs an official send (it is a tool, not a file): \
-             make this call yourself."
-        );
-    }
-}
-
-pub(crate) fn slot_line(slots: &SlotCensus) -> String {
-    if slots.per_event.is_empty() {
-        return "none configured on any delivery event".to_string();
-    }
-    slots
-        .per_event
-        .iter()
-        .map(|(event, ks)| {
-            format!(
-                "{event} {}",
-                ks.iter().map(u32::to_string).collect::<Vec<_>>().join(",")
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("  ")
-}
-
-pub(crate) fn armed_line(armed: &[u32]) -> String {
-    if armed.is_empty() {
-        return "none (no delivery hook has run in this lane)".to_string();
-    }
-    armed
-        .iter()
-        .map(u32::to_string)
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn render_json(
-    msg: &Message,
-    receiver: &Receiver,
-    ctx: &SendContext,
-    decision: &Decision,
-    slots: &SlotCensus,
-    armed: &[u32],
-) -> Result<()> {
-    let configured: serde_json::Map<String, serde_json::Value> = slots
-        .per_event
-        .iter()
-        .map(|(e, ks)| (e.clone(), json!(ks)))
-        .collect();
-    println!(
-        "{}",
-        serde_json::to_string(&text::envelope_header("send", json!({})))?
-    );
-    let row = json!({
-        "kind": "send",
-        "id": msg.id,
-        "verdict": decision.verdict.as_str(),
-        "channel": decision.channel,
-        "mode": msg.mode.as_str(),
-        "receiver": {
-            "lane": receiver.lane,
-            "routing_id": receiver.routing_id,
-            "session": receiver.session,
-            "kind": receiver.kind.as_str(),
-            "state": receiver.state.as_str(),
-            "version": receiver.version,
-            "configured_slots": configured,
-            "armed_slots": armed,
-        },
-        "official": decision.official.as_ref().map(|o| json!({
-            "delegated": true,
-            "tool": o.tool,
-            "to": o.to,
-        })),
-        "prediction": decision.prediction,
-        "risks": decision.risks,
-    });
-    println!("{}", serde_json::to_string(&row)?);
-    println!(
-        "{}",
-        serde_json::to_string(&text::envelope_summary(json!({
-            "queued": decision.queued,
-            "chunks": ctx.chunks,
-            "message_chars": msg.body.chars().count(),
-            "relation": msg.relation.as_str(),
-            "cross_project": msg.cross_project,
-            "ttl_secs": msg.ttl_secs,
-            "official_floor_met": ctx.official_possible(),
-        })))?
-    );
-    Ok(())
 }

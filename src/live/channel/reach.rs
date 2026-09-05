@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde_json::json;
 
-use super::caller::{self, Caller, GateVerdict, Receiver, LANE_ASSUMED_NOTE};
+use super::caller::{self, Caller, GateVerdict, Receiver, SettingsDisclosure, LANE_ASSUMED_NOTE};
 use super::policy::{self, Decision, ReceiverKind, ReceiverState, SendContext};
 use super::send::{relation_of, truthy};
 use super::{channel_dir, read_armed, Mode, Relation, SenderKind, Verdict};
@@ -89,6 +89,9 @@ pub(crate) struct Reach {
     pub(crate) armed: Vec<u32>,
     pub(crate) teams: GateVerdict,
     pub(crate) harbor: GateVerdict,
+    /// The settings sources the gates and the slot census above were read from. A prediction
+    /// is only checkable when it says which files it rested on, and which it could not see.
+    pub(crate) settings: SettingsDisclosure,
     /// The inference sentence plus its fallback, for an agent target only. A top-level target
     /// is answered from the registry row the harness itself wrote, so it carries none.
     pub(crate) inference: Option<String>,

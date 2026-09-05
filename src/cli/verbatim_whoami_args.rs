@@ -422,7 +422,9 @@ impl VerbatimArgs {
           the channel a reply would take) and `topology` (live child lanes as `id kind state`,\n  \
           then how many other live lanes exist). A LANE target answers them for another lane.\n  \
           `--to @<target>` predicts reach WITHOUT sending: the channel, the teams and harbor\n  \
-          gate verdicts, the configured and armed delivery slots, and what a sender would be\n  \
+          gate verdicts, the configured and armed delivery slots, a `settings` line naming the\n  \
+          cascade all of that was read from (scopes read, scopes absent, inputs that leave no\n  \
+          trace), and what a sender would be\n  \
           told. An AGENT target adds the sentence naming what the prediction is made of - the\n  \
           transcript tail and a pid probe, not the harness's own state - and the fallback\n  \
           carrier. `--peers` lists every live lane as `id kind state` ONLY: no description, no\n  \
@@ -477,7 +479,11 @@ pub struct WhoamiArgs {
     /// that have actually run there, and the failure a sender would be told. For an AGENT target
     /// the answer also names what it is made of: csift reads the lane's transcript tail and
     /// probes a pid, never the harness's own memory, so the prediction is an inference and the
-    /// line names the carrier that remains when it is wrong. Takes any `@`-form csift accepts
+    /// line names the carrier that remains when it is wrong. A `settings` line discloses the
+    /// cascade the gates and the slot census were read from: the scopes that contributed, the
+    /// ones tried and absent, and the inputs that leave nothing on disk (a settings file or
+    /// inline JSON handed to Claude Code on its command line, a restricted source set, the
+    /// trust dialog, MDM). Takes any `@`-form csift accepts
     /// (`@<uuid>`, a uuid prefix, `@<agent-id>`, `@<Name>@<Team>`, `@main`, `@trap:<marker>`).
     #[arg(long = "to", value_name = "TARGET", conflicts_with_all = ["peers", "self_target"])]
     pub to: Option<String>,

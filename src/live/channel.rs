@@ -31,6 +31,7 @@
 //! - [`slots`] the temp-dir slot chain that orders concurrent hook processes
 //! - [`reconcile`] the ledger-against-transcript join (intent versus fact)
 //! - [`msg`] the `msg` and `ack` commands built on that join
+//! - [`send`] the `send` command, with its receipt projections in [`send_render`]
 //! - [`reach`] the `whoami` lane sections, the `--to` prediction and the peer census
 
 mod caller;
@@ -50,6 +51,7 @@ mod reach;
 mod recipe;
 mod reconcile;
 mod send;
+mod send_render;
 mod slots;
 mod types;
 

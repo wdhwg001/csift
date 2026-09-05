@@ -152,6 +152,12 @@ pub(crate) fn render_reach_text(r: &Reach) {
     println!("              harbor: {}", r.harbor.verdict);
     println!("  slots       {}", slot_line(&r.slots));
     println!("  armed       {}", armed_line(&r.armed));
+    // Same disclosure the send receipt prints: the cascade the gates and the slot census
+    // above were read from, absent scopes and unobservable inputs named.
+    for (i, line) in r.settings.lines().iter().enumerate() {
+        let label = if i == 0 { "settings" } else { "        " };
+        println!("  {label}    {line}");
+    }
     println!("  prediction  {}", r.decision.prediction);
     for risk in &r.decision.risks {
         println!("  risk        {risk}");
@@ -241,6 +247,7 @@ pub(crate) fn render_reach_json(r: &Reach) -> Result<()> {
             "to": o.to,
         })),
         "inference": r.inference,
+        "settings": r.settings.json(),
     });
     println!("{}", serde_json::to_string(&row)?);
     println!(

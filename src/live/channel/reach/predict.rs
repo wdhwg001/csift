@@ -158,6 +158,7 @@ pub(crate) fn run_reach_to(target: &str, format: OutputFormat) -> Result<()> {
         armed,
         teams: ctx.teams.clone(),
         harbor: ctx.harbor.clone(),
+        settings: SettingsDisclosure::of(&merged),
     };
     match format {
         OutputFormat::Text => {

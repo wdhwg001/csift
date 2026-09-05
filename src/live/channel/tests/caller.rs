@@ -3,7 +3,8 @@
 
 use super::*;
 
-use crate::live::channel::caller::{classify_with, session_transcript_for};
+use crate::live::channel::caller::{classify_with, session_transcript_for, SettingsDisclosure};
+use crate::path::settings::{SourceReport, SCOPE_LOCAL, SCOPE_PLUGIN, SCOPE_PROJECT, SCOPE_USER};
 use std::path::Path;
 
 #[test]
@@ -84,6 +85,132 @@ fn an_external_caller_cannot_claim_a_lane() {
 fn a_blank_from_falls_back_to_the_default_label_rather_than_an_empty_sender() {
     let c = classify_with(Some("   "), None).unwrap();
     assert_eq!(c.label.as_deref(), Some("unknown"));
+}
+
+/// Build a disclosure straight from source rows, so the reduction is tested without a
+/// filesystem: which scopes contributed, which did not, and what stays unobservable.
+fn disclosure(rows: &[(&'static str, &str, bool, Option<&str>)]) -> SettingsDisclosure {
+    SettingsDisclosure {
+        sources: rows
+            .iter()
+            .map(|(scope, path, read, note)| SourceReport {
+                scope,
+                path: PathBuf::from(path),
+                read: *read,
+                note: note.map(std::string::ToString::to_string),
+            })
+            .collect(),
+        unobservable: vec!["--settings (a file path or inline JSON)", "MDM policy"],
+    }
+}
+
+#[test]
+fn the_disclosure_names_the_scopes_that_contributed_and_the_ones_that_did_not() {
+    let d = disclosure(&[
+        (
+            SCOPE_PLUGIN,
+            "/Users/dev/.claude/plugins/a/plugin.json",
+            true,
+            None,
+        ),
+        (SCOPE_USER, "/Users/dev/.claude/settings.json", true, None),
+        (
+            SCOPE_PROJECT,
+            "/Users/dev/p/.claude/settings.json",
+            false,
+            None,
+        ),
+        (
+            SCOPE_LOCAL,
+            "/Users/dev/p/.claude/settings.local.json",
+            false,
+            None,
+        ),
+    ]);
+    assert_eq!(d.read_scopes(), vec![SCOPE_PLUGIN, SCOPE_USER]);
+    assert_eq!(d.absent_scopes(), vec![SCOPE_PROJECT, SCOPE_LOCAL]);
+    let lines = d.lines();
+    assert_eq!(
+        lines[0], "read: plugin, user  ·  absent: project, local",
+        "the scopes are named in fold order, read ones first"
+    );
+    assert_eq!(
+        lines.last().unwrap(),
+        "unobservable: --settings (a file path or inline JSON); MDM policy",
+        "the unobservable list rides verbatim, so `unknown` always arrives with its reason"
+    );
+}
+
+#[test]
+fn a_scope_read_from_two_files_is_named_once_and_never_also_as_absent() {
+    // The policy tier composes several files and a plugin walk emits one row per manifest, so
+    // the text line answers "which scopes", not "which files" - and a scope that contributed
+    // through one file is not ALSO reported as missing through another.
+    let d = disclosure(&[
+        (
+            SCOPE_PLUGIN,
+            "/Users/dev/.claude/plugins/a/hooks/hooks.json",
+            true,
+            None,
+        ),
+        (
+            SCOPE_PLUGIN,
+            "/Users/dev/.claude/plugins/b/plugin.json",
+            true,
+            None,
+        ),
+        (
+            SCOPE_PLUGIN,
+            "/Users/dev/.claude/plugins/c/plugin.json",
+            false,
+            None,
+        ),
+    ]);
+    assert_eq!(d.read_scopes(), vec![SCOPE_PLUGIN]);
+    assert!(d.absent_scopes().is_empty());
+    assert_eq!(d.lines()[0], "read: plugin  ·  absent: none");
+}
+
+#[test]
+fn a_broken_file_reaches_the_disclosure_as_a_note_and_the_json_carries_every_row() {
+    // A note is the ONLY place a broken settings file is visible: it contributed nothing, so
+    // no fold, no gate and no slot count records that it exists at all.
+    let d = disclosure(&[
+        (SCOPE_USER, "/Users/dev/.claude/settings.json", true, None),
+        (
+            SCOPE_PROJECT,
+            "/Users/dev/p/.claude/settings.json",
+            false,
+            Some("malformed JSON: expected value at line 1 column 1"),
+        ),
+    ]);
+    assert_eq!(
+        d.notes(),
+        vec!["project - malformed JSON: expected value at line 1 column 1"]
+    );
+    assert_eq!(
+        d.lines()[1],
+        "note: project - malformed JSON: expected value at line 1 column 1"
+    );
+
+    let json = d.json();
+    let sources = json["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 2, "one entry per FILE, in read order");
+    assert_eq!(sources[0]["scope"], SCOPE_USER);
+    assert_eq!(sources[0]["read"], true);
+    assert!(sources[0]["note"].is_null());
+    assert_eq!(sources[1]["read"], false);
+    assert!(sources[1]["note"]
+        .as_str()
+        .unwrap()
+        .contains("malformed JSON"));
+    assert_eq!(json["unobservable"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn a_cascade_with_no_readable_file_says_so_rather_than_printing_an_empty_list() {
+    let d = disclosure(&[(SCOPE_USER, "/Users/dev/.claude/settings.json", false, None)]);
+    assert_eq!(d.lines()[0], "read: none  ·  absent: user");
 }
 
 #[test]

@@ -66,8 +66,16 @@ impl SendMode {
         JSON (--format json): the envelope's `{\"kind\":\"header\"}` line, ONE \
         `{\"kind\":\"send\", id, verdict, channel, mode, receiver:{lane, routing_id, session, \
         kind, state, version, configured_slots, armed_slots}, official:{delegated, tool, to}, \
-        prediction, risks:[…]}` row, and the `{\"kind\":\"summary\", queued, chunks, \
+        prediction, risks:[…], settings:{sources:[{scope, path, read, note}], \
+        unobservable:[…]}}` row, and the `{\"kind\":\"summary\", queued, chunks, \
         message_chars, relation, cross_project, ttl_secs, official_floor_met}` line.\n\n\
+        THE SETTINGS LINE. The gate verdicts, the slot census and every hook risk above come \
+        off ONE fold of the receiver's settings cascade, so the receipt's `settings` line \
+        names the scopes that contributed, the scopes it tried and did not get (as `absent`), \
+        any file that was there but unreadable, and the inputs that change the outcome and \
+        leave nothing on disk at all (a settings file or inline JSON handed to Claude Code on \
+        its command line, a restricted source set, the trust dialog, MDM) - a verdict is \
+        checkable only when its sources are named.\n\n\
         CONFIGURED vs ARMED. `configured_slots` counts the `csift deliver` slot hook entries \
         installed in the receiver's settings cascade; `armed_slots` counts slots that have actually RUN in \
         that lane. Configuration is not arming: a receiver process can predate the settings \

@@ -183,6 +183,109 @@ impl GateVerdict {
     }
 }
 
+/// The settings cascade a verdict rested on, reduced to what a receipt may print.
+///
+/// A gate verdict, a slot census and every risk line about hooks are all read off ONE fold of
+/// the receiver's settings scopes, so a receipt that names the verdict without naming its
+/// sources is asking to be trusted rather than checked. `sources` is the reader's own inventory
+/// in fold order - which file it tried, whether that file contributed, and why it did not when
+/// it did not - and `unobservable` is the list of inputs that change the outcome and leave
+/// nothing on disk, carried through verbatim so "unknown" always arrives with its reason.
+#[derive(Debug, Clone)]
+pub(crate) struct SettingsDisclosure {
+    pub(crate) sources: Vec<crate::path::settings::SourceReport>,
+    pub(crate) unobservable: Vec<&'static str>,
+}
+
+impl SettingsDisclosure {
+    pub(crate) fn of(m: &crate::path::settings::Merged) -> Self {
+        SettingsDisclosure {
+            sources: m.sources.clone(),
+            unobservable: m.unobservable.clone(),
+        }
+    }
+
+    /// The scope labels that CONTRIBUTED, deduplicated, in fold order. A scope can be read
+    /// from more than one file (the policy drop-ins, one entry per plugin manifest), and the
+    /// text line answers "which scopes", not "which files".
+    pub(crate) fn read_scopes(&self) -> Vec<&'static str> {
+        self.scopes(true)
+    }
+
+    /// The scope labels the reader tried and did NOT get: a missing file, an unreadable one,
+    /// or one the policy tier's first-wins rule left out. Named as absent rather than omitted,
+    /// so a reader can tell "no project settings" from "csift did not look".
+    pub(crate) fn absent_scopes(&self) -> Vec<&'static str> {
+        let read = self.scopes(true);
+        self.scopes(false)
+            .into_iter()
+            .filter(|s| !read.contains(s))
+            .collect()
+    }
+
+    fn scopes(&self, read: bool) -> Vec<&'static str> {
+        let mut out: Vec<&'static str> = Vec::new();
+        for s in self.sources.iter().filter(|s| s.read == read) {
+            if !out.contains(&s.scope) {
+                out.push(s.scope);
+            }
+        }
+        out
+    }
+
+    /// The notes, one per source that carried one, prefixed by its scope. A note is the only
+    /// place a BROKEN settings file is visible at all: it never contributed, so nothing else
+    /// in the fold records that it exists.
+    pub(crate) fn notes(&self) -> Vec<String> {
+        self.sources
+            .iter()
+            .filter_map(|s| s.note.as_ref().map(|n| format!("{} - {n}", s.scope)))
+            .collect()
+    }
+
+    /// The one text line, and its continuations. The caller prints the first under its own
+    /// label and the rest under the label's indent, exactly as the gates section does.
+    pub(crate) fn lines(&self) -> Vec<String> {
+        let mut out = vec![format!(
+            "read: {}  ·  absent: {}",
+            join_or_none(&self.read_scopes()),
+            join_or_none(&self.absent_scopes())
+        )];
+        for note in self.notes() {
+            out.push(format!("note: {note}"));
+        }
+        out.push(format!("unobservable: {}", self.unobservable.join("; ")));
+        out
+    }
+
+    /// The machine echo of [`Self::lines`]: the per-FILE inventory plus the unobservable list.
+    /// The path is included because a caller checking a verdict needs the file, not a scope
+    /// name it would then have to guess the location of.
+    pub(crate) fn json(&self) -> serde_json::Value {
+        let sources: Vec<serde_json::Value> = self
+            .sources
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "scope": s.scope,
+                    "path": s.path.to_string_lossy(),
+                    "read": s.read,
+                    "note": s.note,
+                })
+            })
+            .collect();
+        serde_json::json!({"sources": sources, "unobservable": self.unobservable})
+    }
+}
+
+fn join_or_none(scopes: &[&'static str]) -> String {
+    if scopes.is_empty() {
+        "none".to_string()
+    } else {
+        scopes.join(", ")
+    }
+}
+
 /// Team directories under the Claude Code home: the evidence half of the teams gate verdict
 /// when no settings scope enables it.
 pub(crate) fn teams_dirs() -> usize {

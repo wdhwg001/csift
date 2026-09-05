@@ -3,4 +3,5 @@
 mod deliver;
 mod msg;
 mod send;
+mod settings;
 mod whoami;

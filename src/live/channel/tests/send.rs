@@ -5,9 +5,8 @@ use super::*;
 
 use crate::live::channel::caller::{Caller, Receiver};
 use crate::live::channel::policy::{ReceiverKind, ReceiverState};
-use crate::live::channel::send::{
-    armed_line, parse_ttl, relation_of, slot_line, truthy, SlotCensus,
-};
+use crate::live::channel::send::{parse_ttl, relation_of, truthy, SlotCensus};
+use crate::live::channel::send_render::{armed_line, slot_line};
 use std::path::PathBuf;
 
 fn lane_caller(session: &str, lane: &str) -> Caller {
