@@ -80783,6 +80783,394 @@
           "note": "Landed as the rule every printed count obeys: the slot line names its event and its entries, and the gate evidence is reported under an unknown verdict."
         }
       ]
+    },
+    {
+      "id": "MSG-009",
+      "area": "messaging",
+      "behavior": "PostToolBatch fires once per tool BATCH, not once per tool call: the emitter at 162933925 builds one `tool_calls` entry per `tool_use` block of the turn and joins the results back by `tool_use_id`, against the item schema at 158549367. Two call sites reach it, 164749483 and 164690812, the second discarding any block the emitter returns. The call-site set is not enumerated whole-binary, so the word `single` is not earned.",
+      "depends": "csift carries PostToolBatch in its delivery set and sequences that event's slots in a directory keyed by the parent process, the event and the receiving transcript, so the batch chain never waits on the PostToolUse chain that fires beside it. Because the event fires once per batch, one firing emits one chunk per configured slot rather than one per tool call, which is the number a send prediction counts against the message's chunk list. A chunk printed through the discarding call site is still recorded as intent; the receiving transcript stays the fact.",
+      "code": [
+        {
+          "path": "src/live/channel/slots.rs",
+          "lines": "53-59",
+          "snippet": "pub(crate) fn seq_dir(ppid: u32, event: &str, lane: &str) -> PathBuf {\n    std::env::temp_dir().join(format!(\n        \"csift-deliver-{ppid}-{}-{}\",\n        sanitize_component(event),\n        sanitize_component(lane)\n    ))\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The emitter, its two call sites and the item schema are each read at their offsets; the word `single` is admitted only after a whole-binary enumeration of the emitter name, which this instrument does not run.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Enumerate the emitter name over the whole binary and read every occurrence, which is what the word `single` requires before it can be written.",
+        "Capture a PostToolBatch payload from a turn carrying several tool calls and count its `tool_calls` entries against the turn's `tool_use` blocks, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the PostToolBatch emitter at 162933925, of its two call sites at 164749483 and 164690812, and of the item schema at 158549367.",
+          "observed": "The emitter builds one entry per `tool_use` block of the turn and joins the results by `tool_use_id`; of the two call sites at 164749483 and 164690812, the second discards the block the emitter returns. Two sites out of a set that was not enumerated.",
+          "rule": "Verbatim byte reads; the two call sites are a subset, not a whole-binary count, and no count of the emitter name is carried.",
+          "note": "The event is in the delivery set and its slot chain is keyed by the event name, so the batch chain and the PostToolUse chain that fire together do not wait on each other."
+        }
+      ]
+    },
+    {
+      "id": "MSG-012",
+      "area": "messaging",
+      "behavior": "PostCompact has no additionalContext channel. The hook-output union carries no member built with the `hookEventName:x(\"PostCompact\")` construction: that form occurs 0 times whole-binary, against 2 occurrences of the SubagentStart form at 158562748 and 161636379, and the PostCompact runner at 165796500 collects only `userDisplayMessage`. The bare literal `\"PostCompact\"` ships from 2.1.100 onward, so the absence is of the injection channel and not of the event.",
+      "depends": "A message that survives a compaction is re-offered at `SessionStart` with `source:\"compact\"` and never at PostCompact: the redelivery arm keys on that source and writes its `redelivered` line before the emit, so one compaction re-offers a message once and the next one offers it again. Delivering at PostCompact instead would render and print a chunk into an event that has nowhere to put it, and the ledger would record an emit no transcript could ever confirm.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver_plan.rs",
+          "lines": "206-213",
+          "snippet": "        Some(_)\n            if hook.session_start_source(\"compact\")\n                && !redelivered_since_emit(ledger, &line.id) =>\n        {\n            Verdict::Send {\n                redeliver: Some(RedeliverSource::Compact),\n            }\n        }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The absence is stated in ONE construction form: count that form for PostCompact and for SubagentStart over the whole binary, then read the PostCompact runner at its offset and list the members it collects.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Enumerate every construction form that builds a hook-output member, not only the one counted here, which is what closes a negative stated in a single form.",
+        "Install a PostCompact hook that returns an additionalContext field and read the post-compaction transcript for an attachment carrying it; an absence has no specimen."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The whole-binary counts of the `hookEventName` construction for PostCompact and for SubagentStart, plus the byte read of the PostCompact runner at 165796500.",
+          "observed": "Zero occurrences of the PostCompact construction against two of the SubagentStart form at 158562748 and 161636379; the runner collects `userDisplayMessage` and declares no hook-output member.",
+          "rule": "Occurrences of the fixed byte string over the whole binary for the two counts; the runner read is verbatim.",
+          "note": "The compaction redelivery rides the SessionStart compact source, which is the event that does carry the channel."
+        }
+      ]
+    },
+    {
+      "id": "MSG-026",
+      "area": "messaging",
+      "behavior": "At a teammate's end of turn the events fire SubagentStop (164630567, gate 165803039), then TaskCompleted once per in-progress owned task (164634391), then TeammateIdle (164635164), the teammate half gated at 158120622. Any count of the emitter states its rule first: occurrences of the call form give 2 and occurrences of the bare token give 10, one of the ten a hook-executor map entry at 165806798.",
+      "depends": "csift carries SubagentStop in its delivery set and does not carry TeammateIdle, and the reason is the payload rather than the order: a TeammateIdle payload names its teammate by name and team and carries no agent id, so a delivery firing there could not say which transcript it belonged to, while SubagentStop declares the id as its own required extra. SubagentStop is also one of the two events where the turn-blocking exit-2 vehicle exists, which is why the vehicle rule tests the Stop family by name.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "94-97",
+          "snippet": "    /// True when this is a Stop-family event, the only place the exit-2 vehicle exists.\n    pub(crate) fn is_stop_family(&self) -> bool {\n        self.hook_event_name == \"Stop\" || self.hook_event_name == \"SubagentStop\"\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Read the three fire sites, the SubagentStop gate and the teammate gate at their offsets. Any count of the emitter is reported twice, once under the call form and once under the bare token, because the two disagree over the same file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Re-read the emitter at its offset under a stated counting rule before any count of it is carried forward: the call form gives 2 and the bare token gives 10 over the same file, one of the ten a hook-executor map entry.",
+        "Capture a teammate turn whose owned task list is NOT empty and record whether TaskCompleted fires once per task; that half of the sequence has no specimen."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the SubagentStop fire at 164630567 and its gate at 165803039, the TaskCompleted fire at 164634391, the TeammateIdle fire at 164635164 and the teammate gate at 158120622, with both counting rules applied to the emitter name.",
+          "observed": "The three fires sit in that order along the end-of-turn path; the emitter counts 2 under the call form and 10 under the bare token, one of the ten being the hook-executor map entry at 165806798.",
+          "rule": "Occurrences of the fixed byte string over the whole binary, reported separately for the call form and for the bare token; the fire sites are verbatim reads.",
+          "note": "The observed fire order of a teammate turn is carried by MSG-081; this claim is the binary side and the counting-rule caveat that comes with it."
+        }
+      ]
+    },
+    {
+      "id": "MSG-028",
+      "area": "messaging",
+      "behavior": "`workflow-subagent` is the agent type only for a bare workflow `agent()` call (172608624, 172626282; the 2.1.260 twins at 171559652 and 171591473). A named agent type replaces it, and the agent context's own `agentType` then reads `subagent` with the real type parked in `subagentName`.",
+      "depends": "csift never reads a transcript's kind from an agent type. The receiver kind comes from the on-disk shape - a transcript under `workflows/` is a workflow lane, a teammate meta makes a teammate, anything else under `subagents/` is an unnamed subagent - and that kind is what selects the policy row, including the row where the official transports fail closed and the csift channel is the only carrier. Reading `agentType` instead would misclassify every workflow lane spawned with a named agent, and the send would delegate to a transport that cannot reach it.",
+      "code": [
+        {
+          "path": "src/live/channel/caller.rs",
+          "lines": "320-324",
+          "snippet": "    let kind = match me.kind {\n        crate::subagent::SubagentKind::Teammate => ReceiverKind::Teammate,\n        crate::subagent::SubagentKind::Workflow => ReceiverKind::WorkflowLane,\n        crate::subagent::SubagentKind::BuiltinTask => ReceiverKind::UnnamedSubagent,\n    };"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Read the default agent type at its offsets in both builds. The named-agent merge is re-located by its own byte search before it is cited: the offset carried in the finding this claim comes from is about 1500 bytes off.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Re-locate the named-agent merge by searching the binary for the assignment itself; the offset in the finding this claim comes from was disclosed as about 1500 bytes off, so it is not cited here.",
+        "Run a workflow with a named agent type and read the agent context it writes, which closes the specimen leg for the replacement half."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the default agent type at 172608624 and 172626282, and of the 2.1.260 twins at 171559652 and 171591473.",
+          "observed": "The default type is present at both offsets in both builds, and the context's own type reads `subagent` with the real type in `subagentName`; the named-agent merge does not sit at the offset the finding this claim comes from carried, so it is not cited.",
+          "rule": "Verbatim byte reads; no count is claimed.",
+          "note": "csift takes the kind from the transcript's location, so a moved or renamed agent type cannot change which policy row a receiver falls in."
+        }
+      ]
+    },
+    {
+      "id": "MSG-043",
+      "area": "messaging",
+      "behavior": "The teammate relay wrapper is `<teammate-message teammate_id=\"...\">` with optional colour and summary attributes, built at 160170109 and at 159814142 in 2.1.260, carrying a close-tag neutraliser for a body that contains the closing tag and an unknown-sender fallback when the id is missing.",
+      "depends": "The csift envelope must never be read as one of the harness's own relay framings, and a framing must never be read as an envelope. Both directions rest on the opening bytes: a csift chunk begins with its bracketed header and this wrapper begins with its tag, so a detector that tests the START of the content string separates them without parsing either. csift also reads the harness form on the way in - the wrapper's open and close tags delimit an inbound peer section, and a tag merely quoted mid-prose is not a section, which is why the close tags are held beside the open ones.",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "180-182",
+          "snippet": "pub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. On disk, count records whose string content begins with the wrapper tag after leading whitespace is stripped; counting rule: one per record, over the whole projects root.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": "2.1.195",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the wrapper builder together with its gate and the entry that reaches it as verbatim excerpts, which raises the producer leg above a located template."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the wrapper builder at 160170109 and of its 2.1.260 twin at 159814142, against a corpus scan for records whose content opens with the tag.",
+          "observed": "The builder emits the tag with the teammate id and the two optional attributes, neutralises a closing tag found inside the body and falls back to an unknown sender; on disk the wrapper appears inside the 443 relay records the preamble census counts.",
+          "rule": "One per record whose string content begins with the tag after leading whitespace is stripped; the binary figures are byte offsets, not counts.",
+          "note": "The envelope detector is pinned against this framing, and against the five others, by a unit test that feeds each one to it."
+        }
+      ]
+    },
+    {
+      "id": "MSG-044",
+      "area": "messaging",
+      "behavior": "The cross-session relay wrapper emits its attributes in one fixed order - `from`, `from-session`, `hop-chain`, `from-name`, `from-mode` - and the assembler at 158796877, reached from the builder at 158797224, DROPS an attribute whose value fails its own pattern rather than emitting it empty.",
+      "depends": "The csift envelope header carries the same two field names a reader needs, `from` and `from-session`, but reads every field BY NAME out of a space-delimited header instead of by position: a missing field reads as absent and never shifts the next one along. That is what lets a continuation chunk carry only the id and the part numbering and still parse, and what makes a header naming no sender report no direction rather than a guessed one.",
+      "code": [
+        {
+          "path": "src/live/channel/envelope.rs",
+          "lines": "201-210",
+          "snippet": "        match key {\n            \"id\" => id = Some(value.to_string()),\n            \"part\" => part_spec = Some(value.to_string()),\n            \"mode\" => mode = Mode::parse(value),\n            \"from\" => from = Some(value.to_string()),\n            \"from-session\" => from_session = Some(value.to_string()),\n            \"relation\" => relation = Relation::parse(value),\n            \"to\" => to = Some(value.to_string()),\n            _ => {}\n        }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The specimen side is a scan of the corpus for a record whose string content begins with the cross-session tag; counting rule: one per record, over the whole projects root.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": "2.1.152",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the attribute assembler together with the branch that selects the cross-session variant, which raises the producer leg above a located template.",
+        "Capture one real inbound cross-session delivery: the corpus holds none, so the wrapper as written has no specimen at all."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the cross-session builder at 158797224 and of its attribute assembler at 158796877, plus a corpus scan for a record whose content opens with the tag.",
+          "observed": "The assembler emits the five attributes in the fixed order and drops one whose value fails its pattern; the corpus holds no record opening with the tag, so the shape is producer-side here.",
+          "rule": "One per record whose string content begins with the tag after leading whitespace is stripped; the binary figures are byte offsets.",
+          "note": "csift reads its own header by field name, so a dropped or added field can never displace another one."
+        }
+      ]
+    },
+    {
+      "id": "MSG-045",
+      "area": "messaging",
+      "behavior": "A relayed peer message is a preamble, then the wrapped message, then one of five lane-selected postambles. The preambles come in three peer forms built from one base at 160139849 with the family constants between 160142600 and 160144100, and at 159783737 in 2.1.260, beside separate activity, coordinator and background-observer families.",
+      "depends": "csift recognises an inbound peer message by its preamble as well as by its tag, because the rendered communication view strips the preamble it would otherwise have to match: the three peer forms are held as one constant list, and a peer tag opens a section only at a boundary - the start of the content, the point just after a preamble, or just after a previous section's close tag. The csift envelope detector is pinned against these framings as well as the three tags, so a delivery is never taken for a relay and a relay never for a delivery.",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "162-166",
+          "snippet": "pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[\n    \"Another Claude session sent a message:\",\n    \"Another Claude session sent a message while you were working:\",\n    \"A peer session sent a message while you were working:\",\n];"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. On disk a real relay is a record whose string content begins with a preamble after leading whitespace is stripped; counting rule: one per record, reported against occurrences of the same literals over the whole corpus.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": "2.1.145",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the preamble base builder together with the branch that selects a postamble, which raises the producer leg above located constants."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the preamble base at 160139849, of the family constants between 160142600 and 160144100 and of the 2.1.260 twin at 159783737, against a corpus census of records whose content opens with a preamble.",
+          "observed": "Three peer preamble forms are built from the one base; on disk 443 records open with one of them, 414 in the plain form and 29 in the mid-turn form, against 3,075 occurrences of the same literals.",
+          "rule": "One per record whose string content begins with a preamble after leading whitespace is stripped, reported against occurrences of the fixed byte string over the whole corpus.",
+          "note": "The preamble list is what keeps an inbound peer section recognisable once the rendered view has stripped the preamble away."
+        }
+      ]
+    },
+    {
+      "id": "MSG-046",
+      "area": "messaging",
+      "behavior": "A cross-session send issued from inside a subagent goes out under the PARENT process's socket address (159690453, 159699699), and the receiving side enqueues the message at the receiver's MAIN conversation (180110441), because the target resolver returns the session's main agent id (156787676). The tool states the same rule in prose at 175735560.",
+      "depends": "The official cross-session arm is a one-way door for a subagent, so csift says so in the receipt: where the receiver's registry row carries a socket the send is delegated, and the same row names the enqueue at the receiver's main conversation and the fact that a reply cannot come back to a subagent. The csift channel is what carries a reply addressed at a subagent transcript, which is why the message is queued on it as well as delegated.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "288-293",
+          "snippet": "            risks: vec![\n                \"the official inbound message can be HELD for approval when the receiver's \\\n                 permission mode is bypass-class, and it is enqueued at the receiver's MAIN \\\n                 lane - a reply cannot come back to a subagent\"\n                    .to_string(),\n            ],"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The prose statement at 175735560 is read as one more excerpt and treated as documentation of the rule, never as the mechanism.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the inbound enqueue together with the branch that selects the main target, which raises the producer leg above located call sites.",
+        "Send a cross-session message from inside a subagent and read which of the receiver's transcripts carries the record; the corpus holds no inbound cross-session delivery."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the outbound socket use at 159690453 and 159699699, of the inbound enqueue at 180110441, of the main-target resolver at 156787676 and of the tool's own prose at 175735560.",
+          "observed": "The outbound path uses the parent process's address, the inbound enqueue addresses the resolver's main agent id, and the tool's description states the same rule in words.",
+          "rule": "Verbatim byte reads; no count is claimed.",
+          "note": "The receipt names the consequence for a subagent sender before the send rather than leaving it to be discovered afterwards."
+        }
+      ]
+    },
+    {
+      "id": "MSG-047",
+      "area": "messaging",
+      "behavior": "`notify_when_idle` exists only in the cross-session schema variant (declared 175741479, variant selection 175740659) and is refused for any caller carrying an agent id or a teammate context (175742865). A subscription runs for 12 hours (180087990) and delivers ONE notice in four shapes (180087867, 180100215), each marked `[Cross-session idle notice]`.",
+      "depends": "csift neither offers an idle subscription nor delegates one. Where the official field exists at all it is closed to a caller carrying an agent id, so a subagent sender could not subscribe even against a receiver whose socket is published, and the field is absent from every other schema variant. A sender learns the outcome by reading the channel back with `csift msg <ID>`, which joins the per-lane ledger to the receiving transcript, and a message's own deliverability window defaults to the same 12 hours the official subscription runs.",
+      "code": [
+        {
+          "path": "src/cli/send_args.rs",
+          "lines": "101-104",
+          "snippet": "    /// How long the message stays deliverable, in the site-wide duration grammar\n    /// (`30s` `10m` `12h` `2d` `1w` `3mo` `1y`). Default 12h.\n    #[arg(long, value_name = \"DUR\", default_value = \"12h\")]\n    pub ttl: String,"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Read the field declaration, the variant selection, the caller refusal, the subscription window and the notice shapes at their offsets; the four shapes are counted as declared shapes, not as byte occurrences.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": "2.1.236",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the refusal branch together with the schema that declares the field, which raises the producer leg above located sites.",
+        "Subscribe from a caller carrying no agent id and record the notice that arrives; this corpus holds no idle notice from the cross-session path."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the field declaration at 175741479, the variant selection at 175740659, the caller refusal at 175742865, the 12-hour subscription at 180087990 and the notice shapes at 180087867 and 180100215.",
+          "observed": "The field is declared only in the cross-session variant, refused for a caller carrying an agent id or a teammate context, subscribed for 12 hours and delivered once in four shapes carrying the idle-notice marker.",
+          "rule": "Verbatim byte reads; the four shapes are counted as declared shapes, not as occurrences of a byte string.",
+          "note": "csift's answer to `did it arrive` is the reconciliation command, which is why no part of the send offers to notify anyone."
+        }
+      ]
+    },
+    {
+      "id": "MSG-049",
+      "area": "messaging",
+      "behavior": "An inbound peer message is HELD for approval when the receiver's permission mode is bypass-class or the asserted sender mode differs from it, and an unknown mode fails closed (175668709). The hold buffer keeps 100 entries (180134054); a headless run has no approval surface and drops the message with an expired receipt once the dialog times out (179202959); socket token authentication is required only on Windows (158809233).",
+      "depends": "csift never turns an official delegation into a promise. A socket receiver's receipt names the hold as a risk in the same sentence as the main-conversation enqueue, and a headless receiver takes its own policy row: the verdict is UNPREDICTABLE, and the risk names the `sdk-cli` entry point and says the receiver may end before any hook point is reached. The csift half is still queued in both rows, because a queued message outlives the dialog that dropped the official one.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "271-276",
+          "snippet": "            risks: vec![\n                \"the registry row's entrypoint is `sdk-cli`: a headless receiver has no \\\n                 approval surface for an inbound message and may end before any hook point \\\n                 is reached\"\n                    .to_string(),\n            ],"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The specimen side is a scan of the corpus for a record whose string content opens with the cross-session tag; counting rule: one per record, over the whole projects root, which returns none for the inbound direction.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the hold decision together with the branch that selects it, which raises the producer leg above located sites.",
+        "Send a cross-session message into a receiver in a bypass-class mode and into a headless receiver, and record the hold cause and the receipt; this corpus contains no inbound delivery at all."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the mode comparison at 175668709, the buffer bound at 180134054, the headless drop at 179202959 and the Windows-only token check at 158809233.",
+          "observed": "The comparison holds a message whose asserted mode differs from the receiver's and fails closed on an unknown mode; the buffer is bounded at 100 entries; the headless path drops with an expired receipt; the token check is guarded on the Windows platform.",
+          "rule": "Verbatim byte reads; the buffer bound is the constant read at its offset, not a count.",
+          "note": "The headless receiver has its own policy row, so the risk is stated before the send instead of after it."
+        }
+      ]
     }
   ]
 }
