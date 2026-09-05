@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod deliver;
 mod envelope;
 mod ledger;
 mod marker;

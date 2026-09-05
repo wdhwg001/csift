@@ -78333,6 +78333,1254 @@
           "note": "Landed with the `agent.communication.channel` leaf, whose envelope carries its id, sender and mode in the content string for exactly this reason."
         }
       ]
+    },
+    {
+      "id": "MSG-001",
+      "area": "messaging",
+      "behavior": "Every hook input is one base object plus per-event extras. The base declares eight fields, four of them carrying a describe, and `agent_id` is optional with the describe `Present only when the hook fires from within a subagent`. The declaration is at offset 158547085 in Claude Code 2.1.258 and at 157880604 in 2.1.260.",
+      "depends": "csift reads the base fields by name and treats `agent_id` as the discriminator between a subagent transcript and the top-level session: present names the subagent, absent falls back to `session_id`. A build that made the field mandatory, or that filled it on the top-level thread, would make every delivery write into the wrong per-transcript file.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "47-52",
+          "snippet": "    pub(crate) cwd: Option<String>,\n    /// Present only when the hook fires from within a subagent lane, and on the two\n    /// subagent events, which declare it as their own required extra.\n    pub(crate) agent_id: Option<String>,\n    pub(crate) agent_type: Option<String>,\n    pub(crate) hook_event_name: String,"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Corpus side: count the records carrying the hook-context leaf over the whole projects root, one per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the runtime builder's emit site and the branch that fills `agent_id` in the shipped binary as verbatim excerpts, so the declared field set is paired with the bytes that fill it."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the base-object declaration at 158547085, against a corpus count of hook-context records.",
+          "observed": "The declaration carries eight fields with `agent_id` optional under its describe; 88,889 records carry the hook-context leaf across the projects root.",
+          "rule": "One per record for the corpus count, whole projects root; the byte read is verbatim.",
+          "note": "Landed with the hook entry, which derives the receiving transcript from the presence of this one field."
+        }
+      ]
+    },
+    {
+      "id": "MSG-002",
+      "area": "messaging",
+      "behavior": "The runtime hook-input builder emits nine keys, one of them the undeclared `scratchpad_dir`, and a served or remote call takes a different branch of the same builder: it emits `session_id` as `served:<caller>`, an EMPTY `transcript_path`, and no `agent_type`, `prompt_id` or `scratchpad_dir`. Builder 165808976, served branch 165809331, emitted key set 165809460; the literal `scratchpad_dir` occurs twice over the whole file.",
+      "depends": "The served shape is the one hook payload csift must refuse rather than place: with a non-uuid session and no transcript path there is no project directory and no transcript to derive one from, so acting on it would write into an invented path. `deliver` treats both fields as required and exits 0 without printing.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "44-46",
+          "snippet": "/// The refusal reasons, both of them shapes the harness really produces.\nconst REFUSED_NO_TRANSCRIPT: &str = \"no transcript path in the hook payload\";\nconst REFUSED_LANE_ID: &str = \"the payload's agent id is not a lane id\";"
+        },
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "106-115",
+          "snippet": "/// Classify the payload into the place this invocation may act.\nfn target(hook: &HookInput) -> Target {\n    // A served or remote call names no session csift can place. There is no lane to file a\n    // refusal under, so the refusal is the exit itself.\n    if !crate::path::is_uuid(&hook.session_id) {\n        return Target::Silent;\n    }\n    let Some(root) = channel_root(hook) else {\n        return Target::Silent;\n    };"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The refusal itself is exercised by feeding the served payload shape to `csift deliver --slot 1` on stdin and reading the exit code and the empty stdout.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Capture a served or remote hook payload from a live Claude Code run and record its field set, which closes the specimen leg for the branch.",
+        "Read the caller that enters the builder in the shipped binary as a verbatim excerpt, which is the trigger hop the offsets above do not cover."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads at 165808976, 165809331 and 165809460, plus the occurrence count of the undeclared key.",
+          "observed": "The builder emits nine keys; the served branch emits the `served:` session form with an empty transcript path; `scratchpad_dir` occurs twice whole-file.",
+          "rule": "Occurrences of the fixed byte string over the whole binary; the reads are verbatim.",
+          "note": "The refusal shape csift acts on is exactly this branch."
+        }
+      ]
+    },
+    {
+      "id": "MSG-003",
+      "area": "messaging",
+      "behavior": "SubagentStart re-declares `agent_id` and `agent_type` as its own REQUIRED extras and adds nothing else, at offset 158554141. The field therefore reaches that event even though the base declares it optional.",
+      "depends": "csift never has to infer which transcript a SubagentStart belongs to: the payload names it. `deliver` reads the same field on every event and falls back to the top-level session only when it is absent, so the subagent events need no special case.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "87-92",
+          "snippet": "    /// The lane this event belongs to: the subagent id when the payload names one, else\n    /// the top-level session. `session_id` is ALWAYS the top-level uuid, in every lane,\n    /// so it is the correct fallback and never a guess.\n    pub(crate) fn lane(&self) -> &str {\n        self.agent_id.as_deref().unwrap_or(&self.session_id)\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Corpus side: count the records naming the event over the whole projects root, one per matching line, and the distinct files carrying them, one per file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the emitter that fills the two required extras in the shipped binary as a verbatim excerpt, so the declaration is paired with the bytes that satisfy it."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the SubagentStart extras at 158554141, against a corpus census of records naming that event.",
+          "observed": "The event declares exactly the two required extras; 11,490 records name it across 7,280 files, every one under a `subagents/` path component.",
+          "rule": "One per matching line for records, one per matching file for files, whole projects root.",
+          "note": "The subagent-transcript placement is what makes a pasted hook line reach a child."
+        }
+      ]
+    },
+    {
+      "id": "MSG-004",
+      "area": "messaging",
+      "behavior": "SubagentStop is the only event declaring `agent_transcript_path`, beside `stop_hook_active`, `agent_id`, `agent_type` and the optional background-task and cron arrays, at offset 158554223. Its `transcript_path` still names the top-level session file, so the two paths differ on that event alone.",
+      "depends": "csift derives the channel directory from `transcript_path` and never from `agent_transcript_path`: the channel is keyed by the top-level session, and reading the child path would put a subagent's directory beside a file the harness owns. The field is parsed and kept so a future reader can join the two, never used to place a write.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "58-60",
+          "snippet": "    /// `SubagentStop` only: the CHILD lane's own transcript, distinct from\n    /// `transcript_path`, which names the top-level session file in every lane.\n    pub(crate) agent_transcript_path: Option<String>,"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial fires a SubagentStop hook that logs its whole payload and compares the two path fields against the on-disk transcript tree.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Enumerate every event declaration in the shipped binary and read each one, which is what closes the negative `only event`.",
+        "Log a SubagentStop payload from a live run and record both path fields, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the SubagentStop extras at 158554223.",
+          "observed": "The declaration carries `agent_transcript_path` beside the stop flag, the two agent fields and the two optional arrays.",
+          "rule": "The read is verbatim; no count is claimed for the negative until the enumeration runs.",
+          "note": "csift parses the field and deliberately does not place a write with it."
+        }
+      ]
+    },
+    {
+      "id": "MSG-005",
+      "area": "messaging",
+      "behavior": "SessionStart declares a five-value `source` enum (`startup`, `resume`, `clear`, `compact`, `fork`) plus the resume and fork extras `seconds_since_last_response`, `context_tokens`, `prompt_cache_likely_expired` and `estimated_cache_write_usd`. Declaration 158551000; the emitter payload is at 165800416.",
+      "depends": "The whole re-entry design keys on that enum: `compact` is where csift offers an un-acked message once more, because the compaction threw away the context the first delivery landed in, and `resume` is where a message that had nowhere to land finally does. `startup`, `clear` and `fork` deliver nothing extra, so the value has to be read rather than assumed.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "99-102",
+          "snippet": "    /// True when this is a `SessionStart` carrying the named source.\n    pub(crate) fn session_start_source(&self, want: &str) -> bool {\n        self.hook_event_name == \"SessionStart\" && self.source.as_deref() == Some(want)\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial forces a compaction with a SessionStart hook that logs its payload, and reads back the `source` value and the two resume extras.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Force a compaction and a resume with a logging SessionStart hook and record the `source` value each one carries, which closes the specimen leg for both re-entry paths."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the SessionStart declaration at 158551000 and of the emitter payload at 165800416.",
+          "observed": "The declaration carries the five source values and the four resume-and-fork extras; the emitter fills the same set.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "csift acts on two of the five values and ignores the rest."
+        }
+      ]
+    },
+    {
+      "id": "MSG-006",
+      "area": "messaging",
+      "behavior": "Stop declares `stop_hook_active`, `last_assistant_message`, `background_tasks` (item shape 158552019) and `session_crons` (item shape 158553086), at offset 158553287.",
+      "depends": "`stop_hook_active` is the harness telling a stop hook that the turn is ALREADY continuing because a stop hook blocked it. csift reads it as a hard veto on the turn-blocking vehicle: a delivery still goes out, on the ordinary context channel, so a message never turns into a block loop.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "55-57",
+          "snippet": "    /// `Stop` / `SubagentStop`: true when the turn is already continuing because a stop\n    /// hook blocked it, which is the harness telling this hook to stop blocking.\n    pub(crate) stop_hook_active: bool,"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial runs a Stop hook that logs its payload, blocks once with exit 2, and reads the flag on the next fire.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Log a Stop payload before and after a blocking exit-2 fire and record the flag on each, which closes the specimen leg for the veto csift applies."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the Stop declaration at 158553287 with the two item shapes at 158552019 and 158553086.",
+          "observed": "The declaration carries the stop flag, the last assistant message and the two arrays, each item shape declared separately.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "The flag is one of four conditions csift requires before it blocks a turn."
+        }
+      ]
+    },
+    {
+      "id": "MSG-007",
+      "area": "messaging",
+      "behavior": "UserPromptSubmit declares `prompt` plus a six-value `source` enum (`user`, `sdk`, `system`, `loop_wakeup`, `schedule_wakeup`, `poll_event`) that a payload may omit while it rolls out, at offset 158550335.",
+      "depends": "csift treats UserPromptSubmit as a turn boundary regardless of that enum, so a queue message rides it whether the prompt came from a human, the SDK or a wakeup. Reading the enum would make delivery depend on a field payloads are still allowed to omit.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "35-36",
+          "snippet": "/// The events that end (or restart) a turn, where a `queue` message may ride.\nconst QUEUE_EVENTS: [&str; 3] = [\"UserPromptSubmit\", \"Stop\", \"SubagentStop\"];"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial logs UserPromptSubmit payloads from a typed prompt and from a scheduled wakeup and compares their field sets.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Log UserPromptSubmit payloads from more than one source and record whether the enum field is present, which closes the specimen leg for the omission."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the UserPromptSubmit declaration at 158550335.",
+          "observed": "The declaration carries `prompt` and the six-value source enum.",
+          "rule": "The read is verbatim; no count is claimed.",
+          "note": "csift deliberately does not branch on the enum."
+        }
+      ]
+    },
+    {
+      "id": "MSG-008",
+      "area": "messaging",
+      "behavior": "TeammateIdle declares `teammate_name` and `team_name` only, the second marked deprecated, and its emitted payload carries NO `agent_id`: the emitter calls the base builder with no tool-use context. Schema 158556968, emitter payload 165804055, call 164635164.",
+      "depends": "csift's delivery events are the eight that carry an identity. TeammateIdle is deliberately not among them: with no `agent_id` the payload cannot name the transcript it fired for, so a delivery there would have to resolve a name and a team back to a transcript and could pick the wrong one when two teammates share a name.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "21-33",
+          "snippet": "/// The eight events a steer message may ride. Every other event exits 0 with nothing:\n/// the hook line is identical on all of them, so the filter lives here rather than in\n/// what the user pasted.\npub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial runs a teammate turn with a hook that logs every payload and checks which fields the TeammateIdle fire carries.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the gate that decides whether the teammate event fires at all as a verbatim excerpt, which is the hop between the call site and the payload."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads at 158556968, 165804055 and 164635164, against a payload log from a teammate turn.",
+          "observed": "The declaration carries the two name fields only; three logged TeammateIdle fires carried no `agent_id` and identified the transcript by `teammate_name` plus `team_name`.",
+          "rule": "One per logged fire; the byte reads are verbatim.",
+          "note": "The event is excluded from the delivery set for exactly this reason."
+        }
+      ]
+    },
+    {
+      "id": "MSG-014",
+      "area": "messaging",
+      "behavior": "An `asyncRewake` hook backgrounds only in an interactive or streaming-input session, and on exit code 2 - and only 2 - enqueues a `task-notification` at priority `next` addressed at the top-level agent, framed as stop-hook feedback inside a system-reminder. Config 157220415, gate 165823930, runner 165807721, exit-2 branch 165808400, enqueue 162044727, addressing 156787676.",
+      "depends": "csift's hook is synchronous and never declares `asyncRewake`, so it never leans on that wake. It uses exit 2 in the Stop family instead, where the code blocks the turn for the transcript that fired rather than being re-addressed at the top-level one. The difference matters: a wake addressed elsewhere would deliver a subagent's message into the main conversation.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver_emit.rs",
+          "lines": "115-127",
+          "snippet": "pub(crate) fn emit(event: &str, chunk_text: &str, vehicle: Vehicle) -> Result<()> {\n    match vehicle {\n        Vehicle::AdditionalContext => {\n            println!(\"{}\", hook_output(event, chunk_text)?);\n            Ok(())\n        }\n        Vehicle::Exit2 => {\n            eprintln!(\"{chunk_text}\");\n            let _ = std::io::stdout().flush();\n            let _ = std::io::stderr().flush();\n            std::process::exit(2);\n        }\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial arms an asyncRewake hook that exits 2 while the session is idle and reads whether a task-notification record lands and in which transcript.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Arm an asyncRewake hook that exits 2 in an idle session and record which transcript receives the pulse, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the gate at 165823930, the exit-2 branch at 165808400, the enqueue at 162044727 and the addressing helper at 156787676.",
+          "observed": "The gate requires an interactive or streaming session; the branch fires on exit code 2 alone; the enqueue carries priority `next` and resolves its target through the top-level addressing helper.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "csift uses the Stop-family exit 2, which addresses the transcript that fired."
+        }
+      ]
+    },
+    {
+      "id": "MSG-015",
+      "area": "messaging",
+      "behavior": "Two teardowns exist for in-flight async hooks: one awaits them for up to 30 seconds, one kills them and finalizes as exit 1 or cancelled. Offsets 165807271 and 162005990, with the headless call site at 179192923.",
+      "depends": "csift's hook does one bounded read of stdin and finishes, so it is never an in-flight async hook and neither teardown can truncate it. That is why the ledger line is written before the chunk is printed: a delivery that is killed after the write is recorded as intent, which a reconciliation can tell apart from a delivery that reached the transcript.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "98-104",
+          "snippet": "/// Read the whole hook payload. An unreadable or blank stdin yields `None`: a hook that\n/// was handed nothing has nothing to deliver.\nfn read_stdin() -> Option<String> {\n    let mut raw = String::new();\n    std::io::stdin().read_to_string(&mut raw).ok()?;\n    (!raw.trim().is_empty()).then_some(raw)\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial ends a headless run while an async hook is still in flight and reads which of the two teardowns applied.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the branch that chooses between the awaiting teardown and the killing one as a verbatim excerpt, which is the gate the two offsets do not cover.",
+        "End a headless run with an async hook in flight and record the outcome, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the two teardowns at 165807271 and 162005990.",
+          "observed": "One teardown awaits in-flight hooks up to a 30-second bound; the other kills them and finalizes the result as cancelled.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "csift's hook is synchronous, so neither teardown is on its path."
+        }
+      ]
+    },
+    {
+      "id": "MSG-018",
+      "area": "messaging",
+      "behavior": "`transcript_path` in a hook input is always the TOP-LEVEL session file, in every transcript the hook fires from; an agent's own file has a separate builder reached only by SubagentStop's dedicated field. Offsets 165808976, 166068386, 163782897, 159262689.",
+      "depends": "csift derives the channel root from that path's parent directory joined with the session uuid, which is the project directory and the session sidecar. It needs no `--claude-home`, no project resolution and no encoding of a cwd, and it works identically from a subagent, because the field does not change with the firing transcript.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "136-147",
+          "snippet": "/// `<projects>/<encoded>/<session-uuid>/csift-channel`.\n///\n/// The transcript path in the payload already names the project directory, so the hook\n/// needs no `--claude-home` and no project resolution. When it names none, the payload's\n/// `cwd` still locates the project under the resolved projects root - which is what makes\n/// the empty-transcript refusal recordable rather than silent.\nfn channel_root(hook: &HookInput) -> Option<PathBuf> {\n    let project_dir = if hook.transcript_path.trim().is_empty() {\n        let cwd = hook.cwd.as_deref()?;\n        crate::path::projects_root()\n            .ok()?\n            .join(crate::path::encode_cwd(Path::new(cwd)))"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Corpus side: census the records naming a subagent event and check the path component they sit under, one per matching line and one per matching file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the builder that fills the field and the separate per-agent path builder as verbatim excerpts side by side, so the two paths are traced rather than inferred from their offsets."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads at 165808976 and 159262689, against the corpus census of subagent-event records and the files they sit in.",
+          "observed": "The base builder fills one transcript path while the per-agent path has its own builder; 11,490 subagent-event records sit in 7,280 files, all under a `subagents/` component and none in a top-level transcript.",
+          "rule": "One per matching line for records and one per matching file for files, whole projects root; the reads are verbatim.",
+          "note": "This is what makes the hook entry independent of csift's own home resolution."
+        }
+      ]
+    },
+    {
+      "id": "MSG-019",
+      "area": "messaging",
+      "behavior": "There is no per-event async-eligibility table: async and asyncRewake are per-entry runtime gates (165823930), and the event-keyed verdict map at 161640626 in 2.1.258 and 161262175 in 2.1.260 governs cloud forwarding instead, with eleven forwardable events and the rest marked `runs_locally`, `later`, `low_value` or `container_internal`.",
+      "depends": "csift's event filter is its own, not a reading of a harness table: the same pasted command runs on every event and decides in the binary which ones carry a delivery. A future harness table would not change that, and mistaking the cloud-forwarding map for an eligibility table would have produced a filter that silently dropped events.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "169-173",
+          "snippet": "        version.as_deref(),\n    )?;\n    if !is_steer_event(&hook.hook_event_name) {\n        return Ok(());\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The negative is searched over event-keyed maps in the shipped binary: enumerate the maps keyed by event name and read each one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Enumerate every event-keyed map in the shipped binary and read each one, which is what closes the negative.",
+        "No specimen exists for an absence; a live trial that runs one hook on all eight events and records which fired would bound it from the other side."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the per-entry gate at 165823930 and of the event-keyed verdict map at 161640626.",
+          "observed": "The gate is per hook entry and carries no event key; the event-keyed map carries cloud-forwarding verdicts, eleven of them forwardable.",
+          "rule": "Occurrences of the fixed byte string over the whole binary for the enumeration; the reads are verbatim.",
+          "note": "csift filters events itself rather than reading a table that does not exist."
+        }
+      ]
+    },
+    {
+      "id": "MSG-020",
+      "area": "messaging",
+      "behavior": "An exit 2 with EMPTY stdout whose stderr matches a missing-file pattern is downgraded to non-blocking for Stop, SubagentStop, TaskCompleted, TeammateIdle and a plugin's UserPromptSubmit, at offset 165828097.",
+      "depends": "csift's exit-2 path always writes the rendered chunk to stderr, which begins with the envelope header and can never look like a missing-file message. An empty or diagnostic-shaped stderr would be silently downgraded and the turn would end with the ledger still claiming a block.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver_emit.rs",
+          "lines": "1-12",
+          "snippet": "//! How a chunk reaches the model: the vehicle choice, the block-cap arithmetic behind it,\n//! and the single JSON object a delivery is allowed to print.\n//!\n//! Two vehicles exist and they are not interchangeable. `additionalContext` rides the\n//! hook's stdout at exit 0 and works at every delivery event. Exit 2 exists only in the\n//! Stop family, where it also BLOCKS the turn from ending, which is what makes a queue\n//! message arrive as steering rather than as a note the model reads after it has already\n//! finished. The harness ends the turn itself once a Stop hook has blocked it\n//! `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` times in a row (8 unless the environment says\n//! otherwise, and a non-positive value disables the vehicle here rather than inviting the\n//! override), so the arithmetic keeps one block of headroom under that ceiling and never\n//! spends two blocks on one message."
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial runs a Stop hook that exits 2 with empty stdout and a missing-file stderr and reads whether the turn ends.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the caller that applies the downgrade as a verbatim excerpt, which is the gate the single offset does not cover.",
+        "Run a Stop hook that exits 2 with a missing-file stderr and record whether the turn ends, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the downgrade branch at 165828097.",
+          "observed": "The branch names the five events and requires both an empty stdout and a stderr matching the missing-file pattern.",
+          "rule": "The read is verbatim; no count is claimed.",
+          "note": "csift's blocking stderr always carries the envelope header, so it cannot match."
+        }
+      ]
+    },
+    {
+      "id": "MSG-021",
+      "area": "messaging",
+      "behavior": "Settings hooks are process-global: the per-event collector prepends the settings-and-plugin union for every agent before any per-agent lookup, so one pasted hook entry runs in a subagent transcript as well as the top-level one. The tool-event registry key builder at 162932024 adds a SECOND key `[agentId, parentAgentId]` only when the predicate at 162244149 holds, and that predicate is true for the built-in web-fetch agent alone (162243899).",
+      "depends": "One pasted `csift deliver --slot k` line therefore arms every transcript of a session, which is the whole reason the channel can reach a subagent at all. Because the same entry runs everywhere, the receiving transcript must be read from the payload rather than assumed: csift takes it from `agent_id` and falls back to the session only when the field is absent.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "87-92",
+          "snippet": "    /// The lane this event belongs to: the subagent id when the payload names one, else\n    /// the top-level session. `session_id` is ALWAYS the top-level uuid, in every lane,\n    /// so it is the correct fallback and never a guess.\n    pub(crate) fn lane(&self) -> &str {\n        self.agent_id.as_deref().unwrap_or(&self.session_id)\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Restrict a whole-binary occurrence scan of the key builder and its predicate and read each site; the counting rule is occurrences of the fixed byte string.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the per-event collector that prepends the settings union as a verbatim excerpt at its own offset, which is the hop this claim states from its consequence."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the key builder at 162932024, its predicate at 162244149 and the web-fetch constant at 162243899, against a corpus census of hook-context records in subagent transcripts.",
+          "observed": "The second key is added only under the web-fetch predicate; 7,869 hook-context records sit in subagent transcripts across 7,168 distinct subagent files.",
+          "rule": "Occurrences of the fixed byte string for the reads; one per record and one per file for the census, whole projects root.",
+          "note": "The earlier reading of the dual key as a general parent-hook inheritance is corrected here; the full trace of the collector is carried by MSG-093."
+        }
+      ]
+    },
+    {
+      "id": "MSG-022",
+      "area": "messaging",
+      "behavior": "Six events' hooks are deferred while a pause is in effect: PreToolUse, PermissionRequest, UserPromptSubmit, UserPromptExpansion, TaskCompleted and TeammateIdle. The deferral list is at offset 165849250.",
+      "depends": "A deferred hook is a hook that does not fire, and csift's delivery state lives in files rather than in the firing: a message with no emit line stays pending, so the next event that does fire delivers it. Nothing is lost by a pause, and nothing has to detect one.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver_plan.rs",
+          "lines": "201-205",
+          "snippet": "    match state {\n        // Never emitted: pending at any eligible event. A HELD message has exactly this\n        // shape, so a re-entry event delivers it with no separate rule.\n        None => Verdict::Send { redeliver: None },\n        Some(s) if !s.first_part_emitted() => Verdict::Send { redeliver: None },"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial pauses a session, fires one of the six events and reads whether the hook ran.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the caller that consults the deferral list as a verbatim excerpt, which is the gate the single offset does not cover.",
+        "Pause a session, trigger one of the six events and record whether the hook ran, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte read of the deferral list at 165849250.",
+          "observed": "The list names the six events, four of them among csift's delivery events.",
+          "rule": "The read is verbatim; no count is claimed.",
+          "note": "csift's pending state survives a deferral because it lives in the inbox, not in the firing."
+        }
+      ]
+    },
+    {
+      "id": "MSG-023",
+      "area": "messaging",
+      "behavior": "A workflow agent's child tool-use context carries the minted agent id, so tool-event hooks fired inside it carry `agent_id`; the driver supplies the id as an override rather than building the context. Offsets 163782876, 163774605, 172626168, 172627879, 165809440.",
+      "depends": "That id is a bare hex, the same shape a built-in subagent carries, so csift's existing id grammar accepts it with no new arm and a workflow agent gets its own per-transcript inbox and ledger. This is the one receiver the official transport cannot reach at all, so it is also the case the channel exists for.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "123-133",
+          "snippet": "    let lane = hook.lane().to_string();\n    if is_lane_id(&lane) {\n        Target::Ready { root, lane }\n    } else {\n        // The session is still a lane csift can name, so the refusal is recordable there.\n        Target::Refused {\n            root,\n            lane: hook.session_id.clone(),\n            reason: REFUSED_LANE_ID,\n        }\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial runs a workflow with a hook that logs SubagentStart, SubagentStop and tool-event payloads, compared against a listing of the workflow subtree on disk.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Run a workflow with a payload-logging hook and record whether the tool-event `agent_id` equals the `agent-<hex>.jsonl` stem, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the child context at 163782876, the driver override at 163774605 and the base builder's return at 165809440.",
+          "observed": "The child context carries the minted id and the driver passes it as an override; the base builder returns it as `agent_id`.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "The id shape is what lets csift accept a workflow agent with no new grammar."
+        }
+      ]
+    },
+    {
+      "id": "MSG-024",
+      "area": "messaging",
+      "behavior": "SubagentStart and SubagentStop are suppressed only for agents whose context is `agentType:\"subagent\"` with `delegatedObservation:true`; workflow and teammate agents are not suppressed. Suppressor 158828306 in 2.1.258 and 158169574 in 2.1.260, SubagentStart gate 163777400, SubagentStop gate 165803039.",
+      "depends": "csift never assumes a transcript receives the subagent events: the armed marker is written by the delivery itself, on whatever event actually fired, so a suppressed transcript simply shows the events it does get. A sender reading the marker therefore sees what runs rather than what was configured.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "160-170",
+          "snippet": "    let prior = read_armed(root, lane)?;\n    let version = claude_code_version(hook);\n    refresh_armed(\n        root,\n        lane,\n        slot,\n        &hook.hook_event_name,\n        &now,\n        Some(hook.session_id.as_str()),\n        version.as_deref(),\n    )?;"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Corpus side: census the records naming SubagentStart, one per matching line, over the whole projects root.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the trigger that reaches the two gates as a verbatim excerpt, so the suppression is traced from its entry rather than from the gates alone."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the suppressor at 158828306 and the two event gates at 163777400 and 165803039, against the corpus census of SubagentStart records.",
+          "observed": "The predicate tests the observation flag alongside the agent type; 11,490 records name the event, all of them in non-suppressed transcripts.",
+          "rule": "One per matching line, whole projects root; the reads are verbatim.",
+          "note": "The armed marker records what fired, which makes suppression visible instead of silent."
+        }
+      ]
+    },
+    {
+      "id": "MSG-027",
+      "area": "messaging",
+      "behavior": "The agent-transcript subdirectory map is process-local: it is set at spawn and cleared in the agent's cleanup, so a finished workflow agent's id resolves to a path where nothing was written. Map and accessors 159262008, 159262142, 159262209; getter 159262689; set 163774634; workflow value 172628282; clears 163790735 and 163779328.",
+      "depends": "csift never resolves a channel path through an agent id. The root comes from the payload's own `transcript_path` and the session uuid, both of which are stable after the agent finishes, so a message queued for a workflow agent stays readable and reconcilable once the run is over.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "148-152",
+          "snippet": "    } else {\n        Path::new(&hook.transcript_path).parent()?.to_path_buf()\n    };\n    Some(channel_dir(&project_dir.join(&hook.session_id)))\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. Corpus side: partition the subagent transcripts on the `subagents/workflows/wf_` path component, one per file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the spawn site that sets the map and the cleanup that clears it as verbatim excerpts in one pass, so the lifetime is traced rather than assembled from separate offsets."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the getter at 159262689, the set at 163774634 and the two clears at 163790735 and 163779328, against the on-disk shape of the workflow subtree.",
+          "observed": "The map is set at spawn and cleared twice on the way out; the workflow subtree stores its transcripts under a run directory that the id alone does not name.",
+          "rule": "One per file for the partition, whole projects root; the reads are verbatim.",
+          "note": "csift's path derivation deliberately avoids the id."
+        }
+      ]
+    },
+    {
+      "id": "MSG-030",
+      "area": "messaging",
+      "behavior": "A background child's environment is scrubbed of `CLAUDE_CODE_SESSION_ID` and `CLAUDE_CODE_MESSAGING_SOCKET`, at offsets 166748061 and 167455603, so the child registers its own row with its own socket.",
+      "depends": "csift's hook entry reads nothing from the environment to identify itself: the payload carries the session and the agent id, and the chain that orders concurrent hook processes is keyed by the parent process id, which a scrubbed environment does not touch. A background child therefore delivers exactly like any other.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "323-334",
+          "snippet": "/// The key that groups the N hook processes of one firing.\n///\n/// On unix that is the parent process id, the Claude Code process itself, exactly as the\n/// chain is specified. Windows exposes no parent pid to a std program, so the session uuid\n/// stands in: it is shared by every slot of one firing and differs between sessions, which\n/// is the whole requirement.\nfn chain_key(hook: &HookInput) -> u32 {\n    #[cfg(unix)]\n    {\n        let _ = hook;\n        std::os::unix::process::parent_id()\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial starts a background child and compares its environment and its registry row against the parent's.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the branch that builds the child environment as a verbatim excerpt, which is the gate the two scrub sites do not cover.",
+        "Start a background child and record which variables its environment carries, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the two scrub sites at 166748061 and 167455603.",
+          "observed": "Both variables are removed from the child environment before the spawn.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "The hook entry takes its identity from the payload, never from the environment."
+        }
+      ]
+    },
+    {
+      "id": "MSG-031",
+      "area": "messaging",
+      "behavior": "SessionStart with `source:\"fork\"` is emitted on the same-process branch-and-resume path, at offsets 180760635, 163197314 and 165800416.",
+      "depends": "A fork is a re-entry that is NOT a compaction and NOT a resume, so csift delivers nothing extra on it: an un-acked message is not re-offered and a held one is not released. Treating a fork as a resume would deliver into a transcript that already carries the earlier delivery.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "110-117",
+          "snippet": "/// True when a queue message may ride this event: a turn boundary, or one of the two\n/// `SessionStart` re-entry sources.\npub(crate) fn is_queue_event(event: &str, source: Option<&str>) -> bool {\n    if QUEUE_EVENTS.contains(&event) {\n        return true;\n    }\n    event == \"SessionStart\" && source.is_some_and(|s| REENTRY_SOURCES.contains(&s))\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial branches a session in place and reads the `source` value the SessionStart payload carries.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Re-read the argv construction and the source-enum offsets in the shipped binary before citing them again: the citations in the finding this claim comes from were disclosed as defective.",
+        "Branch a session in place and record the emitted `source` value, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the fork emission at 180760635 and the same-process branch at 163197314.",
+          "observed": "The branch emits the SessionStart with the fork source in the same process, without the resume extras.",
+          "rule": "The reads are verbatim; no count is claimed.",
+          "note": "csift treats fork as an ordinary start, so nothing is re-offered on it."
+        }
+      ]
+    },
+    {
+      "id": "MSG-054",
+      "area": "messaging",
+      "behavior": "`\"SubagentStart\"` is present from Claude Code 2.1.23, with the highest cached build lacking it at 2.0.30, while `\"SubagentStop\"` is present in the oldest cached build: the pair was completed by adding a start event beside a long-standing stop event.",
+      "depends": "csift's delivery set carries both, and a receiver on a build below the start floor simply never fires that one. Because the delivery decision is per event and per message rather than per build, an older receiver loses a delivery point without losing a message.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "24-33",
+          "snippet": "pub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one. Corpus side: census the records naming the start event, one per matching line.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.23",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "A literal dates its own wording, not the behavior; read the emitter of the start event in a build at the floor to confirm the event itself entered there."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the two event literals across the cached native builds, against the corpus census of start-event records.",
+          "observed": "The start literal is absent at 2.0.30 and present at 2.1.23; the stop literal is present in the oldest cached build; 11,490 records name the start event.",
+          "rule": "Lines carrying the literal per build for the ladder; one per matching line for the census.",
+          "note": "Both events are delivery points, so an older receiver loses one of eight."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "\"SubagentStart\"",
+        "lowest_present": "2.1.23",
+        "highest_absent": "2.0.30",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-055",
+      "area": "messaging",
+      "behavior": "`\"PostToolBatch\"` is present from Claude Code 2.1.124, with the highest cached build lacking it at 2.1.100, while `\"PostToolUse\"` predates the cache: the batch event is a new sibling, not a rename of the per-call one.",
+      "depends": "csift carries both in its delivery set. Because they are siblings rather than alternatives, a build that fires both simply offers two delivery points in one turn, and the per-message ledger keeps the second from re-emitting what the first sent.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "21-33",
+          "snippet": "/// The eight events a steer message may ride. Every other event exits 0 with nothing:\n/// the hook line is identical on all of them, so the filter lives here rather than in\n/// what the user pasted.\npub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.124",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "A literal dates its own wording; read the emitter of the batch event in a build at the floor to confirm the event entered there.",
+        "Log both events from one turn in a live run and record their order and payloads, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the batch and per-call event literals across the cached native builds.",
+          "observed": "The batch literal is absent at 2.1.100 and present at 2.1.124; the per-call literal is present in the oldest cached build.",
+          "rule": "Lines carrying the literal per build.",
+          "note": "Both are delivery points and the ledger keeps them from duplicating a message."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "\"PostToolBatch\"",
+        "lowest_present": "2.1.124",
+        "highest_absent": "2.1.100",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-056",
+      "area": "messaging",
+      "behavior": "`\"TeammateIdle\"`, `\"TaskCreated\"`, `\"TaskCompleted\"` and `\"PostCompact\"` all enter at Claude Code 2.1.100, with the highest cached build lacking them at 2.1.23, as one cohort the cache cannot order; `\"PreCompact\"` predates the cache, so PostCompact is an addition and a reader keying on compaction has to accept both.",
+      "depends": "csift keys its post-compaction re-entry on SessionStart with `source:\"compact\"`, not on PostCompact, so the cohort floor does not gate the re-offer at all. A PostCompact-based design would have silently done nothing on every build below the cohort.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "38-40",
+          "snippet": "/// The two `SessionStart` sources that are a RE-ENTRY into an existing lane rather than a\n/// fresh start, so a queue message may ride them.\nconst REENTRY_SOURCES: [&str; 2] = [\"resume\", \"compact\"];"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "A cohort that enters in one cached step cannot be ordered by the ladder; bisecting the uncached builds between the two steps would separate the four literals.",
+        "Force a compaction on a build at the floor and record which of the two events fires, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the four cohort literals and of the pre-compaction literal across the cached native builds.",
+          "observed": "All four cohort literals are absent at 2.1.23 and present at 2.1.100; the pre-compaction literal is present in the oldest cached build.",
+          "rule": "Lines carrying the literal per build.",
+          "note": "csift's re-entry keys on the SessionStart source instead, which predates the cohort."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "\"PostCompact\"",
+        "lowest_present": "2.1.100",
+        "highest_absent": "2.1.23",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-057",
+      "area": "messaging",
+      "behavior": "`asyncRewake` is present from Claude Code 2.1.100, with the highest cached build lacking it at 2.1.23 and no lowercase predecessor, and `rewakeMessage` follows one cached step later at 2.1.124: the payload field is separable from the trigger name.",
+      "depends": "csift's printed hook block declares no async or rewake field on any of its entries, so the block is valid on every build in the ladder, including those below both floors. A recipe that emitted an async entry would be a configuration a receiver could silently ignore.",
+      "code": [
+        {
+          "path": "src/live/channel/recipe.rs",
+          "lines": "38-46",
+          "snippet": "/// Render the fragment for `slots` slots on the eight delivery events.\npub(crate) fn fragment(slots: u32, shell: RecipeShell) -> Value {\n    let mut hooks = serde_json::Map::new();\n    for event in STEER_EVENTS {\n        let entries: Vec<Value> = (1..=slots).map(|k| entry(k, shell)).collect();\n        hooks.insert(event.to_string(), json!([{ \"hooks\": entries }]));\n    }\n    json!({ \"hooks\": Value::Object(hooks) })\n}"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "A literal dates its own wording; read the config parser in a build at the floor to confirm the field entered there.",
+        "Paste the printed block into a build below the floor and record whether it parses, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the trigger and payload-field literals across the cached native builds.",
+          "observed": "The trigger literal is absent at 2.1.23 and present at 2.1.100; the payload field follows one cached step later at 2.1.124.",
+          "rule": "Lines carrying the literal per build.",
+          "note": "The printed block uses only the plain command form, valid below both floors."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "asyncRewake",
+        "lowest_present": "2.1.100",
+        "highest_absent": "2.1.23",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-058",
+      "area": "messaging",
+      "behavior": "`hook_additional_context` is present from Claude Code 2.0.30, with the highest cached build lacking it at 2.0.0, while the camelCase `additionalContext` predates the cache and both still ship: the snake_case attachment type is the newer name for an older channel.",
+      "depends": "csift prints the camelCase field inside `hookSpecificOutput` and audits the snake_case attachment the harness writes from it. Both names are load-bearing at once, one on the way out and one on the way back, which is why the delivery and the reconciliation do not share a literal.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver_emit.rs",
+          "lines": "98-106",
+          "snippet": "/// The one JSON object a delivery prints on stdout.\npub(crate) fn hook_output(event: &str, chunk_text: &str) -> Result<String> {\n    Ok(serde_json::to_string(&json!({\n        \"hookSpecificOutput\": {\n            \"hookEventName\": event,\n            \"additionalContext\": chunk_text,\n        }\n    }))?)\n}"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one. Corpus side: count the records carrying the attachment type, one per matching line.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.0.30",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the writer that turns the camelCase output field into the snake_case attachment as a verbatim excerpt, which pairs the two names in one hop."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of both literals across the cached native builds, against a corpus count of the attachment type.",
+          "observed": "The snake_case literal is absent at 2.0.0 and present at 2.0.30; the camelCase literal is present in the oldest cached build; 88,889 records carry the attachment.",
+          "rule": "Lines carrying the literal per build for the ladder; one per record for the count, whole projects root.",
+          "note": "The output field and the attachment type are different names for the same channel."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "hook_additional_context",
+        "lowest_present": "2.0.30",
+        "highest_absent": "2.0.0",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-059",
+      "area": "messaging",
+      "behavior": "`agent_transcript_path` is present from Claude Code 2.1.23, with the highest cached build lacking it at 2.0.30, while the shorter `transcript_path` predates it; `last_assistant_message` is present from 2.0.0, with the highest cached build lacking it at 1.0.60, and its camelCase twin is the newcomer rather than the predecessor.",
+      "depends": "csift reads only the shorter path field, which predates every other field it touches, so the hook entry works on the oldest build in the ladder. The child-path field is parsed for completeness and used for nothing, so its later floor gates nothing.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "44-52",
+          "snippet": "pub(crate) struct HookInput {\n    pub(crate) session_id: String,\n    pub(crate) transcript_path: String,\n    pub(crate) cwd: Option<String>,\n    /// Present only when the hook fires from within a subagent lane, and on the two\n    /// subagent events, which declare it as their own required extra.\n    pub(crate) agent_id: Option<String>,\n    pub(crate) agent_type: Option<String>,\n    pub(crate) hook_event_name: String,"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.0.0",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "A literal dates its own wording; read the builder in a build at each floor to confirm the fields entered there.",
+        "Run the hook entry against a build below the child-path floor and record that delivery is unaffected, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the two path literals and of the assistant-message literal across the cached native builds.",
+          "observed": "The child-path literal is absent at 2.0.30 and present at 2.1.23; the shorter path literal predates it; the assistant-message literal is absent at 1.0.60 and present at 2.0.0.",
+          "rule": "Lines carrying the literal per build.",
+          "note": "csift depends only on the field that predates the rest."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "agent_transcript_path",
+        "lowest_present": "2.1.23",
+        "highest_absent": "2.0.30",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-060",
+      "area": "messaging",
+      "behavior": "The five-value SessionStart source enum is present from Claude Code 2.1.214, with the highest cached build lacking it at 2.1.208; the four-value form without `fork` occupies the same two sites from 2.1.100 through 2.1.208. Only the fork member is new, and no build below 2.1.214 lacked a source field.",
+      "depends": "csift's re-entry rule reads `resume` and `compact`, both of them in the four-value form, so it behaves identically on every build from the four-value floor onward. The fork member is the one value it deliberately ignores, so its later floor changes nothing either way.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver_plan.rs",
+          "lines": "240-246",
+          "snippet": "/// A steer message rides any eligible event; a queue message only a turn boundary.\nfn mode_eligible(mode: Mode, hook: &HookInput) -> bool {\n    match mode {\n        Mode::Steer => true,\n        Mode::Queue => is_queue_event(&hook.hook_event_name, hook.source.as_deref()),\n    }\n}"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "A literal dates its own wording; read the enum site in a build at each floor to confirm which members it carried.",
+        "Force a resume and a compaction on a build at the four-value floor and record the delivered source values, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the five-value and four-value enum forms across the cached native builds, at the two sites that carry them.",
+          "observed": "The five-value form is absent at 2.1.208 and present at 2.1.214; the four-value form occupies the same two sites from 2.1.100 to 2.1.208.",
+          "rule": "Lines carrying the literal per build, at both sites.",
+          "note": "The two values csift reads are in both forms."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "\"compact\"",
+        "lowest_present": "2.1.100",
+        "highest_absent": "2.1.23",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal; the five-value form is bracketed separately at 2.1.208 and 2.1.214."
+      }
+    },
+    {
+      "id": "MSG-067",
+      "area": "messaging",
+      "behavior": "The `agent_id` describe sentence `Present only when the hook fires from within a subagent` enters at Claude Code 2.1.100, with the highest cached build lacking it at 2.1.23 and no truncated predecessor. It is documentation prose, so it dates the sentence and not the field.",
+      "depends": "csift matches this claim on the describe rather than on the minified identifier, which is what makes the field findable across builds at all. The floor is a floor on the wording: a build below it can still carry the field, so the absence of the sentence is never read as the absence of the optionality csift depends on.",
+      "code": [
+        {
+          "path": "src/live/channel/hook_input.rs",
+          "lines": "48-50",
+          "snippet": "    /// Present only when the hook fires from within a subagent lane, and on the two\n    /// subagent events, which declare it as their own required extra.\n    pub(crate) agent_id: Option<String>,"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the base-object declaration in a build below the sentence floor and record whether the field is present without its describe, which separates the wording from the field.",
+        "No specimen distinguishes a describe from a field on disk; a payload census across builds would bound the field's own floor."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The presence ladder of the describe sentence across the cached native builds.",
+          "observed": "The sentence is absent at 2.1.23 and present at 2.1.100, with no truncated form in between.",
+          "rule": "Lines carrying the literal per build.",
+          "note": "The sentence is the match anchor, not the behavior."
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "Present only when the hook fires from within a subagent",
+        "lowest_present": "2.1.100",
+        "highest_absent": "2.1.23",
+        "ladder": "Sixty cached native builds, counted by lines carrying the literal."
+      }
+    },
+    {
+      "id": "MSG-078",
+      "area": "messaging",
+      "behavior": "No tool-event context-injection path carries an isolated-context guard: the literal occurs seven times whole-binary and none of them is in the tool-hook region. PreToolUse alone is guarded, and the guard sits in the CONSUMER at 164441998 rather than in the yield at 162928977, testing the delegated-observation predicate defined at 158828306; PostToolUse (yield 162921572, inserters 164458008 and 164460003) and PostToolBatch (inserter 164749952) insert unconditionally.",
+      "depends": "A csift delivery at PreToolUse can therefore be dropped from an observation agent's message array after the hook has already printed it, while the same delivery at PostToolUse or PostToolBatch is not. This is exactly why the ledger records INTENT and the receiver's own transcript is the fact: the emit line is written whatever the consumer does with the chunk.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "295-306",
+          "snippet": "        &LedgerLine::Emit {\n            id: chunk.id.clone(),\n            event: hook.hook_event_name.clone(),\n            slot,\n            part: chunk.part,\n            parts: chunk.parts,\n            vehicle: choice.vehicle,\n            ts_utc: now.to_string(),\n            hook_session: Some(hook.session_id.clone()),\n            hook_agent_id: hook.agent_id.clone(),\n            block_count: choice.block_count,\n        },"
+        }
+      ],
+      "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. The negative is closed by enumeration: scan the whole binary for the isolated-context literal and read every occurrence, then read each guard site by offset.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "Run a delegated-observation agent with a delivery at PreToolUse and at PostToolUse and record which chunk reaches its transcript, which closes the specimen leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The byte reads of the PreToolUse yield at 162928977 and its consumer guard at 164441998, the PostToolUse yield at 162921572 and its inserters, the PostToolBatch inserter at 164749952, and a whole-binary enumeration of the isolated-context literal.",
+          "observed": "Seven occurrences of the isolated-context literal, none in the tool-hook region; the PreToolUse yield is unguarded and its consumer applies the observation predicate; the two other tool events insert unconditionally.",
+          "rule": "Occurrences of the fixed byte string over the whole binary for the enumeration; the reads are verbatim.",
+          "note": "The intent-versus-fact split in the ledger exists for cases exactly like this one."
+        }
+      ],
+      "residue": [
+        "A reader who stops at the yield offset concludes the opposite; the guard is over a megabyte away in the consumer."
+      ]
+    },
+    {
+      "id": "MSG-079",
+      "area": "messaging",
+      "behavior": "Across every subagent transcript in one corpus, hook-context attachments exist for exactly two events, SubagentStart at 7,679 and SubagentStop at 190, and for none of PreToolUse, PostToolUse, PostToolBatch, UserPromptSubmit, SessionStart or Stop, while the top-level transcripts of the same corpus carry 50,074 PreToolUse and 26,900 PostToolUse injections. The 34,389 PostToolUse hook-success records in those same subagent transcripts show the hooks ran and returned plain output instead.",
+      "depends": "The zero is a configuration artifact, not a harness block, so csift must not conclude that a tool-event delivery cannot reach a subagent transcript. It offers all eight events in the printed block and lets the armed marker report which ones actually run in a given transcript.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "156-173",
+          "snippet": "fn handle(hook: &HookInput, root: &Path, lane: &str, slot: u32) -> Result<()> {\n    let now = now_utc();\n    // The pre-refresh marker is the only record of how long this lane's chain has been\n    // observed to be, which is what the chain cleanup reads.\n    let prior = read_armed(root, lane)?;\n    let version = claude_code_version(hook);\n    refresh_armed(\n        root,\n        lane,\n        slot,\n        &hook.hook_event_name,\n        &now,\n        Some(hook.session_id.as_str()),\n        version.as_deref(),\n    )?;\n    if !is_steer_event(&hook.hook_event_name) {\n        return Ok(());\n    }"
+        }
+      ],
+      "instrument": "Collect the hook-context attachment lines from every subagent transcript and partition them by the attachment's event field; compare with the same partition over the top-level transcripts, and with the hook-success attachments in the subagent transcripts. The counting rule is lines, summed over files.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the emission path of a tool-event injection in the shipped binary and confirm no per-transcript filter stands between it and a child's message array, which is the producer leg this census cannot supply."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The event partition of hook-context attachment lines over 8,354 subagent transcripts and the top-level transcripts of the same corpus.",
+          "observed": "7,869 hook-context lines in subagent transcripts, 7,679 SubagentStart and 190 SubagentStop and zero for every other event; 81,027 in top-level transcripts, of which 50,074 PreToolUse and 26,900 PostToolUse; 34,389 PostToolUse hook-success lines in the subagent transcripts.",
+          "rule": "Lines summed over files, then grouped by the extracted event value.",
+          "note": "A raw count of the event literal in subagent transcripts returns 34,384 and is a trap: those are the plain-output twin, not injections."
+        }
+      ]
+    },
+    {
+      "id": "MSG-081",
+      "area": "messaging",
+      "behavior": "At a teammate's end of turn SubagentStop is always the FIRST fire, before Stop and TeammateIdle, whose order between them is not stable; TaskCompleted did not fire at all. The `last_assistant_message` of each SubagentStop matched the corresponding assistant record in the agent's own transcript, and each record's own stamp preceded the hook capture by 119 to 213 milliseconds, so the final record was already on disk when the event fired.",
+      "depends": "csift reads the Claude Code version off the transcript tail when it refreshes the armed marker, and a queue message delivered at SubagentStop lands before the Stop fire of the same turn. Both rest on the final record being on disk at that instant: a flush that lagged the event would give a stale version and a delivery ordered against a turn that had not finished writing.",
+      "code": [
+        {
+          "path": "src/live/channel/deliver.rs",
+          "lines": "356-370",
+          "snippet": "/// The `version` of the newest parseable record in the transcript's tail window.\n///\n/// A positional tail read, not a map: the transcript is live, and Claude Code rewrites it\n/// in place. The window's first line is usually a fragment, which simply fails to parse\n/// and is stepped over as the walk runs backwards.\nfn version_from_tail(path: &Path) -> Option<String> {\n    let (bytes, _) = crate::parse::read_tail(path, VERSION_TAIL_BYTES).ok()?;\n    let text = String::from_utf8_lossy(&bytes);\n    text.lines().rev().find_map(|line| {\n        crate::parse::parse_line(line.as_bytes())\n            .ok()\n            .flatten()\n            .and_then(|rec| rec.version)\n    })\n}"
+        }
+      ],
+      "instrument": "Run a teammate turn with a hook that logs every payload with a capture stamp, then compare each SubagentStop payload against the agent's own transcript records; count one per fire and one per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "live trial"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the flush that persists the final assistant record and the emitter of the end-of-turn events in the shipped binary as verbatim excerpts, which is the producer leg a timing observation cannot supply."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "A payload log of 158 rows from a teammate turn, joined to the agent's own transcript records by text and stamp.",
+          "observed": "Three SubagentStop fires, all matching their transcript record's text, each record stamped 0.213, 0.184 and 0.119 seconds before the capture; SubagentStop first in all three turns; Stop before TeammateIdle in one turn and after it in two; zero TaskCompleted fires in the whole log.",
+          "rule": "One per logged fire and one per transcript record; the event census counts lines of the log.",
+          "note": "The margins are the record's own claimed stamp against the logger's wall clock on one machine, so a flush lag of that order would be invisible to this instrument."
+        }
+      ]
     }
   ]
 }

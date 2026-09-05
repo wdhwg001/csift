@@ -86,5 +86,6 @@ fn run(cli: Cli) -> Result<()> {
              as `csift verbatim …`. To simply READ a session's recent turns (no compaction \
              involved), that is `csift show <target> --turn -3..`."
         ),
+        Command::Deliver(args) => live::channel::run_deliver(&args),
     }
 }

@@ -35,21 +35,31 @@
 // removed once the commands land.
 #![allow(dead_code, unused_imports)]
 
+mod deliver;
+mod deliver_emit;
+mod deliver_plan;
 mod envelope;
+mod hook_input;
 mod inbox;
 mod ledger;
 mod marker;
 mod outbox;
 mod paths;
+mod recipe;
 mod slots;
 mod types;
 
+pub(crate) use deliver::*;
+pub(crate) use deliver_emit::*;
+pub(crate) use deliver_plan::*;
 pub(crate) use envelope::*;
+pub(crate) use hook_input::*;
 pub(crate) use inbox::*;
 pub(crate) use ledger::*;
 pub(crate) use marker::*;
 pub(crate) use outbox::*;
 pub(crate) use paths::*;
+pub(crate) use recipe::*;
 pub(crate) use slots::*;
 pub(crate) use types::*;
 

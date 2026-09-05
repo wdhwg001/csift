@@ -33,7 +33,9 @@ use super::*;
           status   one-shot LIVE verdict on a session: running / waiting-children /\n           \
                    waiting-hitl / idle-eot / stale-dead / unknown, with the evidence named\n  \
           wait     block until a session condition fires (stop / hitl / auq / notification /\n           \
-                   tool: / write: / verdict:), exit 124 on --timeout\n\n\
+                   tool: / write: / verdict:), exit 124 on --timeout\n  \
+          deliver  hook entry; called by Claude Code through the installed hook, not by\n           \
+                   hand (except --recipe, which prints the block you paste)\n\n\
         list/search/stats/files/recover/plan/image/status/wait span each session's subagent \
         transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
@@ -197,6 +199,9 @@ pub enum Command {
     // not a doc comment, so nothing ever renders for it.
     #[command(hide = true)]
     Turns(TurnsRenamedArgs),
+    // The csift-channel hook entry. Bare like every other variant (the shadowing rule
+    // above): its about/long_about live on `DeliverArgs`.
+    Deliver(DeliverArgs),
 }
 
 /// Argument sink for the hidden [`Command::Turns`] tombstone: swallows EVERY token (flags

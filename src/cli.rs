@@ -37,6 +37,7 @@ use crate::model::Class;
 
 mod agents_args;
 mod argv;
+mod deliver_args;
 mod files_recover_args;
 mod formats;
 mod image_plan_args;
@@ -50,6 +51,7 @@ mod verbatim_whoami_args;
 
 pub(crate) use agents_args::*;
 pub(crate) use argv::*;
+pub(crate) use deliver_args::*;
 pub(crate) use files_recover_args::*;
 pub(crate) use formats::*;
 pub(crate) use image_plan_args::*;

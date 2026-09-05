@@ -71,16 +71,23 @@ impl Home {
         p
     }
 
-    /// Spawn csift with piped stdio and this `$HOME`, returning the Child - the `wait`
-    /// tests block on its readiness stderr line before appending their trigger.
-    pub(crate) fn spawn(&self, args: &[&str]) -> std::process::Child {
-        let exe = env!("CARGO_BIN_EXE_csift");
-        Command::new(exe)
-            .args(args)
+    /// The csift command every runner starts from: this `$HOME` (on both the unix and the
+    /// Windows home var) and a cleared session env, so `whoami` is deterministic unless a
+    /// test sets it back.
+    fn cmd(&self, args: &[&str]) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_csift"));
+        cmd.args(args)
             .env("HOME", &self.root)
             .env("USERPROFILE", &self.root)
             .env_remove("CLAUDE_CODE_SESSION_ID")
-            .env_remove("CODEX_COMPANION_SESSION_ID")
+            .env_remove("CODEX_COMPANION_SESSION_ID");
+        cmd
+    }
+
+    /// Spawn csift with piped stdio and this `$HOME`, returning the Child - the `wait`
+    /// tests block on its readiness stderr line before appending their trigger.
+    pub(crate) fn spawn(&self, args: &[&str]) -> std::process::Child {
+        self.cmd(args)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
@@ -96,27 +103,30 @@ impl Home {
         self.run_full(args, extra_env, None)
     }
 
-    /// Like `run`, but feeding `input` on stdin (`--sessions-from -`).
+    /// Like `run`, but feeding `input` on stdin (`--sessions-from -`, `deliver`'s hook
+    /// payload).
     pub(crate) fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+        self.run_with_stdin_env(args, input, &[])
+    }
+
+    /// `run_with_stdin` plus extra environment: a hook entry reads its own env (the
+    /// stop-hook block cap, the Claude Code version), so both have to be settable at once.
+    pub(crate) fn run_with_stdin_env(
+        &self,
+        args: &[&str],
+        input: &str,
+        extra_env: &[(&str, &str)],
+    ) -> Output {
         use std::io::Write as _;
-        let exe = env!("CARGO_BIN_EXE_csift");
-        let mut child = Command::new(exe)
-            .args(args)
-            .env("HOME", &self.root)
-            .env("USERPROFILE", &self.root) // the Windows home var - same relocation there
-            .env_remove("CLAUDE_CODE_SESSION_ID")
-            .env_remove("CODEX_COMPANION_SESSION_ID")
+        let mut cmd = self.cmd(args);
+        cmd.envs(extra_env.iter().copied())
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .expect("spawn csift");
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(input.as_bytes())
-            .unwrap();
+            .stderr(std::process::Stdio::piped());
+        let mut child = cmd.spawn().expect("spawn csift");
+        let mut sink = child.stdin.take().unwrap();
+        sink.write_all(input.as_bytes()).unwrap();
+        drop(sink);
         let out = child.wait_with_output().expect("wait csift");
         Output {
             success: out.status.success(),
@@ -132,20 +142,11 @@ impl Home {
         extra_env: &[(&str, &str)],
         cwd: Option<&Path>,
     ) -> Output {
-        let exe = env!("CARGO_BIN_EXE_csift");
-        let mut cmd = Command::new(exe);
-        cmd.args(args)
-            .env("HOME", &self.root)
-            .env("USERPROFILE", &self.root) // the Windows home var - same relocation there
-            // Make whoami deterministic: clear the session env unless a test sets it.
-            .env_remove("CLAUDE_CODE_SESSION_ID")
-            .env_remove("CODEX_COMPANION_SESSION_ID");
+        let mut cmd = self.cmd(args);
         if let Some(d) = cwd {
             cmd.current_dir(d);
         }
-        for (k, v) in extra_env {
-            cmd.env(k, v);
-        }
+        cmd.envs(extra_env.iter().copied());
         let out = cmd.output().expect("spawn csift");
         Output {
             success: out.status.success(),
