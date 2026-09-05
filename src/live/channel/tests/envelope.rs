@@ -198,3 +198,16 @@ fn a_header_without_the_part_numbering_is_not_a_header() {
     // An unterminated header is not one either.
     assert!(parse_header("[csift-channel v1 id=x part=1/2").is_none());
 }
+
+#[test]
+fn an_unknown_header_key_and_a_bare_token_are_ignored_not_fatal() {
+    // The header is a wire format a NEWER csift may widen. An older reader must still get the
+    // id and the part numbering out of it, so an unrecognised `key=value` and a token with no
+    // `=` at all are both skipped rather than failing the parse.
+    let h = parse_header("[csift-channel v1 id=0123456789abcdef part=2/3 bareword future=later]")
+        .expect("the two required fields are present");
+    assert_eq!(h.id, MSG_ID);
+    assert_eq!((h.part, h.parts), (2, 3));
+    assert_eq!(h.mode, None);
+    assert_eq!(h.from, None);
+}

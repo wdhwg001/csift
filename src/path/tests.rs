@@ -7,6 +7,7 @@ mod ids;
 mod roots;
 mod settings;
 mod settings_scopes;
+mod settings_tolerance;
 mod trap;
 
 static TREE_COUNTER: AtomicU64 = AtomicU64::new(0);
