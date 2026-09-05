@@ -39,6 +39,10 @@ use crate::parse::{mmap_bytes, read_range, read_tail};
 mod activity;
 mod background;
 mod background_scan;
+// The csift channel data layer. Declared `pub(crate)` rather than glob re-exported: the
+// channel has its own vocabulary (Message, Mode, Verdict) that would collide with the
+// live-truth names if it were flattened into this module.
+pub(crate) mod channel;
 mod children;
 mod conditions;
 mod last;

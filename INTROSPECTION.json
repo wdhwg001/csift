@@ -77907,6 +77907,308 @@
           "note": "the switches are evaluated where the whole set is read, which is why they reach plugin and frontmatter hooks and not only the settings scopes"
         }
       ]
+    },
+    {
+      "id": "MSG-010",
+      "area": "messaging",
+      "behavior": "In Claude Code 2.1.258 a hook's additionalContext reaches the model as an attachment record {type:\"hook_additional_context\", content: string[], hookName, toolUseID, hookEvent} built at 165765262. The renderer at 166002547 turns that attachment into an isMeta user record whose text is `<hookName> hook additional context: <content joined by newline>` inside a system-reminder, so the ONLY searchable text of an injected delivery is the joined content array: hookName and hookEvent are attachment fields and never enter the rendered text. An empty content array renders nothing, and a content value that is not an array of strings is dropped by the resume validator at 163203380. The corpus carries 88889 attachment-borne hook-context records (counting rule: one per record carrying the hook-context leaf, over every transcript under the projects root).",
+      "depends": "The csift channel envelope puts the message id, the mode, the sender, the relation and the receiver id in the header LINE, the first element of the content array, rather than in the hook name: an identity that lived in hookName would be unreachable by any content query, including csift's own search. envelope::CHANNEL_MARKER is matched at the START of a content string for the same reason, and the fact half of a delivery - whether the receiver's own transcript records the id - is a content search over these attachments, which is what separates a DELIVERED verdict from an INTENT-ONLY one. If the harness stopped joining the content array into the record text, or moved the injected text out of the searchable body, deliveries would still land but would no longer be auditable from the receiver's transcript.",
+      "code": [
+        {
+          "path": "src/live/channel/envelope.rs",
+          "lines": "26-27",
+          "snippet": "/// The detector. A content string that starts with this is a csift channel chunk.\npub(crate) const CHANNEL_MARKER: &str = \"[csift-channel v1 \";"
+        },
+        {
+          "path": "src/live/channel/envelope.rs",
+          "lines": "135-136",
+          "snippet": "let mut s = format!(\n        \"{CHANNEL_MARKER}id={} part=1/{parts} mode={} from={} from-session={} relation={} to={}]\\n\","
+        }
+      ],
+      "instrument": "Binary: read the excerpt at each offset in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte; offsets 165765262 (constructor), 166002547 (renderer), 163203380 (resume validator). Corpus: csift search '' --additional-context -t harness.meta.hook --format json over the whole projects root, cross-checked against a raw grep of the literal \"type\":\"hook_additional_context\"; counting rule = one per record carrying the leaf.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": "2.0.30",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the attachment constructor at 165765262, the isMeta renderer at 166002547 and the resume validator at 163203380 in the Claude Code 2.1.258 executable and record each as a verbatim excerpt with its role in producer_chain; the three sites are located by offset and not quoted here."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "csift search '' --additional-context -t harness.meta.hook --format json over the whole projects root, cross-checked against --count-by label, --count-by attachment and a raw grep of \"type\":\"hook_additional_context\"; binary offsets 165765262 / 166002547 / 163203380 named for the record shape.",
+          "observed": "88889 attachment-borne hook-context records; the same query for the literal SubagentStart under the hook leaf returns 0 while 7679 injection records name that event, so hookName and hookEvent are provably outside the searchable text.",
+          "rule": "One count per record carrying the hook-context leaf, unscoped over the projects root; the attachment figure equals the raw grep of the attachment-type literal.",
+          "note": "The zero-versus-7679 split is the load-bearing half for the channel: identity must ride the content array. The producer sites are cited by offset without their bytes, which is what holds the attribution at specimen-only."
+        }
+      ]
+    },
+    {
+      "id": "MSG-013",
+      "area": "messaging",
+      "behavior": "In Claude Code 2.1.258 a hook's additionalContext, systemMessage, initialUserMessage and a command hook's stdout all pass through one helper at 165809812 whose default threshold NQn is 1e4, declared at 160361600 among the sibling budgets. At or below 10000 characters the string is returned unchanged. Above it the text is written to disk and the return value is a persisted-output block carrying the absolute path plus a preview budgeted at 2000 characters (formatter 160364489, preview budget 160363500); the 10000-character slice plus an explicit truncation note appears only on the branch where the write fails. The threshold is therefore a persist-to-disk boundary, not a truncating cap. The constant and the helper are unchanged in 2.1.260 at 157427418 and 165481000.",
+      "depends": "csift renders one chunk per slot within envelope::CHUNK_BUDGET = 9200 characters, framing included, so a delivery stays inside the inline threshold with headroom. The headroom is the point: a chunk over the threshold is not lost, but its header is replaced by a pointer, and a header that reaches the model only as a file path defeats the whole envelope - the receiver could no longer tell who sent the message or read the id it would have to reply to. Chunking counts characters rather than bytes for the same reason, since the threshold the harness applies is a character length.",
+      "code": [
+        {
+          "path": "src/live/channel/envelope.rs",
+          "lines": "29-30",
+          "snippet": "/// Characters per emitted chunk, header and framing included.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
+        },
+        {
+          "path": "src/live/channel/envelope.rs",
+          "lines": "69-72",
+          "snippet": "let packed = pack(msg, &body, budget, parts)?;\n        let produced = u32::try_from(packed.len()).unwrap_or(u32::MAX);\n        if produced == parts {\n            return Ok(packed);"
+        }
+      ],
+      "instrument": "Read the constant region at 160361600 and the helper at 165809812 in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; the helper's own branch shows the return-unchanged path, the persist path and the truncate-on-failure path. Then a live capture: install a hook returning more than 10000 characters of additionalContext and read the receiving transcript for a persisted-output block with an absolute path and a 2000-character preview.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the persisted-output formatter at 160364489 and the preview budget at 160363500 in the Claude Code 2.1.258 executable and record both as verbatim excerpts; the two sites are located by offset and not quoted here.",
+        "A live capture: a hook returning more than 10000 characters of additionalContext, then the receiving transcript read for the persisted-output block, its absolute path and the length of its preview."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the default threshold NQn among the sibling output budgets",
+          "offset": 160361600,
+          "excerpt": "var aJ=50000,WNe=500000;var QSt=4,LQn=400000,MQn=200000,$w=50,NQn=1e4,$7e=1e4,FQn=1e5;",
+          "note": "NQn=1e4 is the threshold the helper takes when a caller passes none."
+        },
+        {
+          "role": "writer",
+          "name": "ipe",
+          "offset": 165809812,
+          "excerpt": "async function ipe(e,n,r,{threshold:o=NQn,storageV5:d}={}){if(e.length<=o)return e;let f=await $3(e,`hook-${n}-${r}`,kS(),d);if(U3(f))return s(\"tengu_hook_output_persisted\",{...,truncatedFallback:!0}),`${e.slice(0,o)}\\n\\n[Hook ${r} truncated at ${o} chars \\u2014 persist-to-disk failed: ${f.error}]`;let _=Npe(f);s(\"tengu_hook_output_persisted\",{...,truncatedFallback:!1}),_}",
+          "note": "At or below the threshold the string is returned unchanged; above it the text is persisted and the return value is a pointer; the 10000-character slice with its explicit note is the persist-failure branch alone."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Byte reads at 160361600 (the constant region) and 165809812 (the helper) in the Claude Code 2.1.258 executable, each confirmed against the excerpt recorded in producer_chain.",
+          "observed": "160361600 reads var aJ=50000,WNe=500000;var QSt=4,LQn=400000,MQn=200000,$w=50,NQn=1e4,$7e=1e4,FQn=1e5; and 165809812 reads the helper whose first branch is if(e.length<=o)return e, whose success branch returns a pointer built from the persisted file, and whose failure branch alone returns e.slice(0,o) followed by a truncation note naming the character count.",
+          "rule": "Verbatim byte reads at the two offsets; the threshold value is the literal in the constant declaration, and the three outcomes are the three returns of the helper.",
+          "note": "The persist-versus-truncate distinction is why csift budgets rather than clips: a chunk over the threshold survives on disk but loses its inline header. The formatter and preview-budget sites are cited by offset and the live capture has not been made, which is what holds the attribution at partial-producer."
+        }
+      ]
+    },
+    {
+      "id": "MSG-016",
+      "area": "messaging",
+      "behavior": "In Claude Code 2.1.258 a Stop or SubagentStop hook that exits 2 blocks the turn from ending. The harness counts consecutive blocks and overrides once the count exceeds a cap read from the environment variable CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, whose default is 8; the comparison is count > cap, so the ninth consecutive block is the one that trips the override and the turn ends as completed, and a non-positive cap disables the blocking vehicle outright. The max-turns check runs before it. Gate at 164744170, blocking-error construction at 165866560. The environment-variable literal occurs on 5 lines in 2.1.258 and on 5 in 2.1.260 (counting rule: lines carrying the literal, whole file).",
+      "depends": "A queue delivery may use the exit2 vehicle at Stop or SubagentStop, and a channel that blocked the turn nine times in a row would wedge the receiver rather than message it. So every emit line records its vehicle, an exit2 emit records the block count it carried, and ledger::consecutive_exit2_blocks counts back from the newest line to the last emit on another vehicle or the last ack - a hold or an expiry says nothing about blocking and does not break the run. A delivery compares that count plus one against the cap before choosing exit2 and falls back to the additionalContext vehicle otherwise, which is why the cap and its comparison direction are load-bearing rather than advisory.",
+      "code": [
+        {
+          "path": "src/live/channel/ledger.rs",
+          "lines": "353-368",
+          "snippet": "pub(crate) fn consecutive_exit2_blocks(lines: &[LedgerLine]) -> usize {\n    let mut count = 0usize;\n    for line in lines.iter().rev() {\n        match line {\n            LedgerLine::Emit { vehicle, .. } => {\n                if *vehicle == Vehicle::Exit2 {\n                    count += 1;\n                } else {\n                    break;\n                }\n            }\n            LedgerLine::Ack { .. } => break,\n            _ => {}\n        }\n    }\n    count\n}"
+        },
+        {
+          "path": "src/live/channel/ledger.rs",
+          "lines": "62-64",
+          "snippet": "/// The consecutive-block count this emit carried, recorded only on the exit2\n        /// vehicle, where the harness overrides after a fixed number of blocks.\n        block_count: Option<u32>,"
+        }
+      ],
+      "instrument": "Binary: read 164744170 (the cap comparison and the environment-variable read) and 165866560 (the blocking-error construction) in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm both byte for byte; count the environment literal with grep -a -c -F CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, counting rule = lines carrying the literal over the whole file. Live: a Stop hook exiting 2 nine times in a row with stop_hook_active ignored, once at the default cap and once with the cap set to 0, reading whether the ninth block trips the override and how the transcript records it.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the cap comparison at 164744170 and the blocking-error construction at 165866560 in the Claude Code 2.1.258 executable and record both as verbatim excerpts with their roles in producer_chain; both sites are located by offset and not quoted here.",
+        "A live capture: a Stop hook exiting 2 nine consecutive times at the default cap and again with CLAUDE_CODE_STOP_HOOK_BLOCK_CAP set to 0, reading which block trips the override and what the transcript holds at the wedge."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "grep -a -c -F CLAUDE_CODE_STOP_HOOK_BLOCK_CAP over the Claude Code 2.1.258 and 2.1.260 executables, with the cap comparison located at 164744170 and the blocking-error construction at 165866560.",
+          "observed": "The environment literal counts 5 lines in 2.1.258 and 5 lines in 2.1.260; the cap comparison at 164744170 reads count > cap against a default of 8, so the ninth consecutive block trips the override, and a non-positive value disables blocking.",
+          "rule": "Lines carrying the literal over the whole file for the counts; the default and the comparison direction are read at the located offset.",
+          "note": "The comparison direction decides whether csift may take the eighth or the ninth block, so the count is compared as count + 1 against the cap before an exit2 emit. The two sites are cited by offset and the wedge has not been captured live, which is what holds the attribution at partial-producer."
+        }
+      ]
+    },
+    {
+      "id": "MSG-017",
+      "area": "messaging",
+      "behavior": "In Claude Code 2.1.258, within the Stop family, a hook exiting 2 CONTINUES the turn with its stderr rendered as an isMeta record reading `<Event> hook feedback:`, while a hook returning {\"continue\":false} STOPS the turn and emits a hook_stopped_continuation attachment; continue:false outranks a decision:\"block\" carried in the same response. Consumer 164635300, mapper 165812430, formatter 161464086. The two outcomes share one response channel, so the difference between steering a turn and ending it is a property of what the hook prints and returns, not of the event it fired on.",
+      "depends": "The channel's exit2 vehicle exists only to keep a turn alive long enough to hand the receiver a message, so csift models exactly two vehicles - additionalContext and exit2 - and never returns continue:false. Stopping a receiver's turn would make a delivery an act of control rather than a message, and the sender has no authority to do that. The vehicle is recorded on every emit line so a reader can tell which of the two paths a chunk took, and so the block count is attributed to the right one.",
+      "code": [
+        {
+          "path": "src/live/channel/types.rs",
+          "lines": "281-286",
+          "snippet": "pub(crate) enum Vehicle {\n    /// The hook's stdout JSON (`hookSpecificOutput.additionalContext`), exit 0.\n    AdditionalContext,\n    /// Stop / SubagentStop stderr with exit 2, which also blocks the turn from ending.\n    Exit2,\n}"
+        }
+      ],
+      "instrument": "Read 164635300 (the consumer that branches on the hook response), 165812430 (the mapper from exit code and response to turn outcome) and 161464086 (the feedback formatter) in the Claude Code 2.1.258 executable (tail -c +OFFSET+1 | head -c N) and confirm each byte for byte. Live: a Stop hook exiting 2 with text on stderr, then the same hook returning {\"continue\":false}, reading which record each produces in the receiving transcript.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the consumer at 164635300, the mapper at 165812430 and the formatter at 161464086 in the Claude Code 2.1.258 executable and record each as a verbatim excerpt with its role in producer_chain; the three sites are located by offset and not quoted here.",
+        "A live capture: one Stop hook exiting 2 with stderr text and one returning {\"continue\":false}, reading the isMeta feedback record and the hook_stopped_continuation attachment each produces."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Offsets 164635300, 165812430 and 161464086 located in the Claude Code 2.1.258 executable as the consumer, the exit-code mapper and the feedback formatter of the Stop-family hook response.",
+          "observed": "Exit 2 in the Stop family continues the turn and renders the hook's stderr as an isMeta `<Event> hook feedback:` record; {\"continue\":false} stops the turn and emits a hook_stopped_continuation attachment; a response carrying both continue:false and decision:\"block\" stops rather than blocks.",
+          "rule": "The three outcomes are read as the three branches of the located consumer; no count is asserted.",
+          "note": "csift models the exit2 vehicle and never the stopping one, so only the first branch is a csift code path; the other two are the reason the modelled set is exactly two. The sites are cited by offset and no live capture exists, which is what holds the attribution at partial-producer."
+        }
+      ]
+    },
+    {
+      "id": "MSG-082",
+      "area": "messaging",
+      "behavior": "In Claude Code 2.1.258 the 10000-character persist threshold is applied strictly PER HOOK, at the point each hook's own output is parsed, and never to an accumulated or joined value. Under the word-boundary rule the helper name occurs 8 times whole-file: one definition at 165809812 and seven call sites (165853188 additionalContext, 165853343 systemMessage, 165866160 a command hook's trimmed stdout, 165871439 systemMessage, 165871972 additionalContext, 165872329 initialUserMessage, 187316530 one per DirectoryAdded message), each passing a single hook's single field. The SessionStart accumulator pushes each hook's already-thresholded string into one array at 163198954 and builds one attachment from that array at 163199508 with no threshold call between the two, and the PreToolUse inserter likewise passes the array through untouched. Content is an ARRAY of per-hook strings, so no joined total exists for a second application to run against, and N installed hooks compose additively: N times 10000 characters of inline capacity on one event. The bare fixed string of the helper name counts 87 occurrences and is contaminated by substrings such as pipe( and unpipe(.",
+      "depends": "The channel is thin-hook by design: the user pastes N identical delivery lines, one per slot, and each slot is its own process emitting its own chunk. That design only buys capacity if the threshold is per hook - if it applied to the joined value, adding slots would add nothing and the whole chunking scheme would be wasted work. Each slot therefore renders one chunk within envelope::CHUNK_BUDGET, slots::open_slot gives each one an ordered place in a per-event chain, and the receiver reassembles the parts from their headers. If a future build moved the threshold onto the accumulated content array, one chunk per slot would stop being the right unit and the budget would have to be divided across the installed slots instead.",
+      "code": [
+        {
+          "path": "src/live/channel/slots.rs",
+          "lines": "88-96",
+          "snippet": "pub(crate) fn open_slot(ppid: u32, event: &str, lane: &str, slot: u32) -> Result<SlotChain> {\n    let dir = seq_dir(ppid, event, lane);\n    if slot <= 1 {\n        let _ = std::fs::remove_dir_all(&dir);\n    }\n    std::fs::create_dir_all(&dir)\n        .with_context(|| format!(\"creating slot chain directory {}\", dir.display()))?;\n    Ok(SlotChain { dir, slot })\n}"
+        },
+        {
+          "path": "src/live/channel/envelope.rs",
+          "lines": "29-30",
+          "snippet": "/// Characters per emitted chunk, header and framing included.\npub(crate) const CHUNK_BUDGET: usize = 9200;"
+        }
+      ],
+      "instrument": "grep -a -o -b -E '[^A-Za-z0-9_$]ipe\\(' over the Claude Code 2.1.258 executable returns the 8 word-boundary occurrences (1 definition, 7 call sites); read each with tail -c +OFFSET-230 | head -c 500 and confirm that every call passes one hook's single field. Then read 163198954 and 163199508 and confirm no threshold call lies between the accumulator push and the attachment build, and 162928977 for the PreToolUse inserter passing the array through. Counting rule: occurrences under the word-boundary regex; the bare fixed string returns 87 and is contaminated by substrings.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "A live capture: two hooks installed on one event, each returning an additionalContext string just under 10000 characters, reading whether both arrive inline in one attachment's content array or either is replaced by a persisted-output pointer."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the per-hook additionalContext yield",
+          "offset": 165853188,
+          "excerpt": "yield{additionalContexts:[await ipe(Bo.additionalContext,`${o}-${Tr}`,\"additionalContext\",{storageV5:we})]}",
+          "note": "One hook's own additionalContext field is handed to the threshold helper as that hook's output is parsed, which is where the per-hook application begins."
+        },
+        {
+          "role": "gate",
+          "name": "ipe",
+          "offset": 165809812,
+          "excerpt": "async function ipe(e,n,r,{threshold:o=NQn,storageV5:d}={}){if(e.length<=o)return e;let f=await $3(e,`hook-${n}-${r}`,kS(),d);if(U3(f))return s(\"tengu_hook_output_persisted\",{...,truncatedFallback:!0}),`${e.slice(0,o)}\\n\\n[Hook ${r} truncated at ${o} chars \\u2014 persist-to-disk failed: ${f.error}]`;let _=Npe(f);s(\"tengu_hook_output_persisted\",{...,truncatedFallback:!1}),_}",
+          "note": "The threshold branch: at or below it the string is returned unchanged, above it the text is persisted and replaced by a pointer, and the slice is the persist-failure branch alone."
+        },
+        {
+          "role": "writer",
+          "name": "the SessionStart accumulator and the attachment it joins",
+          "offset": 163199508,
+          "excerpt": "if(_e.additionalContexts&&_e.additionalContexts.length>0)j.push(..._e.additionalContexts); ... if(j.length>0){let _e=Sn({type:\"hook_additional_context\",content:j,hookName:\"SessionStart\",toolUseID:\"SessionStart\",hookEvent:\"SessionStart\"});U.push(_e)}",
+          "note": "The push at 163198954 and the build at 163199508 with no threshold call between them: each hook's already-thresholded string becomes one element of the content array, and the array is never measured as a whole."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "definition",
+          "offset": 165809812,
+          "excerpt": "async function ipe(e,n,r,{threshold:o=NQn,storageV5:d}={}){if(e.length<=o)return e;",
+          "verdict": "The helper itself: one string in, one string or pointer out."
+        },
+        {
+          "site": "call site, a hook's additionalContext",
+          "offset": 165853188,
+          "excerpt": "yield{additionalContexts:[await ipe(Bo.additionalContext,`${o}-${Tr}`,\"additionalContext\",{storageV5:we})]}",
+          "verdict": "One hook's own field."
+        },
+        {
+          "site": "call site, a hook's systemMessage",
+          "offset": 165853343,
+          "excerpt": "content:await ipe(Bo.systemMessage,...)",
+          "verdict": "One hook's own field."
+        },
+        {
+          "site": "call site, a command hook's stdout",
+          "offset": 165866160,
+          "excerpt": "let Lo=await ipe(br.stdout.trim(),cr,\"stdout\",{storageV5:we})",
+          "verdict": "One hook process's own stdout."
+        },
+        {
+          "site": "call site, systemMessage on the second runner",
+          "offset": 165871439,
+          "excerpt": "let nr=await ipe(Rn.systemMessage,`${o}-${Bn}`,\"systemMessage\",...)",
+          "verdict": "One hook's own field."
+        },
+        {
+          "site": "call site, additionalContext on the second runner",
+          "offset": 165871972,
+          "excerpt": "yield{additionalContexts:[await ipe(Rn.additionalContext,`${o}-${Bn}`,\"additionalContext\",{storageV5:we})]}",
+          "verdict": "One hook's own field."
+        },
+        {
+          "site": "call site, initialUserMessage",
+          "offset": 165872329,
+          "excerpt": "yield{initialUserMessage:await ipe(Rn.initialUserMessage,...)}",
+          "verdict": "One hook's own field."
+        },
+        {
+          "site": "call site, DirectoryAdded",
+          "offset": 187316530,
+          "excerpt": "P.map((g,W)=>ipe(g,`add-dir-${f}-${W}`,\"systemMessage\",...))",
+          "verdict": "One call per message, never over the mapped result."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "grep -a -o -b -E '[^A-Za-z0-9_$]ipe\\(' over the Claude Code 2.1.258 executable, every occurrence read with tail -c +OFFSET-230 | head -c 500; byte reads at 160361600 for the constant, 163198954 and 163199508 for the SessionStart accumulator and its join, and 162928977 for the PreToolUse inserter.",
+          "observed": "8 word-boundary occurrences: 1 definition at 165809812 and 7 call sites at 165853188, 165853343, 165866160, 165871439, 165871972, 165872329 and 187316530, each passing one hook's single field. Between the accumulator push at 163198954 and the attachment build at 163199508 there is no threshold call, the nearest being 165853188; the PreToolUse inserter at 162928977 likewise carries content:W.additionalContexts with no call on the array. The bare fixed string returns 87 occurrences, contaminated by pipe( and unpipe(.",
+          "rule": "Occurrences under the word-boundary regex for the enumeration (8), occurrences under the bare fixed string for the contaminated figure (87); the absence between the accumulator and the join is read as bytes between two offsets, not inferred.",
+          "note": "The enumeration is what closes the negative: every occurrence of the helper name is read, so no eighth caller can be hiding over a joined value. Capacity is therefore additive across installed slots, which is the premise of one chunk per slot."
+        }
+      ]
     }
   ]
 }
