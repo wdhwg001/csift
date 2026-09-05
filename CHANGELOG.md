@@ -5,6 +5,72 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.11.0] - 2026-09-05
+
+The csift channel: a way to get a message to a Claude Code lane the official channel
+cannot reach, and to find out afterwards whether it arrived.
+
+### Changed
+
+- **BREAKING: the read-only law becomes a writers law.** Through 0.10.5 csift wrote
+  nothing at all. From 0.11.0 exactly three commands write, `send`, `deliver` and `ack`,
+  and they write exactly one place: a `csift-channel` directory csift creates in the
+  session's own sidecar folder. Never a transcript, never the team mailbox, never the
+  cross-session messaging socket, never the session registry, never any settings file.
+  csift does not install its hook either; `deliver --recipe` prints the block and you
+  paste it. Every other subcommand still only reads. Nothing that worked before stops
+  working, but the promise a reader had is narrower now, and a narrower promise is a
+  breaking one.
+
+### Added
+
+- **`csift send @<lane> "message"`** queues one message for one lane: a top-level
+  session, an unnamed subagent, a teammate, a workflow lane. It exists because the
+  official channel is not weaker for some receivers, it is absent: a running workflow
+  lane cannot be reached by the send tool at all, an unnamed subagent has no arm to
+  address its own parent subagent, nothing wakes an idle session that published no
+  socket, and a sender outside Claude Code holds no tool to call. Every send prints one
+  verdict, `OK`, `FULL`, `MAY-FAIL`, `UNPREDICTABLE` or `REFUSED`, and exits 0 even for a
+  refusal, because a refusal is a definitive answer about the receiver and not a usage
+  error. Where an official transport does exist, csift prints the exact call for you to
+  make and still queues its own copy.
+- **`csift deliver --slot k`** is the hook entry that carries the channel into a lane.
+  You never run it by hand: `csift deliver --recipe` prints the settings block (both the
+  plain and the PowerShell command form, any number of slots) and a human installs it.
+  Slot k emits chunk k of what is waiting, the slots of one event order themselves, and a
+  queue message at a turn boundary may block the turn from ending while the harness's own
+  block cap allows it.
+- **`csift msg <id>`** answers the question a queue cannot: did it actually arrive. The
+  per-lane ledger records what csift emitted, the receiver's transcript proves what
+  landed, and `msg` joins the two into one verdict (`DELIVERED`, `INTENT-ONLY`, `QUEUED`,
+  `HELD`, `EXPIRED`, `ACKED`, `REFUSED`). The proof half on its own is exactly
+  `csift search '<id>' @<lane> --additional-context`, so the join can be audited without
+  trusting it. **`csift ack <id>`** records the one thing only a receiver can say.
+- **`whoami` grew a lane layer**: a `@<agent-id>` target, the `self`, `parent` and
+  `topology` sections, `--to @<lane>` for a reach prediction that sends nothing, and
+  `--peers`, which lists every live lane as id, kind and state and deliberately nothing
+  else. A description or a role-shaped name is the material one lane would use to claim
+  standing over another, so the census answers who is alive, not who should be obeyed.
+  Outside Claude Code, `whoami` now prints the not-a-lane answer with the one channel out
+  and what a receiver needs installed.
+- **`agent.communication.channel`**, the 35th label. A delivery lands in the receiving
+  lane as a hook-context attachment, and this is the one attachment leaf a default search
+  reaches, because a message addressed at the lane is not machinery. It renders verbatim,
+  envelope header and all, so a reader can see who sent it, under what relation, and that
+  it came from neither the user nor the harness.
+- **`@<Name>@<Team>`**, a teammate's routing form, as a target. A teammate carries two ids
+  minted apart at spawn: the routing form the official send tool needs, which can collide
+  when two teammates share a name, and the transcript form on disk, which never does.
+  csift resolves either, keys its own work on the transcript form, and now prints both
+  wherever a teammate appears.
+- The **settings cascade** csift reads to answer "will a delivery hook actually run
+  there": five scopes in Claude Code's own order, `env` merged per key, `hooks`
+  concatenated per event, plugin hook manifests unioned, the policy tier composed
+  first-wins, and the three policy switches that can empty the whole hook set. What is
+  not observable from disk is listed as such, so a gate verdict says "unknown" with its
+  evidence instead of implying the file scopes are the whole story. `plan` now reads its
+  `plansDirectory` through the same model, with its precedence unchanged.
+
 ## [0.10.5] - 2026-09-05
 
 A correction release for the introspection ledger and for four csift defects the ledger's

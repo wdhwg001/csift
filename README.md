@@ -114,7 +114,7 @@ csift is the missing tool it should have had.
    A background task's completion notice is a `"user"` role. \
    A subagent's return: also `"user"`. \
    Your `AskUserQuestion` answer: a _tool result_. \
-   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 34 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said. \
+   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 35 `{role}.{class}.{sub}` labels) finds exactly what a naive grep swears was never said. \
    Some labels exist because the format hides things: `user.unsent` finds the message you esc-recalled and never actually sent, `user.queued` finds what you typed into the queue while a turn was running, `harness.meta.turn-duration` is the record behind the "Done in 1m 5s" line, and `agent.thinking.narration` separates the API's one-line summaries from the reasoning they summarize.
 
 7. 🛎 **Pending questions, on the record.**
@@ -123,30 +123,47 @@ csift is the missing tool it should have had.
 
 8. 🩺 **Is it actually stopped?**
 
-   An end-of-turn record is not a stop. \
-   "Crunched for 46m 26s · done 11:00 am · 1 shell still running" wrote a `turn_duration` line with a duration, a message count, and nothing about the shell. \
-   `csift status` joins the session registry, the transcript tail, every child lane, the task list and a process probe into one verdict, with the evidence named. \
-   Every background shell, async agent and Monitor is listed with its age and whether it came back. Long sessions carry dozens of zombies. \
-   `csift wait --until stop --timeout 300` blocks until it really stops, exits 124 on timeout with a report of what happened meanwhile, and takes a lens (`--ignore-background 'npm run dev'`) so a dev server never holds the wait. \
+   An end-of-turn record is not a stop.
+
+   - `csift status` gives one verdict with the evidence named: the session registry, the transcript tail, every child lane, the task list, a live process probe.
+   - Every background shell, async agent and Monitor, listed with its age and whether it ever came back. Long sessions carry dozens of zombies.
+   - `csift wait --until stop --timeout 300` blocks until it really stops.
+   - A lens for the ones that never return by design: `--ignore-background 'npm run dev'`.
+   - Exit 124 on timeout, with a report of what happened while you waited.
+
    The timeout is required, on purpose. Point-in-time by design, on macOS, Linux and Windows.
 
-9. 🔎 **Round-trips, not lines.**
+9. 📣 **Reach a lane the tool can't.**
 
-   A hit returns the whole exchange, rebuilt from the `uuid`/`parentUuid` graph: the matched tool call with its result, the user turn with the agent's reply. This is the context that `grep` or Claude's ad-hoc scripts can **never** reliably provide.
+   Some receivers have no official channel at all: a running workflow lane, your own parent subagent, an idle session that published no socket, anything at all if you are outside Claude Code.
 
-10. 🌳 **Subagent topology.**
+   - `csift send @<lane> "stop after the current file"` queues one message and says what will carry it.
+   - One verdict per send: OK, FULL, MAY-FAIL, UNPREDICTABLE, REFUSED. Never a silent hope.
+   - Delivery is a hook line you paste; `csift deliver --recipe` prints the block. csift writes no settings file.
+   - `csift msg <id>` joins what csift intended against what the receiver's own transcript proves.
+   - `csift whoami --to @<lane>` predicts reach and sends nothing.
+
+   Where an official transport does exist, csift prints the exact call for you to make, and still queues its own copy so a forgotten delegation is not a lost message.
+
+10. 🔎 **Round-trips, not lines.**
+
+    A hit returns the whole exchange, rebuilt from the `uuid`/`parentUuid` graph: the matched tool call with its result, the user turn with the agent's reply. This is the context that `grep` or Claude's ad-hoc scripts can **never** reliably provide.
+
+11. 🌳 **Subagent topology.**
 
     Kind, lifecycle, and the parent→child tree of every spawned agent, plus detection of lanes frozen on a pending permission approval.
 
-11. 🤖 **Designed for humans and LLMs.**
+12. 🤖 **Designed for humans and LLMs.**
 
     Output is terse, re-feedable, and even structural. Simply install the skill and your Claude will gain the power.
 
-12. 🔒 **Local, read-only, no magic.**
+13. 🔒 **Local, no magic, and one place it writes.**
 
-    Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry, no hidden detections. It reads files already on your disk and never mutates your session histories.
+    Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry, no hidden detections. \
+    It reads files already on your disk and never touches your session histories. \
+    The message channel is the single exception, and a narrow one: `send`, `deliver` and `ack` write into a `csift-channel` directory csift creates beside the session. Nothing else, anywhere, ever.
 
-13. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
+14. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
 
     200 MB transcripts and multi-GB corpora in **about a second**, quick enough to call from inside a hook without noticing.
 
@@ -198,10 +215,13 @@ npx skills add wdhwg001/csift
 | find the message you esc-recalled and never sent      | `csift search "" @<uuid> -t user.unsent`                 |
 | see what record-types fill a session                  | `csift search "" @<uuid> --count-by label`               |
 | run the NEXT command over exactly what matched        | `csift search "X" -l \| csift stats --sessions-from -`   |
+| message a lane the official tool cannot reach         | `csift send @<lane> "TEXT"`                              |
+| check whether that message actually arrived           | `csift msg <id>`                                         |
+| ask whether a lane is reachable, sending nothing      | `csift whoami --to @<lane>`                              |
 
 Run `csift <command> --help` for the full flag set and examples.
 
-## The thirteen subcommands
+## The seventeen subcommands
 
 |                |                                                                                                                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -210,7 +230,7 @@ Run `csift <command> --help` for the full flag set and examples.
 | **`show`**     | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes; `--branch-points` maps where the conversation forked |
 | **`stats`**    | one-scan aggregates per session: tokens by model (counted once per API message), tool calls, turns, span, compactions, narration blocks, a whole-file line-type census                                                                                                  |
 | **`agents`**   | a session's subagents: kind, lifecycle, status, and the parent→child topology                                                                                                           |
-| **`whoami`**   | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe                                                                                                        |
+| **`whoami`**   | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe; then the lane it sits in: itself, its parent, the live lanes under it, and `--to <lane>` for whether a message would reach one (`--peers` lists every live lane, id and state only) |
 | **`files`**    | which files/dirs a session changed, when, plus edits made outside the tool stream                                                                                                       |
 | **`recover`**  | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream: byte-exact or honest gaps; `--list-backups` reads Claude Code's own file-history checkpoints                                                                                       |
 | **`plan`**     | locate the Plan-Mode plan file bound to a session (reverse: which session owns a plan; `--audit` flags edits to plans the session does not own)                                                                                              |
@@ -218,6 +238,10 @@ Run `csift <command> --help` for the full flag set and examples.
 | **`image`**    | list + extract images pasted into a transcript (handle/locator addressing, format transcode)                                                                                            |
 | **`status`**   | one-shot LIVE verdict on a session: running / waiting-children / waiting-hitl / idle-background-open / idle-eot / stale-dead / unknown, from the registry + tail + process probe + every background task it ever launched |
 | **`wait`**     | block until a session condition fires (`stop` / `hitl` / `auq` / `notification[:RE]` / `tool:NAME` / `write:PATH` / `verdict:V`); `--timeout` required, exit 124 with a report of what happened meanwhile |
+| **`send`**     | queue a message for one lane (a session, a subagent, a teammate, a workflow lane), from another lane or from any process outside Claude Code; one verdict per send, and an official transport is printed for you to call, never performed |
+| **`msg`**      | did that message arrive? the channel ledger's intent joined to the receiver transcript's proof, as one verdict; with no id, the lane's whole ledger                                      |
+| **`ack`**      | the receiver's own word: this lane read that message (which is also what stops a re-offer after a compaction)                                                                            |
+| **`deliver`**  | the hook entry that carries the channel into a lane. You never run it: `csift deliver --recipe` prints the settings block, you paste it, csift writes no settings file                    |
 
 ## The summary is a selection. csift keeps the conversation.
 
