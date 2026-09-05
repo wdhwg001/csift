@@ -153,6 +153,113 @@ fn routing_form_collision_bails_listing_every_transcript_id() {
 }
 
 #[test]
+fn a_routing_form_shared_across_two_sessions_is_ambiguous_too() {
+    // The routing form is scoped to whatever the command is scoped to, so a name+team that is
+    // unique inside one session can still collide across the corpus. Nothing about the form
+    // makes it a session-local id, so the ambiguity is the same ambiguity - and the answer is
+    // still both transcript ids, never a pick.
+    let h = relay_home(false);
+    let second = "00000000-0000-4000-8000-000000000002";
+    let other_id = "aRelay-00112233445566aa";
+    h.write(
+        &format!("{ENC_R}/{second}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"start the second relay"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC_R}/{second}/subagents/agent-{other_id}.jsonl"),
+        concat!(
+            r#"{"type":"user","isSidechain":true,"agentId":"aRelay-00112233445566aa","timestamp":"2026-06-07T06:00:02.000Z","message":{"role":"user","content":"ROUTINGOTHER the other session's relay"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC_R}/{second}/subagents/agent-{other_id}.meta.json"),
+        r#"{"agentType":"Relay","description":"relay work","name":"Relay","taskKind":"in_process_teammate","teamName":"harbor"}"#,
+    );
+
+    let out = h.run(&["show", "@Relay@harbor", "--line", "1"]);
+    assert!(!out.success, "two sessions, one routing id: {}", out.stdout);
+    assert!(
+        out.stderr.contains("AMBIGUOUS")
+            && out.stderr.contains(RELAY_ID)
+            && out.stderr.contains(other_id),
+        "both sessions' transcript ids are listed; stderr: {}",
+        out.stderr
+    );
+    // Naming another session alongside it does NOT disambiguate: `@` targets are a UNION, so
+    // each positional resolves on its own and the routing form still has two answers. The way
+    // out is the one the error gives - address a transcript id, which never collides.
+    let still = h.run(&["search", "ROUTINGPROBE", &at(SESS_R), "@Relay@harbor"]);
+    assert!(!still.success, "a sibling target narrows nothing");
+    assert!(still.stderr.contains("AMBIGUOUS"), "{}", still.stderr);
+    let byid = h.run(&["search", "ROUTINGOTHER", &at(other_id)]);
+    assert!(byid.success, "stderr: {}", byid.stderr);
+    assert!(byid.stdout.contains("ROUTINGOTHER"), "{}", byid.stdout);
+}
+
+#[test]
+fn a_teammate_meta_with_no_transcript_is_not_a_teammate_in_scope() {
+    // The index is built from the transcripts that exist, each joined to its meta: a meta left
+    // behind by a lane whose transcript was pruned names nothing csift could read, so it must
+    // miss loudly rather than resolve to a file that is not there.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC_R}/{SESS_R}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC_R}/{SESS_R}/subagents/agent-{RELAY_ID}.meta.json"),
+        r#"{"agentType":"Relay","description":"relay work","name":"Relay","taskKind":"in_process_teammate","teamName":"harbor"}"#,
+    );
+    let out = h.run(&["show", "@Relay@harbor", "--line", "1"]);
+    assert!(!out.success, "a meta alone is not a lane: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no teammate `Relay@harbor`") && out.stderr.contains("ROUTING form"),
+        "the miss is the zero-match error, not a read failure; stderr: {}",
+        out.stderr
+    );
+    // The transcript form misses just as loudly, and for the same reason.
+    let byid = h.run(&["show", &at(RELAY_ID), "--line", "1"]);
+    assert!(!byid.success, "{}", byid.stdout);
+}
+
+#[test]
+fn the_sessions_from_id_list_takes_transcript_ids_only() {
+    // `--sessions-from` is a machine-fed list (it consumes `search -l`), and every id csift
+    // emits into one is a transcript id. The routing form CAN collide, so admitting it here
+    // would let a list resolve to a different lane than the one that produced it: the list
+    // refuses it by name and says which shapes it takes.
+    let h = relay_home(false);
+    let list = h.root.join("ids.txt");
+    std::fs::write(&list, "@Relay@harbor\n").unwrap();
+    let out = h.run(&["list", "--sessions-from", list.to_str().unwrap()]);
+    assert!(!out.success, "stdout: {}", out.stdout);
+    assert!(
+        out.stderr.contains("--sessions-from")
+            && out.stderr.contains("not a session id")
+            && out.stderr.contains("agent id"),
+        "the refusal names the accepted shapes; stderr: {}",
+        out.stderr
+    );
+    // The transcript form the routing id resolves to is what the list takes.
+    std::fs::write(&list, format!("{RELAY_ID}\n")).unwrap();
+    let ok = h.run(&["list", "--sessions-from", list.to_str().unwrap()]);
+    assert!(ok.success, "stderr: {}", ok.stderr);
+    assert!(ok.stdout.contains(RELAY_ID), "{}", ok.stdout);
+    // ...and the routing form stays a POSITIONAL target, which is where it resolves.
+    let positional = h.run(&["list", "@Relay@harbor"]);
+    assert!(positional.success, "stderr: {}", positional.stderr);
+    assert!(
+        positional.stdout.contains(RELAY_ID),
+        "{}",
+        positional.stdout
+    );
+}
+
+#[test]
 fn malformed_routing_shapes_stay_with_the_at_grammar_error() {
     // A second `@`, an empty half or a character outside the name charset is NOT a routing
     // form: it falls to the @-grammar error, which now names the routing shape too.

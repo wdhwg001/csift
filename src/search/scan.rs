@@ -238,14 +238,18 @@ pub(crate) fn search_one_file(
     });
 
     // v0.11.0: the channel needle is DEFAULT-ON and admits any line carrying the envelope
-    // literal, so an ordinary hook context that merely MENTIONS it reaches this point too.
-    // The hook leaf keeps its own flag (the gated-leaves law): such a record survives a
-    // default scan only as a delivery (its first content string opens with the header),
-    // never as bare `harness.meta.hook`. An address or either attachment flag admits it as
-    // before, so nothing an explicit query could reach is dropped here.
+    // literal, so an ordinary ATTACHMENT that merely MENTIONS it reaches this point too - a
+    // hook context that quotes the header, or a file-edit payload whose snippet does. Both
+    // attachment leaves keep their own flag (the gated-leaves law): such a record survives a
+    // default scan only as a delivery (its first content string opens with the header), never
+    // as bare `harness.meta.hook` or `harness.meta.attachment`. An address or either
+    // attachment flag admits it as before, so nothing an explicit query could reach is
+    // dropped here.
     if !gates.hook_context && !gates.attachments && address.is_none() {
         records.retain(|k| {
-            k.rec.hook_additional_context_text().is_none() || k.rec.csift_channel_text().is_some()
+            let gated_attachment = k.rec.hook_additional_context_text().is_some()
+                || k.rec.attachment_payload_text().is_some();
+            !gated_attachment || k.rec.csift_channel_text().is_some()
         });
     }
 

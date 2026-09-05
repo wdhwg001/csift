@@ -4,55 +4,10 @@
 
 use super::*;
 
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use crate::path::settings::{
     deliver_slots, env_value, hooks_for_event, merged_in, string_value_in, SCOPE_LOCAL,
     SCOPE_LOCAL_GIT, SCOPE_POLICY_DROPIN, SCOPE_POLICY_MANAGED, SCOPE_PROJECT, SCOPE_USER,
 };
-
-static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-/// A throwaway directory tree (no external dev-dep), removed on drop. Every fixture path
-/// is generated, so nothing about this machine reaches a test literal.
-#[derive(Debug)]
-struct Tree {
-    root: PathBuf,
-}
-
-impl Tree {
-    fn new() -> Tree {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("csift-settings-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&root).expect("create temp tree");
-        Tree { root }
-    }
-
-    fn write(&self, rel: &str, body: &str) -> PathBuf {
-        let path = self.root.join(rel);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).expect("create parent");
-        }
-        std::fs::write(&path, body).expect("write fixture");
-        path
-    }
-
-    fn dir(&self, rel: &str) -> PathBuf {
-        let path = self.root.join(rel);
-        std::fs::create_dir_all(&path).expect("create dir");
-        path
-    }
-
-    fn path(&self, rel: &str) -> PathBuf {
-        self.root.join(rel)
-    }
-}
-
-impl Drop for Tree {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
-    }
-}
 
 /// One `SessionStart` command hook, as a settings `hooks` block.
 fn session_start(command: &str) -> String {

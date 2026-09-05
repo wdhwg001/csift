@@ -214,6 +214,108 @@ fn show_renders_an_addressed_delivery_flag_free() {
 }
 
 #[test]
+fn a_delivery_inside_a_subagent_transcript_is_found_by_a_default_scan() {
+    // A steer message is usually addressed at a CHILD lane, so the leaf has to reach the
+    // subagent's own transcript on a default scan - both when the subagent is the target and
+    // when the session is (the span default pulls its lanes in).
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the relay work"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{RELAY}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"s1","isSidechain":true,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"lane opener"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"satt1","parentUuid":"s1","timestamp":"2026-06-07T05:00:02.000Z","attachment":{"type":"hook_additional_context","hookEvent":"PostToolUse","hookName":"csift deliver --slot 1","content":["[csift-channel v1 id=0123456789abcdef part=1/1 mode=steer from=00000000-0000-4000-8000-000000000011 from-session=00000000 relation=parent to=aRelay-0123456789abcdef]\nlanebeacon: stop after the current file\n--- end ---"]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{RELAY}.meta.json"),
+        r#"{"agentType":"Relay","taskKind":"in_process_teammate","name":"Relay","teamName":"harbor"}"#,
+    );
+
+    let by_lane = h.run(&["search", "lanebeacon", &at(RELAY)]);
+    assert!(by_lane.success, "stderr: {}", by_lane.stderr);
+    assert!(
+        by_lane.stdout.contains("agent.communication.channel")
+            && by_lane.stdout.contains("lanebeacon"),
+        "the subagent target surfaces its own delivery with no flag:\n{}",
+        by_lane.stdout
+    );
+    assert!(
+        by_lane
+            .stdout
+            .contains("00000000-0000-4000-8000-000000000011 ⇨ self"),
+        "the header's sender rides the comm direction:\n{}",
+        by_lane.stdout
+    );
+
+    // The same record through the session target, which spans its lanes by default.
+    let by_session = h.run(&["search", "lanebeacon", &at(SESS)]);
+    assert!(by_session.success, "stderr: {}", by_session.stderr);
+    assert!(
+        by_session.stdout.contains("agent.communication.channel"),
+        "{}",
+        by_session.stdout
+    );
+    // ...and not when the span is turned off: the delivery lives in the lane, not the session.
+    let top_only = h.run(&["search", "lanebeacon", &at(SESS), "--no-subagents"]);
+    assert!(
+        top_only.stdout.contains("no matching exchanges"),
+        "{}",
+        top_only.stdout
+    );
+}
+
+#[test]
+fn a_non_hook_attachment_carrying_the_literal_is_not_the_leaf_and_stays_gated() {
+    // The channel keep admits any LINE carrying the envelope literal, so an `edited_text_file`
+    // attachment whose payload quotes it is parsed too. The leaf is decided by the payload
+    // TYPE, not by the literal: this one is an ordinary attachment, and ordinary attachments
+    // keep their own flag.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"start the relay work"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"att7","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","attachment":{"type":"edited_text_file","filePath":"/Users/dev/relay/notes.md","snippet":"editbeacon: [csift-channel v1 id=0123456789abcdef part=1/1] is what a delivery opens with"}}"#, "\n",
+        ),
+    );
+    let bare = h.run(&["search", "editbeacon", &at(SESS)]);
+    assert!(bare.success, "stderr: {}", bare.stderr);
+    assert!(
+        bare.stdout.contains("no matching exchanges"),
+        "a file-edit attachment is not a delivery, whatever its text quotes:\n{}",
+        bare.stdout
+    );
+
+    let flagged = h.run(&["search", "editbeacon", &at(SESS), "--attachments"]);
+    assert!(flagged.success, "stderr: {}", flagged.stderr);
+    assert!(
+        flagged.stdout.contains("harness.meta.attachment")
+            && !flagged.stdout.contains("agent.communication.channel"),
+        "under its own flag it is the attachment leaf and nothing more:\n{}",
+        flagged.stdout
+    );
+    // And the channel selector cannot reach it at all.
+    let selected = h.run(&[
+        "search",
+        "editbeacon",
+        &at(SESS),
+        "-t",
+        "agent.communication.channel",
+    ]);
+    assert!(
+        selected.stdout.contains("no matching exchanges"),
+        "{}",
+        selected.stdout
+    );
+}
+
+#[test]
 fn a_hook_context_that_merely_mentions_the_literal_stays_gated() {
     // The channel keep is DEFAULT-ON and admits any line carrying the envelope literal,
     // so an ordinary hook context that only MENTIONS it is parsed too. It must not leak

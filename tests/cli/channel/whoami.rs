@@ -372,6 +372,106 @@ fn the_json_stream_carries_the_new_row_kinds() {
 }
 
 #[test]
+fn the_self_section_reads_frozen_from_an_unreturned_tool_call() {
+    // A lane whose tail is a tool_use with no result is BLOCKED there, not done: its next hook
+    // point comes only when that call returns, which is exactly what a sender needs to know.
+    let h = home(false);
+    let out = h.run(&["whoami", &at(TEAMMATE)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("state    frozen"),
+        "an unreturned tool call is a frozen lane, never a finished one:\n{}",
+        out.stdout
+    );
+    let json = h.run(&["whoami", &at(TEAMMATE), "--format", "json"]);
+    assert_eq!(json_rows(&json.stdout, "self").remove(0)["state"], "frozen");
+}
+
+#[test]
+fn peers_with_no_live_lane_says_so_instead_of_printing_an_empty_list() {
+    // No registry row means no session csift can prove is alive, and a child of a dead session
+    // cannot be live either. The census reports the count rather than trailing off.
+    let h = home(false);
+    // The fixture's registry row is what makes its lanes live; a home without one has none.
+    let empty = Home::new();
+    empty.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        &format!(
+            "{}\n",
+            format_args!(
+                r#"{{"type":"user","uuid":"m1","timestamp":"2026-06-07T04:00:00.000Z","cwd":"{CWD}","version":"2.1.258","message":{{"role":"user","content":"hello"}}}}"#
+            )
+        ),
+    );
+    let out = empty.run(&["whoami", "--peers"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("csift channel · peers") && out.stdout.contains("0 live lane(s)"),
+        "an empty census is an honest empty, with its count:\n{}",
+        out.stdout
+    );
+    let json = empty.run(&["whoami", "--peers", "--format", "json"]);
+    assert!(
+        json_rows(&json.stdout, "peer").is_empty(),
+        "{}",
+        json.stdout
+    );
+    assert_eq!(json_summary(&json.stdout)["peers"], 0);
+    // The populated fixture is the control: the same command does find lanes there.
+    assert!(h
+        .run(&["whoami", "--peers"])
+        .stdout
+        .contains("3 live lane(s)"));
+}
+
+#[test]
+fn a_routing_form_that_names_no_teammate_fails_loud_through_whoami() {
+    let h = home(false);
+    let out = h.run(&["whoami", "@Nobody@harbor"]);
+    assert!(!out.success, "stdout: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no teammate `Nobody@harbor`")
+            && out.stderr.contains("ROUTING form")
+            && out.stderr.contains("--shape teammate"),
+        "the miss names the grammar and how to list the real ids:\n{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn a_colliding_routing_form_lists_both_transcript_ids_through_whoami() {
+    // Two teammates can share one routing id, and the transcript id never collides - so
+    // `whoami` refuses to pick and hands back both ids the caller can address instead.
+    let h = home(false);
+    let twin = "aRelay-fedcba9876543210";
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{twin}.jsonl"),
+        &in_flight_lane(),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{twin}.meta.json"),
+        r#"{"agentType":"Relay","taskKind":"in_process_teammate","name":"Relay","teamName":"harbor"}"#,
+    );
+    let out = h.run(&["whoami", "@Relay@harbor"]);
+    assert!(!out.success, "stdout: {}", out.stdout);
+    assert!(
+        out.stderr.contains("AMBIGUOUS")
+            && out.stderr.contains(TEAMMATE)
+            && out.stderr.contains(twin),
+        "every matching transcript id is listed:\n{}",
+        out.stderr
+    );
+    // Each transcript id still answers on its own: the collision belongs to the routing form.
+    let one = h.run(&["whoami", &at(twin)]);
+    assert!(one.success, "stderr: {}", one.stderr);
+    assert!(
+        one.stdout.contains(&format!("self     {twin}")),
+        "{}",
+        one.stdout
+    );
+}
+
+#[test]
 fn the_two_terminal_modes_refuse_to_be_combined() {
     let h = home(false);
     let both = h.run(&["whoami", "--peers", "--to", &at(TEAMMATE)]);

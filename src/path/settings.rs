@@ -189,8 +189,10 @@ pub(crate) fn string_value_in<'a>(
         .map(|(scope, value)| (value.as_str(), *scope))
 }
 
-/// The platform's managed-settings directory.
-fn managed_settings_dir() -> PathBuf {
+/// The platform's managed-settings directory. `pub(crate)` so the literal each platform
+/// resolves to is pinnable without a filesystem: it is an absolute system path no test can
+/// create, so the only checkable thing about it is the string itself.
+pub(crate) fn managed_settings_dir() -> PathBuf {
     #[cfg(target_os = "macos")]
     let dir = "/Library/Application Support/ClaudeCode";
     #[cfg(target_os = "windows")]
