@@ -9,6 +9,24 @@
 
 use serde_json::{json, Value};
 
+/// The eight delivery events a steer message may ride, in the order every surface prints
+/// them.
+///
+/// ONE list for the whole channel. The hook entry filters on it, `--recipe` writes a chain
+/// for each of them, and both the send receipt and the reach prediction census their slots
+/// over it - so a second copy anywhere would let a delivery fire at an event the receipt
+/// never counted, or a receipt promise an event the delivery refuses.
+pub(crate) const STEER_EVENTS: [&str; 8] = [
+    "SessionStart",
+    "SubagentStart",
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolBatch",
+    "UserPromptSubmit",
+    "Stop",
+    "SubagentStop",
+];
+
 /// Delivery mode. `queue` is a SUBSET of `steer`: a steer message may ride any eligible
 /// hook point, a queue message only a turn-boundary one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

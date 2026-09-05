@@ -25,7 +25,7 @@ use super::send_render::{render_json, render_text, Receipt};
 use super::{
     append_inbox, append_outbox, channel_dir, expires_at, new_message_id, now_utc, read_armed,
     render, write_message, InboxLine, Message, MessageFrom, MessageTo, Mode, OfficialRef,
-    OutboxLine, Relation, TargetForm, Verdict, CHUNK_BUDGET,
+    OutboxLine, Relation, TargetForm, Verdict, CHUNK_BUDGET, STEER_EVENTS,
 };
 use crate::cli::{OutputFormat, SendArgs};
 use crate::path::settings::{self, Merged};
@@ -34,19 +34,9 @@ use crate::path::settings::{self, Merged};
 /// environment and the CLI flag that also enable it leave nothing on disk.
 const TEAMS_ENV: &str = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS";
 
-/// Every delivery event a steer message may ride, in the order the receipt prints them.
-const STEER_EVENTS: [&str; 8] = [
-    "SessionStart",
-    "SubagentStart",
-    "PreToolUse",
-    "PostToolUse",
-    "PostToolBatch",
-    "UserPromptSubmit",
-    "Stop",
-    "SubagentStop",
-];
-
-/// The turn-boundary subset a queue message is restricted to.
+/// The turn-boundary subset a queue message is restricted to. It is the CENSUS list, wider
+/// than the hook entry's eligibility test by `SessionStart`: only its resume and compact
+/// sources are a re-entry, and the settings cascade names an event, not a source.
 const QUEUE_EVENTS: [&str; 4] = ["SessionStart", "UserPromptSubmit", "Stop", "SubagentStop"];
 
 pub(crate) fn run_send(args: &SendArgs) -> Result<()> {

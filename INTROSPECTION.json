@@ -78063,7 +78063,7 @@
       "code": [
         {
           "path": "src/live/channel/types.rs",
-          "lines": "281-286",
+          "lines": "304-309",
           "snippet": "pub(crate) enum Vehicle {\n    /// The hook's stdout JSON (`hookSpecificOutput.additionalContext`), exit 0.\n    AdditionalContext,\n    /// Stop / SubagentStop stderr with exit 2, which also blocks the turn from ending.\n    Exit2,\n}"
         }
       ],
@@ -78614,9 +78614,9 @@
       "depends": "csift's delivery events are the eight that carry an identity. TeammateIdle is deliberately not among them: with no `agent_id` the payload cannot name the transcript it fired for, so a delivery there would have to resolve a name and a team back to a transcript and could pick the wrong one when two teammates share a name.",
       "code": [
         {
-          "path": "src/live/channel/hook_input.rs",
-          "lines": "21-33",
-          "snippet": "/// The eight events a steer message may ride. Every other event exits 0 with nothing:\n/// the hook line is identical on all of them, so the filter lives here rather than in\n/// what the user pasted.\npub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
+          "path": "src/live/channel/types.rs",
+          "lines": "14-27",
+          "snippet": "/// ONE list for the whole channel. The hook entry filters on it, `--recipe` writes a chain\n/// for each of them, and both the send receipt and the reach prediction census their slots\n/// over it - so a second copy anywhere would let a delivery fire at an event the receipt\n/// never counted, or a receipt promise an event the delivery refuses.\npub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
         }
       ],
       "instrument": "Read the excerpt at the named offset in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm it byte for byte; a count is occurrences of the fixed byte string over the whole file. A live trial runs a teammate turn with a hook that logs every payload and checks which fields the TeammateIdle fire carries.",
@@ -79114,8 +79114,8 @@
       "depends": "csift's delivery set carries both, and a receiver on a build below the start floor simply never fires that one. Because the delivery decision is per event and per message rather than per build, an older receiver loses a delivery point without losing a message.",
       "code": [
         {
-          "path": "src/live/channel/hook_input.rs",
-          "lines": "24-33",
+          "path": "src/live/channel/types.rs",
+          "lines": "19-27",
           "snippet": "pub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
         }
       ],
@@ -79158,9 +79158,9 @@
       "depends": "csift carries both in its delivery set. Because they are siblings rather than alternatives, a build that fires both simply offers two delivery points in one turn, and the per-message ledger keeps the second from re-emitting what the first sent.",
       "code": [
         {
-          "path": "src/live/channel/hook_input.rs",
-          "lines": "21-33",
-          "snippet": "/// The eight events a steer message may ride. Every other event exits 0 with nothing:\n/// the hook line is identical on all of them, so the filter lives here rather than in\n/// what the user pasted.\npub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
+          "path": "src/live/channel/types.rs",
+          "lines": "14-27",
+          "snippet": "/// ONE list for the whole channel. The hook entry filters on it, `--recipe` writes a chain\n/// for each of them, and both the send receipt and the reach prediction census their slots\n/// over it - so a second copy anywhere would let a delivery fire at an event the receipt\n/// never counted, or a receipt promise an event the delivery refuses.\npub(crate) const STEER_EVENTS: [&str; 8] = [\n    \"SessionStart\",\n    \"SubagentStart\",\n    \"PreToolUse\",\n    \"PostToolUse\",\n    \"PostToolBatch\",\n    \"UserPromptSubmit\",\n    \"Stop\",\n    \"SubagentStop\",\n];"
         }
       ],
       "instrument": "`grep -a -c -F` the literal across the cached native builds; the counting rule is LINES carrying the literal, and a bracket names the highest cached build without it, never an uncached one.",
@@ -80434,7 +80434,7 @@
       "code": [
         {
           "path": "src/live/channel/send.rs",
-          "lines": "273-276",
+          "lines": "269-272",
           "snippet": "/// How the sender stands to the receiver. The envelope prints it and adds the peer caution for\n/// the four values that make the sender a peer, so a receiver never reads a sibling's message\n/// as an instruction from its parent.\npub(crate) fn relation_of(caller: &Caller, receiver: &Receiver) -> Relation {"
         }
       ],

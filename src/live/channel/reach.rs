@@ -31,7 +31,7 @@ use serde_json::json;
 use super::caller::{self, Caller, GateVerdict, Receiver, SettingsDisclosure, LANE_ASSUMED_NOTE};
 use super::policy::{self, Decision, ReceiverKind, ReceiverState, SendContext};
 use super::send::{relation_of, truthy};
-use super::{channel_dir, read_armed, Mode, Relation, SenderKind, Verdict};
+use super::{channel_dir, read_armed, Mode, Relation, SenderKind, Verdict, STEER_EVENTS};
 use crate::cli::OutputFormat;
 use crate::live::{children_report, probe_pid, tail_shape, PidLiveness, TailShape};
 use crate::path::settings::{self, Merged};
@@ -52,20 +52,6 @@ pub(crate) use render::*;
 /// spellings changing without the other would show up immediately as a gate verdict that
 /// disagrees between `whoami --to` and `csift send` on the same tree.
 const TEAMS_ENV: &str = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS";
-
-/// The delivery events a steer message may ride, in the order a receipt prints them. `whoami`
-/// predicts for the default mode (steer), so the turn-boundary subset the queue mode is
-/// restricted to is not needed here.
-const STEER_EVENTS: [&str; 8] = [
-    "SessionStart",
-    "SubagentStart",
-    "PreToolUse",
-    "PostToolUse",
-    "PostToolBatch",
-    "UserPromptSubmit",
-    "Stop",
-    "SubagentStop",
-];
 
 /// The sentence every AGENT prediction carries. csift reads a lane's tail and probes a pid; the
 /// harness's own view of that lane lives in process memory csift cannot see, so the prediction

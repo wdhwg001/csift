@@ -266,7 +266,8 @@ live.rs + live/    # `status` + `wait` (the live-truth pair): background (types/
                    #   + ps pid probe), tail (bounded tail state machine), children
                    #   (subagent tails + incremental journal), verdict (six-verdict join),
                    #   conditions (--until grammar), status, wait (poll loop), render
-live/channel/      # the v0.11.0 CHANNEL. Data layer: types (message + closed enums + ids),
+live/channel/      # the v0.11.0 CHANNEL. Data layer: types (message + closed enums + ids +
+                   #   STEER_EVENTS, the ONE delivery-event list every surface reads),
                    #   paths (the sidecar layout, lane-id validation, atomic append/rewrite),
                    #   envelope (chunk render + the detector + header parse), outbox, inbox,
                    #   ledger, marker (armed/<lane>.json), slots (the temp-dir slot chain),

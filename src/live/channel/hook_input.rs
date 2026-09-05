@@ -16,21 +16,7 @@
 
 use serde_json::Value;
 
-use super::str_field;
-
-/// The eight events a steer message may ride. Every other event exits 0 with nothing:
-/// the hook line is identical on all of them, so the filter lives here rather than in
-/// what the user pasted.
-pub(crate) const STEER_EVENTS: [&str; 8] = [
-    "SessionStart",
-    "SubagentStart",
-    "PreToolUse",
-    "PostToolUse",
-    "PostToolBatch",
-    "UserPromptSubmit",
-    "Stop",
-    "SubagentStop",
-];
+use super::{str_field, STEER_EVENTS};
 
 /// The events that end (or restart) a turn, where a `queue` message may ride.
 const QUEUE_EVENTS: [&str; 3] = ["UserPromptSubmit", "Stop", "SubagentStop"];
@@ -102,7 +88,9 @@ impl HookInput {
     }
 }
 
-/// True when a steer message may ride this event.
+/// True when a steer message may ride this event. Every other event exits 0 with nothing:
+/// the hook line is identical on all of them, so the filter lives here rather than in what
+/// the user pasted.
 pub(crate) fn is_steer_event(event: &str) -> bool {
     STEER_EVENTS.contains(&event)
 }
