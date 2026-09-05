@@ -27,6 +27,8 @@
 //! - [`ledger`] the per-lane `ledger/<lane>.jsonl` and its fold into per-message state
 //! - [`marker`] the `armed/<lane>.json` runtime proof that hooks really run
 //! - [`slots`] the temp-dir slot chain that orders concurrent hook processes
+//! - [`reconcile`] the ledger-against-transcript join (intent versus fact)
+//! - [`msg`] the `msg` and `ack` commands built on that join
 
 // The commands that consume this layer (`deliver`, `send`, `msg`, `ack`, and the
 // `whoami` reach prediction) land in the following commits of the same release. Until
@@ -43,9 +45,11 @@ mod hook_input;
 mod inbox;
 mod ledger;
 mod marker;
+mod msg;
 mod outbox;
 mod paths;
 mod recipe;
+mod reconcile;
 mod slots;
 mod types;
 
@@ -57,9 +61,11 @@ pub(crate) use hook_input::*;
 pub(crate) use inbox::*;
 pub(crate) use ledger::*;
 pub(crate) use marker::*;
+pub(crate) use msg::*;
 pub(crate) use outbox::*;
 pub(crate) use paths::*;
 pub(crate) use recipe::*;
+pub(crate) use reconcile::*;
 pub(crate) use slots::*;
 pub(crate) use types::*;
 

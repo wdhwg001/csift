@@ -79581,6 +79581,386 @@
           "note": "The margins are the record's own claimed stamp against the logger's wall clock on one machine, so a flush lag of that order would be invisible to this instrument."
         }
       ]
+    },
+    {
+      "id": "MSG-042",
+      "area": "messaging",
+      "behavior": "A team mailbox entry validates as `{type?, from, text, timestamp, read?, color?, summary?}` and is stamped `{msgV, msg_id, type:\"message\", read:false}` when it is written into the JSON array at `teams/<team>/inboxes/<name>.json`. The inbox is polled on a 1000 ms interval and a consumed entry is DELETED from the array rather than marked read: the `read` flag is never flipped in place. At 2.1.258 the validator is at 160159430, the write stamp at 160165900, the path builder at 159675990, the array write at 160162262, the poll at 181706246 and the consume rewrite at 160169100; the same shapes ship at 2.1.260 (159803196, 159806100, 159052967, 181041440).",
+      "depends": "The csift channel keeps an enqueued message in its inbox file forever and records every state change in a SEPARATE per-lane ledger, because the official mailbox cannot answer \"did this arrive?\" afterwards: with the entry deleted on consume and the flag never flipped, absence means either delivered or never written. csift therefore refuses to read a disappearance as delivery, and refuses to read its own emit as one - the DELIVERED verdict additionally requires a record in the receiving lane's transcript. If the mailbox ever began flipping `read` in place, this would stop being the reason the channel keeps intent and fact in two files.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "9-16",
+          "snippet": "//! Promoting intent into fact is exactly the failure the official team mailbox cannot\n//! avoid - it deletes an entry on consume and never flips its `read` flag, so afterwards\n//! nothing on disk distinguishes \"delivered\" from \"never written\". Here the two halves stay\n//! separate files and the verdict names which of them is missing.\n//!\n//! The transcript half is a byte scan, not a parse of every line: the envelope needle and\n//! the id are both raw ASCII substrings of the injected content, so a line that cannot\n//! carry the delivery is rejected before any JSON is built."
+        }
+      ],
+      "instrument": "Read the six offsets in the shipped Claude Code binary (`tail -c +OFFSET+1 | head -c N`) and confirm each excerpt byte for byte. Then parse every `teams/*/inboxes/*.json` array in the corpus and bucket the objects by their `read` value. Counting rule: one per JSON object in a parsed array.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the write stamp and the consume rewrite at their offsets in the shipped binary as verbatim excerpts to close the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The six mailbox offsets re-read in the shipped binary, paired with a parse of every team inbox array in the corpus.",
+          "observed": "The validator, the write stamp, the path builder, the array write, the 1000 ms poll and the consume rewrite are each present at their named offsets, and four of the same shapes at the 2.1.260 offsets; on disk 71 message objects carry `read:false` and none carries `read:true`, and no consumed entry survives in any array.",
+          "rule": "One per JSON object in a parsed array; the binary figures are byte offsets, not counts.",
+          "note": "Landed with the reconciliation commands: the mailbox's unreconcilable shape is why the csift channel keeps an append-only inbox and a separate ledger."
+        }
+      ]
+    },
+    {
+      "id": "MSG-048",
+      "area": "messaging",
+      "behavior": "An idle notification carries the finishing agent's final text in a `result` field truncated at 4000 characters and is written into the team lead's mailbox by a Stop hook the harness registers for itself. At 2.1.258 the notification builder is at 160178102, the truncation at 160170520, the mailbox write at 160171650 and the hook registration at 180652827.",
+      "depends": "csift never reads a harness-written notification as evidence that a channel message arrived: it reports a lane finishing, carries no envelope id, and joins to no message. The only signal csift accepts for \"the receiver read it\" is an `ack` line the receiving lane appends itself, which is why an ack is refused from outside Claude Code and refused for an id the lane never held. If the harness ever wrote an envelope-shaped record on a lane's behalf, an ack would stop being the receiver's own word.",
+      "code": [
+        {
+          "path": "src/live/channel/msg.rs",
+          "lines": "29-34",
+          "snippet": "/// What an external caller is told when it tries to ack. An ack asserts that a lane READ a\n/// message, which a process outside Claude Code cannot know about any lane.\nconst ACK_NEEDS_LANE: &str = \"an external caller cannot ack: an ack records that the RECEIVING \\\n     lane read the message, and a process outside Claude Code (CLAUDE_CODE_SESSION_ID unset) is \\\n     not that lane. Ack from inside the receiving session, or leave the message unacked - \\\n     `csift msg <id>` still reports whether it was delivered\";"
+        }
+      ],
+      "instrument": "Read the four offsets in the shipped binary and confirm each excerpt byte for byte, including the 4000-character truncation constant. On disk, partition every JSON object carried on its own line inside a relay body and count those carrying a `result` field. Counting rule: one per JSON object on its own line inside a relay body.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the harness's own Stop-hook registration and the truncation site in the shipped binary as verbatim excerpts to close the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The notification builder, the truncation constant, the mailbox write and the hook registration re-read at their offsets, paired with a partition of the JSON objects carried inside relay bodies.",
+          "observed": "All four shapes are present at their named offsets with the truncation at 4000 characters; 5 payloads of 336 carry the `result` field, spread over 220 relay records.",
+          "rule": "One per JSON object on its own line inside a relay body; records counted once each.",
+          "note": "Landed with the ack surface: a harness notification is not a channel record, so only the lane's own ledger line closes a message."
+        }
+      ]
+    },
+    {
+      "id": "MSG-050",
+      "area": "messaging",
+      "behavior": "Queued entries at priority at or below `next` fold into the CURRENT turn at every tool-result boundary and land as `queued_command` attachments; an entry whose trimmed value starts with `/` without `skipSlashCommands` is excluded from that fold and waits for the turn start, where only poll events fold. At 2.1.258 the fold filter is at 162030912, the slash exclusion at 162030791, the tool-result caller at 164751026, the turn-start fold at 164695957 and the attachment shape at 169727697; the fold filter is at 161658451 at 2.1.260.",
+      "depends": "A csift delivery rides a HOOK, so the record that proves it is a `hook_additional_context` attachment and never a `queued_command` one. The fact test therefore goes through the hook-context extractor alone: a queued pulse carrying the same text is a queue entry, not a delivery of the message, and counting one would turn an enqueue into a delivery claim. If deliveries ever also folded through the queue, the fact test would need a second carrier rather than a wider needle.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "308-311",
+          "snippet": "fn fact_id(rec: &Record) -> Option<String> {\n    let text = rec.csift_channel_text()?;\n    parse_header(&text).map(|h| h.id)\n}"
+        }
+      ],
+      "instrument": "Read the five offsets in the shipped binary and confirm each excerpt byte for byte. On disk, count every record whose attachment type is `queued_command` and inspect whether any carries an envelope header. Counting rule: one per record whose attachment type is `queued_command`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the fold filter and its slash exclusion in the shipped binary as verbatim excerpts to close the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The fold filter, the slash exclusion, the tool-result caller, the turn-start fold and the attachment shape re-read at their offsets, paired with a census of queued_command-carrying records.",
+          "observed": "All five shapes are present at their named offsets and the fold filter again at the 2.1.260 offset; 2,495 records carry a `queued_command` attachment and the fold is a turn-boundary fold in name only, since the tool-result caller runs at every tool result.",
+          "rule": "One per record whose attachment type is `queued_command`, whole corpus.",
+          "note": "Landed with the fact test: the hook-context extractor is the only carrier a delivery is read from."
+        }
+      ]
+    },
+    {
+      "id": "MSG-070",
+      "area": "messaging",
+      "behavior": "Hook-context injections naming SubagentStart never appear in a top-level transcript: 11,490 records across 7,280 files, every one under a `subagents/` path component and 0 outside. The split is 7,679 context records with non-empty content, 3,808 success records with empty content and 3 cancelled. No such record is present at Claude Code 2.1.246 or later in this corpus, which is a lead only, since the producing hook is locally installed.",
+      "depends": "csift reads the delivery FACT from the RECEIVING lane's own transcript, never from its parent's: the lane context carries the lane's own file beside the owning top-level id that keys the channel directory, so a child lane's proof is looked for exactly where the harness persists it. If injected context stopped landing in a child's own file, a delivery addressed at a child lane would be unverifiable from disk and every reconciliation of it would have to read as intent-only.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "107-120",
+          "snippet": "/// The lane a channel command operates on, with everything derived from it once.\n#[derive(Debug, Clone)]\npub(crate) struct LaneCtx {\n    /// The lane's own transcript id (a session uuid, or an agent id for a child lane).\n    pub(crate) lane: String,\n    /// The OWNING top-level session uuid: the channel root is keyed by session, the files\n    /// inside it by lane.\n    pub(crate) session: String,\n    /// The lane's own transcript - the file the FACT is read from.\n    pub(crate) transcript: PathBuf,\n    /// `<session sidecar>/csift-channel`. Derived, never required to exist: a reader\n    /// treats an absent root as an empty channel.\n    pub(crate) root: PathBuf,\n}"
+        }
+      ],
+      "instrument": "`csift search \"\" --additional-context -t harness.meta.hook --format json` over the projects root, filtered to records naming the SubagentStart event, then partitioned on whether the transcript path carries a `subagents/` component and on whether the injected content is empty. Counting rule: one per matching line for records, one per matching file for files; the lane is read from the path, independent of the record's own sidechain flag.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the SubagentStart inserter and the push onto the child's own message array in the shipped binary as verbatim excerpts to open the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The hook-leaf census restricted to SubagentStart records, partitioned by path component and by empty content.",
+          "observed": "11,490 records across 7,280 files, 100% under a `subagents/` path component and 0 in any top-level transcript; 7,679 carry non-empty content, 3,808 are success records with empty content and 3 are cancelled.",
+          "rule": "One per matching line for records, one per matching file for files; the lane read from the path.",
+          "note": "Landed with the lane context: a child lane's transcript is where its own delivery proof is read."
+        }
+      ]
+    },
+    {
+      "id": "MSG-071",
+      "area": "messaging",
+      "behavior": "The idle notification's `result` field is observed on 5 of 336 payloads, all at Claude Code 2.1.251 and 2.1.259, and on 0 of 331 payloads through 2.1.233. The highest build observed without it is 2.1.233 and the lowest with it 2.1.251; the builds between are unobserved in this corpus.",
+      "depends": "The channel's reconciliation never reads a harness notification field as delivery evidence, so a field that some builds write and others do not cannot move a verdict. The one fact csift accepts is the envelope header parsed out of the receiving lane's own hook-context attachment, recorded as the line and record id that carry it - a locator a reader can refetch, not a harness field whose presence is version-dependent.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "69-76",
+          "snippet": "/// The transcript half: where a delivery of one message id was found in the receiver\n/// lane's own file. The FIRST chunk record wins - a multi-part delivery lands as several\n/// records and the earliest one is the moment the lane saw the header.\n#[derive(Debug, Clone, PartialEq, Eq)]\npub(crate) struct Fact {\n    pub(crate) line: usize,\n    pub(crate) uuid: Option<String>,\n}"
+        }
+      ],
+      "instrument": "Partition every JSON object carried on its own line inside a relay body by the Claude Code version stamped on its carrying record, and count those carrying a `result` field. Counting rule: one per JSON object on its own line inside a relay body; records counted once each.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": "2.1.251",
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the idle-notification builder in the shipped binary as a verbatim excerpt, and bisect the field across the historical builds, to open the producer leg and close the version bracket."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The relay-body payload partition by carrying-record version, counting payloads that carry a `result` field.",
+          "observed": "5 of 336 payloads carry it, all at 2.1.251 and 2.1.259; 0 of 331 through 2.1.233. Highest observed without: 2.1.233. Lowest with: 2.1.251.",
+          "rule": "One per JSON object on its own line inside a relay body; records counted once each.",
+          "note": "Landed with the fact locator: the reconciliation cites a line and a record id, never a harness field."
+        }
+      ]
+    },
+    {
+      "id": "MSG-072",
+      "area": "messaging",
+      "behavior": "No session in this corpus ever received a cross-session message: 628 literal occurrences of the wrapper across 52 files and 259 carrier records, with 0 real deliveries. Every occurrence is prose, a tool description, or an opener quoting the tag.",
+      "depends": "A literal count of an envelope is not a count of deliveries, so csift's fact test is STRUCTURAL: the record must carry the envelope header at the START of its own hook-context content, which a quotation in prose never does. Without that rule a corpus full of mentions - and a channel whose own development sessions quote the header constantly - would report deliveries that never happened.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "305-311",
+          "snippet": "/// The message id a record proves the delivery of: the envelope header parsed out of a\n/// hook-context attachment's own text. A record that merely quotes an id in prose carries\n/// no header at the start of its content and yields `None`.\nfn fact_id(rec: &Record) -> Option<String> {\n    let text = rec.csift_channel_text()?;\n    parse_header(&text).map(|h| h.id)\n}"
+        }
+      ],
+      "instrument": "Count literal occurrences of the cross-session wrapper over the projects root, then count the records whose string content OPENS with the tag or a relay preamble within the first 400 characters. Counting rule: real = content is a string opening with the tag or a preamble inside that window; a mention anywhere else is prose.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the cross-session wrapper builder and its attribute assembler in the shipped binary as verbatim excerpts to open the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "A literal count of the cross-session wrapper against a content-opening test over the same records.",
+          "observed": "628 literal occurrences across 52 files and 259 carrier records; 0 records whose content opens with the tag or a preamble, so this corpus holds no real inbound delivery at all.",
+          "rule": "Real = content is a string opening with the tag or a preamble within the first 400 characters.",
+          "note": "Landed with the structural fact test: a quoted header is not a delivery."
+        }
+      ]
+    },
+    {
+      "id": "MSG-074",
+      "area": "messaging",
+      "behavior": "Mailbox delivery cannot be reconciled on the read flag: 50 inbox files in 13 inbox directories out of 33 team directories, 71 message objects, `read=false` on 71 and `read=true` on 0 under both the literal-occurrence rule and the parsed-object rule, every message typed `message` and carrying one sender token.",
+      "depends": "This is why the channel's two verdicts are named apart. csift's ledger records what it EMITTED and the receiving lane's transcript records what ARRIVED, so an emit with no record reads INTENT-ONLY instead of being promoted to a delivery. A reconciliation that trusted a written flag would report the mailbox's whole population as undelivered while some of it was read and the rest was never sent.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "38-42",
+          "snippet": "pub(crate) enum MsgVerdict {\n    /// Emitted AND present in the receiver lane's transcript.\n    Delivered,\n    /// Emitted, with no transcript record: a crash window, or a flush that has not landed.\n    IntentOnly,"
+        }
+      ],
+      "instrument": "Enumerate `teams/*/inboxes/*.json` under the config home, parse each array, and bucket every object by its `read` value; independently count literal occurrences of the key in the same files. Counting rule: one per parsed object, and one per literal occurrence, reported side by side.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the mailbox consume path in the shipped binary as a verbatim excerpt to open the producer leg for the deletion that makes the flag useless."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The inbox enumeration and array parse, bucketed by `read`, cross-checked against a literal count of the key.",
+          "observed": "50 inbox files in 13 inbox directories out of 33 team directories, 71 message objects, 71 `read=false` and 0 `read=true` under both rules, every object typed `message` from one sender token.",
+          "rule": "One per parsed object, and independently one per literal occurrence of the key.",
+          "note": "Landed with the verdict ladder: DELIVERED and INTENT-ONLY are separate verdicts because a flag cannot tell them apart."
+        }
+      ]
+    },
+    {
+      "id": "MSG-075",
+      "area": "messaging",
+      "behavior": "`commandMode`, not `origin.kind`, discriminates a queued pulse from a queued prompt: 2,495 records carry a `queued_command` attachment, 2,267 of them `task-notification` with no origin key at all, and 228 `prompt`, of which 140 human, 6 peer and 82 none.",
+      "depends": "csift's channel does not ride the queue at all, and its fact scan admits a line only when the raw bytes carry the envelope needle. A queued pulse replaying a delivery's text would therefore never be counted as the delivery, and no discriminator inside the queue attachment is needed to keep them apart. The prefilter also keeps the never-silent law: a line the needle rejects still gets the shape check, so corrupt bytes are counted rather than exempted.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "273-280",
+          "snippet": "    let (hits, skipped) = scan_lines_parallel(&map[..], |line, line_no| {\n        if channel.find(line).is_none()\n            || id_needle.as_ref().is_some_and(|f| f.find(line).is_none())\n        {\n            // The never-silent law: a non-candidate line still gets the O(1) shape check,\n            // so corrupt bytes are counted rather than exempted by the prefilter.\n            return non_candidate_verdict(line);\n        }"
+        }
+      ],
+      "instrument": "Census every record whose attachment type is `queued_command` and bucket it by `commandMode`, then by the presence and value of an origin key; cross-check the csift census against a raw parse of the same lines. Counting rule: one per record whose attachment type is `queued_command`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the queue-entry constructor that stamps `commandMode` in the shipped binary as a verbatim excerpt to open the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The queued_command census bucketed by `commandMode` and by origin key, csift's census set against a raw parse of the same lines.",
+          "observed": "2,495 records; task-notification 2,267 with no origin key at all; prompt 228, of which human 140, peer 6 and none 82; `origin.kind` never takes the value task-notification. The csift census and the raw parse agree exactly.",
+          "rule": "One per record whose attachment type is `queued_command`, whole corpus.",
+          "note": "Landed with the fact scan's byte prefilter: the channel needle is what admits a line, and nothing in the queue carries it."
+        }
+      ]
+    },
+    {
+      "id": "MSG-076",
+      "area": "messaging",
+      "behavior": "Real relays are outnumbered by their own literal: 443 real relay records against 3,075 literal occurrences, while the comm-view census surfaces 15 inbox plus 1 signal because the view strips the preamble it would have to match. 788 of the non-delivery carriers are session-state cache lines replaying the delivered text verbatim, so a literal count roughly triples the population.",
+      "depends": "A verbatim replay of a delivery's text is exactly the shape that would double-count a fact, so the scan keeps the FIRST record of each message id and no more: a multi-part delivery, a replay, or a redelivered chunk all fold to the one moment the lane saw the header. Counting occurrences instead would inflate every delivery on a transcript that replays its own text.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "296-302",
+          "snippet": "    let mut out: BTreeMap<String, Fact> = BTreeMap::new();\n    for (id, fact) in hits {\n        // Keep the FIRST record of each id: a multi-part delivery lands as several chunks\n        // and the earliest one is when the lane saw the header.\n        out.entry(id).or_insert(fact);\n    }\n    Ok((out, skipped))"
+        }
+      ],
+      "instrument": "Count literal occurrences of the relay preambles over the projects root, count the records whose string content opens with one after stripping leading whitespace, and separately count the carriers that are session-state cache lines. Counting rule: a real relay is a record whose string content BEGINS with a preamble after stripping leading whitespace.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the relay preamble builder and the session-state cache writer in the shipped binary as verbatim excerpts to open the producer leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The three-way count over the projects root: preamble literals, records opening with a preamble, and session-state cache carriers, set against the comm-view census.",
+          "observed": "443 real relay records (414 plain, 29 mid-turn) against 3,075 literal occurrences and a comm-view census of 15 inbox plus 1 signal; 788 of the non-delivery carriers are session-state cache lines replaying the delivered text verbatim.",
+          "rule": "A real relay is a record whose string content begins with a preamble after stripping leading whitespace.",
+          "note": "Landed with the first-record-wins fold: a replayed text never counts as a second delivery."
+        }
+      ]
+    },
+    {
+      "id": "MSG-077",
+      "area": "messaging",
+      "behavior": "An unmodeled transcript line type exists: `{agentId, key, result, type:\"result\"}` with a content-hash key, 6,745 lines corpus-wide, every one inside a subagent transcript and none in a top-level file, and none carrying a timestamp, uuid or version.",
+      "depends": "The fact scan walks a lane's whole transcript, so it meets these lines. A brace-framed line the record model does not interpret parses to nothing and is IGNORED, never booked as malformed and never mistaken for a delivery; only a line that is a parse candidate and fails is counted. Without that arm the reconciliation's skipped-line count would report thousands of healthy lines as corruption on any lane that carries them.",
+      "code": [
+        {
+          "path": "src/live/channel/reconcile.rs",
+          "lines": "281-294",
+          "snippet": "        match parse_line(line) {\n            Ok(Some(rec)) => match fact_id(&rec) {\n                Some(id) if only.is_none_or(|want| want == id) => LineVerdict::Keep((\n                    id,\n                    Fact {\n                        line: line_no,\n                        uuid: rec.uuid.clone(),\n                    },\n                )),\n                _ => LineVerdict::Ignore,\n            },\n            Ok(None) => LineVerdict::Ignore,\n            Err(_) => LineVerdict::Skip,\n        }"
+        }
+      ],
+      "instrument": "Count lines whose parsed object carries the `type:\"result\"` shape with an `agentId` and a content-hash `key`, partitioned by whether the file sits under a `subagents/` path component, and check each for a timestamp, uuid and version field. Counting rule: one per matching line, whole corpus.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the writer of this line type in the shipped binary as a verbatim excerpt to open the producer leg and name what the hashed key indexes."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "The line-shape count over the projects root, partitioned by path component and probed for the three record fields.",
+          "observed": "6,745 lines carry the shape, every one inside a subagent transcript and none in a top-level file; none carries a timestamp, a uuid or a version.",
+          "rule": "One per matching line, whole corpus.",
+          "note": "Landed with the fact scan's ignore arm: an unmodeled but well-formed line is neither a delivery nor a malformed line."
+        }
+      ]
     }
   ]
 }

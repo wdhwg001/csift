@@ -7,6 +7,7 @@ mod envelope;
 mod ledger;
 mod marker;
 mod paths;
+mod reconcile;
 mod records;
 mod slots;
 mod types;
