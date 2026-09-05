@@ -6,7 +6,6 @@ use super::settings::{hooks_for_event, Merged};
 /// The delivery slot numbers configured on one event: the `k` of every
 /// `csift deliver --slot k` command hook, sorted and deduplicated because a slot is a
 /// position in the delivery chain, so the same k under two matchers is one slot.
-#[allow(dead_code)] // the channel commands are the consumers
 pub(crate) fn deliver_slots(m: &Merged, event: &str) -> Vec<u32> {
     let mut out: Vec<u32> = hooks_for_event(m, event)
         .iter()

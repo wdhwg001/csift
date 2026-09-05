@@ -77491,8 +77491,8 @@
       "code": [
         {
           "path": "src/path/settings.rs",
-          "lines": "188-194",
-          "snippet": "/// The winning value of one `env` key and the scope that set it.\n#[allow(dead_code)] // the channel commands are the consumers\npub(crate) fn env_value<'a>(m: &'a Merged, key: &str) -> Option<(&'a str, &'a str)> {\n    let value = m.env.get(key)?;\n    let scope = m.env_scope.get(key).copied().unwrap_or(\"unknown\");\n    Some((value.as_str(), scope))\n}"
+          "lines": "169-174",
+          "snippet": "/// The winning value of one `env` key and the scope that set it.\npub(crate) fn env_value<'a>(m: &'a Merged, key: &str) -> Option<(&'a str, &'a str)> {\n    let value = m.env.get(key)?;\n    let scope = m.env_scope.get(key).copied().unwrap_or(\"unknown\");\n    Some((value.as_str(), scope))\n}"
         },
         {
           "path": "src/path/tests/settings.rs",
@@ -77704,13 +77704,13 @@
       "code": [
         {
           "path": "src/path/settings_slots.rs",
-          "lines": "6-18",
-          "snippet": "/// The delivery slot numbers configured on one event: the `k` of every\n/// `csift deliver --slot k` command hook, sorted and deduplicated because a slot is a\n/// position in the delivery chain, so the same k under two matchers is one slot.\n#[allow(dead_code)] // the channel commands are the consumers\npub(crate) fn deliver_slots(m: &Merged, event: &str) -> Vec<u32> {\n    let mut out: Vec<u32> = hooks_for_event(m, event)\n        .iter()\n        .filter_map(|h| deliver_slot_of(&h.command))\n        .collect();\n    out.sort_unstable();\n    out.dedup();\n    out\n}"
+          "lines": "6-17",
+          "snippet": "/// The delivery slot numbers configured on one event: the `k` of every\n/// `csift deliver --slot k` command hook, sorted and deduplicated because a slot is a\n/// position in the delivery chain, so the same k under two matchers is one slot.\npub(crate) fn deliver_slots(m: &Merged, event: &str) -> Vec<u32> {\n    let mut out: Vec<u32> = hooks_for_event(m, event)\n        .iter()\n        .filter_map(|h| deliver_slot_of(&h.command))\n        .collect();\n    out.sort_unstable();\n    out.dedup();\n    out\n}"
         },
         {
           "path": "src/path/settings.rs",
-          "lines": "161-168",
-          "snippet": "/// The hooks registered for one event, in fold order.\n#[allow(dead_code)] // the channel commands are the consumers\npub(crate) fn hooks_for_event<'a>(m: &'a Merged, event: &str) -> Vec<&'a HookEntry> {\n    m.hooks\n        .get(event)\n        .map(|v| v.iter().collect())\n        .unwrap_or_default()\n}"
+          "lines": "161-167",
+          "snippet": "/// The hooks registered for one event, in fold order.\npub(crate) fn hooks_for_event<'a>(m: &'a Merged, event: &str) -> Vec<&'a HookEntry> {\n    m.hooks\n        .get(event)\n        .map(|v| v.iter().collect())\n        .unwrap_or_default()\n}"
         }
       ],
       "instrument": "Read the excerpt at each named offset in the Claude Code 2.1.258 binary (tail -c +OFFSET+1 | head -c N) and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole binary.",
@@ -79959,6 +79959,629 @@
           "observed": "6,745 lines carry the shape, every one inside a subagent transcript and none in a top-level file; none carries a timestamp, a uuid or a version.",
           "rule": "One per matching line, whole corpus.",
           "note": "Landed with the fact scan's ignore arm: an unmodeled but well-formed line is neither a delivery nor a malformed line."
+        }
+      ]
+    },
+    {
+      "id": "MSG-032",
+      "area": "messaging",
+      "behavior": "The send tool's target switch has EIGHT arms and no default, each stamping a route label. The label census over the tool's byte range 175718336-175793426 gives unresolved 19, bridge 12, mailbox 10, uds 7, desktop_host 7, resume 6, in_process 4. The switch head sits at 175782583 with the per-arm offsets beside it. So an official send resolves to one of a small closed set of transports, and a target that matches no arm is stamped unresolved rather than falling through to a default.",
+      "depends": "csift's own policy table is the same shape: one receiver resolves to exactly one channel, with no default arm. The four official channel names csift can delegate to (mailbox, in-process queue, uds, resume) are the four arms a lane target can reach; every other receiver state routes to csift's own channel or to a refusal, so csift never names a transport the tool has no arm for.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "276-280",
+          "snippet": "    match ctx.receiver_kind {\n        ReceiverKind::WorkflowLane => workflow_row(ctx),\n        ReceiverKind::TopLevel => top_level_row(ctx),\n        ReceiverKind::Teammate | ReceiverKind::UnnamedSubagent => agent_row(ctx),\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file. For the label census, count occurrences of `r(\"<label>\"` within the byte range 175718336-175793426.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the switch's trigger and its per-arm gates as verbatim excerpts, not the arm labels alone, to raise the producer leg from the label census to a traced chain."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file. For the label census, count occurrences of `r(\"<label>\"` within the byte range 175718336-175793426.",
+          "observed": "The route-label census over the tool's byte range: unresolved 19, bridge 12, mailbox 10, uds 7, desktop_host 7, resume 6, in_process 4, over eight arms with no default. Corpus side, 65 resume ack objects exist.",
+          "rule": "Occurrences of the fixed label-construction byte string within the named byte range; corpus acks counted one per JSON object.",
+          "note": "Landed with the send policy table, whose arms mirror the switch's."
+        }
+      ]
+    },
+    {
+      "id": "MSG-033",
+      "area": "messaging",
+      "behavior": "The agent-state classifier at 175714369 reads exactly ONE input, the in-process task map row for the agent id: a running row classifies live, a stopped-by-user row carries no agentId at all, any other row classifies stopped, and no usable row classifies evicted. The row test sits at 163719740 and the main-session exclusion at 164964064. The map is process memory: no file carries it.",
+      "depends": "csift therefore never claims the official verdict for an agent target. Its receiver state is assembled from what disk does hold - the session registry row plus a pid probe for a top-level session, the lane's own transcript tail for a subagent, and the harness's own terminal word for a stopped lane - and the state names are csift's, not the classifier's. A reader who needs the official verdict has to ask the harness.",
+      "code": [
+        {
+          "path": "src/live/channel/caller.rs",
+          "lines": "258-261",
+          "snippet": "/// What the lane is doing. A top-level session answers from the registry plus a pid probe (the\n/// only surface that knows a session is alive); a subagent lane answers from its own tail,\n/// with the harness's terminal word about it outranking both.\nfn receiver_state("
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the classifier's trigger and the branch that selects each of the four states as verbatim excerpts.",
+        "SPECIMEN: the task map is process memory, so a specimen needs a live trial that reads the four states while lanes are running and stopped."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The classifier body at 175714369 reads the task map row and nothing else; the row test at 163719740 and the main-session exclusion at 164964064 are its only two companions. No file on disk carries the map.",
+          "rule": "One offset read per cited site; the negative is stated for the classifier body only, not for the whole binary.",
+          "note": "Landed with the receiver probe, which reads registry, tail and background instead."
+        }
+      ]
+    },
+    {
+      "id": "MSG-034",
+      "area": "messaging",
+      "behavior": "A stopped agent resumes into the SAME `agent-<id>.jsonl` under the same id: the resume entry at 175681861 leads to 175682126, the delivered message is framed isMeta at 175692385 behind a peer or coordinator preamble (framing map 166046259, agent wrapper 158150810), prior uuids are suppressed from re-persistence, and the resumed agent is registered at 175693601. So a resume continues one transcript rather than opening a second one.",
+      "depends": "csift's resume delegation says out loud that the lane is respawned rather than delivered to, and it keeps addressing the SAME lane id afterwards - the inbox, the ledger and the armed marker of a resumed lane are the files they already were. If a resume opened a new transcript, every queued message for that lane would be orphaned.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "451-457",
+          "snippet": "    Decision {\n        channel: CH_RESUME,\n        verdict: Verdict::Ok,\n        prediction: \"this respawns the lane with its prior messages replayed; on Claude Code \\\n                     below 2.1.260 its completion notification goes to the main conversation, \\\n                     not to you.\"\n            .to_string(),"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the resume entry, the framing gate and the append that writes into the existing transcript as three verbatim hops."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "65 resume ack objects in the corpus, 63 of them carrying the resumed agent id; the resume path's four offsets read at 175681861, 175682126, 175692385 and 175693601.",
+          "rule": "One per JSON ack object parsed out of the raw lines; offsets read one excerpt each.",
+          "note": "Landed with the resume row, which keeps the lane id stable across a respawn."
+        }
+      ]
+    },
+    {
+      "id": "MSG-035",
+      "area": "messaging",
+      "behavior": "When background tasks are disabled, or when the target is the built-in web-fetch agent, a resume runs INLINE: the gate at 175688042 selects the inline path, the owner is never notified (the notify predicate at 175696022 returns false), and the final report is returned inside the tool result as an inline handback at 175696414. No completion notification is enqueued at all in that shape.",
+      "depends": "csift's resume receipt names the inline shape as one of the outcomes rather than promising a completion notification. A sender told to expect a notification that structurally cannot arrive would wait forever for it.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "462-465",
+          "snippet": "            \"with background tasks disabled, or against the built-in web-fetch agent, the \\\n             resume runs INLINE: no completion notification is enqueued at all and the report \\\n             comes back inside the tool result instead\"\n                .to_string(),"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the inline gate's trigger and the branch that suppresses the notification as verbatim excerpts.",
+        "SPECIMEN: a live trial that resumes an agent with background tasks disabled, and one against the web-fetch agent, would show the report arriving in the tool result with no notification record."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The inline gate at 175688042, the never-notify predicate at 175696022 and the inline handback at 175696414 read as three excerpts; no corpus record carries the inline shape.",
+          "rule": "One offset read per cited site; the corpus absence is stated over the resume ack population only.",
+          "note": "Landed as a named risk on the resume row."
+        }
+      ]
+    },
+    {
+      "id": "MSG-036",
+      "area": "messaging",
+      "behavior": "Five resume error classes exist at 175681090, one of them carrying a transcriptMissing flag. That is the class a workflow lane's id produces: its transcript sits under a workflows subdirectory, and the resume resolver reaches for the path a built-in lane would have written, where nothing exists.",
+      "depends": "csift refuses a send to a COMPLETED workflow lane instead of queueing it: the official resume resolves to a path that lane never wrote to, and no hook fires in a lane that has ended, so there is no carrier of any kind left. Refusing is the only honest verdict.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "291-295",
+          "snippet": "        return refused(\n            \"a completed workflow lane has no re-entry point: an official resume by its id \\\n             resolves to a transcript path the lane never wrote to, and no hook fires in a \\\n             lane that has ended\",\n        );"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the five error classes and the branch that selects the transcript-missing one as verbatim excerpts.",
+        "SPECIMEN: a live trial resuming a finished workflow lane by its id would produce the transcript-missing error; the corpus ack population contains no ack for that path."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The five error classes read at 175681090, one carrying the transcript-missing flag; the corpus resume acks (65 objects) contain none for that path.",
+          "rule": "One offset read; corpus acks counted one per JSON object across the whole corpus.",
+          "note": "Landed as the refusal for a completed workflow lane."
+        }
+      ]
+    },
+    {
+      "id": "MSG-037",
+      "area": "messaging",
+      "behavior": "A teammate resume reuses the SAME resumable agent id: the resume entry at 175730956 replays the prior messages, the roster rejoin at 175733002 re-adds the row, the id is reused through an override at 176260921, and the ack reports how many messages were replayed.",
+      "depends": "csift addresses a teammate resume by the id form the official tool takes - the routing form when the meta carries one, otherwise the transcript-form id - and never invents a new lane id for the respawned teammate. The queue written before the resume is still the queue of the same lane afterwards.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "427-432",
+          "snippet": "/// The `to` value for an agent receiver: a teammate's routing form when it has one (the form\n/// the official tool documents), otherwise the transcript-form lane id, which the official id\n/// arm also accepts. Never a session uuid - that arm does not exist.\nfn official_to(ctx: &SendContext) -> &str {\n    ctx.routing_id.as_deref().unwrap_or(&ctx.lane)\n}"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the teammate resume's trigger, the roster rejoin and the id override as three verbatim hops.",
+        "SPECIMEN: the teammate-resume wording has zero ack specimens in the corpus, so a live trial resuming a completed teammate is what captures one."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The teammate resume path read at 175730956, 175733002 and 176260921; the teammate-resume wording has 30 corpus occurrences and ZERO acks, all inside tool inputs quoting binary excerpts.",
+          "rule": "One offset read per site; corpus occurrences counted one per matching line, acks one per JSON object.",
+          "note": "Landed with the official `to` selection, which keeps the id stable across a respawn."
+        }
+      ]
+    },
+    {
+      "id": "MSG-038",
+      "area": "messaging",
+      "behavior": "Queuing a message into a WAKING agent writes only to the in-memory row and returns that a task record exists, never that the message was delivered (164952693); when the row is not running it emits a stranded-message signal instead (175784050).",
+      "depends": "csift's in-process delegation carries that return value as a named risk, and csift queues the message on its own channel beside the delegation. A caller who reads the official return as a delivery receipt would otherwise stop tracking a message that never landed.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "415-420",
+          "snippet": "            risks: vec![\n                \"the official queue returns that a task record EXISTS, never that the message \\\n                 was delivered; the target must be addressed by its `a...` id, and the send \\\n                 is attributed to the session rather than to the calling lane\"\n                    .to_string(),\n            ],"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the queue-into-waking-agent path's trigger and its return construction as verbatim excerpts.",
+        "SPECIMEN: a live trial that queues into an agent mid-wake would capture both the return value and the stranded signal."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The queue-into-row path read at 164952693 and the stranded-message branch at 175784050; the return value is a record-exists assertion, not a delivery one.",
+          "rule": "One offset read per cited site.",
+          "note": "Landed as the in-process row's risk line."
+        }
+      ]
+    },
+    {
+      "id": "MSG-039",
+      "area": "messaging",
+      "behavior": "At Claude Code 2.1.258 a resumed agent is registered with the session's main agent as owner (175693601) and its completion notification targets that owner (builder 164953374, target resolver 164954861). At 2.1.260 an inserted block reassigns ownership to the RESUMER (174196680), takes a keepalive (164612039), and notifies the previous owner that the child now reports elsewhere (164615732). The previous-owner literal counts 0 lines whole-file at 2.1.258 and at 2.1.259, and 2 lines at 2.1.260.",
+      "depends": "csift's resume prediction states which of the two shapes applies rather than promising the sender will hear back: below 2.1.260 the completion goes to the main conversation and the resumer holds no keepalive. A sender that waits for a notification addressed at itself on such a build waits for something the harness never sends.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "451-457",
+          "snippet": "    Decision {\n        channel: CH_RESUME,\n        verdict: Verdict::Ok,\n        prediction: \"this respawns the lane with its prior messages replayed; on Claude Code \\\n                     below 2.1.260 its completion notification goes to the main conversation, \\\n                     not to you.\"\n            .to_string(),"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file. `grep -a -c -F` the literal across the cached native builds. Counting rule: LINES carrying the literal, never occurrences - the two are different numbers and a line count is not a behavior signal.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": "2.1.260",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the 2.1.260 reassignment block's trigger and gate as verbatim excerpts beside the 2.1.258 owner registration.",
+        "SPECIMEN: a live trial resuming a completed agent on a build at or below 2.1.259 and again at 2.1.260 would show which transcript receives the completion."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file. `grep -a -c -F` the literal across the cached native builds. Counting rule: LINES carrying the literal, never occurrences - the two are different numbers and a line count is not a behavior signal.",
+          "observed": "The previous-owner literal counts 0 lines whole-file at 2.1.258, 0 at 2.1.259 and 2 at 2.1.260; the owner registration reads at 175693601 and the reassignment block at 174196680.",
+          "rule": "Lines carrying the literal per build, never occurrences; one offset read per cited site.",
+          "note": "Landed as the version-dependent sentence in the resume prediction."
+        }
+      ]
+    },
+    {
+      "id": "MSG-040",
+      "area": "messaging",
+      "behavior": "The send tool advertises the resumed agent id back only when the resumed row is absent, unowned, or owned by the current session scope (175783696, row test 163719740, scope resolver 156787676). 63 of 65 corpus ack objects carry the field, so the two that do not are the ownership test failing rather than the field being optional decoration.",
+      "depends": "csift's resume delegation prints the call and asserts nothing about its return value: no csift surface promises that the resumed id comes back, and no csift file is keyed on it. The absence is deliberate - a receipt that named the returned id would be wrong exactly in the ownership cases the tool withholds it.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "458-461",
+          "snippet": "        risks: vec![\n            \"a resume is an action, not a delivery: the lane is respawned, and a concurrent \\\n             resume of the same lane throws rather than queueing\"\n                .to_string(),"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the advertise gate's three conditions as verbatim excerpts beside the row test and the scope resolver."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "63 of 65 corpus ack objects carry the resumed agent id; the advertise gate reads at 175783696 with the row test at 163719740 and the scope resolver at 156787676.",
+          "rule": "One per JSON ack object parsed from the raw lines, whole corpus; one offset read per site.",
+          "note": "Landed as a deliberate absence: the resume row promises nothing about the return value."
+        }
+      ]
+    },
+    {
+      "id": "MSG-041",
+      "area": "messaging",
+      "behavior": "A stopped-by-user target is refused WITHOUT a resume attempt (175783207): the arm stamps a not-reachable error class and instructs the sender to treat the work as cancelled. The classifier's stopped-by-user shape carries no agent id at all, so the arm structurally cannot resume even if it tried.",
+      "depends": "csift refuses a send to a lane the harness stopped, for both channels at once: the official arm refuses by construction, and a csift queue would wait for a hook point in a lane that will never run one. The refusal is the only verdict that does not leave a message pending forever.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "269-275",
+          "snippet": "    if ctx.receiver_state == ReceiverState::StoppedByUser {\n        return refused(\n            \"the receiver lane was stopped by the user - the harness refuses a resume for this \\\n             state and instructs a sender to treat the work as cancelled, so csift queues \\\n             nothing it could never deliver\",\n        );\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the refusal arm's trigger and the error-class construction as verbatim excerpts.",
+        "SPECIMEN: a live trial addressing a lane stopped from the interface would capture the refusal text and the error class."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The refusal arm reads at 175783207 with a not-reachable error class and no resume call; the stopped-by-user classifier shape carries no agent id.",
+          "rule": "One offset read; the structural claim is stated over the arm body only.",
+          "note": "Landed as the stopped-by-user refusal, ahead of every other row."
+        }
+      ]
+    },
+    {
+      "id": "MSG-051",
+      "area": "messaging",
+      "behavior": "Cross-session messaging is gated ON by default on every platform (159674729) with an environment override; agent teams require an environment variable or a command-line flag IN ADDITION to their feature flag (160375330), so teams are OFF by default. Both gate bodies are byte-identical modulo renaming at 2.1.260 (159051775, 160134306). Team directories exist in the corpus, so the teams gate has been on for some sessions.",
+      "depends": "csift reports each gate with a verdict rather than a boolean: a gate is enabled only when a value csift can READ says so (a settings env key, with the winning scope named), and otherwise it is unknown - the shell environment and the command-line flag that also enable it leave nothing on disk. The teammate mailbox is delegated only under a readable enable, and the unknown verdict carries its evidence counts instead of a guess.",
+      "code": [
+        {
+          "path": "src/live/channel/caller.rs",
+          "lines": "152-158",
+          "snippet": "    pub(crate) fn teams(scope: Option<&str>, teams_dirs: usize, teammate_lanes: usize) -> Self {\n        match scope {\n            Some(s) => GateVerdict {\n                name: \"teams\",\n                verdict: format!(\"enabled via settings env ({s})\"),\n                enabled: true,\n            },"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read each gate's trigger and its three inputs as verbatim excerpts, not the gate body alone."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The harbor gate reads at 159674729 returning the flag default on every platform; the teams gate at 160375330 requires an env var or a flag in addition to its own flag. Corpus side, 33 team directories exist.",
+          "rule": "One offset read per gate; team directories counted one per directory under the teams root.",
+          "note": "Landed as the two gate verdicts the send receipt prints."
+        }
+      ]
+    },
+    {
+      "id": "MSG-052",
+      "area": "messaging",
+      "behavior": "The official `to` grammar resolves, in order: a scheme-shaped reject, the literal main, an exact teammate name, the `a[Name-]<16 hex>` id, the name registry, team-lead, the roster, a normalised retry, a trailing bracketed reference, then exact-then-prefix matching (175705120, 175714681, id regex 156729969, bracket grammar 158802439, candidate index 158802700). There is NO arm for a bare session uuid: a uuid fails the id regex and reaches the name index, where it matches only a row literally named that uuid.",
+      "depends": "csift addresses its own channel by session uuid freely, but a DELEGATED official call is never printed with a uuid as its `to`. An agent receiver is addressed by its routing form or its `a...` id, both legal arms; a peer top-level session gets a delegation whose `to` csift leaves for the caller to name, with the missing arm stated, rather than a uuid that would resolve to nothing.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "159-169",
+          "snippet": "    fn unaddressable() -> Self {\n        OfficialCall {\n            tool: OFFICIAL_TOOL,\n            to: None,\n            call: format!(\n                \"{OFFICIAL_TOOL}(to: <the peer as your harness names it>, message: <this \\\n                 message>) - the official `to` grammar has no bare-uuid arm, so the receiver's \\\n                 session uuid is not a legal value and csift will not invent one\"\n            ),\n        }\n    }"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the resolver's ten arms in order as verbatim excerpts, and enumerate every caller of the id regex to close the negative that no arm accepts a bare uuid.",
+        "SPECIMEN: a live trial addressing a known peer session by its uuid would show whether the send resolves or returns not-found."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The resolver reads at 175705120 with the id regex at 156729969 accepting `a` followed by an optional name segment and 16 hex; no arm of the ten tests a uuid shape.",
+          "rule": "One offset read per cited site; the negative is stated over the resolver body, whose arms were read in order.",
+          "note": "Landed as the unaddressable official call for a peer top-level session."
+        }
+      ]
+    },
+    {
+      "id": "MSG-053",
+      "area": "messaging",
+      "behavior": "An agent sender's message body is wrapped in an agent-message element carrying the sender's name (158150810) BEFORE the resume framing wraps it again in a peer preamble (166046259). A delivered peer message therefore reaches the receiver double-framed, and the outer preamble is what a reader sees first.",
+      "depends": "csift frames its own deliveries once, in its own envelope, and states the sender's relation as an explicit field instead of relying on a wrapper the receiver has to recognise. The relation is computed from the two lane ids, and the four peer values add a caution sentence, so a receiver never has to infer authority from the framing it happens to be handed.",
+      "code": [
+        {
+          "path": "src/live/channel/send.rs",
+          "lines": "273-276",
+          "snippet": "/// How the sender stands to the receiver. The envelope prints it and adds the peer caution for\n/// the four values that make the sender a peer, so a receiver never reads a sibling's message\n/// as an instruction from its parent.\npub(crate) fn relation_of(caller: &Caller, receiver: &Receiver) -> Relation {"
+        }
+      ],
+      "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "binary trace"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read the agent wrapper's trigger and the resume framing's gate as verbatim excerpts.",
+        "SPECIMEN: the corpus ack population is the SENDER side of this path; a receiver-side capture of a double-framed body is what closes the leg."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
+          "observed": "The agent wrapper reads at 158150810 and the framing map at 166046259; the corpus carries the sender half only.",
+          "rule": "One offset read per cited site.",
+          "note": "Landed with the relation field, which csift computes rather than inferring from a wrapper."
+        }
+      ]
+    },
+    {
+      "id": "MSG-061",
+      "area": "messaging",
+      "behavior": "The resume vocabulary entered in cohorts, and each literal dates its own WORDING rather than the mechanism: the resumable agent id, the in-process teammate resume sentence and the treat-as-cancelled instruction all enter at 2.1.191 (highest cached absent 2.1.176); the transcript-resume sentence has an exact consecutive-release boundary, absent at 2.1.202 and present at 2.1.203; the resuming-agent wording enters at 2.1.232 (absent 2.1.228); the already-waking wording is the second exact boundary, absent at 2.1.237 and present at 2.1.238. The resume function itself and the in-process teammate term both predate these sentences.",
+      "depends": "csift's official floor is a VERSION comparison against the receiver transcript's own version field, not a wording match: no csift surface parses an ack sentence, and a receiver whose version cannot be read is treated as below the floor rather than assumed past it. A reader keying on wording would mis-date every build where the mechanism shipped before its sentence.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "20-22",
+          "snippet": "/// The Claude Code floor for any official send path. Below it csift's own channel is the\n/// only carrier, whatever the receiver's state.\npub(crate) const OFFICIAL_FLOOR: (u32, u32, u32) = (2, 1, 198);"
+        },
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "214-221",
+          "snippet": "    /// True when the receiver is new enough for any official path. An UNKNOWN version is\n    /// treated as below the floor: the floor is a fact to be shown, not assumed.\n    pub(crate) fn official_possible(&self) -> bool {\n        self.receiver_version\n            .as_deref()\n            .and_then(parse_version)\n            .is_some_and(|v| v >= OFFICIAL_FLOOR)\n    }"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds. Counting rule: LINES carrying the literal, never occurrences - the two are different numbers and a line count is not a behavior signal.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.191",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the writer of each dated sentence in the build that first carries it, so the floors are anchored to a producer rather than to a literal."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "`grep -a -c -F` the literal across the cached native builds. Counting rule: LINES carrying the literal, never occurrences - the two are different numbers and a line count is not a behavior signal.",
+          "observed": "Across the cached builds: the 2.1.191 cohort is absent at 2.1.176; the transcript-resume sentence is absent at 2.1.202 and present at 2.1.203; the resuming-agent wording is absent at 2.1.228 and present at 2.1.232; the already-waking wording is absent at 2.1.237 and present at 2.1.238.",
+          "rule": "Lines carrying each literal per build, never occurrences; a bracket names the highest cached ABSENT build, never an uncached one.",
+          "note": "Landed with the official floor, which compares versions rather than wording."
+        }
+      ]
+    },
+    {
+      "id": "MSG-065",
+      "area": "messaging",
+      "behavior": "Gate codenames are the strongest version anchors available, because a codename cannot be a rename of a descriptive predecessor: the harbor codename enters at 2.1.224 (highest cached absent 2.1.222, with only 2.1.223 uncached) beside a limits sibling on the peer-guard path, and the teams codename enters at 2.1.100 (absent 2.1.23) inside a guard that also requires an experimental environment variable. Presence of a gate NAME is never reachability of what it gates.",
+      "depends": "csift never reports a gate as enabled because its codename exists in a build. The harbor verdict is the CONSEQUENCE csift can see - a messaging socket path in the session registry row, which means the gate is both on and bound - and its absence is reported as unknown, not as off. That is the difference between a name and a reachable transport.",
+      "code": [
+        {
+          "path": "src/live/channel/caller.rs",
+          "lines": "171-183",
+          "snippet": "    /// The harbor (cross-session messaging) gate. The registry's socket path is the one\n    /// on-disk consequence of the gate being on AND bound, so it is the verdict.\n    pub(crate) fn harbor(socket_present: bool) -> Self {\n        GateVerdict {\n            name: \"harbor\",\n            verdict: if socket_present {\n                \"registry messagingSocketPath present -> on and bound\".to_string()\n            } else {\n                \"registry messagingSocketPath absent -> unknown\".to_string()\n            },\n            enabled: socket_present,\n        }\n    }"
+        }
+      ],
+      "instrument": "`grep -a -c -F` the literal across the cached native builds. Counting rule: LINES carrying the literal, never occurrences - the two are different numbers and a line count is not a behavior signal.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "history ladder"
+      },
+      "first_seen_claude_code": "2.1.224",
+      "producer_trace": "partial",
+      "specimen": "none",
+      "attribution": "partial-producer",
+      "open_legs": [
+        "Read each gate's guard body in the build that first carries the codename, so the floor is anchored to the guard rather than to the name.",
+        "SPECIMEN: a live trial with the gate on and off, reading whether a socket path appears in the registry row, would tie the codename to its consequence."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "`grep -a -c -F` the literal across the cached native builds. Counting rule: LINES carrying the literal, never occurrences - the two are different numbers and a line count is not a behavior signal.",
+          "observed": "The harbor codename is absent at 2.1.222 and present at 2.1.224 with 2.1.223 uncached; the teams codename is absent at 2.1.23 and present at 2.1.100.",
+          "rule": "Lines carrying the literal per build; a bracket names the highest cached ABSENT build, and an uncached build between the two is stated rather than skipped.",
+          "note": "Landed as the harbor verdict, which reports the socket consequence instead of the codename."
+        }
+      ]
+    },
+    {
+      "id": "MSG-073",
+      "area": "messaging",
+      "behavior": "Resume acks are real on disk and their wording drifted: 65 JSON ack objects across 91 raw lines, 63 carrying the resumed agent id, in three wording families after substituting the id and the output path - 51 saying the agent had no active task and was resumed from its transcript (2.1.196 to 2.1.231), 11 saying it was stopped and was resumed (2.1.196 to 2.1.210), and 2 terse resuming-agent lines (2.1.252). The teammate-resume sentence has 30 corpus occurrences and ZERO acks, all inside tool inputs quoting binary excerpts.",
+      "depends": "csift reads none of that wording. A resume is DELEGATED: the receipt prints the call and the sender makes it, so no csift surface parses an ack, matches a sentence family, or breaks when a fourth wording appears. The three families are the reason - a reader keyed on the wording would have broken twice already inside one minor range.",
+      "code": [
+        {
+          "path": "src/live/channel/policy.rs",
+          "lines": "148-154",
+          "snippet": "    fn addressed(to: &str) -> Self {\n        OfficialCall {\n            tool: OFFICIAL_TOOL,\n            to: Some(to.to_string()),\n            call: format!(\"{OFFICIAL_TOOL}(to: \\\"{to}\\\", message: <this message>)\"),\n        }\n    }"
+        }
+      ],
+      "instrument": "`csift search` over the projects root for the resume ack shapes, parsed as JSON objects. Counting rule: one per JSON object parsed out of the raw lines, bucketed after substituting the agent id and the output path so wording families are comparable.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Read the writer of each ack wording in the build that carries it, so the three families are anchored to their producers."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-05",
+          "verdict": "holds",
+          "instrument": "`csift search` over the projects root for the resume ack shapes, parsed as JSON objects. Counting rule: one per JSON object parsed out of the raw lines, bucketed after substituting the agent id and the output path so wording families are comparable.",
+          "observed": "65 ack objects across 91 raw lines, 63 carrying the resumed agent id, in three wording families of 51, 11 and 2; the teammate-resume sentence has 30 occurrences and 0 acks.",
+          "rule": "One per JSON ack object parsed from the raw lines, whole corpus; occurrences counted one per matching line.",
+          "note": "Landed as the reason the resume row delegates instead of parsing a return value."
         }
       ]
     }

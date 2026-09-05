@@ -39,7 +39,12 @@ impl Mode {
 /// peer's message as an instruction from its parent or its user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Relation {
+    /// The sender spawned the receiver: the top-level lane to one of its own subagents, or a
+    /// subagent to one it spawned itself. Never a peer, so the caution never fires here.
     Parent,
+    /// The sender was spawned by the receiver - by the session's main conversation, or by
+    /// another subagent. The two share a value because they share a standing; what differs
+    /// is which channel can carry the message, which the receiver KIND decides.
     Child,
     Sibling,
     CrossSession,

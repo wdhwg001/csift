@@ -39,6 +39,9 @@ use super::*;
           msg      reconcile a csift-channel message: the ledger's INTENT joined to the\n           \
                    receiver transcript's FACT, one verdict; with no id, the lane's ledger\n  \
           ack      record that the calling lane READ a channel message (appends an ack line)\n\n\
+          send     queue a message for ONE lane on the csift channel (a user-installed\n           \
+                   `csift deliver` hook carries it); one verdict per send, official sends\n           \
+                   are printed for you to make, never performed\n\n\
         list/search/stats/files/recover/plan/image/status/wait span each session's subagent \
         transcripts by \
         default (built-in Task/Agent-tool, OMC, and Workflow agents); pass `--no-subagents` \
@@ -197,6 +200,7 @@ pub enum Command {
     Wait(WaitArgs),
     Msg(MsgArgs),
     Ack(AckArgs),
+    Send(SendArgs),
     // HIDDEN catch-all for the REMOVED `turns` name (→ `verbatim`, v0.5). Exists only so
     // the rename gets the pointed successor error the `-t thinking` legacy values get,
     // instead of clap's teach-nothing "unrecognized subcommand". Never works, always bails

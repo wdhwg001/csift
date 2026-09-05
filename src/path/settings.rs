@@ -20,7 +20,6 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
-#[allow(unused_imports)] // the channel commands are the consumers
 pub(crate) use super::settings_slots::deliver_slots;
 
 /// The user scope: `<claude-home>/settings.json`.
@@ -160,7 +159,6 @@ pub(crate) fn merged_in(
 }
 
 /// The hooks registered for one event, in fold order.
-#[allow(dead_code)] // the channel commands are the consumers
 pub(crate) fn hooks_for_event<'a>(m: &'a Merged, event: &str) -> Vec<&'a HookEntry> {
     m.hooks
         .get(event)
@@ -169,7 +167,6 @@ pub(crate) fn hooks_for_event<'a>(m: &'a Merged, event: &str) -> Vec<&'a HookEnt
 }
 
 /// The winning value of one `env` key and the scope that set it.
-#[allow(dead_code)] // the channel commands are the consumers
 pub(crate) fn env_value<'a>(m: &'a Merged, key: &str) -> Option<(&'a str, &'a str)> {
     let value = m.env.get(key)?;
     let scope = m.env_scope.get(key).copied().unwrap_or("unknown");

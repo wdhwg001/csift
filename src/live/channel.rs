@@ -37,6 +37,7 @@
 // removed once the commands land.
 #![allow(dead_code, unused_imports)]
 
+mod caller;
 mod deliver;
 mod deliver_emit;
 mod deliver_plan;
@@ -48,8 +49,10 @@ mod marker;
 mod msg;
 mod outbox;
 mod paths;
+mod policy;
 mod recipe;
 mod reconcile;
+mod send;
 mod slots;
 mod types;
 
@@ -66,6 +69,7 @@ pub(crate) use outbox::*;
 pub(crate) use paths::*;
 pub(crate) use recipe::*;
 pub(crate) use reconcile::*;
+pub(crate) use send::run_send;
 pub(crate) use slots::*;
 pub(crate) use types::*;
 
