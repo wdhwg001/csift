@@ -5,7 +5,7 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
-## [0.11.0] - 2026-09-05
+## [0.11.0] - 2026-09-06
 
 The csift channel: a way to get a message to a Claude Code lane the official channel
 cannot reach, and to find out afterwards whether it arrived.
