@@ -147,6 +147,34 @@ fn a_bracket_bearing_label_cannot_close_the_header_early() {
 }
 
 #[test]
+fn an_opening_bracket_and_a_control_char_are_folded_out_of_the_header_too() {
+    // The header is one `[...]` line of space-separated pairs, so BOTH brackets and every
+    // control character have to go, not just the closing one a reader would notice first: an
+    // opening bracket inside a rendered chunk makes the detector read a second header, and a
+    // bare control byte splits the line where no reader expects a break.
+    let from = MessageFrom {
+        kind: SenderKind::External,
+        session: None,
+        lane: None,
+        label: Some("a[b\u{1}c".to_string()),
+        cwd: None,
+    };
+    assert_eq!(from.envelope_token(), "external:a_b_c");
+}
+
+#[test]
+fn the_id_mixer_is_splitmix64_at_its_published_vectors() {
+    // The id's whole claim is avalanche: neighbouring seeds (one nanosecond apart, one
+    // sequence number apart) must produce unrelated ids, or the printed id leaks the clock.
+    // Only the exact function has that property, so it is pinned to its reference outputs
+    // rather than to "looks like hex".
+    assert_eq!(splitmix64(0), 0xe220_a839_7b1d_cdaf);
+    assert_eq!(splitmix64(1), 0x910a_2dec_8902_5cc1);
+    assert_eq!(splitmix64(0xdead_beef), 0x4adf_b90f_68c9_eb9b);
+    assert_eq!(splitmix64(u64::MAX), 0xe4d9_7177_1b65_2c20);
+}
+
+#[test]
 fn four_relations_carry_the_peer_caution_and_three_do_not() {
     for r in [
         Relation::Sibling,

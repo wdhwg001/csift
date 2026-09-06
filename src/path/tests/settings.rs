@@ -400,6 +400,7 @@ fn settings_deliver_slots_reads_the_slot_number_off_the_command() {
                 {"type":"command","command":"/usr/local/bin/csift deliver --slot 2"},
                 {"type":"command","command":"csift  deliver   --slot  1"},
                 {"type":"command","command":"csift deliver --slot 12x"},
+                {"type":"command","command":"csift deliver --slots 7"},
                 {"type":"command","command":"csift status"}]},
             {"matcher":"resume","hooks":[
                 {"type":"command","command":"csift deliver --slot 1"}]}],
@@ -410,7 +411,9 @@ fn settings_deliver_slots_reads_the_slot_number_off_the_command() {
     assert_eq!(
         deliver_slots(&m, "SessionStart"),
         vec![1, 2, 3],
-        "sorted, deduplicated across matchers, and a malformed slot is not a slot"
+        "sorted, deduplicated across matchers; a malformed slot number is not a slot, and \
+         neither is a near miss - both of the three words have to be there, or a hook that \
+         does something else entirely would be counted as a delivery point"
     );
     assert!(deliver_slots(&m, "Stop").is_empty());
     assert!(deliver_slots(&m, "PreToolUse").is_empty());

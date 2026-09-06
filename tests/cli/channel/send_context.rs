@@ -235,3 +235,52 @@ fn two_sessions_split_into_cross_session_and_cross_project_by_their_project_dire
         "a peer relation adds the caution: {chunk}"
     );
 }
+
+#[test]
+fn a_cross_session_send_records_its_outbox_line_under_the_sender() {
+    // The two halves of one send live in two different sessions: the message source and the
+    // receiver's inbox belong to the RECEIVER, the outbox line belongs to the SENDER. A sender
+    // that filed its own log under the receiver would leave a lane unable to answer "what have
+    // I sent", and would write into a stranger's directory to do it.
+    let h = home();
+    let out = h.run_with_env(
+        &[
+            "send",
+            &at(PEER_SAME),
+            "check the beacon",
+            "--format",
+            "json",
+        ],
+        &lane_env(),
+    );
+    assert!(out.success, "{}", out.stderr);
+    let id = sent_id(&out.stdout);
+
+    let mine = std::fs::read_to_string(
+        h.projects()
+            .join(format!("{ENC}/{SESS}/csift-channel/outbox.jsonl")),
+    )
+    .expect("the sender's own outbox");
+    assert!(
+        mine.contains(&id),
+        "the outbox line names the message: {mine}"
+    );
+    assert!(
+        mine.contains(&format!(r#""to_lane":"{PEER_SAME}""#)),
+        "and the lane it went to: {mine}"
+    );
+    assert!(
+        !h.projects()
+            .join(format!("{ENC}/{PEER_SAME}/csift-channel/outbox.jsonl"))
+            .exists(),
+        "the receiver keeps the message and the inbox, never the sender's log"
+    );
+    assert!(
+        h.projects()
+            .join(format!(
+                "{ENC}/{PEER_SAME}/csift-channel/inbox/{PEER_SAME}.jsonl"
+            ))
+            .exists(),
+        "the queue itself is the receiver's"
+    );
+}

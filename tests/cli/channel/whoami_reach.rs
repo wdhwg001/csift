@@ -95,6 +95,26 @@ fn to_a_completed_teammate_is_refused_and_names_the_resume_that_would_reach_it()
 }
 
 #[test]
+fn the_unknown_teams_gate_carries_both_counts_it_can_actually_see() {
+    // The gate cannot be READ - the shell environment and the CLI flags that also enable it
+    // leave nothing on disk - so the verdict hands over the two things csift can count and
+    // lets the reader weigh them. Both numbers are load-bearing: a zero where there are team
+    // directories, or a teammate count that counted the other lanes instead, would argue the
+    // opposite of the truth.
+    let h = home();
+    h.write_claude("teams/alpha/team.json", "{}");
+    h.write_claude("teams/beta/team.json", "{}");
+    let out = h.run(&["whoami", "--to", &at(DONE_TEAMMATE)]);
+    assert!(out.success, "{}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("use evidence: teams directories 2, teammate lanes 1"),
+        "two team directories on disk, one teammate lane in the session:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
 fn to_a_headless_receiver_is_unpredictable_however_many_slots_are_configured() {
     // A `-p` run has no approval surface for an inbound message and may end before any hook
     // point is reached. csift never promises delivery to one, and the reason is the registry's

@@ -149,6 +149,36 @@ fn a_plugin_with_no_usable_name_is_labelled_by_its_directory() {
 }
 
 #[test]
+fn the_plugin_walk_skips_a_dot_directory_and_stops_at_its_depth() {
+    // Two bounds, both of which decide whether a delivery hook is counted at all. A dot
+    // directory is not a plugin tree (it is a cache, a repository, an editor's scratch), and
+    // the depth cap is what keeps one settings read from walking a whole home. A manifest
+    // outside either bound is NOT read, so its slot must not appear in the census.
+    let t = Tree::new();
+    let home = t.dir("home");
+    t.write(
+        "home/plugins/relay/hooks/hooks.json",
+        r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"csift deliver --slot 1"}]}]}}"#,
+    );
+    t.write(
+        "home/plugins/.cache/relay/hooks/hooks.json",
+        r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"csift deliver --slot 2"}]}]}}"#,
+    );
+    // Six directories below `plugins`: one past the last level the walk descends into.
+    t.write(
+        "home/plugins/a/b/c/d/e/f/hooks/hooks.json",
+        r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"csift deliver --slot 3"}]}]}}"#,
+    );
+
+    let m = merged_in(&home, None, &t.path("managed"));
+    assert_eq!(
+        deliver_slots(&m, "Stop"),
+        vec![1],
+        "only the visible manifest inside the depth bound is a delivery point"
+    );
+}
+
+#[test]
 fn the_plugin_walk_stops_at_its_budget_and_says_so() {
     // The walk is bounded so a settings read cannot cost an unbounded directory scan. Hitting
     // the bound means manifests were NOT read, which a caller must be able to see: an unread

@@ -472,6 +472,68 @@ fn a_colliding_routing_form_lists_both_transcript_ids_through_whoami() {
 }
 
 #[test]
+fn the_reach_lines_name_the_target_the_caller_and_the_slots_that_have_run() {
+    // Four identities in one answer, and each of them is the whole point of its line: the
+    // target in BOTH forms (the routing id is what an official send takes), the caller the
+    // prediction was made for, the slots that have really run in that lane, and the exact
+    // command that would turn the prediction into a send.
+    let h = home(false);
+    h.write(
+        &format!("{ENC}/{SESS}/csift-channel/armed/{TEAMMATE}.json"),
+        &format!(
+            r#"{{"slots_seen":[1,2],"last_event":"PostToolUse","last_ts_utc":"2026-06-07T05:00:00Z","hook_session":"{SESS}","claude_code_version":"2.1.258"}}"#
+        ),
+    );
+    let out = h.run_with_env(
+        &["whoami", "--to", &at(TEAMMATE)],
+        &[("CLAUDE_CODE_SESSION_ID", SESS)],
+    );
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains(&format!("  target      {TEAMMATE}  (routing Relay@harbor)")),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(&format!("  caller      lane {SESS}")),
+        "{}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("  armed       1,2"), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains(&format!("`csift send @{TEAMMATE}` writes the message.")),
+        "the transcript form is the one a send takes:\n{}",
+        out.stdout
+    );
+    // The environment names the top-level session in every lane, so a lane caller is told the
+    // sender it was attributed to is an assumption.
+    assert!(
+        out.stderr
+            .contains("lane unknown, sending as the top-level session"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn a_lane_counts_the_live_lanes_that_are_not_its_own() {
+    // "Other" means outside this lane and its subtree. The teammate spawned nothing, so the
+    // session's own conversation and the workflow lane beside it are the two others - counting
+    // its own instead would report a lane as a stranger to itself.
+    let h = home(false);
+    let out = h.run(&["whoami", &at(TEAMMATE)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("  2 other live lane(s) (--peers to list)"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
 fn the_two_terminal_modes_refuse_to_be_combined() {
     let h = home(false);
     let both = h.run(&["whoami", "--peers", "--to", &at(TEAMMATE)]);

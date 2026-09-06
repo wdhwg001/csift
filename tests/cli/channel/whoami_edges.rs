@@ -10,6 +10,11 @@ const SESS: &str = "00000000-0000-4000-8000-000000000081";
 const SECOND: &str = "00000000-0000-4000-8000-000000000082";
 const PARENT_LANE: &str = "aLead-0123456789abcdef";
 const CHILD_LANE: &str = "aScout-0123456789abcdef";
+/// Two built-in lanes of the same session, one spawned by the other, and a third whose
+/// version stamp lands on its second record.
+const BUILTIN_PARENT: &str = "a3000000000000001";
+const BUILTIN_CHILD: &str = "a3000000000000002";
+const LATE_VERSION: &str = "a3000000000000003";
 const CWD: &str = "/Users/dev/Projects/nest";
 
 /// A lane whose tail is an unreturned tool call: in flight whenever the suite runs.
@@ -77,6 +82,115 @@ fn nested_home() -> Home {
         &format!(r#"{{"agentType":"general-purpose","parentAgentId":"{PARENT_LANE}"}}"#),
     );
     h
+}
+
+/// One session owning three built-in lanes: `BUILTIN_CHILD`'s meta names `BUILTIN_PARENT` as
+/// the agent that spawned it, and `LATE_VERSION` carries its version stamp on its SECOND
+/// record - the ordinary shape of a lane whose opener predates the stamp.
+fn builtin_nest_home() -> Home {
+    let h = Home::new();
+    h.write(&format!("{ENC}/{SESS}.jsonl"), &session_transcript(SESS));
+    for id in [BUILTIN_PARENT, BUILTIN_CHILD] {
+        h.write(
+            &format!("{ENC}/{SESS}/subagents/agent-{id}.jsonl"),
+            &in_flight_lane(),
+        );
+    }
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{BUILTIN_PARENT}.meta.json"),
+        r#"{"agentType":"general-purpose","description":"the spawning lane"}"#,
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{BUILTIN_CHILD}.meta.json"),
+        &format!(r#"{{"agentType":"general-purpose","parentAgentId":"{BUILTIN_PARENT}"}}"#),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{LATE_VERSION}.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            format_args!(
+                r#"{{"type":"user","uuid":"v1","timestamp":"2026-06-07T05:00:00.000Z","cwd":"{CWD}","message":{{"role":"user","content":"go"}}}}"#
+            ),
+            r#"{"type":"assistant","uuid":"v2","timestamp":"2026-06-07T05:00:05.000Z","version":"2.1.258","message":{"role":"assistant","stop_reason":null,"content":[{"type":"text","text":"working"}]}}"#
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{LATE_VERSION}.meta.json"),
+        r#"{"agentType":"general-purpose","description":"late stamp"}"#,
+    );
+    h
+}
+
+#[test]
+fn a_reply_to_a_spawning_subagent_takes_the_csift_channel_and_says_so() {
+    // The official `to` grammar has a `main` arm and an id arm and no PARENT arm: addressing
+    // `main` from a nested lane reaches the session's own conversation, not the agent that
+    // spawned it. So the reply line names the csift channel here, and it is the SENDER's
+    // standing as a subagent that decides it - a reply read as coming from the session would
+    // be routed to a queue that delivers to the wrong lane.
+    let h = builtin_nest_home();
+    let out = h.run(&["whoami", &at(BUILTIN_CHILD)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(&format!("parent   {BUILTIN_PARENT}"))
+            && out.stdout.contains("kind     unnamed subagent")
+            && out.stdout.contains("alive    yes"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("  reply    csift steer"),
+        "the channel a reply would take, by name:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn the_path_line_belongs_to_a_named_target_and_not_to_the_environment_form() {
+    // A lane asked about BY NAME is one the caller can go and read, so the answer says where
+    // it is. The environment form resolved nothing the caller named, so printing a path there
+    // would present csift's own guess at the lane as a located file.
+    let h = builtin_nest_home();
+    let named = h.run(&["whoami", &at(BUILTIN_CHILD)]);
+    assert!(named.success, "stderr: {}", named.stderr);
+    assert!(
+        named
+            .stdout
+            .contains(&format!("agent-{BUILTIN_CHILD}.jsonl")),
+        "the named form locates the transcript:\n{}",
+        named.stdout
+    );
+
+    let env = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
+    assert!(env.success, "stderr: {}", env.stderr);
+    assert!(
+        !env.stdout.contains("  path "),
+        "the environment form names no located file:\n{}",
+        env.stdout
+    );
+}
+
+#[test]
+fn a_version_stamped_further_down_the_head_is_still_the_lane_version() {
+    // Both readers walk the head until they have BOTH facts they need, because a record can
+    // carry one and not the other. Stopping at the first record that answered either question
+    // would report a stamped lane as version-unknown, which is what puts a receiver below the
+    // official floor and changes the channel a message takes.
+    let h = builtin_nest_home();
+    let sections = h.run(&["whoami", &at(LATE_VERSION), "--format", "json"]);
+    assert!(sections.success, "stderr: {}", sections.stderr);
+    assert_eq!(
+        json_rows(&sections.stdout, "self").remove(0)["version"],
+        "2.1.258"
+    );
+
+    let to = h.run(&["whoami", "--to", &at(LATE_VERSION)]);
+    assert!(to.success, "stderr: {}", to.stderr);
+    assert!(
+        to.stdout.contains("    version   2.1.258"),
+        "the prediction reads the same stamp:\n{}",
+        to.stdout
+    );
 }
 
 #[test]
