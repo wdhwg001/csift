@@ -165,6 +165,27 @@ fn an_enqueued_message_whose_source_is_gone_is_held_with_the_reason() {
     );
 }
 
+/// The key `csift deliver` groups one firing's slots under, mirrored per platform from
+/// `deliver::chain_key`: on unix the hook process's PARENT pid, which is this test process;
+/// elsewhere, where a std program sees no parent pid, the FNV-1a 32-bit hash of the session
+/// id, which every slot of one firing shares.
+fn chain_key_for(session: &str) -> u32 {
+    #[cfg(unix)]
+    {
+        let _ = session;
+        std::process::id()
+    }
+    #[cfg(not(unix))]
+    {
+        let mut h: u32 = 2_166_136_261;
+        for b in session.as_bytes() {
+            h ^= u32::from(*b);
+            h = h.wrapping_mul(16_777_619);
+        }
+        h
+    }
+}
+
 #[test]
 fn a_slot_that_gave_up_waiting_still_emits_and_says_the_order_may_be_disturbed() {
     // Claude Code runs the same event's hooks CONCURRENTLY, so slot 2 waits for slot 1's
@@ -180,10 +201,10 @@ fn a_slot_that_gave_up_waiting_still_emits_and_says_the_order_may_be_disturbed()
     write_source(&h, session, session, OTHER_MSG, "the second beacon");
     enqueue(&h, session, session, OTHER_MSG, None);
 
-    // The chain csift will open: keyed by the hook process's PARENT pid, which is this test.
+    // The chain csift will open, keyed the way `deliver` keys it (`chain_key_for` below).
     let chain = std::env::temp_dir().join(format!(
         "csift-deliver-{}-PostToolUse-{session}",
-        std::process::id()
+        chain_key_for(session)
     ));
     let _ = std::fs::remove_dir_all(&chain);
     std::fs::create_dir_all(&chain).unwrap();
