@@ -24,6 +24,7 @@ mod classify_harness;
 mod classify_promoted;
 mod classify_roles;
 mod classify_support;
+mod delivery;
 mod grouping;
 mod mutation;
 mod narration;

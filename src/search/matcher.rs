@@ -515,8 +515,11 @@ pub(crate) fn synth_marker_finders(
     }
     // v0.10.1 catch-all system subtypes: the render fabricates the `[<subtype> <level>]`
     // head, so the key-only `"subtype"` needle (the same needle that admits the line)
-    // marks it for stage-2 re-rendering.
-    if args.reaches_gated(Class::MetaSystem) {
+    // marks it for stage-2 re-rendering. The predicate is `scans_system_lines`, NOT
+    // `reaches_gated`: a bare `harness` role selector admits these lines too (for the
+    // delivered `local_command` records), and a marker set narrower than the candidate
+    // gate would let the whole-file gate prune a file whose only hit is in that head.
+    if args.scans_system_lines() {
         verifiable.push(br#""subtype""#);
     }
     // CONSERVATIVE (needs cross-record / external data - force the full scan).

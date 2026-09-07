@@ -85,6 +85,24 @@ pub struct Record {
     #[serde(default, rename = "isVisibleInTranscriptOnly")]
     pub is_visible_in_transcript_only: Option<bool>,
 
+    /// Claude Code's own display-only marker: a record rendered in the UI but filtered
+    /// out of the API request. The shipped schema describes it in exactly those words,
+    /// and the request assembler's drop predicate reads it on user and assistant
+    /// records ([`Record::delivery_override`]). A conditional strip on the persistence
+    /// path normally removes the key before the write, so the corpus specimen count is
+    /// 0 - the field is modeled because the strip has two carry-through branches, not
+    /// because the value is common. Additive + tolerant.
+    #[serde(default, rename = "isVirtual")]
+    pub is_virtual: Option<bool>,
+
+    /// True on the assistant record Claude Code fabricates in place of a failed API
+    /// call. Paired with `message.model == "<synthetic>"` it is the request
+    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is
+    /// on disk and rendered to the human, never sent back to the model. Additive +
+    /// tolerant.
+    #[serde(default, rename = "isApiErrorMessage")]
+    pub is_api_error_message: Option<bool>,
+
     /// `system` record subtype: stop_hook_summary | turn_duration | away_summary
     /// | compact_boundary | informational | api_error | model_refusal_* | agents_killed
     /// | local_command | scheduled_task_fire | …

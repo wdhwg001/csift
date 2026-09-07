@@ -102,11 +102,16 @@ fn category_selector_prefix_and_validity() {
     assert!(!selector_is_valid("thinking")); // old flat value
     assert!(!selector_is_valid("bogus.path"));
     // label_selected: empty ⇒ all; otherwise prefix-gated.
-    assert!(label_selected(&[], "harness.interrupt.user"));
-    assert!(label_selected(&["agent".to_string()], "agent.tool.use"));
+    assert!(label_selected(&[], "harness.interrupt.user", None));
+    assert!(label_selected(
+        &["agent".to_string()],
+        "agent.tool.use",
+        None
+    ));
     assert!(!label_selected(
         &["user".to_string()],
-        "agent.communication.inbox"
+        "agent.communication.inbox",
+        None
     ));
 }
 
@@ -422,30 +427,39 @@ fn files_encoded_token_then_flag_ordering() {
 
 #[test]
 fn selector_three_forms_and_visibility() {
-    // Bare ROLE: LLM-visible leaves only.
-    assert!(selector_matches("user", "user.message"));
-    assert!(selector_matches("user", "user.answer"));
+    // Bare ROLE: the leaves the model received (no record in hand ⇒ the leaf default).
+    assert!(selector_matches("user", "user.message", None));
+    assert!(selector_matches("user", "user.answer", None));
     assert!(
-        !selector_matches("user", "user.unsent"),
+        !selector_matches("user", "user.unsent", None),
         "drafts are not the conversation"
     );
-    assert!(selector_matches("harness", "harness.compaction.summary"));
+    assert!(selector_matches(
+        "harness",
+        "harness.compaction.summary",
+        None
+    ));
     assert!(
-        !selector_matches("harness", "harness.compaction.boundary"),
+        !selector_matches("harness", "harness.compaction.boundary", None),
         "a metrics-only system record"
     );
     // GLOB: everything under the prefix, visibility ignored.
-    assert!(selector_matches("user.*", "user.unsent"));
-    assert!(selector_matches("user.*", "user.message"));
-    assert!(selector_matches("harness.*", "harness.compaction.boundary"));
-    assert!(!selector_matches("user.*", "agent.message"));
+    assert!(selector_matches("user.*", "user.unsent", None));
+    assert!(selector_matches("user.*", "user.message", None));
+    assert!(selector_matches(
+        "harness.*",
+        "harness.compaction.boundary",
+        None
+    ));
+    assert!(!selector_matches("user.*", "agent.message", None));
     // Intermediate prefix / exact leaf: a drill-down keeps its full set.
     assert!(selector_matches(
         "harness.compaction",
-        "harness.compaction.boundary"
+        "harness.compaction.boundary",
+        None
     ));
-    assert!(selector_matches("user.unsent", "user.unsent"));
-    assert!(selector_matches("agent.tool", "agent.tool.result"));
+    assert!(selector_matches("user.unsent", "user.unsent", None));
+    assert!(selector_matches("agent.tool", "agent.tool.result", None));
     // Validity: globs on valid prefixes parse; degenerate forms error.
     assert!(parse_label_selector("user.*").is_ok());
     assert!(parse_label_selector("harness.compaction.*").is_ok());
@@ -469,4 +483,50 @@ fn selector_three_forms_and_visibility() {
         f.is_statically_empty(),
         "-t user -T 'user.*' can never match"
     );
+}
+
+/// The bare-role form is RECORD-level: a delivery verdict overrides the leaf default in
+/// both directions, and only for that form.
+#[test]
+fn a_bare_role_selector_follows_the_record_delivery_verdict() {
+    // Delivered although the leaf is invisible (a system/local_command record).
+    assert!(
+        !selector_matches("harness", "harness.meta.system", None),
+        "the leaf default alone hides it"
+    );
+    assert!(selector_matches(
+        "harness",
+        "harness.meta.system",
+        Some(true)
+    ));
+    // Not delivered although the leaf is visible (an api-error placeholder, an
+    // isVirtual record).
+    assert!(selector_matches("agent", "agent.message", None));
+    assert!(!selector_matches("agent", "agent.message", Some(false)));
+    assert!(!selector_matches("user", "user.message", Some(false)));
+    // Every OTHER form keeps its full set, whatever the record says.
+    for (sel, path) in [
+        ("agent.*", "agent.message"),
+        ("agent.message", "agent.message"),
+        ("harness.*", "harness.meta.system"),
+        ("harness.meta", "harness.meta.system"),
+        ("harness.meta.system", "harness.meta.system"),
+    ] {
+        assert!(
+            selector_matches(sel, path, Some(false)) && selector_matches(sel, path, None),
+            "{sel} -> {path} ignores delivery"
+        );
+    }
+    // `-T` speaks the same rule (LabelFilter feeds one verdict to both sides).
+    let include: Vec<String> = Vec::new();
+    let exclude = vec!["harness".to_string()];
+    let f = LabelFilter::new(&include, &exclude);
+    assert!(
+        f.selected("harness.meta.system"),
+        "-T harness excludes only what the model received"
+    );
+    assert!(!f.with_delivery(Some(true)).selected("harness.meta.system"));
+    // The include side, with no -t at all, is unaffected: every label is eligible.
+    let f = LabelFilter::new(&include, &[]);
+    assert!(f.with_delivery(Some(false)).selected("agent.message"));
 }

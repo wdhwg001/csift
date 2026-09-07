@@ -44,6 +44,7 @@ fn render_label_decorates_pairing_and_direction() {
         from_sidecar: false,
         queue_operation: None,
         queue_reason: None,
+        delivery: None,
         truncated: false,
     };
     assert_eq!(render_label(&paired), "agent.tool.use ▹ agent.tool.result");
@@ -233,6 +234,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         from_sidecar: false,
         queue_operation: None,
         queue_reason: None,
+        delivery: None,
         truncated: false,
     };
     assert_eq!(

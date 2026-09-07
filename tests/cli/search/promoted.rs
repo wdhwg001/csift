@@ -320,7 +320,7 @@ fn zero_match_diagnosis_names_the_gate() {
     let out = h.run(&["search", "quartz-lantern", &at(SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
     assert!(
-        out.stderr.contains("scanned only under an explicit -t"),
+        out.stderr.contains("scanned only under a -t"),
         "{}",
         out.stderr
     );
@@ -335,7 +335,7 @@ fn zero_match_diagnosis_names_the_gate() {
     // With an explicit gated selector the note is gone (those lines WERE scanned).
     let out = h.run(&["search", "quartz-lantern", &at(SESS), "-t", "harness.meta"]);
     assert!(
-        !out.stderr.contains("scanned only under an explicit -t"),
+        !out.stderr.contains("scanned only under a -t"),
         "{}",
         out.stderr
     );

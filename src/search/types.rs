@@ -94,6 +94,12 @@ pub struct Hit {
     /// `delivered_to_agent` - structural evidence the queued text was consumed); `None`
     /// otherwise. JSON `queue_reason`.
     pub queue_reason: Option<String>,
+    /// The source record's DELIVERY override ([`Record::delivery_override`]): `Some(_)`
+    /// when Claude Code's request-assembler drop predicate disagrees with the leaf
+    /// default, `None` when the leaf default stands. Drives the bare-role selection,
+    /// the `[not delivered]` label-zone marker and JSON `delivered`. Read
+    /// [`Hit::delivered`] rather than this field for the verdict itself.
+    pub delivery: Option<bool>,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) - i.e. the reader is seeing a fragment, not the
     /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch
@@ -101,6 +107,16 @@ pub struct Hit {
     /// effect AND bit" signal that drives the trailing reader-caution note (`render_text`) and
     /// the JSON summary's `excerpts_truncated` flag.
     pub truncated: bool,
+}
+
+impl Hit {
+    /// Did the model receive this record? The per-record override when there is one,
+    /// else the matched leaf's own default ([`Class::llm_visible`]). This is the JSON
+    /// `delivered` value and the answer a bare ROLE selector filters on.
+    #[must_use]
+    pub fn delivered(&self) -> bool {
+        self.delivery.unwrap_or_else(|| self.class.llm_visible())
+    }
 }
 
 /// C-27: how far a superseded draft sits from the message that replaced it, plus that

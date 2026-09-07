@@ -151,12 +151,16 @@ pub enum Class {
     /// top-level timestamp (the excerpt carries the nested one).
     MetaSnapshot,
     /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:"system"`
-    /// subtype the harness writes for its own UI and never sends to the model:
+    /// subtype the harness writes for its own UI:
     /// `informational` (e.g. the Remote Control disconnect warning, `level:"warning"`),
     /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,
     /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a
     /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so
     /// invisible by the same instrument as the rest of this family; gated like them.
+    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the
+    /// request assembler re-mints as a user message: that ONE subtype is delivered,
+    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces
+    /// it although this leaf's default says invisible.
     MetaSystem,
 }
 
@@ -186,8 +190,13 @@ impl Class {
     /// (chain continuity), and `preservedMessages` lists these uuids at the same rate
     /// as messages (it is a tail window, not a visibility filter).
     ///
-    /// A bare ROLE selector (`-t user`) expands to visible leaves only; the
-    /// glob form and explicit paths reach the invisible ones.
+    /// The leaf default is not the whole answer, because delivery is decided per
+    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the
+    /// record list, and it disagrees with this table in three cases - a
+    /// `system`/`local_command` record IS sent (re-minted as a user message), while an
+    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is
+    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the
+    /// glob form and explicit paths reach every leaf regardless.
     #[must_use]
     pub fn llm_visible(self) -> bool {
         !matches!(

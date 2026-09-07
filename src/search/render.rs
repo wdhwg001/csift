@@ -24,40 +24,49 @@ pub(crate) fn render_label(h: &Hit) -> String {
     } else {
         ""
     };
+    // C-28: a record Claude Code's request assembler DROPPED says so in the label zone -
+    // display-only, like [narration summary]: it is not matchable text, so it needs no
+    // synthesized-marker registration. Reachable only through a glob or an explicit
+    // leaf; a bare role never selects such a record in the first place.
+    let nd = if h.delivery == Some(false) {
+        " [not delivered]"
+    } else {
+        ""
+    };
     match (h.class, h.pair) {
         (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {
-            return format!("agent.tool.use ▹ agent.tool.result{err}");
+            return format!("agent.tool.use ▹ agent.tool.result{err}{nd}");
         }
         (Class::AgentToolUse, Some(Pairing::PendingNoResult)) => {
-            return "agent.tool.use (no result — pending)".to_string();
+            return format!("agent.tool.use (no result — pending){nd}");
         }
         (Class::AgentToolResult, Some(Pairing::OrphanResult)) => {
-            return format!("agent.tool.result (use not in scope){err}");
+            return format!("agent.tool.result (use not in scope){err}{nd}");
         }
         _ => {}
     }
     if !err.is_empty() {
-        return format!("{}{err}", h.class.path());
+        return format!("{}{err}{nd}", h.class.path());
     }
     // A narration record is an API summary, never the model's reasoning - the marker
     // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.
     if h.class == Class::AgentThinkingNarration {
-        return format!("{} [narration summary]", h.class.path());
+        return format!("{} [narration summary]{nd}", h.class.path());
     }
     // v0.10.0: a queued line names its queue event (and a remove's reason) in the label
     // zone - display-only; the matchable text stays the verbatim queued content.
     if h.class == Class::UserQueued {
         let op = h.queue_operation.as_deref().unwrap_or("queued");
         return match h.queue_reason.as_deref() {
-            Some(reason) => format!("{} [{op} · {reason}]", h.class.path()),
-            None => format!("{} [{op}]", h.class.path()),
+            Some(reason) => format!("{} [{op} · {reason}]{nd}", h.class.path()),
+            None => format!("{} [{op}]{nd}", h.class.path()),
         };
     }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
-        return format!("{}  {from} ⇨ {to}", h.class.path());
+        return format!("{}{nd}  {from} ⇨ {to}", h.class.path());
     }
-    h.class.path().to_string()
+    format!("{}{nd}", h.class.path())
 }
 
 /// Singular/plural word pick for a count (the banner + footer share one rule).

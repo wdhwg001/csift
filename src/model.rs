@@ -35,6 +35,7 @@ mod classify;
 mod classify_channel;
 mod classify_promoted;
 mod classify_support;
+mod delivery;
 mod exchange;
 mod grouping;
 mod markers;

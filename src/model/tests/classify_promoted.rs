@@ -144,6 +144,19 @@ fn meta_system_is_the_catch_all_for_every_other_system_subtype() {
         );
         assert_eq!(labels(&line), vec![Class::MetaSystem], "{line}");
     }
+    // COUNTER-CASE: `local_command` classifies under the same invisible leaf as its
+    // siblings, yet it is the ONE system subtype the request assembler re-mints as a
+    // user message. The leaf default and the record's delivery verdict disagree, and
+    // the label is the leaf's - delivery rides `delivery_override`, never `classify`.
+    let lc = r#"{"type":"system","subtype":"local_command","level":"info","uuid":"lc1","timestamp":"2026-06-07T05:00:02.000Z","content":"<local-command-stdout>ok</local-command-stdout>"}"#;
+    assert_eq!(labels(lc), vec![Class::MetaSystem], "{lc}");
+    assert!(!Class::MetaSystem.llm_visible(), "the leaf default stands");
+    let rec: Record = serde_json::from_str(lc).unwrap();
+    assert_eq!(
+        rec.delivery_override(),
+        Some(true),
+        "but the record is sent"
+    );
     // The modeled subtypes keep their own leaves; the boundary is never the catch-all.
     let boundary = r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","timestamp":"2026-06-07T05:00:03.000Z","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#;
     let rec: Record = serde_json::from_str(boundary).unwrap();

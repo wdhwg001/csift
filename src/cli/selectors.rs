@@ -46,7 +46,7 @@ pub fn selector_is_valid(selector: &str) -> bool {
 
 /// The three selector forms (v0.9.4 - the C-25 visibility law):
 /// - a BARE ROLE (`user` / `agent` / `harness`, i.e. any single-segment selector)
-///   matches only the role's LLM-VISIBLE leaves - the coarse "show me the
+///   matches only the leaves the model RECEIVED - the coarse "show me the
 ///   conversation" ask (a superseded draft under `-t user` poisoned a real
 ///   downstream consumer, which is how this law was born);
 /// - a GLOB (`user.*`, or any valid prefix + `.*`) matches EVERY leaf under the
@@ -54,8 +54,15 @@ pub fn selector_is_valid(selector: &str) -> bool {
 /// - an intermediate prefix or full leaf path (`harness.compaction`,
 ///   `user.unsent`) matches by segment-prefix regardless of visibility - a
 ///   deliberate drill-down names what it wants.
+///
+/// `delivered` is the RECORD-level override ([`crate::model::Record::delivery_override`]):
+/// `Some(_)` when Claude Code's own request-assembler drop predicate disagrees with the
+/// leaf default for the record this label came from, `None` otherwise. Only the
+/// bare-role form consults it, because only the bare-role form claims to be the
+/// conversation. `None` = no record in hand (or none that disagrees), so the leaf
+/// default stands.
 #[must_use]
-pub fn selector_matches(selector: &str, path: &str) -> bool {
+pub fn selector_matches(selector: &str, path: &str, delivered: Option<bool>) -> bool {
     if let Some(prefix) = selector.strip_suffix(".*") {
         return selector_is_segment_prefix(prefix, path);
     }
@@ -65,7 +72,11 @@ pub fn selector_matches(selector: &str, path: &str) -> bool {
     if selector.contains('.') {
         return true; // intermediate prefix or exact leaf: any visibility.
     }
-    // A bare role: visible leaves only.
+    // A bare role: what the model received - the leaf default unless this record's
+    // own delivery verdict overrides it.
+    if let Some(d) = delivered {
+        return d;
+    }
     Class::ALL
         .iter()
         .find(|c| c.path() == path)
@@ -74,11 +85,15 @@ pub fn selector_matches(selector: &str, path: &str) -> bool {
 
 /// Does a record-label `path` satisfy the active `-t` selectors? Empty selectors ⇒ every label is
 /// eligible (no `-t` filter). Otherwise the label matches iff ANY selector matches it under the
-/// three-form rule ([`selector_matches`]) - `-t agent` surfaces the agent role's visible leaves,
-/// `-t agent.tool` use+result, `-t 'user.*'` every user leaf incl. `user.unsent`.
+/// three-form rule ([`selector_matches`]) - `-t agent` surfaces the agent role's delivered leaves,
+/// `-t agent.tool` use+result, `-t 'user.*'` every user leaf incl. `user.unsent`. `delivered`
+/// is the record-level override the bare-role form consults (see [`selector_matches`]).
 #[must_use]
-pub fn label_selected(selectors: &[String], path: &str) -> bool {
-    selectors.is_empty() || selectors.iter().any(|s| selector_matches(s, path))
+pub fn label_selected(selectors: &[String], path: &str, delivered: Option<bool>) -> bool {
+    selectors.is_empty()
+        || selectors
+            .iter()
+            .any(|s| selector_matches(s, path, delivered))
 }
 
 /// The active `-t`/`-T` label filter - the include selectors (empty ⇒ every label) MINUS the
@@ -90,12 +105,30 @@ pub fn label_selected(selectors: &[String], path: &str) -> bool {
 pub struct LabelFilter<'a> {
     include: &'a [String],
     exclude: &'a [String],
+    /// The RECORD-level delivery verdict this filter is being applied WITH (see
+    /// [`LabelFilter::with_delivery`]). `None` on the base filter, which is what every
+    /// per-ARGS use wants (a candidate gate, `reaches_gated`, the statically-empty
+    /// check): those decide before any record is in hand.
+    delivered: Option<bool>,
 }
 
 impl<'a> LabelFilter<'a> {
     #[must_use]
     pub fn new(include: &'a [String], exclude: &'a [String]) -> Self {
-        Self { include, exclude }
+        Self {
+            include,
+            exclude,
+            delivered: None,
+        }
+    }
+
+    /// The same filter, applied to ONE record whose delivery verdict is `delivered`
+    /// ([`crate::model::Record::delivery_override`]). Bare-role selection then follows
+    /// what the model received rather than the leaf default; every other selector form
+    /// is unchanged. Applied ONCE per record, at the hit-emission and census seams.
+    #[must_use]
+    pub fn with_delivery(self, delivered: Option<bool>) -> Self {
+        Self { delivered, ..self }
     }
 
     /// Every label is eligible - the no-filter view (`--siblings` rendering ignores `-t`/`-T`;
@@ -105,16 +138,21 @@ impl<'a> LabelFilter<'a> {
         LabelFilter {
             include: &[],
             exclude: &[],
+            delivered: None,
         }
     }
 
     /// Does a record-label `path` survive include-minus-exclude? Both sides speak
-    /// the same three-form rule ([`selector_matches`]), so `-T user` excludes the
-    /// visible user leaves while `-T 'user.*'` excludes them all.
+    /// the same three-form rule ([`selector_matches`]) and both see this filter's
+    /// record-level delivery verdict, so `-T user` excludes the delivered user leaves
+    /// while `-T 'user.*'` excludes them all.
     #[must_use]
     pub fn selected(&self, path: &str) -> bool {
-        label_selected(self.include, path)
-            && !self.exclude.iter().any(|s| selector_matches(s, path))
+        label_selected(self.include, path, self.delivered)
+            && !self
+                .exclude
+                .iter()
+                .any(|s| selector_matches(s, path, self.delivered))
     }
 
     /// True when NO leaf of [`Class::ALL`] survives - a statically-contradictory `-t`/`-T`

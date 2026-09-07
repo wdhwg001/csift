@@ -120,12 +120,16 @@ pub struct SearchArgs {
 
     /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
     /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE
-    /// (`-t user`) selects the role's LLM-VISIBLE leaves only (excludes `user.unsent` /
+    /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /
     /// `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every leaf under the
     /// prefix, visibility ignored; an intermediate prefix or exact leaf (`-t agent.tool`,
-    /// `-t user.unsent`) selects its full set. An invalid selector is a HARD error listing the
-    /// valid set; with none given, every label is eligible. (0 back-compat: the old flat
-    /// `thinking`/`tool`/`tool-response` now error.)
+    /// `-t user.unsent`) selects its full set. A bare role decides per RECORD, not per leaf:
+    /// Claude Code's request assembler re-mints a `system`/`local_command` record (a slash
+    /// command's own echo and stdout) as a user message, so `-t harness` shows it although its
+    /// leaf is invisible, and it drops an `isVirtual` record and the `<synthetic>` API-error
+    /// placeholder, so `-t agent` hides those although `agent.message` is visible. An invalid
+    /// selector is a HARD error listing the valid set; with none given, every label is
+    /// eligible. (0 back-compat: the old flat `thinking`/`tool`/`tool-response` now error.)
     #[arg(
         short = 't',
         long = "label",
@@ -135,7 +139,9 @@ pub struct SearchArgs {
     pub labels: Vec<String>,
 
     /// EXCLUDE labels matching this selector (same grammar + validation as `-t`; repeatable);
-    /// the rg `-t`/`-T` duality. Effective set = (`-t` selectors, or ALL with none) MINUS
+    /// the rg `-t`/`-T` duality, the record-level rule for a bare role included (`-T harness`
+    /// excludes a delivered `local_command` record and keeps an undelivered one). Effective
+    /// set = (`-t` selectors, or ALL with none) MINUS
     /// `-T` selectors: `-T agent.thinking` = everything except thinking; `-t agent -T
     /// agent.tool` = the agent role minus its tool traffic. A multi-label record renders under
     /// its richest SURVIVING label. A combination that excludes everything it includes is a
@@ -373,11 +379,50 @@ impl SearchArgs {
         !self.labels.is_empty() && self.label_filter().selected(c.path())
     }
 
-    /// True when NO gated leaf is reached by the active selectors (the zero-match
-    /// diagnosis names them so an absence is never mistaken for a scan of them).
+    /// True when a BARE `harness` role selector is active. Such a query asks for what
+    /// the model received under that role, and one gated leaf carries delivered
+    /// records: a `system`/`local_command` line, which Claude Code's request assembler
+    /// re-mints as a user message. The scan therefore admits the `"subtype"` candidate
+    /// lines under this selector too - a key-only memmem on a line shape that is rare
+    /// (585 in the whole measured corpus) - and the per-record override then keeps only
+    /// the `local_command` ones. Every OTHER gated leaf stays exactly as gated.
+    #[must_use]
+    pub fn bare_harness_role(&self) -> bool {
+        self.labels.iter().any(|l| l == "harness")
+    }
+
+    /// True when the scan parses `type:"system"` candidate lines at all: an explicit
+    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE
+    /// one predicate for that admission - the candidate gate and the §7f whole-file
+    /// gate's synthesized-marker set must agree, or a pattern that can only match the
+    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds
+    /// it (a silent drop, the §7 landmine).
+    #[must_use]
+    pub fn scans_system_lines(&self) -> bool {
+        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()
+    }
+
+    /// True when the scan actually PARSES a gated leaf's lines: an explicit selector
+    /// reaches it, or - for `harness.meta.system` alone - a bare `harness` role admits
+    /// them ([`SearchArgs::scans_system_lines`]). THE predicate the candidate gate and
+    /// the zero-match diagnosis both key on: `reaches_gated` answers "did a selector
+    /// name it", which is no longer the same question.
+    #[must_use]
+    pub fn scans_gated(&self, c: Class) -> bool {
+        if c == Class::MetaSystem {
+            return self.scans_system_lines();
+        }
+        self.reaches_gated(c)
+    }
+
+    /// True when NO gated leaf's lines were parsed (the zero-match diagnosis names them
+    /// so an absence is never mistaken for a scan of them). Keys on
+    /// [`SearchArgs::scans_gated`]: under a bare `harness` role the system lines WERE
+    /// parsed, and telling a consumer otherwise is a false statement on the
+    /// honest-empties keystone.
     #[must_use]
     pub fn gated_unreached(&self) -> bool {
-        !GATED_LEAVES.iter().any(|&c| self.reaches_gated(c))
+        !GATED_LEAVES.iter().any(|&c| self.scans_gated(c))
     }
 
     /// The effective `-t`/`-T` filter (include minus exclude).

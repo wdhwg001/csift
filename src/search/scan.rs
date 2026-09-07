@@ -89,10 +89,12 @@ pub(crate) fn search_one_file(
         && (args.label_filter().selected(Class::MetaAttachment.path())
             || args.label_filter().selected(Class::MetaHook.path())))
         || address.is_some();
-    // v0.10.0 promoted non-record lines: admitted ONLY under an EXPLICIT selector that
-    // reaches the leaf (`reaches_gated` - a bare no-`-t` scan never parses them) or an
-    // address (`show --line`/`--uuid` renders an addressed line flag-free).
-    let reach = |c: Class| args.reaches_gated(c) || address.is_some();
+    // v0.10.0 promoted non-record lines: admitted ONLY under a selector that reaches the
+    // leaf (`scans_gated` - a bare no-`-t` scan never parses them) or an address (`show
+    // --line`/`--uuid` renders an addressed line flag-free). `scans_gated` is the ONE
+    // predicate the zero-match diagnosis shares, so the note can never claim a line
+    // shape was unscanned when this gate parsed it.
+    let reach = |c: Class| args.scans_gated(c) || address.is_some();
     // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not
     // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not
     // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any
@@ -111,6 +113,14 @@ pub(crate) fn search_one_file(
         away_summary: reach(Class::MetaAwaySummary),
         stop_hooks: reach(Class::MetaStopHooks),
         snapshot: reach(Class::MetaSnapshot),
+        // v0.11.1: `scans_gated` ALSO admits this leaf under a BARE `harness` role
+        // selector. It holds the one gated shape the model actually receives - a
+        // `system`/`local_command` record, which the request assembler re-mints as a
+        // user message - so a bare `-t harness` would otherwise be blind to the only
+        // on-disk evidence of a slash command whose dialog wrote nothing else. The keep
+        // is the same key-only `"subtype"` memmem, still `&&`-gated; the per-record
+        // override (`Record::delivery_override`) then drops every non-delivered system
+        // record this admission parsed. Every other gated leaf is unchanged.
         system: reach(Class::MetaSystem),
     };
 

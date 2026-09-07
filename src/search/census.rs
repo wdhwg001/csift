@@ -60,7 +60,10 @@ pub(crate) fn label_census(
         for group in record_groups(&ex.hits) {
             records += 1;
             // The label set is per-RECORD (classify output), identical across the
-            // record's section hits - read it off the first.
+            // record's section hits - read it off the first. So is the delivery
+            // override, which a bare ROLE selector keys on: without it a census would
+            // report zero keys for a record the same filter had just surfaced.
+            let filter = filter.with_delivery(group[0].delivery);
             for &leaf in &group[0].labels {
                 if filter.selected(leaf) {
                     *counts.entry(leaf).or_insert(0) += 1;
@@ -98,7 +101,8 @@ pub(crate) fn axis_census(
             match axis {
                 A::Label => {
                     // Keys pass the SAME `-t`/`-T` predicate that admitted the record's
-                    // views (see [`label_census`] - R7 §2.3).
+                    // views (see [`label_census`] - R7 §2.3), delivery override included.
+                    let filter = filter.with_delivery(group[0].delivery);
                     for &leaf in &group[0].labels {
                         if filter.selected(leaf) {
                             *counts.entry(leaf.to_string()).or_insert(0) += 1;
@@ -276,14 +280,15 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
         }
     }
     if diag.gated_unreached {
-        // The gated leaves are parsed only under an explicit selector; a bare scan (and
-        // the label probe above) never looked at those lines, so say so.
+        // The gated leaves are parsed only under a selector that reaches them; this run
+        // never looked at those lines, so say so. The list is DERIVED from the gated set
+        // itself, so a leaf added to (or admitted differently by) the scan can never
+        // leave a stale name in the note - the drift this hard-coded list already grew.
+        let leaves: Vec<&str> = crate::cli::GATED_LEAVES.iter().map(|c| c.path()).collect();
         eprintln!(
-            "csift: note: the gated leaves (user.queued, harness.meta.turn-duration, \
-             harness.meta.away-summary, harness.meta.stop-hooks, harness.meta.snapshot, \
-             harness.meta.system) \
-             are scanned only under an explicit -t that reaches them - this absence does \
-             not cover those lines."
+            "csift: note: the gated leaves ({}) are scanned only under a -t that reaches \
+             them - this absence does not cover those lines.",
+            leaves.join(", ")
         );
     }
 }

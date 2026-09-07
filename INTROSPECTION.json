@@ -4237,7 +4237,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "184-191",
+          "lines": "202-209",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7128,12 +7128,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "130-131",
+          "lines": "148-149",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "313-315",
+          "lines": "331-333",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9872,7 +9872,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "300-306",
+          "lines": "318-324",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -10495,11 +10495,11 @@
       "id": "CLS-001",
       "area": "classification",
       "behavior": "A transcript is one JSON object per line, and the type vocabulary the harness itself constructs is closed at 38. An entry the harness constructs reaches a transcript through `appendEntry` (166106795), which switches on an append-policy table keyed by the entry's own type (`vbr` at 166066494): 5 conversational types under `dedup-transcript` (user, assistant, attachment, system, progress), 30 under `always` and 3 under `route-by-agent`. The switch carries exactly those three cases and no default arm (166107410), so an entry whose type is not a key of the table matches no case and is never queued; `enqueueWrite` occurs four times in the whole executable - its definition and the three arms - and `appendToFile` four times - its definition and three calls inside the queue drain - so the queued path is closed. Each queued entry becomes bytes through `JSON.stringify(entry)+newline` (`j5` at 156850249), concatenated in the drain (166086440) and appended. Nine further writers put a line into a transcript file WITHOUT passing that switch, and every one composes the identical shape, from `j5`, from its bulk twin `Ikt` (156850342, `JSON.stringify` per element plus a newline) or inline: the asynchronous direct append (166155800), the synchronous appender (166154499) and its append-to-existing twin (166154692, which returns early on a missing or zero-length file and prepends a newline to heal a torn tail), the metadata re-append (166090300), the relocation stamp (166124725) and the fork serializer (172851623, 172851990 and 172852160). Their entries come from table-typed constructors - the metadata re-append pushes only last-prompt, custom-title, ai-title, tag, relocated, agent-name, agent-color, agent-setting, mode, permission-mode, isolation-latch and atis-latch entries (166092100 area), the at-exit paths write the entries their registered providers construct (cost-state at 162359807, artifact-comment-monitor at 168570215, artifact-autoreact-ledger at 168619505) and the continued-in record at 180375908 - so the vocabulary bound holds on them too. Two writers escape the table by construction: the remote-hydration subagent write (166135601) writes a whole subagent transcript out of entries received from a server and tests only that at least one of them is a user or an assistant entry, and the conversation import (177679679), gated on an environment flag, writes whole files converted from an export bundle with `version:\"claude-export-import\"`. A census over the projects root - 8,344 transcripts, top-level and subagent alike, workflow journals and the reading tool's sidecar files excluded and reported apart - reads 1,469,365 non-blank lines, 0 unparseable, 0 without a top-level `type`, 0 carrying the import version, and 18 distinct types, every one of them a key of the table; the other 20 keys are declared but unrealized in this corpus (progress, summary, custom-title, ended-by-model, tag, relocated, agent-color, agent-setting, pr-link, frame-link, artifact-comment-monitor, artifact-autoreact-ledger, attribution-snapshot, isolation-latch, worktree-state, marble-origami-commit, marble-origami-snapshot, marble-origami-reset, content-replacement, observer-ref). Of the 18 realized types, 7 carry at least one leaf and 11 carry none: the deliberately unpromoted session-state cache lines (last-prompt 29,874, permission-mode 29,810, mode 29,720, ai-title 29,389, agent-name 12,913) plus six unmodeled types totalling 3,282 lines - atis-latch 1,435, bridge-session 1,354, history-suppression 438, fork-context-ref 33, cost-state 21, continued-in 1 - so 134,988 of 1,469,365 lines, 9.19 percent, belong to types no leaf models. Four of those six carry neither uuid nor timestamp and belong with the bookkeeping lines; two carry an instant (history-suppression via `ts` on 438 of 438 lines, continued-in via `timestamp` on its 1 line) and are the only leaf candidates. The mapped and unmapped split applies a TYPE-level rule to LINE counts - a type counts mapped when at least one leaf models a record of it - so the 13,970 queue-operation lines ride in the mapped total although only the content-bearing ones classify. Successive censuses over the same root return the same type set on growing line totals, so the totals are snapshots while the type set is stable. Beside the harness's own types, the reading tool's sidecar files carry 2 further marker types on disk (`csift-elicitation`, `csift-elicitation-resolved`) plus records shaped as `assistant`; those files are not written by Claude Code and are excluded from the census.",
-      "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins its length at 34 (src/model/tests/classify_support.rs asserts the count). The taxonomy is exactly 34 leaf classes across three roles - 5 under user, 5 under agent plus 3 under agent.communication, and 21 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
+      "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins it two ways - the hand-kept oracle table must equal `Class::ALL.len()`, and the leaf count is asserted at 35 (src/model/tests/classify_support.rs). The taxonomy is exactly 35 leaf classes across three roles - 5 under user, 5 under agent plus 4 under agent.communication, and 21 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "211-216",
+          "lines": "220-225",
           "snippet": "    pub const ALL: &'static [Class] = &[\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserQueued,"
         }
       ],
@@ -10580,6 +10580,15 @@
           "observed": "8,344 transcripts, 1,469,365 non-blank lines, 0 unparseable, 0 without a top-level `type`, 0 with version claude-export-import, 18 distinct types: attachment 539,200, assistant 495,529, user 266,246, last-prompt 29,874, permission-mode 29,810, mode 29,720, ai-title 29,389, queue-operation 13,970, system 13,172, agent-name 12,913, file-history-snapshot 4,170, file-history-delta 2,090, atis-latch 1,435, bridge-session 1,354, history-suppression 438, fork-context-ref 33, cost-state 21, continued-in 1. All 18 are keys of the append-policy table, whose other 20 keys do not appear. Unmapped by any leaf: 134,988 lines, 9.19 percent. Field presence over the six unmodeled types: atis-latch, bridge-se",
           "rule": "one row per non-blank line, files keyed by name (journal.jsonl and the sidecar filename excluded and censused apart); a type counts mapped when at least one leaf models a record of it; one row per raw byte occurrence for every grep count; one row per full dotted leaf path in the selector listing, bare roles and mid-path prefixes excluded.",
           "note": "The enumeration stopped at the identifier-shaped population: three further writers put a line into a transcript file without the switch (the exit re-stamp provider loop and the two object-literal session-metadata appenders), each now read and listed. The 38-key bound survives, both added types being table keys."
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Counted the `Class::` entries of `Class::ALL` in src/model/taxonomy.rs and read the two assertions in src/model/tests/classify_support.rs, then grouped the leaves by their path head.",
+          "observed": "`Class::ALL` lists 35 leaves - 5 user, 9 agent (5 plus 4 communication leaves, the fourth being `agent.communication.channel`) and 21 harness. The oracle test asserts `table.len() == Class::ALL.len()` and separately pins the count at 35, so the number in this claim was one release behind the enum.",
+          "rule": "One observation per enum entry; the role grouping taken from each leaf path head.",
+          "note": "The taxonomy size and the shape of the drift guard are corrected; the claim about Claude Code is unchanged, the stale number was csift-side."
         }
       ],
       "attribution": "end-to-end",
@@ -10742,17 +10751,17 @@
     {
       "id": "CLS-002",
       "area": "classification",
-      "behavior": "`isMeta` is an AUTHORSHIP flag: the prompt-submission path derives the prompt's SOURCE from it through an authorship classifier - `Dmt({isNonInteractive:e,isMeta:n,callerSource:r}){if(e)return\"sdk\";if(n)return\"system\";return r??\"typed\"}` at 162724336, whose return is assigned to the promptSource the record then carries - and `isVisibleInTranscriptOnly` is a summary DISPLAY flag. Neither reports whether the model received the content. The only branch in which `isMeta` decides a record's fate is inside the transcript-to-messages assembler, which SKIPS a record only when isMeta is set AND its origin is absent or `unclassified` (`if(xt.isMeta&&tEn(Ot))continue` at 165543739 with `tEn(e){return e===void 0||e.kind===\"unclassified\"}` at 160108958); isMeta alone never removes a record, and that assembler's readable consumer is the auto-mode classifier's view builder. The display counterpart is a separate render filter (`hhn` at 166033049, applied as a `.filter` in the transcript render chain at 180551315). No traced API-request-path filter reads either flag, and for `isVisibleInTranscriptOnly` the negative is closed by enumeration: the property read `.isVisibleInTranscriptOnly` has exactly 7 sites in the 2.1.258 binary, all above byte 155,000,000, each read today - 162047661 a last-human-turn walk-back, 163579541 the SDK stream synthesis bit, 165931677 and 165935120 two prompt/record predicates, 165941036 a record-copy builder that re-spreads the flags into the user-record factory, 166033146 the display filter, 180531636 the UI prompt-text cache - and none assembles a request payload; for `isMeta` the survey is a grep of the property read `.isMeta` (129 sites in the binary today, 128 of them above that offset; the bare token `isMeta` returns 382) in which none sits on a request path. The only measured visibility instrument is the presence of a `message{}` field: zero of the 26 non-record line types carry one, and every `user`/`assistant` record does. 26 = 15 non-record top-level types plus the 11 `system` subtypes, counted at 2.1.258 on 2026-09-04 (attachment, last-prompt, permission-mode, mode, ai-title, queue-operation, agent-name, file-history-snapshot, file-history-delta, atis-latch, bridge-session, history-suppression, fork-context-ref, cost-state, continued-in; subtypes stop_hook_summary, turn_duration, away_summary, scheduled_task_fire, compact_boundary, model_refusal_fallback, api_error, local_command, agents_killed, informational, model_refusal_no_fallback). That count is BUILD-DEPENDENT and so carries a floor: `history-suppression` first appears at 2.1.227 and is absent at the adjacent 2.1.226, `continued-in` first appears at 2.1.257 and is absent at the adjacent published release 2.1.252 (2.1.253 to 2.1.256 were never published), so a transcript written below 2.1.227 can carry neither, one written between 2.1.227 and 2.1.252 can carry only history-suppression, and 26 requires 2.1.257 or newer; the claim's original 24 was 13 plus 11. The instrument has a producer of its own on both sides: a non-record constructor mints `{type:\"system\",subtype:\"turn_duration\",...,isMeta:!1}` with NO message key (166030930, its away_summary neighbour identical in shape), the user-record constructor mints `message:{role:\"user\",content}` unconditionally with isMeta, isVisibleInTranscriptOnly and isCompactSummary as sibling booleans (165936023), and the append envelope adds parentUuid, cwd, sessionId, version, gitBranch and slug but never a message field (166105359).",
+      "behavior": "`isMeta` is an AUTHORSHIP flag: the prompt-submission path derives the prompt's SOURCE from it through an authorship classifier - `Dmt({isNonInteractive:e,isMeta:n,callerSource:r}){if(e)return\"sdk\";if(n)return\"system\";return r??\"typed\"}` at 162724336, whose return is assigned to the promptSource the record then carries - and `isVisibleInTranscriptOnly` is a summary DISPLAY flag. Neither reports whether the model received the content. The only branch in which `isMeta` decides a record's fate is inside the transcript-to-messages assembler, which SKIPS a record only when isMeta is set AND its origin is absent or `unclassified` (`if(xt.isMeta&&tEn(Ot))continue` at 165543739 with `tEn(e){return e===void 0||e.kind===\"unclassified\"}` at 160108958); isMeta alone never removes a record, and that assembler's readable consumer is the auto-mode classifier's view builder. The display counterpart is a separate render filter (`hhn` at 166033049, applied as a `.filter` in the transcript render chain at 180551315). No traced API-request-path filter reads either flag, and for `isVisibleInTranscriptOnly` the negative is closed by enumeration: the property read `.isVisibleInTranscriptOnly` has exactly 7 sites in the 2.1.258 binary, all above byte 155,000,000, each read today - 162047661 a last-human-turn walk-back, 163579541 the SDK stream synthesis bit, 165931677 and 165935120 two prompt/record predicates, 165941036 a record-copy builder that re-spreads the flags into the user-record factory, 166033146 the display filter, 180531636 the UI prompt-text cache - and none assembles a request payload; for `isMeta` the survey is a grep of the property read `.isMeta` (129 sites in the binary today, 128 of them above that offset; the bare token `isMeta` returns 382) in which none sits on a request path. The only measured visibility instrument is the presence of a `message{}` field: zero of the 26 non-record line types carry one, and every `user`/`assistant` record does. 26 = 15 non-record top-level types plus the 11 `system` subtypes, counted at 2.1.258 on 2026-09-04 (attachment, last-prompt, permission-mode, mode, ai-title, queue-operation, agent-name, file-history-snapshot, file-history-delta, atis-latch, bridge-session, history-suppression, fork-context-ref, cost-state, continued-in; subtypes stop_hook_summary, turn_duration, away_summary, scheduled_task_fire, compact_boundary, model_refusal_fallback, api_error, local_command, agents_killed, informational, model_refusal_no_fallback). That count is BUILD-DEPENDENT and so carries a floor: `history-suppression` first appears at 2.1.227 and is absent at the adjacent 2.1.226, `continued-in` first appears at 2.1.257 and is absent at the adjacent published release 2.1.252 (2.1.253 to 2.1.256 were never published), so a transcript written below 2.1.227 can carry neither, one written between 2.1.227 and 2.1.252 can carry only history-suppression, and 26 requires 2.1.257 or newer; the claim's original 24 was 13 plus 11. The instrument has a producer of its own on both sides: a non-record constructor mints `{type:\"system\",subtype:\"turn_duration\",...,isMeta:!1}` with NO message key (166030930, its away_summary neighbour identical in shape), the user-record constructor mints `message:{role:\"user\",content}` unconditionally with isMeta, isVisibleInTranscriptOnly and isCompactSummary as sibling booleans (165936023), and the append envelope adds parentUuid, cwd, sessionId, version, gitBranch and slug but never a message field (166105359). The API-request assembler itself has since been read: `Iw` (165956819) walks the record list under one drop predicate `LP` (165953664) whose four arms test `type`, `subtype`, `isVirtual`, and `isApiErrorMessage` together with the `<synthetic>` model, and none of them reads `isMeta` or `isVisibleInTranscriptOnly` (CLS-026).",
       "depends": "csift's bare-role selectors expand to LLM-visible leaves using `Class::llm_visible`, keyed on the `message{}` instrument rather than on `isMeta`, `isVisibleInTranscriptOnly`, parentUuid threading or `compactMetadata.preservedMessages` membership; misreading `isMeta` as visibility poisoned a real last-human-touch hook. The instrument's margin is also what makes a NEW non-record type safe by default: `history-suppression` and `continued-in` arrived after the leaf set was fixed, scored zero on the instrument like every other non-record type, and needed no change to `llm_visible`.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "175-178",
+          "lines": "179-182",
           "snippet": "    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "180-182",
+          "lines": "184-186",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record"
         }
       ],
@@ -10803,6 +10812,15 @@
           "observed": "before: `isMeta` is an AUTHORSHIP flag and `isVisibleInTranscriptOnly` a summary DISPLAY flag; neither reports whether the model received the content. The only measured visibility instrument is the presence of a `message{}` fiel || after: `isMeta` is an AUTHORSHIP flag: the prompt-submission path derives the prompt's SOURCE from it through an authorship classifier - `Dmt({isNonInteractive:e,isMeta:n,callerSource:r}){if(e)return\"sdk\";if(n)return\"system\";re",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "Five legs consumed, and the two defects the text verification found in the previous rewrite are fixed. First, the causal direction was inverted: `Dmt` at 162724336, re-read here, TAKES isMeta and RETURNS the promptSource, so the sentence now says the submission path derives the source from the flag, not the flag from the source. Second, a negative had been widened past its enumeration: the earlier text said no read site of EITHER flag filters a request payload while only `.isMeta` had been surveyed, so `.isVisibleInTranscriptOnly` is now enumerated site by site (7 sites, all read today, each c"
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Read the request-path assembler and its drop predicate at 165956819 and 165953664 in the 2.1.258 executable, and counted the literal `local-command-stdout` over the whole file and over the byte window 165390000-166100000 that holds the assembler and the record factories.",
+          "observed": "The predicate's four arms test type, subtype, isVirtual and isApiErrorMessage with the sentinel model; neither flag this claim is about appears in any of them. The tag literal: 42 occurrences in the executable, 0 in the window.",
+          "rule": "One observation per byte offset read; one per byte match for the literal counts.",
+          "note": "The claim's negative about the request path is now anchored on the request-path assembler itself rather than only on the flags' own call-site survey."
         }
       ],
       "attribution": "end-to-end",
@@ -11967,7 +11985,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "222-224",
+          "lines": "231-233",
           "snippet": "        Class::CommInbox,\n        Class::CommSent,\n        Class::CommSignal,"
         }
       ],
@@ -12927,7 +12945,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "358",
+          "lines": "376",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -13021,7 +13039,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "379-380",
+          "lines": "387-388",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13108,7 +13126,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "385-386",
+          "lines": "393-394",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13235,7 +13253,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "428",
+          "lines": "436",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13355,7 +13373,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "381-384",
+          "lines": "389-392",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13429,7 +13447,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "435-439",
+          "lines": "443-447",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14206,7 +14224,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "356",
+          "lines": "364",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14557,7 +14575,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "104-110",
+          "lines": "122-127",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14572,7 +14590,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "421",
+          "lines": "429",
           "snippet": "        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())"
         }
       ],
@@ -14683,7 +14701,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "111-116",
+          "lines": "129-134",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
@@ -14771,7 +14789,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "173-178",
+          "lines": "177-182",
           "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         },
         {
@@ -14977,7 +14995,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "180-186",
+          "lines": "184-190",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
         }
       ],
@@ -15074,7 +15092,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "168-172",
+          "lines": "172-176",
           "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts"
         }
       ],
@@ -15263,7 +15281,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "173-178",
+          "lines": "177-182",
           "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         }
       ],
@@ -18699,7 +18717,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "228-231",
+          "lines": "246-249",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -19837,7 +19855,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "217-221",
+          "lines": "235-239",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -20140,8 +20158,8 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "153-160",
-          "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI and never sends to the model:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),\n    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,\n    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a\n    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so\n    /// invisible by the same instrument as the rest of this family; gated like them.\n    MetaSystem,"
+          "lines": "153-164",
+          "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),\n    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,\n    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a\n    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so\n    /// invisible by the same instrument as the rest of this family; gated like them.\n    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible.\n    MetaSystem,"
         }
       ],
       "instrument": "`csift search \"\" <target> -t harness.meta.system --count-by label` (the leaf is gated: without an explicit `-t` reaching it those lines are never parsed), then address one hit with `csift show <target> --line <n> --raw | jq 'keys, .subtype'`. Counting rule: one record per jsonl line whose `type` is `system` and `subtype` is `hook_response`. Binary cross-check: resolve the Claude Code binary (`bin=$(command -v claude)`; follow symlinks with `readlink -f`) and `strings -n 40 \"$bin\" | grep -F 'subtype:\"hook_response\"' | head -1` prints the single minified record constructor listing the whole field set.",
@@ -21749,7 +21767,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "142-150",
+          "lines": "160-168",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -21869,7 +21887,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "145-148",
+          "lines": "163-166",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -21964,7 +21982,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "152-160",
+          "lines": "170-178",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -21979,7 +21997,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "393-397",
+          "lines": "401-405",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -34796,7 +34814,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "305",
+          "lines": "311",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -34885,7 +34903,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "313-314",
+          "lines": "331-332",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -35325,7 +35343,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "180-186",
+          "lines": "184-190",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
         }
       ],
@@ -36201,7 +36219,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "145-148",
+          "lines": "163-166",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -40644,7 +40662,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "373-375",
+          "lines": "382-384",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
@@ -40745,8 +40763,8 @@
       "code": [
         {
           "path": "src/search/render.rs",
-          "lines": "42-45",
-          "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if h.class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]\", h.class.path());"
+          "lines": "51-54",
+          "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if h.class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", h.class.path());"
         },
         {
           "path": "src/search/turns_match.rs",
@@ -45322,7 +45340,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "162-166",
+          "lines": "180-184",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -45570,7 +45588,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "168-172",
+          "lines": "186-190",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -45771,13 +45789,13 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "189-199",
+          "lines": "197-207",
           "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
         },
         {
           "path": "src/search/render.rs",
-          "lines": "47-55",
-          "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if h.class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]\", h.class.path()),\n            None => format!(\"{} [{op}]\", h.class.path()),\n        };\n    }"
+          "lines": "56-64",
+          "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if h.class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", h.class.path()),\n            None => format!(\"{} [{op}]{nd}\", h.class.path()),\n        };\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -46488,7 +46506,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "184-187",
+          "lines": "202-205",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -47636,7 +47654,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "372-374",
+          "lines": "378-380",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -47907,7 +47925,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "434-440",
+          "lines": "442-448",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48032,7 +48050,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "202-208",
+          "lines": "220-226",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -48240,7 +48258,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "434-440",
+          "lines": "442-448",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -48551,7 +48569,7 @@
       "id": "QT-026",
       "area": "queue-and-telemetry",
       "behavior": "The TYPED-ENTRY append path routes through one function, appendEntry, which dispatches on a closed per-type write-policy table (vbr, 166066494): 38 top-level line types, 5 under `dedup-transcript` (user, assistant, attachment, system, progress), 30 under `always` and 3 under `route-by-agent`. Its switch (166107421) has NO default arm - an entry whose type is not in the table matches no case and is silently never written - and an `always` type is handed straight to enqueueWrite exactly as its constructor built it. That table bounds the typed-literal surface, NOT every byte that can reach a transcript: appendEntryToCurrentTranscriptNow (definition 166129659) writes an entry straight into the current session file through a synchronous O_APPEND appender (166154683, carrying the `appendEntryToExistingFileSync: short write` literal), appendEntryToFileAsync (166155592) is a second such path, both are separate exports (174412305, 174412345), three passthroughs accept any caller-built entry (166114479, 166114538, 166170820) and a test-only helper accepts any shape (166080808). Of the records that do travel the typed path, only the user record factory (165936023, `return{type:\"user\",message:{role:\"user\",content:e||up},...}`) and the assistant stream builder mint a `message{}` (the assistant side is attributed by the specimen census below, not by a located hop); the envelope of the MESSAGE-CHAIN path (166105359, inside the chain loop that ends in this.appendEntry) spreads parentUuid, logicalParentUuid, isSidechain, teamName, agentName, promptId, agentId, the record itself, the cwd/sessionId/version block, gitBranch and slug, and adds no `message` key; the insert methods that carry the promoted line types never route through that chain, so a promoted line carries none of those keys and cannot be threaded by parentUuid - so message-less is the default and a `message{}` is a property of two constructors rather than of the sample. FIVE message-less shapes carry the queue and telemetry facts csift promotes: `queue-operation` with the queued content (162031847), the `system` subtypes `turn_duration` (166030930), `away_summary` (166031203) and `stop_hook_summary` (166030639), and the `file-history-snapshot` / `file-history-delta` pair (166106053 / 166123148). They are a small part of the message-less set, not the whole of it. Corpus, one observation per physical jsonl line under the projects root with workflow journals and elicitation sidecars excluded: 8,251 transcript files, 1,446,970 parsed lines, 18 distinct top-level types and 11 distinct `system` subtypes - 28 distinct type/subtype pairs. Every observed type is an entry of the 38-entry table and none sits outside it; 20 table entries have no lines here (agent-color, agent-setting, artifact-autoreact-ledger, artifact-comment-monitor, attribution-snapshot, content-replacement, custom-title, ended-by-model, frame-link, isolation-latch, the three marble-origami types, observer-ref, pr-link, progress, relocated, summary, tag, worktree-state), which is a corpus fact and not evidence they cannot be written. Exactly TWO types carry a top-level `message` key - user (261,730 lines) and assistant (487,555) - and the other 697,685 lines carry none, `attachment` being the largest message-less bucket at 529,653 lines. The five named shapes on disk: queue-operation 13,928, stop_hook_summary 5,823, turn_duration 4,816, file-history-snapshot 4,158, file-history-delta 2,081, away_summary 1,691; the other message-less types on disk are last-prompt 29,838, permission-mode 29,774, mode 29,685, ai-title 29,355, agent-name 12,885, atis-latch 1,400, bridge-session 1,319, history-suppression 410, fork-context-ref 33, cost-state 19, continued-in 1, plus the eight remaining `system` subtypes (scheduled_task_fire 459, compact_boundary 236, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2).",
-      "depends": "csift promotes each of the five to exactly one LLM-invisible leaf (`user.queued`, `harness.meta.turn-duration`, `harness.meta.away-summary`, `harness.meta.stop-hooks`, `harness.meta.snapshot`) and admits them to a scan ONLY behind an explicit `-t` selector reaching that leaf or a `show` address, so a bare scan, a bare role selector, a `-T`-only filter and a flagless `--count-by label` never parse them. A SIXTH gated leaf, `harness.meta.system`, catches every OTHER `type:\"system\"` subtype, the compaction boundary excepted (it keeps its own leaf). The remaining message-less types stay unmodeled, which is safe only because the promotion is a whitelist of named types (src/model/classify_promoted.rs) rather than a message-less test: a rule keyed on the absence of `message{}` would sweep in attachment, last-prompt, mode, permission-mode, ai-title, agent-name, atis-latch and the rest of the bookkeeping set - 697,685 of 1,446,970 corpus lines.",
+      "depends": "csift promotes each of the five to exactly one LLM-invisible leaf (`user.queued`, `harness.meta.turn-duration`, `harness.meta.away-summary`, `harness.meta.stop-hooks`, `harness.meta.snapshot`) and admits them to a scan ONLY behind an explicit `-t` selector reaching that leaf or a `show` address, so a bare scan, a `-T`-only filter and a flagless `--count-by label` never parse them, and neither does a bare role selector - with ONE exception. A SIXTH gated leaf, `harness.meta.system`, catches every OTHER `type:\"system\"` subtype, the compaction boundary excepted (it keeps its own leaf), and a bare `harness` role DOES admit its lines: one subtype under it, `local_command`, is re-minted by the request assembler and sent (CLS-026), so the lines are parsed and the per-record delivery override keeps only that subtype. The other five leaves keep the explicit-selector rule exactly. The remaining message-less types stay unmodeled, which is safe only because the promotion is a whitelist of named types (src/model/classify_promoted.rs) rather than a message-less test: a rule keyed on the absence of `message{}` would sweep in attachment, last-prompt, mode, permission-mode, ai-title, agent-name, atis-latch and the rest of the bookkeeping set - 697,685 of 1,446,970 corpus lines.",
       "code": [
         {
           "path": "src/model/classify_promoted.rs",
@@ -48616,6 +48634,15 @@
           "observed": "8,251 transcript files, 1,446,970 parsed lines, 18 distinct types and 11 system subtypes = 28 distinct type/subtype pairs; every type present in the table, none outside it; 20 table entries with zero lines. Message key present on user (261,730) and assistant (487,555) only; 697,685 lines message-less, attachment the largest at 529,653. Named shapes: queue-operation 13,928, stop_hook_summary 5,823, turn_duration 4,816, file-history-snapshot 4,158, file-history-delta 2,081, away_summary 1,691. Across all 8,443 jsonl files including journals and sidecars, 1,461,271 lines, 0 unparseable.",
           "rule": "One observation per physical jsonl line; a line is message-less when the parsed top-level object has no `message` key; workflow journal.jsonl and elicitation sidecar files are counted separately and excluded from the transcript figures.",
           "note": "The envelope was described as stamped on every persisted line; it belongs to the message-chain path, which the insert methods carrying the promoted line types never enter, so a promoted line carries neither parentUuid nor the cwd block. Scoped, with the consequence for threading stated, and the assistant-side constructor marked as specimen-attributed rather than located."
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Ran `csift search \"\" <target> -t harness --count-by label` against a build with the leaf default alone and against one carrying the per-record delivery override, over the top-level transcripts, and read the candidate gate that admits the `\"subtype\"` line shape.",
+          "observed": "The five other promoted leaves stay out of a bare role exactly as the claim states. `harness.meta.system` does not: over 72 top-level transcripts the leaf is absent from a bare `-t harness` census under the leaf default alone and reports 16 records under the override, those 16 being the whole `system`/`local_command` population.",
+          "rule": "One observation per record for the census; the gate read once at its source.",
+          "note": "The \"a bare role selector never parses them\" clause is narrowed: it holds for five of the six leaves, and the sixth is admitted so its delivered subtype can be reached."
         }
       ],
       "attribution": "end-to-end",
@@ -48940,23 +48967,23 @@
     {
       "id": "QT-027",
       "area": "queue-and-telemetry",
-      "behavior": "The presence of a message{} field is the one measured instrument for whether a line is part of the conversation: ZERO of 629,829 lines across the 25 measured non-record type/subtype buckets carries message{}, while every user record (229,721 of 229,721) and every assistant record (432,052 of 432,052) carries it as an object. Claude Code's own internal wording labels the promoted system subtypes render internals - turn_duration is documented as the line the REPL renders as 'Done in Ns' / 'Waiting for N agents'.",
-      "depends": "csift decides `Class::llm_visible` on that single instrument, which is what keeps a bare role selector (`-t user`) expanding to visible leaves only while the glob form and explicit paths reach the invisible ones.",
+      "behavior": "The presence of a message{} field separates the non-record line types from the conversation records: ZERO of 629,829 lines across the 25 measured non-record type/subtype buckets carries message{}, while every user record (229,721 of 229,721) and every assistant record (432,052 of 432,052) carries it as an object. Claude Code's own internal wording labels the promoted system subtypes render internals - turn_duration is documented as the line the REPL renders as 'Done in Ns' / 'Waiting for N agents'. It is not by itself the DELIVERY instrument: the request assembler's own drop predicate re-mints one message-less shape, a `system`/`local_command` record, as a user message and sends it, while dropping two shapes that DO carry message{} (CLS-026). The shape rule therefore holds for the leaf DEFAULT, and the predicate decides per record.",
+      "depends": "csift decides `Class::llm_visible` on that shape rule, which is what keeps a bare role selector (`-t user`) expanding to the delivered leaves only while the glob form and explicit paths reach the rest; the three per-record exceptions the harness's own predicate names ride `Record::delivery_override` beside it.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "191-204",
+          "lines": "200-213",
           "snippet": "    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "59-72",
-          "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if selector.contains('.') {\n        return true; // intermediate prefix or exact leaf: any visibility.\n    }\n    // A bare role: visible leaves only.\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
+          "lines": "66-83",
+          "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if selector.contains('.') {\n        return true; // intermediate prefix or exact leaf: any visibility.\n    }\n    // A bare role: what the model received - the leaf default unless this record's\n    // own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "180-189",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// A bare ROLE selector (`-t user`) expands to visible leaves only; the"
+          "lines": "184-199",
+          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
       "instrument": "`csift stats <target>` prints a whole-file line-type census; for each non user/assistant type, count the lines of that type carrying `\"message\":{`. Counting rule = one observation per physical line, per type; expect 0 for every non-record type.",
@@ -48986,6 +49013,15 @@
           "observed": "complete producer trace: trigger every transcript write enters at Rw @166113249; gate vbr, the per-type write-policy table appendEntry dispatches on @166066494; writer the envelope literal in insertMessageChain @166105359; writer the user record factory - one of only two minters of message{} @165936023; writer the assistant per-block record literal - the second minter @165442985. writer excerpt: let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};if(ke.type===\"user\"&&ke.toolUseResult!=null)ke.toolUseResult=Tor(ke.toolUseResult);if(awai enumeration: 7 site(s) read: consumer that makes message{} the conversation instrument: the API request assembly @165407936: messages are built as {role:to.message.role, content:to.message.content}, so a l; system-record constructor cluster: turn_duration @166030930: integers and timestamps only, no message field; system-record constructor cluster: away_summary @166031203: content string, no message field; system-record constructor cluster: stop_hook_summary @166030639: arrays and booleans, no message field; file-history-snapshot literal @166106134: messageId/snapshot only; file-history-delta literal @166123213: messageId/trackingPath/backup only; the write-policy table's tail (route-by-agent types) @166067194: completes the 38-type enumeration: content-replacement, fork-context-ref, observ specimen: 8207 files, 1410516 lines, 0 unparseable. 31 non-record type-or-subtype buckets over 688526 lines carry a top-level message key on 0 of them. Every user line carries a message OBJECT (251742 of 251742) and every assistant line likewise (470248 of 470248). Two of the 31 buckets (128 lines) are a thir",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); one observation per physical jsonl line, per bucket; carries message = the top-level key exists; for the two record types the stronger test (the value is an object) was used",
           "note": "The write-policy table plus the envelope literal show the transcript can only mint a message field in the two record factories, and today's whole-corpus census reproduces the 0 / 100% split with no exception."
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Read the request assembler loop and its drop predicate at 165959679 and 165953664 in the 2.1.258 executable, then compared the predicate's verdict against `Class::llm_visible` leaf by leaf for the shapes it names.",
+          "observed": "Three disagreements: `system`/`local_command` is sent although message-less, and an `isVirtual` record and the `<synthetic>` API-error placeholder are dropped although both carry a message object. Corpus over 72 top-level transcripts: 16 records of the first shape, 118 of the third, 0 of the second.",
+          "rule": "One observation per byte offset read; one per record for the corpus counts.",
+          "note": "The behavior sentence calling message{} the one instrument for conversation membership is narrowed to the leaf default; delivery is decided per record."
         }
       ],
       "attribution": "end-to-end",
@@ -49164,16 +49200,16 @@
       "id": "QT-029",
       "area": "queue-and-telemetry",
       "behavior": "Membership in a compaction boundary's compactMetadata.preservedMessages is NOT a visibility instrument either: the field is an OBJECT {anchorUuid, uuids[], allUuids[]}, not a list, and its uuids are an unfiltered TAIL WINDOW of 5 to 11 records anchored on a user record - it lists the promoted telemetry uuids at the same rate as message uuids (telemetry 0.0020-0.0029, message records 0.0014-0.0029, measured over 32 boundaries in one transcript).",
-      "depends": "csift refuses preservedMessages as a delivery signal and keeps `message{}` presence as the only instrument; reading the list as a visibility filter would mark telemetry as delivered context.",
+      "depends": "csift refuses preservedMessages as a delivery signal and keeps `message{}` presence as the leaf-level instrument, with the harness's own drop predicate overriding it per record (CLS-026); reading the list as a visibility filter would mark telemetry as delivered context.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "180-189",
-          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// A bare ROLE selector (`-t user`) expands to visible leaves only; the"
+          "lines": "184-199",
+          "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "192-204",
+          "lines": "201-213",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
@@ -49224,6 +49260,15 @@
           "observed": "complete producer trace: trigger the compaction completion driver @163628255; gate function dMe and function KI @166210664; writer function $it @164831131. writer excerpt: function $it(e,n,r,o=r){let d=r.map((_)=>_.uuid),f=dMe([...r],o).map((_)=>_.uuid);if(d.length===0)return e;return{...e,compactMetadata:{...e.compactMetadata,...f.length>0&&{preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}},preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}}}}function ojt(e,n){if(!n)retu specimen: 235 compact_boundary records corpus-wide. preservedMessages is an object on 235 of 235 - never a bare list - with keys allUuids/anchorUuid/uuids on 234 and the legacy anchorUuid/uuids on 1. uuids lengths run 2 to 428 (median 7) and allUuids 2 to 460 (median 7); summed, 3,304 uuids against 3,598 allU",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); one observation per compact_boundary line for the shape and key-set census; list lengths are one observation per boundary. The rate rule from the existing check is one observation per uuid listed in a boundary's preservedMessages.uuids, resolved to a line type by an index of every uuid in the same file, divided by that type's total line count in the file.",
           "note": "KI is the entire filter and it names only progress records and empty hook_success attachments, so nothing in the builder can distinguish a telemetry uuid from a message uuid - and the corpus confirms the object shape and the uuids-subset-of-allUuids relation the builder implies."
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Re-read the drop predicate at 165953664 and checked whether any of its four arms reads `compactMetadata` or a preserved-uuid list; then re-read the claim's own code sites for the wording they encode.",
+          "observed": "The predicate tests `type`, `subtype`, `isVirtual`, `isApiErrorMessage` and `message.model` only; nothing on the request path reads a preserved list, so the claim's negative stands and only the word \"only\" in its dependency clause needed narrowing.",
+          "rule": "One observation per predicate arm read.",
+          "note": "preservedMessages is still not a visibility signal; the dependency clause no longer calls message{} the only instrument."
         }
       ],
       "attribution": "end-to-end",
@@ -49945,8 +49990,8 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "189-190",
-          "snippet": "    /// A bare ROLE selector (`-t user`) expands to visible leaves only; the\n    /// glob form and explicit paths reach the invisible ones."
+          "lines": "193-199",
+          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
       "instrument": "Run `strings -n 6` over the shipped Claude Code binary for the located version and grep for `turn_duration|away_summary|scheduled_task_fire`, then read the surrounding doc comments; counting rule = one observation per extracted string.",
@@ -50093,12 +50138,12 @@
       "id": "QT-034",
       "area": "queue-and-telemetry",
       "behavior": "Claude Code carries an explicit display-only concept for records rendered in the UI but filtered before the API send - the shipped schema declares `is_virtual:x(!0).optional().describe(\"@internal Display-only: rendered in the UI but filtered before API send.\")` (158583711) - and the reason the flag is absent from disk is a CONDITIONAL FIELD STRIP on the persistence path, not the record being withheld. The literal `isVirtual:!0` occurs seven times in the 2.1.258 executable: five mint a record in the client (the refusal-fallback tool_use 164148510, the two halves of the bridge state rebuild 164182473 and 164182661, the tool executor display block 164464084, and the esc-cancel virtual thinking block 181612042), and two sit in the wire-to-record converter, which restores the marker from an SDK frame on its assistant arm (163578782) and on its user arm (163579231). The strip sits on the persistence path itself: Rw calls dMe before insertMessageChain (166113249); dMe runs KI then Wns (166210664); and each of Wns' three arms rebuilds the record WITHOUT the marker under `if(o.isVirtual && !r.has(d) && o.virtualInResumeRun!==!0)` (166209496, generic arm `let{isVirtual:f,..._}=o;return[_]` at 166210517). Two branches carry the marker through to the writer: a record inside the index span of a resumedFromIncompleteThinking resume, and a record marked virtualInResumeRun during a resume run (`if(dr&&zj(xr))xr.virtualInResumeRun=!0`, 164704163). \"Never lands on disk\" is therefore a corpus measurement, not a construction law - and the measurement is three-fold. Over the 8,435 *.jsonl files under the projects root, one observation per byte match, needles taken WITH the surrounding quotes but WITHOUT the trailing colon (strictly weaker than the claim's `\"isVirtual\":`, so a zero here implies a zero there): `\"isVirtual\"` 0, `\"is_virtual\"` 0, and both keys that would preserve the marker are themselves 0 - `\"virtualInResumeRun\"` 0 and `\"resumedFromIncompleteThinking\"` 0 - against the control needle `\"isMeta\"`, which matched 9,355 times in the identical scan and proves the scan reaches record interiors. The quotes are load-bearing: the bare token isVirtual matches 1,945 times over 223 files, all of it prose in transcripts that discuss the flag, so a rule restated without the quotes does not reproduce. There is thus no serialized visibility flag on disk, which is why visibility has to be inferred from the record shape.",
-      "depends": "csift cannot read a visibility flag off the line and keys on `message{}` presence instead (src/model/taxonomy.rs); a future serialized flag would be a stronger instrument than the shape inference. Because the strip is conditional rather than absolute, a reader should treat the key's absence as the overwhelmingly common case rather than an invariant: a resume run is the shape that would put the marker on disk, and a csift surface that ever consumed the field must tolerate its appearance rather than assume it impossible.",
+      "depends": "csift now reads the flag off the line: `Record::is_virtual` is deserialized and `Record::delivery_override` returns `Some(false)` for a user or assistant record carrying it, mirroring the `zj` arm of the request assembler's drop predicate (CLS-026), so a bare role selector drops such a record while a glob or an explicit leaf still reaches it. Because the strip is conditional rather than absolute, a reader should treat the key's absence as the overwhelmingly common case rather than an invariant: a resume run is the shape that would put the marker on disk, and a csift surface that ever consumed the field must tolerate its appearance rather than assume it impossible.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "189-190",
-          "snippet": "    /// A bare ROLE selector (`-t user`) expands to visible leaves only; the\n    /// glob form and explicit paths reach the invisible ones."
+          "lines": "193-199",
+          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
       "instrument": "`cd ~/.claude/projects && for n in '\"isVirtual\"' '\"is_virtual\"' '\"virtualInResumeRun\"' '\"resumedFromIncompleteThinking\"' '\"isMeta\"'; do rg -oNI -uu --no-messages \"$n\" -g '*.jsonl' . | wc -l; done`; counting rule = one observation per byte match, needles taken WITH the surrounding quotes. The first four must be 0 and the control must be large, which proves the scan reaches record interiors; the bare token without quotes is not the instrument (it matches prose about the flag, 1,945 times over 223 files against 0 for the quoted key). Binary side: `grep -abo 'isVirtual:!0' <executable>` returns the five client minters and the two wire-converter arms, and `strings -n 6` finds the is_virtual schema describe string.",
@@ -50138,6 +50183,15 @@
           "observed": "8,435 files: \"isVirtual\" 0, \"is_virtual\" 0, \"virtualInResumeRun\" 0, \"resumedFromIncompleteThinking\" 0, control \"isMeta\" 9,355; the unquoted token isVirtual matches 1,945 times over 223 files, so the quotes are what make the rule reproduce. Binary side: the literal isVirtual:!0 occurs seven times, at 163578782, 163579231, 164148510, 164182473, 164182661, 164464084 and 181612042. | Wns at 166210517 strips the marker only under a three-part condition whose escape is set at 164704163, so the absolute is a corpus measurement; and a byte census of isVirtual:!0 returns seven occurrences, which is why the text now states the census total and splits it into five minters and two wire-converter arms.",
           "rule": "one observation per byte match over every *.jsonl under the projects root; the two keys that gate the strip's escape are counted in the same pass, and a control needle known to be frequent proves the scan reaches record interiors",
           "note": "The absolute wording is replaced by the mechanism that produces it plus the measurement that supports it. The refuting hop is Wns at 166209496: the strip is guarded by `o.isVirtual && !r.has(d) && o.virtualInResumeRun!==!0`, and the setter at 164704163 shows the escape is real, so the binary establishes no \"never lands on disk\" law - the corpus is the only evidence for the absolute and is now stated as such. The minting count is corrected in the same edit: a byte census of `isVirtual:!0` over the 2.1.258 executable returns SEVEN occurrences, not five - the five client minters plus the two arms of the wire-to-record converter at 163578782 and 163579231, which rebuild the marker from an SDK frame - so the text now gives the census total and splits it by role instead of counting only the minters. The display-only schema string is verbatim at 158583711, and the scan reproduces the zero on all four needles with the control at 9,355 over 8,435 files. csift depends on the absence only in the weak sense that there is no flag to read, so no code relied on the struck wording."
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Re-enumerated `isVirtual:!0` across the 2.1.258 executable and compared the offsets against the ones this claim already lists, then read the drop arm at 165932568 and re-ran the quoted-key corpus scan for the serialized field.",
+          "observed": "7 occurrences at 163578782, 163579231, 164148510, 164182473, 164182661, 164464084 and 181612042, the same seven the claim records; 2.1.261 also carries 7. The drop arm reads `e.isVirtual===!0` on user and assistant records. Corpus: 0 matches for the quoted key over the top-level transcripts, so the field is modeled for tolerance rather than for a specimen.",
+          "rule": "One observation per byte match in the executable; one per byte match for the quoted-key corpus scan.",
+          "note": "The dependency clause saying csift cannot read a visibility flag off the line is rewritten: it reads this one now, as the second arm of the delivery override."
         }
       ],
       "attribution": "end-to-end",
@@ -50290,12 +50344,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "337-343",
+          "lines": "345-351",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "367-370",
+          "lines": "375-378",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -50384,12 +50438,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "277-282",
+          "lines": "295-300",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "288-291",
+          "lines": "306-309",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -50516,12 +50570,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "288-291",
+          "lines": "306-309",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "277-282",
+          "lines": "295-300",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -51595,7 +51649,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "362-367",
+          "lines": "370-375",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -51729,12 +51783,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "192-198",
+          "lines": "201-207",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "118-120",
+          "lines": "136-138",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -51875,7 +51929,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "99-106",
+          "lines": "117-124",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52212,7 +52266,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "268-270",
+          "lines": "286-288",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -52463,12 +52517,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "352",
+          "lines": "370",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "374-379",
+          "lines": "392-397",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -52575,7 +52629,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "374-379",
+          "lines": "392-397",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -52664,7 +52718,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "346-348",
+          "lines": "376-378",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -52765,7 +52819,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "129-131",
+          "lines": "147-149",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -52847,7 +52901,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "115-119",
+          "lines": "140-144",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -52949,7 +53003,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "313-314",
+          "lines": "331-332",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53051,7 +53105,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "126-129",
+          "lines": "151-154",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -53141,12 +53195,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "362-367",
+          "lines": "370-375",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "385-386",
+          "lines": "393-394",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53246,12 +53300,12 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "379-380",
+          "lines": "387-388",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "305",
+          "lines": "311",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -53343,7 +53397,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "254-259",
+          "lines": "272-277",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -53441,7 +53495,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "261-265",
+          "lines": "279-283",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -53692,7 +53746,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "234-236",
+          "lines": "240-242",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -54301,7 +54355,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "107-114",
+          "lines": "125-132",
           "snippet": "    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n\n    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant."
         }
       ],
@@ -54663,7 +54717,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "279-280",
+          "lines": "287-288",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -54772,12 +54826,12 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "190-204",
-          "snippet": "    /// glob form and explicit paths reach the invisible ones.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "lines": "193-213",
+          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "257-261",
+          "lines": "266-270",
           "snippet": "    let sections = if superseded {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -55448,7 +55502,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "408-413",
+          "lines": "416-421",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify).\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
         }
       ],
@@ -59428,7 +59482,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "307-312",
+          "lines": "325-330",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -63939,7 +63993,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "116",
+          "lines": "134",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -64535,7 +64589,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "277-282",
+          "lines": "295-300",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -64700,7 +64754,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "288-291",
+          "lines": "306-309",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -69832,7 +69886,7 @@
       "id": "QT-SYS-001",
       "area": "queue-and-telemetry",
       "behavior": "Claude Code writes `type:\"system\"` records for its own UI whose `subtype` falls outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`). Measured 2026-09-04 over 8225 transcripts under the projects root (journal and elicitation-sidecar files excluded): 13087 system records under exactly 11 subtypes - stop_hook_summary 5798, turn_duration 4791, away_summary 1683, scheduled_task_fire 459, compact_boundary 235, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2. `informational` is a notice with a string `content` and a `level` (warning 9, notice 5); its live specimen is the Remote Control disconnect notice, composed at 181648256 - which also dedupes against the last transcript record - and reached from the bridge failure arm at 181655786. Every one of the 13087 carries `uuid`, `timestamp` and `parentUuid`, and NONE carries a `message{}` field. `isMeta` is NOT universal, which the old text asserted: the key is ABSENT on api_error (29 of 29), on stop_hook_summary (5798 of 5798) and on 134 of the 235 compaction boundaries, and is `false` on the remaining 7126. The constructors agree - the api_error constructor (166032184) returns {type, subtype, level:\"error\", error, retryInMs, retryAttempt, maxRetries, source, timestamp, uuid} with no isMeta field, and the stop_hook_summary constructor (166030639) likewise, while every other transcript-writing constructor in that cluster sets isMeta:false. A subtype the corpus has not yet seen is not guaranteed isMeta:false either: the file_snapshot record literal (163818846) writes isMeta:true. `parentUuid` is set by no system-record constructor at all - it is stamped by the shared envelope hop (166105359) after the write-policy table (166066498) routes type `system` to the transcript sink like user and assistant records - which is also why a compaction boundary is the one system record whose parentUuid is null. The 11 observed subtypes are a CORPUS property, not the shipped set: the 2.1.258 executable holds 92 adjacent `type:\"system\",subtype:\"...\"` literals over 48 DISTINCT subtype names, and the transcript-writing constructor cluster alone builds four with zero corpus specimens (permission_retry, bridge_status, cloud_session_status, memory_saved). Two of the eleven have a second literal outside that cluster and neither is a counterexample: an informational wire projection (163575905) whose only call site (179104884) spreads it into a control-protocol message carrying session_id and never appends a transcript record, and a local_command rehydration mapper (163578281) that supplies timestamp, uuid and isMeta explicitly. Only two literals in the whole executable put a `message` key inside a system-subtype object, both permission_denied (169797551, 178901181), and both are control-protocol wire projections with session_id and snake_case fields, never transcript records. The two model_refusal subtypes are inline yields in the query loop (164720173, 164725713) rather than factory functions, and model_refusal_fallback has a second producer on the banner path (164575450) that adds the `scope` key - so an audit reading only the constructor cluster would miss them.",
-      "depends": "`search -t harness.meta.system` (the v0.10.1 catch-all leaf, gated) classifies any system subtype other than the four modeled ones and renders `[<subtype> <level>] <content>`, falling back to `[<subtype>]` when the record carries no `level` (away_summary, turn_duration, scheduled_task_fire and agents_killed carry none; stop_hook_summary carries the unusual level `suggestion`) and to the head alone when there is no `content` (agents_killed carries neither); `show --line` renders such a line flag-free. Two csift laws rest on the record SHAPE rather than on the subtype list, which is exactly why the leaf is a catch-all and not an enumeration: the leaf is `llm_visible:false` because no such record carries a `message{}` field (0 of 13087 on 2026-09-04), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - and 48 distinct subtype names ship against 11 observed, so it will meet one. Neither law reads `isMeta`, so the correction to that clause changes no csift code. What would break the leaf is the harness starting to send these records to the model (a `message{}` field) or moving a subtype into a differently-typed record.",
+      "depends": "`search -t harness.meta.system` (the v0.10.1 catch-all leaf, gated) classifies any system subtype other than the four modeled ones and renders `[<subtype> <level>] <content>`, falling back to `[<subtype>]` when the record carries no `level` (away_summary, turn_duration, scheduled_task_fire and agents_killed carry none; stop_hook_summary carries the unusual level `suggestion`) and to the head alone when there is no `content` (agents_killed carries neither); `show --line` renders such a line flag-free. Two csift laws rest on the record SHAPE rather than on the subtype list, which is exactly why the leaf is a catch-all and not an enumeration: the leaf DEFAULT is `llm_visible:false` because no such record carries a `message{}` field (0 of 13087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - and 48 distinct subtype names ship against 11 observed, so it will meet one. Neither law reads `isMeta`. The leaf default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the leaf is the harness sending a SECOND subtype (a new arm beside `UWt`) or moving a subtype into a differently-typed record.",
       "code": [
         {
           "path": "src/model/classify_promoted.rs",
@@ -69846,7 +69900,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "412",
+          "lines": "420",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -69887,6 +69941,15 @@
           "observed": "before: Claude Code writes `type:\"system\"` records for its own UI that carry a `subtype` outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`): observed subtypes are  || after: Claude Code writes `type:\"system\"` records for its own UI whose `subtype` falls outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`). Measured 2026-09-04 ove",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "One clause of the old behavior was refuted on both legs and is rewritten. `isMeta:false` is not universal across these records: the api_error constructor at 166032184, re-read today, returns no isMeta field at all, and all 29 corpus api_error records lack the key - as do all 5798 stop_hook_summary records (whose constructor at 166030639 also omits it) and 134 of the 235 compaction boundaries. The enumeration also turned up a transcript-writing system literal with isMeta:true (file_snapshot, 163818846, no corpus specimens), so the safe statement is that isMeta is false where present, absent on "
+        },
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Re-censused the system subtypes over the top-level transcripts with rg and with `csift search \"\" -t harness.meta.system --no-subagents --count-by label`, then read the request assembler's drop predicate and its `local_command` exemption in the 2.1.258 executable at 165953664 and 165947398.",
+          "observed": "585 records under 7 subtypes over 72 top-level transcripts (scheduled_task_fire 460, model_refusal_fallback 54, api_error 29, local_command 16, informational 14, agents_killed 10, model_refusal_no_fallback 2), the two counts agreeing exactly. The predicate exempts `subtype:\"local_command\"` and the assembler re-mints it, so the message-less shape rule does not settle delivery for that subtype.",
+          "rule": "One observation per record for the census; one per byte offset read for the predicate.",
+          "note": "The depends clause claiming the leaf default settles delivery for every subtype is rewritten; csift now overrides it per record for local_command (CLS-026)."
         }
       ],
       "attribution": "end-to-end",
@@ -73675,7 +73738,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "168-173",
+          "lines": "172-177",
           "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts\n    ///   drew real replies before the retraction.)"
         }
       ],
@@ -78223,7 +78286,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "429-433",
+          "lines": "437-441",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -81535,6 +81598,623 @@
         {
           "site": "trailing line shape: attachment/session_context",
           "verdict": "never follows a draft (0/886); 10/2595 after control records (0.4%). A shape only the control side shows cannot mark a draft either."
+        }
+      ]
+    },
+    {
+      "id": "CLS-026",
+      "area": "classification",
+      "behavior": "Claude Code turns a transcript into an API request with ONE walk and ONE drop predicate. The assembler `Iw` (165956819) builds its record list through the attachment-folding pre-pass `Ses` (165946869) and then loops `for(let nt of B){if(LP(nt))continue;switch(nt.type){...}}` (165959679; the same shape at 166270005 in Claude Code 2.1.261). The predicate is `function LP(e){if(e.type===\"api_system\")return!1;return e.type===\"progress\"||e.type===\"system\"&&!UWt(e)||zj(e)||LV(e)}` (165953664), and its three helpers are `UWt(e){return e.type===\"system\"&&e.subtype===\"local_command\"}` (165947398), `zj(e){return(e.type===\"user\"||e.type===\"assistant\")&&e.isVirtual===!0}` (165932568) and `LV(e){return e.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.message?.model===Jc}` (165932647) with `Jc=\"<synthetic>\"` (160102864). So of all message-less records exactly ONE is sent: `type:\"system\"` with `subtype:\"local_command\"`, which the loop's `case\"system\"` arm RE-MINTS as a user message built from the record's own content, uuid and timestamp (`xe({content:nt.content,uuid:nt.uuid,timestamp:nt.timestamp})`) and merges into the preceding user record when there is one. Every other system subtype is dropped, and the body map that becomes the request carries `role` and `content` only (165407936). Nothing on this path reads `isMeta`, `isVisibleInTranscriptOnly` or any slash-command tag: the literal `local-command-stdout` has 42 occurrences in the 2.1.258 executable and 0 of them fall in the byte window 165390000-166100000 that holds the assembler, the predicate and the record factories.",
+      "depends": "`Record::delivery_override` mirrors the three predicate arms in which the harness verdict differs from csift's per-leaf default, and a bare ROLE selector (`-t harness` / `-t user` / `-t agent`) keys on it PER RECORD, so `search -t harness` surfaces a `system`/`local_command` record although `harness.meta.system` is an invisible leaf, and `-t agent` drops the API-error placeholder although `agent.message` is a visible one. The `search` candidate gate admits the key-only `\"subtype\"` line shape under a bare `harness` selector so such a record can be reached at all. If the harness moved the re-mint or widened `UWt`, a bare role would report as conversation something the model never received, or hide something it did.",
+      "code": [
+        {
+          "path": "src/model/delivery.rs",
+          "lines": "50-62",
+          "snippet": "        if ty == \"system\" {\n            return (self.subtype.as_deref() == Some(\"local_command\")).then_some(true);\n        }\n        if ty != \"user\" && ty != \"assistant\" {\n            return None;\n        }\n        if self.is_virtual == Some(true) {\n            return Some(false);\n        }\n        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
+        },
+        {
+          "path": "src/cli/selectors.rs",
+          "lines": "75-79",
+          "snippet": "    // A bare role: what the model received - the leaf default unless this record's\n    // own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        return d;\n    }"
+        },
+        {
+          "path": "src/cli/search_args.rs",
+          "lines": "394-403",
+          "snippet": "    /// True when the scan parses `type:\"system\"` candidate lines at all: an explicit\n    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE\n    /// one predicate for that admission - the candidate gate and the \u00a77f whole-file\n    /// gate's synthesized-marker set must agree, or a pattern that can only match the\n    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds\n    /// it (a silent drop, the \u00a77 landmine).\n    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()\n    }"
+        }
+      ],
+      "instrument": "Binary: `grep -abo 'function LP(' <executable>` and read 120 bytes at the returned offset; the same for `function UWt(`, `function zj(`, `function LV(`, `Jc=\"<synthetic>\"` and the loop literal `for(let nt of B){if(LP(nt))continue;`. Window negative: `grep -c local-command-stdout` over the whole executable and over bytes 165390000-166100000, counting rule one observation per byte match. Corpus: sum `rg -c '\"subtype\":\"local_command\"'` over the top-level transcripts under the projects root, counting rule one observation per record, and cross-check against `csift search \"\" -t harness.meta.system --no-subagents --count-by label`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The `api_system` early return is the one predicate arm with no corpus specimen: no record of that type appears in the projects root, so only the branch was read."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "Iw",
+          "offset": 165956819,
+          "excerpt": "function Iw(e,n=[],r,o){let d=r!==void 0&&_ve(r),f=A$e(),_=r!==void 0&&d&&uzt(r),v=d?new Map:void 0,C=new Set(n.map((nt)=>nt.name)),I=o?.keptToolNames;if(I)for(let nt of I)C.add(nt);let F=o?.echoWireToolInputs===!0,B=Ses(e,!0),U=BSe(e),j,W=!1;",
+          "note": "The assembler that produces the request record list; `B=Ses(e,!0)` is the folded list the drop loop walks."
+        },
+        {
+          "role": "gate",
+          "name": "LP",
+          "offset": 165953664,
+          "excerpt": "function LP(e){if(e.type===\"api_system\")return!1;return e.type===\"progress\"||e.type===\"system\"&&!UWt(e)||zj(e)||LV(e)}",
+          "note": "The one drop predicate. Four arms, each read: api_system keeps, progress drops, a non-local_command system record drops, and the two record-marker helpers drop."
+        },
+        {
+          "role": "gate",
+          "name": "UWt",
+          "offset": 165947398,
+          "excerpt": "function UWt(e){return e.type===\"system\"&&e.subtype===\"local_command\"}",
+          "note": "The single exemption inside the system arm: the one subtype that is not dropped."
+        },
+        {
+          "role": "writer",
+          "name": "the case\"system\" re-mint",
+          "offset": 165959679,
+          "excerpt": "for(let nt of B){if(LP(nt))continue;switch(nt.type){case\"progress\":continue;case\"system\":{if(!UWt(nt))continue;let ln=xe({content:nt.content,uuid:nt.uuid,timestamp:nt.timestamp}),pn=nL(Ne);if(pn?.type===\"user\"){Ne[Ne.length-1]=Jje(pn,ln);continue}Ne.push(ln);continue}",
+          "note": "The spared system record becomes a user message built from its own content, uuid and timestamp, merged into the preceding user record when there is one."
+        },
+        {
+          "role": "writer",
+          "name": "the request body map",
+          "offset": 165407936,
+          "excerpt": "messages:Rr.map((to)=>({role:to.message.role,content:to.message.content}))},{querySource:f.querySource,retryCause:void 0,promptEpoch:f.promptRenderEpoch});",
+          "note": "What actually leaves for the API: role and content only, so no flag on the record survives the send to be read later."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "LP arm 1 (api_system)",
+          "offset": 165953664,
+          "excerpt": "if(e.type===\"api_system\")return!1;",
+          "verdict": "Keeps the record; the only arm with no corpus specimen."
+        },
+        {
+          "site": "LP arm 2 (progress)",
+          "offset": 165953664,
+          "excerpt": "return e.type===\"progress\"",
+          "verdict": "Drops a progress record; csift models no such leaf, so the leaf default already agrees."
+        },
+        {
+          "site": "LP arm 3 (system, via UWt)",
+          "offset": 165947398,
+          "excerpt": "function UWt(e){return e.type===\"system\"&&e.subtype===\"local_command\"}",
+          "verdict": "Drops every system subtype except local_command; the exemption is the first override arm."
+        },
+        {
+          "site": "LP arm 4a (zj, isVirtual)",
+          "offset": 165932568,
+          "excerpt": "function zj(e){return(e.type===\"user\"||e.type===\"assistant\")&&e.isVirtual===!0}",
+          "verdict": "Drops a display-only user or assistant record; the second override arm."
+        },
+        {
+          "site": "LP arm 4b (LV, API-error placeholder)",
+          "offset": 165932647,
+          "excerpt": "function LV(e){return e.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.message?.model===Jc}",
+          "verdict": "Drops the fabricated assistant placeholder; the third override arm."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Read the five predicate offsets and the assembler loop in the 2.1.258 executable with a byte-offset dump; counted `local-command-stdout` over the whole file and over bytes 165390000-166100000; censused the delivered subtype over the top-level transcripts with rg and with `csift search \"\" -t harness.meta.system --no-subagents --count-by label`.",
+          "observed": "All five offsets returned the excerpts recorded in producer_chain byte for byte. `local-command-stdout`: 42 occurrences in the executable, 0 in the window. Corpus over 72 top-level transcripts: 16 `system`/`local_command` records, and the whole `harness.meta.system` census is 585 records (scheduled_task_fire 460, model_refusal_fallback 54, api_error 29, local_command 16, informational 14, agents_killed 10, model_refusal_no_fallback 2), which sums to 585 and matches csift's own count exactly.",
+          "rule": "One observation per byte match for the literal counts; one per record for the corpus counts.",
+          "note": "First pinning of the request-path drop predicate; the claim is the basis of `Record::delivery_override`."
+        }
+      ]
+    },
+    {
+      "id": "CLS-027",
+      "area": "classification",
+      "behavior": "The assistant record Claude Code fabricates in place of a failed API call is built by one factory and carries a sentinel model. `Jrr` (165933431) returns a `type:\"assistant\"` record whose message stamps `model:Jc` (165934047) with `Jc=\"<synthetic>\"` (160102864), and it takes BOTH `isApiErrorMessage` and `isVirtual` as parameters, so the same factory mints both display-only shapes. `zo` (165934505) is the arm that calls it with `isApiErrorMessage:!0`. The literal `isApiErrorMessage:!0` has exactly 4 occurrences in the 2.1.258 executable and only 165934688 sits on the record-factory path; the other three (163578872, 166555809, 180222849) never mint a new placeholder - 166555809 and 180222849 build a control-protocol or SDK frame, and 163578872 is the wire-to-record converter, which REBUILDS the marker on a record arriving from an SDK frame. The request assembler drops exactly this shape through `LV` (CLS-026). Corpus: 118 records carry `isApiErrorMessage:true` and 118 of those 118 carry `\"model\":\"<synthetic>\"` on the same line.",
+      "depends": "csift deserializes `isApiErrorMessage` and reads `message.model`, and `Record::delivery_override` returns `Some(false)` only when BOTH are present - an assistant record marked `isApiErrorMessage` with a REAL model is a genuine turn that merely errored, and is sent. A bare `-t agent` therefore drops the placeholders (measured 118 fewer `agent.message` records in a whole-corpus `--count-by label`) while `-t agent.message` and `-t 'agent.*'` still reach them and render a `[not delivered]` marker in the label zone. If the harness stopped stamping the sentinel model, the second half of the test would stop matching and the placeholders would read as conversation again.",
+      "code": [
+        {
+          "path": "src/model/delivery.rs",
+          "lines": "59-62",
+          "snippet": "        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
+        },
+        {
+          "path": "src/model/record.rs",
+          "lines": "98-104",
+          "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
+        },
+        {
+          "path": "src/search/render.rs",
+          "lines": "27-35",
+          "snippet": "    // C-28: a record Claude Code's request assembler DROPPED says so in the label zone -\n    // display-only, like [narration summary]: it is not matchable text, so it needs no\n    // synthesized-marker registration. Reachable only through a glob or an explicit\n    // leaf; a bare role never selects such a record in the first place.\n    let nd = if h.delivery == Some(false) {\n        \" [not delivered]\"\n    } else {\n        \"\"\n    };"
+        }
+      ],
+      "instrument": "Binary: `grep -abo 'isApiErrorMessage:!0' <executable>` (expect 4 offsets) and read 180 bytes at each to separate the record factory from the wire projections; `grep -abo 'model:Jc,role:\"assistant\"'` and `grep -abo 'Jc=\"<synthetic>\"'` for the sentinel. Corpus: `rg -c '\"isApiErrorMessage\":true'` summed over the top-level transcripts, then the same matching lines piped through `rg -c '\"model\":\"<synthetic>\"'`; counting rule one observation per record. Effect side: `csift search \"\" -t agent --no-subagents --count-by label` before and after, reading the `agent.message` row.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "zo",
+          "offset": 165934505,
+          "excerpt": "function zo({content:e,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,errorDetails:f,truncatedAfterOutput:_,now:v,uuid:C}){let I=Jrr({content:[{type:\"text\",text:e===\"\"?up:e}],isApiErrorMessage:!0,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,errorDetails:f,truncatedAfterOutput:_,now:v,uuid:C});",
+          "note": "The API-error path calls the fabricated-record factory with the marker set."
+        },
+        {
+          "role": "gate",
+          "name": "LV",
+          "offset": 165932647,
+          "excerpt": "function LV(e){return e.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.message?.model===Jc}",
+          "note": "The drop arm that selects exactly this shape: the marker AND the sentinel model, never either alone."
+        },
+        {
+          "role": "writer",
+          "name": "Jrr",
+          "offset": 165933431,
+          "excerpt": "function Jrr({content:e,isApiErrorMessage:n=!1,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,errorDetails:_,truncatedAfterOutput:v,isVirtual:C,usage:I=",
+          "note": "The record factory; it takes isApiErrorMessage and isVirtual, which is why one factory mints both display-only shapes."
+        },
+        {
+          "role": "writer",
+          "name": "the sentinel model stamp",
+          "offset": 165934047,
+          "excerpt": "model:Jc,role:\"assistant\",stop_details:null,stop_reason:\"stop_sequence\",stop_sequence:\"\",type:\"message\",usage:I,content:e,context_management:null},requestId:void 0,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,errorDetails:_,truncatedAfterOutput:v,isApiErrorMessage:n,isVirtual:C}",
+          "note": "The bytes that reach disk: the sentinel model and both markers on the same record."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "record factory path",
+          "offset": 165934688,
+          "excerpt": "isApiErrorMessage:!0,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,errorDetails:f,truncatedAfterOutput:_,now:v,uuid:C});",
+          "verdict": "The one site that becomes a transcript record; it is the argument list of the Jrr call inside zo."
+        },
+        {
+          "site": "wire-to-record converter projection",
+          "offset": 163578872,
+          "excerpt": "isApiErrorMessage:!0},...n.api_error!==void 0&&{apiError:n.api_error},...n.batch_tool_uses!==void 0&&n.batch_tool_uses.length>0&&{batchToolUses:n.batch_tool_uses}",
+          "verdict": "Rebuilds the marker on a record arriving from an SDK frame; a converter, so it mints no new placeholder of its own."
+        },
+        {
+          "site": "SDK result frame",
+          "offset": 166555809,
+          "excerpt": "isApiErrorMessage:!0},c={type:\"result\",uuid:Vn(),subtype:\"error_during_execution\",is_error:!0,duration_ms:0",
+          "verdict": "Builds a control-protocol result object with snake_case fields; never appended to a transcript."
+        },
+        {
+          "site": "stream projection",
+          "offset": 180222849,
+          "excerpt": "isApiErrorMessage:!0},...e.api_error!==void 0&&{apiError:e.api_error}}}function A(e){return{type:\"stream_event\",event:e.event",
+          "verdict": "A wire projection beside a stream_event builder; not a transcript record."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Enumerated `isApiErrorMessage:!0` across the whole 2.1.258 executable and read 180 bytes at each offset; read `Jrr`, its model stamp and the `Jc` assignment; counted the corpus records and the sentinel-carrying subset over the top-level transcripts; ran the `-t agent` label census twice over the same corpus, once with a build that has only the leaf default and once with the build carrying the per-record override.",
+          "observed": "4 occurrences of the literal, at 163578872, 165934688, 166555809 and 180222849, each read and classified in the enumeration. Corpus: 118 records with `isApiErrorMessage:true`, 118 of 118 carrying `\"model\":\"<synthetic>\"` on the same line. Census delta over one corpus state, the two builds run back to back: `agent.message` 34275 with the leaf default alone and 34157 with the per-record override, a difference of exactly 118.",
+          "rule": "One observation per byte match in the executable; one per record in the corpus; the census counts records under a surviving leaf.",
+          "note": "First pinning of the placeholder shape and of the two-part test the drop predicate applies to it."
+        }
+      ]
+    },
+    {
+      "id": "TURN-027",
+      "area": "turn-boundary",
+      "behavior": "A local-jsx slash command decides what is WRITTEN through the `display` option its completion callback returns, and the executor `Ge` (173521004) has exactly four outcomes. `display:\"skip\"` calls `f({messages:[],shouldQuery:!1,...})` (173522907) and writes nothing at all. `display:\"system\"` builds its records through `um` (166031707), the `{type:\"system\",subtype:\"local_command\",content:e,level:\"info\",timestamp,uuid,isMeta:!1}` factory - a command echo plus a `<local-command-stdout>` body - selected by the ternary at 173523156 (172837328 in Claude Code 2.1.261). Any OTHER value falls to the ordinary branch at 173523209, which writes a `type:\"user\"` wrapper record built by `xe` plus a `<local-command-stdout>` user record, with no isMeta on either. And a panel closed with ESCAPE resolves `closed.then((A)=>{if(A===\"dismissed\"...` (173524018) into `f({messages:[]})`, writing nothing, for every panel command whatever its display option. The `local` command type has no display axis: its result map (173525100) returns `{messages:[]}` for a result of type `skip`, and routes a `text` result through the same `um` factory, choosing the tag `local-command-stderr` when the result level is `error` and `local-command-stdout` otherwise.",
+      "depends": "csift classifies the two shapes differently and must keep doing so: the wrapper user record and its stdout sibling are `harness.command.invocation` / `harness.command.stdout`, while the `display:\"system\"` pair is `harness.meta.system` and gated. Only the second shape is re-minted by the request assembler (CLS-026), so delivery follows the record TYPE rather than the command, and a reader who assumes a slash command always leaves a user-record wrapper will mis-read both the skip arm and the system arm.",
+      "code": [
+        {
+          "path": "src/model/classify_promoted.rs",
+          "lines": "24-25",
+          "snippet": "                \"compact_boundary\" => None,\n                _ => Some(Class::MetaSystem),"
+        },
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "160-163",
+          "snippet": "    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible."
+        },
+        {
+          "path": "src/model/markers.rs",
+          "lines": "120-122",
+          "snippet": "pub fn is_slash_command_wrapper(content: &str) -> bool {\n    content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)\n}"
+        }
+      ],
+      "instrument": "Binary: dump 330 bytes at 173521004, 173522907, 173523156, 173523209, 173524018 and 173525100 and read the four arms plus the local result map; dump 300 bytes at 166031707 for the `um` factory. Corpus: `csift search \"\" -t harness --no-subagents --count-by label` for the wrapper and stdout rows, and a per-record walk of the lines matching `\"subtype\":\"local_command\"` splitting them on whether the content holds a `local-command-stdout` tag; counting rule one observation per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "How the 83 local-jsx command objects divide across the four arms is not measured here; the instrument would be a per-object read of each command's completion callback."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "Ge",
+          "offset": 173521004,
+          "excerpt": "function Ge(e,n,o,m,l,c,S,I,T,v,N,q,L,W,j,Z,J){let r=due(e,o.options.commands),d=Uq(pre().has(e)?e:\"custom\");if(!nf(r)){p(d,\"cmd_policy_disabled\");",
+          "note": "The slash-command executor every arm below returns from."
+        },
+        {
+          "role": "gate",
+          "name": "the display ternary",
+          "offset": 173523156,
+          "excerpt": "messages:_?.display===\"system\"?A?C:[um(ae(r,n)),um(`<local-command-stdout>${nb(String(i))}</local-command-stdout>`),...C]:[xe({content:S$({inputString:ae(r,n),precedingInputBlocks:m}),uuid:I}),",
+          "note": "The branch that decides which record TYPE is written: the system factory or the ordinary user record."
+        },
+        {
+          "role": "gate",
+          "name": "the skip arm",
+          "offset": 173522907,
+          "excerpt": "_?.display===\"skip\"){f({messages:[],shouldQuery:!1,command:r,nextInput:_?.nextInput,submitNextInput:_?.submitNextInput});return}",
+          "note": "Returns an empty message list, so nothing at all reaches the transcript."
+        },
+        {
+          "role": "gate",
+          "name": "the escape dismiss",
+          "offset": 173524018,
+          "excerpt": ".closed.then((A)=>{if(A===\"dismissed\"&&!E)E=!0,p(d,\"cmd_local_jsx_dismissed\"),f({messages:[],shouldQuery:!1,command:r})})",
+          "note": "A dismissed panel takes the same empty path regardless of the command's own display option."
+        },
+        {
+          "role": "writer",
+          "name": "um",
+          "offset": 166031707,
+          "excerpt": "function um(e,n){return{type:\"system\",subtype:\"local_command\",content:e,level:\"info\",timestamp:new Date().toISOString(),uuid:oT(),isMeta:!1,...n?.contextUsage!==void 0&&{contextUsage:n.contextUsage}}}",
+          "note": "The factory behind the system arm: level is always info and isMeta always false, which the corpus confirms."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Dumped the six executor offsets and the `um` factory from the 2.1.258 executable and read each arm; walked every corpus line matching `\"subtype\":\"local_command\"` with a JSON parse, splitting on the presence of a `local-command-stdout` tag and tallying isMeta, level and the presence of a message object.",
+          "observed": "The four arms read as recorded, and the `local` result map routes its text result through the same `um` factory rather than through a user record. Corpus over 72 top-level transcripts: 16 `local_command` records, 12 carrying a stdout body and 4 being command echoes; isMeta false on 16 of 16, level \"info\" on 16 of 16, and a message object absent on 16 of 16. The user-record shapes stand beside them at 214 `harness.command.invocation` and 169 `harness.command.stdout` records.",
+          "rule": "One observation per byte offset read; one per record for every corpus tally.",
+          "note": "First pinning of the display axis; the `local` text arm writing through the system factory refines what the executor was thought to do."
+        }
+      ]
+    },
+    {
+      "id": "TURN-028",
+      "area": "turn-boundary",
+      "behavior": "`/btw` writes nothing on any normal path, and its answer never joins the conversation it was asked from. Its dialog chunk spans bytes 187243199-187267228 in the 2.1.258 executable and holds exactly 4 `display:\"skip\"` returns - two command entry points (187266019, 187266405) and two panel key handlers (187255960, 187256581). The only writing paths in the chunk are the bare-invocation usage error (`s(\"Usage: /btw <your question>\",{display:\"system\"})` at 187266164) and two fork sub-path messages (187258022, 187258102), all three `display:\"system\"`. The answer itself is a separate one-turn query: `qE` (164783861) gates its transcript recorder on a `skipTranscript` parameter (`je=I?void 0:Oh(d)` ... `if(je)await Kne(...)` at 164784912), and the `/btw` call site (179010362) passes `querySource:\"side_question\"`, `maxTurns:1`, `skipCacheWrite:!0` and `skipTranscript:!0`; the question and its answers live in `session.btwHistory` in memory, and the panel's fork key writes them into a NEW forked transcript, never the parent.",
+      "depends": "csift tells a consumer that a zero-match search is a DEFINITIVE absence, and that framing is only honest with the bound this claim gives: a command whose every normal exit is the skip arm leaves NO record, so \"csift finds no wrapper for /btw\" is not \"/btw was not run\". The same reasoning covers every panel a user closed with Escape. A csift surface that ever inferred command usage from wrapper records would be wrong for this family, and the SKILL wrong-assumption row exists for it.",
+      "code": [
+        {
+          "path": "src/search/census.rs",
+          "lines": "231-236",
+          "snippet": "pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {\n    eprintln!(\n        \"csift: 0 matches \u2014 a DEFINITIVE absence (exit 0), NOT an error. \\\n         Scope: {} session(s). Active filters: {}.\",\n        diag.sessions_in_scope, diag.active_filters\n    );"
+        },
+        {
+          "path": "src/model/markers.rs",
+          "lines": "107",
+          "snippet": "pub const COMMAND_NAME_PREFIX: &str = \"<command-name>\";"
+        }
+      ],
+      "instrument": "Binary: count `display:\"skip\"` inside bytes 187243199-187267228 (expect 4) and read 200 bytes at each; read 200 bytes at 187266164, 187258022 and 187258102 for the writing paths; read 260 bytes at 164783861 and 164784912 for the recorder gate and 260 at 179010362 for the call site. Corpus: `csift search \"\" -t harness.command.invocation --no-subagents` and a per-record tally of the command names, plus a JSON walk of the `\"subtype\":\"local_command\"` lines extracting each echo's `<command-name>` tag; counting rule one observation per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the /btw call into the one-turn query",
+          "offset": 179010362,
+          "excerpt": "side_question\"}}),querySource:\"side_question\",forkLabel:\"side_question\",maxTurns:1,skipCacheWrite:!0,skipTranscript:!0,overrides:{abortController:y}",
+          "note": "The answer is produced by a separate query that is told not to record a transcript."
+        },
+        {
+          "role": "gate",
+          "name": "qE recorder gate",
+          "offset": 164784912,
+          "excerpt": "je=I?void 0:Oh(d),Ge=null;if(je)await Kne(e,je,void 0,we.storageV5).catch((xt)=>t(`Forked agent [${d}] failed to record initial transcript: ${xt}`))",
+          "note": "With skipTranscript set, the recorder handle is undefined and the append never runs."
+        },
+        {
+          "role": "writer",
+          "name": "the usage-error write",
+          "offset": 187266164,
+          "excerpt": "display:\"system\"}),null;return e(Se,{question:w.question,initialResponse:w.response,initialFallbackNotice:w.fallbackNotice,context:u,onDone:s})",
+          "note": "One of the three writing paths in the chunk, and the shape a corpus echo is expected to take."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "command entry, no argument",
+          "offset": 187266019,
+          "excerpt": "display:\"skip\"}),null;if(Xy(te),R)return e(Se,{question:R.question,inFlight:R,context:u,onDone:s});if(!w)return s(\"Usage: /btw <your question>\",{display:\"system\"}),null;",
+          "verdict": "Skip return; the adjacent usage error is the only write on this path."
+        },
+        {
+          "site": "command entry, with a question",
+          "offset": 187266405,
+          "excerpt": "display:\"skip\"}),null;let T=u.session.btwHistory.inFlight;if(T===null||T.question===A)Xy(te);return e(Se,{question:A,context:u,onDone:s})",
+          "verdict": "Skip return; the question is handed to the panel, not to the transcript."
+        },
+        {
+          "site": "panel key handler (history navigation)",
+          "offset": 187255960,
+          "excerpt": "display:\"skip\"})},[k,w,De]);",
+          "verdict": "Skip return on panel close from the history navigation path."
+        },
+        {
+          "site": "panel key handler (close)",
+          "offset": 187256581,
+          "excerpt": "display:\"skip\"});return}if((a.key===\"[\"||a.key===\"]\")&&!a.ctrl&&!a.meta){a.preventDefault()",
+          "verdict": "Skip return on the explicit close key."
+        },
+        {
+          "site": "fork sub-path, pre-first-turn error",
+          "offset": 187258022,
+          "excerpt": "display:\"system\"});else S(),w(\"Cannot fork before the first conversation turn\",{display:\"system\"})",
+          "verdict": "A writing path, and one of only three in the chunk."
+        },
+        {
+          "site": "fork sub-path, failure notice",
+          "offset": 187258102,
+          "excerpt": "display:\"system\"})}).catch((g)=>{S(),w(`Failed to fork: ${l(g)}`)});",
+          "verdict": "The third writing path; the fork itself writes into a NEW transcript."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Counted and read every `display:\"skip\"` occurrence inside the /btw chunk bounds in the 2.1.258 executable, read the three writing paths, and read the one-turn query entry, its recorder gate and its call site; then walked the corpus for slash wrappers by name and extracted the `<command-name>` tag from every `local_command` echo.",
+          "observed": "4 skip returns inside 187243199-187267228 at the four offsets in the enumeration, and 3 writing paths, all `display:\"system\"`. Corpus over 72 top-level transcripts: 214 slash-command wrapper records and none of them naming btw, against exactly 1 `local_command` echo naming btw among the 4 echoes (the other three name model twice and fork once).",
+          "rule": "One observation per byte match inside the named chunk bounds; one per record for the corpus counts.",
+          "note": "The corpus specimen is the writing path, not the normal one: the single btw echo is what a usage error or a fork sub-path leaves behind."
+        }
+      ]
+    },
+    {
+      "id": "TURN-029",
+      "area": "turn-boundary",
+      "behavior": "The `system`/`local_command` record is written in exactly one place, and it is the carrier the request assembler re-mints. The literal `subtype:\"local_command\"` has exactly 2 occurrences in the 2.1.258 executable: 166031745, inside the factory `um` (166031707), and 163578295, a rehydration mapper that rebuilds such a record from an SDK frame with timestamp, uuid and isMeta supplied explicitly. Both writing arms of the slash-command executor reach the transcript through that factory - the local-jsx `display:\"system\"` ternary (173523156) and the `local` result map's text arm (173525100). Because the factory pins them, every such record carries `level:\"info\"` and `isMeta:!1` and no `message{}` object.",
+      "depends": "csift keys the delivered case on the record shape `type:\"system\"` plus `subtype:\"local_command\"` alone (`Record::delivery_override`), not on any command name or tag, and that is sound only because one factory writes the shape. The candidate gate that admits the line is the key-only `\"subtype\"` byte needle, so a second writer producing the same subtype would be picked up automatically, but a writer producing a DIFFERENT subtype for the same purpose would silently fall out of the bare-role view.",
+      "code": [
+        {
+          "path": "src/search/scan.rs",
+          "lines": "419-420",
+          "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
+        },
+        {
+          "path": "src/model/delivery.rs",
+          "lines": "34-36",
+          "snippet": "    /// - a `system`/`local_command` record => `Some(true)`: message-less, so the leaf\n    ///   default calls it invisible, yet the assembler re-mints it as a user message.\n    ///   Its content is a slash command's own echo and stdout."
+        }
+      ],
+      "instrument": "Binary: `grep -abo 'subtype:\"local_command\"' <executable>` and read 300 bytes at each offset, expecting the factory and one rehydration mapper; counting rule one observation per byte match. Corpus: JSON-walk every line matching the same literal and tally `level`, `isMeta` and the presence of a `message` key; counting rule one observation per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the local result map text arm",
+          "offset": 173525826,
+          "excerpt": "let _=i.level===\"error\"?\"local-command-stderr\":\"local-command-stdout\",C=um(`<${_}>${nb(i.value)}</${_}>`,{contextUsage:i.contextUsage});",
+          "note": "The second caller of the factory, beside the local-jsx system ternary."
+        },
+        {
+          "role": "gate",
+          "name": "UWt",
+          "offset": 165947398,
+          "excerpt": "function UWt(e){return e.type===\"system\"&&e.subtype===\"local_command\"}",
+          "note": "What the request assembler tests: the shape this factory writes, and nothing else about it."
+        },
+        {
+          "role": "writer",
+          "name": "um",
+          "offset": 166031707,
+          "excerpt": "function um(e,n){return{type:\"system\",subtype:\"local_command\",content:e,level:\"info\",timestamp:new Date().toISOString(),uuid:oT(),isMeta:!1",
+          "note": "The one factory; it pins level and isMeta, which is why the corpus values are uniform."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the factory",
+          "offset": 166031745,
+          "excerpt": "subtype:\"local_command\",content:e,level:\"info\",timestamp:new Date().toISOString(),uuid:oT(),isMeta:!1",
+          "verdict": "The only site that mints a new record of this shape."
+        },
+        {
+          "site": "the SDK rehydration mapper",
+          "offset": 163578295,
+          "excerpt": "subtype:\"local_command\"",
+          "verdict": "Rebuilds the record from a wire frame with timestamp, uuid and isMeta supplied explicitly; a converter, not a new writer."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Enumerated `subtype:\"local_command\"` across the whole 2.1.258 executable and read 300 bytes at each offset; read the two calling arms; then JSON-walked every corpus record of that subtype and tallied level, isMeta and the presence of a message key.",
+          "observed": "2 occurrences, at 163578295 and 166031745, both read and classified in the enumeration; 2.1.261 also carries exactly 2. Corpus over 72 top-level transcripts: 16 records, level \"info\" on 16 of 16, isMeta false on 16 of 16, and no message object on any of the 16.",
+          "rule": "One observation per byte match in the executable; one per record in the corpus.",
+          "note": "Closes the negative behind the delivered case: the shape has a single minting site."
+        }
+      ]
+    },
+    {
+      "id": "TURN-030",
+      "area": "turn-boundary",
+      "behavior": "Several ways of running a slash command leave NO record at all, so the absence of a wrapper is not evidence the command was not run. Three families, each read in the 2.1.258 executable. (1) A local-jsx command whose every normal exit is `display:\"skip\"`: `/btw` (4 skip returns in its chunk, TURN-028), `/tasks` and its alias `/bashes` (the panel `Urt` at 181021865, whose chunk holds 6 skip returns), and `/release-notes` (186349332: `y(s,t,i){t({type:\"append\",messages:[Mt(s,\"notice\")]}),i(void 0,{display:\"skip\"})}` - it appends an informational notice built at 163953658 and THEN returns skip, so what it leaves is on disk and rendered to the human but dropped by the request assembler). (2) Any panel closed with ESCAPE, which resolves into `f({messages:[]})` (173524018) whatever the command's own display option. (3) A `local` command whose result is of type `skip`, which returns `{messages:[],shouldQuery:!1,command:r}` from the result map (173525100).",
+      "depends": "This is the bound on what a definitive absence means. csift frames a zero-match search as a DEFINITIVE absence for the parseable corpus, and that is a statement about the TRANSCRIPT, never about what happened in the interface; the SKILL wrong-assumption rows exist so a consumer does not read \"no wrapper\" as \"not run\", and does not read a harness notice on disk as something the model was told. A `system`/`informational` record - what `/release-notes` leaves - is the exact shape the request assembler drops (CLS-026), which is why it stays an invisible leaf while `local_command` does not.",
+      "code": [
+        {
+          "path": "src/search/census.rs",
+          "lines": "175-178",
+          "snippet": "/// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare \"no matching\n/// exchanges\" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;\n/// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the\n/// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)"
+        },
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "153-155",
+          "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),"
+        }
+      ],
+      "instrument": "Binary: read 300 bytes at 181021865 for the tasks panel and count `display:\"skip\"` in bytes 181021865-181060000; read 300 bytes at 186349332 and at 163953658 for the release-notes path and the notice factory; read 330 bytes at 173524018 and 900 at 173525100 for the dismiss and the local result map. Corpus: `csift search \"\" -t harness.command.invocation --no-subagents --count-by label` and a per-name tally of the wrapper records; counting rule one observation per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "Urt (the tasks panel)",
+          "offset": 181021865,
+          "excerpt": "function Urt({onDone:T,toolUseContext:I,initialDetailTaskId:O,onBack:q,promptVisibleBelow:oe=!1}){let ue=W((Ro)=>Ro.tasks),Se=Lt(),Ce=Kf(),Re=I.messageQueue",
+          "note": "The panel behind /tasks and its alias /bashes; every exit in its chunk is a skip return."
+        },
+        {
+          "role": "gate",
+          "name": "the release-notes skip return",
+          "offset": 186349332,
+          "excerpt": "function y(s,t,i){t({type:\"append\",messages:[Mt(s,\"notice\")]}),i(void 0,{display:\"skip\"})}",
+          "note": "Appends a notice and then takes the skip arm, so the record exists but no command wrapper does."
+        },
+        {
+          "role": "writer",
+          "name": "the informational notice factory",
+          "offset": 163953658,
+          "excerpt": "function dne(e,n){return{type:\"system\",subtype:\"informational\",content:e,isMeta:!1,timestamp:new Date().toISOString(),uuid:cRo(),level:n}}",
+          "note": "What a notice actually is: a system record with a level, which the request assembler drops."
+        },
+        {
+          "role": "writer",
+          "name": "the local skip arm",
+          "offset": 173525196,
+          "excerpt": "if(i.type===\"skip\")return{messages:[],shouldQuery:!1,command:r};",
+          "note": "The third no-record family: a local command whose result asks for nothing to be written."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Read the tasks panel, the release-notes function, the notice factory, the dismiss handler and the local result map at their offsets in the 2.1.258 executable, and counted `display:\"skip\"` inside the tasks chunk bounds; then tallied the corpus slash wrappers by name and censused the system subtypes with rg.",
+          "observed": "6 skip returns inside 181021865-181060000; the release-notes function appends `Mt(s,\"notice\")` and returns skip in one statement; the notice factory builds `type:\"system\"`/`subtype:\"informational\"`. Corpus over 72 top-level transcripts: 214 wrapper records under 12 command names, none of them tasks, bashes, release-notes, rewind or stop; 14 `informational` system records, all of them inside the 585-record `harness.meta.system` census.",
+          "rule": "One observation per byte match inside the named bounds; one per record for every corpus tally.",
+          "note": "First pinning of the no-record families; it is the bound the zero-match diagnosis wording depends on."
+        }
+      ]
+    },
+    {
+      "id": "MISC-031",
+      "area": "misc",
+      "behavior": "The builtin slash-command registry is one array built lazily: `builtinCommandTable??=k7o()` (165682619) with `function k7o(){return[...]}` (165682669). Counting the type literals inside the executable, Claude Code 2.1.258 carries 146 of them - `type:\"local\"` 45, `type:\"local-jsx\"` 83, `type:\"prompt\"` 18 - and 2.1.261 carries 148, the difference being two more `local` entries with the local-jsx and prompt counts unchanged at 83 and 18. Some names ship as a `local` and a `local-jsx` TWIN, selected by the scratchpad gate `Oe()` (160046882), which the local twin carries as its `isEnabled`; an interactive terminal therefore runs the local-jsx twin, which is why `/model` (165672499, `{type:\"local-jsx\",name:\"model\",...}`) writes records through the local-jsx executor rather than the local one. The dialog map `Ose` (180404524) maps each local-jsx name to its own lazily imported chunk (the `btw` entry at 180404874, the `model` entry at 180406443).",
+      "depends": "csift reads slash-command wrappers by their tag shape rather than against a list of command names (`is_slash_command_wrapper` accepts either tag order), which is what keeps it correct as the registry grows by two entries between adjacent builds. It also means the set of names a corpus shows is a property of what was RUN, never of what ships: a claim about which commands exist has to be read out of the registry, not out of the wrappers.",
+      "code": [
+        {
+          "path": "src/model/markers.rs",
+          "lines": "118-122",
+          "snippet": "/// True when `content` is a slash-command wrapper (\u00a74.2.3) in EITHER tag order.\n#[must_use]\npub fn is_slash_command_wrapper(content: &str) -> bool {\n    content.starts_with(COMMAND_NAME_PREFIX) || content.starts_with(COMMAND_MESSAGE_PREFIX)\n}"
+        },
+        {
+          "path": "src/cli/search_args.rs",
+          "lines": "121-124",
+          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /\n    /// `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every leaf under the"
+        }
+      ],
+      "instrument": "Binary: read 300 bytes at 165682619 and at 165682669 for the table and its builder; count `type:\"local\"`, `type:\"local-jsx\"` and `type:\"prompt\"` across the whole executable for each version, counting rule one observation per byte match; read 300 bytes at 160046882 for the scratchpad gate and at 165672499 for a twinned name. Corpus: `csift search \"\" -t harness.command.invocation --no-subagents` and a per-name tally, counting rule one observation per record.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "measured against the shipped binary and the projects corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "How the 146 type literals collapse into distinct command objects and name slots is not measured here; the instrument would be a parse of the array returned by the builder."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the lazy table",
+          "offset": 165682619,
+          "excerpt": "builtinCommandTable??=k7o(),e.builtinCommandTable}function k7o(){return[z3t,s9e,$kt,KJn,x9n,RSt,U9n,wje,...PZ(\"fleetFork\"),UJn,PSt,I9n,EZn,Sje,LSt,NSt,kje",
+          "note": "One array, built once; every builtin command object is an element or a spread of one."
+        },
+        {
+          "role": "gate",
+          "name": "Oe (the scratchpad gate)",
+          "offset": 160046882,
+          "excerpt": "function Oe(){let{isScratchpadEnabled:e}=import.meta.require(\"/$bunfs/root/chunk-p224hgmg.js\");return e()}",
+          "note": "What selects between a local and a local-jsx twin of the same name."
+        },
+        {
+          "role": "writer",
+          "name": "the model command object",
+          "offset": 165672499,
+          "excerpt": "{type:\"local-jsx\",name:\"model\",get description(){return`Set the AI model for Claude Code (currently ${us(at())})`},argumentHint:\"[model]\",immediate:!0,requires:{ink:!0},thinClientDispatch:\"control-request\"}",
+          "note": "A twinned name whose local-jsx half is what an interactive terminal runs, and the reason /model leaves records."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "date": "2026-09-07",
+          "verdict": "refined",
+          "instrument": "Read the table and its builder at their offsets, counted the three command type literals across the whole executable for 2.1.258 and 2.1.261, and read the scratchpad gate and the model command object; then tallied the corpus slash wrappers by name.",
+          "observed": "2.1.258: `type:\"local\"` 45, `type:\"local-jsx\"` 83, `type:\"prompt\"` 18, summing to 146. 2.1.261: 47, 83 and 18, summing to 148. The dialog map and the scratchpad gate returned their excerpts unchanged. Corpus over 72 top-level transcripts: 214 wrapper records under 12 distinct names, a small fraction of what the registry ships.",
+          "rule": "One observation per byte match for the literal counts; one per record for the wrapper tally.",
+          "note": "First pinning of the registry size and of the twin-selection gate."
         }
       ]
     }

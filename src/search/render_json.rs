@@ -67,6 +67,10 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
         "label": h.class.path(),
         "labels": h.labels,
+        // C-28: did the model RECEIVE this record? The matched leaf's default,
+        // overridden per record by Claude Code's own request-assembler drop predicate.
+        // `labels` is not the delivery verdict, which is why this rides beside it.
+        "delivered": h.delivered(),
         "excerpt": h.excerpt,
         "ts_utc": h.timestamp_utc,
         "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),

@@ -99,7 +99,7 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         rows).\n\n\
         THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 35 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
-        role's LLM-VISIBLE leaves - the conversation as the model receives/produces\n  \
+        role's DELIVERED leaves - the conversation as the model receives/produces\n  \
         it. Eight leaves are invisible and need naming or a glob: `user.unsent`\n  \
         (a superseded draft is not in the surviving conversation - CC's own\n  \
         preservedMessages accounting excludes every draft), `harness.compaction.boundary`\n  \
@@ -109,6 +109,16 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \
         contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
         last-human-touch consumer.)\n  \
+          RECORD-LEVEL DELIVERY: a bare role decides per RECORD, not per leaf, because\n  \
+        Claude Code's request assembler runs one drop predicate and it disagrees with\n  \
+        the leaf table in exactly three cases - a `system`/`local_command` record (a\n  \
+        slash command's own echo and stdout) IS re-minted as a user message and sent,\n  \
+        so `-t harness` shows it although `harness.meta.system` is invisible; an\n  \
+        `isVirtual` record and the `<synthetic>` API-error placeholder are NOT sent, so\n  \
+        `-t agent` / `-t user` hide them although their leaves are visible. A glob, an\n  \
+        intermediate prefix and an exact leaf are unaffected and reach every record;\n  \
+        an undelivered one renders a `[not delivered]` marker in the label zone, and\n  \
+        JSON carries `delivered` on every hit.\n  \
           GATED LEAVES (v0.10.0, +1 in v0.10.1): the six promoted non-record leaves -\n  \
         `user.queued` and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot,\n  \
         system}` - are scanned ONLY when an explicit -t reaches them (the full path, a\n  \
@@ -116,7 +126,10 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         when a `csift show --line/--uuid` address names the line. A bare scan with no\n  \
         -t, a bare role, and `--count-by label` without -t never parse those lines\n  \
         (every one is a non-message line, and most queued content is a duplicate\n  \
-        automation pulse). All six are LLM-invisible: none carries a message field.\n  \
+        automation pulse) - with ONE exception: a bare `-t harness` admits the system\n  \
+        lines so the delivered `local_command` records among them can be reached, and\n  \
+        the per-record rule then drops the rest. All six leaf DEFAULTS are\n  \
+        LLM-invisible: none carries a message field.\n  \
         Their raw form is still `show --line N --raw`.\n  \
           user     .message                genuine human prose (a slash command with typed\n                                   \
         prose renders as `/name args`)\n           \

@@ -177,6 +177,14 @@ pub(crate) fn collect_record_hits(
     if labels.is_empty() {
         return; // unmodeled / excluded record - carries no role.class.sub label
     }
+    // C-28: whether the model RECEIVED a record is a per-RECORD fact, and a bare ROLE
+    // selector asks exactly that - so the filter is specialised HERE, once, before any
+    // label is tested (the seam where the bare-role expansion first meets a record).
+    // The scan-layer `user.unsent` assignment above is the precedent for a fact a pure
+    // per-record classify cannot carry; this one is per record but belongs to the
+    // SELECTION, not to the label set, so `labels[]` is untouched by it.
+    let delivery = rec.delivery_override();
+    let filter = filter.with_delivery(delivery);
     let ts = rec.timestamp.clone();
     let model = rec
         .message
@@ -239,6 +247,7 @@ pub(crate) fn collect_record_hits(
                 from_sidecar: false,
                 queue_operation: queue_operation.clone(),
                 queue_reason: queue_reason.clone(),
+                delivery,
                 truncated,
             });
         }
