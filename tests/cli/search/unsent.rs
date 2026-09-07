@@ -353,6 +353,105 @@ fn an_empty_sent_message_renders_the_line_without_a_share() {
     assert_eq!(row["diff_exact"], true, "{}", j.stdout);
 }
 
+/// A compaction RE-ANCHOR re-appends a contiguous block with its uuids PRESERVED, so the
+/// same logical message is on disk twice with only `promptId` differing. Grouping on
+/// parentUuid alone read the copy as a later sibling and made the ORIGINAL - a message
+/// that was sent and answered - a `user.unsent` draft with a 0-char diff.
+#[test]
+fn a_replayed_same_uuid_opener_is_never_a_draft() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef before the tide turns"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"timestamp":"2026-06-07T05:01:00.000Z","compactMetadata":{"trigger":"auto","preTokens":900}}"#, "\n",
+            r#"{"type":"user","uuid":"s1","parentUuid":null,"isCompactSummary":true,"timestamp":"2026-06-07T05:01:01.000Z","message":{"role":"user","content":"summary of the session so far"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p2","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef before the tide turns"}}"#, "\n",
+        ),
+    );
+    let unsent = h.run(&["search", "", &at(SESS), "-t", "user.unsent"]);
+    assert!(unsent.success, "stderr: {}", unsent.stderr);
+    assert!(
+        unsent.stdout.contains("no matching exchanges"),
+        "a replayed copy is not a draft:\n{}",
+        unsent.stdout
+    );
+    assert!(
+        !unsent.stdout.contains("differs from the sent message"),
+        "and carries no diff line:\n{}",
+        unsent.stdout
+    );
+    // The message opens exactly ONE turn: the replayed copy folds in as a member of the
+    // turn it lands in rather than minting a second t<N> for one logical message.
+    let turns = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "--count-by",
+        "turn",
+        "--format",
+        "json",
+    ]);
+    let keys: Vec<serde_json::Value> = turns
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "census")
+        .map(|v| v["key"].clone())
+        .collect();
+    assert_eq!(keys.len(), 1, "one turn, not two:\n{}", turns.stdout);
+    // The original still classifies as the human's message, at its own line.
+    let msg = h.run(&["search", "", &at(SESS), "-t", "user.message"]);
+    assert!(
+        msg.stdout.contains("chart the reef before the tide turns"),
+        "the original is user.message:\n{}",
+        msg.stdout
+    );
+}
+
+/// A recalled message resent UNCHANGED is a real draft (its own uuid) with nothing to
+/// report: saying "differs in 0 chars" would send the reader hunting for an edit.
+#[test]
+fn an_unchanged_resend_says_identical_rather_than_zero_chars() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"d1","parentUuid":"p0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"p0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["search", "", &at(SESS), "-t", "user.unsent"]);
+    assert!(
+        out.stdout.contains("identical to the sent message"),
+        "an unchanged resend says so:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("0 chars"),
+        "never a 0-char diff line:\n{}",
+        out.stdout
+    );
+    let j = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "user.unsent",
+        "--format",
+        "json",
+    ]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "exchange")
+        .expect("exchange row");
+    assert_eq!(row["diff_chars"], 0, "{}", j.stdout);
+    assert_eq!(row["diff_exact"], true, "{}", j.stdout);
+}
+
 #[test]
 fn a_sectioned_draft_keeps_the_single_unsent_label() {
     // A superseded draft shaped like a sectioned text (a pulse) must not fan out into

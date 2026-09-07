@@ -129,6 +129,12 @@ pub struct DraftDiff {
 impl DraftDiff {
     /// The one-line rendering shared by `search` and `show` (text mode).
     pub(crate) fn text_line(&self) -> String {
+        // A resend that changed nothing: the user recalled the message and sent it back
+        // as it was. Saying "differs in 0 chars" would invite the reader to look for an
+        // edit that is not there.
+        if self.exact && self.chars == 0 {
+            return "identical to the sent message".to_string();
+        }
         let more = if self.exact { "" } else { "more than " };
         match self.pct {
             Some(p) => format!(

@@ -5,6 +5,27 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.11.1] - 2026-09-07
+
+### Fixed
+
+- **A replayed record is no longer read as a resend, and turn numbers shift where it was.**
+  A compaction re-anchor re-appends a block of already-written records with their uuids
+  preserved, and a re-appended user message keeps its `parentUuid` too, differing from the
+  original in one field (`promptId`). The draft rule groups openers by `parentUuid` and
+  keeps the last, so it read the copy as a later sibling: the ORIGINAL message, sent and
+  answered, was labelled `user.unsent`, dropped from turn numbering, and shown as differing
+  from the sent message in 0 chars. Seven genuine messages were affected in one session.
+  Same-uuid openers under one parent now collapse to their first occurrence: the first
+  keeps its label and its turn, the copy opens nothing but stays a turn member, so it is
+  still addressable and still renders like every other replayed record. **Turn numbering
+  shifts on any transcript carrying a replayed block** — as it did for the v0.5 slash-wrapper
+  fix and the 0.9.2 draft work. Re-read the `tN` from current output rather than reusing a
+  noted one; `--uuid` is the address that survives. Recorded as ledger claim CMP-019.
+- **An unedited resend says so.** A draft whose text is identical to the message that
+  replaced it now reads `identical to the sent message` rather than `differs from the sent
+  message in 0 chars`.
+
 ## [0.11.0] - 2026-09-06
 
 The csift channel: a way to get a message to a Claude Code lane the official channel

@@ -36,11 +36,20 @@ pub(crate) fn reconstruct_and_match(
     // the 0-based turn index; map each index group back to its `Kept` borrows.
     // The skip set is computed EXPLICITLY (not inside the deduped grouper) so the
     // collapse can be DISCLOSED and an addressed draft can still be fetched (C-18).
-    // The map form additionally names each draft's SURVIVOR (C-27, the unsent diff
-    // line); the skip set the grouper consumes is exactly its key set.
-    let draft_map = crate::model::superseded_draft_map(records, |k| &k.rec);
-    let skip: std::collections::HashSet<usize> = draft_map.keys().copied().collect();
-    let index_turns = crate::model::group_turn_indices_core(records, |k| k.rec.opens_turn(), &skip);
+    // ONE walk decides both opener corrections: which openers are superseded DRAFTS (with
+    // the survivor named, for the C-27 diff line) and which are REPLAY COPIES a compaction
+    // re-anchor re-appended under a uuid an earlier opener already carried. A draft is
+    // dropped from turn reconstruction; a replay copy stops opening a turn but stays a
+    // member (it is a real record on disk, and every other record of that block renders at
+    // both of its lines).
+    let collapse = crate::model::collapse_openers(records, |k| &k.rec);
+    let draft_map = &collapse.drafts;
+    let skip = collapse.dropped();
+    let index_turns = crate::model::group_turn_indices_core(
+        records,
+        |i, k| k.rec.opens_turn() && collapse.opens(i),
+        &skip,
+    );
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
@@ -189,7 +198,7 @@ pub(crate) fn reconstruct_and_match(
         // which are read.
         let draft_diff = if draft && want_diff {
             idxs.first()
-                .and_then(|&i| draft_diff_for(records, i, &draft_map, &plan_index))
+                .and_then(|&i| draft_diff_for(records, i, draft_map, &plan_index))
         } else {
             None
         };

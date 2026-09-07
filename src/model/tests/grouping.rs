@@ -177,6 +177,83 @@ fn superseded_drafts_null_parent_never_grouped() {
     );
 }
 
+// ── the compaction RE-ANCHOR replay ──
+// A compaction re-anchor re-appends a contiguous block of records with their uuids
+// PRESERVED (the copies differ in `promptId` alone). The copy is the same logical record,
+// so it must not mark the original as an abandoned draft and must not open a second turn.
+
+#[test]
+fn a_replayed_same_uuid_opener_is_not_a_draft() {
+    // u1 is re-appended after a compaction boundary with the same uuid/parentUuid and a
+    // fresh promptId. Before the guard, the copy looked like a later sibling and made the
+    // ORIGINAL - a message that was sent and answered - a user.unsent draft.
+    let records: Vec<Record> = [
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"root","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p1","message":{"role":"user","content":"chart the reef"}}"#,
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p2","message":{"role":"user","content":"chart the reef"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+    let c = collapse_openers(&records, |r| r);
+    assert!(
+        c.drafts.is_empty(),
+        "a replayed copy supersedes nothing: {:?}",
+        c.drafts
+    );
+    assert!(c.replays.contains(&3), "index 3 is the replay copy");
+    assert!(!c.opens(3), "the copy never opens a turn");
+    // ONE turn for the message, and the copy stays a member rather than vanishing.
+    assert_eq!(
+        group_turn_indices_deduped(&records, |r| r),
+        vec![vec![0, 1, 2, 3]],
+        "one turn; the replayed opener folds in as a member"
+    );
+}
+
+#[test]
+fn a_genuine_edit_resend_is_still_a_draft_when_the_uuids_differ() {
+    // The guard keys on uuid IDENTITY, so an ordinary esc-edit-resend (distinct uuids
+    // under one parent) is unaffected.
+    let records: Vec<Record> = [
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"root","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
+            r#"{"type":"user","uuid":"d1","parentUuid":"a0","message":{"role":"user","content":"chart the reef"}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","message":{"role":"user","content":"chart the reef and the harbor"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+    let c = collapse_openers(&records, |r| r);
+    assert_eq!(c.drafts.get(&1), Some(&2), "d1 -> its survivor u1");
+    assert!(c.replays.is_empty());
+}
+
+#[test]
+fn a_replayed_pair_still_marks_a_later_real_resend() {
+    // The two corrections coexist: u1 is replayed (no draft), and a genuine edit-resend
+    // under the SAME parent afterwards still marks its own earlier sibling.
+    let records: Vec<Record> = [
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"root","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p1","message":{"role":"user","content":"first"}}"#,
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p2","message":{"role":"user","content":"first"}}"#,
+            r#"{"type":"user","uuid":"d2","parentUuid":"a0","message":{"role":"user","content":"second draft"}}"#,
+            r#"{"type":"user","uuid":"u2","parentUuid":"a0","message":{"role":"user","content":"second sent"}}"#,
+        ]
+        .iter()
+        .map(|l| parse(l))
+        .collect();
+    let c = collapse_openers(&records, |r| r);
+    assert!(c.replays.contains(&2), "the replay copy of u1");
+    // u1 (idx1) is superseded by the real later sibling u2 - it IS an earlier draft of
+    // that parent's turn; d2 (idx3) is superseded too. The replay copy is neither.
+    assert_eq!(c.drafts.get(&3), Some(&4), "d2 -> u2");
+    assert!(
+        !c.drafts.contains_key(&2),
+        "the replay copy is never a draft"
+    );
+}
+
 #[test]
 fn deduped_grouping_matches_plain_when_no_drafts() {
     // With no same-parent draft siblings, deduped grouping is identical to the plain

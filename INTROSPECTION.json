@@ -73498,13 +73498,13 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "131-135",
-          "snippet": "        // Keep the LAST opener per parent: when a new sibling appears, the previously-seen\n        // one for that parent becomes a superseded draft.\n        if let Some(prev) = latest.insert(parent, i) {\n            superseded.insert(prev);\n        }"
+          "lines": "198-208",
+          "snippet": "        // Keep the LAST opener per parent: when a new sibling appears, the previously-seen\n        // one for that parent becomes a superseded draft.\n        match groups.get_mut(parent) {\n            Some(entry) => {\n                let prev = std::mem::replace(&mut entry.0, i);\n                entry.1.push(prev);\n            }\n            None => {\n                groups.insert(parent, (i, Vec::new()));\n            }\n        }"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "140-153",
-          "snippet": "/// [`group_turn_indices`] with esc-cancel / edit-resend DRAFT SUPPRESSION (\u00a76.4.1): a\n/// superseded draft ([`superseded_draft_indices`]) is dropped ENTIRELY - it neither opens a\n/// turn nor folds in as a member - so a message the user edited away before sending can\n/// never resurface as a phantom turn (nor leak its abandoned text into a neighbour). This is\n/// the delimiter every session-operating surface (`turns` / `search` / `files` / `recover`)\n/// uses, so they stay byte-consistent on what counts as a turn.\n#[must_use]\npub fn group_turn_indices_deduped<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> Vec<Vec<usize>> {\n    let skip = superseded_draft_indices(records, |x| rec(x));\n    group_turn_indices_core(records, |x| rec(x).opens_turn(), &skip)\n}"
+          "lines": "234-254",
+          "snippet": "/// [`group_turn_indices`] with the two [`collapse_openers`] corrections (\u00a76.4.1): a\n/// superseded DRAFT is dropped ENTIRELY - it neither opens a turn nor folds in as a\n/// member - so a message the user edited away before sending can never resurface as a\n/// phantom turn (nor leak its abandoned text into a neighbour); a REPLAY COPY stops\n/// OPENING a turn but stays a member, so a compaction re-anchor cannot mint a second turn\n/// for a message that was sent once. This is the delimiter every session-operating surface\n/// (`turns` / `search` / `files` / `recover`) uses, so they stay byte-consistent on what\n/// counts as a turn.\n#[must_use]\npub fn group_turn_indices_deduped<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> Vec<Vec<usize>> {\n    let collapse = collapse_openers(records, |x| rec(x));\n    let skip = collapse.dropped();\n    group_turn_indices_core(\n        records,\n        |i, x| rec(x).opens_turn() && collapse.opens(i),\n        &skip,\n    )\n}"
         }
       ],
       "instrument": "Group all turn-opening user records of one transcript by `parentUuid` and count groups of size greater than one (counting rule: drafts = group size minus one, one per group), then cross-validate against csift's own `N superseded draft(s)` footer. Measured draft rates over four sessions: 11% (62 genuine / 7 drafts), 26% (1,216 / 317), 6% (86 / 5), 3% (32 / 1).",
@@ -81169,6 +81169,75 @@
           "observed": "The comparison holds a message whose asserted mode differs from the receiver's and fails closed on an unknown mode; the buffer is bounded at 100 entries; the headless path drops with an expired receipt; the token check is guarded on the Windows platform.",
           "rule": "Verbatim byte reads; the buffer bound is the constant read at its offset, not a count.",
           "note": "The headless receiver has its own policy row, so the risk is stated before the send instead of after it."
+        }
+      ]
+    },
+    {
+      "id": "CMP-019",
+      "area": "compaction",
+      "behavior": "A compaction re-anchor re-appends a contiguous block of already-written records, and a TURN-OPENING user record in that block keeps both its uuid and its parentUuid. In the measured transcript the block follows two compact_boundary + isCompactSummary pairs, and each duplicated user record's two raw lines differ in exactly ONE top-level field, promptId: uuid, parentUuid, timestamp and message are equal. Whole-file census of that transcript, one observation per uuid occurring twice: 464 uuids appear twice, 462 of them with the same parentUuid on both lines, and by record type attachment 289, assistant 117, user 44, system 14. The preserved parentUuid is what distinguishes this shape from the resume replay measured under REC-091, where the copy commonly differs by an added slug and 3,835 of 9,131 duplicated lines carry a DIFFERENT parentUuid: a replayed opener therefore lands in the same parent GROUP as the original, which no rule keyed on parentUuid alone can tell apart from a later sibling.",
+      "depends": "csift's superseded-draft rule groups turn-openers by parentUuid and keeps the LAST one, so before the uuid guard a replayed opener read as a later sibling and made the ORIGINAL a user.unsent draft: 7 genuine messages in one session were labelled unsent, dropped from turn numbering, and (once the C-27 diff line shipped) rendered as differing from the sent message in 0 chars. collapse_openers now collapses same-uuid openers under one parent to their FIRST occurrence: the first keeps its label and its turn, and the copy neither supersedes it nor opens a turn, while staying a turn MEMBER so it is still addressable and consistent with the replayed assistant and attachment records, which have always rendered at both of their lines. Turn NUMBERING shifts on any transcript carrying a replayed block, which is the correctness price of the fix. If a future build stopped preserving the parentUuid on a replayed opener, the guard would become inert rather than wrong: the copy would fall in a different parent group and never be compared with the original.",
+      "code": [
+        {
+          "path": "src/model/grouping.rs",
+          "lines": "190-196",
+          "snippet": "        // A uuid this parent's openers already carried: the same logical record, re-appended\n        // by a compaction re-anchor. It supersedes nothing and opens nothing.\n        if let Some(uuid) = r.uuid.as_deref() {\n            if first_uuid.insert((parent, uuid), i).is_some() {\n                out.replays.insert(i);\n                continue;\n            }"
+        },
+        {
+          "path": "src/search/turns_match.rs",
+          "lines": "39-52",
+          "snippet": "    // ONE walk decides both opener corrections: which openers are superseded DRAFTS (with\n    // the survivor named, for the C-27 diff line) and which are REPLAY COPIES a compaction\n    // re-anchor re-appended under a uuid an earlier opener already carried. A draft is\n    // dropped from turn reconstruction; a replay copy stops opening a turn but stays a\n    // member (it is a real record on disk, and every other record of that block renders at\n    // both of its lines).\n    let collapse = crate::model::collapse_openers(records, |k| &k.rec);\n    let draft_map = &collapse.drafts;\n    let skip = collapse.dropped();\n    let index_turns = crate::model::group_turn_indices_core(\n        records,\n        |i, k| k.rec.opens_turn() && collapse.opens(i),\n        &skip,\n    );"
+        }
+      ],
+      "instrument": "Pairs: `csift search '' -t user.unsent --no-subagents --max-count 0 --format json`; for each exchange row read the draft record at its hit line and the record its `superseding_line` names, from the transcript `csift list --format json` gives the `path` of, and compare their top-level keys and values - a pair whose two records carry the SAME uuid is this shape, not an edit-resend. Whole file: count top-level uuid values occurring more than once in that transcript and group them by the record `type` of their lines. Counting rules: one observation per duplicated uuid; 'same parentUuid' counts duplicated uuids whose two lines carry equal parentUuid; the type census attributes a duplicated uuid to the type its lines carry; the field comparison is over top-level keys only.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.11.0",
+        "source": "SPEC.md section 6.4.1; AGENTS.md section 3.3"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Which site re-stamps promptId on the re-appended record is unread: the copies differ in that one field, and the record envelope that sets promptId for a user record would settle whether the re-stamp is by construction or by the caller."
+      ],
+      "residue": [
+        "The three hops above are the preservation half only. A trigger and gate traced for THIS fact rather than borrowed - the branch that selects a re-anchor over the ordinary append - would raise the producer leg from partial."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-07",
+          "verdict": "holds",
+          "instrument": "The user.unsent enumeration joined to each survivor by superseding_line, with the two records read from the transcript and compared field by field; then a whole-file count of top-level uuids occurring twice in that transcript, grouped by record type.",
+          "observed": "7 pairs whose draft and survivor carry the SAME uuid, all in one transcript, the two lines about 1,200 lines apart and not byte-identical; on every one of them uuid, parentUuid, timestamp and message are equal and promptId is the only differing top-level field. Whole file: 464 uuids appear twice, 462 with the same parentUuid, by type attachment 289, assistant 117, user 44, system 14. The block follows two compact_boundary plus isCompactSummary pairs. Before the guard those 7 genuine messages classified user.unsent with a 0-char diff; after it they classify user.message, open their own turns, and the copies fold in as members.",
+          "rule": "One observation per duplicated uuid within the one transcript; the pair comparison is over top-level keys and values; the type census attributes a duplicated uuid to the record type its lines carry.",
+          "note": "The shape was found by the residue of TURN-026: pairs whose two records shared a uuid could not be edit-resends. The guard keys on uuid identity under one parent, so an ordinary edit-resend, whose siblings carry distinct uuids, is untouched. The preservation half of the writer is REC-092's traced chain, carried here as borrowed hops; the promptId re-stamp is the hop still open."
+        }
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the REPL boundary reducer mapping compactMetadata.preservedMessages through",
+          "offset": 181618380,
+          "excerpt": ",this.stream.deferredSlashEchoUuid=null;if(Se.note(T),Hu(T)){let Pe=T.compactMetadata.preservedMessages,Ie=(Pe?.allUuids??Pe?.uuids??[]).map((De)=>I.getSnapshot().find((Ne)=>Ne.uuid===De)).filter((De)=>De!==void 0).map(ude),Ee=new Set(Ie.map((De)=>De.uuid));if(this.stream.pendingPreservedInsert=Pe&&Ie.length>0?{preserv",
+          "note": "REC-092's hop, reused unchanged. This is what re-appends the block at a compaction: the boundary's preservedMessages uuid list is looked up in the snapshot and the hits are mapped through ude before being re-inserted, which is why a whole contiguous region reappears rather than a single record."
+        },
+        {
+          "role": "gate",
+          "name": "ude's assistant-only branch returning a non-assistant record UNCHANGED",
+          "offset": 163630561,
+          "excerpt": "function ude(e){if(e.type!==\"assistant\")return e;return{...e,message:{...e.message,usage:{...e.message.usage,input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}}}}function ITo(e,n,r){let o=n.compactMetada",
+          "note": "REC-092's hop, reused unchanged. The half this claim rests on: a non-assistant record is returned as it is, so a re-appended USER record keeps its uuid, parentUuid, timestamp and message, which is exactly the shape that made a parentUuid-only sibling rule read the copy as a later sibling."
+        },
+        {
+          "role": "writer",
+          "name": "appendEntry's dedup-transcript case writing the second physical line",
+          "offset": 166107841,
+          "excerpt": "sessionMessages(n,o),C=e.isSidechain&&e.agentId!==void 0,I=C?Ud(uo(e.agentId)):_,F=!v.has(e.uuid);if(C||F){if(this.enqueueWrite(I,e,o),!C){if(v.add(e.uuid),zI(e))if(this.internalEventWriter&&Vi())this.persistToRemote(n,e);else await this.persistToRemote(n,e)}e",
+          "note": "REC-092's hop, reused unchanged. The uuid dedup that would normally stop a second copy is one arm of a policy switch, and the arm admits the record, so the copy reaches the file with its uuid already on disk."
         }
       ]
     }
