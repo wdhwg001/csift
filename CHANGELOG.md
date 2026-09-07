@@ -59,6 +59,46 @@ surface change bumps the PATCH.
   replaced it now reads `identical to the sent message` rather than `differs from the sent
   message in 0 chars`.
 
+### Changed
+
+- **BREAKING: a bare role selector now selects what the model RECEIVED, per record.** It
+  used to decide that per leaf, from a table of which labels are conversation. Claude Code
+  decides it per record, with one drop predicate inside the assembler that builds an API
+  request, and that predicate disagrees with the leaf table in exactly three cases. csift
+  mirrors those three and nothing else. The two census changes, measured on this corpus
+  with the two builds run back to back over 72 top-level transcripts:
+  - `-t harness` now surfaces `system`/`local_command` records, a slash command's own echo
+    and its stdout, because the assembler re-mints them as a user message and sends them.
+    Sixteen records appear where 0.11.0 showed none, although `harness.meta.system` is an
+    invisible leaf and stays one by default.
+  - `-t agent` now drops the API-error placeholders, the assistant records Claude Code
+    fabricates when a call fails and never sends back. `agent.message` falls by exactly
+    118, the whole population of records carrying `isApiErrorMessage` (118 of 118 also
+    carry the `<synthetic>` model that the predicate tests for). An `isVirtual` record
+    leaves a bare `-t user` the same way.
+  Globs (`-t 'agent.*'`), intermediate prefixes and exact leaf paths are untouched and
+  still reach every record, so nothing became unreachable. Under those forms an
+  undelivered record renders `[not delivered]` in the label zone, and every JSON hit
+  gained a `delivered` field carrying the verdict. Recorded as ledger claims CLS-026 and
+  CLS-027.
+
+- **A bare `-t harness` admits the `type:"system"` lines.** Those lines were gated behind
+  an explicit selector, so the delivered record above could not have been reached at all.
+  The other five gated leaves keep the explicit-selector rule exactly, and the per-record
+  rule drops every other system record the admission parsed. `gated_leaves_unreached` and
+  its stderr note now report what the scan actually parsed instead of which selector was
+  typed, and the note's leaf list is derived from the gated set instead of typed out.
+
+- **Slash commands the model never sees, documented.** Three families leave nothing on
+  disk, so finding no wrapper record is not evidence a command was not run: `/btw`,
+  `/tasks` (= `/bashes`) and `/release-notes` return skip on every normal exit, any panel
+  closed with Escape writes nothing whatever its own option was, and `/rewind`
+  (= `/checkpoint`/`/undo`) and `/stop` take the same path through the `local` result map.
+  A record on disk is not a record the model saw either: `/release-notes` appends a
+  harness notice and then returns skip, so it is rendered to the human and dropped by the
+  assembler. SKILL's wrong-assumptions table carries both rows. Recorded as ledger claims
+  TURN-027 through TURN-030 and MISC-031.
+
 ## [0.11.0] - 2026-09-06
 
 The csift channel: a way to get a message to a Claude Code lane the official channel
