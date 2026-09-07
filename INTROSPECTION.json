@@ -34796,7 +34796,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "509",
+          "lines": "305",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -47636,7 +47636,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "576-578",
+          "lines": "372-374",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -49182,8 +49182,8 @@
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();\n    for key in [\"trigger\", \"preTokens\", \"postTokens\", \"durationMs\"] {\n        if let Some(v) = obj.get(key) {\n            let rendered = match v {\n                serde_json::Value::String(s) => s.clone(),\n                other => other.to_string(),\n            };\n            fields.push(format!(\"{key}={rendered}\"));\n        }\n    }\n    (!fields.is_empty()).then(|| format!(\"[compaction boundary: {}]\", fields.join(\" \")))\n}"
         },
         {
-          "path": "src/cli/search_args.rs",
-          "lines": "161-164",
+          "path": "src/cli/search_help.rs",
+          "lines": "103-106",
           "snippet": "        it. Eight leaves are invisible and need naming or a glob: `user.unsent`\\n  \\\n        (a superseded draft is not in the surviving conversation - CC's own\\n  \\\n        preservedMessages accounting excludes every draft), `harness.compaction.boundary`\\n  \\\n        (a metrics-only system record), and the six gated leaves below. The glob form\\n  \\"
         }
       ],
@@ -53251,7 +53251,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "509",
+          "lines": "305",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -53692,7 +53692,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "438-440",
+          "lines": "234-236",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
