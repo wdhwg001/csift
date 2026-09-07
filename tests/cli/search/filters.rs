@@ -411,3 +411,67 @@ fn additional_context_flag_surfaces_hook_attachment_under_meta_hook() {
         outj.stdout
     );
 }
+
+#[test]
+fn a_record_the_label_filter_excluded_still_renders_as_a_sibling() {
+    // Sibling eligibility is "this record produced no HIT", not "this record was skipped
+    // before the filter". An empty pattern is the sharp case: nothing is prefiltered away,
+    // so every record reaches the label filter, and the ones it drops are exactly the
+    // back-and-forth `--siblings` exists to show.
+    let h = populated_home();
+    let out = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "--no-subagents",
+        "-t",
+        "user.message",
+        "--siblings",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("The carry is the partial line"),
+        "the agent reply the -t dropped must render as context:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("the carry is the low-edge partial"),
+        "and so must the tool result:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn a_merged_elicitation_marker_obeys_the_label_filter() {
+    // The MCP arm surfaces a marker that carries no tool_use block, and it is guarded on
+    // the tool.use label being BOTH carried and SELECTED. A merged record is not exempt
+    // from `-t`: under a user-side selector it must stay silent, or the filter reads as
+    // broken on exactly the records a reader cannot see in the transcript.
+    let h = sidecar_session_home();
+    h.write(
+        &format!("{ENC}/{SESS}/elicitations.jsonl"),
+        &format!(
+            "{}\n",
+            mcp_pending_line(
+                "el-f",
+                "2026-06-27T01:10:00.000Z",
+                "gdrive",
+                "zzmcp confirm"
+            )
+        ),
+    );
+    let selected = h.run(&["search", "zzmcp", &at(SESS), "-t", "agent.tool.use"]);
+    assert!(selected.success, "stderr: {}", selected.stderr);
+    assert!(
+        selected.stdout.contains("zzmcp"),
+        "the marker surfaces under its own leaf:\n{}",
+        selected.stdout
+    );
+    let excluded = h.run(&["search", "zzmcp", &at(SESS), "-t", "user.message"]);
+    assert!(excluded.success, "stderr: {}", excluded.stderr);
+    assert!(
+        excluded.stdout.contains("no matching exchanges"),
+        "a user-side selector must not surface a tool.use marker:\n{}",
+        excluded.stdout
+    );
+}

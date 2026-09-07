@@ -525,5 +525,32 @@ fn addressed_show_renders_hook_attachment_without_the_flag() {
     );
 }
 
+#[test]
+fn show_uuid_fetches_the_addressed_records_and_nothing_else() {
+    // An address that admits everything still contains the record it named, so only the
+    // COUNT catches it - and a whole-transcript dump under `--uuid u0` is the worst kind
+    // of wrong answer: it looks like a fetch and reads like a session.
+    let h = populated_home();
+    let one = h.run(&["show", &at(SESS), "--uuid", "u0", "--format", "json"]);
+    assert!(one.success, "stderr: {}", one.stderr);
+    assert_eq!(
+        json_summary(&one.stdout)["records"],
+        serde_json::json!(1),
+        "one uuid fetches one record:\n{}",
+        one.stdout
+    );
+    let two = h.run(&["show", &at(SESS), "--uuid", "u0,u1", "--format", "json"]);
+    assert!(two.success, "stderr: {}", two.stderr);
+    assert_eq!(
+        json_summary(&two.stdout)["records"],
+        serde_json::json!(2),
+        "two uuids fetch two records:\n{}",
+        two.stdout
+    );
+    // A line address is unaffected by an empty uuid set (and vice versa).
+    let line = h.run(&["show", &at(SESS), "--line", "1", "--format", "json"]);
+    assert_eq!(json_summary(&line.stdout)["records"], serde_json::json!(1));
+}
+
 mod branching;
 mod drafts;

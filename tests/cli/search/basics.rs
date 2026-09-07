@@ -295,3 +295,32 @@ fn regex_alternation_extracts_needles_and_still_matches() {
     let ci = h.run(&["search", "harborx.*beacon|beacon.*lanternz", enc, "-c"]);
     assert_eq!(ci.stdout.trim(), "2", "{}", ci.stdout);
 }
+
+#[test]
+fn the_unbounded_scan_warning_is_for_an_empty_pattern_alone() {
+    // The advisory fires on the one query that really does match everything in scope. A
+    // pattern narrows the result by definition, so warning about it would train a reader
+    // to ignore the line that matters.
+    let h = populated_home();
+    let bare = h.run(&["search", ""]);
+    assert!(bare.success, "stderr: {}", bare.stderr);
+    assert!(
+        bare.stderr.contains("matches every exchange in scope"),
+        "an empty pattern with no filter is warned about: {}",
+        bare.stderr
+    );
+    let pattern = h.run(&["search", "carry"]);
+    assert!(pattern.success, "stderr: {}", pattern.stderr);
+    assert!(
+        !pattern.stderr.contains("matches every exchange in scope"),
+        "a real pattern is not an unbounded scan: {}",
+        pattern.stderr
+    );
+    // A filtered empty pattern is bounded too.
+    let filtered = h.run(&["search", "", "-t", "user.message"]);
+    assert!(
+        !filtered.stderr.contains("matches every exchange in scope"),
+        "a label filter bounds it: {}",
+        filtered.stderr
+    );
+}

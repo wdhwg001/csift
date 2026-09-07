@@ -233,3 +233,55 @@ fn search_match_banner_at_head_mirrors_footer_and_json() {
         cb.stdout
     );
 }
+
+#[test]
+fn the_footer_states_only_the_exclusions_and_drops_that_happened() {
+    // The footer is the both-ends echo of what constrained the run. A `label-not=` with
+    // nothing after it, or a "0 later dropped by --max-count", both tell a reader the run
+    // was narrowed when it was not - the exact reading error the footer exists to prevent.
+    let h = populated_home();
+    let plain = h.run(&["search", "carry", &at(SESS), "--no-subagents"]);
+    assert!(plain.success, "stderr: {}", plain.stderr);
+    assert!(
+        plain.stdout.contains("label=all"),
+        "the footer is printed at all: {}",
+        plain.stdout
+    );
+    assert!(
+        !plain.stdout.contains("label-not="),
+        "no -T was given: {}",
+        plain.stdout
+    );
+    assert!(
+        !plain.stdout.contains("dropped by --max-count"),
+        "no cap was given: {}",
+        plain.stdout
+    );
+    // The positive controls, so the absences above are not just a missing footer.
+    let excluded = h.run(&[
+        "search",
+        "carry",
+        &at(SESS),
+        "--no-subagents",
+        "-T",
+        "agent.thinking",
+    ]);
+    assert!(
+        excluded.stdout.contains("label-not=agent.thinking"),
+        "an active -T is echoed: {}",
+        excluded.stdout
+    );
+    let capped = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "--no-subagents",
+        "--max-count",
+        "1",
+    ]);
+    assert!(
+        capped.stdout.contains("1 later dropped by --max-count"),
+        "a real drop is echoed with its count: {}",
+        capped.stdout
+    );
+}

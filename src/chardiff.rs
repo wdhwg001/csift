@@ -339,9 +339,184 @@ mod tests {
         let b = "b".repeat(60_000);
         let d = char_diff(&a, &b);
         assert!(!d.exact, "the budget stops the walk: {d:?}");
-        assert!(
-            d.chars > 0 && d.chars < 120_000,
-            "the floor is a real explored distance: {d:?}"
+        // The exact depth matters: the floor is only a floor because every distance up
+        // to it was explored IN FULL, which is one diagonal for d=0, two for d=1 and so
+        // on. Nothing slides here, so depth 1999 is where that sum first passes the
+        // budget - report 2000 and the number stops being a proven floor.
+        assert_eq!(
+            d.chars, 1999,
+            "the floor is the last fully explored depth: {d:?}"
+        );
+    }
+
+    /// The exact insert-plus-delete distance from the LCS table - the definition the
+    /// greedy walk is an optimisation of. Quadratic, so it only ever runs on tiny pairs.
+    fn reference_distance(a: &str, b: &str) -> usize {
+        let av: Vec<char> = a.chars().collect();
+        let bv: Vec<char> = b.chars().collect();
+        let mut lcs = vec![vec![0usize; bv.len() + 1]; av.len() + 1];
+        for i in 1..=av.len() {
+            for j in 1..=bv.len() {
+                lcs[i][j] = if av[i - 1] == bv[j - 1] {
+                    lcs[i - 1][j - 1] + 1
+                } else {
+                    lcs[i - 1][j].max(lcs[i][j - 1])
+                };
+            }
+        }
+        av.len() + bv.len() - 2 * lcs[av.len()][bv.len()]
+    }
+
+    #[test]
+    fn the_walk_is_exact_against_the_reference_on_every_small_pair() {
+        // The walk's own arithmetic - which predecessor a diagonal extends, the slide
+        // guard, how far the slide runs - has no output surface of its own: a wrong step
+        // shows up only as a wrong distance on SOME pair. So sweep a deterministic set of
+        // small pairs over a 3-letter alphabet (shared runs, ties between the two
+        // predecessors, one side empty, equal lengths) and check every answer against the
+        // definition. Nothing here is near a bound, so every answer must also be exact.
+        let mut state = 0x2545_f491_4f6c_dd1du64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let alphabet = ['a', 'b', 'c'];
+        for _ in 0..600 {
+            let mut pair = [String::new(), String::new()];
+            for side in &mut pair {
+                let len = next() % 11;
+                for _ in 0..len {
+                    side.push(alphabet[(next() % 3) as usize]);
+                }
+            }
+            let (a, b) = (&pair[0], &pair[1]);
+            let got = char_diff(a, b);
+            assert!(got.exact, "a tiny pair never hits a bound: {a:?} {b:?}");
+            assert_eq!(
+                got.chars,
+                reference_distance(a, b),
+                "walked {a:?} against {b:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_huge_common_head_is_stripped_before_the_budget_can_see_it() {
+        // The head strip is not a speed-up alone. Sliding along a common run longer than
+        // the whole step budget would spend it at depth 0 and turn an exact answer into a
+        // floor of the length difference. Stripped, the walk only ever sees the residual.
+        let head = "x".repeat(MAX_DIFF_STEPS + 100_000);
+        let a = format!("{head}ALPHA");
+        let b = format!("{head}BETA");
+        let d = char_diff(&a, &b);
+        assert_eq!(
+            d,
+            CharDiff {
+                chars: 7,
+                exact: true
+            },
+            "the residual pair (ALPH against BET) is what gets measured: {d:?}"
+        );
+    }
+
+    #[test]
+    fn a_huge_common_tail_is_stripped_before_the_budget_can_see_it() {
+        // The mirror of the head case, with a length difference so the slide happens on a
+        // diagonal that does NOT reach the endpoint: unstripped, that wrong diagonal runs
+        // the whole common run at depth 2, spends the budget, and reports a floor of 2
+        // where the residual pair ("y" against "CD") is worth an exact 3.
+        let tail = "y".repeat(MAX_DIFF_STEPS + 100_000);
+        let a = format!("y{tail}");
+        let b = format!("CD{tail}");
+        let d = char_diff(&a, &b);
+        assert_eq!(
+            d,
+            CharDiff {
+                chars: 3,
+                exact: true
+            },
+            "{d:?}"
+        );
+    }
+
+    #[test]
+    fn a_contained_draft_stays_exact_however_far_past_the_cap_it_sits() {
+        // The subsequence test runs BEFORE the cap precisely so the dominant corpus shape
+        // - a short draft the resend still contains - is settled exactly at any size. The
+        // insertion is split in two so the head and tail strips cannot reduce it to the
+        // one-side-empty case. Lose the shortcut and the number is the same but becomes a
+        // floor, which reads to the caller as "more than 700000".
+        let b = format!("A{}B{}", "c".repeat(300_000), "d".repeat(400_000));
+        let d = char_diff("AB", &b);
+        assert_eq!(
+            d,
+            CharDiff {
+                chars: 700_000,
+                exact: true
+            },
+            "{d:?}"
+        );
+        assert!(d.chars > MAX_DIFF_CHARS, "well past the cap: {d:?}");
+    }
+
+    #[test]
+    fn the_walk_runs_when_its_first_affordable_depth_fits_the_budget() {
+        // The give-up guard is "the walk could only improve on lb after depth lb, which
+        // costs about lb^2/2". At lb = 1500 that is 1.1M steps, inside the budget, so the
+        // walk runs and returns the exact distance. Widen the guard and this pair reports
+        // 1500 as a floor instead of 1502 as a fact.
+        let a = format!("Q{}", "a".repeat(10));
+        let b = format!("R{}", "a".repeat(1510));
+        let d = char_diff(&a, &b);
+        assert_eq!(
+            d,
+            CharDiff {
+                chars: 1502,
+                exact: true
+            },
+            "{d:?}"
+        );
+    }
+
+    #[test]
+    fn the_step_budget_counts_the_characters_slid_not_only_the_diagonals() {
+        // One common run longer than the budget, in the MIDDLE: the diagonals alone are a
+        // handful, so only the slide can spend the budget. It does, at depth 2, and the
+        // answer is the floor that depth proves - not the exact 4 an uncounted slide
+        // would go on to find.
+        let mid = "m".repeat(MAX_DIFF_STEPS + 100_000);
+        let a = format!("P{mid}Q");
+        let b = format!("R{mid}S");
+        let d = char_diff(&a, &b);
+        assert_eq!(
+            d,
+            CharDiff {
+                chars: 2,
+                exact: false
+            },
+            "{d:?}"
+        );
+    }
+
+    #[test]
+    fn the_budget_gives_up_past_the_limit_not_on_it() {
+        // Sized so the walk stands EXACTLY on the budget at the end of depth 2: one
+        // diagonal at d=0, two at d=1, the slide, then three at d=2. Standing on the
+        // limit is not exceeding it, so the walk goes one depth further and reports the
+        // stronger floor.
+        let mid = "m".repeat(MAX_DIFF_STEPS - 6);
+        let a = format!("P{mid}Q");
+        let b = format!("R{mid}S");
+        let d = char_diff(&a, &b);
+        assert_eq!(
+            d,
+            CharDiff {
+                chars: 3,
+                exact: false
+            },
+            "{d:?}"
         );
     }
 }
