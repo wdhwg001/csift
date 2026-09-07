@@ -64377,8 +64377,8 @@
       "depends": "csift's printed refetch is always addressed at the hit's OWN `session_id`, never the parent uuid - in text mode a subagent hit prints an extra `csift show @<agent-id> --line N` continuation - because pointing the parent at a subagent's line would silently fetch the WRONG record.",
       "code": [
         {
-          "path": "src/search/render.rs",
-          "lines": "398-400",
+          "path": "src/search/render_json.rs",
+          "lines": "20-22",
           "snippet": "/// The ready-to-run fetch command for a hit - `csift show` addressed at the transcript that\n/// OWNS the hit's line number (`session_id`, never the parent uuid: line numbers are\n/// per-file, so pointing the parent at a subagent's line would silently fetch the WRONG"
         }
       ],
