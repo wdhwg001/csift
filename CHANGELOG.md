@@ -7,6 +7,39 @@ surface change bumps the PATCH.
 
 ## [0.11.1] - 2026-09-07
 
+### Added
+
+- **The unsent diff line.** A rendered `user.unsent` draft now says how far it sits from
+  the message that replaced it: `differs from the sent message in N chars (P% of the
+  final): may carry an addition or a correction`, with `superseding_line`,
+  `superseding_uuid`, `diff_chars`, `diff_pct` and `diff_exact` in JSON (on the `search`
+  exchange row and the `show` record row). N counts insertions plus deletions of a
+  shortest character-level edit script, so it is the work the edit did and not a length
+  difference; P is N over the final message's length and can exceed 100 when the draft
+  was the longer text. The engine is a bounded char-level Myers walk with no new
+  dependency, and it runs only when a draft is actually rendered, so `-c`, `-l` and
+  `--count-by` pay nothing. Measured over the whole corpus after the replay guard below,
+  on a population of 887 drafts (a live corpus gains drafts as sessions run, so a re-run
+  sees a slightly larger one): 877 exact, the other 10 reporting a proven floor between
+  3,813 and 9,360 characters, the largest draft (237,434 characters) diffed in 0.755 ms,
+  and both a whole-corpus draft scan and a broad search within noise of 0.11.0.
+
+### Changed
+
+- **`user.unsent` is documented as retroactive.** A draft and its resend are the same
+  record shape (same key set on 852 of 886 pairs; nothing but identity and time always
+  differs), and no successor line shape separates the two populations — every shape that
+  reads zero after a control record reads zero because that window is cut at the next
+  assistant reply, not because of anything about drafts. So the only discriminator is the
+  later sibling, and a hook running at prompt submit cannot apply the label, because that
+  sibling is the prompt being submitted. The closest approximation, skipping a trailing
+  turn-opener that no assistant record follows, hides 92.2% of drafts but wrongly skips
+  2.9% of genuine messages, and is now stated as a heuristic in SKILL's wrong-assumptions
+  table rather than implied to be the label. Censused over the full populations: all 886
+  drafts, each joined to the survivor csift itself names, against all 2,595 `user.message`
+  records of the 28 draft-carrying sessions. Recorded as ledger claim TURN-026, which
+  carries the commands and the whole per-shape table.
+
 ### Fixed
 
 - **A replayed record is no longer read as a resend, and turn numbers shift where it was.**

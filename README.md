@@ -262,15 +262,15 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
-| end-to-end | 488 | 79.1% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| &nbsp;&nbsp;of which chain traced and adversarially re-read | 488 | 79.1% | the three hops quoted at byte offsets in `producer_chain`, every excerpt re-read by an independent verifier |
+| end-to-end | 489 | 79.1% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
+| &nbsp;&nbsp;of which chain traced and adversarially re-read | 489 | 79.1% | the three hops quoted at byte offsets in `producer_chain`, every excerpt re-read by an independent verifier |
 | &nbsp;&nbsp;of which audit-graded, chain not yet traced | 0 | 0.0% | graded end-to-end from the release-audit checks (writer offsets cited there) before the three-hop tracing existed; the next audit traces them |
 | specimen-only | 36 | 5.8% | observed on disk or live; the writer not traced (or traced only in part) (24 of them with a partly traced writer) |
 | producer-only | 32 | 5.2% | the writer traced in full; no specimen exists in the corpus or could be produced here |
 | partial-producer | 47 | 7.6% | a template or field located without its gate and trigger; no specimen |
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
 | upstream | 14 | 2.3% | the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed |
-| total | 617 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
+| total | 618 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
 <!-- ledger-tally:end -->
 
 A claim that is not end-to-end lists the exact instrument that would close it, and a claim attributed by elimination can never be marked as holding.

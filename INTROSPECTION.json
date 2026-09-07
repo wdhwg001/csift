@@ -81240,6 +81240,303 @@
           "note": "REC-092's hop, reused unchanged. The uuid dedup that would normally stop a second copy is one arm of a policy switch, and the arm admits the record, so the copy reaches the file with its uuid already on disk."
         }
       ]
+    },
+    {
+      "id": "TURN-026",
+      "area": "turn-boundary",
+      "behavior": "An esc-recalled draft and the message that replaced it are indistinguishable at the instant the draft is written: nothing on disk marks the earlier record until the later one exists. Over the FULL population of 886 superseded drafts in 28 sessions, each paired with the survivor csift itself names, the two records carry the same top-level key set on 852 of 886 pairs (13 distinct key sets on the draft side, 15 counting each pair's union; the keys ever present on one side only are imagePasteIds on 29 pairs, origin on 5 and queueSkipAttachments on 1). Among keys both carry, promptId, uuid and timestamp differ on all 886, message on 862, promptSource on 28, origin on 15 and version on 1 - identity and time apart, the records are the same shape, and no field marks one as unsent. The window between the pair is almost never empty (1 of 886): it holds ordinary end-of-turn telemetry, and none of it separates the two populations. Against a control of all 2,595 user.message records (2,567 exchange rows) in the same sessions, no shape follows every draft - file-history-snapshot leads at 99.3% of drafts and 91.2% of control records - and every shape that shows a ZERO on the control side shows it because that window is cut at the next assistant line: with the cut removed, system/stop_hook_summary goes from 0 to 85.2% of control records, system/turn_duration from 0 to 65.8%, attachment/queued_command from 0 to 15.0%, attachment/batching_reminder_sent from 0 to 7.9% and attachment/bash_output_audience_note from 0 to 4.7%. So there is no discriminator at all, definitional artifacts included. The local recall path is why nothing is written for the recall itself: it refills the input box and slices the in-memory message array without appending anything (hops traced under TURN-025), and the one positive artifact a rewind can leave, a last-prompt line carrying rewound:true, comes only from the remote/bridge heal path and has 0 specimens in 29,662 last-prompt lines. The only signal is the LATER sibling, and even the window's shape is not a rule: 69 of 886 drafts (7.8%) drew an assistant record before the resend arrived.",
+      "depends": "csift assigns user.unsent at the SCAN layer, after the file is read, because the label is a statement about a LATER record: collapse_openers keeps the last opener per parentUuid and marks the earlier siblings, and a per-record classify cannot reach that. Everything downstream inherits the ordering - the draft stays outside turn numbering, its diff is measured against the survivor, and a turn window suppresses it. The consequence a consumer must know is that no hook running at prompt submit can apply the label: the superseding record IS the prompt being submitted, so waiting for it is waiting for the event that is firing. The closest on-disk approximation, skipping a trailing turn-opener that no assistant record follows, hides 817 of 886 drafts (92.2%) but wrongly skips 74 of 2,595 genuine messages (2.9%, a second prompt queued before any reply), so csift documents it as a heuristic and never as the label. If a build ever wrote a mark at recall time - a flag on the draft record, or a rewound:true line naming the surviving leaf - that would be a second and earlier instrument, and the retroactive rule would become a fallback rather than the only route.",
+      "code": [
+        {
+          "path": "src/search/hits.rs",
+          "lines": "168-176",
+          "snippet": "    // A superseded turn-opener draft (the scan layer computed the set - a pure\n    // per-record classify cannot see the LATER same-parent sibling) carries the single\n    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the\n    // conversation, so it never rides `user.message` (whose counts stay pure).\n    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
+        },
+        {
+          "path": "src/model/grouping.rs",
+          "lines": "233-239",
+          "snippet": "#[must_use]\npub fn superseded_draft_map<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> std::collections::HashMap<usize, usize> {\n    collapse_openers(records, rec).drafts\n}"
+        }
+      ],
+      "instrument": "Four steps on csift's own output, over the full populations - no sampling. (1) DRAFTS: `csift search '' -t user.unsent --no-subagents --max-count 0 --format json`; every exchange row is a draft and its `superseding_line` names the survivor (csift's own last-same-parentUuid-opener mapping, with same-uuid replay copies excluded per CMP-019), so there is no forward scan, no cap and no opener predicate to define. FILES: `csift list --format json --max-count 0` prints each transcript's `path`; a session id that resolves to more than one path (a project-directory rename) contributes every path, and a draft is read from the candidate whose record at the row's line carries the row's own uuid. (2) PAIRS: parse the draft line and the survivor line from that file; compare top-level key sets and, for keys both carry, values; classify every line strictly between them by `type`, refined to `attachment.type` for attachment lines, `subtype` for system lines and `operation` for queue-operation lines; count a shape once per pair. Count pairs with at least one `type:\"assistant\"` line between, and pairs with no line at all between. (3) CONTROL: `csift search '' -t user.message --sessions-from - --no-subagents --max-count 0 --format json` fed the session ids of step 1 (the rule: the sessions that carry at least one draft), every HIT of every row. Each control record's successor window runs to the next line that is either `type:\"assistant\"` or an opener, exclusive; the opener set is csift's own `csift search '' -t user.message -t user.answer -t user.rejection -t agent.communication.inbox --sessions-from - --no-subagents --max-count 0 --format json` (the four turn-opening cases of AGENTS section 3.3). Classify that window the same way, once per record, and count separately the records whose window ends at an opener with no assistant in between - the false-skip population. Then repeat the classification with the window cut ONLY at the next opener: a shape scoring zero under the first window and non-zero under this one is excluded from the control by the cut, not by anything about drafts. (4) RATES: every rate is N over its named population (886 pairs, 2,595 control records over 2,567 rows). The discriminator test is a shape present after EVERY draft and absent after every control record. `assistant` is outside the shape table because the first control window is defined to end at an assistant line; for the same reason the draft window, which is the pair's own span and is not cut at an opener, reads higher on `user`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.11.0",
+        "source": "SPEC.md section 6.4.1; AGENTS.md section 3.3; SKILL.md wrong-assumptions table"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The two windows are not symmetric by construction: a control record's window stops at the next assistant or opener line, while a pair's window is the span between the draft and its survivor and is not cut at an opener. The second control pass (cut only at an opener) measures that asymmetry rather than removing it; a fully symmetric comparison would need a draft-side window cut the same way."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "restoreMessageSync - the LOCAL esc-recall entry",
+          "offset": 180778472,
+          "excerpt": "restoreMessageSync=(T,I)=>{let{_setAppState:O,draft:q}=this;this.rewindConversationTo(T,I);let oe=fhn(T);if(oe)q.replaceValue(oe.text),q.setMode(oe.mode);",
+          "note": "Traced under TURN-025 and reused unchanged: recalling a sent message rewinds and refills the input box, and nothing in the body appends a record, which is why the draft on disk gets no mark when it is superseded."
+        },
+        {
+          "role": "gate",
+          "name": "rewindConversationTo - in-memory only",
+          "offset": 180776684,
+          "excerpt": "rewindConversationTo(T,I){let{session:O,transcript:q,scope:oe,store:ue,turn:Se}=this,Ce=q.getSnapshot(),Re=Ce.lastIndexOf(T);if(Re===-1)return;let Pe=Ce.slice(0,Re),Ie=Ce.slice(Re);lde(fa(),\"rewind\"),yUn(I);",
+          "note": "Traced under TURN-025 and reused unchanged: the snapshot is sliced in memory and the file is append-only, so the earlier record keeps exactly the bytes it was written with and the later sibling is the only new fact."
+        },
+        {
+          "role": "writer",
+          "name": "oEe - the ONE positive artifact a rewind can leave",
+          "offset": 166113611,
+          "excerpt": "oEe(e,n,r){let o=Fi();o.currentSessionLeafUuid=e??void 0,o.currentSessionLeafTs=new Date().toISOString(),await o.appendEntry({type:\"last-prompt\",...o.currentSessionLastPrompt&&{lastPrompt:o.currentSessionLastPrompt},leafUuid:e,explicit:!0,...n?.rewound&&{rewound:!0},sessionId:Q()},void 0,void 0,r)}",
+          "note": "Traced under TURN-025 and reused unchanged: the only line a rewind can add carries leafUuid and, on the remote path, rewound:true - never the recalled text and never a flag on the draft record."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.0",
+          "date": "2026-09-07",
+          "verdict": "holds",
+          "instrument": "The four steps run end to end after the CMP-019 guard corrected the population: the user.unsent enumeration joined to each survivor by the row's own superseding_line, transcripts read by the path csift list prints, every pair compared key by key and its between-window classified, all 2,595 user.message records of the same sessions classified against the four-case opener set csift emits, and each shape re-counted with the control window cut only at the next opener.",
+          "observed": "886 drafts over 28 sessions; 886 pairs resolved, 0 unresolved (2 session ids resolved to two transcript files each and the uuid check picked the right one). Key sets identical on 852 of 886, 13 distinct key sets on the draft side and 15 by pair union, one-sided keys imagePasteIds 29, origin 5, queueSkipAttachments 1; value differences promptId 886, uuid 886, timestamp 886, message 862, promptSource 28, imagePasteIds 27, origin 15, version 1. 1 of 886 windows holds no line at all; 69 of 886 (7.8%) hold an assistant record. Control: 2,595 records over 2,567 rows, of which 74 (2.9%) have a window ending at another opener with no assistant. Shape rates (drafts/control): file-history-snapshot 99.3/91.2, last-prompt 64.4/53.7, permission-mode 64.3/53.7, mode 64.3/53.4, ai-title 64.3/53.8, hook_additional_context 56.4/51.3, user 47.1/23.9, agent-name 42.0/37.8, total_tokens_reminder 27.8/29.7, ultrathink_effort 22.6/16.2, and 40-odd further shapes below 11% on the draft side. Eight shapes read zero on the control side, and the second pass shows every one of those zeros is the assistant cut: stop_hook_summary 0 -> 85.2%, turn_duration 0 -> 65.8%, queued_command 0 -> 15.0%, batching_reminder_sent 0 -> 7.9%, bash_output_audience_note 0 -> 4.7%, model_refusal_fallback 0 -> 1.5%, informational 0 -> 0.3%, model_refusal_no_fallback 0 -> one occurrence. No shape follows every draft, so there is no discriminator.",
+          "rule": "One observation per pair (886) and one per control record (2,595, over 2,567 exchange rows); a shape counts once per window however often it occurs in it. Pair rates are over 886, control rates over 2,595. A pair is the draft row and the record its own superseding_line names, in the file whose record at the row's line carries the row's uuid. A control window ends, exclusive, at the next assistant line or the next line csift emits under user.message, user.answer, user.rejection or agent.communication.inbox; the second pass drops the assistant half of that rule. `assistant` is outside the shape comparison because the first window definition zeroes it on the control side.",
+          "note": "Re-run over the population the same-uuid guard corrected. The conclusion is unchanged and now has no artifact left in it: neither the draft record nor any successor shape separates a draft from a submitted prompt, and the eight shapes that looked draft-only were end-of-turn material the control window cut away."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "trailing line shape: file-history-snapshot",
+          "verdict": "880/886 after drafts (99.3%) against 2366/2595 after control records (91.2%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: last-prompt",
+          "verdict": "571/886 after drafts (64.4%) against 1394/2595 after control records (53.7%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: ai-title",
+          "verdict": "570/886 after drafts (64.3%) against 1396/2595 after control records (53.8%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: mode",
+          "verdict": "570/886 after drafts (64.3%) against 1387/2595 after control records (53.4%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: permission-mode",
+          "verdict": "570/886 after drafts (64.3%) against 1394/2595 after control records (53.7%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/hook_additional_context",
+          "verdict": "500/886 after drafts (56.4%) against 1330/2595 after control records (51.3%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: user",
+          "verdict": "417/886 after drafts (47.1%) against 619/2595 after control records (23.9%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: agent-name",
+          "verdict": "372/886 after drafts (42.0%) against 980/2595 after control records (37.8%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/total_tokens_reminder",
+          "verdict": "246/886 after drafts (27.8%) against 772/2595 after control records (29.7%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/ultrathink_effort",
+          "verdict": "200/886 after drafts (22.6%) against 421/2595 after control records (16.2%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/task_reminder",
+          "verdict": "92/886 after drafts (10.4%) against 204/2595 after control records (7.9%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: atis-latch",
+          "verdict": "56/886 after drafts (6.3%) against 195/2595 after control records (7.5%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/workflow_keyword_request",
+          "verdict": "55/886 after drafts (6.2%) against 82/2595 after control records (3.2%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/hook_success",
+          "verdict": "53/886 after drafts (6.0%) against 54/2595 after control records (2.1%) - 2.9x more common after drafts, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 96.8%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/date_change",
+          "verdict": "46/886 after drafts (5.2%) against 129/2595 after control records (5.0%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: queue-operation/enqueue",
+          "verdict": "35/886 after drafts (4.0%) against 98/2595 after control records (3.8%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: system/model_refusal_fallback",
+          "verdict": "34/886 after drafts (3.8%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 39/2595 control records (1.5%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: bridge-session",
+          "verdict": "34/886 after drafts (3.8%) against 139/2595 after control records (5.4%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: system/turn_duration",
+          "verdict": "33/886 after drafts (3.7%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 1708/2595 control records (65.8%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: history-suppression",
+          "verdict": "32/886 after drafts (3.6%) against 113/2595 after control records (4.4%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: queue-operation/dequeue",
+          "verdict": "27/886 after drafts (3.0%) against 34/2595 after control records (1.3%) - 2.3x more common after drafts, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 23.3%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: system/stop_hook_summary",
+          "verdict": "24/886 after drafts (2.7%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 2212/2595 control records (85.2%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: attachment/hook_non_blocking_error",
+          "verdict": "21/886 after drafts (2.4%) against 4/2595 after control records (0.2%) - 12.0x more common after drafts, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 1.2%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/skill_listing",
+          "verdict": "13/886 after drafts (1.5%) against 94/2595 after control records (3.6%) - 2.4x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 6.5%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: queue-operation/remove",
+          "verdict": "12/886 after drafts (1.4%) against 31/2595 after control records (1.2%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: system/away_summary",
+          "verdict": "11/886 after drafts (1.2%) against 1/2595 after control records (0.0%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/edited_text_file",
+          "verdict": "8/886 after drafts (0.9%) against 16/2595 after control records (0.6%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/deferred_tools_delta",
+          "verdict": "7/886 after drafts (0.8%) against 110/2595 after control records (4.2%) - 5.2x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 10.2%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/queued_command",
+          "verdict": "4/886 after drafts (0.5%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 390/2595 control records (15.0%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: file-history-delta",
+          "verdict": "4/886 after drafts (0.5%) against 32/2595 after control records (1.2%) - 2.4x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 16.8%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/agent_listing_delta",
+          "verdict": "3/886 after drafts (0.3%) against 70/2595 after control records (2.7%) - 9.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 7.0%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/date",
+          "verdict": "2/886 after drafts (0.2%) against 14/2595 after control records (0.5%) - 2.5x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 0.9%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/hook_cancelled",
+          "verdict": "2/886 after drafts (0.2%) against 10/2595 after control records (0.4%) - 2.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 4.3%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/plan_mode_exit",
+          "verdict": "2/886 after drafts (0.2%) against 4/2595 after control records (0.2%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: system/informational",
+          "verdict": "2/886 after drafts (0.2%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 8/2595 control records (0.3%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: attachment/remote_session_change",
+          "verdict": "1/886 after drafts (0.1%) against 11/2595 after control records (0.4%) - 4.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 0.6%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: system/model_refusal_no_fallback",
+          "verdict": "1/886 after drafts (0.1%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 1/2595 control records (0.0%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: attachment/file",
+          "verdict": "1/886 after drafts (0.1%) against 40/2595 after control records (1.5%) - 15.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 7.0%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/auto_mode",
+          "verdict": "1/886 after drafts (0.1%) against 2/2595 after control records (0.1%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/invoked_skills",
+          "verdict": "1/886 after drafts (0.1%) against 36/2595 after control records (1.4%) - 14.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 4.7%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/opened_file_in_ide",
+          "verdict": "1/886 after drafts (0.1%) against 1/2595 after control records (0.0%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/plan_mode",
+          "verdict": "1/886 after drafts (0.1%) against 3/2595 after control records (0.1%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/instructions",
+          "verdict": "1/886 after drafts (0.1%) against 10/2595 after control records (0.4%) - 4.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 0.6%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: queue-operation/popAll",
+          "verdict": "1/886 after drafts (0.1%) against 7/2595 after control records (0.3%) - 3.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 2.3%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/batching_reminder_sent",
+          "verdict": "1/886 after drafts (0.1%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 204/2595 control records (7.9%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: system/compact_boundary",
+          "verdict": "1/886 after drafts (0.1%) against 47/2595 after control records (1.8%) - 18.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 7.6%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/compact_file_reference",
+          "verdict": "1/886 after drafts (0.1%) against 43/2595 after control records (1.7%) - 17.0x more common after control records, and still not a discriminator: it follows both populations, so neither its presence nor its absence names one. With the assistant cut removed the control side reads 6.5%, so part of the gap is the window."
+        },
+        {
+          "site": "trailing line shape: attachment/bash_output_audience_note",
+          "verdict": "1/886 after drafts (0.1%), 0/2595 after control records. The zero is DEFINITIONAL, not a fact about drafts: the control window is cut at the next assistant line, and with the cut removed this shape follows 122/2595 control records (4.7%) - it is end-of-turn material that lands after the reply the window stops at."
+        },
+        {
+          "site": "trailing line shape: cost-state",
+          "verdict": "1/886 after drafts (0.1%) against 1/2595 after control records (0.0%): rates within a factor of two, so its presence says nothing about which population a record belongs to."
+        },
+        {
+          "site": "trailing line shape: attachment/command_permissions",
+          "verdict": "never follows a draft (0/886); 16/2595 after control records (0.6%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: attachment/model",
+          "verdict": "never follows a draft (0/886); 11/2595 after control records (0.4%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: attachment/environment",
+          "verdict": "never follows a draft (0/886); 8/2595 after control records (0.3%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: attachment/prompt_snapshot",
+          "verdict": "never follows a draft (0/886); 7/2595 after control records (0.3%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: system/api_error",
+          "verdict": "never follows a draft (0/886); 1/2595 after control records (0.0%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: attachment/diagnostics",
+          "verdict": "never follows a draft (0/886); 1/2595 after control records (0.0%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: attachment/plan_file_reference",
+          "verdict": "never follows a draft (0/886); 32/2595 after control records (1.2%). A shape only the control side shows cannot mark a draft either."
+        },
+        {
+          "site": "trailing line shape: attachment/session_context",
+          "verdict": "never follows a draft (0/886); 10/2595 after control records (0.4%). A shape only the control side shows cannot mark a draft either."
+        }
+      ]
     }
   ]
 }
