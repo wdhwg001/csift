@@ -168,6 +168,191 @@ fn role_selector_excludes_drafts_and_the_glob_reaches_them() {
     );
 }
 
+/// C-27: the draft states its distance from the message that replaced it.
+#[test]
+fn a_rendered_draft_carries_the_diff_against_the_sent_message() {
+    let h = unsent_home();
+    // The draft is 36 chars, the resend 51: the edit inserted "and the harbor "
+    // (15 chars), 29.4% of the final. A pure insertion, so the count here happens to
+    // equal the length difference; the replacement shapes that separate the two are
+    // the chardiff unit tests.
+    let out = h.run(&["search", "", &at(SESS), "-t", "user.unsent"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(
+            "differs from the sent message in 15 chars (29.4% of the final): may carry an \
+             addition or a correction"
+        ),
+        "the diff line renders verbatim:\n{}",
+        out.stdout
+    );
+    let j = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "user.unsent",
+        "--format",
+        "json",
+    ]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "exchange")
+        .expect("exchange row");
+    assert_eq!(row["superseding_line"], 2, "{}", j.stdout);
+    assert_eq!(row["superseding_uuid"], "u1", "{}", j.stdout);
+    assert_eq!(row["diff_chars"], 15, "{}", j.stdout);
+    assert_eq!(row["diff_pct"], 29.4, "{}", j.stdout);
+    assert_eq!(row["diff_exact"], true, "{}", j.stdout);
+}
+
+/// A NON-draft exchange carries none of the five keys (search's lean envelope), and a
+/// non-draft `show` row carries them as explicit nulls. A draft's superseding sibling is
+/// always in the same transcript - it is what makes the record a draft - so "the sibling
+/// is absent" is exactly the non-draft case.
+#[test]
+fn a_non_draft_row_carries_no_diff_fields() {
+    let h = unsent_home();
+    let j = h.run(&["search", "harbor", &at(SESS), "--format", "json"]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "exchange")
+        .expect("exchange row");
+    assert_eq!(row["superseded_draft"], false, "{}", j.stdout);
+    for key in ["superseding_line", "diff_chars", "diff_pct", "diff_exact"] {
+        assert!(row.get(key).is_none(), "{key} is absent:\n{}", j.stdout);
+    }
+    assert!(
+        !j.stdout.contains("differs from the sent message"),
+        "no diff line on a sent message:\n{}",
+        j.stdout
+    );
+    let show = h.run(&["show", &at(SESS), "--line", "2", "--format", "json"]);
+    let rec: serde_json::Value = show
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "record")
+        .expect("record row");
+    for key in [
+        "superseding_line",
+        "superseding_uuid",
+        "diff_chars",
+        "diff_pct",
+        "diff_exact",
+    ] {
+        assert!(rec[key].is_null(), "{key} is null:\n{}", show.stdout);
+    }
+}
+
+#[test]
+fn show_renders_the_diff_line_for_an_addressed_draft() {
+    let h = unsent_home();
+    let out = h.run(&["show", &at(SESS), "--line", "1"]);
+    assert!(
+        out.stdout
+            .contains("differs from the sent message in 15 chars (29.4% of the final)"),
+        "an addressed draft states its distance:\n{}",
+        out.stdout
+    );
+    let j = h.run(&["show", &at(SESS), "--line", "1", "--format", "json"]);
+    let rec: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "record")
+        .expect("record row");
+    assert_eq!(rec["superseding_line"], 2, "{}", j.stdout);
+    assert_eq!(rec["superseding_uuid"], "u1", "{}", j.stdout);
+    assert_eq!(rec["diff_chars"], 15, "{}", j.stdout);
+    assert_eq!(rec["diff_pct"], 29.4, "{}", j.stdout);
+    assert_eq!(rec["diff_exact"], true, "{}", j.stdout);
+}
+
+/// The share is of the FINAL message, so a draft the user cut down reads above 100%.
+#[test]
+fn the_share_exceeds_100_when_the_draft_was_the_longer_text() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"d1","parentUuid":"p0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef and the harbor and the shoals"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"p0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"chart it"}}"#, "\n",
+        ),
+    );
+    // 44 chars down to 8: the script deletes far more than the final message is long,
+    // so the share of the final is above 100.
+    let j = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "user.unsent",
+        "--format",
+        "json",
+    ]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "exchange")
+        .expect("exchange row");
+    let pct = row["diff_pct"].as_f64().expect("diff_pct is a number");
+    assert!(pct > 100.0, "a shrunk draft reads above 100%: {}", j.stdout);
+    assert_eq!(row["diff_exact"], true, "{}", j.stdout);
+}
+
+/// No denominator, no percentage: an empty final message drops the parenthetical
+/// rather than fabricating a 0 or a 100, and the wire says null.
+#[test]
+fn an_empty_sent_message_renders_the_line_without_a_share() {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"d1","parentUuid":"p0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"p0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":""}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["search", "", &at(SESS), "-t", "user.unsent"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(
+            "differs from the sent message in 14 chars: may carry an addition or a correction"
+        ),
+        "no share when the final message is empty:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("% of the final"),
+        "the parenthetical is dropped, never fabricated:\n{}",
+        out.stdout
+    );
+    let j = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "user.unsent",
+        "--format",
+        "json",
+    ]);
+    let row: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "exchange")
+        .expect("exchange row");
+    assert_eq!(row["diff_chars"], 14, "{}", j.stdout);
+    assert!(row["diff_pct"].is_null(), "{}", j.stdout);
+    assert_eq!(row["diff_exact"], true, "{}", j.stdout);
+}
+
 #[test]
 fn a_sectioned_draft_keeps_the_single_unsent_label() {
     // A superseded draft shaped like a sectioned text (a pulse) must not fan out into

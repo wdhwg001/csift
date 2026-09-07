@@ -36,7 +36,10 @@ pub(crate) fn reconstruct_and_match(
     // the 0-based turn index; map each index group back to its `Kept` borrows.
     // The skip set is computed EXPLICITLY (not inside the deduped grouper) so the
     // collapse can be DISCLOSED and an addressed draft can still be fetched (C-18).
-    let skip = crate::model::superseded_draft_indices(records, |k| &k.rec);
+    // The map form additionally names each draft's SURVIVOR (C-27, the unsent diff
+    // line); the skip set the grouper consumes is exactly its key set.
+    let draft_map = crate::model::superseded_draft_map(records, |k| &k.rec);
+    let skip: std::collections::HashSet<usize> = draft_map.keys().copied().collect();
     let index_turns = crate::model::group_turn_indices_core(records, |k| k.rec.opens_turn(), &skip);
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
@@ -85,6 +88,12 @@ pub(crate) fn reconstruct_and_match(
     // Resolve the `--turn` spec against THIS transcript's turn count (0-based), so
     // open/from-end forms (`N..`, `-3..` = the last 3) materialize per-file.
     let turn_bounds = turn_range.map(|spec| spec.resolve(index_turns.len(), false));
+    // C-27: the diff is a RENDER fact, so it is computed only where an exchange will
+    // actually be printed - never during the scan, never for a draft that only gets
+    // counted in the footer, and never under the terminal count modes (`-c` / `-l` /
+    // `--count-by` print no exchange at all). The corpus holds multi-megabyte drafts;
+    // paying for one per counted draft would tax exactly the query that counts them.
+    let want_diff = !(args.count_only || args.sessions_with_matches || args.count_by.is_some());
 
     // Build one turn's Exchange (or None when range-filtered / hit-free) - ONE closure
     // shared verbatim by the serial and parallel walks below, so the two paths cannot
@@ -173,6 +182,18 @@ pub(crate) fn reconstruct_and_match(
             (Some(&a), Some(&b)) => (a, b),
             _ => (0, 0),
         };
+        // C-27: a draft that is about to be RENDERED states its distance from the
+        // message that replaced it. The survivor is already in `records` (it is what
+        // made this record a draft), so no second pass over the file is needed - and
+        // that holds for `show` too, whose address restricts which records HIT, not
+        // which are read.
+        let draft_diff = if draft && want_diff {
+            idxs.first()
+                .and_then(|&i| draft_diff_for(records, i, &draft_map, &plan_index))
+        } else {
+            None
+        };
+
         Some(Exchange {
             session_id: session_id.clone(),
             is_subagent,
@@ -185,6 +206,7 @@ pub(crate) fn reconstruct_and_match(
             turn_lines,
             record_uuids,
             superseded_draft: draft,
+            draft_diff,
         })
     };
 
@@ -225,6 +247,39 @@ pub(crate) fn reconstruct_and_match(
 
     // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
     (out, index_turns.len(), skip.len())
+}
+
+/// The C-27 unsent diff for ONE draft record: its distance from the message that
+/// replaced it, plus that message's address. Both texts come from
+/// [`Record::reconstructed_user_text`] - the SAME engine the draft's own hit renders
+/// through - so the number describes what the reader is looking at.
+///
+/// `None` when the survivor is not in this file's records (only reachable if a caller
+/// hands in a partial record set) or when either side has no reconstructed text.
+fn draft_diff_for(
+    records: &[Kept],
+    draft_idx: usize,
+    map: &HashMap<usize, usize>,
+    plan_index: &PlanIndex,
+) -> Option<DraftDiff> {
+    let sent = records.get(*map.get(&draft_idx)?)?;
+    let draft_text = records
+        .get(draft_idx)?
+        .rec
+        .reconstructed_user_text(Some(plan_index))?;
+    let sent_text = sent.rec.reconstructed_user_text(Some(plan_index))?;
+    let d = crate::chardiff::char_diff(&draft_text, &sent_text);
+    let sent_chars = sent_text.chars().count();
+    // No denominator when the sent message is empty: the share is undefined, and a
+    // fabricated 0 or 100 would read as a measurement.
+    let pct = (sent_chars > 0).then(|| d.chars as f64 * 100.0 / sent_chars as f64);
+    Some(DraftDiff {
+        superseding_line: sent.line_no,
+        superseding_uuid: sent.rec.uuid.clone(),
+        chars: d.chars,
+        pct,
+        exact: d.exact,
+    })
 }
 
 /// The FIXED `--siblings` policy (the former per-selector cap DSL is gone - one

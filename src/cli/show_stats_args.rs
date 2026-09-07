@@ -39,6 +39,15 @@ use super::*;
         ERROR (exit non-zero); a range CLAMPS to the file but erroring if it yields nothing. \
         A pending-elicitation record merged from the sidecar has no physical line; address \
         it by `--uuid` (it renders `(elicitation sidecar)` in place of `Lnnnn`).\n\n\
+        SUPERSEDED DRAFTS\n  \
+          An addressed draft (an opener a later same-parent sibling replaced) renders as \
+        its own annotated unit outside turn numbering, and states its distance from the \
+        message that replaced it: `differs from the sent message in N chars (P% of the \
+        final)` - insertions plus deletions of a shortest CHARACTER edit script, never a \
+        length difference, so P can exceed 100 when the draft was the longer text. JSON \
+        record rows add superseding_line, superseding_uuid, diff_chars, diff_pct and \
+        diff_exact (false when a bound stopped the walk, in which case both numbers read \
+        \"more than\"); all five are null on any other row.\n\n\
         RAW MODE\n  \
           `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
         torn line: that is the point). It is mutually exclusive with `--format json` (raw \

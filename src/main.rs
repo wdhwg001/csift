@@ -8,6 +8,7 @@
 mod agents;
 mod bash_danger;
 mod bash_mutations;
+mod chardiff;
 mod cli;
 mod elicitation;
 mod files;

@@ -103,6 +103,67 @@ pub struct Hit {
     pub truncated: bool,
 }
 
+/// C-27: how far a superseded draft sits from the message that replaced it, plus that
+/// message's address. Present ONLY on a rendered draft unit whose superseding sibling is
+/// in the same transcript (it always is - the sibling is what makes the record a draft -
+/// unless a `--turn` window or a terminal count mode means nothing is rendered at all).
+#[derive(Debug, Clone)]
+pub struct DraftDiff {
+    /// 1-based jsonl line of the superseding record (the message that WAS sent).
+    pub superseding_line: usize,
+    /// That record's uuid, when it carries one.
+    pub superseding_uuid: Option<String>,
+    /// Insertions + deletions of a shortest CHARACTER-level edit script between the
+    /// draft's reconstructed text and the final's - the characters covered by the
+    /// differing regions, never a length difference. A lower bound when `!exact`.
+    pub chars: usize,
+    /// `chars` as a percentage of the FINAL message's character count. `None` when the
+    /// final text is empty (no denominator - never a fabricated 0 or 100). Can exceed
+    /// 100 when the draft was the longer text.
+    pub pct: Option<f64>,
+    /// False when a bound stopped the walk: `chars` is then a proven floor and every
+    /// rendering says "more than" (see [`crate::chardiff`]).
+    pub exact: bool,
+}
+
+impl DraftDiff {
+    /// The one-line rendering shared by `search` and `show` (text mode).
+    pub(crate) fn text_line(&self) -> String {
+        let more = if self.exact { "" } else { "more than " };
+        match self.pct {
+            Some(p) => format!(
+                "differs from the sent message in {more}{} chars ({more}{p:.1}% of the final): \
+                 may carry an addition or a correction",
+                self.chars
+            ),
+            None => format!(
+                "differs from the sent message in {more}{} chars: may carry an addition or a \
+                 correction",
+                self.chars
+            ),
+        }
+    }
+
+    /// `pct` rounded to the ONE decimal the text renders, so the wire and the line agree.
+    pub(crate) fn pct_json(&self) -> serde_json::Value {
+        match self.pct {
+            Some(p) => serde_json::json!((p * 10.0).round() / 10.0),
+            None => serde_json::Value::Null,
+        }
+    }
+
+    /// Attach the five C-27 keys to a `search` exchange row. Present only on a draft
+    /// unit, the same lean-envelope rule the `siblings` block follows; `show`'s flat
+    /// record rows carry them as explicit nulls instead.
+    pub(crate) fn attach_json(&self, obj: &mut serde_json::Value) {
+        obj["superseding_line"] = serde_json::json!(self.superseding_line);
+        obj["superseding_uuid"] = serde_json::json!(self.superseding_uuid);
+        obj["diff_chars"] = serde_json::json!(self.chars);
+        obj["diff_pct"] = self.pct_json();
+        obj["diff_exact"] = serde_json::json!(self.exact);
+    }
+}
+
 /// A complete reconstructed request/response exchange (round-trip) containing the
 /// hit(s).
 #[derive(Debug, Clone)]
@@ -149,6 +210,9 @@ pub struct Exchange {
     /// single label `user.unsent`. A scan emits it when it matches (except under a
     /// `--turn` window); an explicit `show --line`/`--uuid` address always reaches it.
     pub superseded_draft: bool,
+    /// C-27: the draft's distance from the message that replaced it (see [`DraftDiff`]).
+    /// `None` on every non-draft exchange.
+    pub draft_diff: Option<DraftDiff>,
 }
 
 /// Outcome of a search run, including the no-silent-truncation accounting.

@@ -31,6 +31,11 @@ pub(crate) fn render_text(
                  outside turn numbering)  {}",
                 format_local_compact(ex.started_utc.as_deref())
             );
+            // C-27: the distance from the message that replaced it, so a fetched
+            // draft is never read as the message the model received.
+            if let Some(d) = &ex.draft_diff {
+                println!("  {}", d.text_line());
+            }
         } else {
             println!(
                 "t{}  {}",
@@ -107,6 +112,24 @@ pub(crate) fn render_json(
                 Some((f, t)) => (json!(f), json!(t)),
                 None => (serde_json::Value::Null, serde_json::Value::Null),
             };
+            // C-27: on a draft row, the superseding message's address and the distance
+            // between the two texts; null on every other row.
+            let (sup_line, sup_uuid, diff_chars, diff_pct, diff_exact) = match &ex.draft_diff {
+                Some(d) => (
+                    json!(d.superseding_line),
+                    json!(d.superseding_uuid),
+                    json!(d.chars),
+                    d.pct_json(),
+                    json!(d.exact),
+                ),
+                None => (
+                    serde_json::Value::Null,
+                    serde_json::Value::Null,
+                    serde_json::Value::Null,
+                    serde_json::Value::Null,
+                    serde_json::Value::Null,
+                ),
+            };
             let row = json!({
                 "kind": "record",
                 "session_id": session_id,
@@ -116,6 +139,11 @@ pub(crate) fn render_json(
                 // never a fabricated number; the flag names why.
                 "turn_index": if ex.superseded_draft { serde_json::Value::Null } else { json!(ex.turn_index) },
                 "superseded_draft": ex.superseded_draft,
+                "superseding_line": sup_line,
+                "superseding_uuid": sup_uuid,
+                "diff_chars": diff_chars,
+                "diff_pct": diff_pct,
+                "diff_exact": diff_exact,
                 // A merged elicitation-sidecar record has no physical line (null).
                 "line": if h.from_sidecar { serde_json::Value::Null } else { json!(h.line) },
                 "uuid": h.uuid,

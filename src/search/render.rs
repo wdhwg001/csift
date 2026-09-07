@@ -210,6 +210,12 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
                 format_local_compact(ex.started_utc.as_deref())
             );
         }
+        // C-27: what the user changed before sending. Printed once per draft unit,
+        // under the header, so the reader weighs the draft against what replaced it
+        // instead of reading an abandoned text as the message.
+        if let Some(d) = &ex.draft_diff {
+            println!("      ↳ {}", d.text_line());
+        }
         for hit in &ex.hits {
             print_record_line(role_glyph(hit.class), hit);
             // Close the text-mode ID-law hole for SUBAGENT hits: a line number is per-FILE, so
@@ -511,6 +517,11 @@ pub(crate) fn render_json(
             "hits": hits,
             "record_uuids": ex.record_uuids,
         });
+        // C-27: on a draft unit, the address of the message that replaced it and the
+        // distance between the two texts.
+        if let Some(d) = &ex.draft_diff {
+            d.attach_json(&mut obj);
+        }
         // `--siblings`: attach the non-matched records of the turn (same per-hit shape).
         // Present only when there are siblings - absent ⇒ none (keeps the common envelope lean).
         if !ex.siblings.is_empty() || ex.siblings_hidden > 0 {

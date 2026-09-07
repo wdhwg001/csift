@@ -137,6 +137,55 @@ pub fn superseded_draft_indices<T>(
     superseded
 }
 
+/// [`superseded_draft_indices`] with the SURVIVOR named: each superseded opener maps to
+/// the index of the sibling that finally replaced it (the LAST opener sharing its
+/// `parentUuid` - the one that was delivered), so a caller can render the draft AGAINST
+/// the message the user actually sent (the C-27 unsent diff line).
+///
+/// Deliberately a SECOND walk rather than a refactor of [`superseded_draft_indices`]:
+/// that function is the turn DELIMITER contract every session-operating surface shares,
+/// and it answers a different question (which openers are drafts) with a set that
+/// [`group_turn_indices_core`] consumes directly. An n-way draft group (type, esc, edit,
+/// esc, edit, send) maps EVERY earlier sibling to the same final survivor, not to its
+/// immediate successor: the intermediate versions were never sent either.
+#[must_use]
+pub fn superseded_draft_map<T>(
+    records: &[T],
+    rec: impl Fn(&T) -> &Record,
+) -> std::collections::HashMap<usize, usize> {
+    // parent -> (the last opener seen so far, the earlier siblings it supersedes).
+    let mut groups: std::collections::HashMap<&str, (usize, Vec<usize>)> =
+        std::collections::HashMap::new();
+    for (i, item) in records.iter().enumerate() {
+        let r = rec(item);
+        if !r.opens_turn() {
+            continue;
+        }
+        let Some(parent) = r.parent_uuid.as_deref() else {
+            continue; // null parent: never grouped (same rule as the set form)
+        };
+        if parent.is_empty() {
+            continue;
+        }
+        match groups.get_mut(parent) {
+            Some(entry) => {
+                let prev = std::mem::replace(&mut entry.0, i);
+                entry.1.push(prev);
+            }
+            None => {
+                groups.insert(parent, (i, Vec::new()));
+            }
+        }
+    }
+    let mut out = std::collections::HashMap::new();
+    for (survivor, drafts) in groups.into_values() {
+        for d in drafts {
+            out.insert(d, survivor);
+        }
+    }
+    out
+}
+
 /// [`group_turn_indices`] with esc-cancel / edit-resend DRAFT SUPPRESSION (§6.4.1): a
 /// superseded draft ([`superseded_draft_indices`]) is dropped ENTIRELY - it neither opens a
 /// turn nor folds in as a member - so a message the user edited away before sending can

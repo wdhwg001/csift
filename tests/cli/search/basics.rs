@@ -215,6 +215,45 @@ fn search_help_mentions_regex_dialect_boundaries() {
     assert!(out.stdout.contains("lookahead") || out.stdout.contains("lookbehind"));
 }
 
+/// Help IS surface (the five-document contract), so the C-27 diff line is pinned in
+/// BOTH manuals: the taxonomy's `.unsent` entry in `search --help`, its own section in
+/// `show --help`. Each must name the metric, the "can exceed 100" caveat and the JSON
+/// keys, so a help edit that drops one fails here instead of silently thinning the
+/// manual against SKILL.
+#[test]
+fn help_pins_the_unsent_diff_line_in_both_manuals() {
+    let h = Home::new();
+    for (cmd, keys) in [
+        ("search", "diff_chars, diff_pct, diff_exact"),
+        ("show", "diff_chars, diff_pct and diff_exact"),
+    ] {
+        let out = h.run(&[cmd, "--help"]);
+        assert!(out.success, "{cmd} --help: {}", out.stderr);
+        assert!(
+            out.stdout
+                .contains("differs from the sent message in N chars"),
+            "{cmd} --help states the diff line:\n{}",
+            out.stdout
+        );
+        assert!(
+            out.stdout.contains("CHARACTER edit script")
+                && out.stdout.contains("never a length difference"),
+            "{cmd} --help names the metric:\n{}",
+            out.stdout
+        );
+        assert!(
+            out.stdout.contains("exceed 100"),
+            "{cmd} --help keeps the over-100 caveat:\n{}",
+            out.stdout
+        );
+        assert!(
+            out.stdout.contains("superseding_line, superseding_uuid") && out.stdout.contains(keys),
+            "{cmd} --help names the JSON keys:\n{}",
+            out.stdout
+        );
+    }
+}
+
 #[test]
 fn regex_alternation_extracts_needles_and_still_matches() {
     // The v0.9.4 required-needle gate: a metachar alternation is prefiltered by the

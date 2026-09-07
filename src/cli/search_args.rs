@@ -185,7 +185,13 @@ use super::*;
         .unsent                 a SUPERSEDED draft: sent, esc-recalled, edited and\n                                   \
         re-sent - the original stays on disk OUTSIDE turn\n                                   \
         numbering (never counted as user.message; a queued\n                                   \
-        text edited before dispatch never becomes a record)\n           \
+        text edited before dispatch never becomes a record). A\n                                   \
+        rendered draft states its distance from the message that\n                                   \
+        replaced it - `differs from the sent message in N chars\n                                   \
+        (P% of the final)`: insertions plus deletions of a shortest\n                                   \
+        CHARACTER edit script, never a length difference, so P can\n                                   \
+        exceed 100 (JSON superseding_line, superseding_uuid,\n                                   \
+        diff_chars, diff_pct, diff_exact)\n           \
         .queued                 the human's text as it sat in the input QUEUE (a\n                                   \
         queue-operation line with content: enqueue, a popAll\n                                   \
         recall, or a remove with its reason); the label zone\n                                   \
