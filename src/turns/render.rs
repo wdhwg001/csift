@@ -351,7 +351,7 @@ pub(crate) fn maybe_boundary_banner(
     emit: &mut dyn FnMut(String),
 ) {
     for s in crossed_summaries(summaries, *prev, current) {
-        emit(boundary_banner_line(s.line_no));
+        emit(boundary_banner_line(s.line_no, s.mode));
     }
     *prev = Some(current);
 }

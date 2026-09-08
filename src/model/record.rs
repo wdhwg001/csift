@@ -153,6 +153,15 @@ pub struct Record {
     /// Measured 0 occurrences; the local rewind writes nothing at all. Disclosed only.
     #[serde(default)]
     pub rewound: Option<bool>,
+    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,
+    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine
+    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so
+    /// its presence is what separates the two summarize modes from an ordinary compaction.
+    /// `direction` (`"up_to"` / `"from"`) is the discriminator - `userContext` is written from a
+    /// possibly-undefined value and can be absent. A tiny flat object, so kept as a tolerant
+    /// `Value` like `compact_metadata`; read through [`Record::summarize_direction`].
+    #[serde(default, rename = "summarizeMetadata")]
+    pub summarize_metadata: Option<serde_json::Value>,
 
     /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE
     /// predecessor record the compaction re-links to (`parentUuid` is null on a

@@ -74,7 +74,9 @@ use memchr::memmem;
 use rayon::prelude::*;
 
 use crate::cli::{OutputFormat, VerbatimArgs};
-use crate::model::{group_turn_indices_deduped, normalize_line, Block, Content, PlanIndex, Record};
+use crate::model::{
+    group_turn_indices_deduped, normalize_line, Block, Content, PlanIndex, Record, SummarizeMode,
+};
 use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;

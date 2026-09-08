@@ -172,6 +172,11 @@ pub(crate) struct SummaryInfo {
     pub(crate) fingerprints: Vec<String>,
     /// Char length of the summary body (for the JSON boundary record).
     pub(crate) body_chars: usize,
+    /// C-33: the compaction gesture this summary belongs to. A `/rewind` summarize IS a
+    /// compaction - it clips turns exactly like an auto-compact, so reconstruction is
+    /// unchanged and the mode only labels the banner. `None` when the direction is a value
+    /// csift does not model.
+    pub(crate) mode: Option<crate::model::SummarizeMode>,
 }
 
 /// A per-session scan result before global merge.

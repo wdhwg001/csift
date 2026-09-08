@@ -194,6 +194,11 @@ pub struct ClassifyCtx<'a> {
     pub spawn: Option<&'a dyn SpawnLookup>,
     /// This file's `harness.resume.prompt` uuids, for the placeholder's pair verdict.
     pub resume_prompt_uuids: Option<&'a HashSet<String>>,
+    /// Boundary -> compaction-MODE pairing for this transcript ([`SummarizeIndex`]): a
+    /// `compact_boundary` carries the metrics but never the direction, so its mode is only
+    /// readable through the compaction SUMMARY that follows it. `None` ⇒ a boundary's mode
+    /// stays unknown (an honest null, never a guessed `compact`).
+    pub summarize: Option<&'a SummarizeIndex>,
 }
 
 #[allow(dead_code)]
@@ -210,6 +215,7 @@ impl<'a> ClassifyCtx<'a> {
             is_transcript_opener: false,
             spawn: None,
             resume_prompt_uuids: None,
+            summarize: None,
         }
     }
 }

@@ -66,7 +66,13 @@ use super::*;
         tool_name, from, to, pairing (paired | pending | orphan | null), tool_use_id, \
         source (\"elicitation-sidecar\" | null), survival (live | pre-cut | abandoned), \
         abandoned_root_line, replay_copy_of, ts_utc, ts_local, text (FULL; never \
-        clipped), image_ids:[…]}. The summary is {records, dropped_by_cap, refetch_remainder \
+        clipped), image_ids:[…], mode, compact_metadata}. `mode` and `compact_metadata` are \
+        the compaction pair's own fields and null on every other record: `mode` is \
+        `compact` | `summarize-from-here` | `summarize-up-to-here` (a `/rewind` summarize \
+        IS a compaction; the boundary learns its mode from the summary that follows it, and \
+        stays null when the fetch did not include one), and `compact_metadata` is the \
+        boundary's own object verbatim, including the `preservedMessages` uuid lists the \
+        one-line excerpt only counts. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
         non_record_lines, skipped_lines, with_elicitation_sidecar}."
 )]

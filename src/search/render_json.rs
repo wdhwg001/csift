@@ -45,6 +45,31 @@ pub(crate) fn refetch_uuid_json(session_id: &str, h: &Hit) -> serde_json::Value 
     }
 }
 
+/// C-33: the compaction MODE of a boundary/summary hit as its stable slug (`compact` /
+/// `summarize-from-here` / `summarize-up-to-here`), else null. Null covers both "not a
+/// compaction record" and "the mode is not knowable here" - an unpaired boundary, or a
+/// `direction` value csift does not model.
+pub(crate) fn compaction_mode_json(h: &Hit) -> serde_json::Value {
+    match h
+        .compaction
+        .as_ref()
+        .and_then(|c| c.mode)
+        .map(crate::model::SummarizeMode::slug)
+    {
+        Some(slug) => serde_json::json!(slug),
+        None => serde_json::Value::Null,
+    }
+}
+
+/// C-33: a boundary hit's `compactMetadata` object VERBATIM (the full `preservedMessages` /
+/// `preservedSegment` uuid lists the one-line excerpt only counts), else null.
+pub(crate) fn compact_metadata_json(h: &Hit) -> serde_json::Value {
+    h.compaction
+        .as_ref()
+        .and_then(|c| c.metadata.clone())
+        .unwrap_or(serde_json::Value::Null)
+}
+
 pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
     let session_id: &str = &ex.session_id;
     // Comm direction (GOLD §4): `from`/`to` only for an `agent.communication.*` hit, else null.
@@ -96,6 +121,12 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "survival": h.survival.as_str(),
         "abandoned_root_line": ex.abandoned_root_line,
         "replay_copy_of": h.replay_copy_of,
+        // C-33 compaction facts; null on every non-compaction hit. `mode` names the gesture
+        // (a plain compact, or one of the two `/rewind` summarize directions) and rides BOTH
+        // the boundary and its summary; `compact_metadata` is the boundary's own object,
+        // verbatim, uuid lists included.
+        "mode": compaction_mode_json(h),
+        "compact_metadata": compact_metadata_json(h),
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.

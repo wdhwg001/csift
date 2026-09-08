@@ -90,6 +90,16 @@ pub(crate) fn render_label(h: &Hit) -> String {
             return format!("{} [{state}]{nd}", class.path());
         }
     }
+    // C-33: a compaction summary written by a `/rewind` summarize names its direction in the
+    // label zone - display-only, like [narration summary] and [not delivered]: it is not
+    // matchable text, so it needs no synthesized-marker registration, and the summary body
+    // stays the verbatim recap. An ordinary compaction summary carries no `summarizeMetadata`
+    // and renders exactly as before.
+    if class == Class::CompactionSummary {
+        if let Some(dir) = h.compaction.as_ref().and_then(|c| c.direction.as_deref()) {
+            return format!("{} [summarize {dir}]{nd}", class.path());
+        }
+    }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
         return format!("{}{nd}  {from} ⇨ {to}", class.path());

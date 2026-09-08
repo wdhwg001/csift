@@ -71,10 +71,38 @@ fn unit_cost_equals_real_emitted_chars_for_the_unit() {
 #[test]
 fn banner_cost_equals_real_emitted_banner_chars() {
     // The boundary banner the renderer emits (+ its '\n') must equal the charged cost.
-    let line = boundary_banner_line(34097);
-    assert_eq!(banner_cost(34097), line.chars().count() + NEWLINE_COST);
+    let line = boundary_banner_line(34097, None);
+    assert_eq!(
+        banner_cost(34097, None),
+        line.chars().count() + NEWLINE_COST
+    );
     assert!(line.contains("compaction boundary"));
     assert!(line.contains("L34097"));
+    // C-33: the same equality must hold for a summarize-mode banner, whose extra segment
+    // widens the line - a reservation computed without the mode would under-charge and the
+    // budget would overrun by exactly that segment.
+    for mode in [
+        SummarizeMode::Compact,
+        SummarizeMode::FromHere,
+        SummarizeMode::UpToHere,
+    ] {
+        let l = boundary_banner_line(34097, Some(mode));
+        assert_eq!(
+            banner_cost(34097, Some(mode)),
+            l.chars().count() + NEWLINE_COST,
+            "charged cost must equal the emitted banner for {mode:?}"
+        );
+    }
+    // A plain compaction's banner is byte-identical to the unpaired one; the two summarize
+    // modes are strictly wider and differ from each other.
+    assert_eq!(
+        boundary_banner_line(34097, Some(SummarizeMode::Compact)),
+        line
+    );
+    let up = boundary_banner_line(34097, Some(SummarizeMode::UpToHere));
+    let from = boundary_banner_line(34097, Some(SummarizeMode::FromHere));
+    assert!(up.contains("summarize up_to") && from.contains("summarize from"));
+    assert!(up.chars().count() > line.chars().count() && up != from);
 }
 
 #[test]
@@ -84,16 +112,19 @@ fn cumulative_banner_cost_is_monotone_and_zero_at_depth_zero() {
             line_no: 100,
             fingerprints: vec![],
             body_chars: 10,
+            mode: None,
         },
         SummaryInfo {
             line_no: 500,
             fingerprints: vec![],
             body_chars: 10,
+            mode: None,
         },
         SummaryInfo {
             line_no: 900,
             fingerprints: vec![],
             body_chars: 10,
+            mode: None,
         },
     ];
     assert_eq!(cumulative_banner_cost(&summaries, 0), 0);
@@ -102,7 +133,7 @@ fn cumulative_banner_cost_is_monotone_and_zero_at_depth_zero() {
     let d3 = cumulative_banner_cost(&summaries, 3);
     assert!(d1 > 0 && d2 > d1 && d3 > d2, "monotone increasing in depth");
     // Depth 1 charges the NEWEST (max line_no = 900) banner only.
-    assert_eq!(d1, banner_cost(900));
+    assert_eq!(d1, banner_cost(900, None));
     // Depth beyond the summary count saturates at "all banners".
     assert_eq!(cumulative_banner_cost(&summaries, 99), d3);
 }

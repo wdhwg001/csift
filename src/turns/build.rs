@@ -26,6 +26,7 @@ pub(crate) fn build(
                     line_no: *line_no,
                     fingerprints: summary_fingerprints(&body),
                     body_chars: body.chars().count(),
+                    mode: rec.summary_compaction_mode(),
                 });
             }
         }

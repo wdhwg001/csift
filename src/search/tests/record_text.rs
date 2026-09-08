@@ -148,3 +148,66 @@ fn fmt_ms_picks_the_top_two_units() {
     assert_eq!(fmt_ms(7_380_000), "2h 3m");
     assert_eq!(fmt_ms(926_676_611), "10d 17h");
 }
+
+/// C-33: the boundary excerpt gains the harness's own SURVIVOR fields, and a legacy
+/// boundary carrying only the four scalars still renders byte-for-byte what it always did.
+#[test]
+fn boundary_excerpt_keeps_the_legacy_four_scalar_form_byte_for_byte() {
+    let legacy = rec(
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"t","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preTokens":1000,"postTokens":200,"durationMs":50}}"#,
+    );
+    assert_eq!(
+        system_record_text(&legacy).as_deref(),
+        Some(
+            "Conversation compacted [compaction boundary: trigger=auto preTokens=1000 \
+             postTokens=200 durationMs=50]"
+        )
+    );
+}
+
+#[test]
+fn boundary_excerpt_renders_every_survivor_field_when_present() {
+    let full = rec(
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"t","logicalParentUuid":"lp1","content":"Conversation compacted","compactMetadata":{"trigger":"manual","preTokens":41041,"postTokens":8121,"durationMs":44736,"messagesSummarized":66,"cumulativeDroppedTokens":32920,"preservedSegment":{"headUuid":"aaaa1111-2222-4333-8444-555566667777","anchorUuid":"bbbb2222-3333-4444-8555-666677778888","tailUuid":"cccc3333-4444-4555-8666-777788889999"},"preservedMessages":{"anchorUuid":"bbbb2222-3333-4444-8555-666677778888","uuids":["a","b"],"allUuids":["a","b","c"]}}}"#,
+    );
+    assert_eq!(
+        system_record_text(&full).as_deref(),
+        Some(
+            "Conversation compacted [compaction boundary: trigger=manual preTokens=41041 \
+             postTokens=8121 durationMs=44736 messagesSummarized=66 \
+             cumulativeDroppedTokens=32920 preserved=2 uuids, 3 allUuids, anchor bbbb2222 \
+             segment=aaaa1111..cccc3333] [logicalParent=lp1]"
+        )
+    );
+}
+
+#[test]
+fn boundary_excerpt_prints_only_the_survivor_parts_it_has() {
+    // preservedMessages without allUuids, preservedSegment with one end only.
+    let partial = rec(
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"t","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preservedMessages":{"uuids":["a"]},"preservedSegment":{"headUuid":"aaaaaaaabbbb"}}}"#,
+    );
+    assert_eq!(
+        system_record_text(&partial).as_deref(),
+        Some(
+            "Conversation compacted [compaction boundary: trigger=auto preserved=1 uuids \
+             segment=aaaaaaaa..]"
+        )
+    );
+    // Empty survivor objects contribute nothing (no `preserved=` / `segment=` noise).
+    let empty = rec(
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"t","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preservedMessages":{},"preservedSegment":{}}}"#,
+    );
+    assert_eq!(
+        system_record_text(&empty).as_deref(),
+        Some("Conversation compacted [compaction boundary: trigger=auto]")
+    );
+    // No compactMetadata at all: the content line stands alone, as before.
+    let bare = rec(
+        r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","timestamp":"t","content":"Conversation compacted"}"#,
+    );
+    assert_eq!(
+        system_record_text(&bare).as_deref(),
+        Some("Conversation compacted")
+    );
+}

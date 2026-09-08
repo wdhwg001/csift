@@ -163,6 +163,9 @@ pub(crate) fn render_json(
                 "ts_local": h.timestamp_utc.as_deref().and_then(local_iso),
                 "text": h.excerpt,
                 "image_ids": h.image_ids,
+                // C-33: the compaction facts of a boundary/summary record; null elsewhere.
+                "mode": crate::search::compaction_mode_json(h),
+                "compact_metadata": crate::search::compact_metadata_json(h),
             });
             println!("{}", serde_json::to_string(&row)?);
         }

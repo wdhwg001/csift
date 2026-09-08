@@ -36,6 +36,8 @@ fn rec(line: &str) -> Record {
 /// A neutral top-level [`ClassifyEnv`] for the `collect_turn_hits` unit tests (no subagent,
 /// no spawn lookup) - the per-record ctx degrades to [`ClassifyCtx::top_level`]'s behavior.
 fn test_env() -> ClassifyEnv<'static> {
+    // A leaked empty pairing keeps the helper's `'static` signature (test-only, one alloc).
+    static EMPTY: std::sync::OnceLock<crate::model::SummarizeIndex> = std::sync::OnceLock::new();
     ClassifyEnv {
         owner_id: "0a1b2c3d-0000-0000-0000-000000000000",
         is_subagent: false,
@@ -43,6 +45,7 @@ fn test_env() -> ClassifyEnv<'static> {
         first_opener_line: None,
         spawn: None,
         resume_prompts: &NO_RESUME_PROMPTS,
+        summarize: EMPTY.get_or_init(crate::model::SummarizeIndex::default),
     }
 }
 

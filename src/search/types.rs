@@ -79,6 +79,26 @@ impl ChainCounts {
     }
 }
 
+/// The compaction facts a `harness.compaction.boundary` / `harness.compaction.summary` hit
+/// carries (C-33). Boxed onto [`Hit::compaction`] as ONE optional field: it is `None` on every
+/// other hit, and compaction records are rare enough that widening every hit would be pure cost.
+#[derive(Debug, Clone)]
+pub struct CompactionHit {
+    /// The BOUNDARY's `compactMetadata` object, verbatim (JSON `compact_metadata` - the full
+    /// `preservedMessages` uuid lists included, which the one-line excerpt only counts).
+    /// `None` on a summary hit.
+    pub metadata: Option<serde_json::Value>,
+    /// The gesture that minted this compaction: a plain `compact`, or one of the two `/rewind`
+    /// summarize directions. `None` = unknown, which happens two ways and both are honest: a
+    /// boundary the scan never paired with its summary, and a `direction` value csift does not
+    /// model.
+    pub mode: Option<crate::model::SummarizeMode>,
+    /// The SUMMARY's own `summarizeMetadata.direction`, verbatim - so an unmodeled gesture still
+    /// renders its own word in the `[summarize <direction>]` tag. `None` on a boundary hit and on
+    /// an ordinary compaction summary.
+    pub direction: Option<String>,
+}
+
 /// A single label-tagged hit inside an exchange.
 #[derive(Debug, Clone)]
 pub struct Hit {
@@ -173,6 +193,9 @@ pub struct Hit {
     /// re-anchor re-appended the record and the last copy is the survivor. `None` when
     /// this line IS the survivor.
     pub replay_copy_of: Option<usize>,
+    /// C-33: the compaction facts of a `harness.compaction.*` hit ([`CompactionHit`]);
+    /// `None` on every other hit.
+    pub compaction: Option<Box<CompactionHit>>,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) - i.e. the reader is seeing a fragment, not the
     /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch

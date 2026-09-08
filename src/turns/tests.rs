@@ -134,6 +134,7 @@ fn summary(line_no: usize, fps: Vec<&str>, body_chars: usize) -> SummaryInfo {
         line_no,
         fingerprints: fps.into_iter().map(fingerprint).collect(),
         body_chars,
+        mode: None,
     }
 }
 

@@ -193,7 +193,33 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         envelope, direction from the header's `from=`. The one\n                                   \
         attachment leaf a DEFAULT scan sees\n  \
           harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
-        .compaction.{summary,boundary} · .command.{invocation,stdout}\n           \
+        .compaction.{summary,boundary}  a compaction's SUMMARY plus its metrics
+                                   \
+        record. The boundary excerpt names every survivor field
+                                   \
+        the record carries (trigger, preTokens, postTokens,
+                                   \
+        durationMs, messagesSummarized, cumulativeDroppedTokens,
+                                   \
+        preserved=<N uuids, M allUuids, anchor …>,
+                                   \
+        segment=<head>..<tail>); JSON adds `compact_metadata`
+                                   \
+        verbatim (the full uuid lists) and `mode` on BOTH records
+                                   \
+        - `compact` | `summarize-from-here` | `summarize-up-to-here`.
+                                   \
+        A `/rewind` summarize IS a compaction: the summary carries
+                                   \
+        `summarizeMetadata.direction` instead of
+                                   \
+        `isVisibleInTranscriptOnly` and renders a `[summarize
+                                   \
+        <direction>]` tag; the boundary learns its mode from the
+                                   \
+        summary that follows it (null when unpaired)
+           \
+        .command.{invocation,stdout}\n           \
         .interrupt.{user,tool} · .schedule.wakeup · .meta.{hook,loop,attachment}\n           \
         .resume.prompt          the repair PROMPT the resume LOADER appends when a\n                                   \
         transcript ends on a dangling user record - an isMeta\n                                   \
@@ -240,7 +266,8 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
         labels:[…], line, uuid, excerpt, tool_name, pairing, \
         from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, \
-        survival, abandoned_root_line, replay_copy_of, refetch, refetch_uuid}, …]}: \
+        survival, abandoned_root_line, replay_copy_of, mode, compact_metadata, \
+        refetch, refetch_uuid}, …]}: \
         `label` is the matched dotted path, `labels` \
         the record's full label set, `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \

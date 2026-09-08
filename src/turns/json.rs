@@ -107,11 +107,14 @@ pub(crate) fn render_json(
                 &mut prev_comp,
                 turn.compactions_before,
                 &sr.summaries,
-                &mut |line_no, summary_chars| {
+                &mut |line_no, summary_chars, mode| {
                     let obj = json!({
                         "kind": "compaction_boundary",
                         "line": line_no,
                         "summary_chars": summary_chars,
+                        // C-33: the gesture that minted this compaction; null when the
+                        // summary names a direction csift does not model.
+                        "mode": mode.map(SummarizeMode::slug),
                     });
                     let s = serde_json::to_string(&obj).expect("serialize boundary");
                     println!("{s}");
@@ -267,10 +270,10 @@ pub(crate) fn maybe_boundary_json(
     prev: &mut Option<usize>,
     current: usize,
     summaries: &[SummaryInfo],
-    emit: &mut dyn FnMut(usize, usize),
+    emit: &mut dyn FnMut(usize, usize, Option<SummarizeMode>),
 ) {
     for s in crossed_summaries(summaries, *prev, current) {
-        emit(s.line_no, s.body_chars);
+        emit(s.line_no, s.body_chars, s.mode);
     }
     *prev = Some(current);
 }

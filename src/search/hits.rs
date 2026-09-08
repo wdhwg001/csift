@@ -90,86 +90,6 @@ pub(crate) fn collect_turn_hits(
     (hits, hit_idxs)
 }
 
-/// The ONE unit an ADDRESSED record with no modeled leaf renders (see the refetch-law note in
-/// [`collect_turn_hits`]): the record's own raw text under an EMPTY label ([`Hit::class`] is
-/// `None`), so a reader sees the bytes csift has rather than a bail. `None` when the record
-/// carries no text anywhere - there is nothing to render and the address stays a miss, which is
-/// the honest answer for a session-state cache line. The address/line/uuid are backfilled by the
-/// caller like any other hit.
-pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize) -> Option<Hit> {
-    let text = record_raw_text(rec)?;
-    let span = matcher.locate(&text)?;
-    let (excerpt, truncated) = match_excerpt(&text, span, excerpt_max);
-    Some(Hit {
-        class: None,
-        labels: Vec::new(),
-        excerpt,
-        timestamp_utc: rec.timestamp.clone(),
-        tool_name: None,
-        model: None,
-        attachment_type: rec.attachment_type(),
-        version: rec.version.clone(),
-        is_error: None,
-        direction: None,
-        tool_use_id: None,
-        pair: None,
-        line: 0,
-        uuid: None,
-        raw: None,
-        image_ids: Vec::new(),
-        from_sidecar: false,
-        queue_operation: None,
-        queue_reason: None,
-        delivery: rec.delivery_override(),
-        // An unlabeled unit is by definition a record csift models no leaf for, so it is
-        // never a resume placeholder (that shape has one).
-        resume_paired: None,
-        survival: crate::model::Survival::Live,
-        rewound_branch: false,
-        replay_copy_of: None,
-        truncated,
-    })
-}
-
-/// Stamp the source record's line number + uuid onto each hit just appended for it - the
-/// `csift show --line/--uuid` address. Done by the turn collector (not `make_hit`) because the line number
-/// lives on the `Kept`, not the `Record`. Also attaches the record's image ids to its FIRST
-/// hit (so an image-bearing message exposes the extractable `#N`/`L<line>i<n>` id once, not
-/// repeated per matched block).
-/// Stamp the SURVIVAL AXIS answer onto each hit just appended: is this record still in
-/// the conversation, is its branch a rewound one, and is the line an earlier copy of a
-/// record a later line carries. The replay pointer is rendered as the SURVIVOR's physical
-/// line, which is only resolvable here where the record list is in hand.
-pub(crate) fn backfill_survival(
-    hits: &mut [Hit],
-    chain: &crate::model::Chain,
-    idx: usize,
-    survivor_line: &HashMap<usize, usize>,
-) {
-    let survival = chain.survival(idx);
-    let rewound = chain.on_rewound_branch(idx);
-    let replay = chain
-        .replay_of(idx)
-        .and_then(|s| survivor_line.get(&s).copied())
-        .filter(|&l| l > 0);
-    for h in hits.iter_mut() {
-        h.survival = survival;
-        h.rewound_branch = rewound;
-        h.replay_copy_of = replay;
-    }
-}
-
-pub(crate) fn backfill_address(hits: &mut [Hit], kept: &Kept) {
-    for h in hits.iter_mut() {
-        h.line = kept.line_no;
-        h.uuid = kept.rec.uuid.clone();
-        h.from_sidecar = kept.from_sidecar;
-    }
-    if let Some(first) = hits.first_mut() {
-        first.image_ids = crate::image::image_ids_for_record(&kept.rec, kept.line_no);
-    }
-}
-
 /// The turn's NON-matched records as sibling hits, restricted + CAPPED per the parsed
 /// `--siblings <SPEC>`. Reuses [`collect_record_hits`] with a PURE-FILTER matcher (matches
 /// every record, so each label-eligible unit of a sibling surfaces with a head excerpt). A
@@ -301,6 +221,19 @@ pub(crate) fn collect_record_hits(
         None
     };
     let label_paths: Vec<&'static str> = labels.iter().map(|c| c.path()).collect();
+    // C-33: the compaction facts of a boundary/summary record. The BOUNDARY carries the
+    // metrics but no direction, so its mode comes from the per-file pairing in `ctx`; the
+    // SUMMARY carries the direction itself. Gated on the label set `classify` just produced
+    // (an enum compare over a one- or two-element Vec), so a record that is neither never
+    // touches a Record field for this: every other hit pays one branch and carries a null.
+    let compaction = if labels
+        .iter()
+        .any(|c| matches!(c, Class::CompactionBoundary | Class::CompactionSummary))
+    {
+        compaction_facts(rec, ctx)
+    } else {
+        None
+    };
     let sel = |c: Class| filter.selected(c.path());
     let has = |c: Class| labels.contains(&c);
     // Direction is per-record (the first comm direction); computed only when a comm label is
@@ -347,6 +280,7 @@ pub(crate) fn collect_record_hits(
                 survival: crate::model::Survival::Live,
                 rewound_branch: false,
                 replay_copy_of: None,
+                compaction: compaction.clone(),
                 truncated,
             });
         }

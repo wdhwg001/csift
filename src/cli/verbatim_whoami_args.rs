@@ -144,7 +144,11 @@ use super::*;
           an automation USER unit additionally\n  \
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
-          {kind:\"compaction_boundary\",…} / {kind:\"collapsed_agents\",…}; and a trailing\n  \
+          {kind:\"compaction_boundary\", line, summary_chars, mode} / {kind:\"collapsed_agents\",…};\n  \
+          a summarize-mode boundary also names its gesture in the text banner\n  \
+          (`… summary at L<n> · summarize <direction> · …`) - a `/rewind` summarize IS a\n  \
+          compaction, so the turns it clipped are reconstructed exactly like any other's;\n  \
+          and a trailing\n  \
           {kind:\"summary\", skipped_lines} ALWAYS closes the stream (even when 0). The envelope\n  \
           is UNIFORM tool-wide (envelope v2): EVERY command's stream is `{kind:\"header\",…}` →\n  \
           kind-tagged rows → `{kind:\"summary\",…}`, so `tail -1 | jq 'select(.kind==\

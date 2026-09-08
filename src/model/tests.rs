@@ -26,6 +26,7 @@ mod classify_promoted;
 mod classify_resume;
 mod classify_roles;
 mod classify_support;
+mod compaction;
 mod delivery;
 mod grouping;
 mod mutation;

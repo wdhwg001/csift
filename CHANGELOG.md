@@ -68,6 +68,30 @@ surface change bumps the PATCH.
   `abandoned_records`, `rewound_turns`, `replay_copies`, `boundary_cut_line` and `leaf_source` in
   the `search` summary. The text footer states every one of them.
 
+- **The compaction boundary shows what the compaction KEPT, and the two `/rewind` summarize
+  modes are finally distinguishable.** A boundary record always carried more than the four
+  numbers csift printed. Its excerpt now names every field the record actually has, in a fixed
+  order and only when present: `messagesSummarized`, `cumulativeDroppedTokens` (the running
+  total of context tokens every compaction of this session has dropped), `preserved=<N uuids,
+  M allUuids, anchor abc12345>` and `segment=<head>..<tail>`. The `preserved` pair is the set
+  the compaction kept — `uuids` is what reached the disk, `allUuids` the in-memory superset,
+  which is why an `allUuids` entry sometimes resolves to no line. The excerpt counts those
+  lists and prints eight-character handles so a boundary line stays scannable; JSON
+  `compact_metadata` carries the whole object verbatim, uuid lists included. A boundary with
+  only the four original scalars renders exactly as it did before, byte for byte.
+- **`mode` on both compaction records: `compact`, `summarize-from-here`, `summarize-up-to-here`.**
+  Claude Code compacts three ways and writes the same two records for all three, so a `/rewind`
+  "Summarize up to here" used to look like an ordinary auto-compact. One key separates them,
+  and it sits on the summary: `summarizeMetadata:{direction, messagesSummarized}` is written
+  INSTEAD of `isVisibleInTranscriptOnly`, and `direction` says which half was summarised —
+  `up_to` summarised everything before the message you picked, `from` everything after it.
+  csift prints that as `mode` in JSON on the search hit, the show record and the verbatim
+  boundary row, as a `[summarize up_to]` tag in the summary's label zone, and as a
+  `· summarize up_to ·` segment in the verbatim banner. The boundary carries no direction of
+  its own, so it takes its mode from the summary that follows it; a boundary your query never
+  paired with one reads null rather than guessing `compact`. And a summarize is a compaction
+  like any other: `verbatim` still restores the turns it clipped.
+
 ### Fixed
 
 - **A fabricated reply no longer reads as the model's.** Those `No response requested.`

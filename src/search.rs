@@ -47,6 +47,7 @@ use crate::time_window::TimeWindow;
 use crate::timez::{format_local_compact, local_iso};
 
 mod census;
+mod hit_facts;
 mod hits;
 mod matcher;
 mod record_text;
@@ -58,6 +59,7 @@ mod turns_match;
 mod types;
 
 pub(crate) use census::*;
+pub(crate) use hit_facts::*;
 pub(crate) use hits::*;
 pub(crate) use matcher::*;
 pub(crate) use record_text::*;

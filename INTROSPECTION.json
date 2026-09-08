@@ -14474,8 +14474,8 @@
     {
       "id": "CMP-001",
       "area": "compaction",
-      "behavior": "A compaction SUMMARY is a `type:\"user\"` record carrying `isCompactSummary:true` co-set with `isVisibleInTranscriptOnly:true`, whose `message.content` is a bare STRING that commonly opens `This session is being continued from a previous conversation...`; Claude Code writes no `type:\"summary\"` record at all.",
-      "depends": "csift keys compaction detection on the `isCompactSummary` FLAG (never on text), excludes the summary from `is_genuine_user` so it never opens a turn, labels it `harness.compaction.summary`, and counts it as the `compactions` figure in `stats`; `verbatim` uses it as the anchor for the turns it clipped. Keying on a `summary` record type finds nothing in current data, and treating the summary as a human turn injects a machine recap into the operator census.",
+      "behavior": "A compaction SUMMARY is a `type:\"user\"` record carrying `isCompactSummary:true`, whose `message.content` is a bare STRING that commonly opens `This session is being continued from a previous conversation...`; Claude Code writes no `type:\"summary\"` record at all. The second key on that record is an EITHER/OR, not a constant: an ordinary compaction co-sets `isVisibleInTranscriptOnly:true`, while a `/rewind` summarize writes `summarizeMetadata` in its place (CMP-021). Over the corpus, 243 of 244 compaction summaries carry `isVisibleInTranscriptOnly` and 1 carries `summarizeMetadata`; none carries both and none carries neither.",
+      "depends": "csift keys compaction detection on the `isCompactSummary` FLAG (never on text and never on `isVisibleInTranscriptOnly`, which one summary in the corpus does not have), excludes the summary from `is_genuine_user` so it never opens a turn, labels it `harness.compaction.summary`, and counts it as the `compactions` figure in `stats`; `verbatim` uses it as the anchor for the turns it clipped. Keying on a `summary` record type finds nothing in current data; keying on the co-set flag would silently drop every summarize-mode compaction.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -14525,6 +14525,16 @@
           "observed": "complete producer trace: trigger autocompact threshold check calling ijt (compactConversation) with isAutoCompact:!0 @164858392; gate if(!Ge)throw ... tengu_compact_failed no_summary @164833194; writer Tn=[xe({content:Upe(Ge,{...}),isCompactSummary:!0,isVisibleInTranscriptOnly:!0})] @164834100; writer function xe({content:e,...}) -> {type:\"user\",message:{role:\"user\",content:e||up},isMeta:n,...,isVisibleInTranscriptOnly:_,isVirtual:v,isCompactSummary:C,...} @165935980; writer function Upe(e,n){let o=`This session is being continued from a previous conversation that ran out of context. ...`} @164802871; writer insertMessageChain envelope: let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,...,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W} @166105359; writer j5(e){return JSON.stringify(e)+newline} @156850249. writer excerpt: nd(performance.now()-me),xt=Sce(_?\"auto\":\"manual\",z??0,e.at(-1)?.uuid),Ot=cY(e,{surfaced:(n.stickyBetas??fa()).surfacedOnWire});if(Ot.size>0)xt.compactMetadata.preCompactDiscoveredTools=[...Ot].sort();let gn=El(),cn=uy()&&cbt(n.toolState,n.agentId),Tn=[xe({content:Upe(Ge,{suppressFollowUpQuestions:o,transcriptPath:gn,r specimen: 235 of 235 rows are user / true / string / no isMeta key, and 235 of 235 content strings begin `This session is being continued from a previous conversati`. Zero files contain a type:\"summary\" record. The one type:\"summary\" literal in the binary (offset 180073967) is an in-memory transcript-viewer g",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One summary record per compaction event, counted per raw line over every jsonl under the corpus root; denominator = lines whose parsed isCompactSummary is true (the parsed key, not a byte grep).",
           "note": "One object literal in the compaction routine sets isCompactSummary and isVisibleInTranscriptOnly together on the user-record factory whose content is the Upe template string, and 235 of 235 corpus summaries match that shape exactly."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Ran a python census over every top-level transcript counting `isCompactSummary:true` records by which of the two second keys they carry, and cross-checked the record type of every hit.",
+          "observed": "244 compaction summaries, all `type:\"user\"`: 243 with `isVisibleInTranscriptOnly`, 1 with `summarizeMetadata`, 0 with both, 0 with neither. 0 records of `type:\"summary\"` anywhere in the corpus.",
+          "rule": "One summary record per compaction event, counted per raw line over top-level transcripts (depth-1 `*.jsonl` under the projects root).",
+          "note": "Refined: the co-set flag is an either/or, and the alternative is the summarize-mode metadata."
         }
       ],
       "attribution": "end-to-end",
@@ -14586,8 +14596,8 @@
     {
       "id": "CMP-002",
       "area": "compaction",
-      "behavior": "Beside the summary Claude Code writes a separate `type:\"system\"` record with `subtype:\"compact_boundary\"`, one per compaction event, carrying a top-level `content:\"Conversation compacted...\"` string plus `compactMetadata:{trigger:\"auto\"|\"manual\", preTokens, postTokens, durationMs, cumulativeDroppedTokens, preCompactDiscoveredTools[], preservedSegment:{headUuid,anchorUuid,tailUuid}, preservedMessages:{anchorUuid,uuids[],allUuids[]}}`. `cumulativeDroppedTokens` is the newest scalar (absent up to CC 2.1.191, present on every boundary from 2.1.199 through 2.1.258); `preCompactDiscoveredTools` and the `preservedMessages.allUuids` array are each absent on a handful of older boundaries; a short-lived `precomputed` key appeared on 6 boundaries around CC 2.1.191-2.1.202 and on none since.",
-      "depends": "csift identifies the boundary purely by `type` + `subtype`, keeps `compactMetadata` UNPARSED, and renders the four scalar keys as `[compaction boundary: trigger=... preTokens=... postTokens=... durationMs=...]`, which is what makes `-t harness.compaction.boundary` both matchable and inspectable; the extra prefilter keep for this role-marker-less line is `-t`-gated behind `needs_compact_boundary`, so every other query pays zero.",
+      "behavior": "Beside the summary Claude Code writes a separate `type:\"system\"` record with `subtype:\"compact_boundary\"`, one per compaction event, carrying a top-level `content:\"Conversation compacted...\"` string plus `compactMetadata:{trigger:\"auto\"|\"manual\", preTokens, postTokens, durationMs, cumulativeDroppedTokens, preCompactDiscoveredTools[], preservedSegment:{headUuid,anchorUuid,tailUuid}, preservedMessages:{anchorUuid,uuids[],allUuids[]}}` and, on a summarize-mode compaction only, a ninth key `messagesSummarized`. Corpus key presence over 244 boundaries: trigger, preTokens, postTokens, durationMs, preservedSegment and preservedMessages on all 244; preCompactDiscoveredTools on 238; cumulativeDroppedTokens on 146; precomputed on 6; messagesSummarized on 1. Trigger splits 224 auto / 20 manual. The binary documents the newer scalars: `cumulative_dropped_tokens` is the running total of context tokens compaction has removed across this and every earlier compaction, each contribution approximately preTokens minus postTokens (written by the walk at @162516109, which takes the max over earlier boundaries and adds this one's delta); `preserved_segment` is relink information for the kept messages, unset when the compaction summarizes everything; and `preserved_messages.uuids` is the on-disk subset while `all_uuids` is the in-memory superset including non-loggable entries, which is why an allUuids entry can resolve to no line. Both preserved objects are written by one helper (@164831131) that the ordinary compaction path and the summarize path both call.",
+      "depends": "csift identifies the boundary purely by `type` + `subtype`, keeps `compactMetadata` as an unparsed value, and renders the present fields as `[compaction boundary: trigger=... preTokens=... postTokens=... durationMs=... messagesSummarized=... cumulativeDroppedTokens=... preserved=<N uuids, M allUuids, anchor <first8>> segment=<head first8>..<tail first8>]`, each field only when the key is there - so a boundary carrying only the four original scalars renders byte-for-byte what it always did. The full uuid lists ride JSON `compact_metadata` and the one-line excerpt counts them, because a boundary line has to stay scannable. The extra prefilter keep for this role-marker-less line is `-t`-gated behind `needs_compact_boundary`, so every other query pays zero.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -14601,8 +14611,8 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "324-332",
-          "snippet": "/// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt -\n/// `[compaction boundary: trigger=auto preTokens=1000 postTokens=200 durationMs=50]` (only the\n/// present fields, stable order, scalars unquoted). `None` when it is not an object or carries none\n/// of the known fields.\npub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();\n    for key in [\"trigger\", \"preTokens\", \"postTokens\", \"durationMs\"] {\n        if let Some(v) = obj.get(key) {"
+          "lines": "320-328",
+          "snippet": "/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a\n/// legacy boundary carrying just the four scalars renders byte-for-byte as before:"
         },
         {
           "path": "src/search/scan.rs",
@@ -14610,7 +14620,7 @@
           "snippet": "        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())"
         }
       ],
-      "instrument": "`jq -r 'select(.subtype==\"compact_boundary\") | (.compactMetadata|keys|join(\",\"))' <transcript> | sort | uniq -c` enumerates the metadata keys actually present; `csift search '' @<session> -t harness.compaction.boundary` must print a `[compaction boundary: trigger=... preTokens=...]` excerpt per hit. Counting rule: one boundary record per compaction event; the boundary count must track the summary count on the same file.",
+      "instrument": "`jq -r 'select(.subtype==\"compact_boundary\") | (.compactMetadata|keys|join(\",\"))' <transcript> | sort | uniq -c` enumerates the metadata keys actually present, and the same pass tallies trigger values; `csift search '' @<session> -t harness.compaction.boundary` must print the excerpt with exactly the keys that boundary carries. Read the two survivor writers and the cumulative-total walk at their offsets in the executable. Counting rule: one boundary record per compaction event, counted per raw line over top-level transcripts; the boundary count must track the summary count on the same file.",
       "located": {
         "claude_code": "2.1.231",
         "csift": "0.2.0",
@@ -14637,6 +14647,16 @@
           "observed": "complete producer trace: trigger autocompact threshold check calling ijt (compactConversation) with isAutoCompact:!0 @164858392; trigger if(Ie.subtype===\"compact_boundary\"){let et=Ugt(Ie); ... hn.push(et), o.push(et), wn.applyCompactBoundary(et)} @179115976; gate function z2t(e) - the conditional spreads deciding which compactMetadata keys exist @163580404; writer function Sce(trigger,preTokens,logicalParentUuid,userContext,messagesSummarized) @166031907; writer function Ugt(e) - the stream-event boundary constructor @163581237; writer xt.compactMetadata.postTokens=nt, xt.compactMetadata.durationMs=Lt, Oie(xt,e) and the preCompactDiscoveredTools guard @164834100; writer function Oie(e,n) - cumulativeDroppedTokens @162516015; writer insertMessageChain envelope: let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,...,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W} @166105359; writer j5(e){return JSON.stringify(e)+newline} @156850249. writer excerpt: function Sce(e,n,r,o,d){return{type:\"system\",subtype:\"compact_boundary\",content:\"Conversation compacted\",isMeta:!1,timestamp:new Date().toISOString(),uuid:oT(),level:\"info\",compactMetadata:{trigger:e,preTokens:n,userContext:o,messagesSummarized:d},...r&&{logicalParentUuid:r}}}function mle(e,n,r,o,d){return{type:\"system specimen: 235 boundary records over 23 files. trigger is auto on 220 and manual on 15 - no third value. cumulativeDroppedTokens present on 137, absent on 98; preCompactDiscoveredTools present on 230, absent on 5; preservedMessages.allUuids present on 234, absent on 1. Boundaries 235 vs summaries 235, and the ",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One boundary record per compaction event, counted per raw line; the pairing rule counts boundaries and isCompactSummary records per file and compares the two integers.",
           "note": "Two boundary constructors in the binary emit exactly the observed literal fields, and z2t's not-undefined spreads are precisely the switch that makes each optional metadata key present or absent, matching the 235-row key-set census."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Ran a python census over every top-level transcript tallying `compactMetadata` key presence, full key sets and trigger values on every `compact_boundary` record; read the preserved-object writer, the cumulative-total walk and the boundary constructor in the 2.1.258 executable.",
+          "observed": "244 boundaries in 21 of 75 files. Key presence: trigger 244, preTokens 244, postTokens 244, durationMs 244, preservedMessages 244, preservedSegment 244, preCompactDiscoveredTools 238, cumulativeDroppedTokens 146, precomputed 6, messagesSummarized 1. Trigger: auto 224, manual 20. Seven distinct key sets, the largest (141 boundaries) being the eight-key shape without messagesSummarized. The preserved-object writer at @164831131 is called from both the reactive-compaction path (@163628586) and the summarize path (@164841141); the cumulative total is written at @162516109 as the max over earlier boundaries plus this one's preTokens minus postTokens.",
+          "rule": "One boundary record per compaction event, counted per raw line over top-level transcripts; a key is present when it appears in that record's compactMetadata object.",
+          "note": "Refined: the ninth key `messagesSummarized` marks a summarize-mode compaction, and the excerpt now renders the survivor fields the record already carried."
         }
       ],
       "attribution": "end-to-end",
@@ -15629,7 +15649,7 @@
         {
           "path": "src/turns/select.rs",
           "lines": "294-301",
-          "snippet": "/// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing\n/// newline). The renderer and the budget reservation both call this so the reserved\n/// banner length is byte-for-byte what is emitted.\npub(crate) fn boundary_banner_line(line_no: usize) -> String {\n    format!(\n        \"{0} compaction boundary \u00b7 summary at L{1} \u00b7 (turns below predate it) {0}\",\n        \"\u2550\u2550\", line_no\n    )"
+          "snippet": "pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {"
         }
       ],
       "instrument": "csift verbatim @<session> --budget 40000 --format json | jq -rc 'select(.kind==\"compaction_boundary\")|.line' | wc -l, cross-checked against the header row's boundaries_spanned and boundaries_total. Counting rule: boundaries the budget window crossed over the session's total. NOTE the boundary row's line key is `line`, not `line_no` (the row carries exactly kind/line/summary_chars), so the ledger's `.line_no` projection yields null on every row.",
@@ -16670,7 +16690,7 @@
         {
           "path": "src/turns/select.rs",
           "lines": "294-301",
-          "snippet": "/// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing\n/// newline). The renderer and the budget reservation both call this so the reserved\n/// banner length is byte-for-byte what is emitted.\npub(crate) fn boundary_banner_line(line_no: usize) -> String {\n    format!(\n        \"{0} compaction boundary \u00b7 summary at L{1} \u00b7 (turns below predate it) {0}\",\n        \"\u2550\u2550\", line_no\n    )"
+          "snippet": "/// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing\n/// newline). The renderer and the budget reservation both call this so the reserved\n/// banner length is byte-for-byte what is emitted."
         }
       ],
       "instrument": "Note a pre-compaction record's `Lnnnn` from any csift surface, let the session compact, then re-run `csift show @<id> --line <that same line> --format json`: it must return the identical record (same `uuid`). Then `csift search '' @<id> -t harness.compaction.boundary --format json | jq -r '.hits[].line'` must be greater than every pre-compaction line, and the summary's line must be exactly one greater than the boundary's. NOTE the jq path: search JSON nests matches inside `{\"hits\":[...]}` exchange rows, so a top-level `.line` selects nothing. Counting rule: one boundary record plus one immediately following summary record appended per compaction event; line numbers are 1-based and per file.",
@@ -35290,7 +35310,7 @@
       "id": "MISC-006",
       "area": "misc",
       "behavior": "A conversation FORK, rewind, retry or parallel lane leaves exactly one plain DAG fact: some record has MORE THAN ONE conversation child (a later `parentUuid` re-attach). Which side is live is NOT computable from the jsonl - parallel tool results share a parent BY CONSTRUCTION, so `user` records carrying a `tool_result` block are not conversation children.",
-      "depends": "`show --branch-points` reports the facts and ranks them by widest inter-child time gap but never classifies which side is live: a live/abandoned classifier was prototyped and REFUTED against real corpora, because parallel tool fan-out false-positives as abandoned branches on most sessions.",
+      "depends": "`show --branch-points` reports the facts and ranks them by widest inter-child time gap but never classifies which side is live: a live/abandoned classifier keyed on the DAG shape alone was prototyped and REFUTED against real corpora, because parallel tool fan-out and repeated-uuid runs wear the same shape. What is computable is a different thing, and it comes from Claude Code rather than from the shape: the loader's own resume walk defines which records survive - it starts from a chosen leaf and reads `parentUuid` only, cycle-guarded, stopping at a boundary's null parent (2.1.258 @166189523, guarded by `tengu_transcript_parent_cycle`), and it never follows `logicalParentUuid`, none of whose 12 occurrences in that executable is a load-path reader. So a surviving-chain question has an answer, and the answer is the loader's rule, not a heuristic over sibling timestamps.",
       "code": [
         {
           "path": "src/show/branch.rs",
@@ -35325,6 +35345,16 @@
           "observed": "complete producer trace: trigger rewindConversationTo @180776684; gate async function Rw, the append frontier @166113243; writer insertMessageChain's record literal and the sourceToolAssistantUUID override @166105060. writer excerpt: sionId:j},j,void 0,v)}for(let fe of e){let me=Hu(fe),_e=F;if(fe.type===\"user\"&&\"sourceToolAssistantUUID\"in fe&&fe.sourceToolAssistantUUID){let we=fe.sourceToolAssistantUUID;if(z===null||z.has(we))_e=we;else s(\"tengu_phantom_parent_write\",{})}if(_e===fe.uuid)s(\"tengu_chain_self_reference_write\",{});let ke={parentUuid:me specimen: csift: 22536 conversation records, 319 branch points. Independent recount: 22536 and 319 - exact match on both numbers. Admitting tool_result carriers as conversation children raises the parents-with-2-or-more-children count to 925, i.e. 606 extra parents that exist only because of the sourceToolAss",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); A conversation child is a user/assistant record that is not a tool_result carrier, not isMeta and not a compaction summary; a branch point is a parent uuid with 2 or more such children.",
           "note": "The rewind truncation, the already-persisted skip that re-parents the new tail, and the tool-result parent override were read verbatim, and an independent recount reproduced 319 branch points against 925 when carriers are admitted."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the loader's parent walk in the 2.1.258 executable and classified all 12 occurrences of `logicalParentUuid` there; re-ran `csift show --branch-points` over the corpus for the fork-fact surface.",
+          "observed": "The walk body reads `Dr.parentUuid` only, breaking on a repeated uuid with the `tengu_transcript_parent_cycle` telemetry and on a missing parent; `logicalParentUuid` occurrences: 7 writes (the boundary constructor, the inbound-envelope boundary, the message-chain entry literal, two serializers), 4 reads by the fork copier's uuid remap, 1 schema name table - no load-path reader.",
+          "rule": "One occurrence per byte match of the literal across the whole executable, each read and classified as write, remap or schema.",
+          "note": "Refined: which side is live is computable, and the rule is the loader's walk rather than anything in the DAG shape."
         }
       ],
       "attribution": "end-to-end",
@@ -37096,7 +37126,7 @@
       "id": "MISC-020",
       "area": "misc",
       "behavior": "A transcript is normally EXTENDED by appends, but appends are not the only thing that reaches the file: one write queue and one 100 ms flush timer carry three item kinds, and two of them mutate a transcript in place - at 166086064 the drain routes a `removeUuid` item to performRemoveByUuid and a compact item to performCompactTranscript, and only an entry item is appended. One in-place path is gated off: the compaction rewrite is enqueued only through requestCompact, which returns unless the store's local GC flag is set (166084451), and that flag is a class field defaulting to false (166076591). The version-stable handle for the gate is its env-and-gate pair, CLAUDE_CODE_TRANSCRIPT_LOCAL_GC falling back to a default-false feature gate (179052977), not the field name: over the cached build ladder the compaction rewrite and that pair are absent at 2.1.216 and present from 2.1.219 (2.1.217 and 2.1.218 are not cached), while the field name localGcEnabled appears only from 2.1.227 - at 2.1.219 and 2.1.226 the identical gate reads `requestCompact(e){if(!<module-scope flag>)return;this.enqueueCompact(e),this.scheduleDrain()}` over the same predicate, so the rename is not the feature's birth, and every build carrying the rewrite defaults it off. The other in-place path is NOT gated: a tombstone removal opens the transcript r+, truncates it at the removed record's line and rewrites the tail (166095622), its live entries are ordinary REPL stream handlers (the tombstone handler at 181621337 and the refusal-continuation retraction at 181619649), and the selecting condition fires the disk removal exactly when the tombstoned record's index sits BELOW the append frontier - that is, when the record is already on disk (179092749). When the uuid is not inside the tail window the same function falls back to reading, filtering and rewriting the WHOLE file, unless the file exceeds 52,428,800 bytes, where it logs that it is skipping the tombstone removal and gives up (166096191, the ceiling constant at 166066127) - so a watcher's exposure depends on file size. That truncate-and-rewrite-tail body with its ceiling log is present in every cached build from 2.1.100 through 2.1.260, and under the method name performRemoveByUuid from 2.1.168, so the shrink half is at least that old - a floor over the cached ladder, not a proof of absence before it. A live transcript can therefore shrink in place, and a byte-offset cursor can outlive the bytes it named. What does hold is the other half of the old sentence: the harness offers a watcher no event stream at all, only the file - the drain fires its in-process mirror callbacks on the append branch alone (166086139), and the append arm only appends, an appendFile call (166118593) or an O_RDWR|O_APPEND fd (166118810), never a seek and never a rewrite - so content already on disk before a watcher's snapshot is never re-emitted to it. A 150 s sampler over the 10 transcripts modified in the preceding ten minutes (31 polls at 5 s, 310 observations) saw 231 growths, 0 shrinks and 0 changes to any byte below the first snapshot's length: a growth-only window that cannot stand in for the missing gate. The user-facing rewind gesture is not a counter-example either: a restore trial left the file byte-identical at 60 lines and the resubmit appended 8 lines with no shrink and one branch point, so restoring a conversation forks logically by appending rather than truncating.",
-      "depends": "csift treats a transcript as append-only for LINE NUMBERS and byte offsets (a `show --line N` address, a `search` hit's `L<n>`, a `wait` baseline) and discloses when that premise fails: the readers that run repeatedly against a LIVE transcript - `wait`'s per-poll increment and the `status`/`wait` tail window - use plain positional reads (`parse::read_range` / `parse::read_tail`), never a memory map, because a page of a mapped file touched past a new, shorter end faults with SIGBUS and no Result catches it; `wait` detects a shrink between two polls (the file is shorter than its baseline), moves the baseline to the new end and reports `transcript shrank N time(s)` with the lane and byte delta in its activity line and a `shrinks` array in JSON (src/live/wait.rs, src/live/activity.rs). The one-shot full scans (`search`, `stats`, the `status` background scan) keep the memory map of SPEC 7a, whose sub-second life bounds the exposure.",
+      "depends": "csift treats a transcript as append-only for LINE NUMBERS and byte offsets (a `show --line N` address, a `search` hit's `L<n>`, a `wait` baseline) and discloses when that premise fails: the readers that run repeatedly against a LIVE transcript - `wait`'s per-poll increment and the `status`/`wait` tail window - use plain positional reads (`parse::read_range` / `parse::read_tail`), never a memory map, because a page of a mapped file touched past a new, shorter end faults with SIGBUS and no Result catches it; `wait` detects a shrink between two polls (the file is shorter than its baseline), moves the baseline to the new end and reports `transcript shrank N time(s)` with the lane and byte delta in its activity line and a `shrinks` array in JSON (src/live/wait.rs, src/live/activity.rs). The one-shot full scans (`search`, `stats`, the `status` background scan) keep the memory map of SPEC 7a, whose sub-second life bounds the exposure. The removal path's enumeration is pinned separately: two helpers, three live callers, all stream-driven, none reachable by an interactive gesture.",
       "code": [
         {
           "path": "src/live/wait.rs",
@@ -37206,6 +37236,16 @@
           "observed": "10 transcripts modified within the ten minutes before the run, 31 polls at 5 s: 310 observations, 231 growths, 0 shrinks, 0 prefix changes. Build ladder: performCompactTranscript and the CLAUDE_CODE_TRANSCRIPT_LOCAL_GC / tengu_transcript_local_gc pair absent through 2.1.216 and present from 2.1.219; localGcEnabled absent through 2.1.226 and present from 2.1.227; the truncate-and-rewrite-tail body with its ceiling log present in every cached build from 2.1.100 through 2.1.260, under the method name performRemoveByUuid from 2.1.168. | The drain at 166086064 routes two of its three item kinds to in-place mutation, and the ungated one truncates the file at 166095622 under the already-on-disk con",
           "rule": "One observation per watched file per 5 s poll; growth = size above the first snapshot's, shrink = below it, prefix change = a sha256 over the first snapshot's length (capped at 1 MiB) differing from the first; one count per build per needle.",
           "note": "The mechanism stands and two figures are re-measured rather than inherited. The drain's routing at 166086064 shows three item kinds with the removeUuid and compact arms mutating in place; the compaction rewrite is gated at 166084451 over the class default at 166076591, and the tombstone removal is ungated, truncating and rewriting the tail at 166095622 under the frontier condition at 179092749. The build floor for the shrink half is widened by a fresh sweep: the truncate-and-rewrite body with its ceiling log is present from 2.1.100 (unnamed) and under the name performRemoveByUuid from 2.1.168, where the previous text stopped at 2.1.191. The growth-only window is a new sampler with its own rule - 10 transcripts, 31 polls at 5 s, 310 observations, 231 growths, 0 shrinks, 0 prefix changes - and it is again labelled as unable to stand in for the missing shrink capture. The append writer is cited at both its forms, the appendFile call at 166118593 and the O_RDWR|O_APPEND fd at 166118810. depends now describes csift's current readers: positional reads on every repeated read of a live transcript, a detected shrink moving the baseline and disclosed in the activity line and in JSON."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Enumerated the two in-place removal helpers and every call site in the 2.1.258 executable, and re-ran the file-history-snapshot version census with the nearest-preceding-versioned-record rule.",
+          "observed": "The removal helpers `m5e` (@166122844) and `ign` (@166122935) have three live callers between them: the frontier-gated evict @179092749, the tombstone handler @181621337 and the refusal-continuation loop @181619649. Snapshot census: 586 `isSnapshotUpdate:true` rows in 26 of 75 files against 3,773 false rows; dating each true row by the nearest preceding versioned record in its own file gives Claude Code versions 2.1.150 through 2.1.207, so the ceiling is 2.1.207.",
+          "rule": "One occurrence per byte match of the call form; one snapshot row per raw jsonl line, dated by the nearest preceding record in the same file carrying a non-empty `version` string.",
+          "note": "Refined: the shrink's producer leg is enumerated, and the snapshot ceiling is stated with the dating rule that produced it. The shrink specimen stays open."
         }
       ],
       "attribution": "end-to-end",
@@ -49251,7 +49291,7 @@
         {
           "path": "src/search/record_text.rs",
           "lines": "324-337",
-          "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();\n    for key in [\"trigger\", \"preTokens\", \"postTokens\", \"durationMs\"] {\n        if let Some(v) = obj.get(key) {\n            let rendered = match v {\n                serde_json::Value::String(s) => s.clone(),\n                other => other.to_string(),\n            };\n            fields.push(format!(\"{key}={rendered}\"));\n        }\n    }\n    (!fields.is_empty()).then(|| format!(\"[compaction boundary: {}]\", fields.join(\" \")))\n}"
+          "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();"
         },
         {
           "path": "src/cli/search_help.rs",
@@ -54977,8 +55017,8 @@
     {
       "id": "REC-033",
       "area": "record-model",
-      "behavior": "A conversation fork leaves one plain DAG fact: some record has MORE THAN ONE conversation child - a later `parentUuid` re-attach - where a conversation child is a user or assistant record that is not a tool_result carrier, not `isMeta` and not a compaction summary. A REWIND truncates the live message array in MEMORY only (the kept prefix replaces the array; nothing is removed from the file), so the recalled record keeps its parent on disk while the resubmitted prompt is chained onto that same parent by the persistence walk, which re-derives its seed from the uuids already in the file. Both rewind entry points hand the rewind a HUMAN user record - the turn-teardown restore after a user cancel or a refusal-fallback edit picks the last record passing the human-origin predicate and only fires when nothing meaningful follows it, and the message selector lists only records passing that same predicate - so a rewind's signature is a parent with two or more USER children whose own uuid occupies exactly ONE line of the file. A parallel tool fan-out leaves no branch point at all: the only fan-out re-attach in the writer re-parents user records that carry `tool_result` blocks onto the assistant record that issued the `tool_use`, and those carriers are excluded from the child predicate. A SECOND on-disk family wears the same DAG shape without being a fork: one to three contiguous runs of lines repeat uuids already present earlier in the SAME file, so a single record is counted twice as a child and the row's parent uuid itself occupies two lines. The parent's line count separates the two families exactly, 566 rows against 142, while the repeated-child mark agrees on 141 of those 142, the exception being the single row whose children are of mixed type - and the repeated-uuid runs are confined on disk to 2.1.159 through 2.1.220. Which side of a fork is live is not computable from the file: a local rewind writes no marker (the `last-prompt` `rewound` flag has exactly one call site that passes it, on the poll-driven rewind handler that also stops background tasks and mirrors the entry into the internal event stream; the other record-writing call sites pass no options object), so the DAG shape is the only witness and the two families share it.",
-      "depends": "`show --branch-points` reports the fork FACTS - every record with two or more conversation children, each child with its line and timestamp - ranked by the widest inter-child gap, and never classifies. A live/abandoned classifier was prototyped and refuted against real corpora, and the family that refutes it is not parallel tool fan-out, whose carriers never reach the child predicate: it is the repeated-uuid run, which on the largest transcript supplies 124 of 319 rows and is a duplicate of one edge rather than a fork, so a classifier keyed on sibling-ness would rank an append artifact as an abandoned branch.",
+      "behavior": "A conversation fork leaves one plain DAG fact: some record has MORE THAN ONE conversation child - a later `parentUuid` re-attach - where a conversation child is a user or assistant record that is not a tool_result carrier, not `isMeta` and not a compaction summary. A REWIND truncates the live message array in MEMORY only (the kept prefix replaces the array; nothing is removed from the file), so the recalled record keeps its parent on disk while the resubmitted prompt is chained onto that same parent by the persistence walk, which re-derives its seed from the uuids already in the file. Both rewind entry points hand the rewind a HUMAN user record - the turn-teardown restore after a user cancel or a refusal-fallback edit picks the last record passing the human-origin predicate and only fires when nothing meaningful follows it, and the message selector lists only records passing that same predicate - so a rewind's signature is a parent with two or more USER children whose own uuid occupies exactly ONE line of the file. A parallel tool fan-out leaves no branch point at all: the only fan-out re-attach in the writer re-parents user records that carry `tool_result` blocks onto the assistant record that issued the `tool_use`, and those carriers are excluded from the child predicate. A SECOND on-disk family wears the same DAG shape without being a fork: one to three contiguous runs of lines repeat uuids already present earlier in the SAME file, so a single record is counted twice as a child and the row's parent uuid itself occupies two lines. The parent's line count separates the two families exactly, 566 rows against 142, while the repeated-child mark agrees on 141 of those 142, the exception being the single row whose children are of mixed type - and the repeated-uuid runs are confined on disk to 2.1.159 through 2.1.220. Which side of a fork is live is not computable from the file: a local rewind writes no marker (the `last-prompt` `rewound` flag has exactly one call site that passes it, on the poll-driven rewind handler that also stops background tasks and mirrors the entry into the internal event stream; the other record-writing call sites pass no options object), so the DAG shape is the only witness and the two families share it. The fork POINT itself is usually not a conversation record at all. Counted under the SAME predicate this sentence defines, over 747 rows in 33 of 75 top-level transcripts, the record carrying two or more conversation children is a `type:\"system\"` record 541 times (turn_duration 290, away_summary 149, stop_hook_summary 99, local_command 2, informational 1), an assistant record 94 times, a user record 68 times and an attachment 44 times - so 585 of 747 fork points, 78%, hang off a record that is neither user nor assistant.",
+      "depends": "`show --branch-points` reports the fork FACTS - every record with two or more conversation children, each child with its line and timestamp - ranked by the widest inter-child gap, and never classifies. A live/abandoned classifier was prototyped and refuted against real corpora, and the family that refutes it is not parallel tool fan-out, whose carriers never reach the child predicate: it is the repeated-uuid run, which on the largest transcript supplies 124 of 319 rows and is a duplicate of one edge rather than a fork, so a classifier keyed on sibling-ness would rank an append artifact as an abandoned branch. The parent LOOKUP is narrower than the fork set: it runs over role-marker lines only, so of the same 747 rows the parent's own line is located for 162 and null for the other 585, while the fork point is still NAMED by its uuid in every row and every child keeps its own line. Those two splits are one fact counted twice - the 162 located are exactly the 94 assistant plus 68 user parents, and the 585 null are exactly the parents that are neither - which is why the lookup has to widen to every parsed line.",
       "code": [
         {
           "path": "src/show/branch.rs",
@@ -55013,6 +55053,16 @@
           "observed": "708 branch-point rows in 31 of 8358 transcripts, 0 files failing to read. Shape crossed with the parent's line count: 566 rows with distinct child uuids and all-user children, every one with a parent on ONE line; 133 repeating an assistant uuid, 8 repeating a user uuid, and 1 with distinct children of mixed type, and all 142 of those with a parent on TWO lines. Gaps: of the 141 repeated-child rows 137 have a widest gap below 2 s and the other four are 13, 31, 196 and 214 s; of the 567 distinct-child rows none is below 2 s. The largest transcript (123044 lines) splits the same way - 319 rows, 194 distinct-uuid all-user on one-line parents against 124 repeated-child and 1 mixed on two-line par",
           "rule": "One row per record with two or more conversation children; a conversation child is a user or assistant record that is not a tool_result carrier, not isMeta and not a compaction summary. A row is repeated-child when one uuid appears twice among its children. A parent's line count is the number of lines in that file carrying the byte string `\"uuid\":\"<parent uuid>\"`. A duplicated record uuid is a value appearing as the first `\"uuid\":\"<v>\"` match on more than one line, recounted on each flagged file by parsing every line for its own top-level uuid; a session present under two project directories is counted once as a session and twice as a transcript.",
           "note": "The two-mark separation was an overstatement: the parent line count separates the families exactly while the child-uuid mark misfiles the single mixed-children row. Corrected to the line-count mark with the exception named."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Two instruments back to back over every top-level transcript: a python pass applying the SAME conversation-child predicate `show --branch-points` implements (an assistant record always qualifies; a user record only when it is not isMeta, not a compaction summary and carries no tool_result block; no other type ever does), counting child EDGES per parentUuid exactly as the surface's `ch.len() >= 2` does and tallying the parent uuid's own record type; and `csift show <file> --branch-points --format json` over the same files, counting `kind:\"branch-point\"` rows and how many carry a null `line`.",
+          "observed": "747 fork points in 33 of 75 top-level transcripts, both instruments agreeing on the row count. Parent record type: system 541 (turn_duration 290, away_summary 149, stop_hook_summary 99, local_command 2, informational 1), assistant 94, user 68, attachment 44; 585 of 747 parents are neither user nor assistant. The surface located the parent's line on 162 rows and left 585 null - the same split from the other side, since the lookup covers user and assistant lines and nothing else. The same python pass under a looser child rule that admits every user and assistant record reads 2,691 fork points, which is a different question and not this claim's number.",
+          "rule": "One fork point per parentUuid with two or more conversation-child EDGES under the predicate above; children counted as edges, not distinct uuids, so a replayed record counts at both of its lines as the surface counts it; the parent's type is read from the last line carrying that uuid; scope is depth-1 `*.jsonl` under the projects root.",
+          "note": "Refined: the fork parent is a non-conversation record in 585 of 747 rows, and the parent line the surface can locate is exactly the complement."
         }
       ],
       "attribution": "end-to-end",
@@ -83543,6 +83593,625 @@
           "observed": "493,348 such lines (attachment 448,995, last-prompt 30,746, system 13,607) and 2,388,599 (line, key) observations: 2,388,594 agreements, 5 disagreements, all system x type, all an api_error payload carrying \"type\":\"overloaded_error\". parentUuid and isSidechain produced no late-key observation on any of the 673,710 admitted lines. The forward and reverse readers agreed on all 75 transcripts and on the whole-corpus label census, and the reverse reader was within 1% of the forward one on CPU time, so it was not kept.",
           "rule": "One observation per (line, key) pair over the lines the spine walks: a line whose top-level type is one of the five `spine_type_wanted` admits - user, assistant, attachment, system or last-prompt - and which carries neither role marker. A key token counts only when followed, after optional whitespace, by a colon. The differential compares the search summary of each transcript byte for byte.",
           "note": "The census was run as the correctness gate for reading the envelope from the end of a long line. It found the one shape that breaks the naive reading, and the measurement that followed found no time in the idea, so the fact is recorded and the walk is unchanged."
+        }
+      ]
+    },
+    {
+      "id": "CMP-020",
+      "area": "compaction",
+      "behavior": "A compaction summarises the IN-MEMORY message array, never the transcript file. The summarize entry `I8n` (2.1.258 @164837057) takes `direction` defaulting to `\"from\"` and splits the array it was handed - `W=_===\"up_to\"?e.slice(0,n):e.slice(n)` for the half to summarize, the complement for the half kept - and the array reaching it has already been trimmed to the newest compaction boundary by `ul` (@166032628: find the last boundary marker, `return r===-1?e:e.slice(r)`), which re-reads nothing. No filesystem read sits on that path: every `readFile` occurrence in the 40,000-byte window around the entry belongs to the read-file-state cache. The count that reaches the records is the length of that in-memory slice: the summary's `summarizeMetadata.messagesSummarized` and the boundary's `compactMetadata.messagesSummarized` are both `W.length` at the constructor call @164840137.",
+      "depends": "csift prints `messagesSummarized` verbatim in the boundary excerpt and never converts it into a line count, a record count or a turn count: it counts entries of an in-memory array that holds shapes the file does not (progress entries, non-loggable entries), which is the same reason `compactMetadata.preservedMessages.allUuids` carries uuids that resolve to no line. `verbatim` reconstructs the clipped turns from the FILE, so it recovers exactly the records that were written, not the array the summariser saw; equating the two would make the excerpt assert how many lines a compaction removed.",
+      "code": [
+        {
+          "path": "src/search/record_text.rs",
+          "lines": "327-341",
+          "snippet": "    for key in [\n        \"trigger\",\n        \"preTokens\",\n        \"postTokens\",\n        \"durationMs\",\n        \"messagesSummarized\",\n        \"cumulativeDroppedTokens\",\n    ] {"
+        },
+        {
+          "path": "src/model/compaction.rs",
+          "lines": "5-12",
+          "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`\n//! for \"Summarize up to here\" and `\"from\"` for \"Summarize from here\"."
+        }
+      ],
+      "instrument": "Read the three hops at their offsets in the 2.1.258 executable and count `readFile` in the surrounding window; then, on the one corpus boundary carrying `compactMetadata.messagesSummarized`, compare that number against the uuid-bearing records preceding the boundary in the same file and against `preservedMessages.allUuids` entries that resolve to no line. Counting rule: one record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4 compaction"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "I8n, the summarize entry",
+          "offset": 164837057,
+          "excerpt": "async function I8n(e,n,r,o,d){let{userFeedback:f,direction:_=\"from\",onNotification:v,onResponseLength:C}=d??{}",
+          "note": "the entry takes the direction as a parameter, defaulting to \"from\"; 2.1.259 re-anchor: the same function at @165669147."
+        },
+        {
+          "role": "gate",
+          "name": "the direction split over the in-memory array",
+          "offset": 164837205,
+          "excerpt": "let W=_===\"up_to\"?e.slice(0,n):e.slice(n),z=_===\"up_to\"?e.slice(n).filter((ln)=>ln.type!==\"progress\"&&!Hu(ln)&&!(ln.type===\"user\"&&ln.isCompactSummary)):e.slice(0,n).filter((ln)=>ln.type!==\"progress\")",
+          "note": "both halves are slices of the array argument; the kept half filters progress entries, which is why the array is wider than the file."
+        },
+        {
+          "role": "gate",
+          "name": "ul, the boundary trim that feeds the array",
+          "offset": 166032598,
+          "excerpt": "function ul(e,n){let r=kMe(e);return r===-1?e:e.slice(r)}",
+          "note": "the array handed to the summariser is sliced forward from the last boundary marker in memory; no file is opened. 2.1.259 re-anchor: @166871444."
+        },
+        {
+          "role": "writer",
+          "name": "the constructor call that turns the slice length into a field",
+          "offset": 164840134,
+          "excerpt": "xt=Sce(\"manual\",fe??0,Lt,f,W.length)",
+          "note": "`W.length` - the length of the in-memory slice - becomes `compactMetadata.messagesSummarized`."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the four hops within 400 bytes of each offset in the 2.1.258 executable; counted `readFile` in bytes 164820000-164860000; parsed the one corpus transcript whose boundary carries `compactMetadata.messagesSummarized` and counted uuid-bearing records before that boundary and `preservedMessages.allUuids` entries absent from the file.",
+          "observed": "All four excerpts present verbatim. `readFile` occurrences in the window: 4, every one a read-file-state cache call, 0 on the summarize path. The specimen boundary sits at line 112 of a 134-line transcript with `messagesSummarized` 66; uuid-bearing records before it: 66 (43 attachment, 10 assistant, 7 user, 6 system); `preservedMessages.allUuids` 19 entries of which 2 resolve to no line in the file, `uuids` 17 of which 0 do.",
+          "rule": "One record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`; an allUuids entry resolves when some line of the same file carries that uuid.",
+          "note": "The count coincides with the on-disk record count on this specimen, while the same boundary's allUuids carries two entries the file never received - direct evidence the summarised array holds entries the transcript does not."
+        }
+      ]
+    },
+    {
+      "id": "CMP-021",
+      "area": "compaction",
+      "behavior": "The two `/rewind` summarize gestures write their own metadata onto the compaction SUMMARY, INSTEAD of `isVisibleInTranscriptOnly`, in a single ternary (2.1.258 @164840539): `isCompactSummary:!0,...z.length>0?{summarizeMetadata:{messagesSummarized:W.length,userContext:f,direction:_}}:{isVisibleInTranscriptOnly:!0}`. It is a genuine either/or, and `direction` is the discriminator: `\"up_to\"` for \"Summarize up to here\", `\"from\"` for \"Summarize from here\" (also the entry's default). `userContext` is written from a possibly-undefined value and is absent from the only corpus specimen, so a reader that keys on a three-key shape sees nothing. The matching BOUNDARY carries `compactMetadata.messagesSummarized`, which only this path writes: the boundary constructor `Sce(trigger, preTokens, logicalParentUuid, userContext, messagesSummarized)` (@166031907) has exactly three call sites and only the summarize one (@164840137) passes the last two arguments. That call also decides `logicalParentUuid`: for `up_to` it is the last non-progress entry of the summarised prefix, for `from` it is the tail of the KEPT set. Corpus: 244 compaction summaries - 243 carrying `isVisibleInTranscriptOnly`, 1 carrying `summarizeMetadata` with exactly `{direction, messagesSummarized}`, 0 carrying both, 0 carrying neither - and 244 boundaries, 1 with `compactMetadata.messagesSummarized`.",
+      "depends": "csift derives a compaction MODE (`compact` / `summarize-from-here` / `summarize-up-to-here`) from that direction and prints it on BOTH records: the summary names its own, and the boundary learns its mode by pairing with the summary that follows it, because the boundary's metadata names no direction. The two unknowns stay unknown - a direction csift does not model, and a boundary the FILE leaves unpaired (no summary after it, or a second boundary first) - because guessing `compact` there would make the `verbatim` banner and the JSON `mode` assert a gesture nothing observed. The pairing is read from the whole parsed record set before any window or cap narrows the output, so addressing a boundary alone still reports its mode. A summarize is still a compaction for reconstruction: `verbatim` replays across the cut unchanged and the mode only labels the event.",
+      "code": [
+        {
+          "path": "src/model/compaction.rs",
+          "lines": "37-46",
+          "snippet": "    /// The stable machine slug (JSON `mode`).\n    #[must_use]\n    pub fn slug(self) -> &'static str {\n        match self {\n            SummarizeMode::Compact => \"compact\",\n            SummarizeMode::FromHere => \"summarize-from-here\",\n            SummarizeMode::UpToHere => \"summarize-up-to-here\",\n        }\n    }"
+        },
+        {
+          "path": "src/model/record.rs",
+          "lines": "131-140",
+          "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
+        },
+        {
+          "path": "src/search/hit_facts.rs",
+          "lines": "55-73",
+          "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
+        }
+      ],
+      "instrument": "Read the ternary at its offset in the 2.1.258 executable and enumerate every occurrence of the boundary constructor, reading each call site's argument list. Over the corpus, count compaction summaries by which of the two keys they carry and boundaries by `compactMetadata` key presence, then read the one `summarizeMetadata` object in full. Counting rule: one summary record and one boundary record per compaction event, counted per raw line over top-level transcripts.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4 compaction"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the picker option that names the direction",
+          "offset": 180785641,
+          "excerpt": "let Qn=Ko===\"summarize_up_to\"?\"up_to\":\"from\"",
+          "note": "the chosen row becomes the direction the summarize entry receives. 2.1.259 re-anchor: @181633... region of the same handler."
+        },
+        {
+          "role": "gate",
+          "name": "the either/or on the summary record",
+          "offset": 164840504,
+          "excerpt": "isCompactSummary:!0,...z.length>0?{summarizeMetadata:{messagesSummarized:W.length,userContext:f,direction:_}}:{isVisibleInTranscriptOnly:!0}",
+          "note": "one ternary decides which of the two keys the summary carries. 2.1.259 re-anchor: @165672723."
+        },
+        {
+          "role": "writer",
+          "name": "Sce, the boundary constructor",
+          "offset": 166031907,
+          "excerpt": "function Sce(e,n,r,o,d){return{type:\"system\",subtype:\"compact_boundary\",content:\"Conversation compacted\",isMeta:!1,timestamp:new Date().toISOString(),uuid:oT(),level:\"info\",compactMetadata:{trigger:e,preTokens:n,userContext:o,messagesSummarized:d},...r&&{logicalParentUuid:r}}}",
+          "note": "the fourth and fifth parameters are the summarize-only fields; `r` becomes logicalParentUuid. 2.1.259 re-anchor: @166870753."
+        },
+        {
+          "role": "writer",
+          "name": "the summarize call that supplies them",
+          "offset": 164840044,
+          "excerpt": "let Lt=_===\"up_to\"?e.slice(0,n).findLast((ln)=>ln.type!==\"progress\")?.uuid:z.at(-1)?.uuid,xt=Sce(\"manual\",fe??0,Lt,f,W.length)",
+          "note": "logicalParentUuid is the last summarised entry for `up_to` and the tail of the KEPT set for `from` - the two are not the same record."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "definition",
+          "offset": 166031907,
+          "excerpt": "function Sce(e,n,r,o,d){return{type:\"system\",subtype:\"compact_boundary\"",
+          "verdict": "the constructor itself; the fourth and fifth parameters are optional and land in compactMetadata only when passed."
+        },
+        {
+          "site": "reactive compaction",
+          "offset": 163627968,
+          "excerpt": "let fe=r.at(-1)?.uuid,me=Sce(_,W,fe)",
+          "verdict": "three arguments: no userContext, no messagesSummarized on the boundary."
+        },
+        {
+          "site": "full compaction",
+          "offset": 164834125,
+          "excerpt": "xt=Sce(_?\"auto\":\"manual\",z??0,e.at(-1)?.uuid)",
+          "verdict": "three arguments: the auto and manual /compact path also writes neither field."
+        },
+        {
+          "site": "summarize",
+          "offset": 164840134,
+          "excerpt": "xt=Sce(\"manual\",fe??0,Lt,f,W.length)",
+          "verdict": "the ONLY site passing userContext and messagesSummarized, which is why the boundary key marks a summarize."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the ternary and all four `Sce(` occurrences within 320 bytes of each offset in the 2.1.258 executable; ran a python census over the corpus counting compaction summaries by key, boundary `compactMetadata` key presence and trigger values, and dumped the one `summarizeMetadata` object.",
+          "observed": "`Sce(` occurs 4 times: 1 definition + 3 call sites, only the summarize site passing 5 arguments. Corpus: 244 boundaries (trigger auto 224, manual 20), key presence trigger 244, preTokens 244, postTokens 244, durationMs 244, preservedMessages 244, preservedSegment 244, preCompactDiscoveredTools 238, cumulativeDroppedTokens 146, precomputed 6, messagesSummarized 1. 244 summaries: 243 with isVisibleInTranscriptOnly, 1 with summarizeMetadata = {\"messagesSummarized\":66,\"direction\":\"up_to\"}, 0 with both, 0 with neither.",
+          "rule": "One summary record and one boundary record per compaction event, one record per raw line, over top-level transcripts only.",
+          "note": "`userContext` is absent from the only specimen, so the discriminator is `direction` alone; the boundary's `messagesSummarized` marks the same event from the other record."
+        }
+      ]
+    },
+    {
+      "id": "REC-101",
+      "area": "record-model",
+      "behavior": "`/rewind` -> \"Restore conversation\" truncates the live message array in memory and writes NOTHING to the transcript. At 2.1.258 `rewindConversationTo` (@180776684) takes the transcript snapshot, finds the selected record's index, slices the prefix, calls `q.replace(prefix)`, emits telemetry and resets the turn with `{kind:\"rewound\"}`. Across its whole 1,856-byte body none of thirteen record-writing names occurs - appendEntry, appendFile, insertFileHistory, insertMessageChain, mirrorInternalEntry, enqueueRemove, removeMessageByUuid, performRemove, writeFile, trackWrite, currentSessionLeafUuid and the two last-prompt writers - and the only `rewound` token in it is the in-memory turn reset. The `last-prompt` line's `rewound` flag is written elsewhere and never by this path: over the corpus 0 of 30,658 `last-prompt` lines carry `rewound:true` and 0 carry `explicit:true`, while all 30,658 carry a `leafUuid` key. On disk a conversation restore is therefore indistinguishable from no gesture at all until the next prompt is submitted.",
+      "depends": "csift never looks for a rewind marker, because none is written: `show --branch-points` reports the DAG facts (a record with two or more conversation children) and leaves the classification to the reader, and no surface reads `rewound` or `explicit`. A tool that expected a flag would report every rewound session as clean.",
+      "code": [
+        {
+          "path": "src/show/branch.rs",
+          "lines": "3-10",
+          "snippet": "//! A Claude Code rewind, retry, or parallel lane leaves one plain DAG fact: some record\n//! has MORE THAN ONE conversation child (a later `parentUuid` re-attach). Which side is\n//! \"live\" is NOT computable from the jsonl: a live/abandoned classifier was prototyped\n//! and refuted against real corpora (parallel tool fan-out makes sibling leaves that\n//! false-positive as abandoned branches on most sessions). So csift reports the facts\n//! and RANKS them by the widest inter-child time gap: a rewind usually shows a wide\n//! gap, a parallel lane a near-zero one. The reader applies judgment; csift never\n//! classifies."
+        }
+      ],
+      "instrument": "Read the whole `rewindConversationTo` body in the 2.1.258 executable and count each record-writing name inside it; over the corpus count `last-prompt` lines and how many carry `rewound:true`, `explicit:true` and a `leafUuid` key. Counting rule: one occurrence per byte match inside the function body; one line per raw jsonl line for the corpus counts.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4 record semantics"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the picker's restore-conversation arm",
+          "offset": 180785915,
+          "excerpt": "if(Ko===\"code\"||Ko===\"both\")try{vi=(await q(mo))?.skippedLinks??0}catch(Qn){fn=Qn,h(fn)}if(Ko===\"conversation\"||Ko===\"both\")try{await O(mo)}catch(Qn){Sr=Qn,h(Sr)}",
+          "note": "the conversation arm runs after the code arm; \"both\" runs each once."
+        },
+        {
+          "role": "gate",
+          "name": "the index lookup that bounds the truncation",
+          "offset": 180776684,
+          "excerpt": "rewindConversationTo(T,I){let{session:O,transcript:q,scope:oe,store:ue,turn:Se}=this,Ce=q.getSnapshot(),Re=Ce.lastIndexOf(T);if(Re===-1)return;let Pe=Ce.slice(0,Re),Ie=Ce.slice(Re)",
+          "note": "an unknown record returns without touching anything; the split is over the in-memory snapshot. 2.1.259 re-anchor: @181623864."
+        },
+        {
+          "role": "writer",
+          "name": "the in-memory replace, which is the whole effect",
+          "offset": 180777109,
+          "excerpt": "s(\"tengu_conversation_rewind\",{preRewindMessageCount:Ce.length,postRewindMessageCount:Re,messagesRemoved:Ce.length-Re,rewindToMessageIndex:Re,source:u(I)}),r6(\"rewind\"),q.replace(Pe)",
+          "note": "`q.replace` swaps the array; the telemetry names the counts, and nothing after it reaches a file."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read bytes 180776684-180778540 of the 2.1.258 executable and counted thirteen record-writing names inside that window; ran a python census over the corpus counting `type:\"last-prompt\"` lines carrying `rewound:true`, `explicit:true` and a `leafUuid` key.",
+          "observed": "Body length 1,856 bytes; occurrence counts inside it: appendEntry 0, insertFileHistory 0, enqueueRemove 0, removeMessageByUuid 0, performRemove 0, writeFile 0, insertMessageChain 0, mirrorInternalEntry 0, trackWrite 0, appendFile 0, currentSessionLeafUuid 0, and the two last-prompt writer names 0. Corpus: 30,658 last-prompt lines, 30,658 with a leafUuid key, 0 with rewound:true, 0 with explicit:true.",
+          "rule": "One occurrence per byte match inside the function body; one line per raw jsonl line over top-level transcripts.",
+          "note": "The restore leaves no record and no flag, so the DAG shape is the only witness."
+        }
+      ]
+    },
+    {
+      "id": "REC-102",
+      "area": "record-model",
+      "behavior": "A branch the conversation left behind stays on disk in full, and it is not small. Census over 75 top-level transcripts (834,912 lines, 672,983 uuid-bearing records, 0 unparsable): 1,481 abandoned roots in 44 of the 75 files - 1,307 user and 174 assistant - whose subtrees hold 11,142 records (1,912 user, 716 assistant, 8,391 attachment, 123 system) carrying 422 `tool_use` blocks. Of the 1,307 user roots, 57 have an assistant descendant (a branch that drew a reply before the conversation moved elsewhere) and 1,250 have none (a recalled prompt). The shape follows from the rewind writing nothing: the array is truncated in memory and the next prompt is chained onto the same parent, so the old branch simply stops being extended, with every one of its records still present, still addressable, and still the true account of what hit the disk at the time.",
+      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` when `parentUuid` is null - csift's forensic reading, NOT Claude Code's rule: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, and of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader.",
+      "code": [
+        {
+          "path": "src/show/branch.rs",
+          "lines": "3-10",
+          "snippet": "//! A Claude Code rewind, retry, or parallel lane leaves one plain DAG fact: some record\n//! has MORE THAN ONE conversation child (a later `parentUuid` re-attach). Which side is\n//! \"live\" is NOT computable from the jsonl: a live/abandoned classifier was prototyped\n//! and refuted against real corpora (parallel tool fan-out makes sibling leaves that\n//! false-positive as abandoned branches on most sessions). So csift reports the facts\n//! and RANKS them by the widest inter-child time gap: a rewind usually shows a wide\n//! gap, a parallel lane a near-zero one. The reader applies judgment; csift never\n//! classifies."
+        },
+        {
+          "path": "src/recover/scan.rs",
+          "lines": "138-144",
+          "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
+        }
+      ],
+      "instrument": "One python pass per top-level transcript: build the uuid map, take the file-order LAST conversation record (type user or assistant) as the leaf, walk `parentUuid` upward with a cycle guard following `logicalParentUuid` when `parentUuid` is null, then count abandoned roots (a conversation record off that chain whose parent uuid is on it, where the child uuid and the parent uuid each occupy exactly one line) and walk each root's subtree downward through `parentUuid`, skipping chain members. Separately read the loader's own walk in the 2.1.258 executable and classify every occurrence of `logicalParentUuid`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4 record semantics"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the in-memory truncation that abandons the branch",
+          "offset": 180776684,
+          "excerpt": "rewindConversationTo(T,I){let{session:O,transcript:q,scope:oe,store:ue,turn:Se}=this,Ce=q.getSnapshot(),Re=Ce.lastIndexOf(T);if(Re===-1)return;let Pe=Ce.slice(0,Re)",
+          "note": "the records after the cut leave memory; the file keeps them."
+        },
+        {
+          "role": "gate",
+          "name": "Rw re-derives the parent seed from the uuids already on disk",
+          "offset": 166113243,
+          "excerpt": "async function Rw(e,n,r,o,d){let f=dMe(e,o),_=Q(),v=__t(ya(_)),C=await Ku().sessionMessages(_,d),I=[],F=r;if(F&&!pu()&&!C.has(F))s(\"tengu_phantom_parent_hint\",{});let B=!1;for(let j of f)if(C.has(j.uuid)){if(!B&&Jde(j))F=j.uuid}else I.push(j),B=!0;if(I.length>0)await Fi().insertMessageChain(I,!1,void 0,F,n,_,v,d)",
+          "note": "entries already on disk are skipped and the newest of them becomes the parent seed, which is how the resend lands on the same parent as the abandoned record."
+        },
+        {
+          "role": "writer",
+          "name": "the entry literal that writes that seed as parentUuid",
+          "offset": 166105359,
+          "excerpt": "let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe",
+          "note": "the append never rewrites or removes an earlier record, so both children of that parent survive."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Ran the abandoned-branch census script over every top-level transcript, and read the loader's parent walk plus all 12 occurrences of `logicalParentUuid` in the 2.1.258 executable.",
+          "observed": "75 files, 834,912 lines, 672,983 uuid-bearing records, 0 unparsable, 210,956 conversation records. 1,481 abandoned roots in 44 files (user 1,307, assistant 174); subtrees 11,142 records (attachment 8,391, user 1,912, assistant 716, system 123) with 422 tool_use blocks; user roots with an assistant descendant 57, without 1,250. The loader walk reads `Dr.parentUuid` only, guarded by `tengu_transcript_parent_cycle`; of 12 `logicalParentUuid` occurrences, 7 are writes, 4 are the fork copier's uuid remap and 1 is a schema name table - none continues a walk.",
+          "rule": "One record per parsed line carrying a non-empty string uuid; a conversation record is type user or assistant; an abandoned root is a conversation record off the surviving chain whose parent uuid is on it, both uuids occupying exactly one line; a subtree is the downward parentUuid closure of a root, each uuid counted once, chain members excluded.",
+          "note": "The census's logicalParentUuid fallback is csift's forensic reading and is stated as such; Claude Code's own walk has no such step."
+        }
+      ]
+    },
+    {
+      "id": "FH-051",
+      "area": "freshness-file-history",
+      "behavior": "`/rewind` -> \"Restore code\" writes only the WORKING TREE, and it can delete. At 2.1.258 the entry `Pze` (@162373265) returns immediately unless the file-checkpointing gate passes, finds the snapshot by message id, and hands the tracked file set to `P3r` (@162374924); for each tracked file `P3r` resolves the backup and, when `backupFileName` is null, DELETES the file (`FileHistory: [Rewind] Deleted <path>` @162375475) rather than restoring it, while the backup itself is opened read-only through `F3r` (@162379934). The reducer arm the restore dispatches at the end, `case\"touch\"` (@162370167), returns `{...e,trackSequence:(e.trackSequence??0)+1}` - it calls neither the delta writer nor the snapshot writer, so a restore appends no `file-history-delta` and no `file-history-snapshot` line. Corpus confirms the record shapes carry no restore marker at all: all 2,181 `file-history-delta` lines have exactly the key set {backup, messageId, snapshotMessageId, timestamp, trackingPath, type} and all 4,359 `file-history-snapshot` lines exactly {isSnapshotUpdate, messageId, snapshot, type}.",
+      "depends": "`recover` replays transcript records, so a code restore is invisible to it: the file on disk can differ from the newest content any record carries, with no record in between and no key to look for. csift therefore never reads the absence of a mutation record as evidence a file did not change - the same law its opaque-window accounting already states - and the next turn's `edited_text_file` attachment is the only trace that follows.",
+      "code": [
+        {
+          "path": "src/recover/scan.rs",
+          "lines": "138-144",
+          "snippet": "/// Write `recovery-report.tsv` under `out_dir` and print the one-line summary. The\n/// three accounting columns disclose what each recovered file's window held beyond\n/// the replay: `boundaries` (integrity boundaries), `bash_file` (parsed bash\n/// mutations of the file), `bash_opaque` (mutating-class + PowerShell commands whose\n/// file set is unknowable). A `complete` row with non-zero columns is complete FROM\n/// THE TOOL STREAM, not verified against disk."
+        }
+      ],
+      "instrument": "Read the entry, the per-file restore loop, the delete arm, the backup open and the `touch` reducer arm at their offsets in the 2.1.258 executable. Over the corpus, group every `file-history-delta` and `file-history-snapshot` line by its exact top-level key set. Counting rule: one line per raw jsonl line over top-level transcripts; a key set is the sorted list of top-level keys.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4.9 freshness"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "Pze, the rewind entry, gated on file checkpointing",
+          "offset": 162373266,
+          "excerpt": "function Pze(e,n){if(!pT())return;let r=e();if(!r)return;let o=r.snapshots.findLast((d)=>d.messageId===n);if(!o)throw h(Error(`FileHistory: Snapshot for ${n} not found`))",
+          "note": "with the gate off the restore does nothing at all. 2.1.259 re-anchor: `fKe` @163137030."
+        },
+        {
+          "role": "gate",
+          "name": "the null-backup branch that turns a restore into a delete",
+          "offset": 162375442,
+          "excerpt": "if(v===null){try{await iQe(f),t(`FileHistory: [Rewind] Deleted ${f}`),r.push(f)}catch(I){",
+          "note": "a tracked file with no backup at the snapshot is removed from the working tree, not reverted. 2.1.259 re-anchor: `BZr` @163138688."
+        },
+        {
+          "role": "writer",
+          "name": "the touch arm, which writes no history record",
+          "offset": 162370167,
+          "excerpt": "case\"touch\":return{...e,trackSequence:(e.trackSequence??0)+1}",
+          "note": "the only reducer arm the restore dispatches; the delta writer and the snapshot writer sit under the other two arms and are never reached. 2.1.259 re-anchor: @163133931."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read `Pze`, `P3r`, the delete arm, `F3r` and the `touch` reducer arm within 340 bytes of each offset in the 2.1.258 executable; ran a python census over the corpus grouping every file-history line by its exact top-level key set.",
+          "observed": "All five excerpts present verbatim; the touch arm's body is exactly the trackSequence bump. Corpus: 2,181 file-history-delta lines, one key set only {backup,messageId,snapshotMessageId,timestamp,trackingPath,type}; 4,359 file-history-snapshot lines, one key set only {isSnapshotUpdate,messageId,snapshot,type}. No key naming a restore or a rewind on either shape.",
+          "rule": "One line per raw jsonl line over top-level transcripts; a key set is the sorted list of top-level keys, counted once per line.",
+          "note": "The restore writes the working tree and the in-memory reducer sequence, and nothing else."
+        }
+      ]
+    },
+    {
+      "id": "FH-052",
+      "area": "freshness-file-history",
+      "behavior": "When a file changed under Claude Code between two turns, the ONLY record of it is an `edited_text_file` attachment on the next turn, and it carries a DIFF rather than the file. At 2.1.258 the per-turn pass `QSr` (@165751939) walks the read-file-state set and, per entry, skips a partial read (`offset`/`limit` set) and any path the filter rejects, then gates on the mtime: `if(await Bx(C)<=v.timestamp)return null` (@165752200) - a file no newer than the remembered read produces nothing. Past that gate it re-reads through the Read tool and returns null again when the read was truncated by the token cap or when the content equals what was remembered; only a non-empty diff becomes the attachment `{type:\"edited_text_file\",filename,snippet}` (@165752532). A budget then EMPTIES the snippet of later attachments in the same batch once the accumulated snippet length reaches `vQo=16384` (@165751925, applied @165753030), so an empty snippet means over budget, not unchanged. Corpus: 1,450 such attachments in 30 of 75 transcripts, 103 of them with an empty snippet.",
+      "depends": "`recover` treats the `edited_text_file` attachment as an authoritative boundary for a file's content and reads an EMPTY snippet as the over-budget degraded form rather than as an empty file. Because the attachment is produced only by an mtime-gated re-read on the next turn, a change made and reverted within one turn leaves no attachment at all - which is why recover's per-window opaque accounting states what it cannot see instead of asserting the file was untouched.",
+      "code": [
+        {
+          "path": "src/recover/carriers.rs",
+          "lines": "270-276",
+          "snippet": "    // (7a) edited_text_file \u2192 an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);"
+        }
+      ],
+      "instrument": "Read the pass entry, the mtime gate, the attachment literal and the budget constant at their offsets in the 2.1.258 executable, and enumerate every occurrence of the literal `edited_text_file` to separate the writer from the readers. Over the corpus, count `type:\"attachment\"` lines whose `attachment.type` is `edited_text_file`, the transcripts carrying them, and how many have an empty `snippet`. Counting rule: one attachment per raw jsonl line.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4.9 freshness"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "QSr, the per-turn walk over the read-file-state set",
+          "offset": 165751939,
+          "excerpt": "async function QSr(e){let n=K1e(e.readFileState);if(n.length===0)return[];let r=pe(e),d=(await Promise.all(n.map(async(_)=>{let v=e.readFileState.get(_);if(!v)return null;if(v.offset!==void 0||v.limit!==void 0)return null;",
+          "note": "only files the session actually READ are candidates, and a partial read is skipped outright."
+        },
+        {
+          "role": "gate",
+          "name": "the mtime gate against the remembered read",
+          "offset": 165752200,
+          "excerpt": "if(await Bx(C)<=v.timestamp)return null;let F={file_path:C};if(!(await im.validateInput(F,e)).result)return null;let U=await im.call(F,e);if(U.data.type===\"text\"){if(U.data.file.truncatedByTokenCap===!0)return null;if(z$(v,U.data.file.content))return null;",
+          "note": "three more silent nulls after the mtime test: an unreadable path, a token-capped read, and content equal to what was remembered."
+        },
+        {
+          "role": "writer",
+          "name": "the attachment literal, carrying a diff",
+          "offset": 165752456,
+          "excerpt": "let j=EJt(v.content,U.data.file.content);if(j===\"\")return null;return{type:\"edited_text_file\",filename:C,snippet:j}",
+          "note": "`snippet` is the diff between the remembered content and the re-read content, never the file; the 16,384-character budget at @165753030 empties later snippets in the same batch."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the rewound-file-tracking collector",
+          "offset": 163600073,
+          "excerpt": "else if(f.type===\"edited_text_file\")try{r.push(ct(f.filename,n))}",
+          "verdict": "a reader: it collects filenames off existing attachments."
+        },
+        {
+          "site": "the same collector's error message",
+          "offset": 163600150,
+          "excerpt": "collectRewoundFileTrackingPaths: skipping malformed edited_text_file attachment",
+          "verdict": "a log string in the same reader."
+        },
+        {
+          "site": "the query telemetry counter",
+          "offset": 164753388,
+          "excerpt": "let YP=Y(Lo,(xr)=>xr.type===\"attachment\"&&xr.attachment.type===\"edited_text_file\")",
+          "verdict": "a reader: counts the attachments already built for one query."
+        },
+        {
+          "site": "the attachment literal",
+          "offset": 165752519,
+          "excerpt": "return{type:\"edited_text_file\",filename:C,snippet:j}",
+          "verdict": "the WRITER - the only site that constructs the attachment."
+        },
+        {
+          "site": "the snippet budget",
+          "offset": 165753001,
+          "excerpt": "for(let _ of d){if(_.type!==\"edited_text_file\")continue;if(f>=vQo)_.snippet=\"\";else f+=_.snippet.length}",
+          "verdict": "a post-pass over the built attachments: empties snippets past the budget."
+        },
+        {
+          "site": "the prompt-side renderer",
+          "offset": 165996587,
+          "excerpt": "edited_text_file:(e)=>{let n=`Note: ${Kc(e.filename)} changed on disk since you last read it.",
+          "verdict": "a reader: turns the attachment into the note the model sees."
+        },
+        {
+          "site": "two attachment-type name tables",
+          "offset": 179043603,
+          "excerpt": "\"edited_image_file\",\"edited_text_file\",\"file\",\"goal_status\",\"hook_additional_context\"",
+          "verdict": "a name list, and its twin at 180442008; neither constructs anything."
+        },
+        {
+          "site": "the bundled schema strings",
+          "offset": 70454004,
+          "excerpt": "edited_text_file",
+          "verdict": "schema text, with its twin at 74823948; not code."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the pass entry, the mtime gate, the attachment literal and the budget constant within 700 bytes of their offsets in the 2.1.258 executable, and read all 10 occurrences of the literal `edited_text_file` to classify each; ran a python census over the corpus counting attachment lines whose payload type is `edited_text_file`, the transcripts carrying them and the empty-snippet share, and dumped the one attachment in the trial transcript.",
+          "observed": "10 occurrences: 1 writer, 1 budget post-pass, 4 readers, 2 name tables, 2 schema strings. Corpus: 1,450 edited_text_file attachments in 30 of 75 transcripts, 103 with an empty snippet. The trial transcript carries exactly one, at line 57, keys {filename, snippet, type}, snippet 10 characters.",
+          "rule": "One attachment per raw jsonl line, over top-level transcripts; an occurrence is one byte match of the literal in the executable.",
+          "note": "The attachment is an mtime-gated re-read producing a diff, so its absence is never evidence a file was unchanged."
+        }
+      ]
+    },
+    {
+      "id": "MISC-032",
+      "area": "misc",
+      "behavior": "`/rewind` is a local slash command registered at 2.1.258 @165665366 as `{description:\"Restore the code and/or conversation to a previous point\",name:\"rewind\",aliases:[\"checkpoint\",\"undo\"],argumentHint:\"\",type:\"local\",supportsNonInteractive:!1}`. Its picker builds the option list in `Go` (@180784332): three code-bearing rows when the gate passes (`both` \"Restore code and conversation\", `conversation` \"Restore conversation\", `code` \"Restore code\") and only `conversation` when it does not, then unconditionally pushes `summarize` \"Summarize from here\", `summarize_up_to` \"Summarize up to here\" and `nevermind` \"Never mind\" - six rows with the code arm, four without. The gate is `pT` (@162370862) and two arms PRECEDE the named feature check: an in-process kill switch and an SDK-only arm (`CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING && !CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING`), with the default `Io(\"fileCheckpointingEnabled\",!0).value && !CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING`. A summarize row maps to a direction (@180785654: `summarize_up_to` -> `\"up_to\"`, otherwise `\"from\"`) and carries an optional free-text context input; a restore row runs BOTH arms in a fixed order (@180785915: code first, then conversation). The picker's footer states that rewinding does not affect files edited manually or via bash.",
+      "depends": "csift reads the on-disk consequences of each row and nothing else, and the rows differ sharply in what they leave: a conversation restore writes no record, a code restore writes only the working tree, and only the two summarize rows write records - a boundary and a summary carrying `summarizeMetadata`. csift therefore reports a summarize as a compaction with a mode, and reports a restore not at all, because the gesture that would need reporting left nothing to read.",
+      "code": [
+        {
+          "path": "src/model/compaction.rs",
+          "lines": "5-12",
+          "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`\n//! for \"Summarize up to here\" and `\"from\"` for \"Summarize from here\"."
+        }
+      ],
+      "instrument": "Read the registry entry, the option builder, the gate function, the direction map and the both-order restore at their offsets in the 2.1.258 executable. On the corpus, find the on-disk trace of the summarize rows by counting compaction summaries carrying `summarizeMetadata` and reading the `direction` value. Counting rule: one registry object, one option list, one summary record per compaction event over top-level transcripts.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 4 compaction"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The picker rendered both shapes in a live trial - six rows with the code arm and four under the note that the code will be unchanged - which is what the builder's arithmetic predicts; a second capture with the kill switch set would pin the SDK arm too."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the command registry entry",
+          "offset": 165665365,
+          "excerpt": "{description:\"Restore the code and/or conversation to a previous point\",name:\"rewind\",aliases:[\"checkpoint\",\"undo\"],argumentHint:\"\",type:\"local\",supportsNonInteractive:!1,load:()=>import(",
+          "note": "a local command with two aliases, unavailable outside an interactive session. 2.1.259 re-anchor: @166500354."
+        },
+        {
+          "role": "gate",
+          "name": "pT, the file-checkpointing gate that selects the code rows",
+          "offset": 162370862,
+          "excerpt": "function pT(){if(Zt())return!1;if(Oe())return R3r();return vo(\"fileCheckpointingEnabled\",!0).value&&!a.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING}function R3r(){return a.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING&&!a.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING}",
+          "note": "the kill switch and the SDK arm run BEFORE the named feature check. 2.1.259 re-anchor: `Aw` @163134626."
+        },
+        {
+          "role": "writer",
+          "name": "Go, the option list the picker renders",
+          "offset": 180784332,
+          "excerpt": "function Go(Ko){let fn=Ko?[{value:\"both\",label:\"Restore code and conversation\"},{value:\"conversation\",label:\"Restore conversation\"},{value:\"code\",label:\"Restore code\"}]:[{value:\"conversation\",label:\"Restore conversation\"}],Sr={type:\"input\",placeholder:\"add context (optional)\",initialValue:\"\",allowEmptySubmitToCancel:!0,showLabelWithValue:!0,labelValueSeparator:\": \"};return fn.push({value:\"summarize\",label:\"Summarize from here\",...Sr,onChange:pn}),fn.push({value:\"summarize_up_to\",label:\"Summarize up to here\",...Sr,onChange:Ot}),fn.push({value:\"nevermind\",label:\"Never mind\"}),fn}",
+          "note": "the two summarize rows carry the optional context input; the row count is six or four. 2.1.259 re-anchor: `$o` @181631460."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the registry entry, the option builder, the gate, the direction map and the both-order restore within 900 bytes of their offsets in the 2.1.258 executable; ran a python census over the corpus for the on-disk trace of a summarize row.",
+          "observed": "All five excerpts present verbatim; the builder yields six rows with the code arm and four without. Corpus: 1 of 244 compaction summaries carries `summarizeMetadata`, with `direction` \"up_to\" - the trace of one `summarize_up_to` selection; the paired boundary carries `trigger:\"manual\"` and `messagesSummarized`.",
+          "rule": "One registry object, one option list, one summary record per compaction event over top-level transcripts.",
+          "note": "The gate's two leading arms mean an absent code row is not evidence that checkpointing is disabled by configuration."
+        }
+      ]
+    },
+    {
+      "id": "MISC-033",
+      "area": "misc",
+      "behavior": "The in-place transcript SHRINK has exactly two helper functions and three live callers, all stream-driven, and no interactive gesture reaches any of them. At 2.1.258 both helpers sit side by side: `m5e` (@166122844) forwards straight to `removeMessageByUuid`, and `ign` (@166122935) first checks the session's on-disk uuid set and returns when the uuid is not there. `m5e` occurs 3 times in the whole executable - its definition, a caller inside the evict path gated on the append frontier (@179092749: the removal fires only when the record's index sits below the frontier, that is, when it is already on disk) and the tombstone handler (@181621337, which skips the removal when the uuid was already retracted this stream). `ign` has exactly one call site (@181619649), in the refusal-continuation loop that adds the uuid to `transcriptRetractedUuids` and removes it. Every path is a stream event: a tombstone, a late structured-output retraction, or a refusal continuation replacing uuids.",
+      "depends": "csift treats a transcript as append-only for LINE NUMBERS and byte offsets while disclosing when that premise fails, and this enumeration is why the disclosure exists rather than a guard: the shrink cannot be predicted from anything a reader can see, so the readers that run repeatedly against a live transcript use positional reads instead of a memory map (a mapped page past a shortened end faults with no catchable error), and `wait` detects a shorter file between polls, moves its baseline and reports the shrink.",
+      "code": [
+        {
+          "path": "src/live/wait.rs",
+          "lines": "129-137",
+          "snippet": "            if len < cur.offset {\n                // The file SHRANK: Claude Code rewrote it in place (a rewind tombstone\n                // truncates and rewrites the tail; an armed local GC rewrites on\n                // compaction). Bytes before the new end were already read; the\n                // baseline moves to the new end and the report says so (v0.10.4).\n                activity.note_shrink(&cur.lane, cur.offset - len);\n                cur.offset = len;\n                continue;\n            }"
+        }
+      ],
+      "instrument": "Read both helper definitions in the 2.1.258 executable, then enumerate every occurrence of each helper's call form across the whole binary and read each site to say what drives it. Counting rule: one occurrence per byte match of the call form, with a leading delimiter where the bare name would collide with other identifiers.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "SPEC.md section 7a performance"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "No in-place shrink has been captured on disk. The instrument: drive a session to a refusal continuation that replaces an already-persisted uuid while sampling the transcript's size and a hash over its first-snapshot length, and record the poll at which the size falls."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the tombstone stream case",
+          "offset": 179114390,
+          "excerpt": "case\"tombstone\":{yield*_o.onTombstone(Ie),wn.evict(Ie.message.uuid),io.dropHeld(Ie.message.uuid)",
+          "note": "a stream tombstone evicts the record and reaches the frontier-gated removal."
+        },
+        {
+          "role": "gate",
+          "name": "the append-frontier test that selects records already on disk",
+          "offset": 179092653,
+          "excerpt": "if(n.splice(G,1),_>G){if(_--,r)s(\"tengu_tombstone_persisted_removal\",{message_type:u(Ee.type)}),m5e(se,o)}",
+          "note": "the disk removal fires only when the removed index sits below the append frontier. 2.1.259 re-anchor: @180055246."
+        },
+        {
+          "role": "writer",
+          "name": "the two removal helpers",
+          "offset": 166122844,
+          "excerpt": "function m5e(e,n){let r=L()&&n!==void 0?n:void 0;await Fi().removeMessageByUuid(e,r)}async function ign(e,n){let r=L()&&n!==void 0?n:void 0;if(!(await Ku().sessionMessages(Q(),r)).has(e))return;await Fi().removeMessageByUuid(e,r)}",
+          "note": "both funnel into removeMessageByUuid; `ign` additionally refuses a uuid that is not on disk. 2.1.259 re-anchors: `Y8e` @166961956 and `iyn` @166962047."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "m5e definition",
+          "offset": 166122844,
+          "excerpt": "function m5e(e,n){let r=L()&&n!==void 0?n:void 0;await Fi().removeMessageByUuid(e,r)}",
+          "verdict": "the helper itself, not a caller."
+        },
+        {
+          "site": "m5e in the frontier-gated evict",
+          "offset": 179092675,
+          "excerpt": "if(_--,r)s(\"tengu_tombstone_persisted_removal\",{message_type:u(Ee.type)}),m5e(se,o)",
+          "verdict": "live caller: fires only for a record already below the append frontier."
+        },
+        {
+          "site": "m5e in the tombstone handler",
+          "offset": 181621214,
+          "excerpt": "onTombstone:(lt)=>{if(De({type:\"remove-by-uuid\",uuid:lt.uuid}),this.stream.transcriptRetractedUuids.delete(lt.uuid))return;m5e(lt.uuid,Ie)}",
+          "verdict": "live caller: removes on a tombstone unless the uuid was already retracted this stream."
+        },
+        {
+          "site": "ign definition",
+          "offset": 166122929,
+          "excerpt": "async function ign(e,n){let r=L()&&n!==void 0?n:void 0;if(!(await Ku().sessionMessages(Q(),r)).has(e))return;await Fi().removeMessageByUuid(e,r)}",
+          "verdict": "the helper itself, not a caller."
+        },
+        {
+          "site": "ign in the refusal-continuation loop",
+          "offset": 181619551,
+          "excerpt": "for(let De of Ee)Ce({type:\"remove-by-uuid\",uuid:De}),this.stream.transcriptRetractedUuids.add(De),ign(De,oe)",
+          "verdict": "the only call site: a refusal continuation replacing uuids retracts each one."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read both helper definitions at their offset in the 2.1.258 executable, enumerated `m5e(` across the whole binary and enumerated `ign(` with a leading delimiter (the bare form collides with `sign(`, `design(` and friends: 1,096 matches against 1 real call site), and read each site.",
+          "observed": "`m5e(` occurs 3 times: 1 definition and 2 live callers (@179092749 the frontier-gated evict, @181621337 the tombstone handler). `,ign(` occurs once, at @181619649 in the refusal-continuation loop; the bare `ign(` form matches 1,096 times, all substrings of unrelated identifiers. Five occurrences, three live callers, all stream-driven; no interactive gesture reaches either helper.",
+          "rule": "One occurrence per byte match of the call form across the whole executable, delimiter-anchored where the bare name collides; a live caller is a site that invokes the helper.",
+          "note": "The specimen leg stays open: no shrink has been captured on disk."
         }
       ]
     }

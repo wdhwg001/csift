@@ -294,16 +294,26 @@ pub(crate) fn image_marker_cost(ids: &[String]) -> usize {
 /// The EXACT compaction-boundary banner line a crossed summary renders to (no trailing
 /// newline). The renderer and the budget reservation both call this so the reserved
 /// banner length is byte-for-byte what is emitted.
-pub(crate) fn boundary_banner_line(line_no: usize) -> String {
+pub(crate) fn boundary_banner_line(line_no: usize, mode: Option<SummarizeMode>) -> String {
+    // C-33: a `/rewind` summarize is a compaction like any other for reconstruction, so the
+    // mode only ANNOTATES the banner - and only when it is one of the two summarize gestures,
+    // which keeps an ordinary compaction's banner byte-for-byte what it always was.
+    let tag = match mode {
+        Some(SummarizeMode::FromHere | SummarizeMode::UpToHere) => mode
+            .and_then(SummarizeMode::direction)
+            .map(|d| format!(" · summarize {d}"))
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
     format!(
-        "{0} compaction boundary · summary at L{1} · (turns below predate it) {0}",
-        "══", line_no
+        "{0} compaction boundary · summary at L{1}{2} · (turns below predate it) {0}",
+        "══", line_no, tag
     )
 }
 
 /// The budget cost of one boundary banner as a physical line (`chars + NEWLINE_COST`).
-pub(crate) fn banner_cost(line_no: usize) -> usize {
-    boundary_banner_line(line_no).chars().count() + NEWLINE_COST
+pub(crate) fn banner_cost(line_no: usize, mode: Option<SummarizeMode>) -> usize {
+    boundary_banner_line(line_no, mode).chars().count() + NEWLINE_COST
 }
 
 /// The EXACT total banner chars the render emits when the selected set spans `depth`
@@ -319,9 +329,14 @@ pub(crate) fn cumulative_banner_cost(summaries: &[SummaryInfo], depth: usize) ->
     }
     // Rank by descending line number (newest = rank 1); the first `depth` of those are the
     // boundaries the ascending render crosses to reach a turn at that depth.
-    let mut by_rank: Vec<usize> = summaries.iter().map(|s| s.line_no).collect();
-    by_rank.sort_unstable_by(|a, b| b.cmp(a));
-    by_rank.into_iter().take(depth).map(banner_cost).sum()
+    let mut by_rank: Vec<(usize, Option<SummarizeMode>)> =
+        summaries.iter().map(|s| (s.line_no, s.mode)).collect();
+    by_rank.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+    by_rank
+        .into_iter()
+        .take(depth)
+        .map(|(line_no, mode)| banner_cost(line_no, mode))
+        .sum()
 }
 
 /// A worst-case (provable upper-bound) char count of the document header block emitted by

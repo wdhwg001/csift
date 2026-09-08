@@ -51,8 +51,18 @@ pub(crate) fn reconstruct_and_match(
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
-
     let filter = args.label_filter();
+    // C-33: pair each `compact_boundary` with the compaction SUMMARY that follows it, so a
+    // boundary hit can name the gesture that minted it. One pass, empty on a transcript that
+    // never compacted - and SKIPPED outright when the active `-t`/`-T` can reach neither
+    // compaction leaf, because then no hit can ever read the pairing (SPEC section 7: a
+    // `-t user`/`-t agent.*` scan pays nothing for a feature it cannot surface).
+    let summarize_index = if wants_compaction_pairing(&filter) {
+        crate::model::SummarizeIndex::from_records(records.iter().map(|k| &k.rec))
+    } else {
+        crate::model::SummarizeIndex::default()
+    };
+
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
     let tool_names = build_tool_name_index(records);
@@ -86,6 +96,7 @@ pub(crate) fn reconstruct_and_match(
         first_opener_line,
         spawn: spawn_lookup.map(|s| s as &(dyn SpawnLookup + Sync)),
         resume_prompts: &resume_prompts,
+        summarize: &summarize_index,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -440,6 +451,10 @@ pub(crate) struct ClassifyEnv<'a> {
     /// `harness.resume.placeholder` hit's pair verdict joins against
     /// ([`Record::resume_paired`]). Empty on the overwhelming majority of transcripts.
     pub(crate) resume_prompts: &'a HashSet<String>,
+    /// Boundary -> compaction-mode pairing (C-33): the direction that separates the two
+    /// `/rewind` summarize gestures from an ordinary compaction sits on the SUMMARY record,
+    /// so a boundary reads its own mode through this per-file pairing.
+    pub(crate) summarize: &'a crate::model::SummarizeIndex,
 }
 
 impl ClassifyEnv<'_> {
@@ -455,8 +470,18 @@ impl ClassifyEnv<'_> {
                 && Some(kept.line_no) == self.first_opener_line,
             spawn: self.spawn.map(|s| s as &dyn SpawnLookup),
             resume_prompt_uuids: Some(self.resume_prompts),
+            summarize: Some(self.summarize),
         }
     }
+}
+
+/// Can the active `-t`/`-T` selection surface EITHER compaction leaf? When it cannot, no hit
+/// can ever read the boundary -> mode pairing, so the per-file index is never built (SPEC
+/// section 7: a `-t user`/`-t agent.*` scan pays nothing for a feature it cannot show). Named
+/// so the skip is pinned by a test rather than living as an inline condition.
+pub(crate) fn wants_compaction_pairing(filter: &LabelFilter<'_>) -> bool {
+    filter.selected(Class::CompactionBoundary.path())
+        || filter.selected(Class::CompactionSummary.path())
 }
 
 /// Index this file's `harness.resume.prompt` uuids, so a resume PLACEHOLDER can say whether

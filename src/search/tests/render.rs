@@ -51,6 +51,7 @@ fn render_label_decorates_pairing_and_direction() {
         survival: crate::model::Survival::Live,
         rewound_branch: false,
         replay_copy_of: None,
+        compaction: None,
         truncated: false,
     };
     assert_eq!(render_label(&paired), "agent.tool.use ▹ agent.tool.result");
@@ -245,6 +246,7 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         survival: crate::model::Survival::Live,
         rewound_branch: false,
         replay_copy_of: None,
+        compaction: None,
         truncated: false,
     };
     assert_eq!(
@@ -265,4 +267,101 @@ fn sibling_cap_policy_is_fixed_and_message_classes_uncapped() {
     assert_eq!(sibling_cap(Class::AgentToolUse), Some(3));
     assert_eq!(sibling_cap(Class::AgentToolResult), Some(3));
     assert_eq!(sibling_cap(Class::CommandStdout), Some(2));
+}
+
+/// C-33: a compaction summary written by a `/rewind` summarize names its direction in the
+/// label zone (display-only, like `[narration summary]`); an ordinary compaction summary
+/// renders the bare leaf path exactly as before.
+#[test]
+fn a_summarize_summary_names_its_direction_in_the_label_zone() {
+    let mk = |compaction: Option<Box<CompactionHit>>| Hit {
+        class: Some(Class::CompactionSummary),
+        labels: vec!["harness.compaction.summary"],
+        excerpt: String::new(),
+        timestamp_utc: None,
+        tool_name: None,
+        model: None,
+        attachment_type: None,
+        version: None,
+        is_error: None,
+        direction: None,
+        tool_use_id: None,
+        pair: None,
+        line: 9,
+        uuid: None,
+        raw: None,
+        image_ids: Vec::new(),
+        from_sidecar: false,
+        queue_operation: None,
+        queue_reason: None,
+        delivery: None,
+        resume_paired: None,
+        survival: crate::model::Survival::Live,
+        rewound_branch: false,
+        replay_copy_of: None,
+        compaction,
+        truncated: false,
+    };
+    let tagged = mk(Some(Box::new(CompactionHit {
+        metadata: None,
+        mode: Some(crate::model::SummarizeMode::UpToHere),
+        direction: Some("up_to".into()),
+    })));
+    assert_eq!(
+        render_label(&tagged),
+        "harness.compaction.summary [summarize up_to]"
+    );
+    // An ordinary compaction: a mode, but no direction to name.
+    let plain = mk(Some(Box::new(CompactionHit {
+        metadata: None,
+        mode: Some(crate::model::SummarizeMode::Compact),
+        direction: None,
+    })));
+    assert_eq!(render_label(&plain), "harness.compaction.summary");
+    assert_eq!(render_label(&mk(None)), "harness.compaction.summary");
+    // An unmodeled direction still renders its own verbatim word rather than nothing.
+    let odd = mk(Some(Box::new(CompactionHit {
+        metadata: None,
+        mode: None,
+        direction: Some("sideways".into()),
+    })));
+    assert_eq!(
+        render_label(&odd),
+        "harness.compaction.summary [summarize sideways]"
+    );
+}
+
+/// C-33 PERF: the boundary -> mode pairing is built only when the active selection can
+/// surface a compaction leaf, so a `-t user`/`-t agent.*` scan never walks the records for a
+/// feature it cannot show. The gate is a named predicate precisely so this is pinned.
+#[test]
+fn the_compaction_pairing_is_skipped_when_no_compaction_leaf_is_selectable() {
+    use crate::cli::LabelFilter;
+    let none: Vec<String> = Vec::new();
+    // No `-t` at all: every leaf is selectable, so the pairing is built.
+    assert!(wants_compaction_pairing(&LabelFilter::all()));
+    assert!(wants_compaction_pairing(&LabelFilter::new(&none, &none)));
+    for reaching in [
+        "harness",
+        "harness.compaction",
+        "harness.compaction.boundary",
+        "harness.compaction.summary",
+    ] {
+        let inc = vec![reaching.to_string()];
+        assert!(
+            wants_compaction_pairing(&LabelFilter::new(&inc, &none)),
+            "{reaching} reaches a compaction leaf"
+        );
+    }
+    for missing in ["user", "user.unsent", "agent", "agent.tool", "harness.meta"] {
+        let inc = vec![missing.to_string()];
+        assert!(
+            !wants_compaction_pairing(&LabelFilter::new(&inc, &none)),
+            "{missing} reaches neither compaction leaf, so the index must be skipped"
+        );
+    }
+    // `-T` takes the leaves back out: an excluded pair is also a skipped index.
+    let inc = vec!["harness".to_string()];
+    let exc = vec!["harness.compaction".to_string()];
+    assert!(!wants_compaction_pairing(&LabelFilter::new(&inc, &exc)));
 }

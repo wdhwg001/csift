@@ -4,6 +4,7 @@
 mod agents;
 mod argv;
 mod channel;
+mod compaction;
 mod contracts;
 mod elicitation;
 mod files;

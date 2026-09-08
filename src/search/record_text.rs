@@ -326,10 +326,28 @@ pub(crate) use crate::text::fmt_ms;
 /// `[compaction boundary: trigger=auto preTokens=1000 postTokens=200 durationMs=50]` (only the
 /// present fields, stable order, scalars unquoted). `None` when it is not an object or carries none
 /// of the known fields.
+///
+/// C-33 widens it to the harness's own SURVIVOR fields, each still printed only when present, so a
+/// legacy boundary carrying just the four scalars renders byte-for-byte as before:
+/// `messagesSummarized=` (a `/rewind` summarize wrote this boundary - an ordinary compaction never
+/// passes the argument), `cumulativeDroppedTokens=` (the running total of context tokens every
+/// compaction of this session has dropped), `preserved=<N uuids, M allUuids, anchor <first8>>` (the
+/// records the compaction KEPT: `uuids` is the on-disk subset, `allUuids` the in-memory superset,
+/// which is why some `allUuids` entries resolve to no line) and `segment=<head first8>..<tail
+/// first8>` (the kept run's ends). The full uuid lists are JSON-only - the excerpt prints counts and
+/// the first-8 handles so a boundary line stays scannable. Every fabricated byte here is covered by
+/// the `-t`-gated `compact_boundary` synth marker, which is a raw substring of the same line.
 pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {
     let obj = meta.as_object()?;
     let mut fields: Vec<String> = Vec::new();
-    for key in ["trigger", "preTokens", "postTokens", "durationMs"] {
+    for key in [
+        "trigger",
+        "preTokens",
+        "postTokens",
+        "durationMs",
+        "messagesSummarized",
+        "cumulativeDroppedTokens",
+    ] {
         if let Some(v) = obj.get(key) {
             let rendered = match v {
                 serde_json::Value::String(s) => s.clone(),
@@ -338,7 +356,49 @@ pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<Strin
             fields.push(format!("{key}={rendered}"));
         }
     }
+    if let Some(preserved) = preserved_messages_fragment(obj.get("preservedMessages")) {
+        fields.push(preserved);
+    }
+    if let Some(segment) = preserved_segment_fragment(obj.get("preservedSegment")) {
+        fields.push(segment);
+    }
     (!fields.is_empty()).then(|| format!("[compaction boundary: {}]", fields.join(" ")))
+}
+
+/// `preserved=<N uuids, M allUuids, anchor <first8>>` from `compactMetadata.preservedMessages` -
+/// each part only when its key is there. `None` when the object carries none of the three.
+fn preserved_messages_fragment(v: Option<&serde_json::Value>) -> Option<String> {
+    let obj = v?.as_object()?;
+    let mut parts: Vec<String> = Vec::new();
+    for (key, word) in [("uuids", "uuids"), ("allUuids", "allUuids")] {
+        if let Some(a) = obj.get(key).and_then(serde_json::Value::as_array) {
+            parts.push(format!("{} {word}", a.len()));
+        }
+    }
+    if let Some(anchor) = obj.get("anchorUuid").and_then(serde_json::Value::as_str) {
+        parts.push(format!("anchor {}", short_uuid(anchor)));
+    }
+    (!parts.is_empty()).then(|| format!("preserved={}", parts.join(", ")))
+}
+
+/// `segment=<head first8>..<tail first8>` from `compactMetadata.preservedSegment`. `None` when
+/// neither end is present; a one-ended object renders the end it has.
+fn preserved_segment_fragment(v: Option<&serde_json::Value>) -> Option<String> {
+    let obj = v?.as_object()?;
+    let end = |key: &str| {
+        obj.get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(short_uuid)
+            .unwrap_or_default()
+    };
+    let (head, tail) = (end("headUuid"), end("tailUuid"));
+    (!(head.is_empty() && tail.is_empty())).then(|| format!("segment={head}..{tail}"))
+}
+
+/// The first 8 characters of a uuid (codepoint-safe; a shorter id renders whole) - the scannable
+/// handle the boundary excerpt prints in place of a full uuid.
+fn short_uuid(id: &str) -> String {
+    id.chars().take(8).collect()
 }
 
 /// The communication [`Class`] a `tool_use` block carries (GOLD §3): a `SendMessage` →
