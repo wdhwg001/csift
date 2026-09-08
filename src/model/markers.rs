@@ -202,10 +202,30 @@ pub(crate) const CROSS_SESSION_MESSAGE_CLOSE: &str = "</cross-session-message>";
 /// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).
 pub const ASYNC_LAUNCH_ACK_PREFIX: &str = "Async agent launched successfully";
 
-/// The fixed harness-injected continuation marker (GOLD §5) - `harness.schedule.continuation`.
-/// A `type:"user"` (`isMeta`) record CC injects to resume a session from where it left off.
-/// Verified across real `~/.claude/projects` data (522 occurrences), exact content.
-pub const SCHEDULE_CONTINUATION_MARKER: &str = "Continue from where you left off.";
+/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:"user"` record
+/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.
+/// It is machinery, not the operator - the human never typed it.
+///
+/// The producer is a getter, not a fixed string: `CLAUDE_CODE_RESUME_PROMPT` wins over this
+/// constant, and Claude Code sets that variable itself on two respawn paths whose values
+/// BEGIN with this sentence and continue (a runner move, a process restart). Claude Code's
+/// own recogniser compares the content EXACTLY against the env-resolved value; csift cannot
+/// observe the receiver's environment, so it matches this constant as a PREFIX, which
+/// covers the bare form and both Claude-Code-set variants alike.
+pub const RESUME_PROMPT_MARKER: &str = "Continue from where you left off.";
+
+/// The RESUME REPAIR PLACEHOLDER (`harness.resume.placeholder`): the stand-in assistant
+/// record the loader splices in after a resumed transcript's trailing user record, so the
+/// loaded conversation does not end on an unanswered prompt. Claude Code writes it with no
+/// model call at all - hence the [`SYNTHETIC_MODEL`] sentinel - and suppresses the splice
+/// only under its `--reply-on-resume` flag.
+pub const RESUME_PLACEHOLDER_TEXT: &str = "No response requested.";
+
+/// The `message.model` sentinel Claude Code stamps on every record it fabricates in place
+/// of a model turn - the resume placeholder and the API-error notice both carry it. It is
+/// the one field that separates a fabricated assistant record from a real one, so a record
+/// carrying it is never the assistant's own text.
+pub(crate) const SYNTHETIC_MODEL: &str = "<synthetic>";
 
 /// The `ScheduleWakeup` TIMER's fired-prompt sentinel (GOLD §5) - `harness.schedule.wakeup`.
 /// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is

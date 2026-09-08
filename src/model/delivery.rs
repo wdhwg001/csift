@@ -26,11 +26,6 @@
 
 use super::*;
 
-/// The `message.model` value Claude Code stamps on a fabricated stand-in assistant
-/// record. The API-error placeholder carries it, which is what separates the
-/// placeholder from a real assistant turn that merely errored.
-const SYNTHETIC_MODEL: &str = "<synthetic>";
-
 impl Record {
     /// Whether Claude Code's request assembler sent this record to the model, when its
     /// verdict DIFFERS from the leaf default. `None` = no override, so
@@ -41,8 +36,14 @@ impl Record {
     ///   Its content is a slash command's own echo and stdout.
     /// - a user/assistant record with `isVirtual:true` => `Some(false)`.
     /// - an assistant record with `isApiErrorMessage:true` whose `message.model` is the
-    ///   `<synthetic>` sentinel => `Some(false)`: the harness's own API-error notice,
+    ///   [`SYNTHETIC_MODEL`] sentinel => `Some(false)`: the harness's own API-error notice,
     ///   rendered to the human and never returned to the model.
+    ///
+    /// The RESUME PLACEHOLDER (`harness.resume.placeholder`) shares that sentinel model and
+    /// is deliberately NOT covered by this arm: the loader mints it WITHOUT
+    /// `isApiErrorMessage`, so the drop predicate's own conjunction is false and the record
+    /// reaches the model like any other. Its leaf default already says visible, so no
+    /// override is needed - the pair is delivered, which is the whole point of splicing it.
     ///
     /// A BARE role selector (`-t harness`) asks for what the model received, so it
     /// keys on this per RECORD; an intermediate prefix, a glob and an explicit leaf

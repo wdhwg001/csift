@@ -175,6 +175,9 @@ pub trait SpawnLookup {
 /// - `spawn`: the [`SpawnLookup`] (the global spawn index) for comm direction + subagent-return
 ///   detection. `None` ⇒ direction degrades gracefully (spawn TO / return falls back to the
 ///   raw name or `?`), so the engine is fully testable without a real index.
+/// - `resume_prompt_uuids`: the uuids of this file's [`Class::ResumePrompt`] records, so a
+///   [`Class::ResumePlaceholder`] can say whether it closes a repair PAIR
+///   ([`Record::resume_paired`]). `None` ⇒ no verdict rather than a guessed one.
 #[allow(dead_code)]
 pub struct ClassifyCtx<'a> {
     /// The transcript owner's re-feedable id (session uuid / bare agent id) = comm `self`.
@@ -189,6 +192,8 @@ pub struct ClassifyCtx<'a> {
     pub is_transcript_opener: bool,
     /// Spawn pairing lookup for comm direction + subagent-return detection.
     pub spawn: Option<&'a dyn SpawnLookup>,
+    /// This file's `harness.resume.prompt` uuids, for the placeholder's pair verdict.
+    pub resume_prompt_uuids: Option<&'a HashSet<String>>,
 }
 
 #[allow(dead_code)]
@@ -204,6 +209,7 @@ impl<'a> ClassifyCtx<'a> {
             parent_id: None,
             is_transcript_opener: false,
             spawn: None,
+            resume_prompt_uuids: None,
         }
     }
 }
@@ -219,6 +225,10 @@ impl std::fmt::Debug for ClassifyCtx<'_> {
             .field("parent_id", &self.parent_id)
             .field("is_transcript_opener", &self.is_transcript_opener)
             .field("has_spawn_lookup", &self.spawn.is_some())
+            .field(
+                "resume_prompts",
+                &self.resume_prompt_uuids.map_or(0, HashSet::len),
+            )
             .finish()
     }
 }

@@ -113,8 +113,23 @@ pub enum Class {
     /// [`SCHEDULE_WAKEUP_MARKER`] prompt). Distinct from [`Class::MetaLoop`] (the
     /// autonomous-loop driver prose); the timer is the harness scheduler firing.
     ScheduleWakeup,
-    /// `harness.schedule.continuation` - a `Continue from where you left off.` resume tick.
-    ScheduleContinuation,
+    /// `harness.resume.prompt` - the repair PROMPT Claude Code's loader appends when a
+    /// resumed transcript ends on a dangling user record (an esc-recalled draft never
+    /// resent, any unanswered prompt): an `isMeta` `type:"user"` record carrying
+    /// [`RESUME_PROMPT_MARKER`]. It is delivered to the model, yet it is the LOADER's text,
+    /// not the operator's - so it never opens a turn and never counts as a human message.
+    /// (Named `harness.schedule.continuation` through v0.11.x; the record comes from the
+    /// resume loader, never from the scheduler, so the leaf moved to the family it belongs
+    /// to. Same predicate, same records.)
+    ResumePrompt,
+    /// `harness.resume.placeholder` - the repair PLACEHOLDER spliced in right after a
+    /// resumed transcript's trailing user record so the loaded conversation does not end on
+    /// an unanswered prompt: an assistant record with the [`SYNTHETIC_MODEL`] model, no
+    /// `isApiErrorMessage`, and exactly [`RESUME_PLACEHOLDER_TEXT`] as its content. It is
+    /// delivered, and it is not the assistant's own text. Whether it closes a repair PAIR
+    /// (its parent is a [`Class::ResumePrompt`] record) is a FACT on the hit, not a second
+    /// leaf: the same splice writes the unpaired form after any other trailing user record.
+    ResumePlaceholder,
     /// `harness.meta.hook` - hook-injected feedback (stop-hook / `<local-command-caveat>` /
     /// edit-failed-retry), not the operator.
     MetaHook,
@@ -244,7 +259,8 @@ impl Class {
         Class::InterruptUser,
         Class::InterruptTool,
         Class::ScheduleWakeup,
-        Class::ScheduleContinuation,
+        Class::ResumePrompt,
+        Class::ResumePlaceholder,
         Class::MetaHook,
         Class::MetaLoop,
         Class::MetaAttachment,
@@ -285,7 +301,8 @@ impl Class {
             Class::InterruptUser => "harness.interrupt.user",
             Class::InterruptTool => "harness.interrupt.tool",
             Class::ScheduleWakeup => "harness.schedule.wakeup",
-            Class::ScheduleContinuation => "harness.schedule.continuation",
+            Class::ResumePrompt => "harness.resume.prompt",
+            Class::ResumePlaceholder => "harness.resume.placeholder",
             Class::MetaHook => "harness.meta.hook",
             Class::MetaLoop => "harness.meta.loop",
             Class::MetaAttachment => "harness.meta.attachment",
@@ -328,7 +345,8 @@ impl Class {
             | Class::InterruptUser
             | Class::InterruptTool
             | Class::ScheduleWakeup
-            | Class::ScheduleContinuation
+            | Class::ResumePrompt
+            | Class::ResumePlaceholder
             | Class::MetaHook
             | Class::MetaLoop
             | Class::MetaAttachment

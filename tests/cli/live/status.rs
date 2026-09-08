@@ -459,3 +459,47 @@ fn p16_a_completion_pulse_settles_its_lane_while_an_open_agent_stays_live() {
         out.stdout
     );
 }
+
+#[test]
+fn the_last_section_walks_past_the_resume_repair_pair() {
+    // C-34: a session resumed onto a dangling prompt ends with the LOADER's repair pair -
+    // "Continue from where you left off." and the fabricated "No response requested.".
+    // Neither is this session's last exchange, so `status` must report the real ones.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "3f2e1d0c-9b8a-4756-8342-1a0b9c8d7e6f";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"sound the shoal margin"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:20.000Z","message":{"role":"assistant","model":"claude-opus-4-8","stop_reason":"end_turn","content":[{"type":"text","text":"the shoal margin is sounded"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"p1","parentUuid":"a1","isMeta":true,"userType":"external","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Continue from where you left off."}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"h1","parentUuid":"p1","isApiErrorMessage":false,"timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"assistant","model":"<synthetic>","stop_reason":"stop_sequence","content":[{"type":"text","text":"No response requested."}]}}"#, "\n",
+        ),
+    );
+    let j = h.run(&["status", &at(sess), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let v: serde_json::Value = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|r: &serde_json::Value| r["kind"] == "verdict")
+        .expect("verdict row");
+    assert_eq!(
+        v["last"]["agent"]["text"], "the shoal margin is sounded",
+        "the placeholder is not the newest reply: {}",
+        j.stdout
+    );
+    assert_eq!(
+        v["last"]["user"]["text"], "sound the shoal margin",
+        "the repair prompt is not the newest human prompt: {}",
+        j.stdout
+    );
+    let out = h.run(&["status", &at(sess)]);
+    assert!(
+        !out.stdout.contains("No response requested")
+            && !out.stdout.contains("Continue from where"),
+        "neither half reaches the last section:\n{}",
+        out.stdout
+    );
+}

@@ -86,6 +86,10 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // v0.10.0 queue facts (a `user.queued` hit); null on every other hit.
         "queue_operation": h.queue_operation,
         "queue_reason": h.queue_reason,
+        // v0.12.0: does this `harness.resume.placeholder` close a repair PAIR (its parent is
+        // a `harness.resume.prompt` record)? Null on every other hit - one writer produces
+        // both forms, so the fact rides the hit instead of splitting the leaf.
+        "resume_paired": h.resume_paired,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.

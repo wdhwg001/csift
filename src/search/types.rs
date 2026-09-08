@@ -105,6 +105,13 @@ pub struct Hit {
     /// the `[not delivered]` label-zone marker and JSON `delivered`. Read
     /// [`Hit::delivered`] rather than this field for the verdict itself.
     pub delivery: Option<bool>,
+    /// v0.12.0: on a `harness.resume.placeholder` hit ONLY, whether it closes a resume
+    /// repair PAIR - `Some(true)` when its `parentUuid` is a `harness.resume.prompt`
+    /// record in the same transcript, `Some(false)` when it is not (the same splice
+    /// writes the unpaired form after any other trailing user record). `None` on every
+    /// other hit, and on a placeholder whose file was never indexed for prompts. Drives
+    /// the `[paired]`/`[unpaired]` label-zone marker and JSON `resume_paired`.
+    pub resume_paired: Option<bool>,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) - i.e. the reader is seeing a fragment, not the
     /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch

@@ -22,6 +22,7 @@ mod classify_channel;
 mod classify_comm;
 mod classify_harness;
 mod classify_promoted;
+mod classify_resume;
 mod classify_roles;
 mod classify_support;
 mod delivery;

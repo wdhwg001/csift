@@ -154,6 +154,32 @@ fn last_messages_take_the_newest_prompt_and_reply_as_excerpts() {
 }
 
 #[test]
+fn last_messages_skip_the_resume_repair_pair() {
+    // A session resumed onto a dangling prompt ends with the LOADER's repair pair. Neither
+    // half is this session's last exchange, so `last` must walk past both to the real ones.
+    let main = concat!(
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"the real last prompt"}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"the real last reply"}]}}"#,
+        "\n",
+        r#"{"type":"user","uuid":"p1","parentUuid":"a1","isMeta":true,"userType":"external","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Continue from where you left off."}]}}"#,
+        "\n",
+        r#"{"type":"assistant","uuid":"h1","parentUuid":"p1","isApiErrorMessage":false,"timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"assistant","model":"<synthetic>","stop_reason":"stop_sequence","content":[{"type":"text","text":"No response requested."}]}}"#,
+        "\n",
+    );
+    let t = TempSession::new(main, None);
+    let l = last_messages(&t.main).unwrap();
+    // The placeholder needs the explicit skip: it is an assistant record with real text.
+    let a = l.agent.expect("an agent message");
+    assert_eq!(a.text, "the real last reply");
+    // The prompt needs none - it is isMeta, which `is_genuine_user` already excludes. This
+    // assertion is the pin: if that gate ever loosened, `last` would report the loader's
+    // sentence as the human's last prompt.
+    let u = l.user.expect("a user message");
+    assert_eq!(u.text, "the real last prompt");
+}
+
+#[test]
 fn activity_census_and_tail_state_words() {
     let mut act = Activity::default();
     let parse = |s: &str| crate::parse::parse_line(s.as_bytes()).unwrap().unwrap();

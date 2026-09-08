@@ -36,7 +36,13 @@ fn excerpt(ts: Option<String>, text: &str) -> LastMsg {
 pub(crate) fn last_messages(path: &Path) -> Result<LastMessages> {
     let mut out = LastMessages::default();
     crate::parse::tail_records_prefiltered(path, crate::parse::line_has_role_marker, 0, |rec| {
-        if out.agent.is_none() {
+        // C-34: a session resumed onto a dangling prompt ends with the LOADER's repair pair,
+        // and neither half is this session's last exchange. The placeholder needs an explicit
+        // skip - it is an assistant record with real text, so `agent_text` would hand back
+        // "No response requested." as the newest reply. Its partner needs none: the prompt is
+        // `isMeta`, which `is_genuine_user` already excludes (pinned by a unit test), so the
+        // walk continues to what the human actually last sent.
+        if out.agent.is_none() && !rec.is_resume_placeholder() {
             if let Some(t) = rec.agent_text() {
                 out.agent = Some(excerpt(rec.timestamp.clone(), &t));
             }

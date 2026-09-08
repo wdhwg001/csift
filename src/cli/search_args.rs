@@ -25,9 +25,10 @@ use super::*;
         agent.communication.{inbox,sent,signal,channel} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
         harness.compaction.{summary,boundary} | harness.command.{invocation,stdout} | \
-        harness.interrupt.{user,tool} | harness.schedule.{wakeup,continuation} | \
-        harness.meta.{hook,loop,attachment,turn-duration,away-summary,stop-hooks,snapshot}. With none \
-        given, EVERY label is eligible. `-T`/`--label-not` \
+        harness.interrupt.{user,tool} | harness.schedule.wakeup | \
+        harness.resume.{prompt,placeholder} | \
+        harness.meta.{hook,loop,attachment,turn-duration,away-summary,stop-hooks,snapshot,system}. \
+        With none given, EVERY label is eligible. `-T`/`--label-not` \
         EXCLUDES with the same selector grammar (the rg -t/-T duality): the effective set is \
         (-t selectors, or ALL) minus (-T selectors); a combination that excludes everything it \
         includes is a hard error. The human turn is \

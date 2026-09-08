@@ -99,13 +99,13 @@ fn classify_interrupts_user_and_tool() {
 }
 
 #[test]
-fn classify_schedule_continuation_and_wakeup() {
+fn classify_resume_prompt_and_wakeup() {
     let cont = parse(
         r#"{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Continue from where you left off."}]}}"#,
     );
     assert_eq!(
         cont.classify(&ClassifyCtx::top_level()),
-        vec![Class::ScheduleContinuation]
+        vec![Class::ResumePrompt]
     );
     let wake = parse(
         r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<<autonomous-loop-dynamic>>"}}"#,

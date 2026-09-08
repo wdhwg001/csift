@@ -97,7 +97,7 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 35 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 36 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
         role's DELIVERED leaves - the conversation as the model receives/produces\n  \
         it. Eight leaves are invisible and need naming or a glob: `user.unsent`\n  \
@@ -169,7 +169,24 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         attachment leaf a DEFAULT scan sees\n  \
           harness  .notification.{workflow,monitor,subagent,background-command,task}\n           \
         .compaction.{summary,boundary} · .command.{invocation,stdout}\n           \
-        .interrupt.{user,tool} · .schedule.{wakeup,continuation} · .meta.{hook,loop,attachment}\n           \
+        .interrupt.{user,tool} · .schedule.wakeup · .meta.{hook,loop,attachment}\n           \
+        .resume.prompt          the repair PROMPT the resume LOADER appends when a\n                                   \
+        transcript ends on a dangling user record - an isMeta\n                                   \
+        record reading \"Continue from where you left off.\"\n                                   \
+        The model receives it, but the human never typed it, so\n                                   \
+        it opens no turn (named harness.schedule.continuation\n                                   \
+        through v0.11.x - same records, new path). The isMeta\n                                   \
+        flag is REQUIRED: a message you begin with that same\n                                   \
+        sentence carries none, so it stays user.message and\n                                   \
+        opens its turn\n           \
+        .resume.placeholder     the stand-in reply spliced in after that prompt so the\n                                   \
+        loaded conversation does not end unanswered: an\n                                   \
+        assistant record with the `<synthetic>` model reading\n                                   \
+        \"No response requested.\" - fabricated, never the model's\n                                   \
+        text. The label zone says `[paired]` when its parent is\n                                   \
+        the prompt, `[unpaired]` when the same splice landed\n                                   \
+        after some other trailing user record (JSON\n                                   \
+        resume_paired)\n           \
         .meta.turn-duration     the end-of-turn telemetry record (durationMs,\n                                   \
         messageCount, pendingBackgroundAgentCount,\n                                   \
         pendingWorkflowCount) behind the REPL's \"Done in Ns\" /\n                                   \
@@ -197,7 +214,8 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
         labels:[…], line, uuid, excerpt, tool_name, pairing, \
-        from, to, ts_utc, ts_local, queue_operation, queue_reason, refetch, refetch_uuid}, …]}: \
+        from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, refetch, \
+        refetch_uuid}, …]}: \
         `label` is the matched dotted path, `labels` \
         the record's full label set, `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
@@ -223,7 +241,8 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         evidence). A trailing footer object {matched, sessions, transcript_ids, dropped_by_cap, \
         skipped_lines, with_elicitation_sidecar, excerpts_truncated} closes the stream, plus \
         {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached} on a \
-        ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts, null \
+        ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts and \
+        `resume_paired` the `harness.resume.placeholder` one, null \
         elsewhere; `gated_leaves_unreached` is true when no selector reached a gated leaf). \
         (`transcript_ids` is the per-TRANSCRIPT matching-id set, named apart from `-l`'s \
         owning-session ids.) (Whole-document `json.load` fails; parse line-by-line as JSONL: N \

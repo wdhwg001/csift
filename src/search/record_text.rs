@@ -50,7 +50,11 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
             | Class::InterruptUser
             | Class::InterruptTool
             | Class::ScheduleWakeup
-            | Class::ScheduleContinuation
+            | Class::ResumePrompt
+            // The resume PLACEHOLDER is an assistant record classified at the RECORD level
+            // (the block loop only emits agent classes), so it renders through this path -
+            // verbatim, since `record_raw_text` joins its one text block unchanged.
+            | Class::ResumePlaceholder
             | Class::MetaHook
             | Class::MetaLoop
             | Class::MetaAttachment

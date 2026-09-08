@@ -382,7 +382,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "184-189",
+          "lines": "198-203",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
@@ -517,12 +517,12 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "461-464",
+          "lines": "439-442",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "184-189",
+          "lines": "198-203",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -3121,7 +3121,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "325-329",
+          "lines": "339-343",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3252,7 +3252,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "325-329",
+          "lines": "339-343",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3353,7 +3353,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "325-329",
+          "lines": "339-343",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
@@ -4237,12 +4237,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "202-209",
+          "lines": "211-218",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "206-218",
+          "lines": "210-222",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {\n                if let Some(n) = Record::u64_field(v) {\n                    fields.push(format!(\"{key}={n}\"));\n                }\n            }\n            (!fields.is_empty()).then(|| format!(\"[turn duration: {}]\", fields.join(\" \")))"
         }
       ],
@@ -7128,12 +7128,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "148-149",
+          "lines": "157-158",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "331-333",
+          "lines": "340-342",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9872,7 +9872,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "318-324",
+          "lines": "327-333",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -10495,11 +10495,11 @@
       "id": "CLS-001",
       "area": "classification",
       "behavior": "A transcript is one JSON object per line, and the type vocabulary the harness itself constructs is closed at 38. An entry the harness constructs reaches a transcript through `appendEntry` (166106795), which switches on an append-policy table keyed by the entry's own type (`vbr` at 166066494): 5 conversational types under `dedup-transcript` (user, assistant, attachment, system, progress), 30 under `always` and 3 under `route-by-agent`. The switch carries exactly those three cases and no default arm (166107410), so an entry whose type is not a key of the table matches no case and is never queued; `enqueueWrite` occurs four times in the whole executable - its definition and the three arms - and `appendToFile` four times - its definition and three calls inside the queue drain - so the queued path is closed. Each queued entry becomes bytes through `JSON.stringify(entry)+newline` (`j5` at 156850249), concatenated in the drain (166086440) and appended. Nine further writers put a line into a transcript file WITHOUT passing that switch, and every one composes the identical shape, from `j5`, from its bulk twin `Ikt` (156850342, `JSON.stringify` per element plus a newline) or inline: the asynchronous direct append (166155800), the synchronous appender (166154499) and its append-to-existing twin (166154692, which returns early on a missing or zero-length file and prepends a newline to heal a torn tail), the metadata re-append (166090300), the relocation stamp (166124725) and the fork serializer (172851623, 172851990 and 172852160). Their entries come from table-typed constructors - the metadata re-append pushes only last-prompt, custom-title, ai-title, tag, relocated, agent-name, agent-color, agent-setting, mode, permission-mode, isolation-latch and atis-latch entries (166092100 area), the at-exit paths write the entries their registered providers construct (cost-state at 162359807, artifact-comment-monitor at 168570215, artifact-autoreact-ledger at 168619505) and the continued-in record at 180375908 - so the vocabulary bound holds on them too. Two writers escape the table by construction: the remote-hydration subagent write (166135601) writes a whole subagent transcript out of entries received from a server and tests only that at least one of them is a user or an assistant entry, and the conversation import (177679679), gated on an environment flag, writes whole files converted from an export bundle with `version:\"claude-export-import\"`. A census over the projects root - 8,344 transcripts, top-level and subagent alike, workflow journals and the reading tool's sidecar files excluded and reported apart - reads 1,469,365 non-blank lines, 0 unparseable, 0 without a top-level `type`, 0 carrying the import version, and 18 distinct types, every one of them a key of the table; the other 20 keys are declared but unrealized in this corpus (progress, summary, custom-title, ended-by-model, tag, relocated, agent-color, agent-setting, pr-link, frame-link, artifact-comment-monitor, artifact-autoreact-ledger, attribution-snapshot, isolation-latch, worktree-state, marble-origami-commit, marble-origami-snapshot, marble-origami-reset, content-replacement, observer-ref). Of the 18 realized types, 7 carry at least one leaf and 11 carry none: the deliberately unpromoted session-state cache lines (last-prompt 29,874, permission-mode 29,810, mode 29,720, ai-title 29,389, agent-name 12,913) plus six unmodeled types totalling 3,282 lines - atis-latch 1,435, bridge-session 1,354, history-suppression 438, fork-context-ref 33, cost-state 21, continued-in 1 - so 134,988 of 1,469,365 lines, 9.19 percent, belong to types no leaf models. Four of those six carry neither uuid nor timestamp and belong with the bookkeeping lines; two carry an instant (history-suppression via `ts` on 438 of 438 lines, continued-in via `timestamp` on its 1 line) and are the only leaf candidates. The mapped and unmapped split applies a TYPE-level rule to LINE counts - a type counts mapped when at least one leaf models a record of it - so the 13,970 queue-operation lines ride in the mapped total although only the content-bearing ones classify. Successive censuses over the same root return the same type set on growing line totals, so the totals are snapshots while the type set is stable. Beside the harness's own types, the reading tool's sidecar files carry 2 further marker types on disk (`csift-elicitation`, `csift-elicitation-resolved`) plus records shaped as `assistant`; those files are not written by Claude Code and are excluded from the census.",
-      "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins it two ways - the hand-kept oracle table must equal `Class::ALL.len()`, and the leaf count is asserted at 35 (src/model/tests/classify_support.rs). The taxonomy is exactly 35 leaf classes across three roles - 5 under user, 5 under agent plus 4 under agent.communication, and 21 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
+      "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins it two ways - the hand-kept oracle table must equal `Class::ALL.len()`, and the leaf count is asserted at 36 (src/model/tests/classify_support.rs). The taxonomy is exactly 36 leaf classes across three roles - 5 under user, 5 under agent plus 4 under agent.communication, and 22 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "220-225",
+          "lines": "235-240",
           "snippet": "    pub const ALL: &'static [Class] = &[\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserQueued,"
         }
       ],
@@ -10589,6 +10589,16 @@
           "observed": "`Class::ALL` lists 35 leaves - 5 user, 9 agent (5 plus 4 communication leaves, the fourth being `agent.communication.channel`) and 21 harness. The oracle test asserts `table.len() == Class::ALL.len()` and separately pins the count at 35, so the number in this claim was one release behind the enum.",
           "rule": "One observation per enum entry; the role grouping taken from each leaf path head.",
           "note": "The taxonomy size and the shape of the drift guard are corrected; the claim about Claude Code is unchanged, the stale number was csift-side."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Ran the taxonomy drift guards after the resume-family change: the hand-kept oracle table in src/model/tests/classify_support.rs must equal Class::ALL.len(), and the literal leaf-count assertion must match.",
+          "observed": "Class::ALL holds 36 leaves with no duplicate path. harness.schedule.continuation was renamed to harness.resume.prompt (a rename, not an addition) and harness.resume.placeholder was added, so the count moved by exactly one; the closed 38-type entry vocabulary this claim is about did not move.",
+          "rule": "One entry per Class variant listed in Class::ALL; the oracle table is counted independently and the two must agree.",
+          "note": "The leaf count is a csift-side number this claim also pins; it moved 35 -> 36 with the resume family. The Claude Code fact - the closed append-policy type vocabulary - is unchanged."
         }
       ],
       "attribution": "end-to-end",
@@ -10756,12 +10766,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "179-182",
+          "lines": "194-197",
           "snippet": "    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "184-186",
+          "lines": "199-201",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record"
         }
       ],
@@ -11397,12 +11407,12 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "120",
+          "lines": "133",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "242-245",
+          "lines": "249-252",
           "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span (P1c M3). When \u22651 section matches, that fully classifies the record."
         }
       ],
@@ -11515,7 +11525,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "325-329",
+          "lines": "339-343",
           "snippet": "        // The harness's agents-stopped notice (v0.10.0): a kill notice, not the human.\n        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -11854,7 +11864,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "184-189",
+          "lines": "198-203",
           "snippet": "/// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result\n/// (`\"Async agent launched successfully.\\nagentId: \u2026\"`). This is a launch ACK, NOT the child's\n/// report - the report arrives LATER via the `<task-notification>` `<result>` pulse (G1 \u2192 inbox).\n/// On disk the ack also carries the structured `toolUseResult.{isAsync:true, status:\"async_launched\"}`\n/// shape ([`Record::is_async_launch_ack`] prefers the structured signal, falls back to this prefix).\npub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         },
         {
@@ -11985,7 +11995,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "231-233",
+          "lines": "246-248",
           "snippet": "        Class::CommInbox,\n        Class::CommSent,\n        Class::CommSignal,"
         }
       ],
@@ -12075,7 +12085,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "269-272",
+          "lines": "394-397",
           "snippet": "pub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {\n    let Some(input) = input else {\n        return false;\n    };"
         }
       ],
@@ -12178,12 +12188,12 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "262-264",
+          "lines": "387-389",
           "snippet": "pub(crate) fn is_spawn_tool_name(name: &str) -> bool {\n    matches!(name, \"Task\" | \"Agent\" | \"Workflow\")\n}"
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "304-306",
+          "lines": "429-431",
           "snippet": "pub(crate) fn spawn_target_name(input: Option<&serde_json::Value>) -> Option<String> {\n    let input = input?;\n    for key in [\"name\", \"subagent_type\"] {"
         }
       ],
@@ -12333,16 +12343,16 @@
     {
       "id": "CLS-013",
       "area": "classification",
-      "behavior": "On resume, Claude Code injects a continuation marker as one isMeta type:\"user\" record whose content is the return of an env-overridable getter, not a fixed string: `var Gbn=\"Continue from where you left off.\"; function igt(){return process.env.CLAUDE_CODE_RESUME_PROMPT||Gbn}` (byte 163204432). The record is minted on the resume deserialization pass's interrupted_turn branch as xe({content:igt(),isMeta:!0}) (bytes 163207705 and 163207742) and, in print mode, by the deferred-tool auto-resume enqueue with mode \"prompt\" and isMeta true (byte 179257500); those are the only two injection sites, and the fourth occurrence of the getter is a RECOGNISER (byte 163205868) that drops a previously injected marker so repeated resumes do not accumulate one. Claude Code sets CLAUDE_CODE_RESUME_PROMPT itself on two of its own respawn paths - the runner-move variant (byte 166506270, `Continue from where you left off. This session moved to a new runner; ...`) and the process-restart variant (byte 167452892, referenced at 167486537, `Continue from where you left off. Note: this session was automatically restarted after its process exited unexpectedly; ...`) - and BOTH begin with the marker sentence and continue past it, so the sentence is a PREFIX of the injected content rather than its whole value. Measured 2026-09-04, whole projects root: 7 records classify `harness.schedule.continuation`, all type user with isMeta true and a single text block equal to the bare marker, one each at seven distinct builds (2.1.154, 2.1.159, 2.1.186, 2.1.220, 2.1.231, 2.1.257, 2.1.258); 0 user records begin with either longer variant, so both env-set variants are producer-side only in this corpus. A different counting rule - the phrase appearing anywhere in a record - matched 470 records at the 2026-09-02 check and is dominated by prose discussing the marker.",
-      "depends": "csift classifies the record `harness.schedule.continuation` by a trim_start().starts_with PREFIX test rather than an equality test, and excludes it from `is_genuine_user`, so a resumed session's human-turn count is not inflated by one per resume and resume points stay enumerable; without the rule the record falls through the isMeta gate unlabeled. The prefix form is exactly what makes the two Claude-Code-set longer variants classify correctly if one ever lands - an equality test would miss both. The rule's honest limit is the same getter: an operator-set CLAUDE_CODE_RESUME_PROMPT whose text does not begin with the marker produces a continuation record csift cannot recognize, and csift asserts nothing about that case.",
+      "behavior": "On resume, Claude Code injects a repair prompt as one isMeta type:\"user\" record whose content is the return of an env-overridable getter, not a fixed string: `var Gbn=\"Continue from where you left off.\"; function igt(){return process.env.CLAUDE_CODE_RESUME_PROMPT||Gbn}` (byte 163204432 at 2.1.258). The record is minted inside the resume post-processor `uVn` (163206036) on the branch the tail classifier `zbn` (163208326) marks interrupted_turn: `else if(De.kind===\"interrupted_turn\"){let[Ge]=cm([xe({content:igt(),isMeta:!0})]);we.push(Ge)}` (163207705), and in print mode by the deferred-tool auto-resume enqueue with mode \"prompt\" and isMeta true; those are the only two injection sites. Claude Code's OWN recogniser for the record is `function Qgo(e){if(e.type!==\"user\"||e.isMeta!==!0||e.promptSource!==void 0)return!1;let n=W0e(e.message.content);return n===igt()||n===Gbn}` (163205744), an EXACT comparison against the env-resolved value or the bare constant - read by `Ygo` (163205375), which drops a previously injected repair pair so repeated resumes do not accumulate one. Claude Code sets CLAUDE_CODE_RESUME_PROMPT itself on two of its own respawn paths - the runner-move variant (166506270, `Continue from where you left off. This session moved to a new runner; ...`) and the process-restart variant (167452827, `Continue from where you left off. Note: this session was automatically restarted after its process exited unexpectedly; ...`) - and BOTH begin with the sentence and continue past it, so the sentence is a PREFIX of the injected content rather than its whole value. Corpus, counting one event per marker record over the uuid-named top-level transcripts: 75 scanned, 10 carry a marker, 8 prompt records, every one the bare form and none a longer variant, so both env-set variants remain producer-side only here. A different counting rule - the phrase appearing anywhere in a record - matches hundreds of records and is dominated by prose discussing the marker.",
+      "depends": "csift classifies the record `harness.resume.prompt` by an isMeta requirement plus a trim_start().starts_with PREFIX test rather than an equality test, and the same isMeta flag excludes it from `is_genuine_user`, so a resumed session's human-turn count is not inflated by one per resume and resume points stay enumerable; without the rule the record falls through the isMeta gate unlabeled. The prefix form is deliberate and it is where csift and the producer differ: Claude Code compares EXACTLY against the value its own environment resolved, which csift cannot observe from a transcript, so a prefix test is the widest reading that stays sound - it covers the bare form and both Claude-Code-set variants. The isMeta half is not decoration: Claude Code's recogniser tests it, and without it a person who BEGINS a real message with the sentence would have their prompt reclassified as machinery and dropped from turn numbering - with it, that message stays `user.message` and opens its turn. The rule's honest limit is the same getter: an operator-set CLAUDE_CODE_RESUME_PROMPT whose text does not begin with the sentence produces a repair prompt csift cannot recognize, and csift asserts nothing about that case. The leaf carries the word resume rather than schedule because the producer is the resume loader and never the scheduler; `harness.schedule.continuation` is the retired spelling and the selector parser answers it with a hard error naming the successor.",
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "191-194",
-          "snippet": "/// The fixed harness-injected continuation marker (GOLD \u00a75) - `harness.schedule.continuation`.\n/// A `type:\"user\"` (`isMeta`) record CC injects to resume a session from where it left off.\n/// Verified across real `~/.claude/projects` data (522 occurrences), exact content.\npub const SCHEDULE_CONTINUATION_MARKER: &str = \"Continue from where you left off.\";"
+          "lines": "205-207",
+          "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
-      "instrument": "csift search '' -t harness.schedule.continuation --count-by label --format json | tail -1 (matched_records = the classified set), then csift search '' -t harness.schedule.continuation --raw and confirm every record is type=user / isMeta=true / content exactly the marker.",
+      "instrument": "csift search '' -t harness.resume.prompt --count-by label --format json | tail -1 (matched_records = the classified set), then csift search '' -t harness.resume.prompt --raw and confirm every record is type=user / isMeta=true / content the marker. Producer side: byte-search the 2.1.258 executable for 'Continue from where you left off.' and for 'interrupted_turn', and read the enclosing functions `uVn`, `zbn`, `Qgo` and `Ygo` at the offsets the behavior cites.",
       "located": {
         "claude_code": "2.1.191",
         "csift": "0.4.0",
@@ -12379,6 +12389,16 @@
           "observed": "before: Claude Code injects a fixed continuation marker as an `isMeta` `type:\"user\"` record whose content is exactly `Continue from where you left off.` when resuming a session. Current measurement (CC 2.1.258, whole corpus, csi || after: On resume, Claude Code injects a continuation marker as one isMeta type:\"user\" record whose content is the return of an env-overridable getter, not a fixed string: `var Gbn=\"Continue from where you left off.\"; function i",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "The old text called the content 'exactly `Continue from where you left off.`' and its depends called that an 'exact-content rule'; the writer refutes both. igt at byte 163204432 returns process.env.CLAUDE_CODE_RESUME_PROMPT before falling back to the constant, and Claude Code sets that variable itself on two respawn paths (bytes 166506270 and 167452892), each beginning with the sentence and continuing - which is precisely why csift's rule is a prefix test. Rewritten as 'the default of an env-overridable getter, and a prefix of the two Claude-Code-set variants', with the injection sites and the"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Byte-searched the 2.1.258 executable for 'Continue from where you left off.' (6 offsets), for 'interrupted_turn' (12) and for 'No response requested.' (4), then read the enclosing functions uVn (163206036), zbn (163208326), Qgo (163205744) and Ygo (163205375) as verbatim windows; re-ran the corpus census with the rule one event per marker record over the uuid-named top-level transcripts.",
+          "observed": "The prompt is minted only under the interrupted_turn branch at 163207723 and its text comes from igt() at 163204441. Claude Code's own recogniser Qgo (163205744) compares EXACTLY against igt() or the bare constant and additionally requires promptSource === undefined; Ygo (163205375) pairs the prompt with the placeholder by adjacency to strip a previously injected pair. Census: 75 top-level transcripts scanned, 10 carry a marker record, 8 prompt records, all 8 the bare literal, 0 a longer variant, 0 unparsable lines.",
+          "rule": "One event per marker record. A prompt record is type user with isMeta true whose string content, or whose single text block, starts with the sentence. Scope: uuid-named files directly under each encoded project directory; subagent transcripts excluded.",
+          "note": "The leaf is renamed harness.schedule.continuation -> harness.resume.prompt: the producer is the resume loader and never the scheduler, and the sibling placeholder now needs a family to sit in. Same predicate, same records. The text gains the producer's own recogniser and the reason csift's prefix test is wider than it (the env-resolved value is not observable from a transcript), and the promptSource test csift does not apply moves to residue."
         }
       ],
       "attribution": "end-to-end",
@@ -12386,77 +12406,63 @@
       "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
-        "The classified count moved from 6 to 7 with corpus growth; the 470 phrase-bearing figure in the claim is a different counting rule and should stay labelled as such.",
-        "The recogniser Qgo at 163205868 drops a previously injected marker on a second resume, so repeated resumes do not accumulate markers - a fact worth its own claim.",
-        "Not attempted (a live action would be required): No live action was attempted: staging a background-revival or runner-move resume would require launching an interactive session, which this audit may not do.",
-        "Narrowed out of the claim on 2026-09-04 (untraced sub-fact, kept for a later audit): The two longer variants have no specimen in this corpus (0 records begin with either), so the prefix half of the corrected text is producer-side only; capturing one needs a background-revival or runner-move resume, which this read-only audit may not stage."
+        "The two longer variants have no specimen in this corpus (0 prompt records begin with either), so the prefix half of the text is producer-side only; capturing one needs a background-revival or runner-move resume.",
+        "Qgo tests three things: type user, isMeta true, and promptSource undefined. csift matches the first two and does NOT test promptSource, so its prompt set is a superset of the producer's by exactly the records that carry that field; no such record exists in this corpus."
       ],
       "producer_chain": [
         {
           "role": "trigger",
-          "name": "uVn - the resume deserialization pass over a stored transcript",
+          "name": "uVn - the resume post-processor over a loaded transcript",
           "offset": 163206036,
-          "excerpt": "function uVn(e,n,r,o){try{cne(e);let d=RVe(e),f=Ygo(ogt(d),o),_=0,v=f.map((Ge)=>{if(Ge.type===\"assistant\"&&!Ge.message.id&&Ge.requestId===void 0)return _+=1,{...Ge,message:{...Ge.message,id:$go()}};return Ge});if(_>0)t(`deserializeMessages: stamped a message.id on ${_} id-less assistant entr${_===1?",
-          "note": "The entry that runs when a session is resumed: it rebuilds the message list, classifies how the previous turn ended, and decides whether a continuation prompt is appended."
+          "excerpt": "function uVn(e,n,r,o){try{cne(e);let d=RVe(e),f=Ygo(ogt(d),o),_=0,v=f.map((Ge)=>{if(Ge.type===\"assistant\"&&!Ge.message.id&&Ge.requestId===void 0)return _+=1,{...Ge,message:{...Ge.message,id:$go()}};return Ge});",
+          "note": "the entry point the resume driver calls with the loaded message array, the superseded tool-use set, replyOnResume and the rewind anchor"
         },
         {
           "role": "gate",
-          "name": "the interrupted_turn branch",
-          "offset": 163207705,
-          "excerpt": "else if(De.kind===\"interrupted_turn\"){let[Ge]=cm([xe({content:igt(),isMeta:!0})]);we.push(Ge),Ue={kind:\"interrupted_prompt\",message:Ge}}else Ue=De;let je=we.findLastIndex((Ge)=>Ge.type!==\"system\"&&Ge.type!==\"progress\");if(!r&&je!==-1&&we[je].type===\"user\")we.splice(je+1,0,mu({content:TR}));return{me",
-          "note": "else if(De.kind==='interrupted_turn'){...} - the marker is appended only on that classification, and only after the two suppressors Ne (rescue) and Fe (stale) have been cleared just above; the env CLAUDE_CODE_RESUME_INTERRUPTED_TURN arms the wider path."
+          "name": "zbn - the tail classifier that decides the loaded turn was interrupted",
+          "offset": 163208326,
+          "excerpt": "function zbn(e,n){if(e.length===0)return S7(n);let r=e.findLastIndex((f)=>f.type!==\"system\"&&f.type!==\"progress\"&&!(f.type===\"assistant\"&&f.isApiErrorMessage&&!Ubn(f))),o=r!==-1?e[r]:void 0;if(!o)return S7(n);",
+          "note": "reads the last non-system non-progress record; a user record there yields interrupted_turn or interrupted_prompt, and nothing on this path reads last-prompt"
         },
         {
           "role": "writer",
-          "name": "the mint, and the getter that supplies its text",
-          "offset": 163207742,
-          "excerpt": "{let[Ge]=cm([xe({content:igt(),isMeta:!0})]);we.push(Ge),Ue={kind:\"interrupted_prompt\",message:Ge}}else Ue=De;let je=we.findLastIndex((Ge)=>Ge.type!==\"system\"&&Ge.type!==\"progress\");if(!r&&je!==-1&&we",
-          "note": "let[Ge]=cm([xe({content:igt(),isMeta:!0})]),we.push(Ge) - one isMeta user record whose content is igt(); cm normalises a string body into the single-text-block array the corpus shows."
+          "name": "the mint on the interrupted_turn branch",
+          "offset": 163207705,
+          "excerpt": "else if(De.kind===\"interrupted_turn\"){let[Ge]=cm([xe({content:igt(),isMeta:!0})]);we.push(Ge),Ue={kind:\"interrupted_prompt\",message:Ge}}else Ue=De;",
+          "note": "the only branch that appends the prompt; its absence is why a placeholder can stand alone"
         },
         {
           "role": "writer",
           "name": "the constant and its env-overridable getter",
           "offset": 163204432,
-          "excerpt": "var Gbn=\"Continue from where you left off.\";function igt(){return a.CLAUDE_CODE_RESUME_PROMPT||Gbn}function Pbn(e,n){if(n===void 0)return!1;for(let r=e.length-1;r>=0;r--){let o=e[r",
-          "note": "var Gbn='Continue from where you left off.';function igt(){return a.CLAUDE_CODE_RESUME_PROMPT||Gbn} - the sentence is the DEFAULT, not a fixed content."
+          "excerpt": "var Gbn=\"Continue from where you left off.\";function igt(){return a.CLAUDE_CODE_RESUME_PROMPT||Gbn}",
+          "note": "the sentence is the DEFAULT, not a fixed content, which is why csift's test is a prefix"
         }
       ],
       "enumeration": [
         {
-          "site": "igt definition",
-          "offset": 163204476,
-          "excerpt": "function igt(){return a.CLAUDE_CODE_RESUME_PROMPT||Gbn}function Pbn(e,n){if(n===void 0)return!1;for(let r=e.length-1;r>=0;r--){let o=e[r];if",
-          "verdict": "the getter itself; env CLAUDE_CODE_RESUME_PROMPT wins over the constant"
+          "site": "Qgo - Claude Code's own recogniser for the prompt",
+          "offset": 163205744,
+          "excerpt": "function Qgo(e){if(e.type!==\"user\"||e.isMeta!==!0||e.promptSource!==void 0)return!1;let n=W0e(e.message.content);return n===igt()||n===Gbn}",
+          "verdict": "an EXACT comparison against the env-resolved value or the bare constant, plus a promptSource test csift does not apply; read, not a writer"
         },
         {
-          "site": "Qgo - a RECOGNISER, not a writer",
-          "offset": 163205868,
-          "excerpt": "igt()||n===Gbn}function W0e(e){return typeof e===\"string\"?e:Array.isArray(e)&&e.length===1&&e[0]?.type===\"text\"?e[0].text:void 0}function sgt(e){return uVn(e).messages}function uVn(e,n,r,o){try{cne(e);let d=RVe(e),f=Ygo(",
-          "verdict": "tests n===igt()||n===Gbn to drop a previously injected marker on re-resume; reads, never writes"
+          "site": "Ygo - the pair stripper on a second resume",
+          "offset": 163205375,
+          "excerpt": "function Ygo(e,n){if(!a.CLAUDE_CODE_RESUME_TOLERATES_CONTEXT_APPENDS)return e;let r;for(let o=0;o<e.length;o++){let d=e[o],f=e[o-1];if(f?.type===\"user\"&&Xgo(d)&&d.uuid!==n){if(r??=e.slice(0,o),Qgo(f)&&f.uuid!==n)r.pop();continue}r?.push(d)}return r??e}",
+          "verdict": "pairs prompt and placeholder by ADJACENCY to drop a previously injected pair; a reader of both recognisers, never a writer of either"
         },
         {
-          "site": "resume interrupted_turn injection",
-          "offset": 163207767,
-          "excerpt": "igt(),isMeta:!0})]);we.push(Ge),Ue={kind:\"interrupted_prompt\",message:Ge}}else Ue=De;let je=we.findLastIndex((Ge)=>Ge.type!==\"system\"&&Ge.type!==\"progress\");if(",
-          "verdict": "injection site 1: xe({content:igt(),isMeta:!0}) inside uVn"
-        },
-        {
-          "site": "print-mode deferred-tool auto-resume enqueue",
-          "offset": 179257500,
-          "excerpt": "U.enqueue({mode:\"prompt\",agentId:Ze(),value:igt(),uuid:$n(),isMeta:!0}),br();function Mi(f){let R=n.cancelPendingUserDialogs(OI.kind,f);if(R>0)J(\"info\",\"cli_user_dialog_implicit_cancel\",{cancelled_cou",
-          "verdict": "injection site 2: U.enqueue({mode:'prompt',agentId:Ze(),value:igt(),uuid:$n(),isMeta:!0})"
-        },
-        {
-          "site": "CC's own env override on a runner move",
+          "site": "the runner-move respawn's env override",
           "offset": 166506270,
-          "excerpt": "CLAUDE_CODE_RESUME_PROMPT:o>1?\"Continue from where you left off. This session moved to a new runner; files you created earlier may no longer exist, so verify the working directory state before relying on prior edits.\":void 0,CCR_SPAWN_TIMESTAMP_MS:String(Date.now()),CCR_RUNNER_STARTUP_TIMING:xe};Z(`",
-          "verdict": "CLAUDE_CODE_RESUME_PROMPT set to 'Continue from where you left off. This session moved to a new runner; ...' - CC itself makes the content longer than the marker"
+          "excerpt": "CLAUDE_CODE_RESUME_PROMPT:o>1?\"Continue from where you left off. This session moved to a new runner; files you created earlier may no longer exist, so verify the working directory state before relying on prior edits.\":void 0",
+          "verdict": "Claude Code itself makes the content longer than the sentence - a writer of the VALUE, not of the record"
         },
         {
-          "site": "CC's own env override on a background revival",
-          "offset": 167486537,
-          "excerpt": "CLAUDE_CODE_RESUME_PROMPT??=St,y)U.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS??=String(kt)}}if(this.attempt>1&&!g&&k!==r.sessionId)U.CLAUDE_BG_POST_CLEAR_RESPAWN=\"1\";if(e)Object.assign(U,e);if(o)delete U.CLAUDE_BG_RV",
-          "verdict": "U.CLAUDE_CODE_RESUME_PROMPT??=St, with St (167452892) = 'Continue from where you left off. Note: this session was automatically restarted after its process exited unexpectedly; ...'"
+          "site": "the process-restart respawn's env override",
+          "offset": 167452827,
+          "excerpt": "var St=\"Continue from where you left off. Note: this session was automatically restarted after its process exited unexpectedly; the user has not sent a new message since the restart. Re-verify anything time-sensitive (branch state, running processes, prior partial work) before continuing.\"",
+          "verdict": "the second longer value; both begin with the sentence, which is what makes a prefix test correct"
         }
       ]
     },
@@ -12468,22 +12474,22 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "208-215",
+          "lines": "242-249",
           "snippet": "/// The header of the harness-injected FIRED autonomous-loop / `ScheduleWakeup` timer tick (P1c\n/// M2a / oracle D12) - `harness.schedule.wakeup`. When the timer FIRES, the harness injects an\n/// `isMeta` `type:\"user\"` record whose content opens `# Autonomous loop check\\n\\nYou're being\n/// invoked on a timer \u2026`. DISTINCT from the `meta.loop` DRIVER ticks\n/// ([`AUTONOMOUS_LOOP_TICK_PREFIX`] = `# Autonomous loop tick` / [`AUTONOMOUS_CHECK_MARKER`]):\n/// `check` \u2260 `tick`, so the two prefixes never collide. The wakeup arm is matched BEFORE the\n/// meta.loop arm in [`Record::classify`], so the fired tick routes to `schedule.wakeup`.\npub const SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX: &str = \"# Autonomous loop check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "233-237",
+          "lines": "267-271",
           "snippet": "/// `harness.meta.loop` markers (GOLD \u00a72, edge-fixtures G2) - autonomous-loop drivers (distinct\n/// from the [`SCHEDULE_WAKEUP_MARKER`] sentinel, which stays `harness.schedule.wakeup`).\npub const AUTONOMOUS_LOOP_TICK_PREFIX: &str = \"# Autonomous loop tick\";\n/// See [`AUTONOMOUS_LOOP_TICK_PREFIX`] - matched anywhere (it can sit mid-prompt).\npub const AUTONOMOUS_CHECK_MARKER: &str = \"Run the autonomous check\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "206",
+          "lines": "240",
           "snippet": "pub const SCHEDULE_WAKEUP_MARKER: &str = \"<<autonomous-loop-dynamic>>\";"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "297-303",
+          "lines": "311-317",
           "snippet": "        if s.contains(SCHEDULE_WAKEUP_MARKER)\n            || s.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n            || s.contains(SCHEDULE_WAKEUP_TIMER_MARKER)\n        {\n            push_unique(out, Class::ScheduleWakeup);\n            return;\n        }"
         }
       ],
@@ -12567,7 +12573,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "293-299",
+          "lines": "307-313",
           "snippet": "        // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three\n        // fixed markers (P1c M2a): the `<<autonomous-loop-dynamic>>` sentinel, the `# Autonomous\n        // loop check` header, and the `You're being invoked on a timer` body sentence. Matched\n        // BEFORE the meta.loop arm - `check` \u2260 `tick`, so the loop-DRIVER prefix never collides.\n        if s.contains(SCHEDULE_WAKEUP_MARKER)\n            || s.starts_with(SCHEDULE_WAKEUP_LOOP_CHECK_PREFIX)\n            || s.contains(SCHEDULE_WAKEUP_TIMER_MARKER)"
         }
       ],
@@ -12652,12 +12658,12 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "222-228",
+          "lines": "256-262",
           "snippet": "/// `harness.meta.hook` markers (GOLD \u00a72, edge-fixtures G2) - hook-injected feedback, NOT the\n/// operator: a stop-hook feedback message, a `<local-command-caveat>` wrapper, or the\n/// edit-failed-retry notice CC injects when an Edit's target changed under it. (These are\n/// `isMeta` user records that would otherwise fall through to `user.message`.)\npub const STOP_HOOK_FEEDBACK_PREFIX: &str = \"Stop hook feedback:\";\n/// See [`STOP_HOOK_FEEDBACK_PREFIX`] - the `<local-command-caveat>\u2026` hook wrapper.\npub const LOCAL_COMMAND_CAVEAT_PREFIX: &str = \"<local-command-caveat>\";"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "231",
+          "lines": "265",
           "snippet": "pub const EDIT_RETRY_MARKER: &str = \"The last Edit failed because the target file was modified\";"
         }
       ],
@@ -12807,17 +12813,17 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "320-324",
+          "lines": "334-338",
           "snippet": "        // isMeta \"[Image: source:\u2026]\" pseudo-record (G2): EXCLUDED - emit no label rather than\n        // mislabel it user.message.\n        if s.starts_with(IMAGE_SOURCE_PREFIX) {\n            return;\n        }"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "336-343",
+          "lines": "350-357",
           "snippet": "        // M2b ROOT FIX: a genuine `user.message` is NEVER isMeta. An isMeta record that matched\n        // no marker above is a harness-injected pseudo-turn (a generic cron/monitor tick, a\n        // novel hook wrapper), NOT the operator - emit NOTHING rather than mislabel it\n        // `user.message` (the role-level isMeta gate `is_genuine_user` already applies). Only\n        // genuine, non-isMeta unmarked prose is `user.message`.\n        if !self.is_meta.unwrap_or(false) {\n            push_unique(out, Class::UserMessage);\n        }"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "239-241",
+          "lines": "273-275",
           "snippet": "/// An `isMeta` `[Image: source:\u2026]` pseudo-record (GOLD \u00a72, edge-fixtures G2) - EXCLUDED from\n/// the taxonomy entirely (classify yields no label), so it is never mislabeled `user.message`.\npub const IMAGE_SOURCE_PREFIX: &str = \"[Image: source:\";"
         }
       ],
@@ -12945,7 +12951,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "376",
+          "lines": "385",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -13039,7 +13045,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "387-388",
+          "lines": "389-390",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13126,7 +13132,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "393-394",
+          "lines": "395-396",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13253,7 +13259,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "436",
+          "lines": "438",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13373,7 +13379,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "389-392",
+          "lines": "391-394",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13442,12 +13448,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "104-110",
+          "lines": "106-112",
           "snippet": "    let gates = CandidateGates {\n        compact_boundary: needs_compact_boundary,\n        hook_context: needs_hook_context,\n        attachments: needs_attachments,\n        channel: needs_channel,\n        queued: reach(Class::UserQueued),\n        turn_duration: reach(Class::MetaTurnDuration),"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "443-447",
+          "lines": "445-449",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14224,7 +14230,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "364",
+          "lines": "366",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14478,7 +14484,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "238-241",
+          "lines": "245-248",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            push_unique(out, Class::CompactionSummary);\n            return;\n        }"
         }
       ],
@@ -14575,7 +14581,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "122-127",
+          "lines": "131-137",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14585,12 +14591,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "320-328",
+          "lines": "324-332",
           "snippet": "/// Render a `compact_boundary` record's `compactMetadata` object as a one-line readable excerpt -\n/// `[compaction boundary: trigger=auto preTokens=1000 postTokens=200 durationMs=50]` (only the\n/// present fields, stable order, scalars unquoted). `None` when it is not an object or carries none\n/// of the known fields.\npub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();\n    for key in [\"trigger\", \"preTokens\", \"postTokens\", \"durationMs\"] {\n        if let Some(v) = obj.get(key) {"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "429",
+          "lines": "431",
           "snippet": "        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())"
         }
       ],
@@ -14701,12 +14707,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "129-134",
+          "lines": "138-143",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "173-179",
+          "lines": "177-183",
           "snippet": "    // A boundary's `parentUuid` is null; `logicalParentUuid` names the record the\n    // compaction re-links to (harness ground truth) - surface it on the same line.\n    if rec.is_compact_boundary() {\n        if let Some(lp) = rec.logical_parent_uuid.as_deref() {\n            parts.push(format!(\"[logicalParent={lp}]\"));\n        }\n    }"
         }
       ],
@@ -14789,12 +14795,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "177-182",
+          "lines": "192-197",
           "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "155-158",
+          "lines": "159-162",
           "snippet": "/// Combines the top-level `content` string (`\"Conversation compacted \u2026\"`) with a readable\n/// `compactMetadata` excerpt so `-t harness.compaction.boundary` can both MATCH the boundary and SEE\n/// what each compaction clipped. `None` when neither is present (no fabricated text).\npub(crate) fn system_record_text(rec: &Record) -> Option<String> {"
         },
         {
@@ -14995,7 +15001,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "184-190",
+          "lines": "199-205",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
         }
       ],
@@ -15092,7 +15098,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "172-176",
+          "lines": "187-191",
           "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts"
         }
       ],
@@ -15281,7 +15287,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "177-182",
+          "lines": "192-197",
           "snippet": "    ///   drew real replies before the retraction.)\n    /// - `harness.compaction.boundary`: a system record with NO message field at\n    ///   all - pure compaction metrics. (The compaction SUMMARY is visible: the\n    ///   DAG threads through it; `isVisibleInTranscriptOnly` is a display flag on\n    ///   summaries, not a delivery flag, and `isMeta` is an authorship flag -\n    ///   neither is a visibility instrument.)"
         }
       ],
@@ -18717,7 +18723,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "246-249",
+          "lines": "255-258",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -19383,7 +19389,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "674-679",
+          "lines": "721-726",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19845,17 +19851,17 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "672",
+          "lines": "719",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "681-682",
+          "lines": "728-729",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "235-239",
+          "lines": "244-248",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -20158,7 +20164,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "153-164",
+          "lines": "168-179",
           "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),\n    /// `api_error`, `model_refusal_fallback` / `model_refusal_no_fallback`,\n    /// `agents_killed`, `local_command`, `scheduled_task_fire`, and any subtype a\n    /// future build adds. Renders `[<subtype> <level>] <content>`. No `message{}`, so\n    /// invisible by the same instrument as the rest of this family; gated like them.\n    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible.\n    MetaSystem,"
         }
       ],
@@ -20781,12 +20787,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "638",
+          "lines": "685",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "660",
+          "lines": "707",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -20957,12 +20963,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "638",
+          "lines": "685",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "660",
+          "lines": "707",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21145,7 +21151,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "704",
+          "lines": "751",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21410,12 +21416,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "640",
+          "lines": "687",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "704",
+          "lines": "751",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21507,12 +21513,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "391",
+          "lines": "438",
           "snippet": "- Slicing (hook injection, \u226410000-char cap): `--slices N --slice i --window W` = fixed-fleet chunks, whole turns; out-of-range \u21d2 nothing, exit 0 (hook affordance). Text-only."
         },
         {
           "path": "SKILL.md",
-          "lines": "640",
+          "lines": "687",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -21677,12 +21683,12 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "274-277",
+          "lines": "278-281",
           "snippet": "/// The `harness.meta.snapshot` excerpt for a `file-history-snapshot` (every tracked\n/// path with its version, sorted) or a `file-history-delta` (the one path). The\n/// snapshot line has no top-level timestamp; the nested one rides the excerpt.\nfn snapshot_record_text(rec: &Record) -> Option<String> {"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "294-299",
+          "lines": "298-303",
           "snippet": "    }\n    let snap = rec.snapshot.as_ref()?;\n    let at = snap\n        .get(\"timestamp\")\n        .and_then(serde_json::Value::as_str)\n        .unwrap_or(\"?\");"
         }
       ],
@@ -21767,7 +21773,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "160-168",
+          "lines": "169-177",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -21887,7 +21893,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "163-166",
+          "lines": "172-175",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -21982,7 +21988,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "170-178",
+          "lines": "179-187",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -21992,12 +21998,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "281-285",
+          "lines": "285-289",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "401-405",
+          "lines": "403-407",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -34020,7 +34026,7 @@
       "code": [
         {
           "path": "src/live/last.rs",
-          "lines": "44-53",
+          "lines": "50-59",
           "snippet": "        if out.user.is_none() {\n            // A genuine prompt, or the machine trigger that opened the turn (an\n            // automation pulse renders as its label, never the raw XML).\n            let text = rec.automation_label().or_else(|| {\n                rec.is_genuine_user()\n                    .then(|| rec.reconstructed_user_text(None))\n                    .flatten()\n            });\n            if let Some(t) = text {\n                out.user = Some(excerpt(rec.timestamp.clone(), &t));"
         }
       ],
@@ -34814,7 +34820,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "311",
+          "lines": "312",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -34903,7 +34909,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "331-332",
+          "lines": "340-341",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -34987,20 +34993,20 @@
     {
       "id": "MISC-003",
       "area": "misc",
-      "behavior": "Claude Code injects a fixed continuation prompt as a type:\"user\", isMeta record whose message.content is a single-element block array [{\"type\":\"text\",\"text\":\"Continue from where you left off.\"}] - not a bare content string. The '522 occurrences' figure does not reproduce: the live corpus carries 6 such records across 4 sessions.",
-      "depends": "csift classifies it `harness.schedule.continuation`; being `isMeta` it is excluded from turn opening, so it never counts as an operator message.",
+      "behavior": "The resume repair prompt lands as a type:\"user\", isMeta record whose message.content is a single-element block array [{\"type\":\"text\",\"text\":\"Continue from where you left off.\"}] - not a bare content string. The '522 occurrences' figure does not reproduce: counting one event per marker record over the uuid-named top-level transcripts, the corpus carries 8 such records in 10 marker-carrying files out of 75 scanned.",
+      "depends": "csift classifies it `harness.resume.prompt`; being `isMeta` it is excluded from turn opening, so it never counts as an operator message, and the block-array shape is why the classifier reads the joined text of a record's text blocks rather than a bare content string only.",
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "194",
-          "snippet": "pub const SCHEDULE_CONTINUATION_MARKER: &str = \"Continue from where you left off.\";"
+          "lines": "215",
+          "snippet": "pub const RESUME_PROMPT_MARKER: &str = \"Continue from where you left off.\";"
         }
       ],
-      "instrument": "Count the leaf, not the phrase: `csift search '' -t harness.schedule.continuation --count-by label`. The claim's clause 'hits must key under harness.schedule.continuation only' is wrong - the sentence is ordinary prose that any transcript can quote, and a text search for it keys under 9 labels.",
+      "instrument": "Count the leaf, not the phrase: `csift search '' -t harness.resume.prompt --count-by label`. The claim's original clause 'hits must key under one leaf only' is wrong - the sentence is ordinary prose that any transcript can quote, and a text search for it keys under many labels.",
       "located": {
         "claude_code": null,
         "csift": "0.2.0",
-        "source": "src/model/markers.rs SCHEDULE_CONTINUATION_MARKER doc comment"
+        "source": "src/model/markers.rs RESUME_PROMPT_MARKER doc comment"
       },
       "first_seen_claude_code": null,
       "checks": [
@@ -35023,6 +35029,16 @@
           "observed": "complete producer trace: trigger the resume deserialization path that classifies an interrupted turn @163207713; gate Gbn and its getter igt @163204426; writer xe({content:igt(),isMeta:!0}) normalized by cm/_es @165940409. writer excerpt: case\"user\":{if(typeof e.message.content===\"string\"){let f=n?AEe(e.uuid,0):e.uuid;return[{...e,uuid:f,message:{...e.message,content:[{type:\"text\",text:e.message.content}]}}]}let r=n||CMe(e),o=Y(e.message.content,(f)=>f.type===\"tool specimen: 7 records under harness.schedule.continuation (the earlier check counted 6), across 5 distinct owning sessions. All 7 raw records share one shape: type user, isMeta true, message.role user, message.content a 1-element list whose only block is {type:text, text:'Continue from where you left off.'} - n",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); Count the classification leaf, not the phrase; one record per raw line, shape read from the raw bytes.",
           "note": "The constant, the interrupted-turn injection and the string-to-block normalization were read verbatim, and all 7 corpus records match that shape exactly."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-ran the record-shape census over every uuid-named top-level transcript, reading each prompt record's type, isMeta and message.content shape; compared against the leaf census.",
+          "observed": "8 prompt records across 10 marker-carrying files of 75 scanned. Every one is type user with isMeta true and a message.content that is a single-element block array whose only block is a text block equal to the bare sentence; none is a bare content string, and none is a longer variant.",
+          "rule": "One event per marker record; a prompt record is type user with isMeta true whose string content or single text block starts with the sentence. Scope: uuid-named files directly under each encoded project directory.",
+          "note": "Renamed to the leaf's new path, harness.resume.prompt. The record shape is unchanged; the count moved with corpus growth and is restated with its rule."
         }
       ],
       "attribution": "end-to-end",
@@ -35067,7 +35083,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "196-197",
+          "lines": "230-231",
           "snippet": "/// The `ScheduleWakeup` TIMER's fired-prompt sentinel (GOLD \u00a75) - `harness.schedule.wakeup`.\n/// When a `ScheduleWakeup` tool fires, the harness injects its `prompt`; this fixed sentinel is"
         }
       ],
@@ -35343,7 +35359,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "184-190",
+          "lines": "199-205",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate"
         }
       ],
@@ -35897,7 +35913,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "206-213",
+          "lines": "210-217",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {"
         }
       ],
@@ -36219,7 +36235,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "163-166",
+          "lines": "172-175",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -38032,12 +38048,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "632",
+          "lines": "679",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "640",
+          "lines": "687",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -40662,12 +40678,12 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "382-384",
+          "lines": "439-441",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "206-208",
+          "lines": "213-215",
           "snippet": "                Block::Thinking { signature, .. } => {\n                    push_unique(out, thinking_block_class(signature.as_deref()));\n                }"
         }
       ],
@@ -40768,7 +40784,7 @@
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "239-241",
+          "lines": "305-307",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -40888,7 +40904,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "206-208",
+          "lines": "213-215",
           "snippet": "                Block::Thinking { signature, .. } => {\n                    push_unique(out, thinking_block_class(signature.as_deref()));\n                }"
         }
       ],
@@ -42739,7 +42755,7 @@
       "code": [
         {
           "path": "src/search/matcher.rs",
-          "lines": "539-541",
+          "lines": "542-544",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         },
         {
@@ -45340,7 +45356,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "180-184",
+          "lines": "189-193",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -45588,7 +45604,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "186-190",
+          "lines": "195-199",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -45789,7 +45805,7 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "197-207",
+          "lines": "253-263",
           "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
         },
         {
@@ -46397,7 +46413,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "200-205",
+          "lines": "204-209",
           "snippet": "        Class::MetaTurnDuration => {\n            let mut fields: Vec<String> = Vec::new();\n            let ms = Record::u64_field(rec.duration_ms.as_ref());\n            if let Some(ms) = ms {\n                fields.push(format!(\"{} \u00b7 durationMs={ms}\", fmt_ms(ms)));\n            }"
         },
         {
@@ -46506,12 +46522,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "202-205",
+          "lines": "211-214",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "205-212",
+          "lines": "209-216",
           "snippet": "            }\n            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),"
         }
       ],
@@ -46849,7 +46865,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "205-212",
+          "lines": "209-216",
           "snippet": "            }\n            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),"
         }
       ],
@@ -47088,7 +47104,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "187-193",
+          "lines": "191-197",
           "snippet": "/// fields only, stable order - so the leaf is both matchable and legible:\n/// - turn-duration: `[turn duration: 1m 5s \u00b7 durationMs=64911 messageCount=908\n///   pendingBackgroundAgentCount=2]`;\n/// - stop-hooks: `[stop hooks: count=N errors=M prevented=false]` + one `command (Nms)`\n///   line per hook (the commands are the record's only text);\n/// - snapshot: `[file-history snapshot at <ts>: <path>@vN, \u2026]` (paths sorted) or\n///   `[file-history delta at <ts>: <path>@vN backup=<name>]` (the `backup=` suffix"
         }
       ],
@@ -47173,7 +47189,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "206-213",
+          "lines": "210-217",
           "snippet": "            for (key, v) in [\n                (\"messageCount\", rec.message_count.as_ref()),\n                (\n                    \"pendingBackgroundAgentCount\",\n                    rec.pending_background_agent_count.as_ref(),\n                ),\n                (\"pendingWorkflowCount\", rec.pending_workflow_count.as_ref()),\n            ] {"
         }
       ],
@@ -47278,7 +47294,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "199",
+          "lines": "203",
           "snippet": "        Class::UserQueued | Class::MetaAwaySummary => rec.content_str().map(str::to_string),"
         }
       ],
@@ -47654,12 +47670,12 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "378-380",
+          "lines": "379-381",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "136-140",
+          "lines": "151-155",
           "snippet": "    /// `harness.meta.away-summary` - the `system`/`away_summary` recap the harness\n    /// generates (a side model call, config-gated) when the operator returns after 5+\n    /// minutes away. Model-generated prose, yet no `message{}`: shown in the UI, not in\n    /// the surviving conversation (measured 1,196/1,198 never re-appear downstream).\n    MetaAwaySummary,"
         }
       ],
@@ -47920,12 +47936,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "227-241",
+          "lines": "231-245",
           "snippet": "            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];\n            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "442-448",
+          "lines": "444-450",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48045,12 +48061,12 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "220-230",
+          "lines": "224-234",
           "snippet": "        Class::MetaStopHooks => {\n            let count = Record::u64_field(rec.hook_count.as_ref()).unwrap_or(0);\n            let errors = rec\n                .hook_errors\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n                .map_or(0, Vec::len);\n            let prevented = rec.prevented_continuation.unwrap_or(false);\n            let mut lines = vec![format!(\n                \"[stop hooks: count={count} errors={errors} prevented={prevented}]\"\n            )];"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "220-226",
+          "lines": "229-235",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -48132,12 +48148,12 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "231-245",
+          "lines": "235-249",
           "snippet": "            if let Some(infos) = rec\n                .hook_infos\n                .as_ref()\n                .and_then(serde_json::Value::as_array)\n            {\n                for info in infos {\n                    let Some(cmd) = info.get(\"command\").and_then(serde_json::Value::as_str) else {\n                        continue;\n                    };\n                    match Record::u64_field(info.get(\"durationMs\")) {\n                        Some(ms) => lines.push(format!(\"{cmd} ({ms}ms)\")),\n                        None => lines.push(cmd.to_string()),\n                    }\n                }\n            }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "141-146",
+          "lines": "156-161",
           "snippet": "    /// `harness.meta.stop-hooks` - the `system`/`stop_hook_summary` execution ledger\n    /// of the Stop hooks that ran at turn end (`hookInfos[].command` + durations,\n    /// `hookErrors`, `preventedContinuation`). Distinct from [`Class::MetaHook`], which\n    /// is the text a hook INJECTED into the model; this record is the run itself and\n    /// its `hookAdditionalContext` is empty on every measured instance.\n    MetaStopHooks,"
         },
         {
@@ -48258,12 +48274,12 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "442-448",
+          "lines": "444-450",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
           "path": "src/cli/show_stats_args.rs",
-          "lines": "84-88",
+          "lines": "93-97",
           "snippet": "    /// `42..` = turn 42 \u2192 the end). Fetches every user and assistant record of the named\n    /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn\n    /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong\n    /// to no turn fetch: address them by `--line`/`--uuid`, or `search -t harness.meta`.\n    /// The turn numbering matches the `\u00b7t<N>` in `search`'s exchange headers exactly."
         }
       ],
@@ -48472,7 +48488,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "281-293",
+          "lines": "285-297",
           "snippet": "    if rec.is_type(\"file-history-delta\") {\n        let path = rec.tracking_path.as_deref()?;\n        let backup = rec.backup.as_ref();\n        let version = ver(backup.and_then(|b| b.get(\"version\")));\n        let at = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let name = backup\n            .and_then(|b| b.get(\"backupFileName\"))\n            .and_then(serde_json::Value::as_str)\n            .map(|n| format!(\" backup={n}\"))\n            .unwrap_or_default();\n        return Some(format!(\n            \"[file-history delta at {at}: {path}@v{version}{name}]\"\n        ));"
         },
         {
@@ -48972,7 +48988,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "200-213",
+          "lines": "215-228",
           "snippet": "    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
@@ -48982,7 +48998,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "184-199",
+          "lines": "199-214",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -49204,17 +49220,17 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "184-199",
+          "lines": "199-214",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "201-213",
+          "lines": "216-228",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "324-337",
+          "lines": "328-341",
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();\n    for key in [\"trigger\", \"preTokens\", \"postTokens\", \"durationMs\"] {\n        if let Some(v) = obj.get(key) {\n            let rendered = match v {\n                serde_json::Value::String(s) => s.clone(),\n                other => other.to_string(),\n            };\n            fields.push(format!(\"{key}={rendered}\"));\n        }\n    }\n    (!fields.is_empty()).then(|| format!(\"[compaction boundary: {}]\", fields.join(\" \")))\n}"
         },
         {
@@ -49990,7 +50006,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "193-199",
+          "lines": "208-214",
           "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -50142,7 +50158,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "193-199",
+          "lines": "208-214",
           "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -50344,12 +50360,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "345-351",
+          "lines": "347-353",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "375-378",
+          "lines": "377-380",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -50438,12 +50454,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "295-300",
+          "lines": "304-309",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "306-309",
+          "lines": "315-318",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -50570,12 +50586,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "306-309",
+          "lines": "315-318",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "295-300",
+          "lines": "304-309",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -51649,7 +51665,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "370-375",
+          "lines": "372-377",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -51783,12 +51799,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "201-207",
+          "lines": "216-222",
           "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "136-138",
+          "lines": "145-147",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -51929,7 +51945,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "117-124",
+          "lines": "126-133",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52266,7 +52282,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "286-288",
+          "lines": "295-297",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -52517,12 +52533,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "370",
+          "lines": "379",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "392-397",
+          "lines": "401-406",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -52629,7 +52645,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "392-397",
+          "lines": "401-406",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -52819,7 +52835,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "147-149",
+          "lines": "156-158",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -52998,12 +53014,12 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "249-256",
+          "lines": "357-364",
           "snippet": "/// Scrape the inline persisted-output pointer (\u00a74.6 fallback): the line\n/// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.\n/// Returns the trimmed path, or `None` if the marker is absent.\npub(crate) fn scrape_persisted_path(text: &str) -> Option<String> {\n    const MARKER: &str = \"Full output saved to:\";\n    let idx = text.find(MARKER)?;\n    let rest = &text[idx + MARKER.len()..];\n    // The path runs to end-of-line."
         },
         {
           "path": "src/model/record.rs",
-          "lines": "331-332",
+          "lines": "340-341",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53195,12 +53211,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "370-375",
+          "lines": "372-377",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "393-394",
+          "lines": "395-396",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53300,12 +53316,12 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "387-388",
+          "lines": "389-390",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "311",
+          "lines": "312",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -53397,7 +53413,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "272-277",
+          "lines": "281-286",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -53495,7 +53511,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "279-283",
+          "lines": "288-292",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -53746,7 +53762,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "240-242",
+          "lines": "241-243",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -54355,7 +54371,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "125-132",
+          "lines": "134-141",
           "snippet": "    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n\n    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant."
         }
       ],
@@ -54707,17 +54723,17 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "330-335",
+          "lines": "344-349",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "63-70",
+          "lines": "75-82",
           "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        records\n            .iter()\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "287-288",
+          "lines": "289-290",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -54816,22 +54832,22 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "168-176",
+          "lines": "220-228",
           "snippet": "    // A superseded turn-opener draft (the scan layer computed the set - a pure\n    // per-record classify cannot see the LATER same-parent sibling) carries the single\n    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the\n    // conversation, so it never rides `user.message` (whose counts stay pure).\n    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "214-224",
+          "lines": "247-257",
           "snippet": "    // C-18 + user.unsent: a superseded draft is a real record OUTSIDE turn numbering.\n    // A scan emits it as its own annotated unit when it hits (searchable, labeled\n    // `user.unsent`) - except under a `--turn` window, which asks about NUMBERED turns\n    // and a draft belongs to none. An explicit address always reaches it (refetch law).\n    if address.is_some() || turn_bounds.is_none() {\n        let mut draft_idxs: Vec<usize> = skip.iter().copied().collect();\n        draft_idxs.sort_unstable();\n        for i in draft_idxs {\n            out.extend(build_exchange(0, &[i], true));\n        }\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "193-213",
+          "lines": "208-228",
           "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "266-270",
+          "lines": "323-327",
           "snippet": "    let sections = if superseded {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -55314,7 +55330,7 @@
         },
         {
           "path": "src/search/matcher.rs",
-          "lines": "536-538",
+          "lines": "539-541",
           "snippet": "/// True when `c` is escaped inside a JSON string literal (so it never appears\n/// verbatim in the raw line bytes): `\"`, any C0 control char (`< 0x20`), or DEL.\n/// (`\\` is handled separately as a regex metacharacter.)"
         }
       ],
@@ -55396,7 +55412,7 @@
       "code": [
         {
           "path": "src/search/record_text.rs",
-          "lines": "383-394",
+          "lines": "387-398",
           "snippet": "/// Render a `tool_use` block to searchable text: `name {json-input}`. The name is\n/// matched first so `csift search AskUserQuestion -t agent.tool.use` works; the input JSON is\n/// included so a regex can match arguments too.\npub(crate) fn render_tool_use(name: Option<&str>, input: Option<&serde_json::Value>) -> String {\n    let mut s = String::new();\n    if let Some(n) = name {\n        s.push_str(n);\n    }\n    if let Some(v) = input {\n        s.push(' ');\n        s.push_str(&v.to_string());\n    }"
         }
       ],
@@ -55502,7 +55518,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "416-421",
+          "lines": "418-423",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify).\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
         }
       ],
@@ -55590,7 +55606,7 @@
       "code": [
         {
           "path": "src/search/matcher.rs",
-          "lines": "523-527",
+          "lines": "526-530",
           "snippet": "    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];\n    if args.resolve_persisted {\n        conservative.push(b\"persistedOutputPath\");\n        conservative.push(b\"Full output saved to:\");\n    }"
         }
       ],
@@ -59482,7 +59498,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "325-330",
+          "lines": "334-339",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -63993,7 +64009,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "134",
+          "lines": "143",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -64087,7 +64103,7 @@
         },
         {
           "path": "src/search/matcher.rs",
-          "lines": "544-550",
+          "lines": "547-553",
           "snippet": "/// Record-address selectors (`--line` / `--uuid`) parsed into membership sets - the \"fetch\n/// THESE records\" filter that turns `search` into the in-permission message-getter. Active when\n/// either set is non-empty; a record is addressed when its physical line OR uuid is in range.\npub(crate) struct AddressSet {\n    pub(crate) lines: BTreeSet<usize>,\n    pub(crate) uuids: BTreeSet<String>,\n}"
         }
       ],
@@ -64507,7 +64523,7 @@
       "code": [
         {
           "path": "src/search/matcher.rs",
-          "lines": "539-541",
+          "lines": "542-544",
           "snippet": "pub(crate) fn json_escapes_in_string(c: char) -> bool {\n    c == '\"' || (c as u32) < 0x20 || c == '\\u{7f}'\n}"
         }
       ],
@@ -64589,7 +64605,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "295-300",
+          "lines": "304-309",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -64754,7 +64770,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "306-309",
+          "lines": "315-318",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -65878,7 +65894,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "330-335",
+          "lines": "344-349",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (parent \u21e8 self),\n        // not the operator (GOLD \u00a73) - unchanged, regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
@@ -66757,7 +66773,7 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "262-264",
+          "lines": "387-389",
           "snippet": "pub(crate) fn is_spawn_tool_name(name: &str) -> bool {\n    matches!(name, \"Task\" | \"Agent\" | \"Workflow\")\n}"
         },
         {
@@ -67295,7 +67311,7 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "189",
+          "lines": "203",
           "snippet": "pub const ASYNC_LAUNCH_ACK_PREFIX: &str = \"Async agent launched successfully\";"
         }
       ],
@@ -67396,7 +67412,7 @@
       "code": [
         {
           "path": "src/model/peer.rs",
-          "lines": "266-269",
+          "lines": "391-394",
           "snippet": "/// True when a `SendMessage` `input` is a control SIGNAL rather than a prose message (GOLD\n/// \u00a73): the top-level `type` (or a nested `message.type`) is present and is NOT `message`/\n/// `direct` (e.g. `shutdown_request`/`shutdown_response`/\u2026). Absent type \u21d2 a plain message.\npub(crate) fn send_message_is_signal(input: Option<&serde_json::Value>) -> bool {"
         }
       ],
@@ -69895,12 +69911,12 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "254",
+          "lines": "258",
           "snippet": "let subtype = rec.subtype.as_deref().unwrap_or(\"system\");"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "420",
+          "lines": "422",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -70507,8 +70523,8 @@
     {
       "id": "TURN-004",
       "area": "turn-boundary",
-      "behavior": "isMeta:true on a type:\"user\" record is an AUTHORSHIP flag stamped by the injecting call site, not derived from the content: the one user-record factory takes isMeta as a named parameter and copies it straight onto the record (165936023). Two injectors are read end to end in 2.1.258. The resume path's interrupted_turn branch injects a continuation prompt (163207700) whose text comes from a helper returning the CLAUDE_CODE_RESUME_PROMPT environment value or, failing that, the fixed sentence \"Continue from where you left off.\" (163204432) - which is why the sentence is a PREFIX and not always the whole content: the background revival respawn sets a longer restarted variant (167486480) and the runner spawn sets a moved-to-a-new-runner variant (166506250). The local-command caveat injector writes its own isMeta:true pseudo-turn (165936931). Measured on 2026-09-04 over 68 uuid-named top-level transcripts: 1,426 isMeta:true type user records (690 with string content, 736 with block-array content), led by an \"[Image: source: ...]\" marker 661, a <local-command-caveat> wrapper 165, a skill base-directory preamble 43, a \"Stop hook feedback: ...\" line 30, and the continuation sentence 7 - all 7 the bare form, neither longer variant occurring in this corpus. The image, skill-preamble and stop-hook buckets have no injector traced here; only the continuation and caveat buckets do.",
-      "depends": "csift gates isMeta out of is_genuine_user before any content inspection (src/model/predicates.rs), so a meta pseudo-turn never opens a turn and never enters the user.message census - verified by the claim's 2026-09-02 check with the strongest available instrument, a raw sweep of every user.message record in the top-level corpus finding no isMeta among them. Recognized markers reparent to harness.schedule.* / harness.meta.*; the continuation test is trim_start().starts_with(...) (src/model/markers.rs), which is what makes it survive the two longer 2.1.258 variants. An isMeta record matching no known marker classifies EMPTY - not merely unlabeled but invisible to a scan (40 of 41 skill-preamble records returned no hit at all on 2026-09-02) - so a novel hook wrapper can never be mistaken for the operator.",
+      "behavior": "isMeta:true on a type:\"user\" record is an AUTHORSHIP flag stamped by the injecting call site, not derived from the content: the one user-record factory takes isMeta as a named parameter and copies it straight onto the record (165936023). Two injectors are read end to end in 2.1.258. The resume path's interrupted_turn branch injects a repair prompt (163207700) whose text comes from a helper returning the CLAUDE_CODE_RESUME_PROMPT environment value or, failing that, the fixed sentence \"Continue from where you left off.\" (163204432) - which is why the sentence is a PREFIX and not always the whole content: the background revival respawn sets a longer restarted variant (167486480) and the runner spawn sets a moved-to-a-new-runner variant (166506250). The local-command caveat injector writes its own isMeta:true pseudo-turn (165936931). Measured on 2026-09-04 over 68 uuid-named top-level transcripts: 1,426 isMeta:true type user records (690 with string content, 736 with block-array content), led by an \"[Image: source: ...]\" marker 661, a <local-command-caveat> wrapper 165, a skill base-directory preamble 43, a \"Stop hook feedback: ...\" line 30, and the resume sentence 7 - all 7 the bare form, neither longer variant occurring in this corpus. The image, skill-preamble and stop-hook buckets have no injector traced here; only the resume-prompt and caveat buckets do.",
+      "depends": "csift gates isMeta out of is_genuine_user before any content inspection (src/model/predicates.rs), so a meta pseudo-turn never opens a turn and never enters the user.message census - verified by the claim's 2026-09-02 check with the strongest available instrument, a raw sweep of every user.message record in the top-level corpus finding no isMeta among them. Recognized markers reparent to harness.resume.prompt / harness.schedule.wakeup / harness.meta.*; the resume-prompt test is trim_start().starts_with(...) (src/model/markers.rs), which is what makes it survive the two longer Claude-Code-set variants. An isMeta record matching no known marker classifies EMPTY - not merely unlabeled but invisible to a scan (40 of 41 skill-preamble records returned no hit at all on 2026-09-02) - so a novel hook wrapper can never be mistaken for the operator.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -70522,8 +70538,8 @@
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "191-194",
-          "snippet": "/// The fixed harness-injected continuation marker (GOLD \u00a75) - `harness.schedule.continuation`.\n/// A `type:\"user\"` (`isMeta`) record CC injects to resume a session from where it left off.\n/// Verified across real `~/.claude/projects` data (522 occurrences), exact content.\npub const SCHEDULE_CONTINUATION_MARKER: &str = \"Continue from where you left off.\";"
+          "lines": "205-207",
+          "snippet": "/// The RESUME REPAIR PROMPT (`harness.resume.prompt`): the `isMeta` `type:\"user\"` record\n/// Claude Code's LOADER appends when a resumed transcript ends on a dangling user record.\n/// It is machinery, not the operator - the human never typed it."
         }
       ],
       "instrument": "`rg -c '\"isMeta\":true' <transcript>` against `csift search '' @<id> --count-by label` (no `user.message` key may cover them), and `rg -c 'Continue from where you left off\\.' ~/.claude/projects/*/*.jsonl` against `csift search 'Continue from where you left off' -t harness.schedule.continuation -c`. Counting rule: one per raw line for rg, one per classified record for csift.",
@@ -70563,6 +70579,16 @@
           "observed": "before: `isMeta:true` on a `type:\"user\"` record is an AUTHORSHIP flag: the string content LOOKS human but is harness-injected. Re-measured 2026-09-02 over 64 top-level transcripts: 1,409 such records, led by `[Image: source: ... || after: isMeta:true on a type:\"user\" record is an AUTHORSHIP flag stamped by the injecting call site, not derived from the content: the one user-record factory takes isMeta as a named parameter and copies it straight onto the re",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "No hop refutes the claim; the correction is scope and freshness. The open leg named two census buckets with no traced writer, the skill base-directory preamble and \"Stop hook feedback: ...\"; grepping the binary for the stop-hook template finds a schema description, an async-rewake path that enqueues a summary and body, and two display components - no isMeta record injector - so rather than assert a producer the behavior now separates the two traced injectors (the resume continuation and the local-command caveat) from the buckets that are specimen-only, and the sub-fact leaves the producer clai"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-counted the isMeta type user population's resume-sentence bucket over the uuid-named top-level transcripts with the one-event-per-marker-record rule, and re-read the injector at 163207723 to confirm isMeta is still stamped by the call site rather than derived from content.",
+          "observed": "8 resume-prompt records over the 75 uuid-named top-level transcripts scanned here, all the bare sentence; neither longer variant occurs. That scope is wider than the 68-transcript sweep the behavior's census sentence reports, which found 7. The mint still passes isMeta:!0 as a named argument to the user-record factory, so the flag remains an authorship stamp - and csift's own prompt predicate now requires it, so the two agree.",
+          "rule": "One record per classified marker; scope is the uuid-named files directly under each encoded project directory, subagent transcripts excluded.",
+          "note": "The named leaf moved from harness.schedule.continuation to harness.resume.prompt with no change to the predicate or to the isMeta gate this claim is about; the bucket count moved with corpus growth."
         }
       ],
       "attribution": "end-to-end",
@@ -70836,7 +70862,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "273-276",
+          "lines": "280-283",
           "snippet": "        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {\n            push_unique(out, Class::CommandStdout);\n            return;\n        }"
         }
       ],
@@ -71164,7 +71190,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "277-288",
+          "lines": "284-295",
           "snippet": "        if is_slash_command_wrapper(s) {\n            // Prose typed after the slash command (`<command-args>`) IS genuine user\n            // input - and the RICHER view (richest-view law: the prose beats the\n            // wrapper), so it is pushed FIRST: the unfiltered record-text emission\n            // renders `/name args`, never the wrapper XML. An explicit\n            // `-t harness.command.invocation` still reaches the wrapper form.\n            if self.slash_command_args().is_some() {\n                push_unique(out, Class::UserMessage);\n            }\n            push_unique(out, Class::CommandInvocation);\n            return;\n        }"
         }
       ],
@@ -71856,7 +71882,7 @@
         },
         {
           "path": "src/search/matcher.rs",
-          "lines": "522-523",
+          "lines": "525-526",
           "snippet": "    // CONSERVATIVE (needs cross-record / external data - force the full scan).\n    let mut conservative: Vec<&[u8]> = vec![b\"To tell you how to proceed\"];"
         }
       ],
@@ -72426,7 +72452,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "84-87",
+          "lines": "85-88",
           "snippet": "#[must_use]\npub fn is_peer_message(content: &str) -> bool {\n    is_teammate_message(content) || is_agent_message(content) || is_cross_session_message(content)\n}"
         },
         {
@@ -72441,7 +72467,7 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "133-142",
+          "lines": "133-141",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {\n    let t = prefix.trim_end();\n    t.is_empty()\n        || PEER_MESSAGE_PREAMBLES.iter().any(|p| t.ends_with(p))\n        || t.ends_with(TASK_NOTIFICATION_CLOSE)\n        || t.ends_with(TEAMMATE_MESSAGE_CLOSE)\n        || t.ends_with(AGENT_MESSAGE_CLOSE)\n        || t.ends_with(CROSS_SESSION_MESSAGE_CLOSE)\n}"
         }
       ],
@@ -72671,12 +72697,12 @@
         },
         {
           "path": "src/model/peer.rs",
-          "lines": "120",
+          "lines": "133",
           "snippet": "pub(crate) fn is_section_boundary(prefix: &str) -> bool {"
         },
         {
           "path": "src/model/markers.rs",
-          "lines": "175-182",
+          "lines": "188-195",
           "snippet": "/// Section CLOSE tags (FINDING-1). A peer / `<task-notification>` open tag that sits right after\n/// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a\n/// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine\n/// user message that merely mentions the literal tag, common in csift's OWN dev sessions) is NOT a\n/// boundary and never starts a section. Kept beside their open-tag constants so the pair never drift.\npub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
@@ -73566,27 +73592,27 @@
       "code": [
         {
           "path": "src/model/grouping.rs",
-          "lines": "88-93",
+          "lines": "92-97",
           "snippet": "/// Indices of turn-opening records that are SUPERSEDED DRAFTS - an earlier sibling of a\n/// later turn-opener sharing the SAME non-null `parentUuid` (\u00a76.4.1). This is the on-disk\n/// shape of the \"type a message, ESC-cancel / edit, resend\" loop (and any rewind that\n/// re-opens a turn from the same point): Claude Code appends every draft as its own\n/// `type:\"user\"` record, yet only ONE - the last in file order - was actually delivered to\n/// the model. The earlier siblings are abandoned drafts."
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "95-101",
+          "lines": "99-105",
           "snippet": "/// WHY last-in-file is the survivor (verified on real `~/.claude/projects` data): distinct\n/// real turns never share a `parentUuid` (each user turn is parented to the assistant\n/// message that preceded it), so same-parent openers are ALWAYS alternative versions of one\n/// logical turn; and across the corpus the last sibling's subtree is the one that reaches\n/// furthest toward the leaf (the live branch). A content-similarity heuristic would miss the\n/// common case where the user *prepended/inserted* text on the edit (`look\u2026` \u2192 `take a closer look\u2026`),\n/// so the parent-uuid identity - not text - is the load-bearing signal."
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "114-117",
+          "lines": "124-127",
           "snippet": "pub fn superseded_draft_indices<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> std::collections::HashSet<usize> {"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "198-208",
+          "lines": "204-214",
           "snippet": "        // Keep the LAST opener per parent: when a new sibling appears, the previously-seen\n        // one for that parent becomes a superseded draft.\n        match groups.get_mut(parent) {\n            Some(entry) => {\n                let prev = std::mem::replace(&mut entry.0, i);\n                entry.1.push(prev);\n            }\n            None => {\n                groups.insert(parent, (i, Vec::new()));\n            }\n        }"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "234-254",
+          "lines": "241-261",
           "snippet": "/// [`group_turn_indices`] with the two [`collapse_openers`] corrections (\u00a76.4.1): a\n/// superseded DRAFT is dropped ENTIRELY - it neither opens a turn nor folds in as a\n/// member - so a message the user edited away before sending can never resurface as a\n/// phantom turn (nor leak its abandoned text into a neighbour); a REPLAY COPY stops\n/// OPENING a turn but stays a member, so a compaction re-anchor cannot mint a second turn\n/// for a message that was sent once. This is the delimiter every session-operating surface\n/// (`turns` / `search` / `files` / `recover`) uses, so they stay byte-consistent on what\n/// counts as a turn.\n#[must_use]\npub fn group_turn_indices_deduped<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> Vec<Vec<usize>> {\n    let collapse = collapse_openers(records, |x| rec(x));\n    let skip = collapse.dropped();\n    group_turn_indices_core(\n        records,\n        |i, x| rec(x).opens_turn() && collapse.opens(i),\n        &skip,\n    )\n}"
         }
       ],
@@ -73671,7 +73697,7 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "172-176",
+          "lines": "224-228",
           "snippet": "    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
         },
         {
@@ -73758,7 +73784,7 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "172-177",
+          "lines": "187-192",
           "snippet": "    /// - `user.unsent`: a superseded draft is NOT in the surviving conversation -\n    ///   Claude Code's own `compactMetadata.preservedMessages` accounting excludes\n    ///   every draft uuid (0 of 772 measured), and the conversation DAG threads\n    ///   through the resend sibling, never the draft. (Wording law: \"not in the\n    ///   surviving conversation\", never \"the model never saw it\" - a few drafts\n    ///   drew real replies before the retraction.)"
         }
       ],
@@ -73836,7 +73862,7 @@
       "code": [
         {
           "path": "src/model/grouping.rs",
-          "lines": "120-130",
+          "lines": "185-195",
           "snippet": "    for (i, item) in records.iter().enumerate() {\n        let r = rec(item);\n        if !r.opens_turn() {\n            continue;\n        }\n        let Some(parent) = r.parent_uuid.as_deref() else {\n            continue; // null parent: never grouped (would merge unrelated records)\n        };\n        if parent.is_empty() {\n            continue;\n        }"
         }
       ],
@@ -77579,7 +77605,7 @@
         },
         {
           "path": "src/path/tests/settings.rs",
-          "lines": "433-441",
+          "lines": "436-444",
           "snippet": "    let m = merged_in(&home, None, &managed);\n    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\"),\n        Some((\"1\", SCOPE_USER))\n    );\n    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_HARBOR_KITE\"),\n        Some((\"0\", SCOPE_POLICY_MANAGED))\n    );"
         }
       ],
@@ -77660,7 +77686,7 @@
         },
         {
           "path": "src/path/tests/settings.rs",
-          "lines": "420-431",
+          "lines": "423-434",
           "snippet": "fn settings_env_value_names_the_scope_that_set_the_key() {\n    let t = Tree::new();\n    let home = t.dir(\"home\");\n    let managed = t.dir(\"managed\");\n    t.write(\n        \"home/settings.json\",\n        r#\"{\"env\":{\"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\":\"1\"}}\"#,\n    );\n    t.write(\n        \"managed/managed-settings.json\",\n        r#\"{\"env\":{\"CLAUDE_CODE_HARBOR_KITE\":\"0\"}}\"#,\n    );"
         }
       ],
@@ -77726,7 +77752,7 @@
         },
         {
           "path": "src/path/tests/settings.rs",
-          "lines": "438-441",
+          "lines": "441-444",
           "snippet": "    assert_eq!(\n        env_value(&m, \"CLAUDE_CODE_HARBOR_KITE\"),\n        Some((\"0\", SCOPE_POLICY_MANAGED))\n    );"
         }
       ],
@@ -78306,7 +78332,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "437-441",
+          "lines": "439-443",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -78344,7 +78370,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "96-103",
+          "lines": "98-105",
           "snippet": "    // v0.11.0 csift channel: a delivery is a real MESSAGE addressed at this lane, not\n    // machinery, so it is admitted by a DEFAULT scan - the one attachment keep that is not\n    // flag-gated. The gate is the LABEL selector alone (the D7 law): no `-t`, or any\n    // selector reaching `agent.communication.channel`, keeps it; `-t user` / `-t harness`\n    // short-circuit before the memmem and pay nothing (and never surface a delivery under\n    // the hook leaf, which keeps its own flag). An addressed fetch is already admitted by\n    // the two attachment gates above.\n    let needs_channel = args.label_filter().selected(Class::CommChannel.path());"
         }
       ],
@@ -78387,7 +78413,7 @@
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "91-95",
+          "lines": "95-99",
           "snippet": "            // A csift-channel delivery renders the envelope chunk VERBATIM (header line +\n            // body), never a rewrite: the header is the receipt a reader audits, and a\n            // verbatim byte substring keeps the 7d/7f prefilter laws sound with no synth\n            // marker. The `harness.meta.hook` view of the same record stays the joined form.\n            Class::CommChannel => rec.csift_channel_text(),"
         }
       ],
@@ -81031,7 +81057,7 @@
       "code": [
         {
           "path": "src/model/markers.rs",
-          "lines": "180-182",
+          "lines": "193-195",
           "snippet": "pub(crate) const TASK_NOTIFICATION_CLOSE: &str = \"</task-notification>\";\npub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = \"</teammate-message>\";\npub(crate) const AGENT_MESSAGE_CLOSE: &str = \"</agent-message>\";"
         }
       ],
@@ -81263,7 +81289,7 @@
       "code": [
         {
           "path": "src/model/grouping.rs",
-          "lines": "190-196",
+          "lines": "196-202",
           "snippet": "        // A uuid this parent's openers already carried: the same logical record, re-appended\n        // by a compaction re-anchor. It supersedes nothing and opens nothing.\n        if let Some(uuid) = r.uuid.as_deref() {\n            if first_uuid.insert((parent, uuid), i).is_some() {\n                out.replays.insert(i);\n                continue;\n            }"
         },
         {
@@ -81332,7 +81358,7 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "168-176",
+          "lines": "220-228",
           "snippet": "    // A superseded turn-opener draft (the scan layer computed the set - a pure\n    // per-record classify cannot see the LATER same-parent sibling) carries the single\n    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the\n    // conversation, so it never rides `user.message` (whose counts stay pure).\n    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
         },
         {
@@ -81629,7 +81655,7 @@
       "code": [
         {
           "path": "src/model/delivery.rs",
-          "lines": "50-62",
+          "lines": "56-68",
           "snippet": "        if ty == \"system\" {\n            return (self.subtype.as_deref() == Some(\"local_command\")).then_some(true);\n        }\n        if ty != \"user\" && ty != \"assistant\" {\n            return None;\n        }\n        if self.is_virtual == Some(true) {\n            return Some(false);\n        }\n        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
         },
         {
@@ -81639,7 +81665,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "394-403",
+          "lines": "395-404",
           "snippet": "    /// True when the scan parses `type:\"system\"` candidate lines at all: an explicit\n    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE\n    /// one predicate for that admission - the candidate gate and the \u00a77f whole-file\n    /// gate's synthesized-marker set must agree, or a pattern that can only match the\n    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds\n    /// it (a silent drop, the \u00a77 landmine).\n    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()\n    }"
         }
       ],
@@ -81746,17 +81772,17 @@
       "code": [
         {
           "path": "src/model/delivery.rs",
-          "lines": "59-62",
+          "lines": "65-68",
           "snippet": "        let synthetic_api_error = ty == \"assistant\"\n            && self.is_api_error_message == Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL);\n        synthetic_api_error.then_some(false)"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "98-104",
+          "lines": "98-105",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
           "path": "src/search/render.rs",
-          "lines": "27-35",
+          "lines": "35-43",
           "snippet": "    // C-28: a record Claude Code's request assembler DROPPED says so in the label zone -\n    // display-only, like [narration summary]: it is not matchable text, so it needs no\n    // synthesized-marker registration. Reachable only through a glob or an explicit\n    // leaf; a bare role never selects such a record in the first place.\n    let nd = if h.delivery == Some(false) {\n        \" [not delivered]\"\n    } else {\n        \"\"\n    };"
         }
       ],
@@ -81852,7 +81878,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "160-163",
+          "lines": "175-178",
           "snippet": "    /// EXCEPT `local_command` (a slash command's own echo and stdout), which the\n    /// request assembler re-mints as a user message: that ONE subtype is delivered,\n    /// per record, via [`Record::delivery_override`], so a bare `-t harness` surfaces\n    /// it although this leaf's default says invisible."
         },
         {
@@ -82033,7 +82059,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "419-420",
+          "lines": "421-422",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
@@ -82115,7 +82141,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "153-155",
+          "lines": "168-170",
           "snippet": "    /// `harness.meta.system` (v0.10.1) - the catch-all for every OTHER `type:\"system\"`\n    /// subtype the harness writes for its own UI:\n    /// `informational` (e.g. the Remote Control disconnect warning, `level:\"warning\"`),"
         }
       ],
@@ -82185,7 +82211,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "121-124",
+          "lines": "122-125",
           "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /\n    /// `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every leaf under the"
         }
       ],
@@ -82347,6 +82373,207 @@
           "observed": "29 lines carry an origin of kind \"peer\", and the path splits them exactly: 23 type:\"user\" records carry it at the top-level origin, 6 type:\"attachment\" queued_command payloads carry it nested at attachment.origin, and no line carries both - so a top-level-only probe returns 23, not 29. Of the 23 user records: 18 lead with <agent-message> (2.1.208 x2, 2.1.217 x12, 2.1.231 x2, 2.1.233 x2), 1 with <cross-session-message> (2.1.259), 4 with no tag (2.1.231 x1, 2.1.246 x3); isMeta:true, promptSource:\"system\" and userType:\"external\" on all 23; queueSkipAttachments on 1. The cross-session record's framing reads exactly: 'Another Claude session sent a message:' + newline + '<cross-session-message from=\"uds:...\" from-name=\"...\" from-mode=\"bypass\">' + newline + body + newline + '</cross-session-message>' + blank line + the security footer, and its origin carries body, from, fromMode, kind, msg_id, name and verifiedPeerPid. Queue lines with a peer framing: 24 enqueue and 6 remove for <agent-message>, 1 enqueue for <cross-session-message>. Binary: \"cross-session-message\" and from-name=\"${ are present at 2.1.124 and absent at 2.1.100; from-mode=\"${ is present at 2.1.224 and absent at 2.1.222; all three are present at 2.1.258, the version this check names, and at every build above it. The one on-disk record is at 2.1.259.",
           "rule": "one observation per LINE carrying a peer origin, read at TWO disjoint paths - the top-level origin on a message record (23 lines) and the nested attachment.origin inside an attachment payload (6 lines), union 29; a probe that reads only the top-level field returns 23. Within the user records the tag bucket is the FIRST peer tag in a string message.content, so a body quoting another framing does not move the bucket. Binary counts are raw byte occurrences of the literal per executable.",
           "note": "Lands with the behavior it describes: the framing is folded into the peer detector and its close tag into the section-boundary set, so the delivered message classifies agent.communication.inbox instead of carrying no label, and the queue rider that shares its content is refused user.queued by the same predicate. The version this check names is the one the badge carries; the on-disk record is one build newer, and the literals it depends on are present in both."
+        }
+      ]
+    },
+    {
+      "id": "CLS-028",
+      "area": "classification",
+      "behavior": "When Claude Code resumes a transcript whose last non-system non-progress record is a type:\"user\" record, the resume post-processor `uVn` (163206036 at 2.1.258) splices a stand-in assistant record in right after it: `let je=we.findLastIndex((Ge)=>Ge.type!==\"system\"&&Ge.type!==\"progress\");if(!r&&je!==-1&&we[je].type===\"user\")we.splice(je+1,0,mu({content:TR}));` (163207961), with `r` the replyOnResume flag and `TR=\"No response requested.\"` (160102814). `mu` (165934337) forwards to the record factory `Jrr` (165933431), which stamps `model:Jc` with `Jc=\"<synthetic>\"` (160102814) and `stop_reason:\"stop_sequence\"`, and takes isApiErrorMessage and isVirtual as parameters that `mu` does not pass - so the placeholder carries the sentinel model without the error flag. That splice is the only `mu({content:TR})` in the executable, and it is gated ONLY on the tail being a user record, while the repair PROMPT beside it is pushed only under the interrupted_turn branch (163207705). The two gates differ, so the same writer produces a placeholder that FOLLOWS a repair prompt and one that follows some other trailing user record. Claude Code's own recogniser is `function Xgo(e){return e.type===\"assistant\"&&!e.isApiErrorMessage&&e.message.model===Jc&&W0e(e.message.content)===TR}` (163205627), with `W0e` (163205883) reading a bare string or a SINGLE text block; it has no parent condition, and `Ygo` (163205375) pairs it with the prompt by adjacency only to strip a previously injected pair. Corpus, counting one event per marker record over the uuid-named top-level transcripts: 75 scanned, 10 carry a marker, 18 placeholder records, of which 8 have a repair prompt as their parentUuid and 10 do not; the parents of those 10 are 7 `[Request interrupted by user]` records, 1 `[Request interrupted by user for tool use]`, 1 `<local-command-stdout>` echo and 1 slash-command wrapper - every one an ordinary non-isMeta user record, exactly the population the prompt's narrower gate excludes.",
+      "depends": "csift classifies the record `harness.resume.placeholder` by a 1:1 port of `Xgo`, so a fabricated record never reads as the assistant's own text: without the leaf all 18 fall under `agent.message`, which asserts the model wrote a sentence no model produced. The `<synthetic>` model is the load-bearing half of the predicate - a genuine reply that happens to say the same sentence carries a real model id and stays `agent.message` - and the single-text-block reading mirrors the producer's own content reader rather than joining every block. Because ONE writer produces both forms, the pairing is not a second leaf: it rides the hit as `resume_paired` (the label zone shows [paired] / [unpaired]), computed from the record's parentUuid against the file's set of repair-prompt uuids, which is the relation a transcript can show for the adjacency Claude Code reads in memory. A record with no prompt index yields no verdict rather than a guessed false. If Claude Code ever changed the sentinel model or the sentence, the leaf would silently empty and those records would return to `agent.message`.",
+      "code": [
+        {
+          "path": "src/model/classify_resume.rs",
+          "lines": "103-108",
+          "snippet": "    pub fn is_resume_placeholder(&self) -> bool {\n        self.is_type(\"assistant\")\n            && self.is_api_error_message != Some(true)\n            && self.message.as_ref().and_then(Message::model_id) == Some(SYNTHETIC_MODEL)\n            && self.single_text_content() == Some(RESUME_PLACEHOLDER_TEXT)\n    }"
+        },
+        {
+          "path": "src/model/classify.rs",
+          "lines": "186-188",
+          "snippet": "            Some(\"assistant\") if self.is_resume_placeholder() => {\n                push_unique(&mut out, Class::ResumePlaceholder);\n            }"
+        },
+        {
+          "path": "src/model/markers.rs",
+          "lines": "222",
+          "snippet": "pub const RESUME_PLACEHOLDER_TEXT: &str = \"No response requested.\";"
+        }
+      ],
+      "instrument": "csift search '' -t harness.resume.placeholder --count-by label --format json | tail -1 for the classified set, then csift search '' -t harness.resume.placeholder --format json and read resume_paired per hit. Producer side: byte-search the 2.1.258 executable for 'No response requested.' (4 offsets: the string table at 160102814, the constant's use in the splice, and two prompt-template mentions) and for 'we.splice', then read `uVn` at 163206036, the splice at 163207961, `mu` at 165934337, `Jrr` at 165933431 and `Xgo` at 163205627 as verbatim windows.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.11.2",
+        "source": "SPEC.md section 5; src/model/classify_resume.rs module doc"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The literal 'No response requested.' predates the splice: it is present in every cached build back to 1.0.60 (1 line there, 3 from 2.1.23, 4 from 2.1.139), so it dates itself and not this behavior. A floor for the splice itself needs a minification-stable literal from the same function.",
+        "Whether the harness ever writes a placeholder that is NOT the last record of its file is untested here; every corpus specimen sits at or near a resume point."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "uVn - the resume post-processor over a loaded transcript",
+          "offset": 163206036,
+          "excerpt": "function uVn(e,n,r,o){try{cne(e);let d=RVe(e),f=Ygo(ogt(d),o),_=0,v=f.map((Ge)=>{if(Ge.type===\"assistant\"&&!Ge.message.id&&Ge.requestId===void 0)return _+=1,{...Ge,message:{...Ge.message,id:$go()}};return Ge});",
+          "note": "the same entry point that mints the repair prompt; its third parameter is replyOnResume, which is the splice's only suppressor"
+        },
+        {
+          "role": "gate",
+          "name": "the splice condition - a trailing user record, and no reply requested",
+          "offset": 163207852,
+          "excerpt": "let je=we.findLastIndex((Ge)=>Ge.type!==\"system\"&&Ge.type!==\"progress\");if(!r&&je!==-1&&we[je].type===\"user\")we.splice(je+1,0,mu({content:TR}));",
+          "note": "gated ONLY on the tail being a user record - unlike the prompt, which needs the interrupted_turn verdict, which is exactly why a placeholder can stand alone"
+        },
+        {
+          "role": "writer",
+          "name": "the splice itself - the only mu({content:TR}) in the executable",
+          "offset": 163207961,
+          "excerpt": "we.splice(je+1,0,mu({content:TR}))",
+          "note": "the record is inserted immediately AFTER the trailing user record, which is what makes the appended repair prompt its parent when one was pushed"
+        },
+        {
+          "role": "writer",
+          "name": "mu - the stand-in record constructor",
+          "offset": 165934337,
+          "excerpt": "function mu({content:e,usage:n,isVirtual:r,now:o,uuid:d}){return Jrr({content:typeof e===\"string\"?[{type:\"text\",text:e===\"\"?up:e}]:e,usage:n,isVirtual:r,now:o,uuid:d})}",
+          "note": "wraps the string into one text block and passes NEITHER isApiErrorMessage nor isVirtual, so the record carries the sentinel model without the error flag"
+        },
+        {
+          "role": "writer",
+          "name": "Jrr - the factory that stamps the sentinel model",
+          "offset": 165933431,
+          "excerpt": "function Jrr({content:e,isApiErrorMessage:n=!1,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,errorDetails:_,truncatedAfterOutput:v,isVirtual:C,usage:I={",
+          "note": "the one factory behind both fabricated assistant shapes; its model field is Jc and its stop_reason a stop_sequence"
+        },
+        {
+          "role": "writer",
+          "name": "the string table holding both sentinels",
+          "offset": 160102814,
+          "excerpt": "var up=\"(no content)\",TR=\"No response requested.\",Jc=\"<synthetic>\",trr=\"Auto Mode Active\"",
+          "note": "the placeholder text and the model sentinel csift ports verbatim"
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "Xgo - Claude Code's own recogniser for the placeholder",
+          "offset": 163205627,
+          "excerpt": "function Xgo(e){return e.type===\"assistant\"&&!e.isApiErrorMessage&&e.message.model===Jc&&W0e(e.message.content)===TR}",
+          "verdict": "the predicate csift ports 1:1, and it carries NO parent condition - which is why the pairing is a hit fact rather than a second leaf"
+        },
+        {
+          "site": "W0e - the content reader both recognisers use",
+          "offset": 163205883,
+          "excerpt": "function W0e(e){return typeof e===\"string\"?e:Array.isArray(e)&&e.length===1&&e[0]?.type===\"text\"?e[0].text:void 0}",
+          "verdict": "a bare string or exactly one text block; a multi-block body is not the marker, which is what csift's single_text_content mirrors"
+        },
+        {
+          "site": "Ygo - the only consumer of Xgo",
+          "offset": 163205507,
+          "excerpt": "if(f?.type===\"user\"&&Xgo(d)&&d.uuid!==n){if(r??=e.slice(0,o),Qgo(f)&&f.uuid!==n)r.pop();continue}",
+          "verdict": "strips a previously injected placeholder, and pops the prompt too when the ADJACENT predecessor is one - the pairing relation, read in memory"
+        },
+        {
+          "site": "the splice - the only mu({content:TR}) in the executable",
+          "offset": 163207924,
+          "excerpt": "if(!r&&je!==-1&&we[je].type===\"user\")we.splice(je+1,0,mu({content:TR}));",
+          "verdict": "the sole writer; a whole-binary search for the constant returns four offsets and this is the only one that constructs a record"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Byte-searched the 2.1.258 executable for 'No response requested.' (4 offsets: 76524748, 160102840, 160517329, 160522127) and read each; read uVn (163206036), the splice (163207961), mu (165934337), Jrr (165933431), Xgo (163205627), W0e (163205868) and Ygo (163205375) as verbatim windows. Corpus: a replica census over every uuid-named top-level transcript, classifying a placeholder by the ported Xgo predicate and joining its parentUuid against that file's repair-prompt uuids.",
+          "observed": "Only one of the four string offsets constructs a record - the splice at 163207961, whose condition is the tail being a user record with replyOnResume falsy; the other three are the string table and two prompt-template mentions. mu passes neither isApiErrorMessage nor isVirtual to Jrr, so the placeholder carries model '<synthetic>' with the error flag absent. Census: 75 transcripts scanned, 10 carry a marker, 18 placeholder records, 8 paired by parentUuid to a repair prompt and 10 unpaired; the 10 parents are 7 '[Request interrupted by user]', 1 '[Request interrupted by user for tool use]', 1 '<local-command-stdout>' echo and 1 slash-command wrapper, all non-isMeta user records. 0 unparsable lines.",
+          "rule": "One event per marker record. A placeholder record is type assistant with message.model '<synthetic>', isApiErrorMessage not true, and a single-text content exactly the sentence. Paired means its parentUuid is the uuid of a prompt record in the SAME file. Scope: uuid-named files directly under each encoded project directory; subagent transcripts excluded.",
+          "note": "The leaf lands with this claim. The gate asymmetry is the whole finding: one writer, two outcomes, so the 10 unpaired records are the same fabricated text and belong under the same leaf, with the pairing carried as a fact."
+        }
+      ]
+    },
+    {
+      "id": "CLS-029",
+      "area": "classification",
+      "behavior": "Both halves of the resume repair pair are SENT to the model. The request assembler's drop predicate at 2.1.258 is `function LP(e){if(e.type===\"api_system\")return!1;return e.type===\"progress\"||e.type===\"system\"&&!UWt(e)||zj(e)||LV(e)}` (165953664); its two record-shaped arms are `function zj(e){return(e.type===\"user\"||e.type===\"assistant\")&&e.isVirtual===!0}` (165932568) and `function LV(e){return e.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.message?.model===Jc}` (165932647). The repair PROMPT is an ordinary user record, so no arm reaches it. The PLACEHOLDER shares the `Jc` sentinel model with the API-error notice, but the constructor `mu` (165934337) passes no isApiErrorMessage, so `LV`'s conjunction is false and no arm reaches it either. The one thing that removes the placeholder is Claude Code's own `--reply-on-resume` flag, declared as \"When resuming, immediately query if the loaded transcript ends in a user-role message (set by /background mid-turn so the fork continues the in-flight turn).\" (170224144) and threaded into the post-processor as its third parameter, which the splice tests as `!r`; nothing else suppresses it, and no resume-specific filter sits between the loaded array and the request.",
+      "depends": "csift's `Class::llm_visible` says both leaves are visible and `Record::delivery_override` returns None for both, so a bare `-t harness` reaches the pair and neither renders the [not delivered] marker. That is the correct reading only because `LV` requires isApiErrorMessage: a naive rule of 'the <synthetic> model means not delivered' would hide the placeholder, and a reader reconstructing what the model saw would lose a record that shaped the resumed turn. The override's own doc names this exclusion so the two shapes stay distinguishable in the code that mirrors the predicate.",
+      "code": [
+        {
+          "path": "src/model/delivery.rs",
+          "lines": "36-46",
+          "snippet": "    /// The RESUME PLACEHOLDER (`harness.resume.placeholder`) shares that sentinel model and\n    /// is deliberately NOT covered by this arm: the loader mints it WITHOUT\n    /// `isApiErrorMessage`, so the drop predicate's own conjunction is false and the record\n    /// reaches the model like any other."
+        },
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "216-219",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent"
+        }
+      ],
+      "instrument": "Byte-search the 2.1.258 executable for 'api_system' to locate the drop predicate, read it and both helper functions at the cited offsets, and confirm the helper that keys on the sentinel model also requires isApiErrorMessage === true. Then byte-search for '--reply-on-resume' (8 offsets) and read the option declaration at 170224144 and the argv builders. csift side: `csift search '' -t harness --format json` over a transcript carrying the pair, and confirm the `delivered` field is true on both hits and that neither renders [not delivered].",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.11.2",
+        "source": "src/model/delivery.rs module doc; SPEC.md section 5"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The suppressor is exercised only by reading the flag's declaration and the argv builders that add it; no live resume was run with --reply-on-resume, so the absence of a spliced placeholder under that flag is producer-side only."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the request assembler consuming the drop predicate",
+          "offset": 165953664,
+          "excerpt": "function LP(e){if(e.type===\"api_system\")return!1;return e.type===\"progress\"||e.type===\"system\"&&!UWt(e)||zj(e)||LV(e)}",
+          "note": "one predicate decides what reaches the model; a record it does not match is sent"
+        },
+        {
+          "role": "gate",
+          "name": "LV - the sentinel-model arm, and why it misses the placeholder",
+          "offset": 165932647,
+          "excerpt": "function LV(e){return e.type===\"assistant\"&&e.isApiErrorMessage===!0&&e.message?.model===Jc}",
+          "note": "the conjunction needs BOTH the error flag and the sentinel model; the placeholder carries only the second"
+        },
+        {
+          "role": "gate",
+          "name": "zj - the isVirtual arm",
+          "offset": 165932568,
+          "excerpt": "function zj(e){return(e.type===\"user\"||e.type===\"assistant\")&&e.isVirtual===!0}",
+          "note": "mu passes no isVirtual either, so this arm misses the placeholder as well"
+        },
+        {
+          "role": "writer",
+          "name": "the --reply-on-resume declaration, the splice's only suppressor",
+          "offset": 170224144,
+          "excerpt": "addOption(new F(\"--reply-on-resume\",\"When resuming, immediately query if the loaded transcript ends in a user-role message (set by /background mid-turn so the fork continues the in-flight turn).\").hideHelp())",
+          "note": "threaded to the post-processor as its third parameter, which the splice tests as !r"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "--reply-on-resume",
+        "lowest_present": "2.1.160",
+        "highest_absent": "2.1.152",
+        "ladder": "64 cached builds from 1.0.60 to 2.1.263, counted with grep -c -a -F -e; a literal dates itself, not the behavior, and the flag only SUPPRESSES the splice, so its floor bounds the suppressor rather than the pair"
+      },
+      "enumeration": [],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the drop predicate LP (165953664) and both helpers zj (165932568) and LV (165932647) as verbatim windows in the 2.1.258 executable, then re-read mu (165934337) for the arguments it does not pass; byte-searched '--reply-on-resume' (8 offsets) and read the option declaration (170224144) and the two argv builders; counted the flag literal across 64 cached builds. csift side: ran a search over a transcript carrying the pair with --format json and read the delivered field on both hits.",
+          "observed": "LV requires isApiErrorMessage === true in conjunction with the sentinel model, and mu passes neither isApiErrorMessage nor isVirtual, so no arm of LP reaches the placeholder; the prompt is an ordinary user record and no arm reaches it. csift reports delivered true on both hits and delivery_override None on both records. The only suppressor found for the splice is the replyOnResume parameter the flag sets; the flag literal is absent from every cached build up to 2.1.152 and present from 2.1.160 on (5 lines at 2.1.258).",
+          "rule": "One predicate arm per record shape; a record is delivered when no arm matches it. On the csift side, one delivered value per emitted hit.",
+          "note": "This is the arm that keeps the C-28 delivery rule honest for the new leaf: the sentinel model alone is not a not-delivered signal, and the placeholder is the shape that proves it."
         }
       ]
     }

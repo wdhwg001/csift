@@ -172,16 +172,20 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
     if selector_is_valid(s) {
         return Ok(s.to_string());
     }
-    // The pre-v0.5 FLAT spellings get a direct successor pointer (faster convergence than
-    // scanning the full selector list) - a guidance hint, not a compat shim: still a hard error.
+    // A RETIRED spelling gets a direct successor pointer (faster convergence than scanning
+    // the full selector list) - a guidance hint, not a compat shim: still a hard error.
     let legacy = match s {
-        "thinking" => Some("agent.thinking"),
-        "tool" => Some("agent.tool"),
-        "tool-response" => Some("agent.tool.result"),
+        "thinking" => Some(("pre-v0.5 flat spelling", "agent.thinking")),
+        "tool" => Some(("pre-v0.5 flat spelling", "agent.tool")),
+        "tool-response" => Some(("pre-v0.5 flat spelling", "agent.tool.result")),
+        // v0.12.0 renamed the resume repair prompt out of the schedule family: the record
+        // comes from the resume loader, never from the scheduler. Same predicate, same
+        // records, new path.
+        "harness.schedule.continuation" => Some(("pre-v0.12.0 name", "harness.resume.prompt")),
         _ => None,
     };
-    let hint = legacy.map_or(String::new(), |t| {
-        format!(" ('{s}' is the pre-v0.5 flat spelling — today that is `{t}`.)")
+    let hint = legacy.map_or(String::new(), |(era, t)| {
+        format!(" ('{s}' is the {era} — today that is `{t}`.)")
     });
     Err(format!(
         "unknown label selector '{s}'.{hint} A selector is a dotted role.class.sub path, any \

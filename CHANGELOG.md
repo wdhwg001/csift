@@ -7,7 +7,45 @@ surface change bumps the PATCH.
 
 ## [0.11.2] - 2026-09-08
 
+### Changed (breaking)
+
+- **`harness.schedule.continuation` is now `harness.resume.prompt`.** Same predicate, same
+  records, new path. That leaf never came from the scheduler: the record is written by the
+  resume LOADER when the transcript it is loading ends on a dangling user prompt, and it
+  needed a family its new sibling could share. `harness.schedule` keeps only `wakeup`. The
+  old spelling is a hard parse error that names its successor, the same way the pre-v0.5
+  flat label values do — update any script or saved query that keys on the old path.
+
+### Added
+
+- **The resume repair pair has its own two leaves.** Resume a session whose last record is a
+  prompt nobody answered — an esc-recalled draft, an interrupted turn — and Claude Code
+  repairs the tail at load time: it appends `Continue from where you left off.` as an
+  `isMeta` user record (`harness.resume.prompt`) and splices a stand-in reply reading `No
+  response requested.` in after it (`harness.resume.placeholder`, new). **The model receives
+  both**, so they shape the resumed turn while belonging to neither side of the conversation:
+  `-t user` and `-t agent` hide them, `-t harness` and `-t harness.resume` show them, and
+  neither opens a turn. The prompt leaf requires `isMeta`, which is the flag the injecting
+  call site stamps and the one Claude Code's own recogniser tests — so a message *you* begin
+  with that sentence is still yours, labelled `user.message` and opening its turn.
+- **`resume_paired` on a placeholder hit**, with `[paired]` / `[unpaired]` in the label zone.
+  One writer produces every placeholder and it fires whenever the loaded tail is a user
+  record, while the prompt beside it needs an interrupted-turn verdict — so the same record
+  also lands alone after an interrupt marker or a slash-command wrapper (measured: 8 of 18
+  in this corpus are paired, 10 are not). Both forms carry the leaf; the pairing is a fact
+  on the hit, read from the record's `parentUuid`, rather than a second label.
+
 ### Fixed
+
+- **A fabricated reply no longer reads as the model's.** Those `No response requested.`
+  records classified `agent.message`, which claims the assistant wrote a sentence no model
+  produced — they carry the `<synthetic>` model sentinel and are built with no model call at
+  all. The new predicate is a port of Claude Code's own recogniser, and the sentinel is its
+  load-bearing half, so a genuine reply that happens to say the same words is unaffected.
+- **`status` and `wait` stop reporting the loader as your last exchange.** A session resumed
+  onto a dangling prompt ends with the repair pair, so the `last` section showed `No response
+  requested.` as the newest reply. Both halves are now skipped and the real last prompt and
+  reply come back.
 
 - **An inbound cross-session message was invisible.** When one Claude Code session sends a
   message to another, the receiver's transcript gets a `type:"user"` record whose content is

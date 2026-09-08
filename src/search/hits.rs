@@ -108,6 +108,9 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         queue_operation: None,
         queue_reason: None,
         delivery: rec.delivery_override(),
+        // An unlabeled unit is by definition a record csift models no leaf for, so it is
+        // never a resume placeholder (that shape has one).
+        resume_paired: None,
         truncated,
     })
 }
@@ -234,6 +237,10 @@ pub(crate) fn collect_record_hits(
     // SELECTION, not to the label set, so `labels[]` is untouched by it.
     let delivery = rec.delivery_override();
     let filter = filter.with_delivery(delivery);
+    // Whether a resume PLACEHOLDER closes a repair pair is a cross-record fact (its parent
+    // must be a `harness.resume.prompt` record), so it rides the hit rather than the label:
+    // one writer produces both the paired and the unpaired form. `None` on every other hit.
+    let resume_paired = rec.resume_paired(ctx);
     let ts = rec.timestamp.clone();
     let model = rec
         .message
@@ -297,6 +304,7 @@ pub(crate) fn collect_record_hits(
                 queue_operation: queue_operation.clone(),
                 queue_reason: queue_reason.clone(),
                 delivery,
+                resume_paired,
                 truncated,
             });
         }

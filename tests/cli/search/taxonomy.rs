@@ -251,15 +251,16 @@ fn acceptance_harness_command_and_interrupt() {
 
 #[test]
 fn acceptance_harness_schedule_and_meta() {
-    // §D12 fired wakeup tick · §D13 continuation · §G2 meta.hook (stop-hook feedback) · §G2 meta.loop
-    // (autonomous-loop driver). All ride on isMeta records that classify (not user.message).
+    // §D12 fired wakeup tick · §D13 the resume repair prompt · §G2 meta.hook (stop-hook
+    // feedback) · §G2 meta.loop (autonomous-loop driver). All ride on isMeta records that
+    // classify (not user.message).
     let h = acceptance_home();
     for (oracle, token, selector) in [
         ("D12 wakeup", "zzwakeup", "harness.schedule.wakeup"),
         (
-            "D13 continuation",
+            "D13 resume prompt",
             "Continue from where you left off",
-            "harness.schedule.continuation",
+            "harness.resume.prompt",
         ),
         ("G2 meta.hook", "zzhook", "harness.meta.hook"),
         ("G2 meta.loop", "zzloop", "harness.meta.loop"),

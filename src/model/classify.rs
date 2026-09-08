@@ -179,6 +179,13 @@ impl Record {
                     push_unique(&mut out, Class::CompactionBoundary);
                 }
             }
+            // The loader's resume repair PLACEHOLDER wears an assistant record's clothes but
+            // carries the `<synthetic>` model sentinel: it is harness text, so it takes the
+            // harness leaf INSTEAD of the per-block agent classes (`agent.message` would
+            // claim the model wrote it). Tested before the block walk, never inside it.
+            Some("assistant") if self.is_resume_placeholder() => {
+                push_unique(&mut out, Class::ResumePlaceholder);
+            }
             Some("assistant") => self.classify_assistant(&mut out),
             Some("user") => self.classify_user(ctx, &mut out),
             _ => {}
@@ -286,8 +293,15 @@ impl Record {
             push_unique(out, Class::CommandInvocation);
             return;
         }
-        if s.trim_start().starts_with(SCHEDULE_CONTINUATION_MARKER) {
-            push_unique(out, Class::ScheduleContinuation);
+        // harness.resume.prompt: the LOADER's repair prompt for a resumed transcript that
+        // ended on a dangling user record. Machinery, never the operator (see
+        // `model/classify_resume.rs` for the producer and why the test is a prefix).
+        // The isMeta half is what protects a human who happens to START a real message with
+        // this sentence: without it that prompt would be reclassified as machinery and
+        // dropped from turn numbering. Claude Code's own recogniser tests isMeta too, and
+        // this arm and `is_resume_prompt` must agree on the set for the pairing index.
+        if self.is_meta.unwrap_or(false) && s.trim_start().starts_with(RESUME_PROMPT_MARKER) {
+            push_unique(out, Class::ResumePrompt);
             return;
         }
         // harness.schedule.wakeup: the FIRED autonomous-loop / ScheduleWakeup timer tick. Three

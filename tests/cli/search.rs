@@ -13,6 +13,7 @@ mod narration;
 mod output;
 mod promoted;
 mod refetch;
+mod resume;
 mod scope;
 mod spawn;
 mod taxonomy;

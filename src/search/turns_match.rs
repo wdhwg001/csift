@@ -80,12 +80,14 @@ pub(crate) fn reconstruct_and_match(
             .find(|k| k.rec.opens_turn())
             .map(|k| k.line_no)
     };
+    let resume_prompts = resume_prompt_uuids(records);
     let env = ClassifyEnv {
         owner_id: &session_id,
         is_subagent,
         parent_id: &parent_session_id,
         first_opener_line,
         spawn: spawn_lookup.map(|s| s as &(dyn SpawnLookup + Sync)),
+        resume_prompts: &resume_prompts,
     };
     // `--no-truncate` lifts the excerpt cap so a found message renders end-to-end (no `… (+N)`).
     // Addressing (`--line`/`--uuid`) means "fetch THIS record" → always full, no excerpt cap.
@@ -410,6 +412,10 @@ pub(crate) struct ClassifyEnv<'a> {
     /// (flips it from `user.message` to `agent.communication.inbox`). `None` ⇒ no opener.
     pub(crate) first_opener_line: Option<usize>,
     pub(crate) spawn: Option<&'a (dyn SpawnLookup + Sync)>,
+    /// The uuids of this file's `harness.resume.prompt` records - the index a
+    /// `harness.resume.placeholder` hit's pair verdict joins against
+    /// ([`Record::resume_paired`]). Empty on the overwhelming majority of transcripts.
+    pub(crate) resume_prompts: &'a HashSet<String>,
 }
 
 impl ClassifyEnv<'_> {
@@ -424,8 +430,25 @@ impl ClassifyEnv<'_> {
                 && kept.line_no != 0
                 && Some(kept.line_no) == self.first_opener_line,
             spawn: self.spawn.map(|s| s as &dyn SpawnLookup),
+            resume_prompt_uuids: Some(self.resume_prompts),
         }
     }
+}
+
+/// Index this file's `harness.resume.prompt` uuids, so a resume PLACEHOLDER can say whether
+/// it closes a repair pair. One pass, and the set stays empty (allocating nothing) on the
+/// overwhelming majority of transcripts - a resume repair is rare, and only a prompt records
+/// a uuid here.
+pub(crate) fn resume_prompt_uuids(records: &[Kept]) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for k in records {
+        if k.rec.is_resume_prompt() {
+            if let Some(uuid) = k.rec.uuid.as_deref() {
+                out.insert(uuid.to_string());
+            }
+        }
+    }
+    out
 }
 
 /// Gather the label-eligible, time-windowed, regex-matching hits inside a turn, plus the

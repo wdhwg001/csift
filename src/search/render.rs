@@ -70,6 +70,15 @@ pub(crate) fn render_label(h: &Hit) -> String {
             None => format!("{} [{op}]{nd}", class.path()),
         };
     }
+    // C-34: a resume PLACEHOLDER says whether it closes a repair pair - display-only, like
+    // [narration summary]. The label cannot carry it (one writer produces both forms, so a
+    // second leaf would split one producer in two); the marker and JSON `resume_paired` do.
+    if class == Class::ResumePlaceholder {
+        if let Some(paired) = h.resume_paired {
+            let state = if paired { "paired" } else { "unpaired" };
+            return format!("{} [{state}]{nd}", class.path());
+        }
+    }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
         return format!("{}{nd}  {from} ⇨ {to}", class.path());

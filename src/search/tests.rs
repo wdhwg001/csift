@@ -42,8 +42,14 @@ fn test_env() -> ClassifyEnv<'static> {
         parent_id: "0a1b2c3d-0000-0000-0000-000000000000",
         first_opener_line: None,
         spawn: None,
+        resume_prompts: &NO_RESUME_PROMPTS,
     }
 }
+
+/// The empty resume-prompt index the neutral [`test_env`] hands out: these fixtures carry no
+/// resume repair pair, so every placeholder verdict would be `unpaired` anyway.
+static NO_RESUME_PROMPTS: std::sync::LazyLock<std::collections::HashSet<String>> =
+    std::sync::LazyLock::new(std::collections::HashSet::new);
 
 /// The synthetic session, one jsonl line per element, in file order.
 fn fixture() -> Vec<&'static str> {
