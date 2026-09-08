@@ -6,18 +6,18 @@
     {
       "id": "BG-001",
       "area": "background-tasks",
-      "behavior": "A backgrounded shell launch is an ordinary `type:\"assistant\"` record carrying a `Bash` (on Windows `PowerShell`) `tool_use` whose input is `{command, description?, timeout?, run_in_background:true, dangerouslyDisableSandbox?}`. Across 2942 corpus launches `description` was present on 99.4% and `timeout` on 25.0%. The flag is NOT exclusive to the two shell tools (the `Agent` tool takes it too, 257 launches) and it is NOT the only way into the background: a FOREGROUND shell command that exceeds its timeout is auto-moved to the background, minting a `backgroundTaskId` with no `run_in_background` on the launching tool_use (80 corpus cases, CC 2.1.210 through 2.1.258).",
-      "depends": "csift's launch ingester keys on exactly that shape (tool name `Bash` or `PowerShell` plus `input.run_in_background == true`); a renamed input flag would make every background task invisible and collapse the `idle-background-open` verdict.",
+      "behavior": "A backgrounded shell launch is an ordinary `type:\"assistant\"` record carrying a `Bash` (on Windows `PowerShell`) `tool_use` whose input is `{command, description?, timeout?, run_in_background:true, dangerouslyDisableSandbox?}`. Across 2942 corpus launches `description` was present on 99.4% and `timeout` on 25.0%. The flag is NOT exclusive to the two shell tools (the `Agent` tool takes it too, 257 launches) and it is NOT the only way into the background. The shell driver has five id-returning exits and four of them mint a `backgroundTaskId` with no `run_in_background` on the launching tool_use, which is never rewritten: the user's ctrl+b, the command's own timeout, a move that lets a queued message reach the model, and a plugin's turn abort. Under the anchored rule below the corpus holds 1 manual receipt, 106 timeout receipts and 0 deliver-message receipts, and the launching tool_use carried the flag on none of the 107; the timeout specimens span Claude Code 2.1.210 through 2.1.259. The receipt sentence is the only text discriminator and the turn-abort exit has none (claim BG-040).",
+      "depends": "csift's launch ingester keys on exactly that shape (tool name `Bash` or `PowerShell` plus `input.run_in_background == true`); a renamed input flag would make every model-requested background task invisible and collapse the `idle-background-open` verdict. The flag is no longer the ingester's only door: three of the four flagless entrances mint a row from their receipt instead (claim BG-040), so a launch that never carried the flag is still counted.",
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "49-59",
+          "lines": "129-139",
           "snippet": "            Block::ToolUse {\n                id: Some(id),\n                name: Some(name),\n                input: Some(input),\n                ..\n            } if (matches!(name.as_str(), \"Bash\" | \"PowerShell\")\n                && input\n                    .get(\"run_in_background\")\n                    .and_then(serde_json::Value::as_bool)\n                    == Some(true))\n                || name == \"Monitor\" =>"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "4-7",
-          "snippet": "//! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its\n//!   tool_result arrives within milliseconds (\"Command running in background with ID:\n//!   <id>. Output is being written to: <path> ...\"), so the tail state machine pairs it\n//!   at once - it is invisible to the unreturned-call logic by construction;"
+          "lines": "4-13",
+          "snippet": "//! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its\n//!   tool_result arrives within milliseconds (\"Command running in background with ID:\n//!   <id>. Output is being written to: <path> ...\"), so the tail state machine pairs it\n//!   at once - it is invisible to the unreturned-call logic by construction. That flag\n//!   is only ONE of four entrances: Claude Code also moves a FOREGROUND shell into the\n//!   background when the user presses ctrl+b, when the command hits its timeout, or to\n//!   let a queued message reach the model. The launching tool_use carries no flag on\n//!   those three and is never rewritten, so the only instrument is the RECEIPT sentence\n//!   (one template, four arms) plus `toolUseResult.backgroundedByUser` /\n//!   `timedOutAfterMs` / `backgroundedToDeliverMessage` - see [`BgEntrance`];"
         }
       ],
       "instrument": "`rg -l '\"run_in_background\":\\s*true' ~/.claude/projects --glob '*.jsonl'`, then parse each matching line's `tool_use` blocks. Counting rule: one launch = one `tool_use` block with `name` in {Bash, PowerShell} and `input.run_in_background === true`, keyed by (file, tool_use id) and deduped on that key - a raw line count over-reads because the field is echoed back inside tool_result text.",
@@ -47,6 +47,16 @@
           "observed": "complete producer trace: trigger Bash tool `async call(e,n,r,o,d)` @165023865; gate exposed input schema NWn (omits run_in_background when background tasks are disabled) @165013615; gate the branch that gives the flag its meaning @165033229; writer the schema field literals that name the on-disk keys @165013199; writer streaming assistant-record mint (the tool_use bytes) @165442985. writer excerpt: run_in_background:aA(M().optional()).describe(\"Set to true to run this command in the background.\"),dangerouslyDisableSandbox:aA(M().optional()).describe(\"Set this to true to dangerously override sandbox mode and run commands without sandboxing.\"),...!1,_simul enumeration: 6 site(s) read: explicit run_in_background exit @165033229: the only id-returning exit whose launching tool_use carries input.run_in_backgro; timeout auto-background arm @165033132: registers the task on timeout; the paired return at 165033881 carries background; turn-abort background exit @165034654: a third entry into the background, flagged backgroundedByTurnAbort - also invisi; user-manual and deliver-a-message exits @165034878: fourth and fifth entries - the human backgrounds it, or an inbound message force; pre-arming of the manual path @165035100: registers the local_bash task ahead of time so the two exits above have an id to; PowerShell driver, the parallel gate @176596202: the Windows tool repeats the same shape with its own schema, confirming the two- specimen: 3214 deduped launches, every one named Bash, 0 PowerShell. description present on 3190 of 3212 in the first pass (99.3%), timeout on 781 (24.3%). Input key sets: 2413 (command,description,run_in_background), 775 the same plus timeout, 16 (command,run_in_background), 6 (command,run_in_background,time",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One launch = one tool_use block whose name is Bash or PowerShell and whose input.run_in_background === true, deduped by (file, tool_use id); a raw line count over-reads because the flag is echoed back inside result text. Percentages are over that deduped set. The corpus is live: the same rule returned 3212 and then 3214 five minutes apart.",
           "note": "The input key names are declared in the shell tool's own schema, their exposure is gated by the background-tasks-disabled predicate, the flag's meaning is the if(De===!0&&!cn) branch that mints the backgroundTaskId, and the block reaches disk through the ordinary streaming assistant-record mint - all read verbatim, against a same-day census of 3214 deduped launches."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Anchored re-census of the alternate entrances the claim's last sentence bounds: over every *.jsonl under the projects root except journal.jsonl, one observation per tool_result block whose left-trimmed text starts with one of the four ack arms' opening clauses AND carries that arm's distinguishing tail, joined in the same file to the tool_use its id names, reading input.run_in_background and the carrying record's version; plus a read of the shell driver's five id-returning exits at their offsets in the shipped 2.1.258 build.",
+          "observed": "8657 transcripts, 1553638 records. Manual 1, deliver-message 0, timeout 106, ordinary 3572. Of the 107 harness-side receipts, 0 had a launching tool_use carrying run_in_background; of the 3572 ordinary ones, 3423 did and 149 did not. The timeout specimens carry versions 2.1.210 through 2.1.259. The five exits are the explicit flag at 165033229, the timeout arm at 165033132, the turn abort at 165034654 and the user-manual and deliver-message pair at 165034878, over the pre-arming at 165035100 - all four flagless ones leaving the launch record untouched.",
+          "rule": "One observation per tool_result block matching an arm's opening clause AND its distinguishing tail (the tail excludes a transcript that merely quotes the template); the flag is read from the tool_use the block's tool_use_id names in the same file; transcripts are every *.jsonl under the projects root except journal.jsonl, one record per newline.",
+          "note": "The launch shape csift keys on is intact and the code site holds. What changed is the last sentence: it named one alternate entrance where there are four, and gave a loose count (80) that also swept in transcripts quoting the template. The anchored rule separates them and the successor claim BG-040 carries the entrances, their producer and the receipt grammar; the residue line asking for them to be named is consumed by this rewrite."
         }
       ],
       "attribution": "end-to-end",
@@ -55,7 +65,7 @@
       "specimen": "observed",
       "residue": [
         "The stored counts (2942 launches, 99.4%, 25.0%, 257 Agent blocks, 80 auto-background cases) are a stale snapshot of a live corpus; today the same rule gives 3214 / 99.3% / 24.3% / 270 / 89. Restate the numbers with their measurement date rather than reading drift as a verdict.",
-        "The claim names one alternate entry into the background. The driver has five id-returning exits: explicit flag, timeout auto-move, turn abort, user-manual and moved-to-deliver-a-message. Four of the five carry no flag on the launch, so csift is blind to all four for the same reason; naming them would bound the blind spot.",
+        "Of the five id-returning exits, the turn-abort one is the only entrance csift still cannot see: its receipt renders the ORDINARY sentence, so it is separable from a model-requested launch by the structured backgroundedByTurnAbort flag alone. A census of tool_result records whose toolUseResult carries that key, joined to their launching tool_use, would size what remains.",
         "The PowerShell half is producer-only on this host: 0 PowerShell tool_use blocks exist in the corpus, so its record shape is read from the schema and the parallel gate, not from bytes. One backgrounded PowerShell command on a Windows host closes it."
       ],
       "producer_chain": [
@@ -137,17 +147,17 @@
     {
       "id": "BG-002",
       "area": "background-tasks",
-      "behavior": "The paired `tool_result` for a backgrounded shell opens `Command running in background with ID: <id>. Output is being written to: <abs path>.` and then appends, conditionally, ONE of two notify sentences (`You will be notified when it completes.` on 97.2% of corpus results, or `If it exits while you are still working you will be notified, but it is terminated when you give your final response...` on 1.0%) or neither (1.8%), then usually `To check interim output, use Read on that file path.`, then optionally a `Session cwd remains <path>; directory changes made by the backgrounded command do not apply to subsequent commands.` line (34.0%). The structured `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpected, backgroundTaskId}` on 51.9% of results, that set plus `backgroundCwdHint` on 33.0%, absent entirely on 13.7% (the subagent lane), and may also carry `assistantAutoBackgrounded`, `backgroundEndsWithFinalResponse` or `dangerouslyDisableSandbox`.",
-      "depends": "csift lifts the task id after the literal `with ID: ` and the output path after `written to: `, falling back to `toolUseResult.backgroundTaskId` / `taskId`; a reworded result string breaks the text path and leaves the id null on the lanes where the structured field is absent.",
+      "behavior": "The paired `tool_result` for a backgrounded shell opens `Command running in background with ID: <id>. Output is being written to: <abs path>.` - one of four arms of a single formatter, the other three belonging to the harness-side entrances (BG-040), of which the MANUAL one is the sole single-sentence ack because it drops both tails below - and then appends, conditionally, ONE of two notify sentences (`You will be notified when it completes.` on 97.2% of corpus results, or `If it exits while you are still working you will be notified, but it is terminated when you give your final response...` on 1.0%) or neither (1.8%), then usually `To check interim output, use Read on that file path.`, then optionally a `Session cwd remains <path>; directory changes made by the backgrounded command do not apply to subsequent commands.` line (34.0%). The structured `toolUseResult` is `{stdout, stderr, interrupted, isImage, noOutputExpected, backgroundTaskId}` on 51.9% of results, that set plus `backgroundCwdHint` on 33.0%, absent entirely on 13.7% (the subagent lane), and may also carry `assistantAutoBackgrounded`, `backgroundEndsWithFinalResponse` or `dangerouslyDisableSandbox`.",
+      "depends": "csift lifts the task id after the literal `with ID: `, then `(task `, then `(ID: ` (the marker the timeout and deliver-message arms use), and the output path after `written to: `, which every arm carries; it falls back to `toolUseResult.backgroundTaskId` / `taskId`; a reworded result string breaks the text path and leaves the id null on the lanes where the structured field is absent.",
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "104-121",
-          "snippet": "                    let text = content\n                        .as_ref()\n                        .map(crate::model::tool_result_content_text)\n                        .unwrap_or_default();\n                    if task.id.is_none() {\n                        task.id = after_marker(&text, \"with ID: \")\n                            .or_else(|| after_marker(&text, \"(task \"))\n                            .or_else(|| {\n                                let v = rec.tool_use_result_value()?;\n                                v.get(\"backgroundTaskId\")\n                                    .or_else(|| v.get(\"taskId\"))?\n                                    .as_str()\n                                    .map(str::to_string)\n                            });\n                    }\n                    if task.output_file.is_none() {\n                        task.output_file = after_marker(&text, \"written to: \");\n                    }"
+          "lines": "206-220",
+          "snippet": "        if task.id.is_none() {\n            task.id = after_marker(&text, \"with ID: \")\n                .or_else(|| after_marker(&text, \"(task \"))\n                .or_else(|| after_marker(&text, \"(ID: \"))\n                .or_else(|| {\n                    let v = rec.tool_use_result_value()?;\n                    v.get(\"backgroundTaskId\")\n                        .or_else(|| v.get(\"taskId\"))?\n                        .as_str()\n                        .map(str::to_string)\n                });\n        }\n        if task.output_file.is_none() {\n            task.output_file = after_marker(&text, \"written to: \");\n        }"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "165-179",
+          "lines": "358-372",
           "snippet": "pub(crate) fn after_marker(text: &str, marker: &str) -> Option<String> {\n    let start = text.find(marker)? + marker.len();\n    let rest = &text[start..];\n    let end = rest\n        .char_indices()\n        .find(|&(i, c)| {\n            c.is_whitespace()\n                || c == ','\n                || c == ')'\n                || (c == '.' && rest[i + 1..].starts_with([' ', '\\n']))\n        })\n        .map_or(rest.len(), |(i, _)| i);\n    let tok = rest[..end].trim_end_matches('.');\n    (!tok.is_empty()).then(|| tok.to_string())\n}"
         }
       ],
@@ -178,6 +188,16 @@
           "observed": "complete producer trace: trigger the shell driver's result assembly (the single toolUseResult literal) @165030211; gate mapToolResultToToolResultBlockParam decides whether an ack paragraph is appended at all @165023444; gate gPe - whether the structured echo is persisted on the record at all @162742281; writer mBt - the ack text template @164082185. writer excerpt: function mBt({backgroundTaskId:e,outputPath:n,backgroundedByUser:r,backgroundedToDeliverMessage:o,timedOutAfterMs:d,reapedAtFinalResponse:f,readToolName:_}){let v=r?`Command was manually backgrounded by user with ID: ${e}. Output is being written to: ${n}.`:o?`Command was moved to the background (ID enumeration: 6 site(s) read: mBt opener - the plain form csift's markers rely on @164082788: the last of four openers in one ternary chain; the three earlier arms (manual, m; mBt notify branch - exactly three outcomes @164083146: the final-response warning when reapedAtFinalResponse, nothing when the human ba; mBt assembly - one paragraph, single-space join @164083198: closes the text side: three parts, falsy ones dropped, joined by one space - the; the cwd-hint line and key are one value @165029333: emitted only when the backgrounded command changed directory, which is why the t; the single structured-echo literal - the whole key universe @165030211: every key a 2.1.258 shell result can carry is in this one literal; assistantAuto; gPe - the whole-field absence @162742281: the only reason toolUseResult is missing rather than partial; the write site is  specimen: 3214 explicit launches, 3213 paired in-file (1 unpaired). Opener: plain `Command running in background with ID:` on 3213 of 3213. Notify sentence: 3140 `You will be notified when it completes.`, 73 the `If it exits while you are still working` variant, 0 neither. toolUseResult key sets: 1720 exactly",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One result per tool_result block that a launch's tool_use id joins to (or, in the second pass, per tool_result whose text contains a background-ack opener), deduped by (file, tool_use id); text variants bucketed by which opener and which notify sentence the text contains; key sets read off the carrying record's top-level toolUseResult, with absent meaning the field is missing rather than empty.",
           "note": "One object literal is the entire structured echo and one template function is the entire ack text, both read verbatim, and a same-day join of 3214 explicit launches to their results reproduces the opener on 3213 of 3213 with the key sets the literal predicts."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the ack formatter whole at its offset in the shipped 2.1.258 build - both conditional tails as well as the four openers - then count, over every *.jsonl under the projects root except journal.jsonl, how many receipts of each arm carry `You will be notified when it completes.` and `To check interim output, use `.",
+          "observed": "The tails at 164082870 read `C=f?\"If it exits while you are still working...\":r?void 0:\"You will be notified when it completes.\",I=r?void 0:` - r is backgroundedByUser, so the manual arm drops the interim tail unconditionally and the notify tail unless the reap-at-final-response variant replaces it. Corpus: the 1 manual receipt carries neither tail; the 106 timeout receipts carry 68 notify and 106 interim; the 3572 ordinary receipts carry 3475 notify and 3571 interim.",
+          "rule": "One tally per tool_result block matching an arm's opening clause AND its distinguishing tail, over every *.jsonl under the projects root except journal.jsonl, one record per newline; a tail counts as present when its literal occurs anywhere in the block's left-trimmed text.",
+          "note": "The claim described one arm of a four-arm formatter as though it were the whole result grammar, and the scrape it depends on gained the `(ID: ` marker the other arms use. Both are now stated; the arms themselves and their producer live in BG-040."
         }
       ],
       "attribution": "end-to-end",
@@ -261,13 +281,13 @@
     {
       "id": "BG-003",
       "area": "background-tasks",
-      "behavior": "A backgrounded shell's `tool_result` is a LAUNCH RECEIPT, not a completion. The shell driver first AWAITS the spawn (`xt=await dV(we,d.signal,\"bash\",{...})`, @165032171); then, when `run_in_background` is true and background is neither disabled nor constraint-forbidden, it awaits task registration and returns `{stdout:\"\",stderr:\"\",code:0,interrupted:false,backgroundTaskId}` without awaiting the command's own result promise (@165033229). The result mapper turns that id into the visible tool_result text (@165023434) and the ack formatter writes one of FOUR sentences (@164082185): the explicit `Command running in background with ID: <id>. Output is being written to: <path>.`, a manually-backgrounded variant that also carries `with ID: `, and a moved-to-deliver-a-message and a timed-out variant that both render `(ID: <id>)` instead. So the launch record and its receipt land close together but not instantly, and WHERE the remaining seconds sit is not attributed by any traced hop: the spawn and the registration both happen inside the tool call, so a slow pairing is not the tool idling, and no transcript field records what else intervened (a permission dialog is a named hypothesis, not a finding). Measured 2026-09-04 over every transcript under the projects root, one delta per (a `Bash`/`PowerShell` tool_use with `input.run_in_background` true, the tool_result block naming that id), both timestamps read off the carrying records: 3216 launches, 3216 paired, min 0.049s, median 0.413s, p90 0.955s, p99 7.389s, max 197.855s - 2915 (90.6%) under 1s, 301 at or over 1s, 51 over 5s and 2 over 30s. Under the looser rule that drops the tool-name restriction the same corpus gives 3487 launches, 3487 paired, median 0.413s, p90 1.003s, max 197.855s. The 2026-09-02 check reported one launch of 2942 that never paired at all; it does not reproduce under either rule today. During the pairing window the launch IS an unreturned call; once paired - the steady state for the whole life of the background command - the tail state machine reports `no pending call`, so a running background shell is invisible to unreturned-call liveness logic.",
-      "depends": "This is why csift added the whole-file background scan and the seventh verdict `idle-background-open`; before it, a session idling at `end_turn` with a running background build reported `idle-eot` and satisfied `wait --until stop`. Two consequences follow from the receipt shape. Inside the pairing window the same launch is BOTH an unreturned call at the tail and an already-open background row: `background_scan::ingest_launches` builds the row from the launch `tool_use` alone (`id: None`, `state: Open`), so the harness task id is simply missing until the receipt lands. And because only two of the four ack sentences carry the `with ID: ` marker the ingester scrapes, the id for a moved-to-background or a timed-out launch has to come from the structured `toolUseResult.backgroundTaskId` fallback in the same ingester (src/live/background_scan.rs), never from the ack text alone.",
+      "behavior": "A backgrounded shell's `tool_result` is a LAUNCH RECEIPT, not a completion. The shell driver first AWAITS the spawn (`xt=await dV(we,d.signal,\"bash\",{...})`, @165032171); then, when `run_in_background` is true and background is neither disabled nor constraint-forbidden, it awaits task registration and returns `{stdout:\"\",stderr:\"\",code:0,interrupted:false,backgroundTaskId}` without awaiting the command's own result promise (@165033229). The result mapper turns that id into the visible tool_result text (@165023434) and the ack formatter writes one of FOUR sentences (@164082185): the explicit `Command running in background with ID: <id>. Output is being written to: <path>.`, the ctrl+b gesture's variant, which also carries `with ID: ` and drops both trailing sentences, and a moved-to-deliver-a-message and a timed-out variant that both render `(ID: <id>)` instead. All four interpolate the output path, which is a plain parameter of the formatter rather than an arm of the selector (BG-040). So the launch record and its receipt land close together but not instantly, and WHERE the remaining seconds sit is not attributed by any traced hop: the spawn and the registration both happen inside the tool call, so a slow pairing is not the tool idling, and no transcript field records what else intervened (a permission dialog is a named hypothesis, not a finding). Measured 2026-09-04 over every transcript under the projects root, one delta per (a `Bash`/`PowerShell` tool_use with `input.run_in_background` true, the tool_result block naming that id), both timestamps read off the carrying records: 3216 launches, 3216 paired, min 0.049s, median 0.413s, p90 0.955s, p99 7.389s, max 197.855s - 2915 (90.6%) under 1s, 301 at or over 1s, 51 over 5s and 2 over 30s. Under the looser rule that drops the tool-name restriction the same corpus gives 3487 launches, 3487 paired, median 0.413s, p90 1.003s, max 197.855s. The 2026-09-02 check reported one launch of 2942 that never paired at all; it does not reproduce under either rule today. During the pairing window the launch IS an unreturned call; once paired - the steady state for the whole life of the background command - the tail state machine reports `no pending call`, so a running background shell is invisible to unreturned-call liveness logic.",
+      "depends": "This is why csift added the whole-file background scan and the seventh verdict `idle-background-open`; before it, a session idling at `end_turn` with a running background build reported `idle-eot` and satisfied `wait --until stop`. Two consequences follow from the receipt shape. Inside the pairing window the same launch is BOTH an unreturned call at the tail and an already-open background row: `background_scan::ingest_launches` builds the row from the launch `tool_use` alone (`id: None`, `state: Open`), so the harness task id is simply missing until the receipt lands. And because only two of the four ack sentences carry the `with ID: ` marker, the ingester also scrapes `(ID: ` for the moved-to-background and timed-out arms - the structured `toolUseResult.backgroundTaskId` fallback could not serve them, because it runs only for a row that already exists and those launches carry no flag to build one from. Their row is minted from the receipt itself (BG-040).",
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "4-7",
-          "snippet": "//! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its\n//!   tool_result arrives within milliseconds (\"Command running in background with ID:\n//!   <id>. Output is being written to: <path> ...\"), so the tail state machine pairs it\n//!   at once - it is invisible to the unreturned-call logic by construction;"
+          "lines": "4-13",
+          "snippet": "//! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its\n//!   tool_result arrives within milliseconds (\"Command running in background with ID:\n//!   <id>. Output is being written to: <path> ...\"), so the tail state machine pairs it\n//!   at once - it is invisible to the unreturned-call logic by construction. That flag\n//!   is only ONE of four entrances: Claude Code also moves a FOREGROUND shell into the\n//!   background when the user presses ctrl+b, when the command hits its timeout, or to\n//!   let a queued message reach the model. The launching tool_use carries no flag on\n//!   those three and is never rewritten, so the only instrument is the RECEIPT sentence\n//!   (one template, four arms) plus `toolUseResult.backgroundedByUser` /\n//!   `timedOutAfterMs` / `backgroundedToDeliverMessage` - see [`BgEntrance`];"
         },
         {
           "path": "src/live/verdict.rs",
@@ -312,6 +332,16 @@
           "observed": "before: A backgrounded shell's `tool_result` normally arrives sub-second (corpus median 0.42s, 90.4% under 1s) but not always: 9.6% of 2941 pairings took over 1s, 48 took over 5s and the slowest took 197.9s, and 1 launch of 2942 || after: A backgrounded shell's `tool_result` is a LAUNCH RECEIPT, not a completion. The shell driver first AWAITS the spawn (`xt=await dV(we,d.signal,\"bash\",{...})`, @165032171); then, when `run_in_background` is true and backgr",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "Two sub-facts the chain never reached are now stated as measurements rather than as properties of the producer, and the one unsourced localization a previous rewrite added is removed. The refuting hop is the spawn await at 165032171: the driver awaits `dV(...)` BEFORE the background branch is reached, and the branch itself awaits the shell's result promise for a preSpawnError and awaits task registration before returning the receipt, so real work happens inside the tool call and the sentence `the ack is minted synchronously inside the tool call, so the delay lies between the assistant record's"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the formatter's selector and its parameter list at their offsets in the shipped 2.1.258 build, and read the two call sites to see how outputPath is supplied; then check on a live 2.1.258 trial which of the four sentences a ctrl+b press produces and what it omits.",
+          "observed": "The formatter at 164082185 takes outputPath as its second parameter and every arm interpolates it; both callers pass pl(<task id>) (165023456 Bash, 176589229 PowerShell), so no arm can omit the path. The live trial's ctrl+b press produced exactly the first arm, `Command was manually backgrounded by user with ID: <id>. Output is being written to: <abs path>/tasks/<id>.output.`, with neither trailing sentence, alongside toolUseResult.backgroundedByUser true.",
+          "rule": "One live gesture, one receipt read verbatim; the formatter and its two callers read at their byte offsets in the shipped build.",
+          "note": "Two corrections. The manually-backgrounded arm is the ctrl+b gesture's and is the only ack with no trailing sentence, which the claim did not say. And the depends clause routed the `(ID: ` arms' id through the structured fallback, which cannot reach them: that fallback only updates a row that already exists, and a flagless launch has none - the receipt now mints the row and scrapes the id itself."
         }
       ],
       "attribution": "end-to-end",
@@ -367,17 +397,17 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "124-133",
-          "snippet": "                // An async agent launch: the sentinel status on the structured echo.\n                let probe = rec.tur_probe();\n                let launched = probe\n                    .as_ref()\n                    .and_then(|p| p.status.as_ref())\n                    .and_then(serde_json::Value::as_str)\n                    == Some(\"async_launched\");\n                if !launched {\n                    continue;\n                }"
+          "lines": "256-265",
+          "snippet": "    // An async agent launch: the sentinel status on the structured echo.\n    let probe = rec.tur_probe();\n    let launched = probe\n        .as_ref()\n        .and_then(|p| p.status.as_ref())\n        .and_then(serde_json::Value::as_str)\n        == Some(\"async_launched\");\n    if !launched {\n        return;\n    }"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "142-156",
-          "snippet": "                tasks.entry(tuid.clone()).or_insert(BgTask {\n                    kind: BgKind::Agent,\n                    id: s(\"agentId\"),\n                    tool_use_id: tuid.clone(),\n                    description: s(\"description\"),\n                    command: None,\n                    launched_utc: rec.timestamp.clone(),\n                    lane: lane.to_string(),\n                    output_file: s(\"outputFile\"),\n                    state: BgState::Open,\n                    returned_utc: None,\n                    output_bytes: None,\n                    output_age_secs: None,\n                    ignored_by: None,\n                });"
+          "lines": "274-286",
+          "snippet": "    tasks.entry(tuid.to_string()).or_insert(BgTask {\n        kind: BgKind::Agent,\n        id: s(\"agentId\"),\n        tool_use_id: tuid.to_string(),\n        description: s(\"description\"),\n        command: None,\n        entered_by: None,\n        timed_out_after_ms: None,\n        launch_note: None,\n        launched_utc: rec.timestamp.clone(),\n        lane: lane.to_string(),\n        output_file: s(\"outputFile\"),\n        state: BgState::Open,"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "8-9",
+          "lines": "14-15",
           "snippet": "//! - an async AGENT: a tool_result whose `toolUseResult` is `{isAsync:true,\n//!   status:\"async_launched\", agentId, description, outputFile}`;"
         },
         {
@@ -638,7 +668,7 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "61-74",
+          "lines": "141-154",
           "snippet": "                let get = |k: &str| {\n                    input\n                        .get(k)\n                        .and_then(serde_json::Value::as_str)\n                        .map(str::to_string)\n                };\n                // A websocket monitor has no command: its url is the thing to name.\n                let command = get(\"command\").or_else(|| {\n                    input\n                        .get(\"ws\")\n                        .and_then(|w| w.get(\"url\"))\n                        .and_then(serde_json::Value::as_str)\n                        .map(str::to_string)\n                });"
         }
       ],
@@ -731,13 +761,13 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "10-17",
+          "lines": "16-23",
           "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "100-111",
-          "snippet": "                if let Some(task) = tasks.get_mut(tuid) {\n                    // The shell result: the task id + output path live in the text (and\n                    // the id also in `toolUseResult.backgroundTaskId`); a Monitor arm reads\n                    // `Monitor started (task <id>, \u2026)` with `toolUseResult.taskId`.\n                    let text = content\n                        .as_ref()\n                        .map(crate::model::tool_result_content_text)\n                        .unwrap_or_default();\n                    if task.id.is_none() {\n                        task.id = after_marker(&text, \"with ID: \")\n                            .or_else(|| after_marker(&text, \"(task \"))\n                            .or_else(|| {"
+          "lines": "199-209",
+          "snippet": "    let text = content\n        .map(crate::model::tool_result_content_text)\n        .unwrap_or_default();\n    if let Some(task) = tasks.get_mut(tuid) {\n        // The shell result: the task id + output path live in the text (and the id also\n        // in `toolUseResult.backgroundTaskId`); a Monitor arm reads `Monitor started\n        // (task <id>, \u2026)` with `toolUseResult.taskId`.\n        if task.id.is_none() {\n            task.id = after_marker(&text, \"with ID: \")\n                .or_else(|| after_marker(&text, \"(task \"))\n                .or_else(|| after_marker(&text, \"(ID: \"))"
         }
       ],
       "instrument": "`rg -o 'Monitor started \\(task [a-z0-9]{9}' ~/.claude/projects --glob '*.jsonl' | wc -l` against `rg -c '\"name\":\"Monitor\"'`, then join each arm's `tool_use` id to a `tool_result` in the same file. Counting rule: one arm per `tool_use` block; an arm is unreturned when no `tool_result` block in the same file carries its id.",
@@ -836,12 +866,12 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "10-17",
+          "lines": "16-23",
           "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "75-80",
+          "lines": "155-160",
           "snippet": "                tasks.entry(id.clone()).or_insert(BgTask {\n                    kind: if name == \"Monitor\" {\n                        BgKind::Monitor\n                    } else {\n                        BgKind::Shell\n                    },"
         }
       ],
@@ -940,12 +970,12 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "75-80",
+          "lines": "155-160",
           "snippet": "                tasks.entry(id.clone()).or_insert(BgTask {\n                    kind: if name == \"Monitor\" {\n                        BgKind::Monitor\n                    } else {\n                        BgKind::Shell\n                    },"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "10-17",
+          "lines": "16-23",
           "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         }
       ],
@@ -1261,17 +1291,17 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "19-21",
+          "lines": "25-27",
           "snippet": "//! Completion is a `<task-notification>` whose `<tool-use-id>` equals the launching\n//! tool_use id (an exact join; the 9-char `backgroundTaskId` is a second key, absent on\n//! 43% of subagent-lane launches), with `<status>` completed | failed | killed | stopped."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "205-216",
+          "lines": "398-409",
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "279-291",
+          "lines": "471-484",
           "snippet": "/// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.\n/// The latest carrier wins (an agent notifies again after a resume).\npub(crate) fn resolve_carriers(\n    tasks: &mut BTreeMap<String, BgTask>,\n    carriers: &[Carrier],\n    notes: &mut Vec<String>,\n) {\n    let mut by_id: BTreeMap<String, String> = BTreeMap::new();\n    for (tuid, t) in tasks.iter() {\n        if let Some(id) = &t.id {\n            by_id.insert(id.clone(), tuid.clone());\n        }\n    }"
         }
       ],
@@ -1645,12 +1675,12 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "44-49",
+          "lines": "49-55",
           "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgKind {\n    Shell,\n    Agent,\n    Monitor,\n}"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "98-106",
+          "lines": "143-152",
           "snippet": "    pub(crate) fn from_status(status: Option<&str>) -> Self {\n        match status.map(str::trim) {\n            None | Some(\"\") | Some(\"completed\") => BgState::Completed,\n            Some(\"failed\") => BgState::Failed,\n            Some(\"killed\") => BgState::Killed,\n            Some(\"stopped\") => BgState::Stopped,\n            Some(\"blocked\") => BgState::Blocked,\n            Some(_) => BgState::Other,\n        }"
         }
       ],
@@ -1807,13 +1837,13 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "19-21",
+          "lines": "25-27",
           "snippet": "//! Completion is a `<task-notification>` whose `<tool-use-id>` equals the launching\n//! tool_use id (an exact join; the 9-char `backgroundTaskId` is a second key, absent on\n//! 43% of subagent-lane launches), with `<status>` completed | failed | killed | stopped."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "108-117",
-          "snippet": "                    if task.id.is_none() {\n                        task.id = after_marker(&text, \"with ID: \")\n                            .or_else(|| after_marker(&text, \"(task \"))\n                            .or_else(|| {\n                                let v = rec.tool_use_result_value()?;\n                                v.get(\"backgroundTaskId\")\n                                    .or_else(|| v.get(\"taskId\"))?\n                                    .as_str()\n                                    .map(str::to_string)\n                            });"
+          "lines": "206-217",
+          "snippet": "        if task.id.is_none() {\n            task.id = after_marker(&text, \"with ID: \")\n                .or_else(|| after_marker(&text, \"(task \"))\n                .or_else(|| after_marker(&text, \"(ID: \"))\n                .or_else(|| {\n                    let v = rec.tool_use_result_value()?;\n                    v.get(\"backgroundTaskId\")\n                        .or_else(|| v.get(\"taskId\"))?\n                        .as_str()\n                        .map(str::to_string)\n                });\n        }"
         }
       ],
       "instrument": "For every background launch, parse `toolUseResult` on the paired result and test for a `backgroundTaskId` key, bucketing by whether the file path contains a `subagents` component. Counting rule: one presence/absence observation per launch keyed (file, tool_use id).",
@@ -1907,12 +1937,12 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "22-27",
+          "lines": "28-33",
           "snippet": "//! It rides THREE carriers: a `type:\"user\"` string record when the session was idle,\n//! or (40% of returned shells) a `queue-operation` enqueue + remove and a\n//! `queued_command` attachment when it landed mid-turn - never a user record. A shell\n//! launched from a SUBAGENT lane is completed in the PARENT main transcript (607/618\n//! measured; zero notifications exist in any subagent transcript), so this scan reads\n//! launches from every lane and completions from the main file."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "225-236",
+          "lines": "418-429",
           "snippet": "pub(crate) fn carrier_text(rec: &Record) -> Option<String> {\n    if rec.is_type(\"queue-operation\") {\n        rec.content_str().map(str::to_string)\n    } else if rec.attachment_type().as_deref() == Some(\"queued_command\") {\n        rec.attachment_value()\n            .and_then(|v| v.get(\"prompt\")?.as_str().map(str::to_string))\n    } else if let Some(Content::Text(s)) = rec.message.as_ref().and_then(|m| m.content.as_ref()) {\n        Some(s.clone())\n    } else {\n        None\n    }\n}"
         }
       ],
@@ -2007,18 +2037,18 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "22-27",
+          "lines": "28-33",
           "snippet": "//! It rides THREE carriers: a `type:\"user\"` string record when the session was idle,\n//! or (40% of returned shells) a `queue-operation` enqueue + remove and a\n//! `queued_command` attachment when it landed mid-turn - never a user record. A shell\n//! launched from a SUBAGENT lane is completed in the PARENT main transcript (607/618\n//! measured; zero notifications exist in any subagent transcript), so this scan reads\n//! launches from every lane and completions from the main file."
         },
         {
           "path": "src/live/background.rs",
-          "lines": "274-288",
+          "lines": "329-343",
           "snippet": "pub(crate) fn main_transcript_for(path: &Path) -> PathBuf {\n    if !crate::subagent::is_subagent_path(path) {\n        return path.to_path_buf();\n    }\n    let mut dir = path.parent();\n    while let Some(d) = dir {\n        if d.file_name().and_then(|n| n.to_str()) == Some(\"subagents\") {\n            if let Some(session_dir) = d.parent() {\n                return session_dir.with_extension(\"jsonl\");\n            }\n        }\n        dir = d.parent();\n    }\n    path.to_path_buf()\n}"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "327-330",
-          "snippet": "            ingest_launches(&rec, &lane, &mut tasks);\n            if is_main {\n                ingest_carriers(&rec, &mut carriers, &mut notes);\n            }"
+          "lines": "383-386",
+          "snippet": "            ingest_launches(&rec, &lane, &mut tasks, &mut minted);\n            if is_main {\n                ingest_carriers(&rec, &mut carriers, &mut notes);\n            }"
         }
       ],
       "instrument": "Take a background id launched inside a `subagents/agent-*.jsonl` and `rg -c '<that id>'` in the child file against the parent transcript: the completion appears only in the parent. Counting rule: one launch per (file, tool_use id), `rg -c` counting matching lines; the e2e test `subagent_launches_complete_in_the_parent_main_transcript` in src/live/tests/background_scan.rs pins it.",
@@ -2176,7 +2206,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "242-257",
+          "lines": "435-450",
           "snippet": "pub(crate) fn delivered_pulse_labels(rec: &Record) -> Vec<String> {\n    if rec.is_type(\"queue-operation\") && rec.operation.as_deref() != Some(\"enqueue\") {\n        return Vec::new();\n    }\n    let Some(text) = carrier_text(rec) else {\n        return Vec::new();\n    };\n    text.split(TASK_NOTIFICATION_PREFIX)\n        .skip(1)\n        .map(|section| {\n            crate::model::automation_label_for_section(&format!(\n                \"{TASK_NOTIFICATION_PREFIX}{section}\"\n            ))\n        })\n        .collect()\n}"
         },
         {
@@ -2374,7 +2404,7 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "309-322",
+          "lines": "502-515",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         },
         {
@@ -2469,12 +2499,12 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "44-49",
+          "lines": "49-55",
           "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgKind {\n    Shell,\n    Agent,\n    Monitor,\n}"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "309-322",
+          "lines": "502-515",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         }
       ],
@@ -2586,7 +2616,7 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "10-17",
+          "lines": "16-23",
           "snippet": "//! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a\n//!   websocket), armed on disk as an immediately-paired pair whose result reads `Monitor\n//!   started (task <id>, \u2026)` with `toolUseResult.taskId`. It shares the `b\u2026` id namespace\n//!   with backgrounded shells (both are `local_bash` tasks in the harness), so only the\n//!   tool name tells them apart. Event pulses (`Monitor event: \u2026`, no `<status>`) never\n//!   close it; a termination notice (`<status>completed</status>`, summary opening\n//!   `Monitor`) or a timeout event does; a PERSISTENT monitor never returns by design\n//!   (measured: 30% of armed monitors produced no notification at all)."
         }
       ],
@@ -2676,7 +2706,7 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "279-281",
+          "lines": "471-474",
           "snippet": "/// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.\n/// The latest carrier wins (an agent notifies again after a resume).\npub(crate) fn resolve_carriers("
         }
       ],
@@ -2807,22 +2837,22 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "29-35",
+          "lines": "35-41",
           "snippet": "//! At the next session start Claude Code reconciles orphans itself: one notification\n//! carrying several `<task-id>` tags plus `__orphan_summary__:shell`, status `stopped`,\n//! whose summary says the tasks \"may have been stopped (via the UI, Monitor timeout, or\n//! agent teardown - these leave no transcript marker)\". That sentence is the honesty\n//! bound: NOT RETURNED IS NOT PROOF OF STILL RUNNING. The `<output-file>` from the\n//! launch is a real file (an agent's is a symlink to its transcript); its size and\n//! mtime are an independent \"still producing output\" signal, one `stat` per open task."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "205-216",
+          "lines": "398-409",
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "260-277",
+          "lines": "453-470",
           "snippet": "pub(crate) fn all_xml_tags(s: &str, tag: &str) -> Vec<String> {\n    let open = format!(\"<{tag}>\");\n    let close = format!(\"</{tag}>\");\n    let mut out = Vec::new();\n    let mut at = 0usize;\n    while let Some(i) = s[at..].find(&open) {\n        let start = at + i + open.len();\n        let Some(j) = s[start..].find(&close) else {\n            break;\n        };\n        let inner = s[start..start + j].trim();\n        if !inner.is_empty() {\n            out.push(inner.to_string());\n        }\n        at = start + j + close.len();\n    }\n    out\n}"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "330-336",
+          "lines": "523-529",
           "snippet": "    if orphaned > 0 {\n        notes.push(format!(\n            \"{orphaned} task(s) were reconciled as stopped by Claude Code at a later session \\\n             start (its orphan summary: no completion record; a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker)\"\n        ));\n    }"
         }
       ],
@@ -2947,12 +2977,12 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "205-216",
+          "lines": "398-409",
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "309-322",
+          "lines": "502-515",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         }
       ],
@@ -3037,7 +3067,7 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "44-49",
+          "lines": "49-55",
           "snippet": "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub(crate) enum BgKind {\n    Shell,\n    Agent,\n    Monitor,\n}"
         }
       ],
@@ -3358,7 +3388,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "188-204",
+          "lines": "381-397",
           "snippet": "    if crate::model::is_agents_stopped_notice(&text) {\n        // The notice rides both a queue enqueue line and the user record: one note per\n        // (count, second). It names no id, so csift cannot say WHICH agents it stopped.\n        let head = text.trim_start();\n        let n = head.bytes().take_while(u8::is_ascii_digit).count();\n        let count = if n == 0 { \"1\" } else { &head[..n] };\n        let ts = rec.timestamp.as_deref().unwrap_or(\"?\");\n        let note = format!(\n            \"{count} background agent(s) were stopped by the user at {} - the notice names \\\n             no id, so csift cannot mark which agents it stopped\",\n            ts.get(..19).unwrap_or(ts)\n        );\n        if !notes.contains(&note) {\n            notes.push(note);\n        }\n        return;\n    }"
         }
       ],
@@ -3690,12 +3720,12 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "29-35",
+          "lines": "35-41",
           "snippet": "//! At the next session start Claude Code reconciles orphans itself: one notification\n//! carrying several `<task-id>` tags plus `__orphan_summary__:shell`, status `stopped`,\n//! whose summary says the tasks \"may have been stopped (via the UI, Monitor timeout, or\n//! agent teardown - these leave no transcript marker)\". That sentence is the honesty\n//! bound: NOT RETURNED IS NOT PROOF OF STILL RUNNING. The `<output-file>` from the\n//! launch is a real file (an agent's is a symlink to its transcript); its size and\n//! mtime are an independent \"still producing output\" signal, one `stat` per open task."
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "340-353",
+          "lines": "533-546",
           "snippet": "pub(crate) fn stat_output(t: &mut BgTask) {\n    let Some(p) = t.output_file.as_deref() else {\n        return;\n    };\n    let Ok(meta) = std::fs::metadata(p) else {\n        return;\n    };\n    t.output_bytes = Some(meta.len());\n    if let Ok(modified) = meta.modified() {\n        if let Ok(age) = std::time::SystemTime::now().duration_since(modified) {\n            t.output_age_secs = Some(i64::try_from(age.as_secs()).unwrap_or(i64::MAX));\n        }\n    }\n}"
         }
       ],
@@ -3790,7 +3820,7 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "165-179",
+          "lines": "358-372",
           "snippet": "pub(crate) fn after_marker(text: &str, marker: &str) -> Option<String> {\n    let start = text.find(marker)? + marker.len();\n    let rest = &text[start..];\n    let end = rest\n        .char_indices()\n        .find(|&(i, c)| {\n            c.is_whitespace()\n                || c == ','\n                || c == ')'\n                || (c == '.' && rest[i + 1..].starts_with([' ', '\\n']))\n        })\n        .map_or(rest.len(), |(i, _)| i);\n    let tok = rest[..end].trim_end_matches('.');\n    (!tok.is_empty()).then(|| tok.to_string())\n}"
         }
       ],
@@ -3878,8 +3908,8 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "21",
-          "snippet": "/// The five raw-byte needles (R13 law: bare value substrings, serialization-safe)."
+          "lines": "33-36",
+          "snippet": "/// The raw-byte needles (R13 law: bare value substrings, serialization-safe). The last\n/// two reach the receipts of the three harness-side entrances; the second of them covers\n/// both the timeout and the deliver-message sentence."
         }
       ],
       "instrument": "Read the background gate at 165033229, the result-promise handler at 164973415 and the notifier's enqueue at 164968551 in the shipped binary; read the write queue at 166084081, the drain's item-kind branch at 166086064, performRemoveByUuid at 166095622, performCompactTranscript at 166098791 and its rename at 166100780, and the localGcEnabled guard at 166084451 with its class default at 166076591. Enumerate the notifier's call sites with grep -abo 'Ddt(' and read each. On disk: walk every transcript under the projects root, byte-prefiltered on backgroundTaskId; take each distinct backgroundTaskId at the first toolUseResult line carrying it, find the first later line in the same file that names that id and carries a task-notification marker, and report the byte and line distance between line starts; for a launch with no such line report the distance to end of file. Counting rule: one launch per distinct backgroundTaskId per file.",
@@ -4094,8 +4124,8 @@
         },
         {
           "path": "src/live/background.rs",
-          "lines": "316-330",
-          "snippet": "        let mut pos = 0usize;\n        while pos < bytes.len() {\n            let end = memchr::memchr(b'\\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);\n            let line = &bytes[pos..end];\n            pos = end + 1;\n            if !line_is_bg_candidate(line) {\n                continue;\n            }\n            let Ok(Some(rec)) = crate::parse::parse_line(line) else {\n                continue;\n            };\n            ingest_launches(&rec, &lane, &mut tasks);\n            if is_main {\n                ingest_carriers(&rec, &mut carriers, &mut notes);\n            }"
+          "lines": "372-386",
+          "snippet": "        let mut pos = 0usize;\n        while pos < bytes.len() {\n            let end = memchr::memchr(b'\\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);\n            let line = &bytes[pos..end];\n            pos = end + 1;\n            if !line_is_bg_candidate(line) {\n                continue;\n            }\n            let Ok(Some(rec)) = crate::parse::parse_line(line) else {\n                continue;\n            };\n            ingest_launches(&rec, &lane, &mut tasks, &mut minted);\n            if is_main {\n                ingest_carriers(&rec, &mut carriers, &mut notes);\n            }"
         },
         {
           "path": "src/live/verdict.rs",
@@ -4365,8 +4395,8 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "21-39",
-          "snippet": "/// The five raw-byte needles (R13 law: bare value substrings, serialization-safe).\npub(crate) fn line_is_bg_candidate(line: &[u8]) -> bool {\n    static FINDERS: std::sync::LazyLock<Vec<memmem::Finder<'static>>> =\n        std::sync::LazyLock::new(|| {\n            [\n                &b\"run_in_background\"[..],\n                b\"Command running in background\",\n                b\"async_launched\",\n                b\"task-notification\",\n                b\"stopped by the user\",\n                b\"\\\"Monitor\\\"\",\n                b\"Monitor started\",\n            ]\n            .into_iter()\n            .map(memmem::Finder::new)\n            .collect()\n        });\n    FINDERS.iter().any(|f| f.find(line).is_some())\n}"
+          "lines": "33-47",
+          "snippet": "/// The raw-byte needles (R13 law: bare value substrings, serialization-safe). The last\n/// two reach the receipts of the three harness-side entrances; the second of them covers\n/// both the timeout and the deliver-message sentence.\npub(crate) fn line_is_bg_candidate(line: &[u8]) -> bool {\n    static FINDERS: std::sync::LazyLock<Vec<memmem::Finder<'static>>> =\n        std::sync::LazyLock::new(|| {\n            [\n                &b\"run_in_background\"[..],\n                b\"Command running in background\",\n                b\"async_launched\",\n                b\"task-notification\",\n                b\"stopped by the user\",\n                b\"\\\"Monitor\\\"\",\n                b\"Monitor started\","
         }
       ],
       "instrument": "`rg -c '\"name\":\"ScheduleWakeup\"' ~/.claude/projects --glob '*.jsonl'`, then enumerate the paired results' `toolUseResult` key sets - no id-shaped field appears. Counting rule: one key-set observation per result record, one row per `ScheduleWakeup` tool_use block.",
@@ -4599,7 +4629,7 @@
         },
         {
           "path": "src/live/background.rs",
-          "lines": "37-39",
+          "lines": "43-45",
           "snippet": "//! Never-returned launches sit 56-375 MB before EOF on real files, so this is a whole-\n//! file scan behind a five-needle byte prefilter (measured +0.2-0.4 s worst case), not a\n//! tail read."
         }
       ],
@@ -4851,7 +4881,7 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "37-39",
+          "lines": "43-45",
           "snippet": "//! Never-returned launches sit 56-375 MB before EOF on real files, so this is a whole-\n//! file scan behind a five-needle byte prefilter (measured +0.2-0.4 s worst case), not a\n//! tail read."
         }
       ],
@@ -10001,12 +10031,12 @@
       "id": "BASH-027",
       "area": "bash-shell",
       "behavior": "A foreground Bash command that outruns its timeout is MOVED TO THE BACKGROUND rather than killed only WHEN auto-backgrounding is armed. The shell driver computes cn=Ll()||constraints.background===\"forbidden\" and Ot=!cn&&OSr(we) (byte 165032058) and registers the promotion only under if(xt.onTimeout&&Ot) (byte 165033132). On that path the driver returns {stdout:\"\",stderr:\"\",code:0,interrupted:!1,backgroundTaskId:pt,timedOutAfterMs:rt} (byte 165033881) - so the echo carries a minted backgroundTaskId, the APPLIED (post-clamp) limit as toolUseResult.timedOutAfterMs, interrupted false and EMPTY stdout and stderr - and the ack formatter's third arm renders the tool_result text `Command did not complete within its <N>s timeout and was moved to the background (ID: <id>). Output is being written to: <path>.` (byte 164082185). The schema description of the optional member reads `Set when the command hit its timeout and was auto-backgrounded; the timeout value in ms`. When Ot is FALSE - background tasks disabled, forbidden by the caller, or a command OSr refuses (a non-simple parse, or a first word in the denylist [\"sleep\"]) - nothing is armed and the same timer KILLS the command: exit code 143 (the constant vvt at byte 161445121), the note `Command timed out after <duration>` written only on the timeout kill (byte 161449100), and the call is persisted as a STRING toolUseResult whose head is `Error: Exit code 143` + newline + that note, with is_error true on the tool_result block, no backgroundTaskId and no timedOutAfterMs. Measured 2026-09-04 over the whole projects root (8408 transcripts): 61 promoted echoes, 61 of 61 with a backgroundTaskId, 61 of 61 with empty stdout AND empty stderr, 0 interrupted, 61 of 61 carrying the moved-to-background sentence, 0 of 61 launched with run_in_background; applied limits 120000 x41, 600000 x10, 300000 x6, 420000 x3, 180000 x1, across 14 builds, none of them yet 2.1.258. The kill arm over the same scope and date: 141 string echoes, tool name Bash on 141 of 141, is_error true on 141 of 141, 0 launched with run_in_background, across 14 builds with 4 at 2.1.258. Restricted to the 68 TOP-LEVEL transcripts (the scope the claim's standing instrument names) the same two passes return 31 promoted and 81 killed.",
-      "depends": "csift's `status` BACKGROUND scan mints a shell task only from a `tool_use` whose `input.run_in_background` is true, and its raw-byte candidate needles cover `Command running in background` but not the moved-to-background wording, so a timeout-promoted task is missing from the very section that exists to name still-running work - and none of the 61 promoted calls is reachable by the existing path, because 0 of 61 were launched with run_in_background. `recover` is hit differently: the promoted call's echo carries empty stdout, so a bash READ content anchor can never gate on it - the command's output exists only in the harness task output file. The kill arm is a second blind spot with a different shape: a killed-at-timeout Bash leaves NO object echo at all, only a STRING toolUseResult, so any surface that reads `toolUseResult` as a dict (the freshness and file-op carriers in `files`/`recover`, the tur_probe fast path) silently skips those 141 records; the only handles on them are the tool_result block's `is_error` flag and the literal head text `Error: Exit code 143`.",
+      "depends": "csift's `status` BACKGROUND scan reads the promoted task from its RECEIPT: the candidate needles cover `moved to the background (ID: ` beside `Command running in background`, and a receipt whose `tool_use` id has no row mints one, tagged `entered_by: timeout` and carrying `timedOutAfterMs` (claim BG-040). This is the only path to them, since the promoted calls are launched without run_in_background; before it they were missing from the very section that exists to name still-running work. `recover` is hit differently: the promoted call's echo carries empty stdout, so a bash READ content anchor can never gate on it - the command's output exists only in the harness task output file. The kill arm is a second blind spot with a different shape: a killed-at-timeout Bash leaves NO object echo at all, only a STRING toolUseResult, so any surface that reads `toolUseResult` as a dict (the freshness and file-op carriers in `files`/`recover`, the tur_probe fast path) silently skips those 141 records; the only handles on them are the tool_result block's `is_error` flag and the literal head text `Error: Exit code 143`.",
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "25-33",
-          "snippet": "            [\n                &b\"run_in_background\"[..],\n                b\"Command running in background\",\n                b\"async_launched\",\n                b\"task-notification\",\n                b\"stopped by the user\",\n                b\"\\\"Monitor\\\"\",\n                b\"Monitor started\",\n            ]"
+          "lines": "40-50",
+          "snippet": "            [\n                &b\"run_in_background\"[..],\n                b\"Command running in background\",\n                b\"async_launched\",\n                b\"task-notification\",\n                b\"stopped by the user\",\n                b\"\\\"Monitor\\\"\",\n                b\"Monitor started\",\n                b\"manually backgrounded by user with ID: \",\n                b\"moved to the background (ID: \",\n            ]"
         }
       ],
       "instrument": "`strings` over the installed Claude Code binary (2.1.258) for the optional schema member `timedOutAfterMs` with its description and for the literal `was moved to the background (ID: `. Corpus: for every Bash echo carrying `timedOutAfterMs`, read `interrupted`, `backgroundTaskId`, `stdout`, `stderr` and the tool_result block's text. Counting rule: one tally per Bash echo carrying the key, over every top-level transcript. Measured 2026-09-02: 31 results, 31 with a `backgroundTaskId`, 31 with empty stdout and stderr, 0 interrupted, 31 whose text carries the moved-to-background sentence.",
@@ -10046,6 +10076,16 @@
           "observed": "before: A FOREGROUND Bash command that outruns its timeout is not killed: Claude Code moves it to the background, mints a `backgroundTaskId`, records the elapsed limit as `toolUseResult.timedOutAfterMs` (its schema description r || after: A foreground Bash command that outruns its timeout is MOVED TO THE BACKGROUND rather than killed only WHEN auto-backgrounding is armed. The shell driver computes cn=Ll()||constraints.background===\"forbidden\" and Ot=!cn&&",
           "rule": "every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
           "note": "The old text stated the promotion as a universal - 'A FOREGROUND Bash command that outruns its timeout is not killed' - and the producer refutes it: the arming gate if(xt.onTimeout&&Ot) at byte 165033132 has no third arm, so with Ot false (byte 165032058) the same timer kills with SIGTERM and the note at byte 161449100 fires, which I re-read today along with vvt=143 at byte 161445121. Everything the old text measured is intact and reproduced digit for digit today; what changed is that the sentence is now conditional and the killed shape is stated beside the promoted one, with its own specimen "
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-run the A/B the previous check used, then compare `csift status --format json` between the released binary and the built one on real sessions carrying timeout promotions, counting `background.tasks[]` rows and reading each row's `entered_by`.",
+          "observed": "On three real sessions the open-task count rises 3 -> 5, 5 -> 6 and 51 -> 54, and the new rows read entered_by timeout (2, 1 and 3 respectively); a fourth session whose two promotions both closed stays at 0 rows under both binaries, which is the correct answer. On the fixture pair the timeout-promoted session moves from `verdict idle-eot` with no background section to `verdict idle-background-open` with a `bg shell` row reading `entered by timeout after 2m`.",
+          "rule": "One status invocation per session per binary; a task counts as entered when it appears in the JSON verdict's background.tasks[] array, which lists open tasks only, so a promotion that already completed correctly contributes no row.",
+          "note": "The behavior is unchanged and every traced hop still reads. The depends clause is what moved: the blind spot it describes is closed, and the promoted call is now reachable by the receipt rather than unreachable for want of a flag. The incidental repo observation in the first check - that the needle array's doc comment said five where the array held seven - is also settled, the comment no longer states a count."
         }
       ],
       "attribution": "end-to-end",
@@ -10253,7 +10293,7 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "49-59",
+          "lines": "129-139",
           "snippet": "            Block::ToolUse {\n                id: Some(id),\n                name: Some(name),\n                input: Some(input),\n                ..\n            } if (matches!(name.as_str(), \"Bash\" | \"PowerShell\")\n                && input\n                    .get(\"run_in_background\")\n                    .and_then(serde_json::Value::as_bool)\n                    == Some(true))\n                || name == \"Monitor\" =>"
         }
       ],
@@ -11663,7 +11703,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "195-197",
+          "lines": "388-390",
           "snippet": "        let note = format!(\n            \"{count} background agent(s) were stopped by the user at {} - the notice names \\\n             no id, so csift cannot mark which agents it stopped\","
         }
       ],
@@ -30951,7 +30991,7 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "37-39",
+          "lines": "43-45",
           "snippet": "//! Never-returned launches sit 56-375 MB before EOF on real files, so this is a whole-\n//! file scan behind a five-needle byte prefilter (measured +0.2-0.4 s worst case), not a\n//! tail read."
         }
       ],
@@ -33786,8 +33826,8 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "4-7",
-          "snippet": "//! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its\n//!   tool_result arrives within milliseconds (\"Command running in background with ID:\n//!   <id>. Output is being written to: <path> ...\"), so the tail state machine pairs it\n//!   at once - it is invisible to the unreturned-call logic by construction;"
+          "lines": "4-13",
+          "snippet": "//! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its\n//!   tool_result arrives within milliseconds (\"Command running in background with ID:\n//!   <id>. Output is being written to: <path> ...\"), so the tail state machine pairs it\n//!   at once - it is invisible to the unreturned-call logic by construction. That flag\n//!   is only ONE of four entrances: Claude Code also moves a FOREGROUND shell into the\n//!   background when the user presses ctrl+b, when the command hits its timeout, or to\n//!   let a queued message reach the model. The launching tool_use carries no flag on\n//!   those three and is never rewritten, so the only instrument is the RECEIPT sentence\n//!   (one template, four arms) plus `toolUseResult.backgroundedByUser` /\n//!   `timedOutAfterMs` / `backgroundedToDeliverMessage` - see [`BgEntrance`];"
         },
         {
           "path": "src/live/verdict.rs",
@@ -46423,12 +46463,12 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "225-236",
+          "lines": "418-429",
           "snippet": "pub(crate) fn carrier_text(rec: &Record) -> Option<String> {\n    if rec.is_type(\"queue-operation\") {\n        rec.content_str().map(str::to_string)\n    } else if rec.attachment_type().as_deref() == Some(\"queued_command\") {\n        rec.attachment_value()\n            .and_then(|v| v.get(\"prompt\")?.as_str().map(str::to_string))\n    } else if let Some(Content::Text(s)) = rec.message.as_ref().and_then(|m| m.content.as_ref()) {\n        Some(s.clone())\n    } else {\n        None\n    }\n}"
         },
         {
           "path": "src/live/background.rs",
-          "lines": "22-27",
+          "lines": "28-33",
           "snippet": "//! It rides THREE carriers: a `type:\"user\"` string record when the session was idle,\n//! or (40% of returned shells) a `queue-operation` enqueue + remove and a\n//! `queued_command` attachment when it landed mid-turn - never a user record. A shell\n//! launched from a SUBAGENT lane is completed in the PARENT main transcript (607/618\n//! measured; zero notifications exist in any subagent transcript), so this scan reads\n//! launches from every lane and completions from the main file."
         }
       ],
@@ -46778,7 +46818,7 @@
       "code": [
         {
           "path": "src/live/background.rs",
-          "lines": "63-81",
+          "lines": "109-127",
           "snippet": "pub(crate) enum BgState {\n    /// Launched, no completion carrier names it yet.\n    Open,\n    Completed,\n    Failed,\n    Killed,\n    /// Claude Code's own orphan reconciliation at the next session start, or an\n    /// explicit `stopped` status.\n    Stopped,\n    /// A Monitor whose timeout fired (the `[Monitor timed out \u2026]` event).\n    TimedOut,\n    /// The remote-agent notifier's fifth terminal value (`<task-id> is blocked: ...`;\n    /// Claude Code 2.1.258 emits it from the cloud-agent poll branch). Not seen on disk\n    /// in a local-only corpus; a producer-only claim in the ledger (BG-011).\n    Blocked,\n    /// A status literal csift does not know. Rendered as its own bucket so a new harness\n    /// value is disclosed instead of being booked as completed (v0.10.3).\n    Other,\n}"
         }
       ],
@@ -74735,7 +74775,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "52-57",
+          "lines": "132-137",
           "snippet": "                input: Some(input),\n                ..\n            } if (matches!(name.as_str(), \"Bash\" | \"PowerShell\")\n                && input\n                    .get(\"run_in_background\")\n                    .and_then(serde_json::Value::as_bool)"
         }
       ],
@@ -84312,6 +84352,132 @@
           "observed": "`m5e(` occurs 3 times: 1 definition and 2 live callers (@179092749 the frontier-gated evict, @181621337 the tombstone handler). `,ign(` occurs once, at @181619649 in the refusal-continuation loop; the bare `ign(` form matches 1,096 times, all substrings of unrelated identifiers. Five occurrences, three live callers, all stream-driven; no interactive gesture reaches either helper.",
           "rule": "One occurrence per byte match of the call form across the whole executable, delimiter-anchored where the bare name collides; a live caller is a site that invokes the helper.",
           "note": "The specimen leg stays open: no shrink has been captured on disk."
+        }
+      ]
+    },
+    {
+      "id": "BG-040",
+      "area": "background-tasks",
+      "behavior": "Claude Code has THREE harness-side entrances into the background, each moving a command the model ran in the FOREGROUND. The user presses ctrl+b on an in-flight call: the keybinding table declares `{context:\"Task\",bindings:{\"ctrl+x ctrl+b\":\"task:background\",\"ctrl+b\":\"task:background\"}}`, the chord hint labelled `run in background` is offered once the call has been in flight for 2000 ms, only the Bash, PowerShell and Agent drivers emit the `background_hint` progress event that reveals it, the gesture is unavailable while `backgroundTasksDisabled` or `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` holds, and one press backgrounds EVERY eligible in-flight task (eligible = not already backgrounded and still owning a shell command), not just the focused one. Or the command hits its timeout. Or it is moved aside so a message queued for the model can reach it. On all three the launching `tool_use` record is already on disk and is NEVER rewritten: its `input` carries no `run_in_background`. The only trace is the `tool_result`, composed by ONE formatter with FOUR arms selected in this order - `Command was manually backgrounded by user with ID: <id>. Output is being written to: <path>.` / `Command was moved to the background (ID: <id>) so that a message that arrived while it was running can reach you; it was not interrupted. Output is being written to: <path>.` / `Command did not complete within its <N>s timeout and was moved to the background (ID: <id>). Output is being written to: <path>.` / the ordinary `Command running in background with ID: <id>. Output is being written to: <path>.`. The output path is not conditional: it is a plain parameter every arm interpolates, and both callers compute it from the task id. Two tails may follow, `You will be notified when it completes.` and `To check interim output, use <read tool> on that file path.`; the MANUAL arm drops the second unconditionally and the first unless the reap-at-final-response variant replaces it, so a ctrl+b receipt is the only single-sentence ack. `toolUseResult` carries `backgroundTaskId` plus the entrance's own flag - `backgroundedByUser` (schema: `True if the user manually backgrounded the command with Ctrl+B`), `backgroundedToDeliverMessage`, or `timedOutAfterMs` (the applied post-clamp limit in ms) - beside the ordinary `stdout` / `stderr` / `interrupted` / `isImage` / `noOutputExpected`. The task id is the ordinary `b`-prefixed local_bash id and the completion is the ordinary `<task-notification>` on the usual three carriers, carrying `<task-id>`, `<tool-use-id>`, `<output-file>`, `<status>` and a summary opening `Background command \"<the launch's input.description>\"`: the entrance is invisible in the pulse, which is why the receipt is the only discriminator. A FOURTH exit, a plugin's turn abort, sets `backgroundedByTurnAbort` and renders the ORDINARY sentence, so text alone cannot separate it from a model-requested launch.",
+      "depends": "csift's `status` and `wait` count a shell as a background task from its RECEIPT when no row exists for its `tool_use` id, and the row records which entrance it was as `entered_by`. The gate `receipt_entrance` demands the WHOLE SENTENCE, because a transcript can hold a RENDERING of the template rather than a receipt of one - a grep of the harness binary is a real corpus shape, carrying `${e}`/`${n}`, and a documentation `<id>` placeholder does the same - and minting from one would fabricate a task, flip a stopped session to `idle-background-open` and hold `--until stop` open over work that never existed. So each arm requires its opening clause AND a task id of the `local_bash` grammar (`b` plus 8 base36 characters, claim BG-009) in the id slot AND its own closing clause: the manual arm's output path must name the task's OWN file (its stem equals the id), the timeout arm needs the `<N>s timeout` digits and a `)` immediately after the id, the deliver arm needs `) so that a message`. Two consequences ride on facts above. Because the launching `tool_use` is never rewritten, the launch instant, command and description are unreachable from the first pass - its line carries no background needle - so a second pass keyed on the minted tool_use ids recovers them from the same transcript, and a row whose launch line is absent keeps the receipt instant under an explicit `launch_note` rather than passing it off as a launch. And because the turn-abort exit renders the ordinary sentence, csift does not claim it: that fourth entrance stays invisible, which is a bounded blind spot rather than a wrong answer. If the formatter's wording moved, every such task would drop out of the background section and `idle-background-open` would go back to reporting a session with a running shell as stopped.",
+      "code": [
+        {
+          "path": "src/live/background_scan.rs",
+          "lines": "14-21",
+          "snippet": "const MANUAL_HEAD: &str = \"Command was manually backgrounded by user with ID: \";\nconst DELIVER_HEAD: &str = \"Command was moved to the background (ID: \";\nconst TIMEOUT_HEAD: &str = \"Command did not complete within its \";\nconst TIMEOUT_TAIL: &str = \"s timeout and was moved to the background (ID: \";\n/// Each arm's own closing clause - the second half of the sentence, without which the\n/// text is a RENDERING of the template rather than a receipt of one.\nconst OUTPUT_CLAUSE: &str = \". Output is being written to: \";\nconst DELIVER_CLAUSE: &str = \") so that a message\";"
+        },
+        {
+          "path": "src/live/background_scan.rs",
+          "lines": "57-86",
+          "snippet": "/// A `local_bash` task id (claim BG-009): the kind prefix `b` plus exactly 8 base36\n/// characters. A rendering of the template has `${e}` or `<id>` in that slot instead.\nfn is_task_id(s: &str) -> bool {\n    s.len() == 9\n        && s.starts_with('b')\n        && s[1..]\n            .bytes()\n            .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase())\n}\n\n/// The `<id>` sitting between here and `close`, and whatever follows it - `None` unless\n/// the slot holds a well-formed task id.\nfn id_before<'a>(rest: &'a str, close: &str) -> Option<(&'a str, &'a str)> {\n    let (id, tail) = rest.split_once(close)?;\n    is_task_id(id).then_some((id, tail))\n}\n\n/// The manual arm's output path names the task's OWN file, so its stem is the task id.\nfn path_stem_is(tail: &str, id: &str) -> bool {\n    let Some(path) = tail.split_whitespace().next() else {\n        return false;\n    };\n    let base = path\n        .trim_end_matches('.')\n        .rsplit(['/', '\\\\'])\n        .next()\n        .unwrap_or_default();\n    base.split('.').next() == Some(id)\n}"
+        },
+        {
+          "path": "src/live/background_scan.rs",
+          "lines": "96-112",
+          "snippet": "pub(crate) fn receipt_entrance(text: &str) -> Option<(BgEntrance, String)> {\n    let t = text.trim_start();\n    if let Some(rest) = t.strip_prefix(MANUAL_HEAD) {\n        let (id, tail) = id_before(rest, OUTPUT_CLAUSE)?;\n        return path_stem_is(tail, id).then(|| (BgEntrance::User, id.to_string()));\n    }\n    if let Some(rest) = t.strip_prefix(DELIVER_HEAD) {\n        let (id, _) = id_before(rest, DELIVER_CLAUSE)?;\n        return Some((BgEntrance::DeliverMessage, id.to_string()));\n    }\n    let (secs, rest) = t.strip_prefix(TIMEOUT_HEAD)?.split_once(TIMEOUT_TAIL)?;\n    if secs.is_empty() || !secs.bytes().all(|b| b.is_ascii_digit()) {\n        return None;\n    }\n    let (id, _) = id_before(rest, \")\")?;\n    Some((BgEntrance::Timeout, id.to_string()))\n}"
+        }
+      ],
+      "instrument": "Byte-search the shipped binary for `context:\"Task\",bindings` (the keybinding table) and for `True if the user manually backgrounded` (the schema description), and for `function mBt(` plus every `mBt(` occurrence (the formatter and its call sites). Corpus: every *.jsonl under the projects root except journal.jsonl, subagent transcripts included, one record per newline; one observation per `tool_result` BLOCK whose left-trimmed text satisfies the SAME predicate the scanner gates on, arm by arm - manual = the opening clause, then a task id matching `b[0-9a-z]{8}`, then `. Output is being written to: `, then a path whose file stem equals that id; deliver-message = the opening clause, that id grammar, then `) so that a message`; timeout = `Command did not complete within its `, ASCII digits, `s timeout and was moved to the background (ID: `, that id grammar, then `)`; ordinary = `Command running in background with ID: ` under the manual arm's own id-plus-path test. The predicate is the gate, so a transcript RENDERING the template is excluded by construction rather than by inspection. Live trial: one foreground Bash call on a scratch project with no `run_in_background`, ctrl+b pressed once after the hint appeared, then read the launch record, the receipt and the completion pulse.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "AGENTS.md section 3.9; SPEC.md section 6 ledger; src/live/background.rs module doc"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "The deliver-message arm has zero corpus specimens and only the producer leg; a message queued while a foreground command runs, on a session whose transcript is kept, would observe it.",
+        "The fifth way in (a plugin's turn abort, backgroundedByTurnAbort) renders the ordinary sentence, so it is separable only by the structured flag; a census of tool_result records whose toolUseResult carries that key, joined to their launching tool_use, would size the remaining blind spot."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the keybinding table's Task context",
+          "offset": 164324970,
+          "excerpt": "context:\"Task\",bindings:{\"ctrl+x ctrl+b\":\"task:background\",\"ctrl+b\":\"task:background\"}},{context",
+          "note": "The gesture's only declaration: while a task is in flight, ctrl+b (and the chord ctrl+x ctrl+b) dispatches the action task:background."
+        },
+        {
+          "role": "gate",
+          "name": "Ndt, the eligibility predicate, and ZM, the background-all handler",
+          "offset": 164971623,
+          "excerpt": "function Ndt(e){if(nm(e))return!e.isBackgrounded&&Boolean(e.shellCommand);return fr(e)&&!e.isBackgrounded&&!b6t(e)}function _ht(e){return Object.values(e.tasks).some(Ndt)}function ZM(e){let n=Object.values(e.all()).filter(Ndt);for(let r of n)if(r.type===\"local_bash\")rWn(r.id,e);for(let r of n)if(r.type!==\"local_bash\")yQ(r.id,e);y(\"tas",
+          "note": "One press backgrounds EVERY eligible in-flight task, not the focused one: eligible means not already backgrounded and still owning a shell command."
+        },
+        {
+          "role": "gate",
+          "name": "Ll, the disable gate",
+          "offset": 159794254,
+          "excerpt": "function Ll(){return $K().backgroundTasksDisabled||a.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS}",
+          "note": "When this holds the chord hint is not rendered at all (its guard reads if(Ll()||L&&M===\"\"){return null} at 180310622) and the shell driver arms no auto-background, so none of the three entrances can fire."
+        },
+        {
+          "role": "writer",
+          "name": "mBt, the four-arm ack formatter",
+          "offset": 164082185,
+          "excerpt": "function mBt({backgroundTaskId:e,outputPath:n,backgroundedByUser:r,backgroundedToDeliverMessage:o,timedOutAfterMs:d,reapedAtFinalResponse:f,readToolName:_}){let v=r?`Command was manually backgrounded by user with ID: ${e}. Output is being written to: ${n}.`:o?`Command was moved to the background (ID: ${e}) so that a message that arrived while it was running can reach you; it was not interrupted. Output is being written to: ${n}.`:d!==void 0?`Command did not complete within its ${Math.max(1,Math.round(d/1000))}s timeout and was moved to the background (ID: ${e}). Output is being written to: ${n}.`:`Command running in background with ID: ${e}. Output is being written to: ${n}.`",
+          "note": "The four arms in selection order and the one bytes-producing site. outputPath is a plain parameter every arm interpolates, so no arm can omit the path; both callers compute it as pl(<task id>)."
+        },
+        {
+          "role": "writer",
+          "name": "mBt's two conditional tails",
+          "offset": 164082870,
+          "excerpt": "C=f?\"If it exits while you are still working you will be notified, but it is terminated when you give your final response and no notification can follow that \\u2014 so do not end your turn to wait for it; if you need its result, wait for it before giving your final response.\":r?void 0:\"You will be notified when it completes.\",I=r?void 0:`",
+          "note": "r is backgroundedByUser: the manual arm drops the interim-output tail unconditionally and the notify tail unless the reap-at-final-response variant replaces it, which is why a ctrl+b receipt is the only single-sentence ack."
+        },
+        {
+          "role": "writer",
+          "name": "the toolUseResult assembly and its ack telemetry",
+          "offset": 165030366,
+          "excerpt": "backgroundTaskId:ke.backgroundTaskId,backgroundedByUser:ke.backgroundedByUser,backgroundedByTurnAbort:ke.backgroundedByTurnAbort,backgroundedToDeliverMessage:ke.backgroundedToDeliverMessage,timedOutAfterMs:ke.timedOutAfterMs,backgroundEndsWithFinalResponse:fn,backgroundCwdHint:hn,dangerouslyDisableS",
+          "note": "The entrance flags reach disk as ordinary toolUseResult members beside the task id; the ack telemetry one line later (165030911) names the trigger set."
+        }
+      ],
+      "enumeration": [
+        {
+          "site": "the formatter's definition",
+          "offset": 164082185,
+          "excerpt": "function mBt({backgroundTaskId:e,outputPath:n,backgroundedByUser:r,backgroundedToDeliverMessage:o,timedOutAfterMs:d,reapedAtFinalResponse:f,readToolName:_}){",
+          "verdict": "the only place any of the four sentences is composed"
+        },
+        {
+          "site": "the Bash result mapper",
+          "offset": 165023453,
+          "excerpt": "_e=mBt({backgroundTaskId:d,outputPath:pl(d),backgroundedByUser:f,backgroundedToDeliverMessage:_,timedOutAfterMs:v,reapedAtFinalResponse:C,readToolName:dt})",
+          "verdict": "one of exactly two callers; passes the entrance flags straight through"
+        },
+        {
+          "site": "the PowerShell result mapper",
+          "offset": 176589225,
+          "excerpt": "I=f?mBt({backgroundTaskId:f,outputPath:pl(f),backgroundedByUser:y,backgroundedToDeliverMessage:p,timedOutAfterMs:_,reapedAtFinalResponse:R,readToolName:dt}):\"\"",
+          "verdict": "the second and last caller, so the Windows shell writes byte-identical sentences"
+        },
+        {
+          "site": "the ack telemetry's trigger set",
+          "offset": 165030911,
+          "excerpt": "trigger:Bn.backgroundedByUser?b(\"user\"):Bn.backgroundedByTurnAbort?b(\"turn_abort\"):Bn.backgroundedToDeliverMessage?b(\"deliver_message\"):Bn.timedOutAfterMs!==void 0?b(\"timeout\"):b(\"explicit\")",
+          "verdict": "five triggers exactly: four ways in beside the model's explicit flag, and turn_abort is the one with no arm of its own in the formatter"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "task:background",
+        "lowest_present": "2.1.23",
+        "highest_absent": "2.0.30",
+        "ladder": "Byte counts across the cached native builds: `task:background` 0 at 2.0.30 and 17 at 2.1.23; `Command was manually backgrounded by user with ID` 0 at 2.1.23 and 6 at 2.1.100; `background_hint` 0 at 2.1.100 and 19 at 2.1.124; `timedOutAfterMs` 0 at 2.1.208 and 12 at 2.1.214; `backgroundedToDeliverMessage` 0 at 2.1.250 and 17 at 2.1.251. A literal dates itself, not the behavior."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "(a) byte-search of the shipped 2.1.258 build for `context:\"Task\",bindings`, `True if the user manually backgrounded`, `function mBt(`, `mBt(`, `function Ndt`, `function ZM(`, `backgroundTasksDisabled`, `background_hint`, `run in background` and every `\\b\\w{2,6}=2000\\b` assignment in the shell-driver region, each hit re-read at its offset; (b) a census over every *.jsonl under the projects root except journal.jsonl, one observation per tool_result block satisfying the scanner's own arm predicate (opening clause, `b[0-9a-z]{8}` id, the arm's closing clause, and for the manual and ordinary arms a path whose stem equals the id), also reading whether the launching tool_use carried run_in_background; (c) a live 2.1.258 trial: one foreground Bash call, ctrl+b once after the hint, then the launch record, the receipt and the completion pulse read verbatim.",
+          "observed": "(a) keybinding table at 164324970 `context:\"Task\",bindings:{\"ctrl+x ctrl+b\":\"task:background\",\"ctrl+b\":\"task:background\"}`; schema line at 165014427 `backgroundedByUser:M().optional().describe(\"True if the user manually backgrounded the command with Ctrl+B\")`; the formatter `function mBt(` at 164082185 carrying all four arms and both tails, and `mBt(` occurring exactly three times - that definition plus the Bash mapper at 165023456 and the PowerShell mapper at 176589229, both called with `outputPath:pl(<task id>)` so no arm can omit the path; the background-all handler `function ZM(` at 164971794 over the eligibility predicate `function Ndt(` at 164971623; the gate `function Ll(){return $K().backgroundTasksDisabled||a.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS}` at 159794254, which also guards the chord hint at 180310622 whose label `action:\"run in background\"` sits at 180310798; the 2000 ms hint constants at 163904321 (the Agent driver's setTimeout delay) and 165011157 (the shell drivers' arming threshold); the toolUseResult assembly at 165030366 and the ack telemetry at 165030911 enumerating exactly five triggers user / turn_abort / deliver_message / timeout / explicit. (b) 8664 transcripts, 1558075 records: manual 1 (main lane 1, subagent 0), deliver-message 0, timeout 106 (main 31, subagent 75), ordinary 3603 (main 2640, subagent 963). The launching tool_use carried run_in_background on 0 of the 107 harness-side receipts and on 3455 of the 3603 ordinary ones. Under the looser rule that asks only for the opening clause plus any non-empty id token, the same corpus returns one extra deliver-message hit, and it is a tool_result holding a grep of the harness binary rather than a receipt - which is why the gate carries the closing clause and the id grammar. (c) the trial's launch is an ordinary assistant record whose Bash input is {command, description, timeout: 200000} with no run_in_background; six seconds later the receipt is a single string `Command was manually backgrounded by user with ID: <9-char b-id>. Output is being written to: <abs path>/tasks/<id>.output.` with neither tail, and toolUseResult {stdout, stderr, interrupted, isImage, noOutputExpected, backgroundTaskId, backgroundedByUser:true}; 151 seconds after the launch an ordinary user record carries `<task-notification>` with that task id, the launch's tool-use id, the output file, `<status>completed</status>` and a summary opening `Background command \"<the launch's description>\"`.",
+          "rule": "One observation per tool_result block satisfying that arm's full predicate - opening clause, a `b`-plus-8-base36 task id in the id slot, the arm's own closing clause, and for the manual and ordinary arms a path whose file stem equals the id; transcripts are every *.jsonl under the projects root except journal.jsonl, subagent transcripts included, one record per newline. The census predicate is the scanner's predicate, so the two agree by construction rather than by comparison. The single manual observation IS the live trial's own receipt - the trial wrote into the corpus the census reads, so (b) and (c) are one specimen counted once and read in detail, not two. Binary hits are byte offsets in the shipped 2.1.258 build, each excerpt re-read at its offset; the live trial is one call, one gesture, three records read verbatim.",
+          "note": "Both legs close. The entrance set, the eligibility rule, the disable gate and the whole formatter are read in the binary, and the two arms that have specimens reproduce them exactly - including the negative the fix rests on, that the launching tool_use carries no run_in_background on any of the 107. Two facts are worth stating explicitly because a truncated reading of the formatter gets them backwards: outputPath is a plain parameter passed by both callers, so all four arms carry the path and 106 of 106 timeout receipts on disk do; and the id slot is a real `local_bash` id, so a rendering of the template with `${e}` or `<id>` in that slot is not a receipt and mints nothing."
         }
       ]
     }

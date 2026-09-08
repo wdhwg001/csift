@@ -544,6 +544,7 @@ command echoes) appear under a bare `-t harness` where 0.11.0 showed none, and
 > ⑯ **`image` lists and extracts an abandoned image, marked.** The bytes are on disk and `--out` writes the same file, so the listing keeps the row and adds `[abandoned]` / JSON `survival`. `--turn` is the one exception: it windows on NUMBERED turns and an abandoned record belongs to none, so a turn window leaves it out.
 > ⑰ **`recover`'s external-write inference widens from the settings family to the `--file` target, on any path** (claims FH-015, FH-021, REC-025, MISC-030). The C-24 file-history instrument - a tracked file's `version` jumping with no replayed tool write - now produces an `external_write` boundary on a recover run's single target reading `external write (inferred, snapshot vN->vM, no tool record since L<line>)`, so the row NAMES the interval it bounds instead of asserting a moment. `files` keeps the narrow settings-family scope on purpose: its tracked set spans every written path, and a global timeline row would flood the output (censused: 58,115 such jumps over 1,121 non-settings paths in 31 of 75 top-level transcripts, against 47 over 5 in the settings family); a row about the ONE file a caller named cannot flood anything. Both file-history line shapes now feed the version sequence - the per-prompt `file-history-snapshot` table and the per-write `file-history-delta`'s `trackingPath` + `backup` - admitted by widening recover's candidate needle to the shared `file-history-` prefix, so the interval is as tight as the harness's own bookkeeping allows. The motivating producer is the `/rewind` "Restore code" gesture, which writes nothing to the transcript; the next prompt's `edited_text_file` attachment stays the authoritative boundary it already was.
 > ⑱ **Cost, stated rather than argued.** The spine pass reads payload bytes it deliberately never parses, and that is the whole of the added cost: a probe build returning from `spine_record` before it walks puts every slower command back at the pre-lane baseline within noise, while the merge, the chain and the turn grouping measure at zero. On a 397 MB session, interleaved with rotated cell order and read as medians: `verbatim` 1.43x wall / 1.33x CPU against 0.11.1, `recover` 1.12x / 1.12x, `image` 1.61x / 1.89x, and `files` 0.90x / 1.00x - faster, because the view replaced four per-file chain builds with one. Two reductions are already in (a SIMD `memchr2` jump over string interiors, and the fused `line_type_and_spine` entry); an early exit is refuted by the key order itself (claim REC-104). A leaner spine row is the remaining lever.
+> ⑲ **C-38: a shell backgrounded by ctrl+b, a timeout or a delivered message is a background task** (claims BG-040, BG-001, BG-002, BG-003, BASH-027). `run_in_background` is the only door the MODEL asks for; Claude Code opens three more on a command the model ran in the FOREGROUND -- the user presses ctrl+b on the in-flight call, the command hits its timeout, or it is moved aside so a queued message can reach the model. The launching `tool_use` is already on disk and is never rewritten, so the RECEIPT is the only trace: ONE formatter, FOUR arms (`Command was manually backgrounded by user with ID: …` / `… was moved to the background (ID: …) so that a message …` / `Command did not complete within its <N>s timeout and was moved to the background (ID: …)` / the ordinary `Command running in background with ID: …`), all four interpolating `Output is being written to: <path>.` because the path is a plain parameter rather than an arm. The manual arm is the only SINGLE-SENTENCE ack: it drops both trailing sentences. `status` and `wait` read all three, so the tasks now count toward `idle-background-open` and hold `--until stop` open -- on three real sessions the open-task count rose 3 -> 5, 5 -> 6 and 51 -> 54. Each row says which door (`entered by ctrl+b` / `entered by timeout after 2m` / `entered to deliver a message`) and JSON gains `entered_by` (`model` | `user` | `timeout` | `deliver-message`, null for an agent or a Monitor), `timed_out_after_ms` and `launch_note`. Because the launch line carries no background needle, one targeted SECOND pass over the same bytes -- keyed on the minted tool_use ids -- recovers the launch instant, command and description; a row whose launch line is absent keeps the RECEIPT instant under `launch_note` (`launched-at unknown; receipt at <ts>`) instead of fabricating one. The mint gate is the WHOLE SENTENCE - the opening clause, a `local_bash` task id (`b` plus 8 base36, claim BG-009) in the id slot, and the arm's own closing clause, with the manual arm's output path required to name the task's OWN file - because a transcript can RENDER the template instead of receiving one (a grep of the harness binary is a real corpus shape; `${e}` and `<id>` both observed), and minting from one would be this fix's mirror image: a fabricated task that flips a stopped session to `idle-background-open` and holds `--until stop` open forever. The corpus census that measures the arms runs that same predicate, so the gate and the instrument coincide by construction. A FIFTH way in, a plugin's turn abort, renders the ORDINARY sentence and stays invisible: a bounded blind spot, recorded rather than guessed.
 > Taxonomy: 35 -> 37 leaves.
 
 > **v0.11.2 CHANGE LEDGER (non-breaking; the third peer framing and the refetch law's last hole -- `csift 0.11.2`).**
@@ -2157,7 +2158,7 @@ disk while its dialog is open and a single-question ask stays buffered; a timing
 of the write frontier, not a question-count rule, section 4).
 
 BACKGROUND TASKS (v0.10.0; the full mechanism + measurements in the v0.10.0 ledger
-①): a whole-main-file scan behind a five-needle prefilter lists every OPEN
+①): a whole-main-file scan behind a byte prefilter lists every OPEN
 backgrounded shell, async agent and Monitor arm as a `bg` row (kind, id, launch
 instant + age, description or command, the output file's bytes + last write) and
 folds closed ones to counts (completed / failed / killed / stopped / timed out, plus `blocked`, the remote-agent notifier's fifth value, and `with an unknown status` for any literal csift does not know - v0.10.3, never booked as completed);
@@ -2169,6 +2170,39 @@ the section says so. THE LENS (`--background-since WHEN`, `--ignore-background R
 decides which open tasks COUNT toward the verdict; every task is still listed, an
 excluded one marked with its rule. An agents-stopped notice names no id, so csift
 notes it but cannot mark which agents it stopped.
+
+FOUR DOORS INTO THE BACKGROUND (v0.12.0; claim BG-040). `run_in_background` is only
+the one the MODEL asks for. Claude Code also moves a command the model ran in the
+FOREGROUND into the background on ctrl+b (a keybinding in the `Task` context, hinted
+after 2 s, one press backgrounding every eligible in-flight call), on the command's own
+timeout, and to let a queued message reach the model. The launching `tool_use` is
+already on disk and is NEVER rewritten, so the only trace is the RECEIPT - one
+formatter, four arms, the manual one being the sole single-sentence ack because it
+drops both trailing sentences, and all four interpolating the output path. csift mints
+a shell row from that receipt whenever the `tool_use` id has no row yet, tags it
+`entered_by` (`model` | `user` | `timeout` |
+`deliver-message`; null for an agent or a Monitor) beside `timed_out_after_ms`, and
+recovers the launch instant, command and description with ONE targeted second pass over
+the same bytes keyed on the minted ids - the launch line carries no background needle
+and the first pass cannot see it. A row whose launch line is absent keeps the RECEIPT
+instant under an explicit `launch_note`, never a fabricated launch time. Such rows are
+OPEN like any other: they reach `idle-background-open`, hold `--until stop` open, and
+answer the lens over their recovered command.
+
+The MINT GATE is the WHOLE SENTENCE, and the reason is this fix's own mirror image. A
+transcript can hold a RENDERING of the template rather than a receipt of one - a grep of
+the harness binary is a real corpus shape, with `${e}`/`${n}` in the slots, and a
+documentation `<id>` placeholder does the same - and minting from one would fabricate a
+task, flip a stopped session to `idle-background-open` and hold `--until stop` open over
+work that never existed. So each arm demands its opening clause AND a task id of the
+`local_bash` grammar (`b` plus 8 base36 characters, claim BG-009) in the id slot AND its
+own closing clause: the manual arm's output path must name the task's OWN file (its
+stem equals the id), the timeout arm needs the `<N>s timeout` digits and a `)`
+immediately after the id, the deliver arm needs its `) so that a message` clause. The
+gate and the corpus census that measures it are the SAME predicate by construction, not
+by agreement. A FIFTH way in, a plugin's turn abort, renders the ORDINARY sentence, so
+text cannot separate it and csift does not claim it - a bounded blind spot, stated
+rather than guessed.
 
 LAST MESSAGES: the newest human prompt (an automation pulse as its label) and the
 newest assistant message as 400-char excerpts (`(+N chars)` when clipped; refetch =

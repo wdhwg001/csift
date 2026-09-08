@@ -129,6 +129,26 @@ surface change bumps the PATCH.
 
 ### Fixed
 
+- **A shell backgrounded by ctrl+b, a timeout or a delivered message is a background task.**
+  `run_in_background` is the only door the model asks for. Claude Code opens three more on a
+  command the model ran in the foreground: you press ctrl+b on the in-flight call, it hits its
+  timeout, or it is moved aside so a queued message can reach the model. The launching tool
+  call is never rewritten, so the receipt sentence is the only trace — and `status` was
+  calling such a session `idle-eot` while a shell of its own was still running. Both commands
+  now read the receipt: the task is listed and counted, `--until stop` stays open over it, and
+  the row says which door it came through (`entered by ctrl+b`, `entered by timeout after 2m`,
+  `entered to deliver a message`; JSON `entered_by`, `timed_out_after_ms`). On three real
+  sessions the open-task count went 3 → 5, 5 → 6 and 51 → 54.
+- **The launch record behind such a task is recovered, and an unknown launch time is said
+  aloud.** The launching line carries none of the scanner's needles, so a second targeted pass
+  fetches its instant, command and description — which is also what `--ignore-background` then
+  matches on. When that line is gone the row keeps the receipt instant under an explicit
+  `launched-at unknown; receipt at …` note (JSON `launch_note`) instead of passing it off as a
+  launch. The receipt must be a whole sentence — the clause, a real `b`+8 task id, and that
+  arm's closing clause — so a transcript that merely renders the template (a grep of the
+  harness binary does exactly this) cannot fabricate a task. A fifth way in, a plugin's turn
+  abort, writes the ordinary sentence and cannot be told apart from a model-requested launch;
+  csift does not claim it.
 - **A fabricated reply no longer reads as the model's.** Those `No response requested.`
   records classified `agent.message`, which claims the assistant wrote a sentence no model
   produced — they carry the `<synthetic>` model sentinel and are built with no model call at

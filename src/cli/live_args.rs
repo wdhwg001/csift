@@ -41,7 +41,19 @@ pub struct BackgroundLensArgs {
         (`<claude-home>/tasks/`) renders open tasks (in_progress first, then pending, \
         with blockers) and folds completed ones to a count.\n\n\
         BACKGROUND TASKS (v0.10.0): a `Bash` launched with run_in_background returns its \
-        tool_result within milliseconds, so the tail machine pairs it at once - the \
+        tool_result within milliseconds, so the tail machine pairs it at once - and that \
+        flag is only ONE of four ways in. Claude Code also moves a command the model ran \
+        in the FOREGROUND into the background when you press ctrl+b on it, when it hits \
+        its timeout, or to let a queued message reach the model. The launching tool call \
+        carries no flag on those and is never rewritten, so the RECEIPT sentence is the \
+        only trace; `status` reads it, counts the task like any other, and each row says \
+        which door it came through (`entered by ctrl+b` / `entered by timeout after 2m` / \
+        `entered to deliver a message`; JSON `entered_by`). A row whose launching record \
+        cannot be found keeps the receipt instant and says so rather than inventing a \
+        launch time. The receipt has to be a whole sentence to count - the clause, a \
+        real `b`+8 task id, and that arm's own closing clause - so a transcript that \
+        merely renders the template cannot fabricate a task. A fifth way in, a plugin's \
+        turn abort, writes the ordinary sentence and stays invisible. The \
         harness itself writes NOTHING about a still-running shell at end of turn (the \
         REPL's \"N shell still running\" lives in process memory; the end-of-turn record \
         carries a duration and a message count, and its pending counts cover background \
@@ -117,7 +129,9 @@ pub struct BackgroundLensArgs {
         live lanes only], settled_children, tasks:[{id, subject, status, blocked_by}] \
         (null when the session has no tasks dir), tasks_completed, \
         pending:[...], background:{open, ignored, completed, failed, killed, stopped, timed_out, blocked, other, \
-        scanned_files, tasks:[{kind, id, tool_use_id, lane, state, description, command, \
+        scanned_files, tasks:[{kind, id, tool_use_id, lane, state, entered_by \
+        (model|user|timeout|deliver-message; null for an agent or a monitor), \
+        timed_out_after_ms, launch_note, description, command, \
         launched_utc, launched_local, age_secs, output_file, output_bytes, \
         output_age_secs, ignored_by} - open tasks only], notes:[...]}, \
         last:{user:{ts_utc, ts_local, text, truncated}|null, agent:{...}|null}, \
@@ -193,6 +207,11 @@ impl StatusArgs {
         --timeout IS REQUIRED (v0.10.0): a background task can be designed never to \
         return (a dev server, a watcher, a tail -f), so an unbounded wait on `stop` is a \
         bug, not a wait. A call without --timeout is rejected with that reason.\n\n\
+        A SHELL THE MODEL RAN IN THE FOREGROUND CAN HOLD `stop` OPEN: ctrl+b, a timeout \
+        or a message delivery moves it into the background, and it then counts like any \
+        other open task (its row and JSON carry `entered_by`). If that is the task you \
+        are willing to leave running, name it with --ignore-background or narrow \
+        --background-since; do not read the 124 as a stall.\n\n\
         HOW TO WAIT ON A SESSION (the orchestrator's steps): 1. `csift status @<id>` \
         first and read the background rows - which tasks dangle, how old, which are \
         days-old zombies; 2. pick the lens: `--background-since now` counts only what \

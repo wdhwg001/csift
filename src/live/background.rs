@@ -4,7 +4,13 @@
 //! - a backgrounded SHELL: a `Bash` tool_use with `input.run_in_background:true`; its
 //!   tool_result arrives within milliseconds ("Command running in background with ID:
 //!   <id>. Output is being written to: <path> ..."), so the tail state machine pairs it
-//!   at once - it is invisible to the unreturned-call logic by construction;
+//!   at once - it is invisible to the unreturned-call logic by construction. That flag
+//!   is only ONE of four entrances: Claude Code also moves a FOREGROUND shell into the
+//!   background when the user presses ctrl+b, when the command hits its timeout, or to
+//!   let a queued message reach the model. The launching tool_use carries no flag on
+//!   those three and is never rewritten, so the only instrument is the RECEIPT sentence
+//!   (one template, four arms) plus `toolUseResult.backgroundedByUser` /
+//!   `timedOutAfterMs` / `backgroundedToDeliverMessage` - see [`BgEntrance`];
 //! - an async AGENT: a tool_result whose `toolUseResult` is `{isAsync:true,
 //!   status:"async_launched", agentId, description, outputFile}`;
 //! - a MONITOR: the `Monitor` tool_use (a command whose stdout lines are events, or a
@@ -55,6 +61,46 @@ impl BgKind {
             BgKind::Shell => "shell",
             BgKind::Agent => "agent",
             BgKind::Monitor => "monitor",
+        }
+    }
+}
+
+/// How a shell entered the background. The model asks for exactly one of these
+/// (`Model`, the `run_in_background:true` launch); the other three are harness-side
+/// moves of a command the model ran in the FOREGROUND, and they are readable only from
+/// the receipt. `None` on a task that has no such entrance (an async agent, a Monitor).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BgEntrance {
+    /// The launch carried `input.run_in_background:true`.
+    Model,
+    /// The user pressed ctrl+b on the in-flight call.
+    User,
+    /// The command hit its timeout.
+    Timeout,
+    /// The command was moved aside so a queued message could reach the model.
+    DeliverMessage,
+}
+
+impl BgEntrance {
+    #[must_use]
+    pub(crate) fn slug(self) -> &'static str {
+        match self {
+            BgEntrance::Model => "model",
+            BgEntrance::User => "user",
+            BgEntrance::Timeout => "timeout",
+            BgEntrance::DeliverMessage => "deliver-message",
+        }
+    }
+
+    /// The short row label. The ordinary launch is the unremarkable case and prints
+    /// nothing; the three harness-side entrances always say so.
+    #[must_use]
+    pub(crate) fn label(self) -> Option<&'static str> {
+        match self {
+            BgEntrance::Model => None,
+            BgEntrance::User => Some("entered by ctrl+b"),
+            BgEntrance::Timeout => Some("entered by timeout"),
+            BgEntrance::DeliverMessage => Some("entered to deliver a message"),
         }
     }
 }
@@ -117,6 +163,15 @@ pub(crate) struct BgTask {
     pub(crate) description: Option<String>,
     /// The shell command (verbatim; shells only).
     pub(crate) command: Option<String>,
+    /// How it got there ([`BgEntrance`]); `None` for an agent or a Monitor.
+    pub(crate) entered_by: Option<BgEntrance>,
+    /// `toolUseResult.timedOutAfterMs` on a timeout entrance (absent before the field
+    /// existed, so `None` is "not stated", never "no timeout").
+    pub(crate) timed_out_after_ms: Option<i64>,
+    /// A row minted from its RECEIPT whose launching `tool_use` line the second pass
+    /// could not find keeps the receipt instant here and says so, rather than
+    /// fabricating a launch instant.
+    pub(crate) launch_note: Option<String>,
     pub(crate) launched_utc: Option<String>,
     /// The transcript that launched it (a session uuid or a bare agent hex).
     pub(crate) lane: String,
@@ -313,6 +368,7 @@ pub(crate) fn background_report(
         let bytes: &[u8] = &mmap;
         let lane = crate::subagent::session_id_from_path(file);
         let is_main = *file == main;
+        let mut minted: Vec<String> = Vec::new();
         let mut pos = 0usize;
         while pos < bytes.len() {
             let end = memchr::memchr(b'\n', &bytes[pos..]).map_or(bytes.len(), |i| pos + i);
@@ -324,10 +380,16 @@ pub(crate) fn background_report(
             let Ok(Some(rec)) = crate::parse::parse_line(line) else {
                 continue;
             };
-            ingest_launches(&rec, &lane, &mut tasks);
+            ingest_launches(&rec, &lane, &mut tasks, &mut minted);
             if is_main {
                 ingest_carriers(&rec, &mut carriers, &mut notes);
             }
+        }
+        // A row minted from its receipt has no launch line in the first pass: the
+        // launching tool_use carries no needle. Its result rides the SAME transcript, so
+        // one targeted pass over these very bytes recovers it.
+        if !minted.is_empty() {
+            fill_receipt_launches(bytes, &minted, &mut tasks);
         }
     }
     resolve_carriers(&mut tasks, &carriers, &mut notes);

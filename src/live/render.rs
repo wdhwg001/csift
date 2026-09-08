@@ -87,6 +87,24 @@ pub(crate) fn render_background_text(b: &BackgroundReport) {
             (Some(bytes), None) => format!("  output {bytes} B"),
             _ => String::new(),
         };
+        // The three harness-side entrances say so: a shell the model ran in the
+        // FOREGROUND is a background task now, and nothing else on the row shows it.
+        let entered = t
+            .entered_by
+            .and_then(BgEntrance::label)
+            .map(|l| match t.timed_out_after_ms {
+                Some(ms) if ms > 0 => format!(
+                    "  {l} after {}",
+                    crate::text::fmt_secs(u64::try_from(ms / 1000).unwrap_or(0))
+                ),
+                _ => format!("  {l}"),
+            })
+            .unwrap_or_default();
+        let launch_note = t
+            .launch_note
+            .as_deref()
+            .map(|n| format!("  [{n}]"))
+            .unwrap_or_default();
         let ignored = t
             .ignored_by
             .as_deref()
@@ -101,7 +119,7 @@ pub(crate) fn render_background_text(b: &BackgroundReport) {
             format!("  lane {}", t.lane)
         };
         println!(
-            "  bg        {:<7} {:<18} {launched}{what}{output}{ignored}{lane}",
+            "  bg        {:<7} {:<18} {launched}{entered}{launch_note}{what}{output}{ignored}{lane}",
             t.kind.slug(),
             t.id.as_deref().unwrap_or(&t.tool_use_id)
         );
@@ -149,6 +167,9 @@ pub(crate) fn background_json(b: &BackgroundReport) -> serde_json::Value {
             "tool_use_id": t.tool_use_id,
             "lane": t.lane,
             "state": t.state.slug(),
+            "entered_by": t.entered_by.map(BgEntrance::slug),
+            "timed_out_after_ms": t.timed_out_after_ms,
+            "launch_note": t.launch_note,
             "description": t.description,
             "command": t.command,
             "launched_utc": t.launched_utc,
