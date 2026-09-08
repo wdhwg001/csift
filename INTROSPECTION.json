@@ -83994,7 +83994,7 @@
         {
           "path": "src/parse/spine.rs",
           "lines": "40-49",
-          "snippet": "fn spine_type_wanted(raw: &[u8]) -> bool {\n    matches!(\n        raw,\n        br#\"\"user\"\"# | br#\"\"assistant\"\"# | br#\"\"attachment\"\"# | br#\"\"system\"\"# | br#\"\"last-prompt\"\"#\n    )\n}"
+          "snippet": "fn spine_type_wanted(raw: &[u8]) -> bool {\n    matches!(\n        raw,\n        br#\"\"user\"\"#\n            | br#\"\"assistant\"\"#\n            | br#\"\"attachment\"\"#\n            | br#\"\"system\"\"#\n            | br#\"\"last-prompt\"\"#\n    )\n}"
         },
         {
           "path": "src/model/record.rs",
