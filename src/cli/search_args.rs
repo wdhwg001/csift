@@ -122,11 +122,13 @@ pub struct SearchArgs {
 
     /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
     /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE
-    /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /
-    /// `user.rewound` / `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every
+    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE
+    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation no
+    /// longer reaches, `harness.compaction.boundary`, which carries no message at all, and
+    /// the six gated leaves); a GLOB (`-t 'user.*'`) selects every
     /// leaf under the prefix, visibility ignored; an intermediate prefix or exact leaf
-    /// (`-t agent.tool`, `-t user.unsent`) selects its full set. A bare role decides per
-    /// RECORD, not per leaf, on two axes. DELIVERY: Claude Code's request assembler re-mints a
+    /// (`-t agent.tool`, `-t user.unsent`) selects its full set. Axis 1 is that leaf default;
+    /// the other two decide per RECORD. DELIVERY: Claude Code's request assembler re-mints a
     /// `system`/`local_command` record (a slash command's own echo and stdout) as a user
     /// message, so `-t harness` shows it although its leaf is invisible, and it drops an
     /// `isVirtual` record and the `<synthetic>` API-error placeholder, so `-t agent` hides

@@ -5,16 +5,9 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
-## [0.11.2] - 2026-09-08
+## [0.12.0] - unreleased
 
 ### Changed (breaking)
-
-- **`harness.schedule.continuation` is now `harness.resume.prompt`.** Same predicate, same
-  records, new path. That leaf never came from the scheduler: the record is written by the
-  resume LOADER when the transcript it is loading ends on a dangling user prompt, and it
-  needed a family its new sibling could share. `harness.schedule` keeps only `wakeup`. The
-  old spelling is a hard parse error that names its successor, the same way the pre-v0.5
-  flat label values do — update any script or saved query that keys on the old path.
 
 - **BREAKING: the SURVIVAL AXIS replaces the three opener heuristics.** csift now asks Claude
   Code's own question - which records does the conversation chain still reach? - instead of
@@ -25,13 +18,32 @@ surface change bumps the PATCH.
 - **`-t user`/`-t agent`/`-t harness` gained a third exclusion axis.** Delivery and leaf
   visibility already narrowed a bare role; survival is the third. Every other selector form is
   unchanged.
+- **`user.unsent` narrows to drafts, and `user.rewound` is one of the two leaves this release
+  adds, bringing the taxonomy to 37** (`harness.resume.placeholder` is the other). A draft is a prompt
+  that was recalled and never drew a reply. A turn the operator rewound past was sent and it
+  DID draw one, and that reply is the whole discriminator. Both sit outside turn numbering and
+  outside a bare `-t user`; both are reached by `-t user.unsent` / `-t user.rewound` or a glob.
+  A rewound opener's diff line leads `rewound: the conversation continued from L<n> instead`.
 - **A replay copy is now the EARLIER line.** The loader's uuid map keeps the last line carrying
   a uuid, so that line is the survivor for opener treatment and for addressing by uuid; the
   earlier line renders `[replay copy of L<n>]`. Both stay searchable and counted.
+- **A turn number names the same turn on every command.** `verbatim` turn 7, a
+  `search --count-by turn` row `t7`, `show --turn 7`, `files --turn 7` and `recover --at
+  @turn:7` all mean the live turn 7 that Claude Code's own conversation chain still reaches,
+  and `image --turn` joins them (it had stayed on the older, more conservative grouper). That
+  agreement had to be re-established and not assumed: splitting one numbering rule into
+  two, which is what wiring the axis into only some surfaces does, put 2,085 turn stamps out of
+  step on a 19-transcript `files`-to-`search` join, 23.1% of the paired rows. 0.12.0 reads 0
+  there, as 0.11.1 did, and `stats` `turns` equals the `search --count-by turn` row count on
+  75 of 75 top-level transcripts.
 - **Census effect of the axis, so you can reconcile your own numbers.** Over this corpus the
   opener count is conserved (3650 turn openers before, 3650 + 7 after): seven records that used
   to be counted as turn-opening `agent.communication.signal` are now `user.rewound`, so that
-  leaf reads 397 where it read 404. Nothing was dropped; the seven moved leaf.
+  leaf reads 397 where it read 404. Nothing was dropped; the seven moved leaf. The whole of
+  `user.rewound` is a re-labelling and the arithmetic closes. Run the two binaries back to back
+  over one corpus, `search "" --count-by label --max-count 0`, and `user.message` drops 6
+  (2,781 to 2,775), `user.unsent` drops 30 (909 to 879), `agent.communication.signal` drops 7
+  (404 to 397), while `user.rewound` reads 43: 6 + 30 + 7 = 43, every record accounted for.
 - **Records above a compaction cut are `pre-cut`, and that is where the fail-open guard
   applies.** Claude Code's walk stops at a `compact_boundary` and never reads its
   `logicalParentUuid`; csift takes exactly that step so an archive can still show what the model
@@ -63,6 +75,28 @@ surface change bumps the PATCH.
   measured corpus). Both `file-history-snapshot` and the per-write `file-history-delta` now feed
   the version sequence.
 
+- **`harness.schedule.continuation` is now `harness.resume.prompt`.** Same predicate, same
+  records, new path. That leaf never came from the scheduler: the record is written by the
+  resume LOADER when the transcript it is loading ends on a dangling user prompt, and it
+  needed a family its new sibling could share. `harness.schedule` keeps only `wakeup`. The
+  old spelling is a hard parse error that names its successor, the same way the pre-v0.5
+  flat label values do. Update any script or saved query that keys on the old path.
+
+- **The axis costs time, and the number is here, not in a footnote.** Every full-scan
+  command now reads the lines its own prefilter drops, keeping the five structural fields the
+  chain needs and none of the payload. On a 397 MB transcript that is 100,387 structural rows
+  against as few as 183 records the command itself wanted. Measured against 0.11.1 on that
+  transcript, medians of 21 runs per arm on an interleaved CPU-time driver with rotated cells
+  and a same-binary control drifting under 2%, the ratios quoted being wall clock: `image`
+  1.74 to 1.77x, `verbatim` 1.35x,
+  `show --branch-points` 1.54x, `recover` 1.19x, `stats` 1.17x, and a heavy `-t user.unsent`
+  search on a 721 MB transcript 1.17x. `files` got FASTER, 0.84x, because four chain builds
+  became one. The byte walk itself is nearly free in wall time because it runs inside the
+  parallel scan; what lands on the clock is the serial carry of a wider row vector plus the
+  chain build. Four candidate savings were measured and rejected, and the one that remains
+  needs the structural rows to stop sharing a collection with full records, which is a later
+  patch and not a last-minute change to the seam this release just settled.
+
 ### Added
 
 - **The resume repair pair has its own two leaves.** Resume a session whose last record is a
@@ -82,8 +116,6 @@ surface change bumps the PATCH.
   in this corpus are paired, 10 are not). Both forms carry the leaf; the pairing is a fact
   on the hit, read from the record's `parentUuid`, rather than a second label.
 
-- **`user.rewound`**, the 37th leaf: a turn the operator rewound past. It was sent and it drew a
-  reply, which is exactly what separates it from a recalled `user.unsent` draft.
 - **JSON**: `survival`, `abandoned_root_line` and `replay_copy_of` per hit and per `show` record;
   `abandoned_records`, `rewound_turns`, `replay_copies`, `boundary_cut_line` and `leaf_source` in
   the `search` summary. The text footer states every one of them.
@@ -129,6 +161,27 @@ surface change bumps the PATCH.
 
 ### Fixed
 
+- **A turn you rewound past used to read as a recalled draft.** The old rule grouped turn
+  openers by their shared `parentUuid` and called every earlier one a superseded draft, so a
+  rewind that landed back on the same parent came out as `user.unsent` with a character diff
+  against the "resend", and a rewind that landed anywhere else came out as an ordinary live
+  turn. Over 910 shared-parent opener pairs in one corpus, 858 have no assistant record below
+  them and are genuine drafts, 52 have one and were rewinds wearing a draft's label, and 0 of
+  the 910 earlier openers are on the surviving conversation. Do not read that 52 and the leaf's
+  own count as one number: they are different censuses. The pair census needs a LATER opener
+  under the same parent; the leaf needs the chain to have resolved that region and then covers
+  every abandoned opener that drew a reply, whatever sits beside it. On this corpus at this
+  release's census `user.rewound` reads 43 over 10 sessions. The likeliest source of the
+  difference is the blind region above a dangling compaction boundary, where csift declines to
+  call anything abandoned at all; that explanation is plausible and UNTESTED.
+- **An abandoned record used to count as part of the live conversation.** Not just the opener:
+  every reply, tool call and tool result under a rewound prompt was numbered into a turn,
+  selected by a bare `-t agent`, replayed by `verbatim` and counted by `stats`. All of that was
+  the model's context on a branch the conversation left. Such a record is now outside turn
+  numbering and outside a bare role, reached by a glob or an exact leaf with an `[abandoned]` /
+  `[rewound]` marker, and every count that changed is disclosed in the footer and the JSON
+  summary. `files`, `recover` and `image` deliberately keep their rows and mark them, because
+  those three answer about the disk.
 - **A shell backgrounded by ctrl+b, a timeout or a delivered message is a background task.**
   `run_in_background` is the only door the model asks for. Claude Code opens three more on a
   command the model ran in the foreground: you press ctrl+b on the in-flight call, it hits its
@@ -194,13 +247,21 @@ surface change bumps the PATCH.
   The record is now reduced to its structural fields instead of removed — the same spine row a
   line the prefilter never picked up already gets. It still emits nothing, so no hit, count,
   census key or turn moves; the chain simply sees it. On this corpus, 173 lines across 5 of 76
-  transcripts were affected. The plain scan and `--attachments` now report the same chain on 76
+  transcripts were affected. (Denominators in this entry read 75 or 76 top-level transcripts
+  depending on the bullet: the corpus is live and gained one file between measurements. Each
+  figure is whole against the scope it was taken on; none of them are a single census.) The
+  plain scan and `--attachments` now report the same chain on 76
   of 76 files, where 3 disagreed before, and on one 7.2 MB transcript 1,190 of 1,246 rows read
   `pre-cut` before and none do now. `show --line` was always right about those lines, because an
   address opens the gates — so a search and a fetch of the same record no longer contradict each
   other.
 
-### Changed
+- **The `harness.meta.system` help list names every subtype csift models.** `csift search
+  --help` listed one of the two model-refusal subtypes and stopped at the six it could name,
+  which reads as a closed set. It now carries `model_refusal_no_fallback` beside
+  `model_refusal_fallback` and says that a subtype a later build adds lands there too, which is
+  what the leaf has always done and what SKILL.md has always said. Help and SKILL are meant to
+  carry the same information, and this one had drifted.
 
 - **Peer message bodies render the same way everywhere.** `verbatim` and `list` already stripped
   the wrapper tags, the relay preamble and the security footer from an inbound peer message;

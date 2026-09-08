@@ -98,20 +98,23 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
         THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 37 leaves\n  \
-          LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
-        role's DELIVERED leaves - the conversation as the model receives/produces\n  \
+          A bare ROLE narrows on THREE axes, and only the FIRST is per-leaf. The other\n  \
+        two are Claude Code's own rules, read per RECORD, and they are independent: a\n  \
+        record can be a visible leaf, delivered when it was written, and abandoned today.\n  \
+          AXIS 1, LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only\n  \
+        the role's DELIVERED leaves - the conversation as the model receives/produces\n  \
         it. Nine leaves are invisible and need naming or a glob: `user.unsent` and\n  \
-        `user.rewound` (neither is in the surviving conversation - see THE SURVIVAL\n  \
-        AXIS below), `harness.compaction.boundary`\n  \
-        (a metrics-only system record), and the six gated leaves below. The glob form\n  \
-        `-t 'user.*'` selects EVERY leaf under the prefix, visibility ignored; an\n  \
-        intermediate prefix (`-t harness.compaction`) or an exact leaf path is a\n  \
-        deliberate drill-down and keeps its full set. (`-t user` restores the 0.7\n  \
+        `user.rewound` (neither is in the surviving conversation - see AXIS 3 below),\n  \
+        `harness.compaction.boundary` (a metrics-only system record: no message field\n  \
+        at all), and the six gated leaves below. The glob form `-t 'user.*'` selects\n  \
+        EVERY leaf under the prefix, visibility ignored; an intermediate prefix\n  \
+        (`-t harness.compaction`) or an exact leaf path is a deliberate drill-down\n  \
+        and keeps its full set. (`-t user` restores the 0.7\n  \
         contract: 0.9.2..0.9.3 briefly included drafts, which poisoned a real\n  \
         last-human-touch consumer.)\n  \
-          RECORD-LEVEL DELIVERY: a bare role decides per RECORD, not per leaf, because\n  \
-        Claude Code's request assembler runs one drop predicate and it disagrees with\n  \
-        the leaf table in exactly three cases - a `system`/`local_command` record (a\n  \
+          AXIS 2, RECORD-LEVEL DELIVERY: a bare role decides per RECORD, not per leaf,\n  \
+        because Claude Code's request assembler runs one drop predicate and it disagrees\n  \
+        with the leaf table in exactly three cases - a `system`/`local_command` record (a\n  \
         slash command's own echo and stdout) IS re-minted as a user message and sent,\n  \
         so `-t harness` shows it although `harness.meta.system` is invisible; an\n  \
         `isVirtual` record and the `<synthetic>` API-error placeholder are NOT sent, so\n  \
@@ -119,7 +122,7 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         intermediate prefix and an exact leaf are unaffected and reach every record;\n  \
         an undelivered one renders a `[not delivered]` marker in the label zone, and\n  \
         JSON carries `delivered` on every hit.\n  \
-          THE SURVIVAL AXIS (v0.12.0): Claude Code does not reconstruct a session by\n  \
+          AXIS 3, SURVIVAL (v0.12.0): Claude Code does not reconstruct a session by\n  \
         reading its jsonl top to bottom. It loads every record into a uuid map (last\n  \
         occurrence of a uuid wins), picks ONE leaf and walks `parentUuid` from it to the\n  \
         head; only what that walk reaches is the conversation. csift mirrors that rule,\n  \
@@ -130,7 +133,7 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         `[rewound]` / `[replay copy of L<n>]` marker in the label zone. An abandoned\n  \
         OPENER carries one leaf: `user.unsent` when nothing ever answered it,\n  \
         `user.rewound` when something did. Above a compaction cut (and in any region\n  \
-        csift's own record set cannot resolve) records are PRE-CUT: Claude Code drops\n  \
+        csift's own walk could not resolve) records are PRE-CUT: Claude Code drops\n  \
         them, csift keeps reading them and every selector still reaches them - what the\n  \
         model saw AT THE TIME is the question an archive answers. JSON carries\n  \
         `survival` (live | pre-cut | abandoned), `abandoned_root_line` and\n  \
@@ -252,8 +255,9 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         .meta.system            every OTHER `type:system` subtype the harness writes for\n                                   \
         its own UI (informational such as the Remote Control\n                                   \
         disconnect warning, api_error, model_refusal_fallback,\n                                   \
-        agents_killed, local_command, scheduled_task_fire); renders\n                                   \
-        `[<subtype> <level>] <content>` (GATED, v0.10.1)\n  \
+        model_refusal_no_fallback, agents_killed, local_command,\n                                   \
+        scheduled_task_fire, and any subtype a later build adds);\n                                   \
+        renders `[<subtype> <level>] <content>` (GATED, v0.10.1)\n  \
           `-t agent` selects the whole role, `-t agent.tool` both tool leaves, a full path\n  \
         just that leaf; `-T` excludes with the same grammar (a combination that excludes\n  \
         everything it includes is a parse error, as is a selector typo, with suggestions).\n  \

@@ -13,7 +13,7 @@
 //! Three states per record ([`Survival`]):
 //! - `Live` - on the chain (or rescued onto it by the two membership rules below).
 //! - `PreCut` - csift's forensic reading ABOVE a cut the loader stops at, plus any
-//!   region csift's own record set cannot resolve. Claude Code drops these; csift keeps
+//!   region csift's own walk could not resolve. Claude Code drops these; csift keeps
 //!   reading them, because "what the model saw at the time" is the question a transcript
 //!   archive answers. They are flagged, never hidden: every selector reaches them.
 //! - `Abandoned` - off the chain in a region the chain DID resolve. An abandoned turn
