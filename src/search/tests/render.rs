@@ -48,6 +48,9 @@ fn render_label_decorates_pairing_and_direction() {
         queue_reason: None,
         delivery: None,
         resume_paired: None,
+        survival: crate::model::Survival::Live,
+        rewound_branch: false,
+        replay_copy_of: None,
         truncated: false,
     };
     assert_eq!(render_label(&paired), "agent.tool.use ▹ agent.tool.result");
@@ -239,6 +242,9 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
         queue_reason: None,
         delivery: None,
         resume_paired: None,
+        survival: crate::model::Survival::Live,
+        rewound_branch: false,
+        replay_copy_of: None,
         truncated: false,
     };
     assert_eq!(

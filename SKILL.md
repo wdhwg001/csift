@@ -170,7 +170,7 @@ Two commands read transcript content — pick by intent: `show` fetches from the
 ### @trap:<marker> — "which subagent am I?"
 **Scope: this is the subagent-only tool.** A running subagent cannot read its own id from env; the top-level thread already has `@main` (env-based, no race, always correct) — reach for `@trap` only when you cannot name yourself. Invent a fresh marker, put it literally IN the csift command; csift finds the transcript whose shell tool_use carries it (Bash — or Windows' separate `PowerShell` tool, same `command` field). Grammar (enforced): exactly 3 CamelCase words + exactly 4 non-trivial trailing digits, hand-invented, context-independent — shaped like `@trap:JollyShinyBrook4283`, which is a RESERVED example csift hard-rejects (invent your own; never script-generate or reuse). TIMING: a subagent's transcript flushes per content block, so its launching command is on disk at dispatch and a **first try resolves** — that is the whole design. Diagnostic: from the MAIN thread a first use normally misses instead (the main record is an async flush of the completed message landing ~1-3.4s after dispatch, and csift beats it) — a miss therefore means EITHER you are the main thread (use `@main`) OR your marker was not literal; in neither branch is retrying `@trap` the answer. When @trap does resolve to the main transcript, csift says so on stderr. One-shot means one marker per identity question, not one per attempt (a fresh marker restarts the race). UNIQUENESS is conversation-wide: in a team/multi-subagent setting the marker must be unique across ALL concurrently-running agents, not just your own retries — a marker that lands in two transcripts (e.g. relayed to a peer in a message) errors AMBIGUOUS, fail-loud, never a silent wrong match. `whoami @trap:<marker>` returns the full upstream ancestry chain.
 
-## Labels (`-t/--label` · `-T/--label-not`), dotted `role.class.sub`, 3 roles, 36 leaves
+## Labels (`-t/--label` · `-T/--label-not`), dotted `role.class.sub`, 3 roles, 37 leaves
 
 Selector = dot-segment prefix, THREE forms (v0.9.4): a bare ROLE (`-t user`) = the role's **LLM-visible** leaves only — the conversation as the model receives/produces it; a GLOB (`-t 'user.*'`, quote it from the shell) = every leaf under the prefix, visibility ignored; an intermediate prefix (`-t agent.tool` = use+result, `-t harness.compaction` = summary+boundary) or a full leaf = its full set, a deliberate drill-down. No `-t` ⇒ all labels (drafts and boundaries stay searchable by default, with disclosure). `-T` EXCLUDES with the same grammar (effective set = includes minus excludes; a combination excluding everything it includes errors). Multi-label records emit once under the richest surviving view (an AUQ answer → `user.answer`; a SendMessage/spawn/`<result>` pulse → `agent.communication.*`; a slash-command-with-args → `user.message` rendered `/name args`). The complete rule is MECHANICAL, not a lookup table: JSON `labels[]` is always ordered richest-first, and the rendered view is simply the FIRST label in `labels[]` that survives your `-t`/`-T` — for any unlisted combination, read it off `labels[]`. Don't guess a record's leaf — run `--count-by label` to see the distribution.
 
@@ -185,6 +185,15 @@ user     .message   genuine human prose (incl. slash-command args, rendered `/na
                     message has no resend sibling and is undetectable; a QUEUED text
                     edited before dispatch never becomes a user record at all (its
                     queue-operation line is `.queued`, below)
+         .rewound   [not LLM-visible: outside `-t user`; reach via `-t user.rewound` or
+                    `-t 'user.*'`]
+                    a turn the conversation was REWOUND past: it was sent AND it drew a
+                    reply, and Claude Code's own parentUuid chain now threads around it,
+                    so neither it nor anything under it is in the surviving conversation.
+                    That reply is the whole discriminator against `.unsent`. OUTSIDE turn
+                    numbering; its diff line leads `rewound: the conversation continued
+                    from L<n> instead`. Everything else on the branch keeps its ordinary
+                    leaf and carries an `[abandoned]`/`[rewound]` marker
          .queued    [not LLM-visible · GATED: parsed only under an explicit selector —
                     `-t user.queued` / `-t 'user.*'`; never by a bare scan, `-t user`,
                     or `--count-by label` without -t]

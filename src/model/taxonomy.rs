@@ -49,6 +49,15 @@ pub enum Class {
     /// structurally undetectable; a QUEUED text edited before dispatch never becomes a
     /// user record at all (it survives only in `queue-operation` lines).
     UserUnsent,
+    /// `user.rewound` - a turn-opener the conversation was REWOUND past: it was sent,
+    /// it drew a reply, and Claude Code's own `parentUuid` chain now threads around it,
+    /// so the model no longer receives it or anything under it. The discriminator
+    /// against [`Class::UserUnsent`] is exactly that reply: a recalled draft has no
+    /// assistant descendant, a rewound turn does (measured over the shared-parent user
+    /// pairs of a real corpus: 868 without, 55 with, 0 on the chain). Assigned at the
+    /// SCAN layer like `user.unsent`, for the same reason - the fact lives in the DAG
+    /// around the record, not in the record. Outside turn numbering; addressable.
+    UserRewound,
     /// `user.queued` - the human's text as it sat in the input QUEUE: a
     /// `queue-operation` line carrying `content` (an `enqueue`, a `popAll` recall to
     /// the input box, or a `remove` with the text). Not in the surviving conversation
@@ -217,6 +226,7 @@ impl Class {
         !matches!(
             self,
             Class::UserUnsent
+                | Class::UserRewound
                 | Class::UserQueued
                 | Class::CompactionBoundary
                 | Class::MetaTurnDuration
@@ -237,6 +247,7 @@ impl Class {
         Class::UserAnswer,
         Class::UserRejection,
         Class::UserUnsent,
+        Class::UserRewound,
         Class::UserQueued,
         Class::AgentMessage,
         Class::AgentThinking,
@@ -279,6 +290,7 @@ impl Class {
             Class::UserAnswer => "user.answer",
             Class::UserRejection => "user.rejection",
             Class::UserUnsent => "user.unsent",
+            Class::UserRewound => "user.rewound",
             Class::UserQueued => "user.queued",
             Class::AgentMessage => "agent.message",
             Class::AgentThinking => "agent.thinking",
@@ -323,6 +335,7 @@ impl Class {
             | Class::UserAnswer
             | Class::UserRejection
             | Class::UserUnsent
+            | Class::UserRewound
             | Class::UserQueued => Role::User,
             Class::AgentMessage
             | Class::AgentThinking

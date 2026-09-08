@@ -1,5 +1,7 @@
 //! C-18 + user.unsent: a draft stays outside turn numbering but is searchable under
-//! its own leaf; the collapse count is disclosed; addresses still fetch.
+//! its own leaf; the collapse count is disclosed; addresses still fetch. v0.12.0 keeps
+//! every one of those answers and re-derives them from the SURVIVAL AXIS, so the header
+//! wording moved from "superseded draft" to the axis's own "draft (superseded …)".
 
 use crate::harness::*;
 
@@ -81,7 +83,7 @@ fn show_fetches_an_addressed_draft_with_an_honest_header() {
     );
     assert!(
         out.stdout.contains("abandoned phrasing")
-            && out.stdout.contains("superseded draft")
+            && out.stdout.contains("draft (superseded")
             && out.stdout.contains("outside turn numbering"),
         "the draft renders with an honest header, never a fabricated t<N>:\n{}",
         out.stdout
@@ -172,4 +174,71 @@ fn show_miss_error_states_the_current_render_domain() {
         "the error names what DOES render (no stale metadata/attachment claim):\n{}",
         out.stderr
     );
+}
+
+// ── the SURVIVAL AXIS through an address ──
+
+const RSESS: &str = "2b1a0f9e-8d7c-4465-9231-0e9d8c7b6a5f";
+
+/// L1 prompt, L2 reply, L3 the REWOUND prompt, L4 its reply, L5 the resend, L6 its reply.
+fn rewind_fixture(h: &Home) {
+    h.write(
+        &format!("{ENC}/{RSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"dredge the northern channel"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"dredging"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"survey the southern shoal"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"surveying"}]}}"#, "\n",
+        ),
+    );
+}
+
+#[test]
+fn show_renders_an_abandoned_record_with_its_marker() {
+    // The refetch law: an address renders the record it names, whatever the chain says -
+    // and it says WHAT the record is instead of fabricating a turn number.
+    let h = Home::new();
+    rewind_fixture(&h);
+    let out = h.run(&["show", &at(RSESS), "--line", "3"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("rewound turn")
+            && out.stdout.contains("outside turn numbering")
+            && out.stdout.contains("user.rewound"),
+        "the rewound prompt renders with its own leaf:\n{}",
+        out.stdout
+    );
+    let j = h.run(&["show", &at(RSESS), "--line", "3..4", "--format", "json"]);
+    let recs: Vec<serde_json::Value> = j
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .filter(|v: &serde_json::Value| v["kind"] == "record")
+        .collect();
+    assert_eq!(recs.len(), 2, "{}", j.stdout);
+    for r in &recs {
+        assert_eq!(r["survival"], "abandoned", "{}", j.stdout);
+        assert_eq!(r["abandoned_root_line"], 3, "{}", j.stdout);
+        assert!(r["turn_index"].is_null(), "{}", j.stdout);
+        assert!(r["replay_copy_of"].is_null(), "{}", j.stdout);
+    }
+}
+
+#[test]
+fn show_turn_addresses_the_live_numbering() {
+    // t1 is the RESEND, not the rewound prompt: `show --turn` and `search`'s `tN` speak
+    // the same numbering, and a rewound turn consumes no number.
+    let h = Home::new();
+    rewind_fixture(&h);
+    let out = h.run(&["show", &at(RSESS), "--turn", "1"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("southern shoal") && !out.stdout.contains("northern channel"),
+        "turn 1 is the surviving second turn:\n{}",
+        out.stdout
+    );
+    let miss = h.run(&["show", &at(RSESS), "--turn", "2"]);
+    assert!(!miss.success, "only two turns survive: {}", miss.stdout);
 }

@@ -12,7 +12,7 @@ use super::*;
 /// data contract, intentionally retained, hence the targeted allow rather than
 /// deleting SPEC-mandated shape.
 #[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Record {
     /// Record discriminator: "user", "assistant", "system", "summary",
     /// "last-prompt", "attachment", … (open set - keep as String, never enum-panic).
@@ -134,6 +134,25 @@ pub struct Record {
     /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.
     #[serde(default, rename = "compactMetadata")]
     pub compact_metadata: Option<serde_json::Value>,
+
+    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's
+    /// loader starts its conversation-chain walk from, re-snapshotted with every write
+    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`
+    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.
+    #[serde(default, rename = "leafUuid")]
+    pub leaf_uuid: Option<String>,
+
+    /// `last-prompt` `explicit`: the leaf was pinned by a writer (an exit/relaunch
+    /// flush, or the remote-control rewind handler) rather than snapshotted. Measured 0
+    /// occurrences in the corpus; parsed and DISCLOSED (the chain's `leaf_source`),
+    /// never otherwise steered on.
+    #[serde(default)]
+    pub explicit: Option<bool>,
+
+    /// `last-prompt` `rewound`: the pin came from the remote-control rewind handler.
+    /// Measured 0 occurrences; the local rewind writes nothing at all. Disclosed only.
+    #[serde(default)]
+    pub rewound: Option<bool>,
 
     /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE
     /// predecessor record the compaction re-links to (`parentUuid` is null on a

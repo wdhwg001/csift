@@ -39,15 +39,21 @@ use super::*;
         ERROR (exit non-zero); a range CLAMPS to the file but erroring if it yields nothing. \
         A pending-elicitation record merged from the sidecar has no physical line; address \
         it by `--uuid` (it renders `(elicitation sidecar)` in place of `Lnnnn`).\n\n\
-        SUPERSEDED DRAFTS\n  \
-          An addressed draft (an opener a later same-parent sibling replaced) renders as \
-        its own annotated unit outside turn numbering, and states its distance from the \
-        message that replaced it: `differs from the sent message in N chars (P% of the \
-        final)` - insertions plus deletions of a shortest CHARACTER edit script, never a \
-        length difference, so P can exceed 100 when the draft was the longer text. JSON \
-        record rows add superseding_line, superseding_uuid, diff_chars, diff_pct and \
-        diff_exact (false when a bound stopped the walk, in which case both numbers read \
-        \"more than\"); all five are null on any other row.\n\n\
+        RECORDS OUTSIDE THE SURVIVING CONVERSATION\n  \
+          `--turn` speaks the SAME numbering `search` prints, and that numbering follows \
+        Claude Code's own conversation chain: a record the chain no longer reaches - a \
+        recalled draft, a turn the operator REWOUND past, anything under one - belongs to \
+        no numbered turn. An ADDRESS still renders it (the refetch law), as its own \
+        annotated unit headed `draft (superseded …)` or `rewound turn …` instead of a \
+        fabricated t<N>, and it states its distance from the message that replaced it: \
+        `differs from the sent message in N chars (P% of the final)` - insertions plus \
+        deletions of a shortest CHARACTER edit script, never a length difference, so P can \
+        exceed 100 when the draft was the longer text; a rewound turn leads with `rewound: \
+        the conversation continued from L<n> instead`. JSON record rows add \
+        superseding_line, superseding_uuid, diff_chars, diff_pct and diff_exact (false \
+        when a bound stopped the walk, in which case both numbers read \"more than\") - all \
+        five null on any other row - plus survival (live | pre-cut | abandoned), \
+        abandoned_root_line and replay_copy_of on every row.\n\n\
         RAW MODE\n  \
           `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
         torn line: that is the point). It is mutually exclusive with `--format json` (raw \
@@ -58,7 +64,8 @@ use super::*;
         {kind:\"summary\", …}. Record rows carry {session_id, is_subagent, parent_session_id, \
         turn_index, line (null for a sidecar-merged record), uuid, label, labels:[…], \
         tool_name, from, to, pairing (paired | pending | orphan | null), tool_use_id, \
-        source (\"elicitation-sidecar\" | null), ts_utc, ts_local, text (FULL; never \
+        source (\"elicitation-sidecar\" | null), survival (live | pre-cut | abandoned), \
+        abandoned_root_line, replay_copy_of, ts_utc, ts_local, text (FULL; never \
         clipped), image_ids:[…]}. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
         non_record_lines, skipped_lines, with_elicitation_sidecar}."

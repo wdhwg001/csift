@@ -32,6 +32,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 
 mod automation;
+mod chain;
 mod classify;
 mod classify_channel;
 mod classify_promoted;
@@ -49,6 +50,7 @@ mod record;
 mod taxonomy;
 
 pub(crate) use automation::*;
+pub(crate) use chain::*;
 pub(crate) use classify_support::*;
 pub(crate) use grouping::*;
 pub(crate) use markers::*;

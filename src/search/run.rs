@@ -215,7 +215,7 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
     let mut all: Vec<Exchange> = Vec::new();
     for fr in per_file {
         outcome.skipped_lines += fr.skipped_lines;
-        outcome.superseded_drafts += fr.superseded_drafts;
+        outcome.chain.add(&fr.chain);
         all.extend(fr.exchanges);
     }
     all.sort_by(|a, b| {
@@ -277,7 +277,8 @@ pub fn run_search(args: &SearchArgs) -> Result<()> {
         match args.format {
             OutputFormat::Text => {
                 for (key, n) in &rows {
-                    println!("{n:>7}  {key}");
+                    // A record outside every numbered turn gets a NAMED bucket, never t0.
+                    println!("{n:>7}  {}", key.as_deref().unwrap_or("t? (abandoned)"));
                 }
                 let excl = if excluded > 0 {
                     format!(" · {excluded} record(s) have no {slug} (outside this axis)")
@@ -497,9 +498,9 @@ pub(crate) struct FileResult {
     /// against. Consumed by `show`'s turn address-miss reporting (`no such turn: t99 -
     /// the transcript has N turn(s)`); 0 on the early-return paths (empty / gated file).
     pub(crate) turn_count: usize,
-    /// Superseded-draft openers collapsed by this file's turn reconstruction (C-18);
-    /// 0 on the early-return paths (no reconstruction ran, nothing was collapsed).
-    pub(crate) superseded_drafts: usize,
+    /// What the SURVIVAL AXIS found in this transcript - all zero on the early-return
+    /// paths (no chain was built, so nothing is claimed).
+    pub(crate) chain: ChainCounts,
 }
 
 /// A retained record. `can_hit` is the §7d keyword-prefilter verdict on the raw
@@ -521,4 +522,10 @@ pub(crate) struct Kept {
     /// the native jsonl. Such a record has no physical `line_no` (0); its hits render
     /// `(elicitation sidecar)` instead of `Lnnnn`.
     pub(crate) from_sidecar: bool,
+    /// True for a SPINE row: a `attachment`/`system`/`last-prompt` line the §7d candidate
+    /// prefilter drops, lifted to its five chain-structural fields ONLY
+    /// ([`crate::parse::spine_record`]) so the conversation chain can see the DAG it
+    /// walks. Such a row carries no `message`, classifies to nothing and must be skipped
+    /// by every record-consuming pass - it exists for [`crate::model::Chain`] alone.
+    pub(crate) spine: bool,
 }

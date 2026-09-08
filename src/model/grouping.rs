@@ -71,10 +71,10 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// message); interrupts / `<local-command-stdout>` / `<command-name>` wrappers, formerly
 /// spurious boundaries, are excluded by `is_genuine_user` (regression fixes).
 ///
-/// NOTE: this raw grouper trusts file order and does NOT suppress superseded drafts. The
-/// production surfaces use [`group_turn_indices_deduped`], which additionally drops the
-/// abandoned-draft openers an esc-cancel / edit-resend leaves behind (§6.4.1). This bare
-/// form stays for the lightweight bool-fixture tests and any caller that has no `Record`.
+/// NOTE: this raw grouper trusts file order and knows nothing of the SURVIVAL AXIS. The
+/// production surfaces use [`group_turn_indices_deduped`], which drops every record
+/// Claude Code's own conversation chain no longer reaches (§6.4.1). This bare form stays
+/// for the lightweight bool-fixture tests and any caller that has no `Record`.
 // Production now routes through `group_turn_indices_deduped`, so in the bin build this bare
 // generic is reached only from `#[cfg(test)]` - kept as the documented base primitive +
 // bool-fixture test entry (same retained-shape rationale as the `#[allow(dead_code)]` on
@@ -89,175 +89,51 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
     )
 }
 
-/// Indices of turn-opening records that are SUPERSEDED DRAFTS - an earlier sibling of a
-/// later turn-opener sharing the SAME non-null `parentUuid` (§6.4.1). This is the on-disk
-/// shape of the "type a message, ESC-cancel / edit, resend" loop (and any rewind that
-/// re-opens a turn from the same point): Claude Code appends every draft as its own
-/// `type:"user"` record, yet only ONE - the last in file order - was actually delivered to
-/// the model. The earlier siblings are abandoned drafts.
+/// [`group_turn_indices`] under the SURVIVAL AXIS ([`Chain`]): a turn opens only on a
+/// record the conversation chain still reaches, and a record it does not reach belongs to
+/// no numbered turn at all - neither as a boundary nor as a member. That covers what the
+/// three former heuristics covered (a recalled draft, a compaction re-anchor's replay
+/// copy, the history above a compaction cut) plus what none of them could see: a turn the
+/// operator rewound past, and which child of a branch point the conversation continued
+/// from. Abandoned records stay searchable, addressable and disclosed; they are simply not
+/// numbered.
 ///
-/// WHY last-in-file is the survivor (verified on real `~/.claude/projects` data): distinct
-/// real turns never share a `parentUuid` (each user turn is parented to the assistant
-/// message that preceded it), so same-parent openers are ALWAYS alternative versions of one
-/// logical turn; and across the corpus the last sibling's subtree is the one that reaches
-/// furthest toward the leaf (the live branch). A content-similarity heuristic would miss the
-/// common case where the user *prepended/inserted* text on the edit (`look…` → `take a closer look…`),
-/// so the parent-uuid identity - not text - is the load-bearing signal.
+/// This is the delimiter every session-operating surface (`verbatim` / `search` / `files`
+/// / `recover`) uses, so they stay byte-consistent on what counts as a turn.
 ///
-/// `rec` projects each element to its `Record` (works for `&Record`, `Record`, and the
-/// search `Kept` wrapper alike). Records with a null/empty `parentUuid` are NEVER grouped
-/// (grouping on "no parent" would merge unrelated first-message drafts); in real data a
-/// genuine user always carries a parent, so this costs nothing.
-///
-/// HONEST BOUND: only the superseded OPENER is reported, not the downstream of a branch
-/// abandoned AFTER it already drew replies (rewind-after-response). Those rare descendants
-/// (≤2% of turns on the measured corpus) keep their own distinct parents and survive; fully
-/// pruning them needs an active-leaf walk, which a compaction boundary severs - so we do not
-/// risk silently dropping a live turn to chase them.
-// Both named derivations below are reached only from `#[cfg(test)]` in the bin build:
-// production takes `collapse_openers` directly, because it needs BOTH of its answers in
-// ONE walk. They stay because they are the names SPEC 6.4.1, AGENTS 3.3 and the ledger
-// cite for the draft contract, and deriving them from the one walk is what keeps those
-// names from drifting away from what the grouper actually does.
-#[allow(dead_code)]
-#[must_use]
-pub fn superseded_draft_indices<T>(
-    records: &[T],
-    rec: impl Fn(&T) -> &Record,
-) -> std::collections::HashSet<usize> {
-    collapse_openers(records, rec).drafts.into_keys().collect()
-}
-
-/// What ONE walk over a transcript's turn-openers decides.
-///
-/// Two different things make a same-parent opener not the turn it looks like, and they
-/// need opposite treatment, so they are decided together:
-///
-/// - a SUPERSEDED DRAFT is an earlier sibling with its OWN uuid: the user typed it,
-///   recalled it, edited it and sent the later one. The EARLIER record is the one that
-///   was never delivered.
-/// - a REPLAY COPY carries the SAME `uuid` as an opener already seen under that parent.
-///   A compaction RE-ANCHOR re-appends a contiguous block of records with their uuids
-///   PRESERVED (the copies differ in `promptId` alone), so the same logical message is
-///   on disk twice. Grouping on `parentUuid` alone reads the copy as a later sibling and
-///   marks the ORIGINAL as an abandoned draft - wrong twice over: that message WAS sent,
-///   and the copy is not a second message. The LATER record is the redundant one.
-///
-/// So same-uuid openers collapse to their FIRST occurrence: the first keeps its label and
-/// its turn, and the copy neither supersedes it nor opens a turn of its own. The copy is
-/// NOT dropped - it stays a turn MEMBER, which keeps it addressable and matches how every
-/// other record of a replayed block is treated (the replayed assistant and attachment
-/// records have always rendered at both of their lines).
-#[derive(Debug, Default)]
-pub struct OpenerCollapse {
-    /// Superseded draft index -> the index of the sibling that finally replaced it.
-    pub drafts: std::collections::HashMap<usize, usize>,
-    /// Indices of replay copies: a later opener whose uuid an earlier same-parent opener
-    /// already carried.
-    pub replays: std::collections::HashSet<usize>,
-}
-
-impl OpenerCollapse {
-    /// The openers turn reconstruction must DROP entirely (drafts only - a replay copy is
-    /// demoted to a member instead, see the type doc).
-    #[must_use]
-    pub fn dropped(&self) -> std::collections::HashSet<usize> {
-        self.drafts.keys().copied().collect()
-    }
-
-    /// Does index `i` still open a turn? False for a replay copy; a draft is handled by
-    /// the skip set instead.
-    #[must_use]
-    pub fn opens(&self, i: usize) -> bool {
-        !self.replays.contains(&i)
-    }
-}
-
-#[must_use]
-pub fn collapse_openers<T>(records: &[T], rec: impl Fn(&T) -> &Record) -> OpenerCollapse {
-    // parent -> (the last opener seen so far, the earlier siblings it supersedes).
-    let mut groups: std::collections::HashMap<&str, (usize, Vec<usize>)> =
-        std::collections::HashMap::new();
-    // (parent, uuid) -> the FIRST opener carrying it: the replay detector.
-    let mut first_uuid: std::collections::HashMap<(&str, &str), usize> =
-        std::collections::HashMap::new();
-    let mut out = OpenerCollapse::default();
-    for (i, item) in records.iter().enumerate() {
-        let r = rec(item);
-        if !r.opens_turn() {
-            continue;
-        }
-        let Some(parent) = r.parent_uuid.as_deref() else {
-            continue; // null parent: never grouped (would merge unrelated records)
-        };
-        if parent.is_empty() {
-            continue;
-        }
-        // A uuid this parent's openers already carried: the same logical record, re-appended
-        // by a compaction re-anchor. It supersedes nothing and opens nothing.
-        if let Some(uuid) = r.uuid.as_deref() {
-            if first_uuid.insert((parent, uuid), i).is_some() {
-                out.replays.insert(i);
-                continue;
-            }
-        }
-        // Keep the LAST opener per parent: when a new sibling appears, the previously-seen
-        // one for that parent becomes a superseded draft.
-        match groups.get_mut(parent) {
-            Some(entry) => {
-                let prev = std::mem::replace(&mut entry.0, i);
-                entry.1.push(prev);
-            }
-            None => {
-                groups.insert(parent, (i, Vec::new()));
-            }
-        }
-    }
-    // An n-way draft group (type, esc, edit, esc, edit, send) maps EVERY earlier sibling to
-    // the same final survivor, not to its immediate successor: the intermediate versions
-    // were never sent either.
-    for (survivor, drafts) in groups.into_values() {
-        for d in drafts {
-            out.drafts.insert(d, survivor);
-        }
-    }
-    out
-}
-
-/// [`superseded_draft_indices`] with the SURVIVOR named: each superseded opener maps to
-/// the index of the sibling that finally replaced it (the LAST opener sharing its
-/// `parentUuid` - the one that was delivered), so a caller can render the draft AGAINST
-/// the message the user actually sent (the C-27 unsent diff line). A replay copy is never
-/// a survivor and never a draft ([`collapse_openers`]).
-#[allow(dead_code)]
-#[must_use]
-pub fn superseded_draft_map<T>(
-    records: &[T],
-    rec: impl Fn(&T) -> &Record,
-) -> std::collections::HashMap<usize, usize> {
-    collapse_openers(records, rec).drafts
-}
-
-/// [`group_turn_indices`] with the two [`collapse_openers`] corrections (§6.4.1): a
-/// superseded DRAFT is dropped ENTIRELY - it neither opens a turn nor folds in as a
-/// member - so a message the user edited away before sending can never resurface as a
-/// phantom turn (nor leak its abandoned text into a neighbour); a REPLAY COPY stops
-/// OPENING a turn but stays a member, so a compaction re-anchor cannot mint a second turn
-/// for a message that was sent once. This is the delimiter every session-operating surface
-/// (`turns` / `search` / `files` / `recover`) uses, so they stay byte-consistent on what
-/// counts as a turn.
+/// CAUTION - this entry point builds the chain from whatever records the caller hands it,
+/// and a caller whose prefilter dropped the `attachment` and `system` lines hands it a
+/// DAG with holes. A chain that cannot see those lines cannot be trusted to say a whole
+/// BRANCH is abandoned, so this form drops only what the pre-0.12.0 rule dropped: the
+/// superseded OPENER itself. Every other record stays a member of the turn above it, and
+/// a turn-keyed consumer (`files --by timeline`) keeps its row. A surface that splices
+/// [`crate::parse::spine_record`] rows back in has the whole DAG and calls
+/// [`group_turn_indices_chained`] with that chain instead, which drops the branch.
 #[must_use]
 pub fn group_turn_indices_deduped<T>(
     records: &[T],
     rec: impl Fn(&T) -> &Record,
 ) -> Vec<Vec<usize>> {
-    let collapse = collapse_openers(records, |x| rec(x));
-    let skip = collapse.dropped();
-    group_turn_indices_core(
-        records,
-        |i, x| rec(x).opens_turn() && collapse.opens(i),
-        &skip,
-    )
+    let chain = Chain::build_by(records, &rec, None);
+    let skip: std::collections::HashSet<usize> = (0..records.len())
+        .filter(|&i| chain.kind(i).is_some())
+        .collect();
+    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)
+}
+
+/// [`group_turn_indices_deduped`] with the chain already built - the path `search` takes,
+/// because its scan splices the structural spine rows of the lines its prefilter drops
+/// into the chain's view and must not pay for a second build.
+#[must_use]
+pub fn group_turn_indices_chained<T>(
+    records: &[T],
+    rec: impl Fn(&T) -> &Record,
+    chain: &Chain,
+) -> Vec<Vec<usize>> {
+    let skip: std::collections::HashSet<usize> = (0..records.len())
+        .filter(|&i| !chain.survival(i).selectable())
+        .collect();
+    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)
 }
 
 /// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index

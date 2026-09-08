@@ -11,7 +11,7 @@ fn collect_hits_thinking_category() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.thinking".to_string()], &[]),
         &m,
         false,
@@ -35,7 +35,7 @@ fn collect_hits_agent_text_only_from_assistant() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.message".to_string()], &[]),
         &m,
         false,
@@ -58,7 +58,7 @@ fn collect_hits_tool_use_matches_name_and_input() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.tool.use".to_string()], &[]),
         &m,
         false,
@@ -84,7 +84,7 @@ fn collect_hits_mcp_elicitation_system_marker() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.tool.use".to_string()], &[]),
         &m,
         false,
@@ -116,7 +116,7 @@ fn collect_hits_auq_marker_does_not_double_emit() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.tool.use".to_string()], &[]),
         &m,
         false,
@@ -143,7 +143,7 @@ fn collect_hits_auq_answer_under_user() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["user".to_string()], &[]),
         &m,
         false,
@@ -167,7 +167,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
     // User category must NOT surface a plain tool_result carrier.
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["user".to_string()], &[]),
         &m,
         false,
@@ -182,7 +182,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
     let mut hits2 = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.tool.result".to_string()], &[]),
         &m,
         false,
@@ -211,7 +211,7 @@ fn auq_answer_surfaces_under_user_category_end_to_end() {
     // genuine user message that was previously missed as a boundary). So the hit
     // lands in turn 1 (the genuine "pick one" opener is turn 0).
     assert_eq!(ex.len(), 1);
-    assert_eq!(ex[0].turn_index, 1);
+    assert_eq!(ex[0].turn_index, Some(1));
     assert!(ex[0]
         .hits
         .iter()
@@ -238,7 +238,7 @@ fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
     );
     // §6.4 behavior change: the answer opens its own turn (turn 1), after the
     // genuine "pick one" opener (turn 0).
-    assert_eq!(ex[0].turn_index, 1);
+    assert_eq!(ex[0].turn_index, Some(1));
     assert!(ex[0]
         .hits
         .iter()
@@ -302,7 +302,7 @@ fn auq_answer_under_user_present_but_pattern_does_not_match() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["user".to_string()], &[]),
         &m,
         false,
@@ -330,16 +330,19 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         can_hit: m.line_may_match(raw),
         line_no: 1,
         from_sidecar: false,
+        spine: false,
     };
     assert!(!kept.can_hit);
     let turn = Turn {
         index: 0,
         records: vec![&kept],
+        indices: vec![0],
     };
     let tw = TimeWindow::default();
     let (hits, hit_idxs) = collect_turn_hits(
         &turn,
-        false,
+        &crate::model::Chain::default(),
+        &HashMap::new(),
         LabelFilter::all(),
         &m,
         &tw,
@@ -365,16 +368,19 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         can_hit: m.line_may_match(raw),
         line_no: 1,
         from_sidecar: false,
+        spine: false,
     };
     let turn = Turn {
         index: 0,
         records: vec![&kept],
+        indices: vec![0],
     };
     // Window starting AFTER the record's timestamp → excluded.
     let tw = TimeWindow::from_args(Some("2026-06-07T06:00:00Z"), None).unwrap();
     assert!(collect_turn_hits(
         &turn,
-        false,
+        &crate::model::Chain::default(),
+        &HashMap::new(),
         LabelFilter::all(),
         &m,
         &tw,
@@ -391,7 +397,8 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
     let tw2 = TimeWindow::default();
     assert!(!collect_turn_hits(
         &turn,
-        false,
+        &crate::model::Chain::default(),
+        &HashMap::new(),
         LabelFilter::all(),
         &m,
         &tw2,
@@ -417,7 +424,7 @@ fn collect_record_hits_resolve_persisted_with_no_pointer_keeps_inline() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.tool.result".to_string()], &[]),
         &m,
         true,
@@ -446,7 +453,7 @@ fn agent_text_block_only_from_assistant_not_user_text_block() {
     let mut hits = Vec::new();
     collect_record_hits(
         &r,
-        false,
+        None,
         LabelFilter::new(&["agent.message".to_string()], &[]),
         &m,
         false,
@@ -492,7 +499,7 @@ fn redacted_thinking_respects_the_label_filter() {
     let mut hits = Vec::new();
     collect_record_hits(
         &rec,
-        false,
+        None,
         filter,
         &Matcher::pure(),
         false,

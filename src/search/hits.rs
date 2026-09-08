@@ -8,7 +8,8 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_turn_hits(
     turn: &Turn<'_>,
-    superseded: bool,
+    chain: &crate::model::Chain,
+    survivor_lines: &HashMap<usize, usize>,
     filter: LabelFilter<'_>,
     matcher: &Matcher,
     time_window: &TimeWindow,
@@ -22,6 +23,11 @@ pub(crate) fn collect_turn_hits(
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
+        // A SPINE row is not a record: it carries five structural fields so the chain can
+        // see the DAG, and nothing to match, classify or render.
+        if kept.spine {
+            continue;
+        }
         // Addressing (`--line`/`--uuid`): only the ADDRESSED records are eligible to hit - the
         // selector that turns `search` into the message-getter. (Applied before the keyword
         // prefilter so an addressed record is fetched regardless of the pattern literal.)
@@ -44,9 +50,14 @@ pub(crate) fn collect_turn_hits(
             continue;
         }
         let before = hits.len();
+        let idx = turn.indices.get(i).copied().unwrap_or(usize::MAX);
+        // C-31: whether the model still receives a record is the THIRD exclusion axis
+        // beside leaf visibility and the delivery override, and like them it is per
+        // RECORD - so the filter is specialised HERE, once, before any label is tested.
+        let filter = filter.with_survival(chain.survival(idx).selectable());
         collect_record_hits(
             rec,
-            superseded,
+            chain.opener_class(idx),
             filter,
             matcher,
             resolve_persisted,
@@ -68,8 +79,10 @@ pub(crate) fn collect_turn_hits(
                 hits.push(hit);
             }
         }
-        // Backfill the source record's address onto every hit this record produced.
+        // Backfill the source record's address + survival onto every hit this record
+        // produced.
         backfill_address(&mut hits[before..], kept);
+        backfill_survival(&mut hits[before..], chain, idx, survivor_lines);
         if hits.len() > before {
             hit_idxs.push(i);
         }
@@ -111,6 +124,9 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         // An unlabeled unit is by definition a record csift models no leaf for, so it is
         // never a resume placeholder (that shape has one).
         resume_paired: None,
+        survival: crate::model::Survival::Live,
+        rewound_branch: false,
+        replay_copy_of: None,
         truncated,
     })
 }
@@ -120,6 +136,29 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
 /// lives on the `Kept`, not the `Record`. Also attaches the record's image ids to its FIRST
 /// hit (so an image-bearing message exposes the extractable `#N`/`L<line>i<n>` id once, not
 /// repeated per matched block).
+/// Stamp the SURVIVAL AXIS answer onto each hit just appended: is this record still in
+/// the conversation, is its branch a rewound one, and is the line an earlier copy of a
+/// record a later line carries. The replay pointer is rendered as the SURVIVOR's physical
+/// line, which is only resolvable here where the record list is in hand.
+pub(crate) fn backfill_survival(
+    hits: &mut [Hit],
+    chain: &crate::model::Chain,
+    idx: usize,
+    survivor_line: &HashMap<usize, usize>,
+) {
+    let survival = chain.survival(idx);
+    let rewound = chain.on_rewound_branch(idx);
+    let replay = chain
+        .replay_of(idx)
+        .and_then(|s| survivor_line.get(&s).copied())
+        .filter(|&l| l > 0);
+    for h in hits.iter_mut() {
+        h.survival = survival;
+        h.rewound_branch = rewound;
+        h.replay_copy_of = replay;
+    }
+}
+
 pub(crate) fn backfill_address(hits: &mut [Hit], kept: &Kept) {
     for h in hits.iter_mut() {
         h.line = kept.line_no;
@@ -153,13 +192,13 @@ pub(crate) fn collect_turn_siblings(
     let all = LabelFilter::all(); // every label is eligible - siblings ignore -t/-T
     let mut sibs = Vec::new();
     for (i, kept) in turn.records.iter().enumerate() {
-        if hit_idxs.contains(&i) {
+        if kept.spine || hit_idxs.contains(&i) {
             continue;
         }
         let before = sibs.len();
         collect_record_hits(
             &kept.rec,
-            false,
+            None,
             all,
             &pure,
             resolve_persisted,
@@ -207,7 +246,7 @@ pub(crate) fn collect_turn_siblings(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn collect_record_hits(
     rec: &Record,
-    superseded: bool,
+    opener_override: Option<Class>,
     filter: LabelFilter<'_>,
     matcher: &Matcher,
     resolve_persisted: bool,
@@ -217,14 +256,14 @@ pub(crate) fn collect_record_hits(
     ctx: &ClassifyCtx,
     hits: &mut Vec<Hit>,
 ) {
-    // A superseded turn-opener draft (the scan layer computed the set - a pure
-    // per-record classify cannot see the LATER same-parent sibling) carries the single
-    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the
-    // conversation, so it never rides `user.message` (whose counts stay pure).
-    let labels = if superseded {
-        vec![Class::UserUnsent]
-    } else {
-        rec.classify(ctx)
+    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record
+    // classify cannot see the DAG around the record) carries ONE label whatever kind of
+    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the
+    // conversation was rewound past. Neither is part of the surviving conversation, so
+    // neither ever rides `user.message` (whose counts stay pure).
+    let labels = match opener_override {
+        Some(c) => vec![c],
+        None => rec.classify(ctx),
     };
     if labels.is_empty() {
         return; // unmodeled / excluded record - carries no role.class.sub label
@@ -305,6 +344,9 @@ pub(crate) fn collect_record_hits(
                 queue_reason: queue_reason.clone(),
                 delivery,
                 resume_paired,
+                survival: crate::model::Survival::Live,
+                rewound_branch: false,
+                replay_copy_of: None,
                 truncated,
             });
         }
@@ -320,7 +362,7 @@ pub(crate) fn collect_record_hits(
     // A superseded draft keeps its single `user.unsent` view whatever its shape: a
     // sectioned draft (a pulse- or relay-shaped text) must not fan out into per-section
     // classes the record's own `labels[]` does not carry (v0.10.2).
-    let sections = if superseded {
+    let sections = if opener_override.is_some() {
         Vec::new()
     } else {
         rec.record_text_sections(ctx)

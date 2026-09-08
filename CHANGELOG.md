@@ -16,6 +16,33 @@ surface change bumps the PATCH.
   old spelling is a hard parse error that names its successor, the same way the pre-v0.5
   flat label values do — update any script or saved query that keys on the old path.
 
+- **BREAKING: the SURVIVAL AXIS replaces the three opener heuristics.** csift now asks Claude
+  Code's own question - which records does the conversation chain still reach? - instead of
+  three special cases that approximated it. A record the chain no longer reaches is ABANDONED:
+  outside turn numbering, skipped by a bare `-t user`/`-t agent`/`-t harness`, reached by a glob
+  or an exact leaf with an `[abandoned]` / `[rewound]` marker. Turn numbering shifts on any
+  transcript carrying a rewind or a replayed block.
+- **`-t user`/`-t agent`/`-t harness` gained a third exclusion axis.** Delivery and leaf
+  visibility already narrowed a bare role; survival is the third. Every other selector form is
+  unchanged.
+- **A replay copy is now the EARLIER line.** The loader's uuid map keeps the last line carrying
+  a uuid, so that line is the survivor for opener treatment and for addressing by uuid; the
+  earlier line renders `[replay copy of L<n>]`. Both stay searchable and counted.
+- **Census effect of the axis, so you can reconcile your own numbers.** Over this corpus the
+  opener count is conserved (3650 turn openers before, 3650 + 7 after): seven records that used
+  to be counted as turn-opening `agent.communication.signal` are now `user.rewound`, so that
+  leaf reads 397 where it read 404. Nothing was dropped; the seven moved leaf.
+- **Records above a compaction cut are `pre-cut`, and that is where the fail-open guard
+  applies.** Claude Code's walk stops at a `compact_boundary` and never reads its
+  `logicalParentUuid`; csift takes exactly that step so an archive can still show what the model
+  had read. The step can fail: 52 of 245 boundary records in this corpus, across 14 of 75
+  transcripts, point at a record that is no longer on disk, and on 13 files that is where the
+  walk ends. Above such a point csift does not know what the chain reached, so nothing there is
+  ever called abandoned — it is `pre-cut`, every selector still reaches it, and the same-parent
+  draft rule still marks a recalled draft inside it. The step is worth taking anyway: coverage
+  of a compacted transcript's conversation records is a median 9.4% without it and 46.5% with
+  it. Recorded as claim MISC-043.
+
 ### Added
 
 - **The resume repair pair has its own two leaves.** Resume a session whose last record is a
@@ -34,6 +61,12 @@ surface change bumps the PATCH.
   also lands alone after an interrupt marker or a slash-command wrapper (measured: 8 of 18
   in this corpus are paired, 10 are not). Both forms carry the leaf; the pairing is a fact
   on the hit, read from the record's `parentUuid`, rather than a second label.
+
+- **`user.rewound`**, the 37th leaf: a turn the operator rewound past. It was sent and it drew a
+  reply, which is exactly what separates it from a recalled `user.unsent` draft.
+- **JSON**: `survival`, `abandoned_root_line` and `replay_copy_of` per hit and per `show` record;
+  `abandoned_records`, `rewound_turns`, `replay_copies`, `boundary_cut_line` and `leaf_source` in
+  the `search` summary. The text footer states every one of them.
 
 ### Fixed
 

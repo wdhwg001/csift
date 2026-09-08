@@ -18,7 +18,7 @@ pub(crate) fn reconstruct_and_match(
     spawn_map: &HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>>,
     inner_parallel: bool,
     head_is_fork: bool,
-) -> (Vec<Exchange>, usize, usize) {
+) -> (Vec<Exchange>, usize, ChainCounts) {
     // Canonical bare-hex id (subagent `agent-` prefix stripped) - the SAME derivation
     // every other surface uses, so a `search` subagent hit's `session_id` is joinable to
     // `files`/`turns`/`recover`/`agents` (id-form unification; a top-level uuid is
@@ -36,20 +36,18 @@ pub(crate) fn reconstruct_and_match(
     // the 0-based turn index; map each index group back to its `Kept` borrows.
     // The skip set is computed EXPLICITLY (not inside the deduped grouper) so the
     // collapse can be DISCLOSED and an addressed draft can still be fetched (C-18).
-    // ONE walk decides both opener corrections: which openers are superseded DRAFTS (with
-    // the survivor named, for the C-27 diff line) and which are REPLAY COPIES a compaction
-    // re-anchor re-appended under a uuid an earlier opener already carried. A draft is
-    // dropped from turn reconstruction; a replay copy stops opening a turn but stays a
-    // member (it is a real record on disk, and every other record of that block renders at
-    // both of its lines).
-    let collapse = crate::model::collapse_openers(records, |k| &k.rec);
-    let draft_map = &collapse.drafts;
-    let skip = collapse.dropped();
-    let index_turns = crate::model::group_turn_indices_core(
-        records,
-        |i, k| k.rec.opens_turn() && collapse.opens(i),
-        &skip,
-    );
+    // The SURVIVAL AXIS decides all three at once: which openers the conversation chain
+    // no longer reaches (a recalled draft, a rewound turn), which lines are a compaction
+    // re-anchor's earlier copies, and where the chain was cut. It is computed EXPLICITLY
+    // (not inside the deduped grouper) so the answer can be DISCLOSED and an addressed
+    // abandoned record can still be fetched.
+    let chain = crate::model::Chain::build_by(records, |k| &k.rec, None);
+    // A replay copy's marker names the SURVIVING line, which only this layer can resolve
+    // (the chain speaks in record indices, the render in physical jsonl lines).
+    let survivor_lines: HashMap<usize, usize> = (0..records.len())
+        .filter_map(|i| chain.replay_of(i).map(|s| (s, records[s].line_no)))
+        .collect();
+    let index_turns = crate::model::group_turn_indices_chained(records, |k| &k.rec, &chain);
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
@@ -109,11 +107,11 @@ pub(crate) fn reconstruct_and_match(
     // Build one turn's Exchange (or None when range-filtered / hit-free) - ONE closure
     // shared verbatim by the serial and parallel walks below, so the two paths cannot
     // drift apart.
-    let build_exchange = |turn_index: usize, idxs: &[usize], draft: bool| -> Option<Exchange> {
-        // Turn-range filter (inclusive, 0-based on genuine-user order). A draft sits
-        // OUTSIDE turn numbering, so the range never applies to it (it is only reachable
-        // by an explicit address anyway).
-        if !draft {
+    let build_exchange = |turn_index: usize, idxs: &[usize], abandoned: bool| -> Option<Exchange> {
+        // Turn-range filter (inclusive, 0-based on genuine-user order). An abandoned unit
+        // sits OUTSIDE turn numbering, so the range never applies to it (it is only
+        // reachable by an explicit address anyway).
+        if !abandoned {
             if let Some((lo, hi)) = turn_bounds {
                 if turn_index < lo || turn_index > hi {
                     return None;
@@ -124,13 +122,15 @@ pub(crate) fn reconstruct_and_match(
         let turn = Turn {
             index: turn_index,
             records: idxs.iter().map(|&i| &records[i]).collect(),
+            indices: idxs.to_vec(),
         };
 
         // Collect the hits in this turn that satisfy category + time + regex, plus the
         // turn-record indices that produced them (so siblings can exclude matched records).
         let (mut hits, hit_idxs) = collect_turn_hits(
             &turn,
-            draft,
+            &chain,
+            &survivor_lines,
             filter,
             matcher,
             time_window,
@@ -198,9 +198,14 @@ pub(crate) fn reconstruct_and_match(
         // made this record a draft), so no second pass over the file is needed - and
         // that holds for `show` too, whose address restricts which records HIT, not
         // which are read.
-        let draft_diff = if draft && want_diff {
-            idxs.first()
-                .and_then(|&i| draft_diff_for(records, i, draft_map, &plan_index))
+        let head = idxs.first().copied();
+        let abandoned_kind = head.filter(|_| abandoned).and_then(|i| chain.kind(i));
+        let abandoned_root_line = head
+            .filter(|_| abandoned)
+            .and_then(|i| chain.abandoned_root(i))
+            .map(|r| records[r].line_no);
+        let draft_diff = if abandoned && want_diff {
+            head.and_then(|i| draft_diff_for(records, i, &chain, &plan_index))
         } else {
             None
         };
@@ -209,14 +214,16 @@ pub(crate) fn reconstruct_and_match(
             session_id: session_id.clone(),
             is_subagent,
             parent_session_id: parent_session_id.clone(),
-            turn_index: turn.index,
+            turn_index: (!abandoned).then_some(turn.index),
             started_utc,
             hits,
             siblings,
             siblings_hidden,
             turn_lines,
             record_uuids,
-            superseded_draft: draft,
+            superseded_draft: abandoned,
+            abandoned_kind,
+            abandoned_root_line,
             draft_diff,
         })
     };
@@ -244,20 +251,34 @@ pub(crate) fn reconstruct_and_match(
             .collect()
     };
 
-    // C-18 + user.unsent: a superseded draft is a real record OUTSIDE turn numbering.
-    // A scan emits it as its own annotated unit when it hits (searchable, labeled
-    // `user.unsent`) - except under a `--turn` window, which asks about NUMBERED turns
-    // and a draft belongs to none. An explicit address always reaches it (refetch law).
+    // An ABANDONED record is a real record OUTSIDE turn numbering. A scan emits its BRANCH
+    // as one annotated unit when it hits (searchable; an opener labeled `user.unsent` or
+    // `user.rewound`) - except under a `--turn` window, which asks about NUMBERED turns and
+    // an abandoned branch belongs to none. An explicit address always reaches it (refetch
+    // law). Grouping by branch head keeps a rewound turn's reply beside the prompt it
+    // answered; a lone recalled draft is a one-record branch, exactly as before.
     if address.is_some() || turn_bounds.is_none() {
-        let mut draft_idxs: Vec<usize> = skip.iter().copied().collect();
-        draft_idxs.sort_unstable();
-        for i in draft_idxs {
-            out.extend(build_exchange(0, &[i], true));
+        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for i in 0..records.len() {
+            if let Some(root) = chain.abandoned_root(i) {
+                branches.entry(root).or_default().push(i);
+            }
+        }
+        for (_, idxs) in branches {
+            out.extend(build_exchange(0, &idxs, true));
         }
     }
 
+    let counts = ChainCounts {
+        abandoned_records: chain.abandoned_records,
+        drafts: chain.drafts,
+        rewound_turns: chain.rewound_turns,
+        replay_copies: chain.replay_copies,
+        boundary_cut_line: chain.boundary_cut.map(|i| records[i].line_no),
+        leaf_source: Some(chain.leaf_source.as_str()),
+    };
     // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
-    (out, index_turns.len(), skip.len())
+    (out, index_turns.len(), counts)
 }
 
 /// The C-27 unsent diff for ONE draft record: its distance from the message that
@@ -270,10 +291,10 @@ pub(crate) fn reconstruct_and_match(
 fn draft_diff_for(
     records: &[Kept],
     draft_idx: usize,
-    map: &HashMap<usize, usize>,
+    chain: &crate::model::Chain,
     plan_index: &PlanIndex,
 ) -> Option<DraftDiff> {
-    let sent = records.get(*map.get(&draft_idx)?)?;
+    let sent = records.get(chain.superseding(draft_idx)?)?;
     let draft_text = records
         .get(draft_idx)?
         .rec
@@ -322,6 +343,9 @@ pub(crate) fn sibling_cap(class: Class) -> Option<usize> {
 pub(crate) struct Turn<'a> {
     pub(crate) index: usize,
     pub(crate) records: Vec<&'a Kept>,
+    /// The same records' indices in the file-order record list - the key the SURVIVAL
+    /// AXIS is addressed by.
+    pub(crate) indices: Vec<usize>,
 }
 
 /// A [`SpawnLookup`] for one session, built from its discovered subagents (a cheap

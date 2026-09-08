@@ -110,6 +110,17 @@ pub struct LabelFilter<'a> {
     /// per-ARGS use wants (a candidate gate, `reaches_gated`, the statically-empty
     /// check): those decide before any record is in hand.
     delivered: Option<bool>,
+    /// The RECORD-level SURVIVAL verdict: is this record still in the conversation Claude
+    /// Code's own chain rule reconstructs ([`LabelFilter::with_survival`])? `true` on the
+    /// base filter, so a decision taken before any record is in hand is unchanged.
+    live: bool,
+}
+
+/// A BARE ROLE selector (`user` / `agent` / `harness`) - one segment, no glob. The form
+/// that claims to be "the conversation", and so the only one the delivery and survival
+/// verdicts narrow.
+fn is_bare_role(selector: &str) -> bool {
+    !selector.contains('.')
 }
 
 impl<'a> LabelFilter<'a> {
@@ -119,6 +130,7 @@ impl<'a> LabelFilter<'a> {
             include,
             exclude,
             delivered: None,
+            live: true,
         }
     }
 
@@ -131,6 +143,18 @@ impl<'a> LabelFilter<'a> {
         Self { delivered, ..self }
     }
 
+    /// The same filter, applied to ONE record whose SURVIVAL verdict is `live` (false only
+    /// for a record Claude Code's conversation chain no longer reaches). A bare ROLE
+    /// selector then skips it: `-t user` means "what the human said in this conversation",
+    /// and a prompt that was recalled or rewound past is not in it. Every other selector
+    /// form - an intermediate prefix, a full leaf, a glob - reaches it exactly as before,
+    /// which is what makes `-t user.rewound` and `-t 'user.*'` the deliberate drill-downs.
+    /// Applied ONCE per record, at the hit-emission and census seams.
+    #[must_use]
+    pub fn with_survival(self, live: bool) -> Self {
+        Self { live, ..self }
+    }
+
     /// Every label is eligible - the no-filter view (`--siblings` rendering ignores `-t`/`-T`;
     /// selectors filter HITS, never a turn's other records).
     #[must_use]
@@ -139,6 +163,7 @@ impl<'a> LabelFilter<'a> {
             include: &[],
             exclude: &[],
             delivered: None,
+            live: true,
         }
     }
 
@@ -148,11 +173,15 @@ impl<'a> LabelFilter<'a> {
     /// while `-T 'user.*'` excludes them all.
     #[must_use]
     pub fn selected(&self, path: &str) -> bool {
-        label_selected(self.include, path, self.delivered)
-            && !self
-                .exclude
-                .iter()
-                .any(|s| selector_matches(s, path, self.delivered))
+        let reaches = |s: &String| {
+            (self.live || !is_bare_role(s)) && selector_matches(s, path, self.delivered)
+        };
+        let included = if self.live {
+            label_selected(self.include, path, self.delivered)
+        } else {
+            self.include.is_empty() || self.include.iter().any(&reaches)
+        };
+        included && !self.exclude.iter().any(&reaches)
     }
 
     /// True when NO leaf of [`Class::ALL`] survives - a statically-contradictory `-t`/`-T`

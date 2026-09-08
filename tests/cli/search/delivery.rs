@@ -9,6 +9,8 @@ use crate::harness::*;
 const ENC: &str = "-Users-dev-example-project";
 const SESS: &str = "5c4b3a20-1d0e-4f9a-8b7c-6d5e4f3a2b1c";
 
+/// Chained head to tail, as the harness writes them - a record nothing points at is
+/// off the conversation chain and a bare ROLE selector skips it (the SURVIVAL AXIS).
 /// L1 human · L2 assistant reply · L3 a delivered slash-command echo
 /// (`system`/`local_command`) · L4 an UNdelivered notice (`system`/`informational`) ·
 /// L5 the `<synthetic>` API-error placeholder · L6 an `isVirtual` user record.
@@ -20,9 +22,9 @@ fn delivery_home() -> Home {
             r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
             r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","model":"claude-x","content":[{"type":"text","text":"charting the lagoon now"}]}}"#, "\n",
             r#"{"type":"system","subtype":"local_command","level":"info","uuid":"s1","parentUuid":"a1","timestamp":"2026-06-07T05:00:10.000Z","content":"<local-command-stdout>lagoon depth 12m</local-command-stdout>","isMeta":false}"#, "\n",
-            r#"{"type":"system","subtype":"informational","level":"warning","uuid":"s2","parentUuid":"a1","timestamp":"2026-06-07T05:00:11.000Z","content":"Remote Control disconnected from the lagoon rig"}"#, "\n",
-            r#"{"type":"assistant","isApiErrorMessage":true,"uuid":"a2","parentUuid":"a1","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: lagoon upstream timeout"}]}}"#, "\n",
-            r#"{"type":"user","isVirtual":true,"uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"user","content":"lagoon placeholder shown only in the UI"}}"#, "\n",
+            r#"{"type":"system","subtype":"informational","level":"warning","uuid":"s2","parentUuid":"s1","timestamp":"2026-06-07T05:00:11.000Z","content":"Remote Control disconnected from the lagoon rig"}"#, "\n",
+            r#"{"type":"assistant","isApiErrorMessage":true,"uuid":"a2","parentUuid":"s2","timestamp":"2026-06-07T05:00:12.000Z","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: lagoon upstream timeout"}]}}"#, "\n",
+            r#"{"type":"user","isVirtual":true,"uuid":"u2","parentUuid":"a2","timestamp":"2026-06-07T05:00:13.000Z","message":{"role":"user","content":"lagoon placeholder shown only in the UI"}}"#, "\n",
         ),
     );
     h

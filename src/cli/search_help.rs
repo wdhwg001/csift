@@ -97,12 +97,12 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         filter, run `--count-by label` (a per-leaf census; empty pattern = whole-scope census; a \
         leaf's count is exactly how many records `-t <leaf>` would surface; JSON `census` \
         rows).\n\n\
-        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 36 leaves\n  \
+        THE LABEL TAXONOMY (-t / -T select by dot-segment prefix): 3 roles, 37 leaves\n  \
           LLM-VISIBILITY (v0.9.4): a bare ROLE selector (`-t user`) selects only the\n  \
         role's DELIVERED leaves - the conversation as the model receives/produces\n  \
-        it. Eight leaves are invisible and need naming or a glob: `user.unsent`\n  \
-        (a superseded draft is not in the surviving conversation - CC's own\n  \
-        preservedMessages accounting excludes every draft), `harness.compaction.boundary`\n  \
+        it. Nine leaves are invisible and need naming or a glob: `user.unsent` and\n  \
+        `user.rewound` (neither is in the surviving conversation - see THE SURVIVAL\n  \
+        AXIS below), `harness.compaction.boundary`\n  \
         (a metrics-only system record), and the six gated leaves below. The glob form\n  \
         `-t 'user.*'` selects EVERY leaf under the prefix, visibility ignored; an\n  \
         intermediate prefix (`-t harness.compaction`) or an exact leaf path is a\n  \
@@ -119,6 +119,24 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         intermediate prefix and an exact leaf are unaffected and reach every record;\n  \
         an undelivered one renders a `[not delivered]` marker in the label zone, and\n  \
         JSON carries `delivered` on every hit.\n  \
+          THE SURVIVAL AXIS (v0.12.0): Claude Code does not reconstruct a session by\n  \
+        reading its jsonl top to bottom. It loads every record into a uuid map (last\n  \
+        occurrence of a uuid wins), picks ONE leaf and walks `parentUuid` from it to the\n  \
+        head; only what that walk reaches is the conversation. csift mirrors that rule,\n  \
+        so a record it no longer reaches - a prompt recalled and re-typed, a turn the\n  \
+        operator REWOUND past, everything under one, an earlier copy of a record a\n  \
+        compaction re-anchor re-appended - is ABANDONED: outside turn numbering, skipped\n  \
+        by a bare role, and reached by a glob or an exact leaf with an `[abandoned]` /\n  \
+        `[rewound]` / `[replay copy of L<n>]` marker in the label zone. An abandoned\n  \
+        OPENER carries one leaf: `user.unsent` when nothing ever answered it,\n  \
+        `user.rewound` when something did. Above a compaction cut (and in any region\n  \
+        csift's own record set cannot resolve) records are PRE-CUT: Claude Code drops\n  \
+        them, csift keeps reading them and every selector still reaches them - what the\n  \
+        model saw AT THE TIME is the question an archive answers. JSON carries\n  \
+        `survival` (live | pre-cut | abandoned), `abandoned_root_line` and\n  \
+        `replay_copy_of` per hit; the summary carries `abandoned_records`,\n  \
+        `rewound_turns`, `replay_copies`, `boundary_cut_line` and `leaf_source`, and the\n  \
+        text footer states every one of them.\n  \
           GATED LEAVES (v0.10.0, +1 in v0.10.1): the six promoted non-record leaves -\n  \
         `user.queued` and `harness.meta.{turn-duration,away-summary,stop-hooks,snapshot,\n  \
         system}` - are scanned ONLY when an explicit -t reaches them (the full path, a\n  \
@@ -147,6 +165,13 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         CHARACTER edit script, never a length difference, so P can\n                                   \
         exceed 100 (JSON superseding_line, superseding_uuid,\n                                   \
         diff_chars, diff_pct, diff_exact)\n           \
+        .rewound                a turn the conversation was REWOUND past: it WAS sent\n                                   \
+        and it drew a reply, and Claude Code's chain now threads\n                                   \
+        around it, so neither it nor anything under it is in the\n                                   \
+        surviving conversation. The discriminator against\n                                   \
+        `.unsent` is exactly that reply. Outside turn numbering;\n                                   \
+        its diff line leads `rewound: the conversation continued\n                                   \
+        from L<n> instead`\n           \
         .queued                 the human's text as it sat in the input QUEUE (a\n                                   \
         queue-operation line with content: enqueue, a popAll\n                                   \
         recall, or a remove with its reason); the label zone\n                                   \
@@ -214,8 +239,8 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         {session_id, is_subagent, parent_session_id, turn_index, ts_utc, ts_local, \
         record_uuids:[…], hits:[{session_id, is_subagent, parent_session_id, label, \
         labels:[…], line, uuid, excerpt, tool_name, pairing, \
-        from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, refetch, \
-        refetch_uuid}, …]}: \
+        from, to, ts_utc, ts_local, queue_operation, queue_reason, resume_paired, \
+        survival, abandoned_root_line, replay_copy_of, refetch, refetch_uuid}, …]}: \
         `label` is the matched dotted path, `labels` \
         the record's full label set, `pairing` the tool_use↔tool_result join state \
         (paired | pending | orphan; null off the tool axis), `from`/`to` the comm direction \
@@ -239,7 +264,9 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
         re-feed `parent_session_id`, which is always the owning top-level uuid). \
         `record_uuids` lists every record stitched into the round-trip (§6.4 completeness \
         evidence). A trailing footer object {matched, sessions, transcript_ids, dropped_by_cap, \
-        skipped_lines, with_elicitation_sidecar, excerpts_truncated} closes the stream, plus \
+        skipped_lines, with_elicitation_sidecar, excerpts_truncated, superseded_drafts, \
+        abandoned_records, rewound_turns, replay_copies, boundary_cut_line, leaf_source} \
+        closes the stream, plus \
         {definitive_absence, active_filters, excluded_by_label, gated_leaves_unreached} on a \
         ZERO-match run (`queue_operation`/`queue_reason` are the `user.queued` facts and \
         `resume_paired` the `harness.resume.placeholder` one, null \

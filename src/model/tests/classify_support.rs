@@ -11,6 +11,7 @@ fn class_path_for_every_variant() {
         (Class::UserAnswer, "user.answer"),
         (Class::UserRejection, "user.rejection"),
         (Class::UserUnsent, "user.unsent"),
+        (Class::UserRewound, "user.rewound"),
         (Class::UserQueued, "user.queued"),
         (Class::AgentMessage, "agent.message"),
         (Class::AgentThinking, "agent.thinking"),
@@ -77,13 +78,13 @@ fn all_classes_cover_the_enum() {
         let head = c.path().split('.').next().unwrap();
         assert_eq!(c.role().as_str(), head, "role/path head mismatch for {c:?}");
     }
-    // ALL has no duplicates and matches the verified table size (36 leaves).
+    // ALL has no duplicates and matches the verified table size (37 leaves).
     let mut seen: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
     seen.sort_unstable();
     let n = seen.len();
     seen.dedup();
     assert_eq!(seen.len(), n, "duplicate in Class::ALL");
-    assert_eq!(n, 36, "Class::ALL leaf count drifted");
+    assert_eq!(n, 37, "Class::ALL leaf count drifted");
 }
 
 #[test]

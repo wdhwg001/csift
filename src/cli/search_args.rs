@@ -20,7 +20,8 @@ use super::*;
         CATEGORIES (`-t`, repeatable): a dotted `role.class.sub` SELECTOR. A selector matches a \
         record label iff it is a dot-SEGMENT prefix of the label's path, so `-t agent` covers the \
         whole agent role while `-t agent.tool` covers use+result. The leaf labels: \
-        user.message | user.answer | user.rejection | user.unsent | user.queued | agent.message | \
+        user.message | user.answer | user.rejection | user.unsent | user.rewound | user.queued | \
+        agent.message | \
         agent.thinking | agent.thinking.narration | agent.tool.use | agent.tool.result | \
         agent.communication.{inbox,sent,signal,channel} | \
         harness.notification.{workflow,monitor,subagent,background-command,task} | \
@@ -122,13 +123,17 @@ pub struct SearchArgs {
     /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A
     /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE
     /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /
-    /// `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every leaf under the
-    /// prefix, visibility ignored; an intermediate prefix or exact leaf (`-t agent.tool`,
-    /// `-t user.unsent`) selects its full set. A bare role decides per RECORD, not per leaf:
-    /// Claude Code's request assembler re-mints a `system`/`local_command` record (a slash
-    /// command's own echo and stdout) as a user message, so `-t harness` shows it although its
-    /// leaf is invisible, and it drops an `isVirtual` record and the `<synthetic>` API-error
-    /// placeholder, so `-t agent` hides those although `agent.message` is visible. An invalid
+    /// `user.rewound` / `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every
+    /// leaf under the prefix, visibility ignored; an intermediate prefix or exact leaf
+    /// (`-t agent.tool`, `-t user.unsent`) selects its full set. A bare role decides per
+    /// RECORD, not per leaf, on two axes. DELIVERY: Claude Code's request assembler re-mints a
+    /// `system`/`local_command` record (a slash command's own echo and stdout) as a user
+    /// message, so `-t harness` shows it although its leaf is invisible, and it drops an
+    /// `isVirtual` record and the `<synthetic>` API-error placeholder, so `-t agent` hides
+    /// those although `agent.message` is visible. SURVIVAL: a record Claude Code's own
+    /// conversation chain no longer reaches - a recalled draft, a turn the operator rewound
+    /// past, anything under one - is not in the conversation either, so a bare role skips it
+    /// while a glob or an exact leaf reaches it, marked `[abandoned]`/`[rewound]`. An invalid
     /// selector is a HARD error listing the valid set; with none given, every label is
     /// eligible. (0 back-compat: the old flat `thinking`/`tool`/`tool-response` now error.)
     #[arg(

@@ -29,6 +29,56 @@ pub enum Pairing {
     OrphanResult,
 }
 
+/// The SURVIVAL AXIS totals a scan discloses - never silent, the same law the draft
+/// disclosure has always followed. All zero on a transcript whose conversation chain
+/// reaches everything (the ordinary case), so a plain scan prints nothing new.
+#[derive(Debug, Clone, Default)]
+pub struct ChainCounts {
+    /// Records off the chain in a region the chain RESOLVED.
+    pub abandoned_records: usize,
+    /// Abandoned openers with no assistant descendant - the `user.unsent` population.
+    pub drafts: usize,
+    /// Abandoned openers WITH one - the `user.rewound` population.
+    pub rewound_turns: usize,
+    /// Lines carrying a uuid a LATER line also carries (a compaction re-anchor's copies).
+    pub replay_copies: usize,
+    /// The 1-based line of the newest `compact_boundary` the chain stopped at or stepped
+    /// over, when exactly one transcript is in scope; `None` otherwise.
+    pub boundary_cut_line: Option<usize>,
+    /// How the chain's leaf was chosen, when exactly one transcript is in scope.
+    pub leaf_source: Option<&'static str>,
+}
+
+impl ChainCounts {
+    /// Fold one transcript's counts into the scope total. The two SINGLE-transcript
+    /// facts (`boundary_cut_line`, `leaf_source`) are dropped the moment a second
+    /// transcript contributes: a line number from an unnamed file is worse than silence.
+    pub(crate) fn add(&mut self, other: &ChainCounts) {
+        let first = self.is_empty();
+        self.abandoned_records += other.abandoned_records;
+        self.drafts += other.drafts;
+        self.rewound_turns += other.rewound_turns;
+        self.replay_copies += other.replay_copies;
+        if first {
+            self.boundary_cut_line = other.boundary_cut_line;
+            self.leaf_source = other.leaf_source;
+        } else {
+            self.boundary_cut_line = None;
+            self.leaf_source = None;
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.boundary_cut_line.is_none() && self.leaf_source.is_none()
+    }
+
+    /// Is there anything to disclose at all?
+    #[must_use]
+    pub fn any(&self) -> bool {
+        self.abandoned_records > 0 || self.replay_copies > 0 || self.boundary_cut_line.is_some()
+    }
+}
+
 /// A single label-tagged hit inside an exchange.
 #[derive(Debug, Clone)]
 pub struct Hit {
@@ -112,6 +162,17 @@ pub struct Hit {
     /// other hit, and on a placeholder whose file was never indexed for prompts. Drives
     /// the `[paired]`/`[unpaired]` label-zone marker and JSON `resume_paired`.
     pub resume_paired: Option<bool>,
+    /// The source record's SURVIVAL ([`crate::model::Survival`]): is it still in the
+    /// conversation Claude Code's own chain rule reconstructs? Drives the `[abandoned]` /
+    /// `[rewound]` label-zone marker, the bare-role exclusion and JSON `survival`.
+    pub survival: crate::model::Survival,
+    /// True when this record sits on an abandoned branch whose head was ANSWERED - the
+    /// `[rewound]` marker rather than the plain `[abandoned]` one.
+    pub rewound_branch: bool,
+    /// 1-based line of the LATER line carrying this record's uuid - a compaction
+    /// re-anchor re-appended the record and the last copy is the survivor. `None` when
+    /// this line IS the survivor.
+    pub replay_copy_of: Option<usize>,
     /// True when this hit's `excerpt` was CLIPPED to fit the default cap (its match-centered
     /// window dropped surrounding content) - i.e. the reader is seeing a fragment, not the
     /// whole record. ALWAYS false under `--no-truncate` and in `--line`/`--uuid` fetch
@@ -157,6 +218,20 @@ pub struct DraftDiff {
 }
 
 impl DraftDiff {
+    /// The one-line rendering shared by `search` and `show` (text mode). A REWOUND
+    /// opener leads with where the conversation went instead: the record was sent and
+    /// answered, so "differs from the sent message" would describe it wrongly.
+    pub(crate) fn text_line_for(&self, kind: Option<crate::model::Kind>) -> String {
+        if matches!(kind, Some(crate::model::Kind::Rewound { .. })) {
+            return format!(
+                "rewound: the conversation continued from L{} instead - {}",
+                self.superseding_line,
+                self.text_line()
+            );
+        }
+        self.text_line()
+    }
+
     /// The one-line rendering shared by `search` and `show` (text mode).
     pub(crate) fn text_line(&self) -> String {
         // A resend that changed nothing: the user recalled the message and sent it back
@@ -217,8 +292,11 @@ pub struct Exchange {
     /// The OWNING top-level session uuid - the scope-token for re-targeting OTHER commands
     /// at the whole session. Equal to `session_id` for a top-level hit.
     pub parent_session_id: String,
-    /// 0-based turn index (turns delimited by genuine-user messages).
-    pub turn_index: usize,
+    /// 0-based turn index (turns delimited by genuine-user messages), or `None` for a
+    /// record the conversation chain no longer reaches: an abandoned unit belongs to no
+    /// numbered turn, and a numeric placeholder would bucket every one of them into t0 -
+    /// which is exactly what the `--count-by turn` census used to report.
+    pub turn_index: Option<usize>,
     /// Turn-opening (genuine-user) record timestamp - this exchange's position in the
     /// COMBINED chronological timeline (top-level + subagent exchanges interleaved by
     /// absolute time). ISO-8601 UTC sorts lexicographically == chronologically. `None`
@@ -240,12 +318,18 @@ pub struct Exchange {
     pub turn_lines: (usize, usize),
     /// Uuids of every record stitched into this exchange (for traceability).
     pub record_uuids: Vec<String>,
-    /// True for a superseded-draft unit (an opener replaced by a later same-parent
-    /// sibling: esc-cancel / edit-resend). Such a record sits OUTSIDE turn numbering
-    /// (`turn_index` is meaningless and renders null/annotated); its hits carry the
-    /// single label `user.unsent`. A scan emits it when it matches (except under a
-    /// `--turn` window); an explicit `show --line`/`--uuid` address always reaches it.
+    /// True for an ABANDONED unit - a record (or branch) Claude Code's conversation chain
+    /// no longer reaches. Such a unit sits OUTSIDE turn numbering (`turn_index` is
+    /// meaningless and renders null/annotated); an abandoned OPENER carries the single
+    /// label `user.unsent` (a recalled draft) or `user.rewound` (a turn that WAS answered
+    /// and was rewound past). A scan emits it when it matches (except under a `--turn`
+    /// window); an explicit `show --line`/`--uuid` address always reaches it.
     pub superseded_draft: bool,
+    /// The abandoned unit's kind, when its head is an opener - the header wording and the
+    /// C-27 diff line both key on it.
+    pub abandoned_kind: Option<crate::model::Kind>,
+    /// The 1-based line of the abandoned branch's head, when the unit is abandoned.
+    pub abandoned_root_line: Option<usize>,
     /// C-27: the draft's distance from the message that replaced it (see [`DraftDiff`]).
     /// `None` on every non-draft exchange.
     pub draft_diff: Option<DraftDiff>,
@@ -265,9 +349,8 @@ pub struct SearchOutcome {
     pub dropped_by_cap: usize,
     /// Total malformed lines skipped while scanning (surfaced, never hidden).
     pub skipped_lines: usize,
-    /// Superseded-draft openers collapsed by turn reconstruction across the scanned
-    /// files (esc-cancel / edit-resend siblings) - disclosed, never silent (C-18).
-    pub superseded_drafts: usize,
+    /// What the SURVIVAL AXIS found across the scanned files - disclosed, never silent.
+    pub chain: ChainCounts,
     /// SCOPE-span counts of the RESOLVED transcript set (top-level + subagent files), from
     /// `resolve_session_files` - so the fan-out is announced even when a spanned subagent
     /// yields no hits. Drives the shared SCOPE banner / JSON header (suppressed when sub==0).

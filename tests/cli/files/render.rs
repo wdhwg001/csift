@@ -214,3 +214,42 @@ fn files_timeline_is_chronological_with_heuristic_label() {
     );
     assert!(!lines.is_empty());
 }
+
+#[test]
+fn files_timeline_keeps_every_row_when_a_branch_left_the_conversation() {
+    // The GOLDEN PIN for the interim wiring: `files` does not splice the structural spine
+    // rows of the lines its prefilter drops, so the chain it builds is missing the
+    // attachment and system nodes and cannot be trusted to call a whole BRANCH abandoned.
+    // Trusting it that far dropped every mutation on that branch from the timeline -
+    // measured on two real transcripts, 230 rows down to 92 and 4,778 down to 3,054. Every
+    // edit a session performed must still be listed here, whichever branch it happened on.
+    let h = Home::new();
+    let enc = "-Users-dev-example-quarry";
+    let sess = "6b5a4938-2716-4c05-9d8e-7f6a5b4c3d2e";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"open the quarry survey"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"tool_use","id":"t0","name":"Write","input":{"file_path":"/Users/dev/quarry/survey.md","content":"one"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"cut the north face"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/Users/dev/quarry/north.md"}}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"a1","timestamp":"2026-06-07T05:01:06.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":"/Users/dev/quarry/ledge.md"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"cut the south face instead"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m3","content":[{"type":"tool_use","id":"t3","name":"Edit","input":{"file_path":"/Users/dev/quarry/south.md"}}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["files", at(sess).as_str(), "--by", "timeline"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    for path in [
+        "/Users/dev/quarry/survey.md",
+        "/Users/dev/quarry/north.md",
+        "/Users/dev/quarry/ledge.md",
+        "/Users/dev/quarry/south.md",
+    ] {
+        assert!(
+            out.stdout.contains(path),
+            "the timeline lost {path}:\n{}",
+            out.stdout
+        );
+    }
+}

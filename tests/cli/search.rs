@@ -16,5 +16,6 @@ mod refetch;
 mod resume;
 mod scope;
 mod spawn;
+mod survival;
 mod taxonomy;
 mod unsent;

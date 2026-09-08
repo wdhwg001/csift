@@ -41,6 +41,17 @@ pub(crate) fn render_label(h: &Hit) -> String {
     } else {
         ""
     };
+    // C-31: the SURVIVAL AXIS rides the label zone the same way - display-only, so it
+    // needs no synthesized-marker registration. `[rewound]` says the branch WAS answered
+    // before the conversation left it; `[abandoned]` says nothing ever answered.
+    let sv = match (h.survival, h.rewound_branch, h.replay_copy_of) {
+        (_, _, Some(line)) => format!(" [replay copy of L{line}]"),
+        (crate::model::Survival::Abandoned { .. }, true, _) => " [rewound]".to_string(),
+        (crate::model::Survival::Abandoned { .. }, false, _) => " [abandoned]".to_string(),
+        _ => String::new(),
+    };
+    let nd = format!("{nd}{sv}");
+    let nd = nd.as_str();
     match (class, h.pair) {
         (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {
             return format!("agent.tool.use ▹ agent.tool.result{err}{nd}");
@@ -218,11 +229,10 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // parent token is the plain first-8 of the owning top-level uuid - no collision
         // machinery (the resolver's fail-loud ambiguity check is the backstop).
         let t = &tok[ex.session_id.as_str()];
-        // A superseded draft sits OUTSIDE turn numbering - name it, never fabricate a t<N>.
-        let turn_tag = if ex.superseded_draft {
-            "draft (superseded — outside turn numbering)".to_string()
-        } else {
-            format!("t{}", ex.turn_index)
+        // An abandoned unit sits OUTSIDE turn numbering - name it, never fabricate a t<N>.
+        let turn_tag = match ex.turn_index {
+            Some(t) => format!("t{t}"),
+            None => abandoned_tag(ex),
         };
         if ex.is_subagent {
             println!(
@@ -240,7 +250,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
         // under the header, so the reader weighs the draft against what replaced it
         // instead of reading an abandoned text as the message.
         if let Some(d) = &ex.draft_diff {
-            println!("      ↳ {}", d.text_line());
+            println!("      ↳ {}", d.text_line_for(ex.abandoned_kind));
         }
         for hit in &ex.hits {
             print_record_line(role_glyph(hit.class), hit);
@@ -309,16 +319,7 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     if merged_any_sidecar(&outcome.exchanges) {
         println!("with elicitation sidecar");
     }
-    // C-18: the esc-edit draft collapse is DISCLOSED, never silent - a superseded opener
-    // is a real record a scan deliberately hides (turn hygiene), so the count and the
-    // escape hatch are stated.
-    if outcome.superseded_drafts > 0 {
-        println!(
-            "({} superseded draft(s) outside turn numbering — esc-edit resends; searchable \
-             as -t user.unsent, addressable via csift show --line/--uuid)",
-            outcome.superseded_drafts
-        );
-    }
+    emit_chain_disclosure(&outcome.chain);
     if outcome.skipped_lines > 0 {
         println!("({})", crate::text::malformed_note(outcome.skipped_lines));
     }
@@ -336,6 +337,66 @@ pub(crate) fn render_text(outcome: &SearchOutcome, args: &SearchArgs) {
     }
     if any_truncated_excerpt(&outcome.exchanges) {
         emit_truncation_caution();
+    }
+}
+
+/// The header tag an ABANDONED unit carries in place of `t<N>`: what kind of thing it is
+/// and why it has no turn number.
+pub(crate) fn abandoned_tag(ex: &Exchange) -> String {
+    match ex.abandoned_kind {
+        Some(crate::model::Kind::Rewound { .. }) => {
+            "rewound turn (the conversation was rewound past it — outside turn numbering)"
+                .to_string()
+        }
+        Some(crate::model::Kind::Draft { .. }) => {
+            "draft (superseded — outside turn numbering)".to_string()
+        }
+        None => "abandoned (off the surviving conversation — outside turn numbering)".to_string(),
+    }
+}
+
+/// The SURVIVAL AXIS disclosure: what the scan hid from turn numbering and from the bare
+/// role selectors, and how to reach it. Never silent - the same law the draft disclosure
+/// has always followed - and printed only when there is something to say, so an ordinary
+/// transcript's footer is unchanged.
+pub(crate) fn emit_chain_disclosure(c: &ChainCounts) {
+    if c.drafts > 0 {
+        println!(
+            "({} superseded draft(s) outside turn numbering — esc-edit resends; searchable \
+             as -t user.unsent, addressable via csift show --line/--uuid)",
+            c.drafts
+        );
+    }
+    if c.rewound_turns > 0 {
+        println!(
+            "({} rewound turn(s) outside turn numbering — answered, then rewound past; \
+             searchable as -t user.rewound)",
+            c.rewound_turns
+        );
+    }
+    if c.abandoned_records > 0 {
+        println!(
+            "({} record(s) off the surviving conversation — Claude Code's parentUuid chain \
+             no longer reaches them, so a bare -t user/agent/harness skips them; marked \
+             [abandoned]/[rewound] and always addressable)",
+            c.abandoned_records
+        );
+    }
+    if c.replay_copies > 0 {
+        println!(
+            "({} replay copy line(s) — a compaction re-anchor re-appended these records; the \
+             LAST copy is the survivor and the earlier line is marked)",
+            c.replay_copies
+        );
+    }
+    if let Some(line) = c.boundary_cut_line {
+        println!(
+            "(the surviving conversation is cut at the compaction boundary L{line}; csift \
+             keeps reading above it — Claude Code's own loader stops there)"
+        );
+    }
+    if let Some(src) = c.leaf_source.filter(|_| c.any()) {
+        println!("(chain leaf: {src})");
     }
 }
 

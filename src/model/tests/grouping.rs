@@ -73,13 +73,14 @@ fn opens_turn_grouping_splits_on_auq_answer_and_skips_interrupt() {
     );
 }
 
-// ── §6.4.1 esc-cancel / edit-resend DRAFT SUPPRESSION ──
-// Real shape (verified on ~/.claude/projects): the user submits, ESC-cancels or edits,
-// and resends; CC appends EACH draft as its own genuine `type:"user"` record sharing the
-// SAME `parentUuid`. Only the last in file order reached the model. `superseded_draft_indices`
-// marks the earlier siblings; `group_turn_indices_deduped` drops them so they never become
-// phantom turns. None of these patterns are reachable through bool fixtures - they need the
-// real uuid/parentUuid tree, so they parse genuine record JSON.
+// ── §6.4.1 under the SURVIVAL AXIS ──
+// v0.12.0: the three opener heuristics are gone; `group_turn_indices_deduped` now asks
+// Claude Code's own conversation chain which records the surviving conversation still
+// reaches, and drops the rest. These cases keep their old shapes and their old ANSWERS -
+// the chain reduces to the same result on a same-parent resend - and the per-record
+// verdicts they used to assert through `superseded_draft_indices` / `collapse_openers`
+// now live in `chain.rs`, which pins the whole DAG matrix. None of these patterns are
+// reachable through bool fixtures: they need the real uuid/parentUuid tree.
 
 #[test]
 fn superseded_drafts_collapse_same_parent_edit_resend() {
@@ -98,17 +99,24 @@ fn superseded_drafts_collapse_same_parent_edit_resend() {
         .map(|l| parse(l))
         .collect();
 
-    let sup = superseded_draft_indices(&records, |r| r);
+    let chain = Chain::build(&records, None);
     assert_eq!(
-        sup.len(),
-        2,
-        "the two earlier same-parent drafts are superseded"
+        chain.drafts, 2,
+        "the two earlier same-parent drafts are abandoned"
     );
-    assert!(
-        sup.contains(&2) && sup.contains(&3),
-        "drafts d1,d2 superseded; u1 (last in file order) survives"
+    assert_eq!(
+        chain.opener_class(2),
+        Some(Class::UserUnsent),
+        "d1 is a recalled draft"
     );
-    assert!(!sup.contains(&4));
+    assert_eq!(chain.opener_class(3), Some(Class::UserUnsent));
+    assert!(chain.opener_class(4).is_none(), "u1 survives");
+    assert_eq!(
+        chain.superseding(2),
+        Some(4),
+        "both map to the final survivor"
+    );
+    assert_eq!(chain.superseding(3), Some(4));
 
     let turns = group_turn_indices_deduped(&records, |r| r);
     assert_eq!(
@@ -152,7 +160,7 @@ fn superseded_drafts_distinct_parents_not_merged() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    assert!(superseded_draft_indices(&records, |r| r).is_empty());
+    assert_eq!(Chain::build(&records, None).drafts, 0);
     assert_eq!(
         group_turn_indices_deduped(&records, |r| r),
         vec![vec![0, 1], vec![2]]
@@ -170,7 +178,7 @@ fn superseded_drafts_null_parent_never_grouped() {
     .iter()
     .map(|l| parse(l))
     .collect();
-    assert!(superseded_draft_indices(&records, |r| r).is_empty());
+    assert_eq!(Chain::build(&records, None).drafts, 0);
     assert_eq!(
         group_turn_indices_deduped(&records, |r| r),
         vec![vec![0], vec![1]]
@@ -192,23 +200,23 @@ fn a_replayed_same_uuid_opener_is_not_a_draft() {
             r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p1","message":{"role":"user","content":"chart the reef"}}"#,
             r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#,
             r#"{"type":"user","uuid":"u1","parentUuid":"a0","promptId":"p2","message":{"role":"user","content":"chart the reef"}}"#,
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#,
         ]
         .iter()
         .map(|l| parse(l))
         .collect();
-    let c = collapse_openers(&records, |r| r);
-    assert!(
-        c.drafts.is_empty(),
-        "a replayed copy supersedes nothing: {:?}",
-        c.drafts
-    );
-    assert!(c.replays.contains(&3), "index 3 is the replay copy");
-    assert!(!c.opens(3), "the copy never opens a turn");
-    // ONE turn for the message, and the copy stays a member rather than vanishing.
+    // v0.12.0 flips the DIRECTION and keeps the effect: the loader's map holds the LAST
+    // line carrying a uuid, so index 3 is the survivor and index 1 is the earlier copy.
+    let c = Chain::build(&records, None);
+    assert_eq!(c.drafts, 0, "a replayed copy supersedes nothing");
+    assert_eq!(c.replay_of(1), Some(3), "index 1 is the earlier copy");
+    assert!(!c.opens(1), "the earlier copy never opens a turn");
+    assert!(c.opens(3));
+    // ONE turn for the message, and the earlier copy stays a member rather than vanishing.
     assert_eq!(
         group_turn_indices_deduped(&records, |r| r),
-        vec![vec![0, 1, 2, 3]],
-        "one turn; the replayed opener folds in as a member"
+        vec![vec![0, 1, 2, 3, 4]],
+        "one turn; the earlier copy folds in as a member"
     );
 }
 
@@ -224,9 +232,10 @@ fn a_genuine_edit_resend_is_still_a_draft_when_the_uuids_differ() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    let c = collapse_openers(&records, |r| r);
-    assert_eq!(c.drafts.get(&1), Some(&2), "d1 -> its survivor u1");
-    assert!(c.replays.is_empty());
+    let c = Chain::build(&records, None);
+    assert_eq!(c.superseding(1), Some(2), "d1 -> its survivor u1");
+    assert_eq!(c.opener_class(1), Some(Class::UserUnsent));
+    assert_eq!(c.replay_copies, 0);
 }
 
 #[test]
@@ -243,14 +252,14 @@ fn a_replayed_pair_still_marks_a_later_real_resend() {
         .iter()
         .map(|l| parse(l))
         .collect();
-    let c = collapse_openers(&records, |r| r);
-    assert!(c.replays.contains(&2), "the replay copy of u1");
-    // u1 (idx1) is superseded by the real later sibling u2 - it IS an earlier draft of
-    // that parent's turn; d2 (idx3) is superseded too. The replay copy is neither.
-    assert_eq!(c.drafts.get(&3), Some(&4), "d2 -> u2");
+    let c = Chain::build(&records, None);
+    assert_eq!(c.replay_of(1), Some(2), "index 1 is the earlier copy of u1");
+    // The surviving u1 line (idx2) is itself replaced by the real later sibling u2, and
+    // d2 (idx3) is too. The earlier copy is neither a draft nor a survivor.
+    assert_eq!(c.superseding(3), Some(4), "d2 -> u2");
     assert!(
-        !c.drafts.contains_key(&2),
-        "the replay copy is never a draft"
+        c.opener_class(1).is_none(),
+        "the earlier replay copy is never a draft"
     );
 }
 

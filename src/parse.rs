@@ -40,10 +40,12 @@ use crate::model::Record;
 mod lines;
 mod parallel;
 mod readers;
+mod spine;
 
 pub(crate) use lines::*;
 pub(crate) use parallel::*;
 pub(crate) use readers::*;
+pub(crate) use spine::*;
 
 #[cfg(test)]
 mod tests;

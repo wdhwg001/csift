@@ -136,7 +136,10 @@ fn label_not_renders_the_richest_surviving_view() {
 fn turn_delimiting_two_genuine_users_only() {
     // A regex that matches in both turns; isMeta + carrier must not add turns.
     let ex = search(&fixture(), &args("the"));
-    let indices: Vec<usize> = ex.iter().map(|e| e.turn_index).collect();
+    let indices: Vec<usize> = ex
+        .iter()
+        .map(|e| e.turn_index.expect("a live exchange is numbered"))
+        .collect();
     assert_eq!(
         indices,
         vec![0, 1],
@@ -153,7 +156,7 @@ fn exchange_returns_full_round_trip() {
     a.labels = vec!["agent.thinking".to_string()];
     let ex = search(&fixture(), &a);
     assert_eq!(ex.len(), 1);
-    assert_eq!(ex[0].turn_index, 0);
+    assert_eq!(ex[0].turn_index, Some(0));
     assert_eq!(ex[0].hits.len(), 1);
     assert_eq!(ex[0].hits[0].class, Some(Class::AgentThinking));
     // Full turn membership (the carry's complete round-trip).
@@ -190,7 +193,7 @@ fn turn_range_filter_selects_turn() {
     a.turn_range = Some("1..1".to_string());
     let ex = search(&fixture(), &a);
     assert_eq!(ex.len(), 1);
-    assert_eq!(ex[0].turn_index, 1);
+    assert_eq!(ex[0].turn_index, Some(1));
 }
 
 #[test]
@@ -200,7 +203,10 @@ fn time_window_filters_by_timestamp() {
     let mut a = args("");
     a.since = Some("2026-06-07T06:00:00Z".to_string());
     let ex = search(&fixture(), &a);
-    let indices: Vec<usize> = ex.iter().map(|e| e.turn_index).collect();
+    let indices: Vec<usize> = ex
+        .iter()
+        .map(|e| e.turn_index.expect("a live exchange is numbered"))
+        .collect();
     assert_eq!(indices, vec![1], "only the 06:00 turn survives the window");
 }
 
@@ -225,7 +231,10 @@ fn reconstruct_synthetic_lead_records_merge_into_first_real_turn() {
         r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"second carry"}}"#,
     ];
     let ex = search(&lines, &args("carry"));
-    let indices: Vec<usize> = ex.iter().map(|e| e.turn_index).collect();
+    let indices: Vec<usize> = ex
+        .iter()
+        .map(|e| e.turn_index.expect("a live exchange is numbered"))
+        .collect();
     assert_eq!(indices, vec![0, 1], "synthetic lead folds into turn 0");
     // The orphan lead record is a MEMBER of turn 0's round-trip.
     assert!(ex[0].record_uuids.contains(&"lead".to_string()));
@@ -245,7 +254,7 @@ fn reconstruct_only_synthetic_lead_no_genuine_user() {
     a.labels = vec!["agent.tool.result".to_string()];
     let ex = search(&lines, &a);
     assert_eq!(ex.len(), 1);
-    assert_eq!(ex[0].turn_index, 0);
+    assert_eq!(ex[0].turn_index, Some(0));
 }
 
 #[test]
@@ -264,7 +273,10 @@ fn turn_range_excludes_below_lo_and_above_hi() {
     let mut a = args("");
     a.turn_range = Some("0..0".to_string());
     let ex = search(&fixture(), &a);
-    let indices: Vec<usize> = ex.iter().map(|e| e.turn_index).collect();
+    let indices: Vec<usize> = ex
+        .iter()
+        .map(|e| e.turn_index.expect("a live exchange is numbered"))
+        .collect();
     assert_eq!(
         indices,
         vec![0],

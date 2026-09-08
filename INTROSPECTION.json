@@ -10495,12 +10495,12 @@
       "id": "CLS-001",
       "area": "classification",
       "behavior": "A transcript is one JSON object per line, and the type vocabulary the harness itself constructs is closed at 38. An entry the harness constructs reaches a transcript through `appendEntry` (166106795), which switches on an append-policy table keyed by the entry's own type (`vbr` at 166066494): 5 conversational types under `dedup-transcript` (user, assistant, attachment, system, progress), 30 under `always` and 3 under `route-by-agent`. The switch carries exactly those three cases and no default arm (166107410), so an entry whose type is not a key of the table matches no case and is never queued; `enqueueWrite` occurs four times in the whole executable - its definition and the three arms - and `appendToFile` four times - its definition and three calls inside the queue drain - so the queued path is closed. Each queued entry becomes bytes through `JSON.stringify(entry)+newline` (`j5` at 156850249), concatenated in the drain (166086440) and appended. Nine further writers put a line into a transcript file WITHOUT passing that switch, and every one composes the identical shape, from `j5`, from its bulk twin `Ikt` (156850342, `JSON.stringify` per element plus a newline) or inline: the asynchronous direct append (166155800), the synchronous appender (166154499) and its append-to-existing twin (166154692, which returns early on a missing or zero-length file and prepends a newline to heal a torn tail), the metadata re-append (166090300), the relocation stamp (166124725) and the fork serializer (172851623, 172851990 and 172852160). Their entries come from table-typed constructors - the metadata re-append pushes only last-prompt, custom-title, ai-title, tag, relocated, agent-name, agent-color, agent-setting, mode, permission-mode, isolation-latch and atis-latch entries (166092100 area), the at-exit paths write the entries their registered providers construct (cost-state at 162359807, artifact-comment-monitor at 168570215, artifact-autoreact-ledger at 168619505) and the continued-in record at 180375908 - so the vocabulary bound holds on them too. Two writers escape the table by construction: the remote-hydration subagent write (166135601) writes a whole subagent transcript out of entries received from a server and tests only that at least one of them is a user or an assistant entry, and the conversation import (177679679), gated on an environment flag, writes whole files converted from an export bundle with `version:\"claude-export-import\"`. A census over the projects root - 8,344 transcripts, top-level and subagent alike, workflow journals and the reading tool's sidecar files excluded and reported apart - reads 1,469,365 non-blank lines, 0 unparseable, 0 without a top-level `type`, 0 carrying the import version, and 18 distinct types, every one of them a key of the table; the other 20 keys are declared but unrealized in this corpus (progress, summary, custom-title, ended-by-model, tag, relocated, agent-color, agent-setting, pr-link, frame-link, artifact-comment-monitor, artifact-autoreact-ledger, attribution-snapshot, isolation-latch, worktree-state, marble-origami-commit, marble-origami-snapshot, marble-origami-reset, content-replacement, observer-ref). Of the 18 realized types, 7 carry at least one leaf and 11 carry none: the deliberately unpromoted session-state cache lines (last-prompt 29,874, permission-mode 29,810, mode 29,720, ai-title 29,389, agent-name 12,913) plus six unmodeled types totalling 3,282 lines - atis-latch 1,435, bridge-session 1,354, history-suppression 438, fork-context-ref 33, cost-state 21, continued-in 1 - so 134,988 of 1,469,365 lines, 9.19 percent, belong to types no leaf models. Four of those six carry neither uuid nor timestamp and belong with the bookkeeping lines; two carry an instant (history-suppression via `ts` on 438 of 438 lines, continued-in via `timestamp` on its 1 line) and are the only leaf candidates. The mapped and unmapped split applies a TYPE-level rule to LINE counts - a type counts mapped when at least one leaf models a record of it - so the 13,970 queue-operation lines ride in the mapped total although only the content-bearing ones classify. Successive censuses over the same root return the same type set on growing line totals, so the totals are snapshots while the type set is stable. Beside the harness's own types, the reading tool's sidecar files carry 2 further marker types on disk (`csift-elicitation`, `csift-elicitation-resolved`) plus records shaped as `assistant`; those files are not written by Claude Code and are excluded from the census.",
-      "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins it two ways - the hand-kept oracle table must equal `Class::ALL.len()`, and the leaf count is asserted at 36 (src/model/tests/classify_support.rs). The taxonomy is exactly 36 leaf classes across three roles - 5 under user, 5 under agent plus 4 under agent.communication, and 22 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
+      "depends": "`Class::ALL` is the single source of truth behind `-t` selector derivation, the clap value parser, the `--help` leaf list, the census keys and the zero-match probe, and a drift-guard unit test pins it two ways - the hand-kept oracle table must equal `Class::ALL.len()`, and the leaf count is asserted at 37 (src/model/tests/classify_support.rs). The taxonomy is exactly 37 leaf classes across three roles - 6 under user, 5 under agent plus 4 under agent.communication, and 22 under harness - counted from the value parser's error listing, one row per full dotted leaf path with bare roles and mid-path prefixes excluded; that count is a property of csift's own enum, not of anything Claude Code writes. `agent.thinking` is the only leaf whose dotted path is a segment-prefix of another leaf (`agent.thinking.narration`), which forces dot-SEGMENT prefix selection rather than plain string prefixing, so `-t agent.thinking` selects both leaves and pure reasoning needs `-T agent.thinking.narration`. A record shape added without its leaf is unreachable by any selector; a leaf added without updating the pinned count fails the gate. The coverage census is the standing measure of that first risk - a line type with no leaf is invisible to `-t` even though `stats` still counts it - and the closed 38-key vocabulary is its upper bound for every harness-constructed entry: 20 declared types have never appeared in this corpus, and each is a leaf the taxonomy would need the day it does. The two writers outside the table bound the guarantee: a hydrated subagent transcript and an imported conversation can carry a type the table never names, so the census, not the table, is what proves the corpus holds none.",
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "235-240",
-          "snippet": "    pub const ALL: &'static [Class] = &[\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserQueued,"
+          "lines": "230-236",
+          "snippet": "    pub const ALL: &'static [Class] = &[\n        Class::UserMessage,\n        Class::UserAnswer,\n        Class::UserRejection,\n        Class::UserUnsent,\n        Class::UserRewound,\n        Class::UserQueued,"
         }
       ],
       "instrument": "Read the policy table and the append switch at the cited offsets and confirm the three cases and the absent default. For the writer closure, list every call site of the two serializers (`j5`, 8 occurrences; `Ikt`, 5) and every inline `JSON.stringify(<var>)+newline` in the whole executable (36 occurrences of the `S(<identifier>)+backtick-newline` form), read each and keep those whose target is a transcript file; for each keeper, read where its entry is constructed. Then census the projects root: for every `.jsonl` under it except workflow journals and the reading tool's sidecar files, parse each non-blank line and bucket by top-level `type`, and count the lines whose `version` is the import version. Counting rule: one row per non-blank line; a type counts mapped when at least one csift leaf models a record of it. For the taxonomy count, `csift search '' -t nosuchleaf` errors listing every valid selector - count the full dotted leaf paths, excluding bare roles and mid-path prefixes - and compare with the `Class::ALL.len()` assertion in the drift-guard unit test.",
@@ -10599,6 +10599,16 @@
           "observed": "Class::ALL holds 36 leaves with no duplicate path. harness.schedule.continuation was renamed to harness.resume.prompt (a rename, not an addition) and harness.resume.placeholder was added, so the count moved by exactly one; the closed 38-type entry vocabulary this claim is about did not move.",
           "rule": "One entry per Class variant listed in Class::ALL; the oracle table is counted independently and the two must agree.",
           "note": "The leaf count is a csift-side number this claim also pins; it moved 35 -> 36 with the resume family. The Claude Code fact - the closed append-policy type vocabulary - is unchanged."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Run `csift search x -t nonsense` and read the selector listing the value parser prints on the hard error, then count its full leaf paths and compare them with `Class::ALL` and the hand-kept oracle table.",
+          "observed": "The listing ends at 37 full leaf paths - 6 under user, 9 under agent, 22 under harness - matching Class::ALL and the oracle table; the harness type vocabulary the claim pins is unchanged at 38.",
+          "rule": "One count per dotted path in the listing that names a leaf rather than a prefix; roles counted by first dot-segment.",
+          "note": "Two leaves were added on top of the resume pair: the opener leaf for a turn the conversation was rewound past, and the count that follows from it."
         }
       ],
       "attribution": "end-to-end",
@@ -48988,8 +48998,8 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "215-228",
-          "snippet": "    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "lines": "210-223",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/cli/selectors.rs",
@@ -48998,7 +49008,7 @@
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "199-214",
+          "lines": "184-199",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         }
       ],
@@ -49038,6 +49048,16 @@
           "observed": "Three disagreements: `system`/`local_command` is sent although message-less, and an `isVirtual` record and the `<synthetic>` API-error placeholder are dropped although both carry a message object. Corpus over 72 top-level transcripts: 16 records of the first shape, 118 of the third, 0 of the second.",
           "rule": "One observation per byte offset read; one per record for the corpus counts.",
           "note": "The behavior sentence calling message{} the one instrument for conversation membership is narrowed to the leaf default; delivery is decided per record."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the invisible-leaf set in `Class::llm_visible` (src/model/taxonomy.rs) and confirm that the promoted non-record leaves still carry no `message{}` field on the corpus.",
+          "observed": "Nine leaves are invisible by default where eight were: the opener leaf for a turn the conversation was rewound past joins the set, on the same instrument as the recalled draft beside it - neither is in the conversation the chain reconstructs.",
+          "rule": "One read per cited site; the leaf set is counted by enum variant.",
+          "note": "A leaf joined the invisible set; the instrument that decides membership is unchanged."
         }
       ],
       "attribution": "end-to-end",
@@ -49220,23 +49240,23 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "199-214",
+          "lines": "184-199",
           "snippet": "    /// v0.10.0 adds the promoted non-record line types, all invisible by the same\n    /// instrument as the boundary: ZERO of them carries a `message{}` field (measured\n    /// over every non-record line type in the corpus; every user/assistant record\n    /// does), and Claude Code's\n    /// own source labels them REPL-render internals. DAG threading is NOT the\n    /// instrument here - later user records name a `turn_duration` uuid as parentUuid\n    /// (chain continuity), and `preservedMessages` lists these uuids at the same rate\n    /// as messages (it is a tail window, not a visibility filter).\n    ///\n    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless."
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "216-228",
-          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "lines": "210-223",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/search/record_text.rs",
-          "lines": "328-341",
+          "lines": "324-337",
           "snippet": "pub(crate) fn compact_metadata_excerpt(meta: &serde_json::Value) -> Option<String> {\n    let obj = meta.as_object()?;\n    let mut fields: Vec<String> = Vec::new();\n    for key in [\"trigger\", \"preTokens\", \"postTokens\", \"durationMs\"] {\n        if let Some(v) = obj.get(key) {\n            let rendered = match v {\n                serde_json::Value::String(s) => s.clone(),\n                other => other.to_string(),\n            };\n            fields.push(format!(\"{key}={rendered}\"));\n        }\n    }\n    (!fields.is_empty()).then(|| format!(\"[compaction boundary: {}]\", fields.join(\" \")))\n}"
         },
         {
           "path": "src/cli/search_help.rs",
-          "lines": "103-106",
-          "snippet": "        it. Eight leaves are invisible and need naming or a glob: `user.unsent`\\n  \\\n        (a superseded draft is not in the surviving conversation - CC's own\\n  \\\n        preservedMessages accounting excludes every draft), `harness.compaction.boundary`\\n  \\\n        (a metrics-only system record), and the six gated leaves below. The glob form\\n  \\"
+          "lines": "103-107",
+          "snippet": "        it. Nine leaves are invisible and need naming or a glob: `user.unsent` and\\n  \\\n        `user.rewound` (neither is in the surviving conversation - see THE SURVIVAL\\n  \\\n        AXIS below), `harness.compaction.boundary`\\n  \\\n        (a metrics-only system record), and the six gated leaves below. The glob form\\n  \\\n        `-t 'user.*'` selects EVERY leaf under the prefix, visibility ignored; an\\n  \\"
         }
       ],
       "instrument": "Read `compactMetadata.preservedMessages` from a boundary record via `csift show <target> --uuid <boundary uuid> --raw` and compare the uuid mix against the same file line-type census from `csift stats`. Counting rule = uuids per type over one preserved list, reported as a rate against that type total in the file.",
@@ -49285,6 +49305,16 @@
           "observed": "The predicate tests `type`, `subtype`, `isVirtual`, `isApiErrorMessage` and `message.model` only; nothing on the request path reads a preserved list, so the claim's negative stands and only the word \"only\" in its dependency clause needed narrowing.",
           "rule": "One observation per predicate arm read.",
           "note": "preservedMessages is still not a visibility signal; the dependency clause no longer calls message{} the only instrument."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read `Class::llm_visible` together with the `--help` visibility paragraph and confirm the two state the same set.",
+          "observed": "Both now read nine invisible leaves and both name the survival axis as the reason the two opener leaves are among them; the six gated leaves are unchanged.",
+          "rule": "One read per cited site; the leaf set is counted by enum variant.",
+          "note": "A leaf joined the invisible set; the instrument that decides membership is unchanged."
         }
       ],
       "attribution": "end-to-end",
@@ -51799,12 +51829,12 @@
       "code": [
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "216-222",
-          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration"
+          "lines": "210-223",
+          "snippet": "    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "145-147",
+          "lines": "136-138",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -51845,6 +51875,16 @@
           "observed": "before: Only the two message-bearing types carry a `message{}` field: re-measured over 413 transcripts in one project directory, assistant 37218/37218 and user 18431/18431 carry one while all 13 other Claude-Code-written line ty || after: Only the two message-bearing types carry a top-level message{} field. Whole-corpus strict-JSON census on 2026-09-03 (7899 Claude-Code-written transcripts, 1358811 non-blank lines, 0 unparseable, sidecar files and csift-m",
           "rule": "every sentence of the new text is backed by a cited hop or a specimen receipt; a refuted clause is dropped, not softened",
           "note": "Only the negative half of the sentence moved. The census that once read '13 other Claude-Code-written line types' now reads 16, the three additions being history-suppression, cost-state and continued-in, and attachment is named explicitly as the largest zero bucket at 492215 lines - a third of the corpus - because that is the bucket whose producer enumeration the claim's chain closes. Every figure here is from my own whole-corpus pass today, not restated from the standing check; the positive half is unchanged and still exactly 100 percent on both message-bearing types with zero unparseable lin"
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read `Class::llm_visible` and check the boundary leaf is still invisible beside the two opener leaves.",
+          "observed": "The compaction boundary is invisible for the same reason as before (no `message{}`); the set it sits in grew by the rewound-opener leaf.",
+          "rule": "One read per cited site; the leaf set is counted by enum variant.",
+          "note": "A leaf joined the invisible set; the instrument that decides membership is unchanged."
         }
       ],
       "attribution": "end-to-end",
@@ -54371,8 +54411,8 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "134-141",
-          "snippet": "    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n\n    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant."
+          "lines": "157-162",
+          "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
       "instrument": "`csift search '' @<session> -t harness.compaction.boundary --max-count 1` then read the raw line with `csift show @<session> --line <n> --raw`; expected: `logicalParentUuid` at top level, `parentUuid` null. Counting rule: one boundary record per compaction.",
@@ -54832,23 +54872,23 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "220-228",
-          "snippet": "    // A superseded turn-opener draft (the scan layer computed the set - a pure\n    // per-record classify cannot see the LATER same-parent sibling) carries the single\n    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the\n    // conversation, so it never rides `user.message` (whose counts stay pure).\n    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
+          "lines": "256-264",
+          "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "247-257",
-          "snippet": "    // C-18 + user.unsent: a superseded draft is a real record OUTSIDE turn numbering.\n    // A scan emits it as its own annotated unit when it hits (searchable, labeled\n    // `user.unsent`) - except under a `--turn` window, which asks about NUMBERED turns\n    // and a draft belongs to none. An explicit address always reaches it (refetch law).\n    if address.is_some() || turn_bounds.is_none() {\n        let mut draft_idxs: Vec<usize> = skip.iter().copied().collect();\n        draft_idxs.sort_unstable();\n        for i in draft_idxs {\n            out.extend(build_exchange(0, &[i], true));\n        }\n    }"
+          "lines": "252-269",
+          "snippet": "    // An ABANDONED record is a real record OUTSIDE turn numbering. A scan emits its BRANCH\n    // as one annotated unit when it hits (searchable; an opener labeled `user.unsent` or\n    // `user.rewound`) - except under a `--turn` window, which asks about NUMBERED turns and\n    // an abandoned branch belongs to none. An explicit address always reaches it (refetch\n    // law). Grouping by branch head keeps a rewound turn's reply beside the prompt it\n    // answered; a lone recalled draft is a one-record branch, exactly as before.\n    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..records.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }\n"
         },
         {
           "path": "src/model/taxonomy.rs",
-          "lines": "208-228",
-          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )\n    }"
+          "lines": "202-222",
+          "snippet": "    /// The leaf default is not the whole answer, because delivery is decided per\n    /// RECORD: Claude Code's request assembler runs ONE drop predicate over the\n    /// record list, and it disagrees with this table in three cases - a\n    /// `system`/`local_command` record IS sent (re-minted as a user message), while an\n    /// `isVirtual` record and the `<synthetic>` API-error placeholder are NOT. That is\n    /// [`Record::delivery_override`], and it is what a bare ROLE selector consults; the\n    /// glob form and explicit paths reach every leaf regardless.\n    #[must_use]\n    pub fn llm_visible(self) -> bool {\n        !matches!(\n            self,\n            Class::UserUnsent\n                | Class::UserRewound\n                | Class::UserQueued\n                | Class::CompactionBoundary\n                | Class::MetaTurnDuration\n                | Class::MetaAwaySummary\n                | Class::MetaStopHooks\n                | Class::MetaSnapshot\n                | Class::MetaSystem\n        )"
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "323-327",
-          "snippet": "    let sections = if superseded {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
+          "lines": "357-361",
+          "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
       "instrument": "compactMetadata.preservedMessages is a JSON OBJECT {anchorUuid, uuids:[...], allUuids?:[...]}, not an array. Treating it as a list of uuids yields 0 preserved uuids and makes the instrument vacuously pass; the object shape is confirmed in the 2.1.258 binary, which builds 'preservedMessages:{anchorUuid:r.anchor_uuid,uuids:[...r.uuids],...r.all_uuids!==void 0&&{allUuids'.",
@@ -54888,6 +54928,16 @@
           "observed": "complete producer trace: trigger turn abort handler calling restoreMessageSync(Zo,Ot?\"refusal_fallback_edit\":\"auto_restore_cancel\") @181627165; gate rewindConversationTo(T,I): Pe=Ce.slice(0,Re) ... q.replace(Pe) @180776684; writer function $it(e,n,r,o=r){let d=r.map(_=>_.uuid),f=dMe([...r],o).map(_=>_.uuid);...preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}} @164831131. writer excerpt: function $it(e,n,r,o=r){let d=r.map((_)=>_.uuid),f=dMe([...r],o).map((_)=>_.uuid);if(d.length===0)return e;return{...e,compactMetadata:{...e.compactMetadata,...f.length>0&&{preservedSegment:{headUuid:f[0],anchorUuid:n,tailUuid:f.at(-1)}},preservedMessages:{anchorUuid:n,uuids:f,allUuids:d}}}}function ojt(e,n){if(!n)retu specimen: 67 top-level transcripts, 232 compact_boundary records, 3,490 distinct preserved uuids. 563 parentUuid groups with more than one user opener; 859 superseded drafts, 0 of which appear in any preservedMessages uuid set, while 11 of the 563 resend siblings do - so the exclusion discriminates rather tha",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); per file: drafts = all but the last member of each multi-member parentUuid group; intersection taken against that same file's preserved uuid set",
           "note": "One mechanism explains both halves: the rewind drops the abandoned record from the live array while leaving it on disk, so the resend inherits its parentUuid and the draft can never enter the keptMessages that preservedMessages is built from."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the scan-layer label override in src/search/hits.rs and the per-record delivery note on `Class::llm_visible`.",
+          "observed": "The override now carries an `Option<Class>` instead of a boolean, because an abandoned opener takes one of TWO leaves; the delivery override beside it is untouched.",
+          "rule": "One read per cited site; the leaf set is counted by enum variant.",
+          "note": "A leaf joined the invisible set; the instrument that decides membership is unchanged."
         }
       ],
       "attribution": "end-to-end",
@@ -70523,8 +70573,8 @@
     {
       "id": "TURN-004",
       "area": "turn-boundary",
-      "behavior": "isMeta:true on a type:\"user\" record is an AUTHORSHIP flag stamped by the injecting call site, not derived from the content: the one user-record factory takes isMeta as a named parameter and copies it straight onto the record (165936023). Two injectors are read end to end in 2.1.258. The resume path's interrupted_turn branch injects a repair prompt (163207700) whose text comes from a helper returning the CLAUDE_CODE_RESUME_PROMPT environment value or, failing that, the fixed sentence \"Continue from where you left off.\" (163204432) - which is why the sentence is a PREFIX and not always the whole content: the background revival respawn sets a longer restarted variant (167486480) and the runner spawn sets a moved-to-a-new-runner variant (166506250). The local-command caveat injector writes its own isMeta:true pseudo-turn (165936931). Measured on 2026-09-04 over 68 uuid-named top-level transcripts: 1,426 isMeta:true type user records (690 with string content, 736 with block-array content), led by an \"[Image: source: ...]\" marker 661, a <local-command-caveat> wrapper 165, a skill base-directory preamble 43, a \"Stop hook feedback: ...\" line 30, and the resume sentence 7 - all 7 the bare form, neither longer variant occurring in this corpus. The image, skill-preamble and stop-hook buckets have no injector traced here; only the resume-prompt and caveat buckets do.",
-      "depends": "csift gates isMeta out of is_genuine_user before any content inspection (src/model/predicates.rs), so a meta pseudo-turn never opens a turn and never enters the user.message census - verified by the claim's 2026-09-02 check with the strongest available instrument, a raw sweep of every user.message record in the top-level corpus finding no isMeta among them. Recognized markers reparent to harness.resume.prompt / harness.schedule.wakeup / harness.meta.*; the resume-prompt test is trim_start().starts_with(...) (src/model/markers.rs), which is what makes it survive the two longer Claude-Code-set variants. An isMeta record matching no known marker classifies EMPTY - not merely unlabeled but invisible to a scan (40 of 41 skill-preamble records returned no hit at all on 2026-09-02) - so a novel hook wrapper can never be mistaken for the operator.",
+      "behavior": "isMeta:true on a type:\"user\" record is an AUTHORSHIP flag stamped by the injecting call site, not derived from the content: the one user-record factory takes isMeta as a named parameter and copies it straight onto the record (165936023). Two injectors are read end to end in 2.1.258. The resume path's interrupted_turn branch injects a repair prompt (163207700) whose text comes from a helper returning the CLAUDE_CODE_RESUME_PROMPT environment value or, failing that, the fixed sentence \"Continue from where you left off.\" (163204432) - which is why the sentence is a PREFIX and not always the whole content: the background revival respawn sets a longer restarted variant (167486480) and the runner spawn sets a moved-to-a-new-runner variant (166506250). The local-command caveat injector writes its own isMeta:true pseudo-turn (165936931). Measured over 68 uuid-named top-level transcripts: 1,426 isMeta:true type user records (690 with string content, 736 with block-array content), led by an \"[Image: source: ...]\" marker 661, a <local-command-caveat> wrapper 165, a skill base-directory preamble 43, a \"Stop hook feedback: ...\" line 30, and the resume sentence 7 - all 7 the bare form, neither longer variant occurring in this corpus. The image, skill-preamble and stop-hook buckets have no injector traced here; only the resume-prompt and caveat buckets do.",
+      "depends": "csift gates isMeta out of is_genuine_user before any content inspection (src/model/predicates.rs), so a meta pseudo-turn never opens a turn and never enters the user.message census - verified by the claim's check with the strongest available instrument, a raw sweep of every user.message record in the top-level corpus finding no isMeta among them. Recognized markers reparent to harness.resume.prompt / harness.schedule.wakeup / harness.meta.*; the resume-prompt test is trim_start().starts_with(...) (src/model/markers.rs), which is what makes it survive the two longer Claude-Code-set variants. An isMeta record matching no known marker classifies EMPTY - not merely unlabeled but invisible to a scan (40 of 41 skill-preamble records returned no hit at all) - so a novel hook wrapper can never be mistaken for the operator.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -70646,7 +70696,7 @@
         "ladder": "every eighth build 2.1.150..2.1.259 plus 46 cached builds; a literal dates itself, not the behavior"
       },
       "residue": [
-        "Narrowed out of the claim on 2026-09-04 (untraced sub-fact, kept for a later audit): Two named census buckets still have no traced writer: the skill base-directory preamble (41) and 'Stop hook feedback: ...' (30) - close them by grepping the binary for the preamble head and for the Stop-hook feedback template and reading the enclosing injector for its isMeta argument."
+        "Narrowed out of the claim as an untraced sub-fact: two named census buckets still have no traced writer, the skill base-directory preamble (41) and 'Stop hook feedback: ...' (30) - close them by grepping the binary for the preamble head and for the Stop-hook feedback template and reading the enclosing injector for its isMeta argument."
       ]
     },
     {
@@ -73588,32 +73638,32 @@
       "id": "TURN-022",
       "area": "turn-boundary",
       "behavior": "When the user recalls a sent message with escape, edits it and re-sends, Claude Code leaves the ORIGINAL on disk: the draft and the delivered resend are separate `type:\"user\"` records sharing ONE non-null `parentUuid`, and only the last in file order was delivered. The shared parent is usually a turn-end anchor record - measured parents were a `stop_hook_summary` system record 133 times, `turn_duration` 83, `away_summary` 80, an interrupt marker 19 and an assistant record once.",
-      "depends": "`superseded_draft_indices` keeps the LAST opener per `parentUuid` and marks the earlier siblings superseded, and `group_turn_indices_deduped` drops them entirely from turn numbering, so an edited-away message can never resurface as a phantom turn or leak its abandoned text into a neighbour. The signal is parent-uuid IDENTITY, not text similarity, which would miss the common prepend/insert edit; distinct real turns never share a parentUuid, and a record with a null/empty parent is never grouped.",
+      "depends": "The chain replaces the standalone draft rule: a turn opens only on a record Claude Code's conversation chain still reaches, and an abandoned OPENER is a recalled draft when nothing under it ever answered. Where csift cannot resolve the chain - above the walk's terminating record, which its own prefilter can force - the measured same-parent rule still applies: the LAST opener sharing a `parentUuid` is the survivor and every earlier one is a draft, so detection never depends on the chain reaching that far. The signal is parent-uuid IDENTITY, not text similarity, which would miss the common prepend/insert edit; distinct real turns never share a parentUuid, and a record with a null/empty parent is never grouped.",
       "code": [
         {
-          "path": "src/model/grouping.rs",
-          "lines": "92-97",
-          "snippet": "/// Indices of turn-opening records that are SUPERSEDED DRAFTS - an earlier sibling of a\n/// later turn-opener sharing the SAME non-null `parentUuid` (\u00a76.4.1). This is the on-disk\n/// shape of the \"type a message, ESC-cancel / edit, resend\" loop (and any rewind that\n/// re-opens a turn from the same point): Claude Code appends every draft as its own\n/// `type:\"user\"` record, yet only ONE - the last in file order - was actually delivered to\n/// the model. The earlier siblings are abandoned drafts."
+          "path": "src/model/chain.rs",
+          "lines": "110-121",
+          "snippet": "/// What an ABANDONED turn-opener was. The discriminator is whether anything under it\n/// ever answered: a recalled prompt has no assistant descendant, a rewound turn does.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Kind {\n    /// A prompt that was recalled into the input box (or otherwise left behind) and never\n    /// drew a reply. `superseded_by` is the surviving opener that replaced it, when the\n    /// two share a `parentUuid`.\n    Draft { superseded_by: Option<usize> },\n    /// A prompt that WAS answered, and the conversation was later rewound past it.\n    /// `resend` is the surviving opener the conversation continued from instead.\n    Rewound { resend: Option<usize> },\n}"
+        },
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "85-89",
+          "snippet": "/// The blind-region rescue of the draft population: inside `PreCut`, an opener with a\n/// LATER opener sharing its `parentUuid` is still the recalled version.\nfn blind_region_openers(b: &Builder<'_>, out: &mut Chain, floor: usize) {\n    // The survivor is the LAST opener sharing a `parentUuid`, wherever it sits - a draft\n    // is usually recalled just below the floor and re-sent just above it, so restricting"
+        },
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "91-101",
+          "snippet": "    let mut last_by_parent: HashMap<&str, usize> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.opens[i] || out.replay_of.contains_key(&i) || !out.survival[i].selectable() {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            last_by_parent.insert(p, i);\n        }\n    }\n    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {"
+        },
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "100-110",
+          "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "99-105",
-          "snippet": "/// WHY last-in-file is the survivor (verified on real `~/.claude/projects` data): distinct\n/// real turns never share a `parentUuid` (each user turn is parented to the assistant\n/// message that preceded it), so same-parent openers are ALWAYS alternative versions of one\n/// logical turn; and across the corpus the last sibling's subtree is the one that reaches\n/// furthest toward the leaf (the live branch). A content-similarity heuristic would miss the\n/// common case where the user *prepended/inserted* text on the edit (`look\u2026` \u2192 `take a closer look\u2026`),\n/// so the parent-uuid identity - not text - is the load-bearing signal."
-        },
-        {
-          "path": "src/model/grouping.rs",
-          "lines": "124-127",
-          "snippet": "pub fn superseded_draft_indices<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> std::collections::HashSet<usize> {"
-        },
-        {
-          "path": "src/model/grouping.rs",
-          "lines": "204-214",
-          "snippet": "        // Keep the LAST opener per parent: when a new sibling appears, the previously-seen\n        // one for that parent becomes a superseded draft.\n        match groups.get_mut(parent) {\n            Some(entry) => {\n                let prev = std::mem::replace(&mut entry.0, i);\n                entry.1.push(prev);\n            }\n            None => {\n                groups.insert(parent, (i, Vec::new()));\n            }\n        }"
-        },
-        {
-          "path": "src/model/grouping.rs",
-          "lines": "241-261",
-          "snippet": "/// [`group_turn_indices`] with the two [`collapse_openers`] corrections (\u00a76.4.1): a\n/// superseded DRAFT is dropped ENTIRELY - it neither opens a turn nor folds in as a\n/// member - so a message the user edited away before sending can never resurface as a\n/// phantom turn (nor leak its abandoned text into a neighbour); a REPLAY COPY stops\n/// OPENING a turn but stays a member, so a compaction re-anchor cannot mint a second turn\n/// for a message that was sent once. This is the delimiter every session-operating surface\n/// (`turns` / `search` / `files` / `recover`) uses, so they stay byte-consistent on what\n/// counts as a turn.\n#[must_use]\npub fn group_turn_indices_deduped<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> Vec<Vec<usize>> {\n    let collapse = collapse_openers(records, |x| rec(x));\n    let skip = collapse.dropped();\n    group_turn_indices_core(\n        records,\n        |i, x| rec(x).opens_turn() && collapse.opens(i),\n        &skip,\n    )\n}"
+          "lines": "116-129",
+          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)\n}\n\n/// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index\n/// in `skip` is omitted entirely (`continue`) - neither a turn boundary nor a member - which\n/// is how superseded drafts are dropped. With an empty `skip` the behaviour is identical to"
         }
       ],
       "instrument": "Group all turn-opening user records of one transcript by `parentUuid` and count groups of size greater than one (counting rule: drafts = group size minus one, one per group), then cross-validate against csift's own `N superseded draft(s)` footer. Measured draft rates over four sessions: 11% (62 genuine / 7 drafts), 26% (1,216 / 317), 6% (86 / 5), 3% (32 / 1).",
@@ -73643,6 +73693,16 @@
           "observed": "complete producer trace: trigger restoreMessageSync - the esc-recall entry @180778472; gate rewindConversationTo - the truncation is IN-MEMORY only @180776684; gate Rw - the parent is DERIVED from the rewound array, not copied @166113243; writer insertMessageChain - the record envelope that stamps parentUuid @166105359. writer excerpt: let ke={parentUuid:me?null:_e,logicalParentUuid:me?F:void 0,isSidechain:n,teamName:d?.teamName,agentName:d?.agentName,promptId:fe.type===\"user\"?_Z()??void 0:void 0,agentId:r,...fe,...Gjt(j),gitBranch:U,slug:W};if(ke.type===\"user\"&&ke.toolUseResult!=null)ke.toolUseResult=Tor(ke.toolUseResult);if(awai specimen: 851 drafts in 26 transcripts. parentUuid is non-null on 851 of 851. Parent record types: system/turn_duration 410, system/away_summary 201, system/stop_hook_summary 147, user 87, attachment 3, system/informational 1, system/local_command 1, assistant 1.",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One observation per record csift's scan-layer superseded-draft rule labels user.unsent, corpus-wide; the parent is looked up by uuid inside the same file and classified by top-level type plus system subtype.",
           "note": "The shared parentUuid is not a copied field but the output of Rw's derivation loop over an array the rewind truncated in memory while the file kept the draft, and the corpus shows a non-null parent on all 851 drafts with the turn-end telemetry types that loop necessarily lands on."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Group every turn-opening user record of each top-level transcript by non-null `parentUuid`, count groups larger than one, and split the earlier members by whether an assistant record hangs below them; cross-check against csift's own footer counts.",
+          "observed": "910 shared-parent opener pairs over 32 files: 858 with no assistant descendant, 52 with one, 0 on the final chain. The shape holds; what changed is that the 52 answered ones are no longer called drafts.",
+          "rule": "Openers grouped by non-null parentUuid; a group of k contributes k-1 pairs, the earlier member being the lower physical line; assistant descendant = any assistant reachable by walking parentUuid links downward. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "note": "The rule moved into the chain and kept its answer for the unanswered majority."
         }
       ],
       "attribution": "end-to-end",
@@ -73693,12 +73753,12 @@
       "id": "TURN-023",
       "area": "turn-boundary",
       "behavior": "Draft groups are n-way, not pairs, and their content shape varies: in one 317-draft sample 230 drafts carried STRING content and 87 carried text-BLOCK content, and up to 8 drafts shared a single `parentUuid` (group sizes reaching 9).",
-      "depends": "csift's draft rule handles both content shapes and n-way groups rather than assuming a pair, and assigns the SINGLE leaf `user.unsent` at the SCAN layer - a pure per-record classify cannot see the LATER same-parent sibling that makes a record a draft - so `user.message` counts stay pure while the draft is still searchable, censusable, suppressed under a `--turn` window and always reachable by `show --line` / `--uuid` (JSON `superseded_draft:true` with a null `turn_index`).",
+      "depends": "csift's draft rule handles both content shapes and n-way groups rather than assuming a pair, and assigns a SINGLE leaf at the SCAN layer - `user.unsent` for a recalled draft, `user.rewound` for an opener that drew a reply before the conversation left it - - a pure per-record classify cannot see the LATER same-parent sibling that makes a record a draft - so `user.message` counts stay pure while the draft is still searchable, censusable, suppressed under a `--turn` window and always reachable by `show --line` / `--uuid` (JSON `superseded_draft:true` with a null `turn_index`).",
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "224-228",
-          "snippet": "    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
+          "lines": "261-264",
+          "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -73733,6 +73793,16 @@
           "observed": "complete producer trace: trigger restoreMessageSync - repeatable, which is what makes a group n-way @180778472; gate mc - the single branch that decides STRING vs BLOCK-ARRAY content @169779554; gate Rw - the same parent is re-derived on every resend @166113243; writer xe - the factory that serialises either shape @165936023. writer excerpt: return{type:\"user\",message:{role:\"user\",content:e||up},isMeta:n,ephemeral:r,turnCompanion:o,usageLimitNote:d,replacesSpa specimen: 851 drafts: 700 STRING content, 151 ARRAY content. Every array-shaped draft inspected (145 distinct uuids) has the block-type set exactly {text,image} and carries imagePasteIds - no other combination occurs. Group sizes (user records per shared parentUuid): 2 -> 370 groups, 3 -> 104, 4 -> 45, 5 -> 1",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One observation per user.unsent record for the shape tally; one observation per distinct (transcript, parentUuid) pair for the group-size histogram, counting every type:'user' record in that file carrying the parent uuid.",
           "note": "The content-shape split is one if in the prompt mint and the corpus confirms it exactly - every block-shaped draft is a text+image message carrying imagePasteIds - while the n-way group size follows from the parent being re-derived on each recall, and the histogram tops out at 9 exactly as the claim states."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read every abandoned opener csift reports across the corpus and record its leaf and its turn index.",
+          "observed": "Every abandoned opener still carries exactly one leaf and a null turn index; the leaf is now one of two, decided by whether an assistant record hangs below the opener.",
+          "rule": "One row per abandoned opener record; leaf and turn index read from the JSON hit.",
+          "note": "n-way groups and both content shapes are unaffected: the split is on descendants, not on content."
         }
       ],
       "attribution": "end-to-end",
@@ -73858,12 +73928,12 @@
       "id": "TURN-025",
       "area": "turn-boundary",
       "behavior": "Two neighbouring shapes leave no user record, and they differ in evidential standing. (a) THE QUEUE HALF is fully written: a queued text edited before dispatch never becomes a type:\"user\" record, because after slash and bash routing the REPL submit dispatcher hands every typed prompt to enqueue and, while a turn is already running, returns early as prompt_queued without constructing any message record (181580347). The admission gate pushes the admitted item onto the in-memory queue and, unless the item is marked unlogged, logs an enqueue operation; whether the value is a string decides only what is handed to the writer, so a non-string value still writes an enqueue line (162035115). The writer builds {type:\"queue-operation\", operation, timestamp, sessionId, content?, reason?} and attaches content only when a value was passed, which is what makes a contentless enqueue line possible; this is the one construction site of that literal, whose four occurrences in the binary are the compiled string pool entry, this literal, a merge-policy table mapping it to \"last-wins\" and the append routing table (162031847). Its default sink is a one-line forward that takes no branch, so every operation built there lands on the same persistence path (162029731). That forward ends in insertQueueOperation on the current session store (166122777). The store method hands the record straight to appendEntry inside trackWrite, with no filtering of its own (166106361). appendEntry switches on the record type: an \"always\" type is written straight through enqueueWrite, without the dedup-transcript uuid bookkeeping user and assistant records get (166107421). The routing table maps queue-operation to \"always\" while user, assistant, attachment and system map to dedup-transcript, so a queue line is persisted on a different policy from any message record (166067280). Two escapes take the text out of the queue without a message record: the drain logs each item, empties the queue and returns the joined text to the INPUT BOX as {text, cursorOffset, images, mode}, so an edit before resubmit mints the record from the EDITED text and the enqueued text never matches (162041220). The mid-turn fold consumes the item with reason \"absorbed_mid_turn\", the reason field the writer attaches to the remove line, and delivers it as an attachment rather than a user record (164752627). That attachment carries the text as prompt, the item's uuid as source_uuid and its mode as commandMode, and its type routes dedup-transcript in the same table, so it is persisted as an attachment line and never as type:\"user\" (165734741). So the typed text of an un-dispatched item survives as queue-operation lines, and on the fold path additionally as that attachment, never as a message record (166067280). Counting parsed type:\"queue-operation\" lines per transcript, 39 transcripts carry them: enqueue 6,924 (all with content), popAll 109 (all with content), dequeue 3,534 (none) and remove 3,273 of which 2,477 carry content (162031847). Of the enqueues, 949 are human prose (content not opening with \"<\"); whitespace-normalized against later user records in the same file, 610 match exactly (64.3 percent), 126 more match by their first 200 characters (13.3 percent, 77.6 percent combined) and 213 never match (22.4 percent), which is the share the drain-and-edit escape predicts (162041220). (b) THE ESC-RECALL HALF is a negative closed by enumeration, not a written path: the local recall entry rewinds and then refills the input box - replaceValue, setMode, setPastedContents and image-paste bookkeeping - with no appendEntry and no insert call anywhere in its body (180778472). The rewind itself slices the in-memory snapshot at the target, replaces it and resets turn and conversation state without appending anything, and the transcript file is append-only, so the recalled message's own record stays exactly as written and nothing new is written (180776684). At Claude Code 2.1.258 a rewind can leave one positive artifact, a last-prompt line carrying leafUuid and, when the caller passes it, rewound:true - a line naming the rewind and the surviving leaf, never the recalled text, since lastPrompt is the last SUBMITTED prompt (166113611). Enumerating that function name gives six occurrences: the definition, four call sites of which only the remote/bridge rewind handler at 179289648 passes the rewound flag, and one unrelated same-named component (166113611). In this corpus the marker has zero specimens: counting last-prompt lines carrying rewound:true against all last-prompt lines, 0 of 29,662 (166113611). So the recalled text is never re-written, and no rewind marker exists in this corpus at all (180776684).",
-      "depends": "csift's user.unsent covers only SUPERSEDED drafts - the esc-recall and edit-resend pairs detected by a shared parentUuid (src/model/grouping.rs) - never \"every unsent message\". The queue-only class is a separate and larger set, reachable solely under the gated user.queued leaf, and csift documents the join rule and its counting basis instead of asserting a bare dispatched flag: the queue-operation line carries no join key, and roughly a fifth to a quarter of enqueued human prose never becomes a user record. A message recalled and then abandoned has no sibling and stays undetectable from the local path, which writes nothing; the version-scoped caveat is that a rewind driven through the remote/bridge handler can write a rewound:true last-prompt line, so if such a line ever appears in a corpus csift reads, that half has to be re-decided rather than re-asserted - the line names the surviving leaf, which would give csift a second instrument for abandoned branches.",
+      "depends": "csift's user.unsent covers only SUPERSEDED drafts - the openers the conversation chain no longer reaches (src/model/chain.rs), which in a region csift cannot resolve reduces to the shared-parentUuid pair - never \"every unsent message\". The queue-only class is a separate and larger set, reachable solely under the gated user.queued leaf, and csift documents the join rule and its counting basis instead of asserting a bare dispatched flag: the queue-operation line carries no join key, and roughly a fifth to a quarter of enqueued human prose never becomes a user record. A message recalled and then abandoned has no sibling and stays undetectable from the local path, which writes nothing; the version-scoped caveat is that a rewind driven through the remote/bridge handler can write a rewound:true last-prompt line, so if such a line ever appears in a corpus csift reads, that half has to be re-decided rather than re-asserted - the line names the surviving leaf, which would give csift a second instrument for abandoned branches.",
       "code": [
         {
-          "path": "src/model/grouping.rs",
-          "lines": "185-195",
-          "snippet": "    for (i, item) in records.iter().enumerate() {\n        let r = rec(item);\n        if !r.opens_turn() {\n            continue;\n        }\n        let Some(parent) = r.parent_uuid.as_deref() else {\n            continue; // null parent: never grouped (would merge unrelated records)\n        };\n        if parent.is_empty() {\n            continue;\n        }"
+          "path": "src/model/chain/branches.rs",
+          "lines": "100-110",
+          "snippet": "    let superseded: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            i < floor\n                && matches!(out.survival[i], Survival::PreCut)\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n                && b.parent[i].is_some_and(|p| last_by_parent.get(p).is_some_and(|&s| s > i))\n        })\n        .collect();\n    for i in superseded {\n        out.survival[i] = Survival::Abandoned { root: i };"
         }
       ],
       "instrument": "Extract every `queue-operation` enqueue `content` and test whether the whitespace-normalized text appears as a later `type:\"user\"` record's string content or `text` block - `csift search '' @<id> -t user.queued --format json` against `-t user.message`. Counting rule: enqueue lines only, human prose only, one comparison per enqueued text; 'exact' = full-string equality, 'prefix' = the first 200 characters as a substring. An earlier figure of about 61% never-dispatched (54 of 88 texts, three-session sample) was measured over ALL queue operations and is superseded by the human-prose-only figures.",
@@ -73953,6 +74023,16 @@
           "observed": "complete producer chain of 14 hops, each a verbatim excerpt at a byte offset; the specimen was already observed, so the legs derive end-to-end.",
           "rule": "the producer chain is complete when trigger, gate and writer are read as verbatim excerpts at byte offsets; a negative closes only by an exhausted enumeration.",
           "note": "the producer leg is closed; the behavior consumes the correction the chain demanded."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-read the queue half of the claim against the chain: check that a queued text that never became a user record still has no opener to abandon, and that the unsent leaf covers only records the chain dropped.",
+          "observed": "The queue-only class is untouched by the axis - it has no `type:\"user\"` record at all, so no chain question arises; the unsent leaf still covers only superseded openers.",
+          "rule": "One comparison per enqueued human text; the unsent population read from csift itself.",
+          "note": "The claim now names the chain as the detector instead of the standalone grouping module."
         }
       ],
       "attribution": "end-to-end",
@@ -81285,17 +81365,17 @@
       "id": "CMP-019",
       "area": "compaction",
       "behavior": "A compaction re-anchor re-appends a contiguous block of already-written records, and a TURN-OPENING user record in that block keeps both its uuid and its parentUuid. In the measured transcript the block follows two compact_boundary + isCompactSummary pairs, and each duplicated user record's two raw lines differ in exactly ONE top-level field, promptId: uuid, parentUuid, timestamp and message are equal. Whole-file census of that transcript, one observation per uuid occurring twice: 464 uuids appear twice, 462 of them with the same parentUuid on both lines, and by record type attachment 289, assistant 117, user 44, system 14. The preserved parentUuid is what distinguishes this shape from the resume replay measured under REC-091, where the copy commonly differs by an added slug and 3,835 of 9,131 duplicated lines carry a DIFFERENT parentUuid: a replayed opener therefore lands in the same parent GROUP as the original, which no rule keyed on parentUuid alone can tell apart from a later sibling.",
-      "depends": "csift's superseded-draft rule groups turn-openers by parentUuid and keeps the LAST one, so before the uuid guard a replayed opener read as a later sibling and made the ORIGINAL a user.unsent draft: 7 genuine messages in one session were labelled unsent, dropped from turn numbering, and (once the C-27 diff line shipped) rendered as differing from the sent message in 0 chars. collapse_openers now collapses same-uuid openers under one parent to their FIRST occurrence: the first keeps its label and its turn, and the copy neither supersedes it nor opens a turn, while staying a turn MEMBER so it is still addressable and consistent with the replayed assistant and attachment records, which have always rendered at both of their lines. Turn NUMBERING shifts on any transcript carrying a replayed block, which is the correctness price of the fix. If a future build stopped preserving the parentUuid on a replayed opener, the guard would become inert rather than wrong: the copy would fall in a different parent group and never be compared with the original.",
+      "depends": "The loader's uuid map keeps the LAST line carrying a uuid, and csift now keeps the same one: the last copy is the survivor for opener treatment and for addressing by uuid, and the earlier line is flagged `replay copy of L<n>` and opens no turn. Before the uuid guard a replayed opener read as a later sibling and made the ORIGINAL a draft: 7 genuine messages in one session were labelled unsent, dropped from turn numbering and rendered as differing from the sent message in 0 chars. Both lines stay searchable and counted, so a replayed block double-counts on every spanning surface - the same law as a cloned transcript, within one file instead of across two.",
       "code": [
         {
-          "path": "src/model/grouping.rs",
-          "lines": "196-202",
-          "snippet": "        // A uuid this parent's openers already carried: the same logical record, re-appended\n        // by a compaction re-anchor. It supersedes nothing and opens nothing.\n        if let Some(uuid) = r.uuid.as_deref() {\n            if first_uuid.insert((parent, uuid), i).is_some() {\n                out.replays.insert(i);\n                continue;\n            }"
+          "path": "src/model/chain/nodes.rs",
+          "lines": "81-90",
+          "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "39-52",
-          "snippet": "    // ONE walk decides both opener corrections: which openers are superseded DRAFTS (with\n    // the survivor named, for the C-27 diff line) and which are REPLAY COPIES a compaction\n    // re-anchor re-appended under a uuid an earlier opener already carried. A draft is\n    // dropped from turn reconstruction; a replay copy stops opening a turn but stays a\n    // member (it is a real record on disk, and every other record of that block renders at\n    // both of its lines).\n    let collapse = crate::model::collapse_openers(records, |k| &k.rec);\n    let draft_map = &collapse.drafts;\n    let skip = collapse.dropped();\n    let index_turns = crate::model::group_turn_indices_core(\n        records,\n        |i, k| k.rec.opens_turn() && collapse.opens(i),\n        &skip,\n    );"
+          "lines": "44-50",
+          "snippet": "    let chain = crate::model::Chain::build_by(records, |k| &k.rec, None);\n    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..records.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, records[s].line_no)))\n        .collect();\n    let index_turns = crate::model::group_turn_indices_chained(records, |k| &k.rec, &chain);"
         }
       ],
       "instrument": "Pairs: `csift search '' -t user.unsent --no-subagents --max-count 0 --format json`; for each exchange row read the draft record at its hit line and the record its `superseding_line` names, from the transcript `csift list --format json` gives the `path` of, and compare their top-level keys and values - a pair whose two records carry the SAME uuid is this shape, not an edit-resend. Whole file: count top-level uuid values occurring more than once in that transcript and group them by the record `type` of their lines. Counting rules: one observation per duplicated uuid; 'same parentUuid' counts duplicated uuids whose two lines carry equal parentUuid; the type census attributes a duplicated uuid to the type its lines carry; the field comparison is over top-level keys only.",
@@ -81324,6 +81404,16 @@
           "observed": "7 pairs whose draft and survivor carry the SAME uuid, all in one transcript, the two lines about 1,200 lines apart and not byte-identical; on every one of them uuid, parentUuid, timestamp and message are equal and promptId is the only differing top-level field. Whole file: 464 uuids appear twice, 462 with the same parentUuid, by type attachment 289, assistant 117, user 44, system 14. The block follows two compact_boundary plus isCompactSummary pairs. Before the guard those 7 genuine messages classified user.unsent with a 0-char diff; after it they classify user.message, open their own turns, and the copies fold in as members.",
           "rule": "One observation per duplicated uuid within the one transcript; the pair comparison is over top-level keys and values; the type census attributes a duplicated uuid to the record type its lines carry.",
           "note": "The shape was found by the residue of TURN-026: pairs whose two records shared a uuid could not be edit-resends. The guard keys on uuid identity under one parent, so an ordinary edit-resend, whose siblings carry distinct uuids, is untouched. The preservation half of the writer is REC-092's traced chain, carried here as borrowed hops; the promptId re-stamp is the hop still open."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the map insert in the shipped executable (2.1.258 @166184775) and confirm which line supplies the record object for a uuid that occurs twice, then read csift's own map construction beside it.",
+          "observed": "The insert overwrites, so the LAST line wins; csift now agrees, where it used to keep the first. The corpus shape is unchanged - a duplicated turn-opening user record keeps both its uuid and its parentUuid and differs in promptId alone.",
+          "rule": "One read per insert site; the corpus shape counted one observation per uuid occurring twice.",
+          "note": "The direction of the collapse flipped to match the loader; the effect - one turn per logical message, both lines searchable - is unchanged."
         }
       ],
       "producer_chain": [
@@ -81354,17 +81444,17 @@
       "id": "TURN-026",
       "area": "turn-boundary",
       "behavior": "An esc-recalled draft and the message that replaced it are indistinguishable at the instant the draft is written: nothing on disk marks the earlier record until the later one exists. Over the FULL population of 886 superseded drafts in 28 sessions, each paired with the survivor csift itself names, the two records carry the same top-level key set on 852 of 886 pairs (13 distinct key sets on the draft side, 15 counting each pair's union; the keys ever present on one side only are imagePasteIds on 29 pairs, origin on 5 and queueSkipAttachments on 1). Among keys both carry, promptId, uuid and timestamp differ on all 886, message on 862, promptSource on 28, origin on 15 and version on 1 - identity and time apart, the records are the same shape, and no field marks one as unsent. The window between the pair is almost never empty (1 of 886): it holds ordinary end-of-turn telemetry, and none of it separates the two populations. Against a control of all 2,595 user.message records (2,567 exchange rows) in the same sessions, no shape follows every draft - file-history-snapshot leads at 99.3% of drafts and 91.2% of control records - and every shape that shows a ZERO on the control side shows it because that window is cut at the next assistant line: with the cut removed, system/stop_hook_summary goes from 0 to 85.2% of control records, system/turn_duration from 0 to 65.8%, attachment/queued_command from 0 to 15.0%, attachment/batching_reminder_sent from 0 to 7.9% and attachment/bash_output_audience_note from 0 to 4.7%. So there is no discriminator at all, definitional artifacts included. The local recall path is why nothing is written for the recall itself: it refills the input box and slices the in-memory message array without appending anything (hops traced under TURN-025), and the one positive artifact a rewind can leave, a last-prompt line carrying rewound:true, comes only from the remote/bridge heal path and has 0 specimens in 29,662 last-prompt lines. The only signal is the LATER sibling, and even the window's shape is not a rule: 69 of 886 drafts (7.8%) drew an assistant record before the resend arrived.",
-      "depends": "csift assigns user.unsent at the SCAN layer, after the file is read, because the label is a statement about a LATER record: collapse_openers keeps the last opener per parentUuid and marks the earlier siblings, and a per-record classify cannot reach that. Everything downstream inherits the ordering - the draft stays outside turn numbering, its diff is measured against the survivor, and a turn window suppresses it. The consequence a consumer must know is that no hook running at prompt submit can apply the label: the superseding record IS the prompt being submitted, so waiting for it is waiting for the event that is firing. The closest on-disk approximation, skipping a trailing turn-opener that no assistant record follows, hides 817 of 886 drafts (92.2%) but wrongly skips 74 of 2,595 genuine messages (2.9%, a second prompt queued before any reply), so csift documents it as a heuristic and never as the label. If a build ever wrote a mark at recall time - a flag on the draft record, or a rewound:true line naming the surviving leaf - that would be a second and earlier instrument, and the retroactive rule would become a fallback rather than the only route.",
+      "depends": "csift assigns user.unsent at the SCAN layer, after the file is read, because the label is a statement about a LATER record: the chain decides which openers the conversation still reaches, and a per-record classify cannot reach that. Everything downstream inherits the ordering - the draft stays outside turn numbering, its diff is measured against the survivor, and a turn window suppresses it. The consequence a consumer must know is that no hook running at prompt submit can apply the label: the superseding record IS the prompt being submitted, so waiting for it is waiting for the event that is firing. The closest on-disk approximation, skipping a trailing turn-opener that no assistant record follows, hides 817 of 886 drafts (92.2%) but wrongly skips 74 of 2,595 genuine messages (2.9%, a second prompt queued before any reply), so csift documents it as a heuristic and never as the label. If a build ever wrote a mark at recall time - a flag on the draft record, or a rewound:true line naming the surviving leaf - that would be a second and earlier instrument, and the retroactive rule would become a fallback rather than the only route.",
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "220-228",
-          "snippet": "    // A superseded turn-opener draft (the scan layer computed the set - a pure\n    // per-record classify cannot see the LATER same-parent sibling) carries the single\n    // label `user.unsent`, whatever kind of opener it was: the draft is not part of the\n    // conversation, so it never rides `user.message` (whose counts stay pure).\n    let labels = if superseded {\n        vec![Class::UserUnsent]\n    } else {\n        rec.classify(ctx)\n    };"
+          "lines": "256-264",
+          "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
-          "path": "src/model/grouping.rs",
-          "lines": "233-239",
-          "snippet": "#[must_use]\npub fn superseded_draft_map<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n) -> std::collections::HashMap<usize, usize> {\n    collapse_openers(records, rec).drafts\n}"
+          "path": "src/model/chain.rs",
+          "lines": "250-252",
+          "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         }
       ],
       "instrument": "Four steps on csift's own output, over the full populations - no sampling. (1) DRAFTS: `csift search '' -t user.unsent --no-subagents --max-count 0 --format json`; every exchange row is a draft and its `superseding_line` names the survivor (csift's own last-same-parentUuid-opener mapping, with same-uuid replay copies excluded per CMP-019), so there is no forward scan, no cap and no opener predicate to define. FILES: `csift list --format json --max-count 0` prints each transcript's `path`; a session id that resolves to more than one path (a project-directory rename) contributes every path, and a draft is read from the candidate whose record at the row's line carries the row's own uuid. (2) PAIRS: parse the draft line and the survivor line from that file; compare top-level key sets and, for keys both carry, values; classify every line strictly between them by `type`, refined to `attachment.type` for attachment lines, `subtype` for system lines and `operation` for queue-operation lines; count a shape once per pair. Count pairs with at least one `type:\"assistant\"` line between, and pairs with no line at all between. (3) CONTROL: `csift search '' -t user.message --sessions-from - --no-subagents --max-count 0 --format json` fed the session ids of step 1 (the rule: the sessions that carry at least one draft), every HIT of every row. Each control record's successor window runs to the next line that is either `type:\"assistant\"` or an opener, exclusive; the opener set is csift's own `csift search '' -t user.message -t user.answer -t user.rejection -t agent.communication.inbox --sessions-from - --no-subagents --max-count 0 --format json` (the four turn-opening cases of AGENTS section 3.3). Classify that window the same way, once per record, and count separately the records whose window ends at an opener with no assistant in between - the false-skip population. Then repeat the classification with the window cut ONLY at the next opener: a shape scoring zero under the first window and non-zero under this one is excluded from the control by the cut, not by anything about drafts. (4) RATES: every rate is N over its named population (886 pairs, 2,595 control records over 2,567 rows). The discriminator test is a shape present after EVERY draft and absent after every control record. `assistant` is outside the shape table because the first control window is defined to end at an assistant line; for the same reason the draft window, which is the pair's own span and is not cut at an opener, reads higher on `user`.",
@@ -81414,6 +81504,16 @@
           "observed": "886 drafts over 28 sessions; 886 pairs resolved, 0 unresolved (2 session ids resolved to two transcript files each and the uuid check picked the right one). Key sets identical on 852 of 886, 13 distinct key sets on the draft side and 15 by pair union, one-sided keys imagePasteIds 29, origin 5, queueSkipAttachments 1; value differences promptId 886, uuid 886, timestamp 886, message 862, promptSource 28, imagePasteIds 27, origin 15, version 1. 1 of 886 windows holds no line at all; 69 of 886 (7.8%) hold an assistant record. Control: 2,595 records over 2,567 rows, of which 74 (2.9%) have a window ending at another opener with no assistant. Shape rates (drafts/control): file-history-snapshot 99.3/91.2, last-prompt 64.4/53.7, permission-mode 64.3/53.7, mode 64.3/53.4, ai-title 64.3/53.8, hook_additional_context 56.4/51.3, user 47.1/23.9, agent-name 42.0/37.8, total_tokens_reminder 27.8/29.7, ultrathink_effort 22.6/16.2, and 40-odd further shapes below 11% on the draft side. Eight shapes read zero on the control side, and the second pass shows every one of those zeros is the assistant cut: stop_hook_summary 0 -> 85.2%, turn_duration 0 -> 65.8%, queued_command 0 -> 15.0%, batching_reminder_sent 0 -> 7.9%, bash_output_audience_note 0 -> 4.7%, model_refusal_fallback 0 -> 1.5%, informational 0 -> 0.3%, model_refusal_no_fallback 0 -> one occurrence. No shape follows every draft, so there is no discriminator.",
           "rule": "One observation per pair (886) and one per control record (2,595, over 2,567 exchange rows); a shape counts once per window however often it occurs in it. Pair rates are over 886, control rates over 2,595. A pair is the draft row and the record its own superseding_line names, in the file whose record at the row's line carries the row's uuid. A control window ends, exclusive, at the next assistant line or the next line csift emits under user.message, user.answer, user.rejection or agent.communication.inbox; the second pass drops the assistant half of that rule. `assistant` is outside the shape comparison because the first window definition zeroes it on the control side.",
           "note": "Re-run over the population the same-uuid guard corrected. The conclusion is unchanged and now has no artifact left in it: neither the draft record nor any successor shape separates a draft from a submitted prompt, and the eight shapes that looked draft-only were end-of-turn material the control window cut away."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-read the retroactivity argument against the chain: check whether any field on a draft record could decide the label without a later record, now that the decider is the DAG rather than a sibling scan.",
+          "observed": "Still retroactive, and now for two labels: a draft is decided by a LATER sibling and a rewound opener by a DESCENDANT, so both need records that do not exist when the opener is written.",
+          "rule": "One read per label; no counting.",
+          "note": "The decider moved from a sibling scan to the chain and the retroactivity argument holds for both opener leaves."
         }
       ],
       "enumeration": [
@@ -82211,8 +82311,8 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "122-125",
-          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /\n    /// `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every leaf under the"
+          "lines": "123-126",
+          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excludes `user.unsent` /\n    /// `user.rewound` / `harness.compaction.boundary`); a GLOB (`-t 'user.*'`) selects every"
         }
       ],
       "instrument": "Binary: read 300 bytes at 165682619 and at 165682669 for the table and its builder; count `type:\"local\"`, `type:\"local-jsx\"` and `type:\"prompt\"` across the whole executable for each version, counting rule one observation per byte match; read 300 bytes at 160046882 for the scratchpad gate and at 165672499 for a twinned name. Corpus: `csift search \"\" -t harness.command.invocation --no-subagents` and a per-name tally, counting rule one observation per record.",
@@ -82574,6 +82674,860 @@
           "observed": "LV requires isApiErrorMessage === true in conjunction with the sentinel model, and mu passes neither isApiErrorMessage nor isVirtual, so no arm of LP reaches the placeholder; the prompt is an ordinary user record and no arm reaches it. csift reports delivered true on both hits and delivery_override None on both records. The only suppressor found for the splice is the replyOnResume parameter the flag sets; the flag literal is absent from every cached build up to 2.1.152 and present from 2.1.160 on (5 lines at 2.1.258).",
           "rule": "One predicate arm per record shape; a record is delivered when no arm matches it. On the csift side, one delivered value per emitted hit.",
           "note": "This is the arm that keeps the C-28 delivery rule honest for the new leaf: the sentinel model alone is not a not-delivered signal, and the placeholder is the shape that proves it."
+        }
+      ]
+    },
+    {
+      "id": "MISC-034",
+      "area": "misc",
+      "behavior": "Claude Code does not reconstruct a session by reading its jsonl in order. It streams every line into a uuid map, and the admission gate is exactly four types with a string uuid - user, assistant, attachment, system (2.1.258 @166066275). A `progress` entry is bypassed BEFORE that gate and its uuid is remapped to its own parent, so a later record naming a progress entry as its parent is rewritten to point past it (@166184395); the map insert is keyed on the uuid (@166184775, with the parentUuid rewrite at @166184525), so for a uuid that occurs twice the LAST line supplies the record object while the first supplies the insertion position the pre-boundary cut compares. Every other line type - file-history-snapshot, summary, last-prompt, custom-title, ai-title, tag, content-replacement, fork-context-ref - goes to its own sidecar map and is never part of the conversation, and the entry switch carries no `queue-operation` branch at all.",
+      "depends": "csift admits exactly those four types with a non-empty uuid (`chain_admits`) and keys its map the same way, so a compaction re-anchor resolves to the LAST line of the re-appended block: that line is the survivor for opener treatment and for addressing by uuid, and the earlier one renders `[replay copy of L<n>]`. csift never parses `progress` lines, so a record whose parent was a progress entry arrives with a parent that names no record and is handled by the 5 s repair instead of the remap - the same outcome on every corpus file measured, and a divergence worth knowing if a producer ever writes deep progress chains.",
+      "code": [
+        {
+          "path": "src/model/chain/nodes.rs",
+          "lines": "50-61",
+          "snippet": "pub(crate) fn chain_admits(r: &Record) -> bool {\n    if r.is_elicitation_marker() {\n        return false;\n    }\n    if r.uuid.as_deref().is_none_or(str::is_empty) {\n        return false;\n    }\n    matches!(\n        r.r#type.as_deref(),\n        Some(\"user\" | \"assistant\" | \"attachment\" | \"system\")\n    )\n}"
+        },
+        {
+          "path": "src/model/chain/nodes.rs",
+          "lines": "81-90",
+          "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
+        }
+      ],
+      "instrument": "Read the admission predicate at 2.1.258 @166066275, and the progress bypass, the parentUuid rewrite and the map insert at 2.1.258 @166184395 and @166184525. Then take any transcript carrying a uuid twice and confirm that csift reports the earlier line as the copy: `csift search \"\" @<id> --format json` and read `replay_copy_of` on the hits of the first line.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read of the loader entry path"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "processEntry",
+          "offset": 166184395,
+          "excerpt": "let nr=Dn.parentUuid;Bn.set(Dn.uuid,nr&&Bn.has(nr)?Bn.get(nr)??null:nr);return}",
+          "note": "the progress bypass and uuid remap; re-anchor 2.1.259 @167023512"
+        },
+        {
+          "role": "gate",
+          "name": "the four-type admission predicate",
+          "offset": 166066275,
+          "excerpt": "e.type===\"user\"||e.type===\"assistant\"||e.type===\"attachment\"||e.type===\"system\"",
+          "note": "re-anchor 2.1.259 @166905373; in 2.1.263 the predicate is wrapped one call deeper"
+        },
+        {
+          "role": "gate",
+          "name": "the parentUuid rewrite that precedes the insert",
+          "offset": 166184525,
+          "excerpt": "nsr(\"rewrote\"),Dn.parentUuid=Bn.get(Dn.parentUuid)??null",
+          "note": "A record whose parent names a bypassed progress entry is rewritten to point past it BEFORE the insert, which is why no admitted record ever ends up with a progress entry as its parent."
+        },
+        {
+          "role": "writer",
+          "name": "the map insert - Map.set on the uuid",
+          "offset": 166184775,
+          "excerpt": "if(n.set(Dn.uuid,Dn),!Dn.isSidechain&&!j",
+          "note": "The insert itself: a Map keyed on the uuid, so a second line carrying a uuid REPLACES the object the first put there and the last line wins. The parentUuid rewrite that precedes it is a separate hop at 166184525."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the three hops at 2.1.258 @166066275, @166184395 and @166184525, then census the corpus for uuids occurring twice and read csift's `replay_copy_of` on the earlier line.",
+          "observed": "The gate admits four types, the progress remap precedes it, and the insert overwrites so the last line wins. Corpus scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "One read per hop; one observation per uuid occurring twice in a file.",
+          "note": "The map is the whole reason a replayed block collapses to one turn."
+        }
+      ]
+    },
+    {
+      "id": "MISC-035",
+      "area": "misc",
+      "behavior": "The leaf the reconstruction walks from is chosen by four gates, not by \"the newest last-prompt\". A `last-prompt` line records a `leafUuid` with every write batch, and the reader accumulates it (2.1.258 @166185087); a `compact_boundary` seen afterwards WIPES it. An `explicit:true` line whose leafUuid is null clears the leaf set outright (@166188711, which returns an EMPTY set); an emptied set leaves no recorded leaf to resolve and no recorded-leaf branch to enter, so the pick drops to the max-`Date.parse(timestamp)` non-sidechain record of any admitted type (@166143533), which is a different record from the file-order-last one whenever a write landed out of time order. When a preserved-messages relink returned an anchor, the recorded-leaf branch is SKIPPED entirely unless the leaf was explicitly pinned (@166189231). Inside that branch, a recorded leaf that is a proper ANCESTOR of the file-order-last non-sidechain record is replaced by that record (@166189280), which is what keeps records appended after the last snapshot in the conversation; a recorded leaf naming no record in the file falls back to the file-order-last record, never to the next-newest leafUuid. When the branch yields no single leaf, a TIPS fallback takes over: every record nothing points at, collapsed to its first conversational ancestor and kept only when that ancestor has no conversational child (@166189919); with an empty candidate set the max-`Date.parse(timestamp)` non-sidechain record of ANY admitted type becomes the leaf (@166143533).",
+      "depends": "csift mirrors every gate in `model::chain::leaf::pick` and DISCLOSES which one fired as `leaf_source` (last-prompt | explicit | tail | tail (last-prompt leaf absent) | newest (leaf set cleared)) in the footer and the JSON summary, because the leaf decides the whole answer: name a different leaf and a different branch of a forked transcript becomes the conversation. The one gate csift does not implement is the newest-descendant promotion of the file tail, which is reachable only when NO last-prompt line in the file carries a leafUuid key - a shape the corpus does not contain.",
+      "code": [
+        {
+          "path": "src/model/chain/leaf.rs",
+          "lines": "37-45",
+          "snippet": "    let tail = tail_index(b);\n    // An `explicit:true` line with a null leaf leaves the loader with an EMPTY leaf set,\n    // and an empty set is not the same as never having had one: there is no recorded leaf\n    // to resolve and no tail branch to fall into, so the pick drops straight to the\n    // newest-by-timestamp record of any admitted type.\n    if rec.cleared {\n        return (newest(b), LeafSource::Cleared);\n    }\n    let resolved = rec.leaf.and_then(|u| b.resolve(u));"
+        },
+        {
+          "path": "src/model/chain/leaf.rs",
+          "lines": "65-76",
+          "snippet": "fn recorded<'a>(b: &Builder<'a>) -> Recorded<'a> {\n    let mut out = Recorded {\n        leaf: None,\n        explicit: false,\n        cleared: false,\n    };\n    for i in 0..b.len() {\n        let r = b.recs[i];\n        if b.is_boundary(i) {\n            out.leaf = None;\n            out.explicit = false;\n            continue;"
+        }
+      ],
+      "instrument": "Read the five hops at 2.1.258 @166185087, @166188711, @166189231, @166189280 and @166189919, plus the max-timestamp pick at @166143533. Then run `csift search \"\" @<id> --format json | tail -1` on a transcript whose newest `last-prompt` names a record the file does not contain and read `leaf_source`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read of the leaf collapse"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the last-prompt reader",
+          "offset": 166185082,
+          "excerpt": "if(Dn.leafUuid!==void 0)An=!0;if(Dn.leafUuid)hn=Dn.explicit===!0||hn&&Dn.leafUuid===pn",
+          "note": "accumulates the recorded leaf and the explicit flag; re-anchor 2.1.259 @167024205"
+        },
+        {
+          "role": "gate",
+          "name": "the recorded-leaf branch and its ancestor preference",
+          "offset": 166189231,
+          "excerpt": "if(!e&&(!Rn||nr)){let cr=pn&&n.has(pn)?pn:void 0;",
+          "note": "a truthy relink anchor skips this branch; the ancestor preference follows at @166189280"
+        },
+        {
+          "role": "writer",
+          "name": "the tips fallback",
+          "offset": 166189919,
+          "excerpt": "if(!ys.has(cr.uuid))Bo.push(cr)",
+          "note": "collects the records nothing points at; re-anchor 2.1.259 @167029012"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the six hops named in the instrument at their 2.1.258 offsets, then read `leaf_source` from csift on a transcript whose recorded leaf names no record.",
+          "observed": "All four gates are present in the order stated, and csift reports `tail (last-prompt leaf absent)` on the off-map case.",
+          "rule": "One read per hop; one leaf_source per transcript.",
+          "note": "The gates were traced because a leaf picked one hop too early makes a live branch look abandoned."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.1",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-read the cleared-set branch at 2.1.258 @166188711 and the max-timestamp pick at @166143533 to settle what an EMPTIED leaf set leads to, then pinned the mirror with a unit case whose newest-by-timestamp record is deliberately NOT the file-order last one.",
+          "observed": "The branch returns an empty set, and with no recorded leaf the pick reaches the max-Date.parse(timestamp) non-sidechain record of any admitted type. csift used to fall through to the file-order tail instead; it now returns that record and discloses `newest (leaf set cleared)`. The corpus exercises neither path: 0 of 30,676 last-prompt lines carry explicit:true.",
+          "rule": "One observation per last-prompt line for the corpus count; the branch reading is a byte-verified excerpt at the stated offset.",
+          "note": "The claim text named the gate but not its consequence, so the mirror had drifted to the tail. Both now say the newest record by timestamp."
+        }
+      ]
+    },
+    {
+      "id": "MISC-036",
+      "area": "misc",
+      "behavior": "The reconstruction walk reads `parentUuid` and nothing else (2.1.258 @166143634). A record with no parentUuid ends it, which is why a `compact_boundary` - whose own parentUuid is null - is an absolute cut: `logicalParentUuid` sits on that record but no reader on the load path consults it. Two repairs ride the walk: a cycle is detected by a visited set and stops it with a partial transcript (the message literal at @166143713), and a parent that names no record, or one already visited, falls back to the nearest UNVISITED record with the SAME `isSidechain` whose timestamp is at most 5000 ms earlier and closest (@166145374).",
+      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader. It then departs in ONE documented way: at a boundary it steps over the cut through that record's own `logicalParentUuid` and flags everything above as `pre-cut` rather than dropping it, because \"what the model saw at the time\" is the question a transcript archive answers. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record - off the chain in a region the walk did resolve - is skipped by a bare role selector.",
+      "code": [
+        {
+          "path": "src/model/chain/walk.rs",
+          "lines": "32-71",
+          "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {\n    let mut out = Walked {\n        floor: leaf.unwrap_or(0),\n        boundary: None,\n    };\n    let Some(leaf) = leaf else {\n        // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no\n        // record is on the chain, and the survival pass turns that into PreCut.\n        out.floor = b.len();\n        return out;\n    };\n    let mut crossed = false;\n    let mut cur = Some(leaf);\n    while let Some(i) = cur {\n        if b.visited[i] {\n            break; // cycle guard\n        }\n        b.visited[i] = true;\n        b.on_chain[i] = true;\n        b.precut[i] = crossed;\n        out.floor = i;\n        let Some(pu) = b.parent[i] else {\n            if b.is_boundary(i) {\n                out.boundary.get_or_insert(i);\n            }\n            break;\n        };\n        b.chain_child.entry(pu).or_insert(i);\n        let next = match b.resolve(pu) {\n            Some(j) if !b.visited[j] => Some(j),\n            _ => repair(b, i),\n        };\n        let next = match next {\n            Some(j) => Some(j),\n            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]\n                    .logical_parent_uuid\n                    .as_deref()"
+        },
+        {
+          "path": "src/model/chain/walk.rs",
+          "lines": "87-98",
+          "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i]\n        .timestamp\n        .as_deref()\n        .and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain;\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp"
+        }
+      ],
+      "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line` and the `survival` values above and below it.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read of the chain walk"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the walk - parentUuid from the leaf to the head",
+          "offset": 166143634,
+          "excerpt": "function aEe(e,n,r){let o=[],d=new Set,f=n;while(f){",
+          "note": "The whole reconstruction: start at the leaf, push each record, follow parentUuid. Everything the loop does not reach is simply not in the array it returns."
+        },
+        {
+          "role": "gate",
+          "name": "the null-parent termination",
+          "offset": 166143866,
+          "excerpt": "let v=f.parentUuid;if(!v)break;",
+          "note": "A null parentUuid ends the walk with no further lookup, which is why a compact_boundary - whose own parentUuid is null - is where a resumed conversation stops. The cycle guard beside it is at 166143713."
+        },
+        {
+          "role": "writer",
+          "name": "the 5 s timestamp repair",
+          "offset": 166145374,
+          "excerpt": "var bns=5000;function Sns(e,n,",
+          "note": "the window constant and the repair; re-anchor 2.1.259 @166984496"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the walk and the repair at 2.1.258 @166143634 and @166145374, then read `boundary_cut_line` and the per-hit `survival` from csift on a compacted transcript.",
+          "observed": "The walk reads parentUuid only and the boundary ends it; csift reports the cut line and marks the history above it pre-cut rather than abandoned.",
+          "rule": "One read per hop; one boundary_cut_line per transcript.",
+          "note": "The forensic continuation across the cut is csift's own, and it is stated as such."
+        }
+      ]
+    },
+    {
+      "id": "MISC-037",
+      "area": "misc",
+      "behavior": "Before any leaf is picked, a pass over the map acts on the NEWEST `compact_boundary` when its `compactMetadata` carries `preservedMessages` or `preservedSegment` (2.1.258 @166141698). It resolves the preserved set - a listed `uuids` array, or a segment walked from its `tailUuid` up to its `headUuid` (@166142944) - and then does four things: re-chains those uuids into a path hanging off `anchorUuid`, re-parents anything that pointed at the anchor to the LAST preserved uuid, DELETES every record whose insertion position sits before that boundary and is not preserved, and re-parents any user/assistant record orphaned by the deletion to the last preserved uuid. It returns that last preserved uuid, and a truthy return makes the leaf logic skip its recorded-leaf branch. Any unresolvable step aborts the whole pass and leaves the map untouched.",
+      "depends": "csift mirrors the pass but marks instead of deleting: a cut record becomes `pre-cut`, still readable, still selectable, and it KEEPS its own `parentUuid`. That last part is load-bearing - re-pointing every cut record at the last preserved uuid would collapse a whole session's openers onto one parent, which the blind-region draft rule then reads as hundreds of same-parent resends. The returned anchor is threaded into the leaf pick so the tips fallback runs exactly where the loader runs it.",
+      "code": [
+        {
+          "path": "src/model/chain/relink.rs",
+          "lines": "35-60",
+          "snippet": "pub(crate) fn apply<'a>(b: &mut Builder<'a>) -> Option<&'a str> {\n    let (newest, with_meta) = boundaries(b);\n    let (Some(newest), Some(meta)) = (newest, with_meta) else {\n        return None;\n    };\n    // The preserved metadata must sit on the NEWEST boundary; otherwise nothing is\n    // re-chained and only the cut runs.\n    let preserved = if meta.first == newest.first {\n        match resolve(b, meta.idx) {\n            Some(p) => Some(p),\n            None => return None, // unresolvable segment: the whole pass aborts\n        }\n    } else {\n        None\n    };\n    let preserved = preserved.filter(|p| !p.uuids.is_empty());\n    if let Some(p) = &preserved {\n        if p.uuids.iter().any(|u| b.resolve(u).is_none()) {\n            return None; // a listed uuid is not in this file: abort, map untouched\n        }\n    }\n    // The cut runs FIRST here, where the loader deletes first and re-parents afterwards:\n    // same order of effect, and it keeps a removed record's own `parentUuid` intact.\n    // Claude Code never looks at a deleted record again, but csift still reads it - and\n    // re-pointing every cut record at the last preserved uuid would collapse a whole\n    // session's openers onto ONE parent, which the blind-region draft rule then reads as"
+        },
+        {
+          "path": "src/model/chain/relink.rs",
+          "lines": "190-209",
+          "snippet": "fn cut(b: &mut Builder<'_>, newest_first: usize, preserved: Option<&Preserved>) {\n    let keep: HashSet<&str> = preserved\n        .map(|p| p.uuids.iter().map(String::as_str).collect())\n        .unwrap_or_default();\n    let dropped: HashSet<usize> = b\n        .map\n        .iter()\n        .filter(|(u, slot)| slot.first < newest_first && !keep.contains(*u))\n        .map(|(_, slot)| slot.last)\n        .collect();\n    if dropped.is_empty() {\n        return;\n    }\n    // Mark by INDEX (the map already knows every line a uuid occupies): a uuid-keyed\n    // re-scan would hash every record's uuid a second time.\n    for &i in &dropped {\n        b.removed[i] = true;\n    }\n    let copies: Vec<usize> = b\n        .replay_of"
+        }
+      ],
+      "instrument": "Read the relink pass at 2.1.258 @166141698 and its preserved-set resolver at @166142944, and list its four effects in order. Then run csift over a transcript whose newest boundary carries `preservedMessages` and read the `survival` of a preserved record and of a pre-boundary record outside the preserved set.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read of the pre-walk relink"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the relink pass",
+          "offset": 166141698,
+          "excerpt": "function hns(e){let n,r=-1,o=-1,d=new Map,f=0;for(let U of e.values()){",
+          "note": "runs on the map before the leaf collapse; re-anchor 2.1.259 @166980807"
+        },
+        {
+          "role": "gate",
+          "name": "the preserved-set resolver",
+          "offset": 166142962,
+          "excerpt": "if(e.preservedMessages)return{preserved:e.preservedMessages,source:\"list\"}",
+          "note": "a listed array, else a tail-to-head segment walk; re-anchor 2.1.259 @166982053"
+        },
+        {
+          "role": "writer",
+          "name": "the pre-boundary deletion and the orphan re-parent",
+          "offset": 166142644,
+          "excerpt": "let B=[];for(let[U]of e){let j=d.get(U);if(j!==void 0&&j<o&&!F.has(U))B.push(U)}for(let U of B)e.delete(U);",
+          "note": "positions come from the map insertion order, which is the first line carrying a uuid"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the relink pass and its resolver at 2.1.258 @166141698 and @166142944, then read csift's `survival` for a preserved record and for a cut one on a transcript whose newest boundary lists a preserved set.",
+          "observed": "The four effects are present in the order stated and abort together; csift reports the preserved records live and the rest of the pre-boundary history pre-cut.",
+          "rule": "One read per hop; one survival value per record inspected.",
+          "note": "The pass runs before the leaf is picked, so a chain built without it starts in the wrong place."
+        }
+      ]
+    },
+    {
+      "id": "MISC-038",
+      "area": "misc",
+      "behavior": "Chain membership is wider than plain ancestry, by two passes that run after the walk. One re-interleaves, for every assistant record ON the chain, all other assistant records sharing its `message.id` and every `tool_result`-carrying user record parented to any of them (2.1.258 @166145690); the other appends every NON-conversation descendant of the leaf, timestamp-sorted, at the end (@166145108, over a parent index built only from records that are neither user nor assistant, @166144919).",
+      "depends": "Without both, csift would call a live turn abandoned: Claude Code writes one record per content block, so a single assistant message spans several lines sharing a message.id and only one of them is on the ancestor path, and a hook attachment written after the last prompt hangs BELOW the leaf rather than above it. Both are mirrored in `chain::walk`, which marks the rescued records live.",
+      "code": [
+        {
+          "path": "src/model/chain/walk.rs",
+          "lines": "123-136",
+          "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].r#type.as_deref() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message.as_ref().and_then(|m| m.id.as_deref()))\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
+        },
+        {
+          "path": "src/model/chain/walk.rs",
+          "lines": "178-189",
+          "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
+        }
+      ],
+      "instrument": "Read the re-interleave at 2.1.258 @166145690 and the trailing-descendant append at @166145108 with its parent index at @166144919. Then build a transcript whose assistant turn spans two records with one `message.id` and a `tool_result` carrier under the second, and confirm csift marks every one of them live.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read of the two membership passes"
+      },
+      "first_seen_claude_code": "2.1.100",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the same-message.id re-interleave",
+          "offset": 166145690,
+          "excerpt": "function kns(e,n,r){let o=n.filter((B)=>B.type===\"assistant\");",
+          "note": "telemetry tengu_chain_parallel_tr_recovered at @166146725; re-anchor 2.1.259 @166984799"
+        },
+        {
+          "role": "gate",
+          "name": "the non-conversation parent index",
+          "offset": 166144973,
+          "excerpt": "if(r.parentUuid&&r.type!==\"user\"&&r.type!==\"assistant\")",
+          "note": "only non-conversation children are followed below the leaf; re-anchor 2.1.259 @166984028"
+        },
+        {
+          "role": "writer",
+          "name": "the trailing-descendant append",
+          "offset": 166145130,
+          "excerpt": "let d=[],f=[e.uuid];while(f.length>0){let _=f.shift();",
+          "note": "breadth-first from the leaf, timestamp-sorted; re-anchor 2.1.259 @166984217"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the two passes at 2.1.258 @166145690 and @166145108 (with the parent index at @166144919), then run csift over a transcript whose assistant turn spans two records with one message.id and read the survival of both.",
+          "observed": "Both passes are present and csift marks the sibling record and its tool_result carrier live rather than abandoned.",
+          "rule": "One read per hop; one survival value per record.",
+          "note": "These two passes are the difference between an axis that works and one that flags every parallel tool call as abandoned."
+        }
+      ]
+    },
+    {
+      "id": "MISC-039",
+      "area": "misc",
+      "behavior": "The `leafUuid` a transcript records is a snapshot, not a command. It is appended with every write batch as part of a session-metadata line (2.1.258 @166091868), and its source is tracked MONOTONICALLY by timestamp as records are inserted, so it names the newest record written rather than anything the operator chose. Two writers can pin it explicitly (@166113838 and @166114075), both on the exit/relaunch flush and the remote-control rewind handler; the local rewind persists nothing at all. Over the corpus every `last-prompt` line carries a `leafUuid` key and none carries `explicit:true` or `rewound:true`.",
+      "depends": "csift reads the recorded leaf as a HINT and discloses it (`leaf_source`), and parses `explicit` and `rewound` without steering on them beyond the one gate the loader has (an explicit pin survives a preserved-messages relink). The corpus counts are why: a behaviour keyed on either flag would be untestable against real data, so csift keeps the flags visible and the rule simple.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "lines": "138-143",
+          "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
+        },
+        {
+          "path": "src/model/chain/leaf.rs",
+          "lines": "65-72",
+          "snippet": "fn recorded<'a>(b: &Builder<'a>) -> Recorded<'a> {\n    let mut out = Recorded {\n        leaf: None,\n        explicit: false,\n        cleared: false,\n    };\n    for i in 0..b.len() {\n        let r = b.recs[i];"
+        }
+      ],
+      "instrument": "Read the snapshot writer at 2.1.258 @166091868 and the two explicit writers at @166113838 and @166114075. Then census every `last-prompt` line under the projects root: total lines, lines with a `leafUuid` key, lines with `explicit:true`, lines with `rewound:true`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read plus a corpus census"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the session-metadata snapshot",
+          "offset": 166091868,
+          "excerpt": "type:\"last-prompt\"",
+          "note": "appended with each write batch; re-anchor 2.1.259 @166930967"
+        },
+        {
+          "role": "gate",
+          "name": "the monotonic leaf-source comparison",
+          "offset": 166105845,
+          "excerpt": "if(F&&B&&(!this.currentSessionLeafTs||B>=this.currentSessionLeafTs))this.currentSessionLeafUuid=F,this.currentSessionLeafTs=B",
+          "note": "The recorded leaf only ever moves FORWARD: the new record replaces it when its timestamp is at least the stored one, so the value names the newest record written and never anything the operator chose."
+        },
+        {
+          "role": "writer",
+          "name": "the two explicit pins",
+          "offset": 166113838,
+          "excerpt": "explicit:!0",
+          "note": "the second pin sits at @166114075; re-anchors 2.1.259 @166952938 and @166953175"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the snapshot writer and the two explicit pins at 2.1.258 @166091868, @166113838 and @166114075, then census every `last-prompt` line under the projects root.",
+          "observed": "30,676 last-prompt lines, all 30,676 carrying a leafUuid key, 0 with explicit:true, 0 with rewound:true, 30,584 carrying lastPrompt text. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "One line per `type:\"last-prompt\"` object; keys counted by presence, flags by a true value.",
+          "note": "The flags are disclosed and never steered on because the corpus cannot exercise them."
+        }
+      ]
+    },
+    {
+      "id": "MISC-040",
+      "area": "misc",
+      "behavior": "Claude Code knows the walk can drop records and says so: when a resumed transcript holds two or more conversation records and NONE carries a parentUuid, it writes a warning naming the mechanism - \"Conversation reconstruction walks parentUuid from the last record, so unlinked records are dropped\" (2.1.258 @166144509) - and reports how many of the records reached the resumed conversation. The cycle guard carries its own literal from at least 2.1.100 (absent at 2.1.23 and below); the unlinked-transcript warning appears at 2.1.203 and is absent at 2.1.202.",
+      "depends": "The warning is the harness stating csift's own risk out loud: a chain built from a PARTIAL record set drops records that are in fact live. csift answers it structurally - the walk's terminating record is a floor, and an off-chain record above that floor is `pre-cut`, never `abandoned` - and it splices the structural rows of the lines its own prefilter drops back into the chain so the floor lands where the loader would put it.",
+      "code": [
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "66-83",
+          "snippet": "fn base_state(b: &Builder<'_>, i: usize, floor: usize) -> Survival {\n    if !b.admit[i] || b.is_sidechain(i) {\n        // Outside the loader's model (a promoted non-record line, a sidechain lane, a\n        // merged elicitation marker): the axis says nothing about it.\n        return Survival::Live;\n    }\n    if b.on_chain[i] {\n        return if b.precut[i] {\n            Survival::PreCut\n        } else {\n            Survival::Live\n        };\n    }\n    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }\n}"
+        }
+      ],
+      "instrument": "Read the diagnostic and its message at 2.1.258 @166144509 and confirm the two conditions that fire it. For the floors, byte-search each historical native build for the two literals and record the lowest build carrying each and the highest lacking it.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "binary read plus a build ladder"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "complete",
+      "specimen": "none",
+      "attribution": "producer-only",
+      "open_legs": [
+        "No corpus specimen of the warning: it fires only on a transcript whose conversation records carry no parentUuid at all, which the projects root does not contain. A synthetic unlinked transcript resumed under the shipped binary would capture it."
+      ],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the unlinked-transcript diagnostic",
+          "offset": 166144054,
+          "excerpt": "function dgn(e,n,r){let o=0;for(let v of e.values()){",
+          "note": "runs after the walk; re-anchor 2.1.259 @166983163"
+        },
+        {
+          "role": "gate",
+          "name": "the two firing conditions",
+          "offset": 166144107,
+          "excerpt": "if(v.type!==\"user\"&&v.type!==\"assistant\")continue;if(v.parentUuid)return;o++",
+          "note": "at least two conversation records and none carrying parentUuid"
+        },
+        {
+          "role": "writer",
+          "name": "the message",
+          "offset": 166144509,
+          "excerpt": "Conversation reconstruction walks parentUuid from the last record, so unlinked records are dropped",
+          "note": "re-anchor 2.1.259 @166983618"
+        }
+      ],
+      "writer_literal_floor": {
+        "literal": "Conversation reconstruction walks parentUuid from the last record",
+        "lowest_present": "2.1.203",
+        "highest_absent": "2.1.202",
+        "ladder": "byte-searched across the cached native builds; the cycle literal \"Cycle detected in parentUuid chain at message \" is present from 2.1.100 and absent at 2.1.23 and below."
+      },
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the diagnostic at 2.1.258 @166144054 with its message at @166144509, and byte-search the two literals across the cached historical builds.",
+          "observed": "The warning fires on two or more conversation records with no parentUuid anywhere; the message literal is present from 2.1.203 and absent at 2.1.202, the cycle literal from 2.1.100 and absent at 2.1.23.",
+          "rule": "One read per hop; one presence test per cached build.",
+          "note": "The floor rule in csift exists because this warning describes exactly what a partial record set would do to it."
+        }
+      ]
+    },
+    {
+      "id": "MISC-041",
+      "area": "misc",
+      "behavior": "A `type:\"user\"` record carries NO field that marks it superseded. Enumerated over the load path, the fields read off a user record are type, uuid, parentUuid, timestamp, isSidechain, sessionId, isMeta, isCompactSummary, permissionMode, promptId, toolUseResult, message.content, sourceToolAssistantUUID, isVirtual and isVisibleInTranscriptOnly - none of them a supersession flag. The supersession field this load path DOES read sits elsewhere: `retractedMessageUuids` on a `system`/`model_refusal_fallback` record, whose listed uuids are filtered out of the loaded array on resume. That field name occurs 24 times in 2.1.258 and those occurrences are not enumerated here, so the reading is \"the load path reads no supersession field off a user record\", not \"nothing else in the binary writes one\". The resume post-processor also DELETES `promptId` from the record it appends, and `rewound` exists only on `last-prompt` lines.",
+      "depends": "This is why both opener leaves are retroactive and assigned at the SCAN layer: there is nothing on the record to read. csift reports a superseded opener from the DAG around it - a later same-parent opener, or the chain threading past it - and never asserts a flag the format does not carry.",
+      "code": [
+        {
+          "path": "src/model/chain.rs",
+          "lines": "77-90",
+          "snippet": "/// One record's place in the surviving conversation.\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub enum Survival {\n    /// On the chain the loader walks (or rescued onto it).\n    #[default]\n    Live,\n    /// Above a cut the loader stops at, or in a region csift could not resolve. Kept and\n    /// selectable exactly as before - only flagged.\n    PreCut,\n    /// Off the chain, in a region the chain resolved. `root` is the index of the\n    /// abandoned branch's topmost record (the branch head a reader should look at).\n    Abandoned { root: usize },\n}\n"
+        }
+      ],
+      "instrument": "Enumerate every field read off a user record on the load path in the shipped executable and classify each as identity, ordering, content or supersession; then byte-search `retractedMessageUuids` and read its one reader.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "field enumeration over the load path"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The enumeration is over the load path only: a field read elsewhere in the executable and never consulted while loading would not appear. Listing every occurrence of each user-record field name in the whole executable would close it."
+      ],
+      "enumeration": [
+        {
+          "site": "retractedMessageUuids reader",
+          "offset": 163212365,
+          "excerpt": "retractedMessageUuids",
+          "verdict": "the only supersession field in the format, and it rides a system record, not the user record it retracts"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Enumerate the fields the load path reads off a user record, then census the corpus for any user record carrying a supersession-shaped key.",
+          "observed": "No supersession field on a user record; the only one in the format is retractedMessageUuids on a system record. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "One field per read site; one record per corpus line of type user.",
+          "note": "The absence is the reason the label cannot be applied at write time."
+        }
+      ]
+    },
+    {
+      "id": "MISC-042",
+      "area": "misc",
+      "behavior": "Forks in a transcript are common and small. Over the corpus, 2,645 records carry two or more distinct conversation children (a branch point) across 44 of 75 files, and 910 opener pairs share a `parentUuid` across 32 files. Splitting the earlier member of each pair by whether an assistant record hangs below it: 858 have none, 52 have one, and 0 are on the final chain.",
+      "depends": "The 0 is the load-bearing number: no earlier same-parent opener survives the chain, so the measured draft rule and the chain agree on that whole population and the axis changes no answer there. The 52 are the population the chain sees and the draft rule could not - openers that WERE answered before the conversation left them - and they are what the rewound leaf names.",
+      "code": [
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "151-164",
+          "snippet": "fn assign_kinds(b: &Builder<'_>, out: &mut Chain, has_reply: &[bool]) {\n    let openers: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            matches!(out.survival(i), Survival::Abandoned { .. })\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n        })\n        .collect();\n    // The surviving opener per parent uuid, in ONE pass: a per-opener rescan would be\n    // O(records x abandoned openers), which on a session with hundreds of recalled drafts\n    // is the whole scan's cost over again.\n    let mut last_opener: HashMap<&str, usize> = HashMap::new();\n    for k in 0..b.len() {\n        if out.survival(k).selectable()"
+        }
+      ],
+      "instrument": "Run csift's chain rule (`Chain::build`) over every top-level transcript under the projects root and count, one observation per record: records carrying two or more distinct conversation children, and pairs of turn-opening user records sharing a parentUuid, splitting the earlier member of each pair by whether an assistant record hangs below it and by whether it is on the final chain. The rule is the loader hops mirrored with exactly two differences, both of which widen what is counted rather than narrow it: csift crosses a compaction cut through the boundary's logicalParentUuid (the loader never reads that field, so its walk stops there), and csift keeps every record the walk does not reach, flagged, where the loader drops it.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The counts describe one operator's corpus. A second corpus would say whether the draft-to-rewind ratio is a property of the harness or of how one person works."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Run csift's chain rule over every top-level transcript under the projects root - the loader hops mirrored, plus the two deliberate differences: it steps over a compaction cut through the boundary's logicalParentUuid, which the loader never reads, and it RETAINS what the walk does not reach instead of discarding it and count branch points and shared-parent opener pairs with the split described.",
+          "observed": "2,645 branch points over 44 files; 910 shared-parent opener pairs over 32 files = 858 without an assistant descendant, 52 with one, 0 on the final chain. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "A branch point is a conversation anchor with two or more DISTINCT conversation children; a pair is one earlier member of an opener group sharing a non-null parentUuid.",
+          "note": "The zero on the chain side is what makes the axis safe to ship over the draft rule."
+        }
+      ]
+    },
+    {
+      "id": "REC-103",
+      "area": "record-model",
+      "behavior": "A `last-prompt` line carries no `uuid` of its own. Over the corpus, 0 of 30,676 such lines have one, while all 30,676 carry a `leafUuid`. It is a session-metadata snapshot, not a conversation record: it is never admitted to the uuid map and it names another record instead.",
+      "depends": "The leaf-hint reader must not require a uuid. A record-shaped guard that demands one - the guard every other csift reader applies - would silently drop every `last-prompt` line and leave the chain with no recorded leaf at all, falling back to the file tail on every transcript. csift lifts the line through the spine extractor, which admits `last-prompt` explicitly and reads `leafUuid`, `explicit` and `rewound` off it.",
+      "code": [
+        {
+          "path": "src/parse/spine.rs",
+          "lines": "34-39",
+          "snippet": "fn spine_type_wanted(raw: &[u8]) -> bool {\n    matches!(\n        raw,\n        br#\"\"user\"\"# | br#\"\"assistant\"\"# | br#\"\"attachment\"\"# | br#\"\"system\"\"# | br#\"\"last-prompt\"\"#\n    )\n}"
+        },
+        {
+          "path": "src/model/record.rs",
+          "lines": "138-143",
+          "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
+        }
+      ],
+      "instrument": "Census every `type:\"last-prompt\"` line under the projects root and count how many carry a `uuid` key and how many carry a `leafUuid` key.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "corpus census"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The writer that constructs the session-metadata line is read as a template but its record envelope is not traced, so whether the absent uuid is by construction or by omission is untraced. Reading the append path that builds the metadata batch would close it."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Census every `type:\"last-prompt\"` line under the projects root for a `uuid` key and a `leafUuid` key.",
+          "observed": "0 of 30,676 carry a uuid; 30,676 of 30,676 carry a leafUuid. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "One observation per line whose type is last-prompt; keys counted by presence.",
+          "note": "A uuid-requiring guard would have made the leaf hint unreachable on every transcript."
+        }
+      ]
+    },
+    {
+      "id": "TURN-032",
+      "area": "turn-boundary",
+      "behavior": "A REWIND leaves a shape a recalled draft does not. The rewound prompt stays on disk with its own parent, its reply and everything under it stay on disk too, and the resubmitted prompt is chained onto the SAME parent - so the branch is off the conversation chain while carrying an assistant descendant. Over the corpus's 910 shared-parent opener pairs, 52 earlier members have an assistant record below them and 858 do not; none of the 910 is on the final chain.",
+      "depends": "csift splits the two with exactly that discriminator and gives the answered one its own leaf, `user.rewound`, assigned at the SCAN layer like the draft leaf beside it. The split matters to a reader: a draft was never answered and its text may never have been seen, while a rewound turn WAS answered - the model produced work under it that the conversation then left behind - so the two need different readings and different diff wording (`rewound: the conversation continued from L<n> instead`).",
+      "code": [
+        {
+          "path": "src/model/taxonomy.rs",
+          "lines": "52-61",
+          "snippet": "    /// `user.rewound` - a turn-opener the conversation was REWOUND past: it was sent,\n    /// it drew a reply, and Claude Code's own `parentUuid` chain now threads around it,\n    /// so the model no longer receives it or anything under it. The discriminator\n    /// against [`Class::UserUnsent`] is exactly that reply: a recalled draft has no\n    /// assistant descendant, a rewound turn does (measured over the shared-parent user\n    /// pairs of a real corpus: 868 without, 55 with, 0 on the chain). Assigned at the\n    /// SCAN layer like `user.unsent`, for the same reason - the fact lives in the DAG\n    /// around the record, not in the record. Outside turn numbering; addressable.\n    UserRewound,\n    /// `user.queued` - the human's text as it sat in the input QUEUE: a"
+        },
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "207-218",
+          "snippet": "fn assistant_below(b: &Builder<'_>) -> Vec<bool> {\n    let mut out = vec![false; b.len()];\n    for i in (0..b.len()).rev() {\n        out[i] = b\n            .children_of(i)\n            .iter()\n            .any(|&c| out[c] || b.recs[c].r#type.as_deref() == Some(\"assistant\"));\n    }\n    out\n}\n\n/// The surviving opener that replaced an abandoned one: the chain's own child of the"
+        }
+      ],
+      "instrument": "Group turn-opening user records by non-null `parentUuid` over every top-level transcript, take the earlier member of each pair, and test whether any assistant record is reachable by walking parentUuid links downward from it; cross-check against `csift search \"\" -t user.rewound --count-by session`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "corpus census plus a live trial"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The rewind entry point persists nothing, so there is no writer to trace for the shape itself - only the loader that later drops the branch. A live rewind captured under the shipped binary, with the file read line by line before and after, is the instrument that would pin the write side."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Census the shared-parent opener pairs of every top-level transcript for an assistant descendant of the earlier member, and read csift's own rewound counts beside them.",
+          "observed": "52 of 910 pairs carry an assistant descendant; csift reports the same population under its rewound leaf. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "One observation per earlier member of an opener group sharing a non-null parentUuid; assistant descendant = any assistant reachable by walking parentUuid links downward.",
+          "note": "The discriminator is a descendant, which is why the leaf cannot be assigned at write time either."
+        }
+      ]
+    },
+    {
+      "id": "TURN-033",
+      "area": "turn-boundary",
+      "behavior": "A prompt recalled with escape and never re-sent stays the file tail, and the tail is what the reconstruction walks from when no other leaf applies. So on the next load that record IS the conversation: nothing supersedes it, nothing hangs below it, and the loader walks up from it. The corpus agrees with the shape - 0 of 910 shared-parent opener pairs have their earlier member on the chain, and a recalled-but-never-resent prompt forms no pair at all.",
+      "depends": "csift must NOT report such a record as unsent, and it does not: with no later same-parent opener there is no supersession, and the chain reaches it because it is the leaf. This is the honest bound on the unsent leaf - a recalled message that was abandoned rather than re-sent is indistinguishable from one still waiting to be answered, and csift says nothing about it either way.",
+      "code": [
+        {
+          "path": "src/model/chain/leaf.rs",
+          "lines": "99-104",
+          "snippet": "fn tail_index(b: &Builder<'_>) -> Option<usize> {\n    (0..b.len())\n        .rev()\n        .find(|&i| b.admit[i] && !b.removed[i] && b.is_survivor(i) && !b.is_sidechain(i))\n}\n"
+        },
+        {
+          "path": "src/model/grouping.rs",
+          "lines": "116-129",
+          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)\n}\n\n/// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index\n/// in `skip` is omitted entirely (`continue`) - neither a turn boundary nor a member - which\n/// is how superseded drafts are dropped. With an empty `skip` the behaviour is identical to"
+        }
+      ],
+      "instrument": "Take a transcript whose last conversation record is a user prompt with no reply and no later same-parent opener, and read csift's `leaf_source`, the record's `survival` and its leaf: `csift show @<id> --line <n> --format json`.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "corpus census plus the leaf rule"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "none",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The write side of an escape recall is untraced: the input box is restored in memory and the record is already on disk, so only a live capture would show what, if anything, is written at the recall itself."
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Read the leaf rule for a transcript whose tail is an unanswered user prompt, then read the survival and the leaf csift assigns that record.",
+          "observed": "The tail record is the leaf, its survival reads live, and it carries the ordinary message leaf - never the unsent one. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
+          "rule": "One observation per transcript whose last conversation record is an unanswered user prompt.",
+          "note": "The bound is stated so a consumer does not read the unsent population as \"every recalled message\"."
+        }
+      ]
+    },
+    {
+      "id": "CLS-030",
+      "area": "classification",
+      "behavior": "Whether the model still receives a record is decided by TWO independent harness mechanisms, not one. The request assembler runs a drop predicate over the record list, and the session loader runs the conversation chain over the file; a record can pass the first and fail the second, because the chain decides which records reach the list at all. A rewound turn is exactly that case: its records carry no flag the assembler reads, and they are gone because the walk no longer reaches them.",
+      "depends": "A bare ROLE selector claims to be the conversation, so it consults BOTH: leaf visibility, then the per-record delivery override, then survival. A glob, an intermediate prefix and an exact leaf path reach every record regardless, which is what makes `-t user.rewound` and `-t 'user.*'` the deliberate drill-downs. The three axes are applied at one seam each - `LabelFilter::with_delivery` and `LabelFilter::with_survival`, both specialised once per record before any label is tested - so the hit emission and the label census can never disagree.",
+      "code": [
+        {
+          "path": "src/cli/selectors.rs",
+          "lines": "154-156",
+          "snippet": "    pub fn with_survival(self, live: bool) -> Self {\n        Self { live, ..self }\n    }"
+        },
+        {
+          "path": "src/search/hits.rs",
+          "lines": "57-60",
+          "snippet": "        let filter = filter.with_survival(chain.survival(idx).selectable());\n        collect_record_hits(\n            rec,\n            chain.opener_class(idx),"
+        }
+      ],
+      "instrument": "On a transcript carrying a rewound turn, compare `csift search \"\" @<id> -t user` with `-t 'user.*'` and with `-t user.rewound`, and compare `--count-by label` under each: the bare role must omit the rewound records, the other two must include them, and the census keys must match what each selector surfaces.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.0",
+        "source": "the two harness mechanisms read together"
+      },
+      "first_seen_claude_code": "2.1.203",
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "producer_chain": [
+        {
+          "role": "trigger",
+          "name": "the session loader walk",
+          "offset": 166143634,
+          "excerpt": "function aEe(e,n,r){let o=[],d=new Set,f=n;while(f){",
+          "note": "The SECOND of the two mechanisms: the walk decides which records reach the array the assembler then filters, so a record can be dropped here without the assembler ever seeing it."
+        },
+        {
+          "role": "gate",
+          "name": "the request-assembler drop predicate",
+          "offset": 165953664,
+          "excerpt": "function LP(e){if(e.type===\"api_system\")return!1;",
+          "note": "The FIRST of the two mechanisms: the assembler walks the record list and drops by record shape. It never sees the chain, which is why a rewound record passes it and is still absent from the request."
+        },
+        {
+          "role": "writer",
+          "name": "the leaf collapse that selects one branch",
+          "offset": 166189231,
+          "excerpt": "if(!e&&(!Rn||nr)){let cr=",
+          "note": "the branch the walk starts from; re-anchor 2.1.259 @167028349"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Compare the three selector forms and their label censuses on a transcript carrying a rewound turn.",
+          "observed": "The bare role omits the rewound records and its census keys omit them too; the glob and the exact leaf reach them, marked. The delivery axis is unchanged beside it.",
+          "rule": "One comparison per selector form; census keys counted per record, not per section.",
+          "note": "Survival is the third exclusion a bare role applies, after leaf visibility and delivery."
+        }
+      ]
+    },
+    {
+      "id": "MISC-043",
+      "area": "misc",
+      "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The loader never reads the field - its walk follows `parentUuid`, which the boundary carries as null, so the reconstruction simply ends there - and nothing on the write path keeps the named record alive: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 75 uuid-named top-level transcripts under the projects root, one observation per boundary record: 245 `compact_boundary` records, of which 52 carry a `logicalParentUuid` matching no `uuid` on ANY line of their own file, spread over 14 files; on 13 of those files a walk that tries to cross such a boundary ends on it.",
+      "depends": "csift does NOT stop at a compaction cut: it steps over the boundary through `logicalParentUuid` and flags what it then reads `PreCut`, because an archive is asked what the model had read at the time. That step is csift's own, so its failure is csift's own too - and it is the reason the survival axis carries a FLOOR. When the named record is absent the walk ends on the boundary and every record physically above it sits in a region csift could not resolve, so it is `PreCut` and never `Abandoned`; the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the step landing. The step is still worth taking: over the 21 compacted transcripts in the same corpus, the share of a file's conversation records the walk reaches is a median 9.4% (mean 16.9%, 11 of 21 files under 10%) without the step and a median 46.5% (mean 54.6%, 2 of 21 under 10%) with it.",
+      "code": [
+        {
+          "path": "src/model/chain/walk.rs",
+          "lines": "73-81",
+          "snippet": "            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]\n                    .logical_parent_uuid\n                    .as_deref()\n                    .and_then(|u| b.resolve(u))\n                    .filter(|&j| !b.visited[j])\n            }"
+        },
+        {
+          "path": "src/model/chain/branches.rs",
+          "lines": "81-84",
+          "snippet": "    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }"
+        }
+      ],
+      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set. Counting rule: one observation per boundary record; a file counts once if it holds at least one dangling boundary. For the coverage split, run the walk twice per compacted file - once following `logicalParentUuid` at a boundary and once not - and report reached conversation records over conversation records in the file, a conversation record being a `user` or `assistant` line with a string uuid counted once at its last line.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 4 compaction shape, measured against the live corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "Which writer removed each named record is not pinned per specimen: the relink pass's pre-boundary deletion (2.1.258 @166142644) and the armed local GC (MISC-020) are both traced producers of pre-boundary removal, but nothing in a transcript says which one ran. Closing it needs a live trial that compacts a session with the GC armed and with it disarmed and re-runs the census on both files."
+      ],
+      "residue": [
+        "Whether a build ever wrote a boundary whose logical parent was absent at write time, rather than deleted afterwards, is a question for the historical builds: bisect on the relink function's literal."
+      ],
+      "producer_chain": [
+        {
+          "role": "gate",
+          "name": "the walk never reads logicalParentUuid - a null parentUuid ends it",
+          "offset": 166143866,
+          "excerpt": "let v=f.parentUuid;if(!v)break;",
+          "note": "The reason nothing keeps the named record alive: the reconstruction reads `parentUuid` only, and a boundary carries null there, so the field is written and never followed."
+        },
+        {
+          "role": "writer",
+          "name": "the pre-boundary deletion inside the relink pass",
+          "offset": 166142644,
+          "excerpt": "let B=[];for(let[U]of e){let j=d.get(U);if(j!==void 0&&j<o&&!F.has(U))",
+          "note": "Every entry positioned before the boundary and outside the preserved set is collected for removal, which is what leaves a boundary pointing at a record no line of the file carries any more."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.1",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Ran the dangling-boundary census and the two-walk coverage split described in the instrument over the projects root, then read the two hops at 2.1.258 @166143866 (the null-parent termination) and @166142644 (the pre-boundary deletion) byte for byte.",
+          "observed": "245 compact_boundary records over 75 top-level transcripts; 52 of them name a logicalParentUuid absent from every line of their own file, across 14 files; 13 files end their walk on such a boundary. Three of those files: 32 boundaries / 3 dangling / 15 crossings / 33.6% of conversation records reached; 11 / 3 / 0 crossings / 3.2%; 6 / 1 / 1 crossing / 23.0% where the same file reaches 9.4% with no step-over. Over the 21 compacted files, coverage without the step-over is a median 9.4% and with it a median 46.5%.",
+          "rule": "One observation per boundary record for the dangling count; a file counts once if it holds at least one. Coverage is reached conversation records over conversation records in the file, a conversation record being a user or assistant line with a string uuid counted once at its last line.",
+          "note": "This is the fact behind the survival axis floor: the unresolvable region is produced by csift's own forensic step over a cut, not by the record set csift reads."
+        }
+      ]
+    },
+    {
+      "id": "REC-104",
+      "area": "record-model",
+      "behavior": "The top-level key order of a record line puts the CHAIN envelope on both sides of the payload, not in front of it. Censused over every line of an admitted type (`user`, `assistant`, `attachment`, `system`) in 75 uuid-named top-level transcripts, one observation per line: 673,710 lines, and `parentUuid` is the FIRST top-level key on all 673,710 of them. On 662,470 of the same lines at least one key the conversation chain reads sits AFTER the first payload key (`message` / `attachment` / `content` / `toolUseResult` / `snapshot`): `uuid` on 662,470, `timestamp` on 662,470, `type` on 588,396 and `compactMetadata` on 245. So a record's own identity and instant are written after its content.",
+      "depends": "csift's spine walk (`parse::spine_record`) reads the structural fields of a line the \u00a77d prefilter drops, and this census is why it walks the WHOLE top-level object: an early stop once the wanted keys are in hand would fire on 11,240 lines of 673,710, and a walk that assumed the envelope came first would miss `uuid` and `timestamp` on 98.3% of them. It is also why the payload skip is the hot path and is written as a `memchr2` hop through string interiors rather than a byte loop. If a future build moves the envelope in front of the payload, the early stop becomes worth taking and this claim is where the measurement to re-run lives.",
+      "code": [
+        {
+          "path": "src/parse/spine.rs",
+          "lines": "93-98",
+          "snippet": "/// The depth-1 key walk itself. `type` is NOT an early exit for the OTHER keys: measured\n/// over a real corpus, `parentUuid` is the first key of every one of 673,710 lines of an\n/// admitted type while `uuid` and `timestamp` sit AFTER the payload key on 662,470 of them\n/// (claim REC-104) - so the walk has to reach the end of the object either way, and a\n/// \"stop once the wanted keys are in hand\" shortcut would stop on almost no line.\nfn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {"
+        }
+      ],
+      "instrument": "Walk each line of every uuid-named top-level transcript with a depth-1 JSON key scanner that records the byte offset of each TOP-LEVEL key. Keep the lines whose `type` is user, assistant, attachment or system. For each, take the smallest offset among the payload keys `message`, `attachment`, `content`, `toolUseResult` and `snapshot`, and count the line as an exception when any present key of the chain envelope - type, uuid, parentUuid, timestamp, isSidechain, subtype, compactMetadata, logicalParentUuid, leafUuid, explicit, rewound - has a greater offset. Counting rule: one observation per line; report the exception total and the per-key totals, plus the histogram of the first top-level key.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": null,
+        "source": "SPEC.md section 7 performance contract, measured against the live corpus"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "partial",
+      "specimen": "observed",
+      "attribution": "specimen-only",
+      "open_legs": [
+        "The key ORDER is a property of the object literal the entry builder returns, and the builder read here is the user-record factory (2.1.258 @165936023), which covers user records only. Closing the leg means reading the assistant, attachment and system record constructors and the append path that serialises them, and confirming no field is added to an existing object after construction."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "the user-record factory object literal",
+          "offset": 165936023,
+          "excerpt": "return{type:\"user\",message:{role:\"user\",content:e||up},isMet",
+          "note": "The order a record is serialised in is the order of the literal that builds it. This one puts `type` and `message` before the identity fields the caller adds, which is the shape the census reads back off disk."
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.1",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Ran the depth-1 top-level key-offset scanner over every uuid-named top-level transcript under the projects root with the counting rule above, then read the user-record factory literal at 2.1.258 @165936023.",
+          "observed": "673,710 lines of an admitted type. First top-level key: parentUuid on all 673,710. Lines where a chain-envelope key sits after the first payload key: 662,470 - by key, uuid 662,470, timestamp 662,470, type 588,396, compactMetadata 245. No line placed the whole envelope in front of the payload.",
+          "rule": "One observation per line whose type is user, assistant, attachment or system; a line counts as an exception once, however many of its envelope keys are late. Offsets are top-level only - a key of the same name nested inside the payload is not counted.",
+          "note": "The census was run to decide whether the spine walk could stop early; it refuted that, so the walk reads the whole object and the payload skip carries the optimisation instead."
         }
       ]
     }

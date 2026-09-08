@@ -57,7 +57,7 @@ pub(crate) fn search_one_file(
             exchanges: Vec::new(),
             skipped_lines: 0,
             turn_count: 0,
-            superseded_drafts: 0,
+            chain: ChainCounts::default(),
         });
     };
     let bytes: &[u8] = &mmap;
@@ -197,7 +197,7 @@ pub(crate) fn search_one_file(
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped,
                     turn_count: 0,
-                    superseded_drafts: 0,
+                    chain: ChainCounts::default(),
                 });
             }
             let (pending, pending_skipped) = crate::elicitation::unresolved_pending(path)?;
@@ -206,7 +206,7 @@ pub(crate) fn search_one_file(
                     exchanges: Vec::new(),
                     skipped_lines: gate_skipped + pending_skipped,
                     turn_count: 0,
-                    superseded_drafts: 0,
+                    chain: ChainCounts::default(),
                 });
             }
         }
@@ -231,6 +231,21 @@ pub(crate) fn search_one_file(
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
     let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
         if !line_is_transcript_candidate(line, &gates) {
+            // The SURVIVAL AXIS needs the DAG, and the DAG threads through the
+            // `attachment` / `system` lines this prefilter drops - a prompt submitted
+            // after a SessionStart hook is parented to that hook's attachment record. So
+            // the non-candidate arm lifts the five structural fields (never the payload)
+            // into a spine row. It is not a searchable record: `spine` keeps it out of
+            // every emission pass.
+            if let Some(rec) = crate::parse::spine_record(line) {
+                return crate::parse::LineVerdict::Keep(Kept {
+                    rec,
+                    can_hit: false,
+                    line_no,
+                    from_sidecar: false,
+                    spine: true,
+                });
+            }
             // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
             return crate::parse::non_candidate_verdict(line);
         }
@@ -241,6 +256,7 @@ pub(crate) fn search_one_file(
                 can_hit,
                 line_no,
                 from_sidecar: false,
+                spine: false,
             }),
             Ok(None) => crate::parse::LineVerdict::Ignore,
             Err(_) => crate::parse::LineVerdict::Skip,
@@ -257,6 +273,9 @@ pub(crate) fn search_one_file(
     // dropped here.
     if !gates.hook_context && !gates.attachments && address.is_none() {
         records.retain(|k| {
+            if k.spine {
+                return true;
+            }
             let gated_attachment = k.rec.hook_additional_context_text().is_some()
                 || k.rec.attachment_payload_text().is_some();
             !gated_attachment || k.rec.csift_channel_text().is_some()
@@ -279,6 +298,7 @@ pub(crate) fn search_one_file(
                 can_hit: true, // no physical line to prefilter - let the matcher decide.
                 line_no: 0,
                 from_sidecar: true,
+                spine: false,
             });
         }
     }
@@ -290,7 +310,7 @@ pub(crate) fn search_one_file(
         .unwrap_or(bytes.len())
         .min(4096);
     let head_is_fork = memchr::memmem::find(&bytes[..head_end], b"fork-context-ref").is_some();
-    let (mut exchanges, turn_count, superseded_drafts) = reconstruct_and_match(
+    let (mut exchanges, turn_count, chain_counts) = reconstruct_and_match(
         path,
         &records,
         args,
@@ -337,7 +357,7 @@ pub(crate) fn search_one_file(
         exchanges,
         skipped_lines: skipped,
         turn_count,
-        superseded_drafts,
+        chain: chain_counts,
     })
 }
 

@@ -35,6 +35,7 @@ pub(crate) fn is_record_text_class(c: Class) -> bool {
         c,
         Class::UserMessage
             | Class::UserUnsent
+            | Class::UserRewound
             | Class::CommInbox
             | Class::CommSignal
             | Class::CommChannel
@@ -89,7 +90,7 @@ pub(crate) fn record_text_emission(
             | Class::NotificationSubagent
             | Class::NotificationBackgroundCommand
             | Class::NotificationTask => rec.automation_label(),
-            Class::UserMessage | Class::UserUnsent | Class::CommInbox => {
+            Class::UserMessage | Class::UserUnsent | Class::UserRewound | Class::CommInbox => {
                 rec.reconstructed_user_text(Some(plan_index))
             }
             // A csift-channel delivery renders the envelope chunk VERBATIM (header line +

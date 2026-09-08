@@ -88,6 +88,14 @@ pub fn format_local_compact(raw: Option<&str>) -> String {
     render_local(raw, true)
 }
 
+/// The instant as milliseconds since the epoch - the arithmetic form the conversation
+/// chain's 5 s parent repair needs (a window, not a rendering). `None` when the string is
+/// absent or unparseable, which the repair reads as "no candidate".
+#[must_use]
+pub fn epoch_ms(raw: &str) -> Option<i64> {
+    Some(raw.parse::<jiff::Timestamp>().ok()?.as_millisecond())
+}
+
 /// System-local time as an ISO8601-with-offset string (for JSON `ts_local`), or
 /// `None` if the raw UTC is missing/unparseable.
 #[must_use]

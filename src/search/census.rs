@@ -63,7 +63,9 @@ pub(crate) fn label_census(
             // record's section hits - read it off the first. So is the delivery
             // override, which a bare ROLE selector keys on: without it a census would
             // report zero keys for a record the same filter had just surfaced.
-            let filter = filter.with_delivery(group[0].delivery);
+            let filter = filter
+                .with_delivery(group[0].delivery)
+                .with_survival(group[0].survival.selectable());
             for &leaf in &group[0].labels {
                 if filter.selected(leaf) {
                     *counts.entry(leaf).or_insert(0) += 1;
@@ -88,11 +90,14 @@ pub(crate) fn axis_census(
     exchanges: &[Exchange],
     axis: crate::cli::CountAxis,
     filter: LabelFilter<'_>,
-) -> (Vec<(String, usize)>, usize, usize) {
+) -> (Vec<(Option<String>, usize)>, usize, usize) {
     use crate::cli::CountAxis as A;
     let multi_transcript = distinct_session_count(exchanges) > 1;
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    let mut turn_counts: BTreeMap<(String, usize), usize> = BTreeMap::new();
+    // `None` is the ABANDONED bucket: a record the conversation chain no longer reaches
+    // belongs to no numbered turn, and BTreeMap orders `None` first, so the render puts it
+    // last deliberately rather than letting it read as turn zero.
+    let mut turn_counts: BTreeMap<(String, Option<usize>), usize> = BTreeMap::new();
     let mut records = 0usize;
     let mut excluded = 0usize;
     for ex in exchanges {
@@ -102,7 +107,9 @@ pub(crate) fn axis_census(
                 A::Label => {
                     // Keys pass the SAME `-t`/`-T` predicate that admitted the record's
                     // views (see [`label_census`] - R7 §2.3), delivery override included.
-                    let filter = filter.with_delivery(group[0].delivery);
+                    let filter = filter
+                        .with_delivery(group[0].delivery)
+                        .with_survival(group[0].survival.selectable());
                     for &leaf in &group[0].labels {
                         if filter.selected(leaf) {
                             *counts.entry(leaf.to_string()).or_insert(0) += 1;
@@ -149,23 +156,30 @@ pub(crate) fn axis_census(
             }
         }
     }
-    let rows: Vec<(String, usize)> = if matches!(axis, A::Turn) {
+    let rows: Vec<(Option<String>, usize)> = if matches!(axis, A::Turn) {
         // The turn axis reads as a HISTOGRAM: ascending (transcript, turn) order; the key
         // carries the transcript id only when >1 transcript is in scope (kept FULL - a
         // truncated id would not round-trip as an `@` target).
-        turn_counts
+        let mut v: Vec<(Option<String>, usize)> = turn_counts
             .into_iter()
             .map(|((sid, t), n)| {
-                let key = if multi_transcript {
-                    format!("{sid}\u{b7}t{t}")
-                } else {
-                    format!("t{t}")
-                };
+                let key = t.map(|t| {
+                    if multi_transcript {
+                        format!("{sid}\u{b7}t{t}")
+                    } else {
+                        format!("t{t}")
+                    }
+                });
                 (key, n)
             })
-            .collect()
+            .collect();
+        // The abandoned bucket sorts LAST: the histogram reads in turn order and the
+        // records outside it come after, never as a turn.
+        v.sort_by_key(|(k, _)| k.is_none());
+        v
     } else {
-        let mut v: Vec<(String, usize)> = counts.into_iter().collect();
+        let mut v: Vec<(Option<String>, usize)> =
+            counts.into_iter().map(|(k, n)| (Some(k), n)).collect();
         v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
         v
     };

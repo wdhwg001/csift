@@ -90,6 +90,12 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // a `harness.resume.prompt` record)? Null on every other hit - one writer produces
         // both forms, so the fact rides the hit instead of splitting the leaf.
         "resume_paired": h.resume_paired,
+        // C-31 SURVIVAL AXIS: is this record still in the conversation Claude Code's own
+        // chain rule reconstructs, which branch head it hangs off when it is not, and
+        // whether the line is an earlier copy of a record a later line carries.
+        "survival": h.survival.as_str(),
+        "abandoned_root_line": ex.abandoned_root_line,
+        "replay_copy_of": h.replay_copy_of,
         // The `csift show --line/--uuid` address: 1-based source line + the record uuid (when
         // present). A merged elicitation-sidecar hit has NO physical line, so `line` is null and
         // `source:"elicitation-sidecar"` marks the provenance (§3.10); a native hit omits `source`.
@@ -131,7 +137,7 @@ pub(crate) fn render_json(
             // re-feedable `parent_session_id` (= session_id for a top-level hit).
             "is_subagent": ex.is_subagent,
             "parent_session_id": ex.parent_session_id,
-            "turn_index": if ex.superseded_draft { serde_json::Value::Null } else { serde_json::json!(ex.turn_index) },
+            "turn_index": ex.turn_index,
             "superseded_draft": ex.superseded_draft,
             // Envelope-level chronological position = the turn-opening timestamp, the key
             // the combined timeline is sorted on. `ts_local` is the same instant in the
@@ -180,9 +186,14 @@ pub(crate) fn render_json(
         "transcript_ids_truncated": ids_truncated,
         "dropped_by_cap": outcome.dropped_by_cap,
         "skipped_lines": outcome.skipped_lines,
-        // C-18: superseded-draft openers the turn reconstruction collapsed (esc-edit
-        // resends) - real records outside turn numbering, fetchable by explicit address.
-        "superseded_drafts": outcome.superseded_drafts,
+        // C-18 + C-31: what the SURVIVAL AXIS took out of turn numbering. Real records,
+        // outside numbering, fetchable by explicit address.
+        "superseded_drafts": outcome.chain.drafts,
+        "abandoned_records": outcome.chain.abandoned_records,
+        "rewound_turns": outcome.chain.rewound_turns,
+        "replay_copies": outcome.chain.replay_copies,
+        "boundary_cut_line": outcome.chain.boundary_cut_line,
+        "leaf_source": outcome.chain.leaf_source,
         // True when ≥1 emitted record was merged from the elicitation sidecar (§3.10) - the
         // machine echo of the `with elicitation sidecar` text note.
         "with_elicitation_sidecar": merged_any_sidecar(&outcome.exchanges),
