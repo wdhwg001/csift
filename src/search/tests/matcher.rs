@@ -303,7 +303,7 @@ fn resolve_persisted_end_to_end_matches_deep_token() {
         &mut with_resolve,
     );
     assert_eq!(with_resolve.len(), 1, "deep token matches after resolution");
-    assert_eq!(with_resolve[0].class, Class::AgentToolResult);
+    assert_eq!(with_resolve[0].class, Some(Class::AgentToolResult));
 
     std::fs::remove_file(&p).ok();
 }

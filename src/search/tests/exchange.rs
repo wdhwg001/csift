@@ -78,7 +78,7 @@ fn label_not_excludes_and_composes_with_include() {
     assert!(
         ex0.iter()
             .flat_map(|e| &e.hits)
-            .any(|h| h.class == Class::AgentThinking),
+            .any(|h| h.class == Some(Class::AgentThinking)),
         "fixture premise: 'straddling' hits agent.thinking"
     );
     // -T agent.thinking (no -t): ALL minus thinking - the thinking hit is gone.
@@ -88,7 +88,7 @@ fn label_not_excludes_and_composes_with_include() {
     assert!(
         ex.iter()
             .flat_map(|e| &e.hits)
-            .all(|h| h.class != Class::AgentThinking),
+            .all(|h| h.class != Some(Class::AgentThinking)),
         "-T agent.thinking must drop thinking hits"
     );
     // -t agent -T agent.thinking: the agent role minus its thinking leaf.
@@ -98,9 +98,10 @@ fn label_not_excludes_and_composes_with_include() {
     let exb = search(&fixture(), &b);
     for h in exb.iter().flat_map(|e| &e.hits) {
         assert!(
-            h.class.path().starts_with("agent") && h.class != Class::AgentThinking,
-            "surviving hits stay within -t minus -T; got {}",
-            h.class.path()
+            h.class.is_some_and(|c| c.path().starts_with("agent"))
+                && h.class != Some(Class::AgentThinking),
+            "surviving hits stay within -t minus -T; got {:?}",
+            h.class.map(Class::path)
         );
     }
 }
@@ -118,7 +119,7 @@ fn label_not_renders_the_richest_surviving_view() {
     let ex = search(&lines, &plain);
     assert_eq!(
         ex.iter().flat_map(|e| &e.hits).next().map(|h| h.class),
-        Some(Class::CommSent),
+        Some(Some(Class::CommSent)),
         "the unfiltered view is the richer comm label"
     );
     let mut b = args("zzpayload");
@@ -126,7 +127,7 @@ fn label_not_renders_the_richest_surviving_view() {
     let exb = search(&lines, &b);
     assert_eq!(
         exb.iter().flat_map(|e| &e.hits).next().map(|h| h.class),
-        Some(Class::AgentToolUse),
+        Some(Some(Class::AgentToolUse)),
         "with the comm branch excluded the record renders as the surviving tool.use"
     );
 }
@@ -154,7 +155,7 @@ fn exchange_returns_full_round_trip() {
     assert_eq!(ex.len(), 1);
     assert_eq!(ex[0].turn_index, 0);
     assert_eq!(ex[0].hits.len(), 1);
-    assert_eq!(ex[0].hits[0].class, Class::AgentThinking);
+    assert_eq!(ex[0].hits[0].class, Some(Class::AgentThinking));
     // Full turn membership (the carry's complete round-trip).
     let uuids = &ex[0].record_uuids;
     for expected in ["u0", "a0t", "a0u", "c0", "a0f"] {
@@ -177,7 +178,10 @@ fn category_filter_restricts_hits() {
     // "carry" appears in turn 0's thinking AND agent text; with -t agent only
     // the agent hit is emitted (one exchange, one agent hit).
     assert_eq!(ex.len(), 1);
-    assert!(ex[0].hits.iter().all(|h| h.class == Class::AgentMessage));
+    assert!(ex[0]
+        .hits
+        .iter()
+        .all(|h| h.class == Some(Class::AgentMessage)));
 }
 
 #[test]

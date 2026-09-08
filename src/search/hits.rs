@@ -56,6 +56,18 @@ pub(crate) fn collect_turn_hits(
             &env.ctx_for(kept),
             &mut hits,
         );
+        // The REFETCH LAW (`show --line`/`--uuid`): an explicit address renders the record it
+        // names. `classify` models no leaf for a few real message shapes - an `isMeta`
+        // pseudo-turn matching no harness marker (the M2b rule: emit nothing rather than
+        // mislabel it `user.message`), a block record whose text is empty - and such a record
+        // produced no unit at all, so the address became a "no such record(s)" bail on a line
+        // that is plainly there. Emit ONE unlabeled unit instead. Only an ADDRESS reaches
+        // this: a scan still sees nothing, so no census, count or `-t` result moves.
+        if address.is_some() && hits.len() == before {
+            if let Some(hit) = unlabeled_hit(rec, matcher, excerpt_max) {
+                hits.push(hit);
+            }
+        }
         // Backfill the source record's address onto every hit this record produced.
         backfill_address(&mut hits[before..], kept);
         if hits.len() > before {
@@ -63,6 +75,41 @@ pub(crate) fn collect_turn_hits(
         }
     }
     (hits, hit_idxs)
+}
+
+/// The ONE unit an ADDRESSED record with no modeled leaf renders (see the refetch-law note in
+/// [`collect_turn_hits`]): the record's own raw text under an EMPTY label ([`Hit::class`] is
+/// `None`), so a reader sees the bytes csift has rather than a bail. `None` when the record
+/// carries no text anywhere - there is nothing to render and the address stays a miss, which is
+/// the honest answer for a session-state cache line. The address/line/uuid are backfilled by the
+/// caller like any other hit.
+pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize) -> Option<Hit> {
+    let text = record_raw_text(rec)?;
+    let span = matcher.locate(&text)?;
+    let (excerpt, truncated) = match_excerpt(&text, span, excerpt_max);
+    Some(Hit {
+        class: None,
+        labels: Vec::new(),
+        excerpt,
+        timestamp_utc: rec.timestamp.clone(),
+        tool_name: None,
+        model: None,
+        attachment_type: rec.attachment_type(),
+        version: rec.version.clone(),
+        is_error: None,
+        direction: None,
+        tool_use_id: None,
+        pair: None,
+        line: 0,
+        uuid: None,
+        raw: None,
+        image_ids: Vec::new(),
+        from_sidecar: false,
+        queue_operation: None,
+        queue_reason: None,
+        delivery: rec.delivery_override(),
+        truncated,
+    })
 }
 
 /// Stamp the source record's line number + uuid onto each hit just appended for it - the
@@ -126,10 +173,12 @@ pub(crate) fn collect_turn_siblings(
     // the caller renders an explicit `(+N more · csift show …)` pointer.
     let mut kept_per_leaf: HashMap<&'static str, usize> = HashMap::new();
     let mut hidden = 0usize;
-    sibs.retain(|hit| match sibling_cap(hit.class) {
+    sibs.retain(|hit| match hit.class.and_then(sibling_cap) {
         None => true,
         Some(cap) => {
-            let n = kept_per_leaf.entry(hit.class.path()).or_insert(0);
+            let n = kept_per_leaf
+                .entry(hit.class.map_or("", Class::path))
+                .or_insert(0);
             if *n < cap {
                 *n += 1;
                 true
@@ -228,7 +277,7 @@ pub(crate) fn collect_record_hits(
         if let Some(span) = matcher.locate(text) {
             let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
             hits.push(Hit {
-                class,
+                class: Some(class),
                 labels: label_paths.clone(),
                 excerpt,
                 timestamp_utc: ts.clone(),

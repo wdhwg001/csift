@@ -496,14 +496,14 @@ pub(crate) fn set_pairing(h: &mut Hit, use_ids: &HashSet<String>, result_ids: &H
         return;
     };
     h.pair = match h.class {
-        Class::AgentToolUse | Class::CommSent | Class::CommSignal => {
+        Some(Class::AgentToolUse | Class::CommSent | Class::CommSignal) => {
             Some(if result_ids.contains(id) {
                 Pairing::Paired
             } else {
                 Pairing::PendingNoResult
             })
         }
-        Class::AgentToolResult | Class::CommInbox => Some(if use_ids.contains(id) {
+        Some(Class::AgentToolResult | Class::CommInbox) => Some(if use_ids.contains(id) {
             Pairing::Paired
         } else {
             Pairing::OrphanResult

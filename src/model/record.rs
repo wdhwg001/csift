@@ -103,6 +103,15 @@ pub struct Record {
     #[serde(default, rename = "isApiErrorMessage")]
     pub is_api_error_message: Option<bool>,
 
+    /// Provenance of a message Claude Code did not receive from the operator's own prompt box
+    /// (C-30). An inbound cross-session PEER message carries `{kind:"peer", from,
+    /// verifiedPeerPid, msg_id?, name?, fromMode?, body?, …}`; other kinds (`human`,
+    /// `task-notification`, …) ride the same field. Kept as a raw `Value` (a tiny flat object)
+    /// and read tolerantly through [`Record::peer_origin`], so an added key or an odd shape can
+    /// never fail the record. Absent on every record the operator typed.
+    #[serde(default)]
+    pub origin: Option<serde_json::Value>,
+
     /// `system` record subtype: stop_hook_summary | turn_duration | away_summary
     /// | compact_boundary | informational | api_error | model_refusal_* | agents_killed
     /// | local_command | scheduled_task_fire | …

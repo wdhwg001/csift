@@ -554,3 +554,4 @@ fn show_uuid_fetches_the_addressed_records_and_nothing_else() {
 
 mod branching;
 mod drafts;
+mod fetch_domain;

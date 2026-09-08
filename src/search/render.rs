@@ -4,22 +4,30 @@ use super::*;
 
 /// Glyph for the ROLE a hit sits on (GOLD §6): `◂` user, `▸` agent, `⚙` harness machinery.
 /// (`⚙`/gear is the chosen distinct harness marker - visually separate from the two
-/// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.)
-pub(crate) fn role_glyph(class: Class) -> char {
-    match class.role() {
-        crate::model::Role::User => '◂',
-        crate::model::Role::Agent => '▸',
-        crate::model::Role::Harness => '⚙',
+/// conversational sides without colliding with the `⇨`/`▹` comm/pairing markers.) An
+/// UNLABELED unit (an addressed record with no modeled leaf - see [`Hit::class`]) has no
+/// role to read, so it takes `?` rather than borrowing one of the three.
+pub(crate) fn role_glyph(class: Option<Class>) -> char {
+    match class.map(Class::role) {
+        Some(crate::model::Role::User) => '◂',
+        Some(crate::model::Role::Agent) => '▸',
+        Some(crate::model::Role::Harness) => '⚙',
+        None => '?',
     }
 }
 
 /// The rendered label for a hit: the dotted [`Class::path`], DECORATED with the GOLD §4/§7
 /// markers - a `▹` for a paired/pending/orphan tool hit, an `<from> ⇨ <to>` for a comm hit.
 pub(crate) fn render_label(h: &Hit) -> String {
+    // An ADDRESSED record csift models no leaf for (the refetch law, `Hit::class`): say so
+    // instead of borrowing a neighbouring leaf's name.
+    let Some(class) = h.class else {
+        return "(no label)".to_string();
+    };
     // Tool pairing (▹) takes the dedicated two-sided form (GOLD §7).
     // C-13: a RESULT-side hit whose tool_result carried `is_error` says so in-band -
     // pairing answers "did a result come back"; the decoration answers "was it good".
-    let err = if h.class == Class::AgentToolResult && h.is_error == Some(true) {
+    let err = if class == Class::AgentToolResult && h.is_error == Some(true) {
         " [error]"
     } else {
         ""
@@ -33,7 +41,7 @@ pub(crate) fn render_label(h: &Hit) -> String {
     } else {
         ""
     };
-    match (h.class, h.pair) {
+    match (class, h.pair) {
         (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {
             return format!("agent.tool.use ▹ agent.tool.result{err}{nd}");
         }
@@ -46,27 +54,27 @@ pub(crate) fn render_label(h: &Hit) -> String {
         _ => {}
     }
     if !err.is_empty() {
-        return format!("{}{err}{nd}", h.class.path());
+        return format!("{}{err}{nd}", class.path());
     }
     // A narration record is an API summary, never the model's reasoning - the marker
     // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.
-    if h.class == Class::AgentThinkingNarration {
-        return format!("{} [narration summary]{nd}", h.class.path());
+    if class == Class::AgentThinkingNarration {
+        return format!("{} [narration summary]{nd}", class.path());
     }
     // v0.10.0: a queued line names its queue event (and a remove's reason) in the label
     // zone - display-only; the matchable text stays the verbatim queued content.
-    if h.class == Class::UserQueued {
+    if class == Class::UserQueued {
         let op = h.queue_operation.as_deref().unwrap_or("queued");
         return match h.queue_reason.as_deref() {
-            Some(reason) => format!("{} [{op} · {reason}]{nd}", h.class.path()),
-            None => format!("{} [{op}]{nd}", h.class.path()),
+            Some(reason) => format!("{} [{op} · {reason}]{nd}", class.path()),
+            None => format!("{} [{op}]{nd}", class.path()),
         };
     }
     // Comm direction (⇨): append `from ⇨ to` to the label path (GOLD §4).
     if let Some((from, to)) = &h.direction {
-        return format!("{}{nd}  {from} ⇨ {to}", h.class.path());
+        return format!("{}{nd}  {from} ⇨ {to}", class.path());
     }
-    format!("{}{nd}", h.class.path())
+    format!("{}{nd}", class.path())
 }
 
 /// Singular/plural word pick for a count (the banner + footer share one rule).

@@ -11,13 +11,15 @@ fn class_path_and_role_glyph_cover_every_leaf() {
     // category_label/glyph table.
     for &c in Class::ALL {
         assert!(!c.path().is_empty());
-        let g = role_glyph(c);
+        let g = role_glyph(Some(c));
         assert!(matches!(g, '◂' | '▸' | '⚙'), "{} -> {g}", c.path());
     }
-    assert_eq!(role_glyph(Class::UserMessage), '◂');
-    assert_eq!(role_glyph(Class::AgentMessage), '▸');
-    assert_eq!(role_glyph(Class::CommInbox), '▸'); // comm is agent-side
-    assert_eq!(role_glyph(Class::NotificationWorkflow), '⚙');
+    assert_eq!(role_glyph(Some(Class::UserMessage)), '◂');
+    assert_eq!(role_glyph(Some(Class::AgentMessage)), '▸');
+    assert_eq!(role_glyph(Some(Class::CommInbox)), '▸'); // comm is agent-side
+    assert_eq!(role_glyph(Some(Class::NotificationWorkflow)), '⚙');
+    // An addressed record with no modeled leaf takes its own marker (the refetch law).
+    assert_eq!(role_glyph(None), '?');
 }
 
 #[test]
@@ -25,7 +27,7 @@ fn render_label_decorates_pairing_and_direction() {
     // ▹ pairing: a paired tool.use renders the two-sided form; a pending use / orphan result
     // render their notes. ⇨ direction: a comm hit appends `from ⇨ to`.
     let paired = Hit {
-        class: Class::AgentToolUse,
+        class: Some(Class::AgentToolUse),
         labels: vec!["agent.tool.use"],
         excerpt: String::new(),
         timestamp_utc: None,
@@ -57,7 +59,7 @@ fn render_label_decorates_pairing_and_direction() {
         "agent.tool.use (no result — pending)"
     );
     let orphan = Hit {
-        class: Class::AgentToolResult,
+        class: Some(Class::AgentToolResult),
         pair: Some(Pairing::OrphanResult),
         ..paired.clone()
     };
@@ -66,7 +68,7 @@ fn render_label_decorates_pairing_and_direction() {
         "agent.tool.result (use not in scope)"
     );
     let comm = Hit {
-        class: Class::CommInbox,
+        class: Some(Class::CommInbox),
         direction: Some(("VSMultiRegion".into(), "self".into())),
         tool_use_id: None,
         pair: None,
@@ -212,10 +214,10 @@ fn a_channel_delivery_renders_verbatim_as_a_message() {
     );
     // A delivery renders as a message: the agent glyph, the comm direction, and no
     // sibling cap (harness leaves are capped at 2 per turn; a message never is).
-    assert_eq!(role_glyph(Class::CommChannel), '▸');
+    assert_eq!(role_glyph(Some(Class::CommChannel)), '▸');
     assert_eq!(sibling_cap(Class::CommChannel), None);
     let hit = Hit {
-        class: Class::CommChannel,
+        class: Some(Class::CommChannel),
         labels: vec!["agent.communication.channel", "harness.meta.hook"],
         excerpt: String::new(),
         timestamp_utc: None,

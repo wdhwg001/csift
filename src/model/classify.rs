@@ -11,8 +11,8 @@ impl Record {
         self.is_type("system") && self.subtype.as_deref() == Some("compact_boundary")
     }
 
-    /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2) - a
-    /// `<teammate-message>` OR `<agent-message>` at a section boundary. The predicate
+    /// True when this record is ANY inbound PEER message (GOLD §1 + FINDING-2 + C-30) - a
+    /// `<teammate-message>`, `<agent-message>` OR `<cross-session-message>` at a section boundary. The predicate
     /// [`Record::is_genuine_user`] EXCLUDES and [`Record::opens_turn`] INCLUDES (a peer message is
     /// not the operator, but it still delimits a turn). Reads the raw (un-normalized) message text so
     /// the relay preamble's `\n` survives; gated to `type:"user"` (the only place a peer message
@@ -388,42 +388,6 @@ impl Record {
         self.classify_user_string(ctx, &joined, out);
     }
 
-    /// The FROM id of the FIRST inbound peer section (a `<teammate-message>` or `<agent-message>`)
-    /// in this `type:"user"` record - the comm FROM for [`Record::direction`] (GOLD §4 + P1c M1).
-    /// `None` when this is not a peer record; a section with no sender attribute degrades to the
-    /// literal `"peer"`. Reads the raw (un-normalized) text so the relay preamble's `\n` survives.
-    pub(crate) fn first_peer_from(&self) -> Option<String> {
-        if !self.is_type("user") {
-            return None;
-        }
-        let text = self.raw_message_text()?;
-        let first = parse_all_peer_sections(&text).into_iter().next()?;
-        Some(first.from.unwrap_or_else(|| "peer".to_string()))
-    }
-
-    /// The CLEAN inbound-comm preview of this record when it is (or leads with) an inbound peer
-    /// message - a `<teammate-message …>` or `<agent-message from="…">` (GOLD §1/§5). Returns the
-    /// FIRST inbound peer section's class + sender + tag/footer-stripped body, so `turns` / `list`
-    /// render `agent.communication.inbox  <from> ⇨ self  <body>` instead of the raw `<teammate-message
-    /// …>` XML blob a peer opener used to show. `None` for a non-peer record. RENDER-ONLY (does not
-    /// affect [`Record::classify`] / [`Record::opens_turn`]). Pure + tolerant + codepoint-safe
-    /// (delegates to the ASCII-offset peer-section scan).
-    #[must_use]
-    pub fn inbound_comm_preview(&self) -> Option<InboundComm> {
-        let text = self.raw_message_text()?;
-        let first = parse_all_peer_sections(&text).into_iter().next()?;
-        let class = if first.is_signal {
-            Class::CommSignal
-        } else {
-            Class::CommInbox
-        };
-        Some(InboundComm {
-            class,
-            from: first.from.unwrap_or_else(|| "peer".to_string()),
-            body: normalize_line(peer_section_body(&first.text)),
-        })
-    }
-
     /// The per-section record-level text emissions of a BATCHED `type:"user"` record (≥1
     /// `<task-notification>` and/or inbound peer `<teammate-message>` / `<agent-message>` section)
     /// -- GOLD §3 G4/G5 per-section render. One [`RecordTextSection`] per section's label, MIRRORING
@@ -478,22 +442,23 @@ impl Record {
             },
         );
         // (b) inbound peer sections OUTSIDE every notification span (precedence + cross-family).
-        for peer in parse_all_peer_sections(&raw) {
+        let peers = parse_all_peer_sections(&raw);
+        let single = peers.len() == 1;
+        for peer in &peers {
             if notif_spans
                 .iter()
                 .any(|&(s, e)| peer.offset >= s && peer.offset < e)
             {
                 continue;
             }
-            let from = peer.from.clone().unwrap_or_else(|| "peer".to_string());
             out.push(RecordTextSection {
                 class: if peer.is_signal {
                     Class::CommSignal
                 } else {
                     Class::CommInbox
                 },
-                text: normalize_line(&peer.text),
-                direction: Some((from, owner())),
+                text: peer_render_body(self, peer, single),
+                direction: Some((peer_sender(self, peer, single), owner())),
             });
         }
         out

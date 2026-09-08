@@ -147,7 +147,7 @@ pub(crate) fn render_json(
                 // A merged elicitation-sidecar record has no physical line (null).
                 "line": if h.from_sidecar { serde_json::Value::Null } else { json!(h.line) },
                 "uuid": h.uuid,
-                "label": h.class.path(),
+                "label": h.class.map(crate::model::Class::path),
                 "labels": h.labels,
                 "tool_name": h.tool_name,
                 "from": from,

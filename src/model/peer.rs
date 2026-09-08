@@ -66,12 +66,25 @@ pub fn is_agent_message(content: &str) -> bool {
     has_boundary_section(content, AGENT_MESSAGE_OPEN)
 }
 
-/// True when `content` is ANY inbound peer message - a `<teammate-message>` OR an `<agent-message>`
-/// at a section boundary (GOLD §1 + P1c M1 + FINDING-2). Both are PEER-agent messages, never the
-/// operator: excluded from [`Record::is_genuine_user`] yet still turn-opening ([`Record::opens_turn`]).
+/// True when `content` is an inbound `<cross-session-message …>` peer message (C-30) at a section
+/// BOUNDARY - the THIRD peer framing, the one a session-to-session send lands in. Boundary-anchored
+/// like the other two, and for the same reason: this repo's own docs quote the literal tag, so a
+/// `contains` check would reclassify genuine prose as an inbound message. Claude Code's own reader
+/// anchors the same way (its detector tests the tag at content start, or right after one of the
+/// relay preambles).
+#[allow(dead_code)]
+#[must_use]
+pub fn is_cross_session_message(content: &str) -> bool {
+    has_boundary_section(content, CROSS_SESSION_MESSAGE_OPEN)
+}
+
+/// True when `content` is ANY inbound peer message - a `<teammate-message>`, an `<agent-message>`
+/// OR a `<cross-session-message>` at a section boundary (GOLD §1 + P1c M1 + FINDING-2 + C-30). All
+/// three are PEER-agent messages, never the operator: excluded from [`Record::is_genuine_user`] yet
+/// still turn-opening ([`Record::opens_turn`]).
 #[must_use]
 pub fn is_peer_message(content: &str) -> bool {
-    is_teammate_message(content) || is_agent_message(content)
+    is_teammate_message(content) || is_agent_message(content) || is_cross_session_message(content)
 }
 
 /// Parse an inbound teammate/peer message (GOLD §5) into its `teammate_id` + optional signal
@@ -124,6 +137,7 @@ pub(crate) fn is_section_boundary(prefix: &str) -> bool {
         || t.ends_with(TASK_NOTIFICATION_CLOSE)
         || t.ends_with(TEAMMATE_MESSAGE_CLOSE)
         || t.ends_with(AGENT_MESSAGE_CLOSE)
+        || t.ends_with(CROSS_SESSION_MESSAGE_CLOSE)
 }
 
 /// Invoke `emit(offset, section)` for each BOUNDARY-anchored `<open …>…</close>` section in
@@ -153,6 +167,14 @@ pub(crate) fn scan_tag_sections<F: FnMut(usize, &str)>(
         emit(start, &after[..end_rel]);
         idx = start + end_rel;
     }
+}
+
+/// The SENDER of a `<cross-session-message …>` section (C-30): the `from-name` attribute (the
+/// sender session's display name) when it is present, else the `from` attribute (its transport
+/// address). Preferring the name keeps the rendered direction readable - `from` is a socket or
+/// bridge address, `from-name` is what a human named the session.
+pub(crate) fn cross_session_sender(section: &str) -> Option<String> {
+    extract_xml_attr(section, "from-name").or_else(|| extract_xml_attr(section, "from"))
 }
 
 /// One inbound peer-message section located in a `type:"user"` record's text (GOLD §5 + P1c M1):
@@ -202,6 +224,19 @@ pub(crate) fn parse_all_peer_sections(content: &str) -> Vec<PeerSection> {
             });
         },
     );
+    scan_tag_sections(
+        content,
+        CROSS_SESSION_MESSAGE_OPEN,
+        CROSS_SESSION_MESSAGE_CLOSE,
+        |offset, section| {
+            out.push(PeerSection {
+                from: cross_session_sender(section),
+                is_signal: false,
+                offset,
+                text: section.to_string(),
+            });
+        },
+    );
     out.sort_by_key(|p| p.offset);
     out
 }
@@ -216,10 +251,100 @@ pub(crate) fn peer_section_body(section: &str) -> &str {
         Some(i) => &section[i + 1..],
         None => section,
     };
-    body.strip_suffix("</teammate-message>")
-        .or_else(|| body.strip_suffix("</agent-message>"))
+    body.strip_suffix(TEAMMATE_MESSAGE_CLOSE)
+        .or_else(|| body.strip_suffix(AGENT_MESSAGE_CLOSE))
+        .or_else(|| body.strip_suffix(CROSS_SESSION_MESSAGE_CLOSE))
         .unwrap_or(body)
         .trim()
+}
+
+impl Record {
+    /// The top-level `origin` object of an inbound PEER record (C-30), when it carries one:
+    /// Claude Code stamps `{kind:"peer", from, verifiedPeerPid, msg_id?, name?, fromMode?,
+    /// body?, …}` on every user record it mints for a session-to-session message. `None` for a
+    /// record with no `origin`, a non-object one, or one of another `kind`. Tolerant: the field
+    /// is an open map, so a new key can never fail the read.
+    pub(crate) fn peer_origin(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        let obj = self.origin.as_ref()?.as_object()?;
+        let peer = obj.get("kind").and_then(serde_json::Value::as_str) == Some("peer");
+        peer.then_some(obj)
+    }
+
+    /// A string field of this record's peer `origin`, trimmed and non-empty, or `None`.
+    fn peer_origin_str(&self, key: &str) -> Option<String> {
+        let v = self.peer_origin()?.get(key)?.as_str()?.trim();
+        (!v.is_empty()).then(|| v.to_string())
+    }
+
+    /// The FROM id of the FIRST inbound peer section (a `<teammate-message>`, `<agent-message>` or
+    /// `<cross-session-message>`) in this `type:"user"` record - the comm FROM for
+    /// [`Record::direction`] (GOLD §4 + P1c M1 + C-30). `None` when this is not a peer record;
+    /// resolution and its fallbacks live in [`peer_sender`]. Reads the raw (un-normalized) text so
+    /// the relay preamble's `\n` survives.
+    pub(crate) fn first_peer_from(&self) -> Option<String> {
+        if !self.is_type("user") {
+            return None;
+        }
+        let text = self.raw_message_text()?;
+        let secs = parse_all_peer_sections(&text);
+        let first = secs.first()?;
+        Some(peer_sender(self, first, secs.len() == 1))
+    }
+
+    /// The CLEAN inbound-comm preview of this record when it is (or leads with) an inbound peer
+    /// message - a `<teammate-message …>`, `<agent-message from="…">` or
+    /// `<cross-session-message from="…">` (GOLD §1/§5 + C-30). Returns the FIRST inbound peer
+    /// section's class + sender + tag/footer-stripped body, so `turns` / `list` render
+    /// `agent.communication.inbox  <from> ⇨ self  <body>` instead of the raw XML blob a peer opener
+    /// used to show. `None` for a non-peer record. RENDER-ONLY (does not affect
+    /// [`Record::classify`] / [`Record::opens_turn`]). Pure + tolerant + codepoint-safe (delegates
+    /// to the ASCII-offset peer-section scan).
+    #[must_use]
+    pub fn inbound_comm_preview(&self) -> Option<InboundComm> {
+        let text = self.raw_message_text()?;
+        let secs = parse_all_peer_sections(&text);
+        let first = secs.first()?;
+        let class = if first.is_signal {
+            Class::CommSignal
+        } else {
+            Class::CommInbox
+        };
+        Some(InboundComm {
+            class,
+            from: peer_sender(self, first, secs.len() == 1),
+            body: peer_render_body(self, first, secs.len() == 1),
+        })
+    }
+}
+
+/// The rendered SENDER of one inbound peer section (the comm FROM). `origin.name` wins when the
+/// record carries a peer `origin` AND this is its ONLY peer section - Claude Code derives that
+/// name from the very `from-name` attribute the section carries, so the two agree, and the
+/// structured field survives a body a tag scan cannot bound. A BATCHED record (several sections)
+/// has one `origin` describing one of them, so every section falls back to its own attribute; a
+/// section with no sender attribute degrades to the literal `peer`.
+pub(crate) fn peer_sender(rec: &Record, section: &PeerSection, single: bool) -> String {
+    if single {
+        if let Some(name) = rec.peer_origin_str("name") {
+            return name;
+        }
+    }
+    section.from.clone().unwrap_or_else(|| "peer".to_string())
+}
+
+/// The rendered BODY of one inbound peer section - the peer's own words with the wrapper tags,
+/// the relay preamble and the trailing security footer stripped. `origin.body` wins under the
+/// same single-section rule as [`peer_sender`] (Claude Code fills it from the section's own body,
+/// so it is the same text read from a structured field instead of a tag scan). Both forms are
+/// VERBATIM substrings of the source line, so the §7d/§7f prefilter laws hold with no
+/// synthesized-marker registration.
+pub(crate) fn peer_render_body(rec: &Record, section: &PeerSection, single: bool) -> String {
+    if single {
+        if let Some(body) = rec.peer_origin_str("body") {
+            return normalize_line(&body);
+        }
+    }
+    normalize_line(peer_section_body(&section.text))
 }
 
 /// Extract a `name="value"` attribute's value from the start of an XML-ish tag, trimmed

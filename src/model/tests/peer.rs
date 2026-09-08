@@ -252,3 +252,153 @@ fn agent_message_non_meta_excluded_opens_turn_inbox() {
         vec![Class::CommInbox]
     );
 }
+
+// ── C-30: the `<cross-session-message>` peer framing ──
+
+/// The full on-disk shape of one inbound cross-session message: the relay preamble, the tag with
+/// its attributes, the body, the close tag and the security footer, plus the `origin` object and
+/// the `isMeta`/`promptSource`/`userType` stamps Claude Code writes beside them.
+fn cross_session_record() -> Record {
+    parse(
+        r#"{"type":"user","uuid":"00000000-0000-4000-8000-000000000030","timestamp":"2026-06-07T05:00:00.000Z","isMeta":true,"promptSource":"system","userType":"external","queueSkipAttachments":true,"origin":{"kind":"peer","from":"uds:/Users/dev/relay.sock","verifiedPeerPid":4242,"msg_id":"00000000-0000-4000-8000-0000000000a1","name":"relay-7","fromMode":"bypass","body":"the shared resolver landed"},"message":{"role":"user","content":"Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\" from-name=\"relay-7\" from-mode=\"bypass\">\nthe shared resolver landed\n</cross-session-message>\n\nThis came from another Claude session."}}"#,
+    )
+}
+
+#[test]
+fn cross_session_message_is_the_third_peer_framing() {
+    // C-30: the framing a session-to-session send lands in. It is `type:user`/`role:user`/string
+    // and matches no synthetic marker, so before it was folded into `is_peer_message` the isMeta
+    // gate dropped it and the record carried NO label at all - invisible to every search.
+    let r = cross_session_record();
+    assert!(is_cross_session_message(
+        "Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\">hi</cross-session-message>"
+    ));
+    assert!(is_peer_message(
+        "<cross-session-message from=\"uds:/Users/dev/relay.sock\">hi</cross-session-message>"
+    ));
+    assert!(!r.is_genuine_user(), "a peer is never the operator");
+    assert!(r.opens_turn(), "but a delivered message still opens a turn");
+    assert!(r.is_peer_message_record());
+    assert_eq!(
+        r.classify(&ClassifyCtx::top_level()),
+        vec![Class::CommInbox]
+    );
+}
+
+#[test]
+fn cross_session_tag_quoted_mid_prose_stays_user_message() {
+    // FINDING-1 for the third framing: this repo's own docs quote the literal tag, so a
+    // `contains` check would reclassify the operator's prose as an inbound peer message.
+    let r = parse(
+        r#"{"type":"user","message":{"role":"user","content":"csift now classifies the <cross-session-message from=\"...\"> framing alongside the other two."}}"#,
+    );
+    assert!(!r.is_peer_message_record());
+    assert!(r.is_genuine_user());
+    assert_eq!(
+        r.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
+    );
+}
+
+#[test]
+fn cross_session_attributes_pick_the_name_over_the_address() {
+    // The open tag carries `from` (a transport address), `from-name` (the sender session's
+    // display name) and `from-mode`. The direction renders the NAME - `from` is a socket path.
+    let section = r#"<cross-session-message from="uds:/Users/dev/relay.sock" from-name="relay-7" from-mode="bypass">body</cross-session-message>"#;
+    assert_eq!(
+        extract_xml_attr(section, "from").as_deref(),
+        Some("uds:/Users/dev/relay.sock")
+    );
+    assert_eq!(
+        extract_xml_attr(section, "from-name").as_deref(),
+        Some("relay-7")
+    );
+    assert_eq!(
+        extract_xml_attr(section, "from-mode").as_deref(),
+        Some("bypass")
+    );
+    assert_eq!(cross_session_sender(section).as_deref(), Some("relay-7"));
+    // With no `from-name` the address is the honest fallback, never a fabricated name.
+    let bare =
+        r#"<cross-session-message from="uds:/Users/dev/relay.sock">body</cross-session-message>"#;
+    assert_eq!(
+        cross_session_sender(bare).as_deref(),
+        Some("uds:/Users/dev/relay.sock")
+    );
+}
+
+#[test]
+fn cross_session_direction_and_body_render_without_the_xml() {
+    let r = cross_session_record();
+    let ctx = ClassifyCtx::top_level();
+    assert_eq!(
+        r.direction(&ctx),
+        Some(("relay-7".to_string(), "self".to_string()))
+    );
+    let preview = r.inbound_comm_preview().expect("inbound preview");
+    assert_eq!(preview.class, Class::CommInbox);
+    assert_eq!(preview.from, "relay-7");
+    assert_eq!(preview.body, "the shared resolver landed");
+    let sections = r.record_text_sections(&ctx);
+    assert_eq!(sections.len(), 1, "one peer section: {sections:?}");
+    assert_eq!(sections[0].class, Class::CommInbox);
+    assert_eq!(sections[0].text, "the shared resolver landed");
+    assert!(
+        !sections[0].text.contains("cross-session-message"),
+        "the wrapper tags, the relay preamble and the footer are all stripped"
+    );
+}
+
+#[test]
+fn cross_session_origin_wins_for_a_single_section_and_yields_for_a_batch() {
+    // `origin.name` / `origin.body` are derived by Claude Code from the very attributes and body
+    // the tag carries, so preferring the structured pair is the same text read from a field
+    // instead of a scan - but ONE origin describes ONE message, so a BATCHED record falls back
+    // to each section's own attribute rather than stamping the first sender onto all of them.
+    let single = parse(
+        r#"{"type":"user","isMeta":true,"origin":{"kind":"peer","from":"uds:/Users/dev/relay.sock","name":"relay-7","body":"structured body"},"message":{"role":"user","content":"Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\" from-name=\"tag-name\">\ntag body\n</cross-session-message>"}}"#,
+    );
+    let preview = single.inbound_comm_preview().expect("inbound preview");
+    assert_eq!(preview.from, "relay-7");
+    assert_eq!(preview.body, "structured body");
+
+    let batched = parse(
+        r#"{"type":"user","isMeta":true,"origin":{"kind":"peer","from":"uds:/Users/dev/relay.sock","name":"relay-7","body":"structured body"},"message":{"role":"user","content":"Another Claude session sent a message:\n<cross-session-message from-name=\"relay-7\">\nfirst\n</cross-session-message>\n<cross-session-message from-name=\"relay-8\">\nsecond\n</cross-session-message>"}}"#,
+    );
+    let sections = batched.record_text_sections(&ClassifyCtx::top_level());
+    assert_eq!(sections.len(), 2, "two peer sections: {sections:?}");
+    assert_eq!(sections[0].text, "first");
+    assert_eq!(sections[1].text, "second");
+    assert_eq!(
+        sections[1].direction.as_ref().map(|(f, _)| f.as_str()),
+        Some("relay-8"),
+        "the second section keeps its OWN sender"
+    );
+    // A record with no `origin` at all reads the tag, exactly as before.
+    let no_origin = parse(
+        r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<cross-session-message from-name=\"relay-7\">\ntag only\n</cross-session-message>"}}"#,
+    );
+    let preview = no_origin.inbound_comm_preview().expect("inbound preview");
+    assert_eq!(preview.from, "relay-7");
+    assert_eq!(preview.body, "tag only");
+}
+
+#[test]
+fn queued_cross_session_rider_is_never_the_human() {
+    // A `queue-operation` enqueue line carries the SAME framed content one line before the user
+    // record. It is a harness RIDER, not the operator's typed text, and the peer detector is
+    // what `queued_class` consults - so folding the third framing in refuses it by construction.
+    let rider = parse(
+        r#"{"type":"queue-operation","operation":"enqueue","content":"<cross-session-message from=\"uds:/Users/dev/relay.sock\" from-name=\"relay-7\" from-mode=\"bypass\">\nthe shared resolver landed\n</cross-session-message>"}"#,
+    );
+    assert_eq!(
+        rider.promoted_class(),
+        None,
+        "a peer rider is not user.queued"
+    );
+    // The human's own queued text still is.
+    let typed = parse(
+        r#"{"type":"queue-operation","operation":"enqueue","content":"run the release audit"}"#,
+    );
+    assert_eq!(typed.promoted_class(), Some(Class::UserQueued));
+}

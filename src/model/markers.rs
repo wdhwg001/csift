@@ -172,6 +172,19 @@ pub const PEER_MESSAGE_PREAMBLES: &[&str] = &[
 /// `from="…"` attribute ⇨ self), never `user.message`.
 pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 
+/// The opening tag of an inbound `<cross-session-message …>` peer form (C-30) - the THIRD peer
+/// framing, and the one a session-to-session send lands in. Claude Code writes it as a
+/// `type:"user"`, `role:"user"`, STRING-content record carrying `isMeta:true`,
+/// `promptSource:"system"`, `userType:"external"` and a top-level `origin` object
+/// (`{kind:"peer", from, verifiedPeerPid, msg_id, name, fromMode, body}`); a `queue-operation`
+/// enqueue line with the SAME content precedes it. The open tag carries up to five attributes in
+/// a fixed order - `from` (the sender's transport address), `from-session`, `hop-chain`,
+/// `from-name` (the sender session's display name) and `from-mode` - and the body sits between
+/// the tag's newline and [`CROSS_SESSION_MESSAGE_CLOSE`], inside the same relay preamble +
+/// security-footer envelope the other two peer forms use. Classifies
+/// `agent.communication.inbox` (`from-name`, else `from`, ⇨ self), never `user.message`.
+pub const CROSS_SESSION_MESSAGE_OPEN: &str = "<cross-session-message";
+
 /// Section CLOSE tags (FINDING-1). A peer / `<task-notification>` open tag that sits right after
 /// one of these (modulo whitespace) is at a section BOUNDARY ([`is_section_boundary`]), so a
 /// BATCHED record's later sections are still recognized - while a tag QUOTED mid-prose (a genuine
@@ -180,6 +193,7 @@ pub const AGENT_MESSAGE_OPEN: &str = "<agent-message";
 pub(crate) const TASK_NOTIFICATION_CLOSE: &str = "</task-notification>";
 pub(crate) const TEAMMATE_MESSAGE_CLOSE: &str = "</teammate-message>";
 pub(crate) const AGENT_MESSAGE_CLOSE: &str = "</agent-message>";
+pub(crate) const CROSS_SESSION_MESSAGE_CLOSE: &str = "</cross-session-message>";
 
 /// The leading sentence of an ASYNC/background `Agent` spawn's launch-confirmation tool_result
 /// (`"Async agent launched successfully.\nagentId: …"`). This is a launch ACK, NOT the child's

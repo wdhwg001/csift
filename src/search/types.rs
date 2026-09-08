@@ -33,7 +33,12 @@ pub enum Pairing {
 #[derive(Debug, Clone)]
 pub struct Hit {
     /// The matched LEAF [`Class`] - its [`Class::path`] is the rendered/JSON `label` (GOLD §6).
-    pub class: Class,
+    /// `None` on the ONE shape that has no leaf: a record an explicit `show --line`/`--uuid`
+    /// address named that [`Record::classify`] models no label for (an `isMeta` pseudo-turn
+    /// matching no harness marker, a text-less block record). The refetch law says an address
+    /// renders the record it names, so the unit is emitted with an honest empty label rather
+    /// than dropped into a "no such record(s)" bail; a SCAN never produces one.
+    pub class: Option<Class>,
     /// The full label path SET this record carries ([`Record::classify`]), for JSON `labels`.
     pub labels: Vec<&'static str>,
     /// The matched text excerpt (whitespace-normalized, explicitly truncated).
@@ -111,11 +116,13 @@ pub struct Hit {
 
 impl Hit {
     /// Did the model receive this record? The per-record override when there is one,
-    /// else the matched leaf's own default ([`Class::llm_visible`]). This is the JSON
-    /// `delivered` value and the answer a bare ROLE selector filters on.
+    /// else the matched leaf's own default ([`Class::llm_visible`]). An unlabeled unit has
+    /// no leaf to ask, and only an explicit address produces one, so it falls back to the
+    /// same answer the assembler gives a plain message record: delivered.
     #[must_use]
     pub fn delivered(&self) -> bool {
-        self.delivery.unwrap_or_else(|| self.class.llm_visible())
+        self.delivery
+            .unwrap_or_else(|| self.class.is_none_or(Class::llm_visible))
     }
 }
 

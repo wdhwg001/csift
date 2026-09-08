@@ -3,6 +3,88 @@
 use crate::harness::*;
 
 #[test]
+fn a_peer_origin_nested_in_an_attachment_is_not_a_peer_message() {
+    // T5. A peer origin reaches disk at TWO paths that never coincide: the TOP-LEVEL `origin` on
+    // a user record, and a NESTED `attachment.origin` inside a `queued_command` payload (claim
+    // TURN-031 - the corpus splits 23 top-level / 6 nested, which is why a top-level-only probe
+    // returns 23 of the 29 lines). The nested one is a queued PULSE's provenance, not a delivered
+    // message: the peer framing sits inside an attachment payload, never at a section boundary of
+    // a `message.content` string, so it must not become `agent.communication.inbox` and must not
+    // move `user.queued`.
+    //
+    // DISCRIMINATION, and the shape of the break matters. What fails the row-count assertion
+    // below (left 0, right 1) is a CLASSIFY-level widening that labels the payload AS an inbound
+    // comm: reading `attachment.origin.kind` and, when it is `peer`, pushing `Class::CommInbox`
+    // and RETURNING, so the comm leaf REPLACES `harness.meta.attachment`. The mechanism is worth
+    // knowing: a comm label routes the render through `reconstructed_user_text`, which an
+    // attachment has no `message` for, so a mislabelled payload does not merely read wrong, it
+    // stops rendering at all.
+    //
+    // Two widenings measured here do NOT fail it. (1) The same read pushing `Class::CommInbox`
+    // ADDITIVELY, without the return: the record then carries `labels: [inbox, attachment]` and
+    // `label` stays `harness.meta.attachment`, because `record_text_emission` walks the labels
+    // richest-first, gets `None` from `reconstructed_user_text` for the comm view, and falls
+    // through to the attachment view that renders. (2) Widening `peer_origin()` to fall back to
+    // the nested path: that function's one caller is reachable only from a parsed
+    // `message.content` peer section, which an attachment has none of.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "00000000-0000-4000-8000-0000000000d1";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"zznested chart the reef"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"att0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","attachment":{"type":"queued_command","command":"<agent-message from=\"relay-7\">\nzznested payload body\n</agent-message>","commandMode":"prompt","origin":{"kind":"peer","from":"relay-7","senderTaskId":"arelay-7-0123456789abcdef","name":"relay-7","body":"zznested payload body"}}}"#, "\n",
+        ),
+    );
+    // A default scan never parses an attachment line, so the nested peer origin is invisible.
+    let plain = h.run(&["search", "zznested payload", &at(sess)]);
+    assert!(plain.success, "stderr: {}", plain.stderr);
+    assert!(
+        plain.stdout.contains("no matching exchanges"),
+        "a nested peer origin does not open the attachment gate:\n{}",
+        plain.stdout
+    );
+    // With the gate open it is an ATTACHMENT payload, never an inbound comm.
+    let gated = h.run(&[
+        "search",
+        "zznested payload",
+        &at(sess),
+        "--attachments",
+        "--format",
+        "json",
+    ]);
+    assert!(gated.success, "stderr: {}", gated.stderr);
+    let rows = json_rows(&gated.stdout, "exchange");
+    assert_eq!(rows.len(), 1, "one exchange in:\n{}", gated.stdout);
+    let hit = &rows[0]["hits"][0];
+    assert_eq!(
+        hit["label"], "harness.meta.attachment",
+        "a peer framing quoted INSIDE a payload is payload, not a delivered message"
+    );
+    assert!(
+        hit["from"].is_null() && hit["to"].is_null(),
+        "and it carries no comm direction: {hit}"
+    );
+    // The queued census is untouched: the nested origin is not the human's queued text either.
+    let census = h.run(&[
+        "search",
+        "",
+        &at(sess),
+        "-t",
+        "user.queued",
+        "--count-by",
+        "label",
+    ]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        !census.stdout.contains("user.queued"),
+        "no queue line exists here, and the attachment is not one:\n{}",
+        census.stdout
+    );
+}
+
+#[test]
 fn attachments_are_invisible_by_default() {
     // The default scan never parses attachment lines: a pattern living only in an
     // attachment payload is a DEFINITIVE absence (exit 0), and the label alone (without

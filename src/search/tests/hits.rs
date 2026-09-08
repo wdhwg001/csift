@@ -22,7 +22,7 @@ fn collect_hits_thinking_category() {
         &mut hits,
     );
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].class, Class::AgentThinking);
+    assert_eq!(hits[0].class, Some(Class::AgentThinking));
     assert!(hits[0].excerpt.contains("carry"));
 }
 
@@ -46,7 +46,7 @@ fn collect_hits_agent_text_only_from_assistant() {
         &mut hits,
     );
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].class, Class::AgentMessage);
+    assert_eq!(hits[0].class, Some(Class::AgentMessage));
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn collect_hits_mcp_elicitation_system_marker() {
         1,
         "MCP system marker must produce exactly one hit"
     );
-    assert_eq!(hits[0].class, Class::AgentToolUse);
+    assert_eq!(hits[0].class, Some(Class::AgentToolUse));
     assert_eq!(hits[0].tool_name.as_deref(), Some("mcp-elicitation"));
     assert!(hits[0].excerpt.contains("wibblewobble"));
 }
@@ -154,7 +154,7 @@ fn collect_hits_auq_answer_under_user() {
         &mut hits,
     );
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].class, Class::UserAnswer);
+    assert_eq!(hits[0].class, Some(Class::UserAnswer));
 }
 
 #[test]
@@ -193,7 +193,7 @@ fn tool_result_carrier_not_a_user_hit_when_plain() {
         &mut hits2,
     );
     assert_eq!(hits2.len(), 1);
-    assert_eq!(hits2[0].class, Class::AgentToolResult);
+    assert_eq!(hits2[0].class, Some(Class::AgentToolResult));
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn auq_answer_surfaces_under_user_category_end_to_end() {
     assert!(ex[0]
         .hits
         .iter()
-        .any(|h| h.class == Class::UserAnswer && h.excerpt.contains("bold option")));
+        .any(|h| h.class == Some(Class::UserAnswer) && h.excerpt.contains("bold option")));
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn auq_alternate_phrasing_surfaces_under_user_end_to_end() {
     assert!(ex[0]
         .hits
         .iter()
-        .any(|h| h.class == Class::UserAnswer && h.excerpt.contains("teal option")));
+        .any(|h| h.class == Some(Class::UserAnswer) && h.excerpt.contains("teal option")));
 }
 
 #[test]
@@ -257,10 +257,10 @@ fn auq_answer_not_double_counted_no_category_filter() {
     // No selector filter → every label eligible.
     let ex = search(&lines, &args("zzqq"));
     assert_eq!(ex.len(), 1);
-    let cats: Vec<Class> = ex[0].hits.iter().map(|h| h.class).collect();
+    let cats: Vec<Option<Class>> = ex[0].hits.iter().map(|h| h.class).collect();
     assert_eq!(
         cats,
-        vec![Class::UserAnswer],
+        vec![Some(Class::UserAnswer)],
         "AUQ answer must appear ONCE as the richest view `user.answer`, not also agent.tool.result"
     );
 }
@@ -432,7 +432,7 @@ fn collect_record_hits_resolve_persisted_with_no_pointer_keeps_inline() {
         1,
         "inline text still matches when there is no pointer"
     );
-    assert_eq!(hits[0].class, Class::AgentToolResult);
+    assert_eq!(hits[0].class, Some(Class::AgentToolResult));
 }
 
 #[test]
@@ -472,7 +472,10 @@ fn auq_answer_still_surfaces_under_tool_response_alone() {
     a.labels = vec!["agent.tool.result".to_string()];
     let ex = search(&lines, &a);
     assert_eq!(ex.len(), 1);
-    assert!(ex[0].hits.iter().all(|h| h.class == Class::AgentToolResult));
+    assert!(ex[0]
+        .hits
+        .iter()
+        .all(|h| h.class == Some(Class::AgentToolResult)));
     assert_eq!(ex[0].hits.len(), 1, "exactly one tool-response hit");
 }
 

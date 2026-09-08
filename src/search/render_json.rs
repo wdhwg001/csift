@@ -65,7 +65,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         "is_subagent": ex.is_subagent,
         "parent_session_id": ex.parent_session_id,
         // The matched dotted leaf path (`label`) + the record's FULL label set (`labels`).
-        "label": h.class.path(),
+        "label": h.class.map(Class::path),
         "labels": h.labels,
         // C-28: did the model RECEIVE this record? The matched leaf's default,
         // overridden per record by Claude Code's own request-assembler drop predicate.
