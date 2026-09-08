@@ -263,23 +263,36 @@ pub(crate) fn search_one_file(
         }
     });
 
-    // v0.11.0: the channel needle is DEFAULT-ON and admits any line carrying the envelope
-    // literal, so an ordinary ATTACHMENT that merely MENTIONS it reaches this point too - a
-    // hook context that quotes the header, or a file-edit payload whose snippet does. Both
-    // attachment leaves keep their own flag (the gated-leaves law): such a record survives a
-    // default scan only as a delivery (its first content string opens with the header), never
-    // as bare `harness.meta.hook` or `harness.meta.attachment`. An address or either
-    // attachment flag admits it as before, so nothing an explicit query could reach is
-    // dropped here.
+    // A DEFAULT-ON needle admits attachment lines this scan cannot search. The channel
+    // needle is the v0.11.0 one - it keeps any line carrying the envelope literal, so a hook
+    // context that quotes the header or a file-edit payload whose snippet does arrives here
+    // too - and the D7 `compact_boundary` needle is a bare value substring, so on a flagless
+    // scan it admits any payload that merely mentions the word. Both attachment leaves keep
+    // their own flag (the gated-leaves law): such a record surfaces on a default scan only as
+    // a delivery (its first content string opens with the header), never as bare
+    // `harness.meta.hook` or `harness.meta.attachment`.
+    //
+    // DEMOTE it, never delete it. The SURVIVAL AXIS walks `parentUuid` THROUGH attachment
+    // records - a prompt submitted after a SessionStart hook is parented to that hook's
+    // attachment record - so removing a node breaks the chain AT it: the walk cannot resolve
+    // that parent, its floor freezes at the break, and every record above reads `PreCut` (or
+    // `Abandoned` off the main line). Reduced to its structural fields the record is exactly
+    // the spine row the non-candidate arm would have produced for the same line, so it is
+    // invisible to every emission pass and visible to the chain. An address or either
+    // attachment flag admits it whole, as before.
     if !gates.hook_context && !gates.attachments && address.is_none() {
-        records.retain(|k| {
+        for k in &mut records {
             if k.spine {
-                return true;
+                continue;
             }
             let gated_attachment = k.rec.hook_additional_context_text().is_some()
                 || k.rec.attachment_payload_text().is_some();
-            !gated_attachment || k.rec.csift_channel_text().is_some()
-        });
+            if gated_attachment && k.rec.csift_channel_text().is_none() {
+                k.rec = crate::parse::spine_from_record(&k.rec);
+                k.can_hit = false;
+                k.spine = true;
+            }
+        }
     }
 
     // ── Transparent elicitation-sidecar merge (§3.10) ──

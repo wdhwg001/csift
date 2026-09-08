@@ -13095,7 +13095,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "389-390",
+          "lines": "422-423",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13182,7 +13182,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "395-396",
+          "lines": "428-429",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13309,7 +13309,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "438",
+          "lines": "471",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13429,7 +13429,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "391-394",
+          "lines": "424-427",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13503,7 +13503,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "445-449",
+          "lines": "478-482",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14280,7 +14280,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "366",
+          "lines": "399",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14656,7 +14656,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "431",
+          "lines": "464",
           "snippet": "        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())"
         }
       ],
@@ -22073,7 +22073,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "403-407",
+          "lines": "436-440",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -48071,7 +48071,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "444-450",
+          "lines": "477-483",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48404,7 +48404,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "444-450",
+          "lines": "477-483",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -49499,7 +49499,7 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "179-211",
+          "lines": "214-246",
           "snippet": "pub(crate) fn line_type_and_spine(\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<Record>)>, ()> {\n    if line.iter().all(u8::is_ascii_whitespace) {\n        return Ok(None);\n    }\n    // The same key set [`SpineFields`] holds, captured as borrowed `RawValue` spans so\n    // serde validates the whole line without decoding or allocating any of them.\n    #[derive(serde::Deserialize)]\n    struct Probe<'a> {\n        #[serde(rename = \"type\", borrow, default)]\n        r#type: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        subtype: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"parentUuid\", borrow, default)]\n        parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"logicalParentUuid\", borrow, default)]\n        logical_parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"leafUuid\", borrow, default)]\n        leaf_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        timestamp: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"isSidechain\", borrow, default)]\n        is_sidechain: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        explicit: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        rewound: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"compactMetadata\", borrow, default)]\n        compact_metadata: Option<&'a serde_json::value::RawValue>,\n    }"
         }
       ],
@@ -49598,7 +49598,7 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "179-181",
+          "lines": "214-216",
           "snippet": "pub(crate) fn line_type_and_spine(\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<Record>)>, ()> {"
         }
       ],
@@ -50042,7 +50042,7 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "179-181",
+          "lines": "214-216",
           "snippet": "pub(crate) fn line_type_and_spine(\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<Record>)>, ()> {"
         }
       ],
@@ -50520,12 +50520,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "347-353",
+          "lines": "380-386",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "377-380",
+          "lines": "410-413",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -51825,7 +51825,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "372-377",
+          "lines": "404-410",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -53381,12 +53381,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "372-377",
+          "lines": "404-410",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "395-396",
+          "lines": "428-429",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53486,7 +53486,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "389-390",
+          "lines": "422-423",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
@@ -54913,7 +54913,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "289-290",
+          "lines": "322-323",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55728,7 +55728,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "418-423",
+          "lines": "451-456",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify).\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
         }
       ],
@@ -70136,7 +70136,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "422",
+          "lines": "455",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -78582,7 +78582,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "439-443",
+          "lines": "472-476",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -82329,7 +82329,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "421-422",
+          "lines": "454-455",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {
@@ -83662,7 +83662,7 @@
       "code": [
         {
           "path": "src/parse/spine.rs",
-          "lines": "94-99",
+          "lines": "134-140",
           "snippet": "/// The depth-1 key walk itself. `type` is NOT an early exit for the OTHER keys: measured\n/// over a real corpus, `parentUuid` is the first key of every one of 673,710 lines of an\n/// admitted type while `uuid` and `timestamp` sit AFTER the payload key on 662,470 of them\n/// (claim REC-104) - so the walk has to reach the end of the object either way, and a\n/// \"stop once the wanted keys are in hand\" shortcut would stop on almost no line.\npub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {"
         },
         {

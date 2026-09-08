@@ -184,6 +184,21 @@ surface change bumps the PATCH.
   names. A plain scan still emits nothing, so no count, census or `-t` result changes; a line
   that is no record at all (a session-state cache line, a torn line) is still a hard miss
   pointing at `--raw`.
+- **A plain search stopped reporting live history as pre-cut.** Two of the byte needles that
+  pick candidate lines run on every scan, and both can pick up an `attachment` line a plain
+  search has no label for — one looks for the channel envelope, the other for the word
+  `compact_boundary`, which any payload may simply use. Such a record was removed before
+  matching so it could not surface under a gated leaf, and removing it punched a hole in the
+  conversation chain, which threads through attachment records: the walk stopped at the hole
+  and everything above it came back marked `pre-cut`, on transcripts that had never compacted.
+  The record is now reduced to its structural fields instead of removed — the same spine row a
+  line the prefilter never picked up already gets. It still emits nothing, so no hit, count,
+  census key or turn moves; the chain simply sees it. On this corpus, 173 lines across 5 of 76
+  transcripts were affected. The plain scan and `--attachments` now report the same chain on 76
+  of 76 files, where 3 disagreed before, and on one 7.2 MB transcript 1,190 of 1,246 rows read
+  `pre-cut` before and none do now. `show --line` was always right about those lines, because an
+  address opens the gates — so a search and a fetch of the same record no longer contradict each
+  other.
 
 ### Changed
 

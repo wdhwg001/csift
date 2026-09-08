@@ -84,6 +84,36 @@ pub(crate) fn spine_record_from(f: &SpineFields<'_>) -> Record {
     }
 }
 
+/// Reduce an ALREADY-PARSED [`Record`] to the same chain-structural row
+/// [`spine_record`] lifts off the raw line: the chain fields cloned, everything else
+/// dropped (no `message`, no `toolUseResult`, no attachment payload), so the result
+/// classifies to nothing, opens no turn and emits no hit.
+///
+/// The caller is a scan that already paid for the full parse and then found the record
+/// unsearchable under its gates. DELETING it there is what breaks the chain - the walk
+/// threads `parentUuid` THROUGH `attachment` and `system` records, so a missing node
+/// fails every record above it open - and keeping it whole would leak a gated leaf into
+/// the output. Demoting it is the only answer that is right on both axes.
+///
+/// A unit test pins this field for field against [`spine_record`] on the same line, so
+/// the two ways into a spine row cannot drift.
+pub(crate) fn spine_from_record(rec: &Record) -> Record {
+    Record {
+        r#type: rec.r#type.clone(),
+        subtype: rec.subtype.clone(),
+        uuid: rec.uuid.clone(),
+        parent_uuid: rec.parent_uuid.clone(),
+        logical_parent_uuid: rec.logical_parent_uuid.clone(),
+        leaf_uuid: rec.leaf_uuid.clone(),
+        timestamp: rec.timestamp.clone(),
+        is_sidechain: rec.is_sidechain,
+        explicit: rec.explicit,
+        rewound: rec.rewound,
+        compact_metadata: rec.compact_metadata.clone(),
+        ..Record::default()
+    }
+}
+
 /// The RAW value spans of the keys the chain reads, borrowed straight out of the line.
 /// Nothing is decoded or allocated here, so a line the walk ends up rejecting costs its
 /// bytes and nothing else.

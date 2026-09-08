@@ -202,6 +202,54 @@ fn a_bool_followed_by_whitespace_reads_the_same_in_both() {
 }
 
 #[test]
+fn demoting_a_parsed_record_lands_on_the_same_row_as_walking_its_line() {
+    // The third way into a spine row: a scan that already parsed the line in full, then
+    // found the record unsearchable under its gates, reduces it in place rather than
+    // dropping it out of the chain. That row has to be the row the byte walk would have
+    // produced for the same line, or one query's chain would differ from another's.
+    for line in [FULL, BOUNDARY, LAST_PROMPT, SPACED_BOOL] {
+        let parsed = parse_line(line.as_bytes())
+            .expect("valid json")
+            .expect("a record");
+        let demoted = spine_from_record(&parsed);
+        same(spine_record(line.as_bytes()).as_ref(), Some(&demoted));
+        // Everything the emission passes read is gone with the payload.
+        assert!(
+            demoted.message.is_none(),
+            "no message survives the demotion"
+        );
+        assert!(demoted.attachment_payload_text().is_none());
+        assert!(demoted.hook_additional_context_text().is_none());
+        assert!(demoted.csift_channel_text().is_none());
+        assert!(!demoted.opens_turn(), "and it opens no turn");
+    }
+    // The two shapes whose structural fields steer the walk keep them.
+    let boundary = spine_from_record(
+        &parse_line(BOUNDARY.as_bytes())
+            .expect("valid json")
+            .expect("a record"),
+    );
+    assert_eq!(boundary.subtype.as_deref(), Some("compact_boundary"));
+    assert_eq!(boundary.logical_parent_uuid.as_deref(), Some("a-9"));
+    assert!(
+        boundary.compact_metadata.is_some(),
+        "the cut fields survive"
+    );
+    let leaf = spine_from_record(
+        &parse_line(LAST_PROMPT.as_bytes())
+            .expect("valid json")
+            .expect("a record"),
+    );
+    assert_eq!(
+        leaf.leaf_uuid.as_deref(),
+        Some("a-9"),
+        "the leaf hint survives"
+    );
+    assert_eq!(leaf.explicit, Some(true));
+    assert_eq!(leaf.rewound, Some(false));
+}
+
+#[test]
 fn a_duplicate_top_level_key_parts_the_two_entries_and_the_census_says_malformed() {
     // The ONE shape where they legitimately differ, asserted rather than assumed. serde's
     // derive rejects a repeated known field, so the census counts the line malformed and
