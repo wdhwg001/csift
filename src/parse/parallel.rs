@@ -46,6 +46,50 @@ where
     })
 }
 
+/// The line-numbered records of one transcript, in file order.
+pub type NumberedRecords = Vec<(usize, Record)>;
+
+/// [`parse_candidates_parallel`] PLUS the conversation-chain SPINE.
+///
+/// A surface's byte prefilter keeps the lines that surface cares about, and a chain built
+/// from those alone breaks at the first `attachment` the DAG threads through (see
+/// [`spine_record`]). So the non-candidate arm lifts each dropped line's five structural
+/// fields into a spine row instead of discarding it. Returns `(candidates, spine, skipped)`:
+/// both vectors are in file order, keyed by their 1-based jsonl line, DISJOINT by
+/// construction, and the malformed count still books every obviously-corrupt line exactly
+/// once (a line that yields no spine row falls through to [`non_candidate_verdict`]).
+pub fn parse_candidates_with_spine<F>(
+    bytes: &[u8],
+    prefilter: F,
+) -> (NumberedRecords, NumberedRecords, usize)
+where
+    F: Fn(&[u8]) -> bool + Sync,
+{
+    let (rows, skipped) = scan_lines_parallel(bytes, |line, line_no| {
+        if !prefilter(line) {
+            if let Some(rec) = spine_record(line) {
+                return LineVerdict::Keep((line_no, rec, true));
+            }
+            return non_candidate_verdict(line);
+        }
+        match parse_line(line) {
+            Ok(Some(rec)) => LineVerdict::Keep((line_no, rec, false)),
+            Ok(None) => LineVerdict::Ignore,
+            Err(_) => LineVerdict::Skip,
+        }
+    });
+    let mut records: Vec<(usize, Record)> = Vec::with_capacity(rows.len());
+    let mut spine: Vec<(usize, Record)> = Vec::new();
+    for (line_no, rec, is_spine) in rows {
+        if is_spine {
+            spine.push((line_no, rec));
+        } else {
+            records.push((line_no, rec));
+        }
+    }
+    (records, spine, skipped)
+}
+
 /// The verdict for a line a byte-prefilter rejected: `Skip` (⇒ counted malformed) when the
 /// line is OBVIOUSLY not a JSON object, else `Ignore` (a legit non-candidate record).
 /// Convenience wrapper over [`line_shape_malformed`] for the scan closures.

@@ -20,6 +20,7 @@ fn unit(role: Role, line_no: usize, text: &str, orig_newlines: usize) -> TurnUni
         also_in_summary: false,
         from_sidecar: false,
         inbound: None,
+        survival: "live",
     }
 }
 
@@ -125,8 +126,14 @@ fn scan_with_turns(turns: Vec<TurnSlice>, summaries: Vec<SummaryInfo>) -> ScanRe
         parent_session_id: "s".to_string(),
         turns,
         summaries,
+        abandoned_openers: Vec::new(),
         skipped_lines: 0,
     }
+}
+
+/// The survival view over a COMPLETE fixture record list (no dropped line, so no spine).
+fn view_of(records: &[(usize, Record)]) -> ChainView {
+    ChainView::build(records, &[])
 }
 
 fn summary(line_no: usize, fps: Vec<&str>, body_chars: usize) -> SummaryInfo {

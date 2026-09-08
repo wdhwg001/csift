@@ -39,6 +39,17 @@ use super::*;
         (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, \
         `45s`, `1w`) meaning \"that long ago\" in the system-local timezone; a mutation \
         with no timestamp never falls inside a bounded window.\n\n\
+        THE SURVIVAL AXIS: turn numbers are the LIVE ones - the turns Claude Code's own \
+        conversation chain still reaches, the same numbers `search` and `show` print. A \
+        mutation made on a branch the operator later rewound past, or under a prompt that \
+        was recalled and re-typed, belongs to no numbered turn: its turn slot reads \
+        `abandoned (root L<n>)` naming the branch head, and the row carries an `[abandoned]` \
+        marker (`[pre-cut]` above a compaction cut). The ROW STAYS. Disk truth is file \
+        order, and that write really did land - dropping it would answer \"did this session \
+        write X?\" with a lie. The rollups count the share separately \
+        (`(N from abandoned branches)`). A `--turn` window admits such a row by the live \
+        turn it physically follows, for the same reason: a window over a span must not \
+        silently omit a write that happened inside it.\n\n\
         No silent truncation: skipped malformed lines are counted and surfaced.",
     after_help = "DETAIL LEVEL: `--by <summary|dir|file|timeline>` (default summary, strictly coarsening)\n  \
           --by summary (coarse top-level-prefix rollup) < --by dir (full parent dir) < --by file \
@@ -67,9 +78,13 @@ use super::*;
          `--by timeline` to test create-vs-edit or filter by op.)\n\n\
         JSON SCHEMAS (per --format json)\n  \
           --by timeline : one object per mutation: {session_id, is_subagent, parent_session_id,\n             \
-                       path, op, ts_utc, ts_local, turn_index, is_create, heuristic,\n             \
-                       resolution, path_verbatim, command_errored} + a\n             \
-                       trailing summary object. (session_id is the transcript's own id: a\n             \
+                       path, op, ts_utc, ts_local, turn_index, survival, abandoned_root_line,\n             \
+                       is_create, heuristic, resolution, path_verbatim, command_errored} + a\n             \
+                       trailing summary object. (`survival` is live | pre-cut | abandoned; an\n             \
+                       ABANDONED mutation - one made on a branch the conversation was later\n             \
+                       rewound past - has a NULL turn_index and an abandoned_root_line naming\n             \
+                       its branch head's jsonl line. It is never dropped: the write hit the\n             \
+                       disk. session_id is the transcript's own id: a\n             \
                        top-level uuid, or a bare SUBAGENT hex when is_subagent=true, which is\n             \
                        NOT a re-feedable @<uuid> target; re-feed parent_session_id, always the\n             \
                        owning top-level uuid. heuristic=true ONLY for a bash-derived mutation: a\n             \
@@ -97,7 +112,10 @@ use super::*;
                        for the settings family (`.claude/settings*.json`); the tracked\n             \
                        set spans thousands of ordinary paths and the harness writes\n             \
                        bookkeeping constantly, so wider reporting would flood every\n             \
-                       timeline. The row's detail names the version transition and the\n             \
+                       timeline (58,115 such jumps over 1,121 paths in one measured\n             \
+                       corpus). `csift recover --file <path>` reads the SAME instrument\n             \
+                       on any single path, where that flood cannot arise. The row's\n             \
+                       detail names the version transition and the\n             \
                        uncovered interval; a version-counter RESET (process restart)\n             \
                        starts a new generation and is never reported as a write.\n             \
                        `command_errored=true` flags a mutation kept\n             \
@@ -105,11 +123,14 @@ use super::*;
                        and which arms ran is unknowable, so it is disclosed instead of\n             \
                        dropped.)\n  \
           --by file  : one object per file: {session_id, is_subagent, parent_session_id,\n             \
-                       file, write, edit, bash, multi_edit, notebook_edit, total,\n             \
-                       distinct_files, first_utc, first_local, last_utc, last_local} + a\n             \
+                       file, write, edit, bash, multi_edit, notebook_edit, external_write,\n             \
+                       abandoned, total, distinct_files, first_utc, first_local, last_utc,\n             \
+                       last_local} + a\n             \
                        trailing summary object. (is_subagent + parent_session_id discriminate\n             \
                        the id-domain on EVERY grouped view, same as --by timeline: a subagent\n             \
-                       row's session_id is a bare hex; re-feed parent_session_id.)\n  \
+                       row's session_id is a bare hex; re-feed parent_session_id. `abandoned`\n             \
+                       is a SHARE of `total`, never a subtraction: how many of this group's\n             \
+                       mutations came from records off the surviving conversation.)\n  \
           --by dir / --by summary : the same per-op count keys + the same {session_id,\n             \
                        is_subagent, parent_session_id} discriminators, grouped under a\n             \
                        `dir`/`bucket` key, + a trailing summary {distinct_files,\n             \

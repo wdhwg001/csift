@@ -341,9 +341,13 @@ fn no_target_and_interrupted_gates() {
     let records = numbered(&[
         r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
     ]);
-    let turns =
-        group_turn_indices_deduped(&records.iter().map(|(_, r)| r).collect::<Vec<_>>(), |r| *r);
-    let out = collect_turn_bash_anchors(&records, &turns[0], None, &Default::default());
+    let view = view_of(&records);
+    let out = collect_turn_bash_anchors(
+        &records,
+        view.turns()[0].as_slice(),
+        None,
+        &Default::default(),
+    );
     assert!(out.events.is_empty() && out.suppress.is_empty());
 
     // An INTERRUPTED compound command cannot vouch for its write.

@@ -2,20 +2,25 @@
 
 use super::*;
 
-/// Build the per-turn slices + summary dedup sets from a session's line-numbered
-/// records. Turn segmentation reuses the single shared engine
-/// [`group_turn_indices_deduped`], so an esc-cancel / edit-resend draft never surfaces as a
-/// phantom turn (§6.4.1); a compaction summary is a turn MEMBER (it is excluded from
-/// genuine-user), so the walk is transparent to it.
+/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.
+///
+/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the
+/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and
+/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a
+/// display choice: the compaction summariser reads the IN-MEMORY message array (claim
+/// CMP-020), which by then no longer holds those turns, so replaying one would put text
+/// into a "what the compaction clipped" reconstruction that no model ever saw. A compaction
+/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent
+/// to it.
 pub(crate) fn build(
     records: &[(usize, Record)],
+    view: &ChainView,
     sidecar: &[Record],
 ) -> (Vec<TurnSlice>, Vec<SummaryInfo>) {
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
+    let turns = view.turns();
     // ExitPlanMode plan pointers for this session, so a rejection-with-message turn
     // opener can surface `[plan: <path>]` (§4.2.4). Cheap; empty in a no-plan session.
-    let plan_index = PlanIndex::from_records(recs.iter().copied());
+    let plan_index = PlanIndex::from_records(records.iter().map(|(_, r)| r));
 
     // Summary line numbers in file order (for compactions_before + boundary banners).
     let mut summaries: Vec<SummaryInfo> = Vec::new();
@@ -36,6 +41,12 @@ pub(crate) fn build(
 
     let mut slices: Vec<TurnSlice> = Vec::with_capacity(turns.len());
     for (turn_index, idxs) in turns.iter().enumerate() {
+        // A live turn whose every record this prefilter dropped carries nothing to replay.
+        // It keeps its NUMBER (the view holds the empty group so the numbering never
+        // shifts); it just contributes no slice.
+        if idxs.is_empty() {
+            continue;
+        }
         let mut user: Option<TurnUnit> = None;
         let mut is_automation = false;
         let mut automation: Option<crate::model::AutomationTrigger> = None;
@@ -49,6 +60,7 @@ pub(crate) fn build(
 
         for &i in idxs {
             let (line_no, rec) = (records[i].0, &records[i].1);
+            let survival = view.survival(i).as_str();
 
             // Tool-call + erroring-tool-result counts for THIS record. The turn-wide
             // `tool_calls` accumulator (the `[N tool calls]` marker) is unchanged; the
@@ -89,18 +101,18 @@ pub(crate) fn build(
                 if let Some(label) = rec.automation_label() {
                     is_automation = true;
                     automation = rec.automation_trigger();
-                    user = Some(make_unit(line_no, Role::User, &label, rec));
+                    user = Some(make_unit(line_no, Role::User, &label, rec, survival));
                 } else if let Some(ic) = rec.inbound_comm_preview() {
                     // An inbound PEER opener - `<teammate-message>` (GOLD §1) OR `<agent-message>`
                     // (FINDING-2, now an `opens_turn` boundary too): render the CLEAN body with an
                     // `agent.communication.{inbox,signal}  <from> ⇨ self` header in place of the raw
                     // XML it used to dump into the `▽ USER` lane. `inbound_comm_preview` covers BOTH
                     // peer forms (boundary-anchored, FINDING-1), so neither shows raw XML.
-                    let mut u = make_unit(line_no, Role::User, &ic.body, rec);
+                    let mut u = make_unit(line_no, Role::User, &ic.body, rec, survival);
                     u.inbound = Some(ic);
                     user = Some(u);
                 } else if let Some(text) = rec.reconstructed_user_text(Some(&plan_index)) {
-                    user = Some(make_unit(line_no, Role::User, &text, rec));
+                    user = Some(make_unit(line_no, Role::User, &text, rec, survival));
                 }
             }
 
@@ -109,7 +121,7 @@ pub(crate) fn build(
             // to THIS message (the placeholder's per-message Y / Z), then zeroed.
             if let Some(text) = rec.agent_text() {
                 agents.push(AgentMsg {
-                    unit: make_unit(line_no, Role::Assistant, &text, rec),
+                    unit: make_unit(line_no, Role::Assistant, &text, rec, survival),
                     // Provisional; reassigned by AgentPos after the loop.
                     pos: AgentPos::Last,
                     preceding_tool_calls: pending_tool_calls,
@@ -174,7 +186,7 @@ pub(crate) fn build(
         let turn_index = slices.len();
         slices.push(TurnSlice {
             turn_index,
-            user: Some(make_unit(0, Role::User, &text, rec)),
+            user: Some(make_unit(0, Role::User, &text, rec, "live")),
             tool_calls: 0,
             image_ids: Vec::new(),
             agents: Vec::new(),
@@ -190,7 +202,13 @@ pub(crate) fn build(
 /// Build a [`TurnUnit`] from a record's already-normalized one-line `text`. The
 /// `orig_newlines` count is taken from the record's ORIGINAL (pre-normalization) text so
 /// the `L lines elided` note is meaningful.
-pub(crate) fn make_unit(line_no: usize, role: Role, text: &str, rec: &Record) -> TurnUnit {
+pub(crate) fn make_unit(
+    line_no: usize,
+    role: Role,
+    text: &str,
+    rec: &Record,
+    survival: &'static str,
+) -> TurnUnit {
     let orig_newlines = raw_body_newlines(rec);
     TurnUnit {
         line_no,
@@ -202,6 +220,7 @@ pub(crate) fn make_unit(line_no: usize, role: Role, text: &str, rec: &Record) ->
         also_in_summary: false,
         from_sidecar: rec.is_elicitation_marker(),
         inbound: None,
+        survival,
     }
 }
 

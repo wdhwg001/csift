@@ -33,9 +33,7 @@ fn collect_opaque_counts_markers_and_powershell_not_index_git() {
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"b2","name":"Bash","input":{"command":"git add . && git commit -m x && git checkout -- ."}}]}}"#,
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"p1","name":"PowerShell","input":{"command":"Set-Content -Path out.txt -Value hi"}}]}}"#,
     ]);
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
-    let opaque = collect_opaque_commands("sess1", &records, &turns);
+    let opaque = collect_opaque_commands("sess1", &records, &view_of(&records));
     let markers: Vec<&str> = opaque.iter().map(|o| o.marker.as_str()).collect();
     assert_eq!(
         markers,
@@ -116,7 +114,5 @@ fn collect_opaque_ignores_other_tools_with_a_command_field() {
         r#"{"type":"user","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"go"}}"#,
         r#"{"type":"assistant","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"Sandbox","input":{"command":"ls"}}]}}"#,
     ]);
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
-    assert!(collect_opaque_commands("s", &records, &turns).is_empty());
+    assert!(collect_opaque_commands("s", &records, &view_of(&records)).is_empty());
 }

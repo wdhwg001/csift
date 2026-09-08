@@ -183,6 +183,7 @@ fn external_edit_detail_gains_the_formatter_clue_when_one_ran() {
         is_subagent: false,
         parent_session_id: "sess1".into(),
         events: Vec::new(),
+        stamps: std::collections::BTreeMap::new(),
         opaque,
         merged_line_origin: std::collections::BTreeMap::new(),
         skipped_lines: 0,

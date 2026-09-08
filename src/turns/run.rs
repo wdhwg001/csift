@@ -223,6 +223,7 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
             parent_session_id,
             turns: Vec::new(),
             summaries: Vec::new(),
+            abandoned_openers: Vec::new(),
             skipped_lines: 0,
         });
     };
@@ -234,17 +235,14 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
     // byte-for-byte identical to the serial `scan_lines_bytes` pass this replaces; the
     // win is that a single giant transcript (the default `turns @main` case is ONE file)
     // is no longer bottlenecked on one core.
-    let (records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
-        if !line_is_turn_candidate(line) {
-            // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
-            return crate::parse::non_candidate_verdict(line);
-        }
-        match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => crate::parse::LineVerdict::Keep((line_no, rec)),
-            Ok(None) => crate::parse::LineVerdict::Ignore, // blank - counted in numbering
-            Err(_) => crate::parse::LineVerdict::Skip,     // malformed - counted
-        }
-    });
+    // The SURVIVAL AXIS decides which turns the summariser ever saw, and it needs the whole
+    // DAG - so the lines this prefilter drops are lifted to structural SPINE rows in the
+    // same pass. Turn numbers then agree with `search`'s (`--slice` indexes them), and a
+    // turn the operator rewound past is recognized instead of being replayed as if the model
+    // had ever read it.
+    let (records, spine, mut skipped) =
+        crate::parse::parse_candidates_with_spine(bytes, line_is_turn_candidate);
+    let view = ChainView::build(&records, &spine);
 
     // ── Transparent elicitation-sidecar merge (§3.10) ──
     // A TOP-LEVEL session's unresolved-pending elicitations (AskUserQuestion/ExitPlanMode/MCP)
@@ -260,13 +258,14 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<ScanResult> {
         sidecar = pending;
     }
 
-    let (turns, summaries) = build(&records, &sidecar);
+    let (turns, summaries) = build(&records, &view, &sidecar);
     Ok(ScanResult {
         session_id,
         is_subagent,
         parent_session_id,
         turns,
         summaries,
+        abandoned_openers: view.abandoned_openers().to_vec(),
         skipped_lines: skipped,
     })
 }

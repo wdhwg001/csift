@@ -35,7 +35,7 @@ use memchr::memmem;
 use rayon::prelude::*;
 
 use crate::cli::{OutputFormat, RecoverArgs, RecoverMode};
-use crate::model::{group_turn_indices_deduped, Block, Record};
+use crate::model::{Block, ChainView, Record};
 use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;

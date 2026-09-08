@@ -61,6 +61,12 @@ pub(crate) struct TurnUnit {
     /// body. `None` for an ordinary user/assistant unit. RENDER-ONLY - the turn count is unchanged
     /// (a peer opener still opens a turn via `opens_turn`).
     pub(crate) inbound: Option<crate::model::InboundComm>,
+    /// The wire spelling of the carrying record's survival. `verbatim` replays LIVE turns
+    /// only, so this is `live` for almost every unit; `pre-cut` marks a unit ABOVE a
+    /// compaction cut Claude Code's own loader stops at. csift keeps reconstructing across
+    /// that cut on purpose - restoring what a compaction clipped is the whole command - and
+    /// this field is how a machine reader tells the two regions apart.
+    pub(crate) survival: &'static str,
 }
 
 /// Position of an agent message within its turn's ordered agent-message run. A
@@ -192,6 +198,12 @@ pub(crate) struct ScanResult {
     pub(crate) turns: Vec<TurnSlice>,
     /// Summary records in file order (oldest → newest), each with its line + dedup set.
     pub(crate) summaries: Vec<SummaryInfo>,
+    /// The jsonl lines of the turn openers the surviving conversation no longer reaches - a
+    /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER
+    /// replayed: the compaction summariser's input is the in-memory message array, so it
+    /// never saw them either (claim CMP-020), and replaying them would put text into the
+    /// reconstruction that no model ever read. They are counted and pointed at instead.
+    pub(crate) abandoned_openers: Vec<usize>,
     pub(crate) skipped_lines: usize,
 }
 

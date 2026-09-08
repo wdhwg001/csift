@@ -63,8 +63,9 @@ fn footer_reports_skipped_lines() {
 fn render_multi_session_separator() {
     // Two sessions → the per_session blank-line separator arm (`!first`) fires.
     let ln: Vec<usize> = (1..=fixture().len()).collect();
-    let mut a = extract_mutations("aaaa-sess", &fixture(), &ln);
-    let b = extract_mutations("bbbb-sess", &fixture(), &ln);
+    let fx = fixture();
+    let mut a = extract_mutations("aaaa-sess", &fx, &ln, &view_of(&fx));
+    let b = extract_mutations("bbbb-sess", &fx, &ln, &view_of(&fx));
     a.extend(b);
     render_text(&outcome(FilesDetail::Summary, a));
 }

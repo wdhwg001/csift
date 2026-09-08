@@ -140,7 +140,7 @@ fn end_to_end_live_dedup_through_build_and_plan() {
         (4, rec(r#"{"type":"user","timestamp":"2026-06-07T06:00:00.000Z","message":{"role":"user","content":"the live duplicate ask verbatim"}}"#)),
         (5, rec(r#"{"type":"assistant","timestamp":"2026-06-07T06:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"live reply"}]}}"#)),
     ];
-    let (turns, summaries) = build(&records, &[]);
+    let (turns, summaries) = build(&records, &view_of(&records), &[]);
     assert_eq!(summaries.len(), 1);
     assert!(summaries[0]
         .fingerprints

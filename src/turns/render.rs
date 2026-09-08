@@ -13,6 +13,40 @@ pub(crate) struct RenderCtx {
     pub(crate) cfg: RichnessCfg,
 }
 
+/// How many abandoned openers a session's note lists by line before it elides the rest.
+const ABANDONED_LINE_CAP: usize = 8;
+
+/// The per-session note for turns the surviving conversation no longer reaches: how many,
+/// where they are, and the exact `show` command that fetches the first one. `None` when the
+/// transcript has none (the overwhelmingly common case prints nothing).
+///
+/// They are counted, never replayed. `verbatim` reconstructs what a COMPACTION clipped, and
+/// the summariser's input is the in-memory message array (claim CMP-020) - a turn the
+/// operator rewound past was already gone from it, so replaying it would invent history.
+/// The elision is explicit: this command never hides a count.
+pub(crate) fn abandoned_note(sr: &ScanResult) -> Option<String> {
+    let lines = &sr.abandoned_openers;
+    if lines.is_empty() {
+        return None;
+    }
+    let shown: Vec<String> = lines
+        .iter()
+        .take(ABANDONED_LINE_CAP)
+        .map(|l| format!("L{l}"))
+        .collect();
+    let mut list = shown.join(" · ");
+    if lines.len() > ABANDONED_LINE_CAP {
+        list.push_str(&format!(" (+{} more)", lines.len() - ABANDONED_LINE_CAP));
+    }
+    Some(format!(
+        "  abandoned  {} turn(s) off the surviving conversation, not replayed: {list}  \
+         (read one: csift show @{} --line {})",
+        lines.len(),
+        sr.session_id,
+        lines[0]
+    ))
+}
+
 /// Look up the dedup-flagged `TurnSlice` for a selected turn index within the PLAN's
 /// turns (NOT `ScanResult.turns`, which is un-flagged) so the renderer sees the
 /// `also_in_summary` flag the plan set.
@@ -201,6 +235,9 @@ pub(crate) fn render_text(
         // - the consumer is reading merged records, not raw native jsonl.
         if plan_has_sidecar(plan) {
             println!("  with elicitation sidecar");
+        }
+        if let Some(note) = abandoned_note(sr) {
+            println!("{note}");
         }
         println!("  {}", "─".repeat(60));
 

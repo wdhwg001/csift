@@ -48,13 +48,26 @@ pub(crate) fn render_boundaries_section(outcome: &Outcome) {
             String::new()
         };
         println!(
-            "  ⚠ {}  ·  L{}  ·  turn {}  ·  {}  ·  {}{sub}",
+            "  ⚠ {}  ·  L{}  ·  turn {}  ·  {}  ·  {}{}{sub}",
             b.path,
             b.line_no,
-            b.turn_index,
+            b.stamp.text(),
             format_timestamp(b.timestamp_utc.as_deref()),
-            b.kind
+            b.kind,
+            survival_marker(b.survival)
         );
+    }
+}
+
+/// The label-zone survival marker a row carries: ` [abandoned]` when the surviving
+/// conversation no longer reaches the record, ` [pre-cut]` when it sits above a compaction
+/// cut csift still reads, and nothing at all for a live record (the common case pays no
+/// output). The write itself is real either way - the marker says which conversation it
+/// belongs to, never whether it happened.
+pub(crate) fn survival_marker(survival: &str) -> String {
+    match survival {
+        "live" => String::new(),
+        other => format!("  [{other}]"),
     }
 }
 
@@ -159,14 +172,15 @@ pub(crate) fn render_timeline(outcome: &Outcome) {
                 ""
             };
             println!(
-                "  L{}  {}  turn {}  {}{}  {}{}{detail}",
+                "  L{}  {}  turn {}  {}{}  {}{}{detail}{}",
                 m.line_no,
                 format_timestamp(m.mutation.timestamp_utc.as_deref()),
-                m.turn_index,
+                m.stamp.text(),
                 m.mutation.op.label(),
                 heuristic,
                 m.mutation.path,
-                errored
+                errored,
+                survival_marker(m.survival)
             );
         }
     });
@@ -250,7 +264,12 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
                     "op": m.mutation.op.json_key(),
                     "ts_utc": m.mutation.timestamp_utc,
                     "ts_local": m.mutation.timestamp_utc.as_deref().and_then(local_iso),
-                    "turn_index": m.turn_index,
+                    // An ABANDONED mutation belongs to no numbered turn, so `turn_index` is
+                    // null and `abandoned_root_line` names its branch head instead; the row
+                    // itself stays, because the write hit the disk.
+                    "turn_index": m.stamp.index(),
+                    "survival": m.survival,
+                    "abandoned_root_line": m.stamp.root_line(),
                     "line": m.line_no,
                     "is_create": m.mutation.is_create,
                     "heuristic": m.mutation.op.is_heuristic(),
@@ -283,7 +302,9 @@ pub(crate) fn render_json(outcome: &Outcome) -> Result<()> {
             "parent_session_id": b.parent_session_id,
             "path": b.path,
             "line": b.line_no,
-            "turn_index": b.turn_index,
+            "turn_index": b.stamp.index(),
+            "survival": b.survival,
+            "abandoned_root_line": b.stamp.root_line(),
             // WHAT changed the file out of band (formatter/git/external-editor/…) -
             // named `cause` so `kind` stays the envelope discriminator exclusively.
             "cause": b.kind,
@@ -363,6 +384,9 @@ pub(crate) fn json_grouped<F: Fn(&FileMutation) -> String>(
                 "multi_edit": counts.multi_edit,
                 "bash": counts.bash,
                 "external_write": counts.external_write,
+                // A SHARE of `total`, never a subtraction: how many of this group's
+                // mutations came from a record off the surviving conversation.
+                "abandoned": counts.abandoned,
                 "total": counts.total(),
                 "distinct_files": counts.files.len(),
                 "first_utc": counts.first_ts,

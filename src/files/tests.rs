@@ -4,9 +4,20 @@ fn rec(line: &str) -> Record {
     serde_json::from_slice(line.as_bytes()).expect("valid fixture record")
 }
 
+/// The survival view over a COMPLETE fixture record list (no dropped line, so no spine).
+fn view_of(records: &[Record]) -> ChainView {
+    let pairs: Vec<(usize, Record)> = records
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(i, r)| (i + 1, r))
+        .collect();
+    ChainView::build(&pairs, &[])
+}
+
 fn extract(records: &[Record]) -> Vec<TaggedMutation> {
     let line_nos: Vec<usize> = (1..=records.len()).collect();
-    extract_mutations("0a1b2c3d-sess", records, &line_nos)
+    extract_mutations("0a1b2c3d-sess", records, &line_nos, &view_of(records))
 }
 
 /// A synthetic multi-turn session: turn 0 Writes two /tmp docs + Edits a gaps doc;

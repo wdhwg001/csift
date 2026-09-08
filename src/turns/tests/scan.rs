@@ -114,6 +114,7 @@ fn scan_named(session_id: &str) -> ScanResult {
         parent_session_id: session_id.to_string(),
         turns: vec![mk_turn(0, Some("ask"), Some("reply"), 1, 0)],
         summaries: Vec::new(),
+        abandoned_openers: Vec::new(),
         skipped_lines: 0,
     }
 }

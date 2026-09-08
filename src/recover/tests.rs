@@ -8,10 +8,14 @@ fn rec(line: &str) -> Record {
     serde_json::from_str(line).expect("valid fixture record")
 }
 
+/// The survival view over a COMPLETE fixture record list - every line is a record here,
+/// so the spine is empty and the chain sees the whole DAG already.
+fn view_of(records: &[(usize, Record)]) -> ChainView {
+    ChainView::build(records, &[])
+}
+
 fn extract_events(records: &[(usize, Record)], file: &str) -> Vec<FileEvent> {
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
-    extract_with_turns(records, &turns, Some(file))
+    extract_with_turns(records, &view_of(records), Some(file)).0
 }
 
 fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {

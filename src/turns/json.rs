@@ -145,7 +145,15 @@ pub(crate) fn render_json(
     // always close with a trailing summary. The key is `skipped_lines` (was a one-off `count`
     // alias, emitted only when > 0; both divergences are now removed for cross-subcommand
     // consistency).
-    let term = crate::text::envelope_summary(json!({"skipped_lines": ctx.skipped_lines}));
+    // `abandoned_turns` is the machine twin of the per-session text note: turn openers the
+    // surviving conversation no longer reaches, summed over every session in scope. They are
+    // NOT part of the reconstruction (the summariser never saw them either), so the count is
+    // the disclosure - fetch one with `csift show @<id> --line <n>`.
+    let abandoned_turns: usize = sessions.iter().map(|sr| sr.abandoned_openers.len()).sum();
+    let term = crate::text::envelope_summary(json!({
+        "skipped_lines": ctx.skipped_lines,
+        "abandoned_turns": abandoned_turns,
+    }));
     println!("{}", serde_json::to_string(&term)?);
     if let Some(p) = out_path {
         crate::recover::write_out_guarded(p, &out_blob)?;
@@ -188,6 +196,10 @@ pub(crate) fn emit_unit_json(
         "elided_lines": r.elided_lines,
         "also_in_summary": unit.also_in_summary,
         "compactions_before": turn.compactions_before,
+        // `live`, or `pre-cut` for a unit ABOVE the compaction cut Claude Code's own loader
+        // stops at (csift keeps reconstructing across it - that is the command's purpose).
+        // A unit is never `abandoned`: those turns are counted in the summary, not replayed.
+        "survival": unit.survival,
         "text": unit.text,
     });
     // STRUCTURED automation attribution on a USER segment: a machine pulse opener carries

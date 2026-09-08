@@ -17,6 +17,7 @@ fn media_ref(mt: &str) -> ImageRef {
         url: None,
         ts_utc: None,
         record_uuid: None,
+        survival: "live",
         data: None,
     }
 }

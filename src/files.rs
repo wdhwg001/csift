@@ -41,7 +41,7 @@ use regex::Regex;
 
 use crate::bash_mutations::parse_bash_mutations;
 use crate::cli::{FilesArgs, FilesDetail, OutputFormat};
-use crate::model::{group_turn_indices_deduped, FileMutation, FileOp, Record};
+use crate::model::{ChainView, FileMutation, FileOp, Record};
 use crate::parse::mmap_bytes;
 use crate::path;
 use crate::time_window::TimeWindow;

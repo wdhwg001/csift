@@ -72,10 +72,10 @@ pub(crate) fn plural(n: usize) -> &'static str {
 /// spurious boundaries, are excluded by `is_genuine_user` (regression fixes).
 ///
 /// NOTE: this raw grouper trusts file order and knows nothing of the SURVIVAL AXIS. The
-/// production surfaces use [`group_turn_indices_deduped`], which drops every record
+/// production surfaces use [`group_turn_indices_chained`], which drops every record
 /// Claude Code's own conversation chain no longer reaches (§6.4.1). This bare form stays
 /// for the lightweight bool-fixture tests and any caller that has no `Record`.
-// Production now routes through `group_turn_indices_deduped`, so in the bin build this bare
+// Production now routes through `group_turn_indices_chained`, so in the bin build this bare
 // generic is reached only from `#[cfg(test)]` - kept as the documented base primitive +
 // bool-fixture test entry (same retained-shape rationale as the `#[allow(dead_code)]` on
 // `Record`).
@@ -98,17 +98,21 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 /// from. Abandoned records stay searchable, addressable and disclosed; they are simply not
 /// numbered.
 ///
-/// This is the delimiter every session-operating surface (`verbatim` / `search` / `files`
-/// / `recover`) uses, so they stay byte-consistent on what counts as a turn.
-///
 /// CAUTION - this entry point builds the chain from whatever records the caller hands it,
 /// and a caller whose prefilter dropped the `attachment` and `system` lines hands it a
 /// DAG with holes. A chain that cannot see those lines cannot be trusted to say a whole
 /// BRANCH is abandoned, so this form drops only what the pre-0.12.0 rule dropped: the
 /// superseded OPENER itself. Every other record stays a member of the turn above it, and
-/// a turn-keyed consumer (`files --by timeline`) keeps its row. A surface that splices
-/// [`crate::parse::spine_record`] rows back in has the whole DAG and calls
-/// [`group_turn_indices_chained`] with that chain instead, which drops the branch.
+/// a turn-keyed consumer (`files --by timeline`) keeps its row.
+///
+/// Every production surface now hands the grouper a WHOLE DAG - `search`/`show`/`stats`
+/// splice [`crate::parse::spine_record`] rows into their own record list and call
+/// [`group_turn_indices_chained`]; `verbatim`/`files`/`recover`/`image` go through
+/// [`crate::model::ChainView`], which does the same splice in their own index space. So
+/// this conservative form has NO caller left outside the unit tests; it is kept as the
+/// documented middle rung (a chain built from a hole-punched DAG must not be trusted to
+/// call a whole branch abandoned) and as the entry those tests exercise.
+#[allow(dead_code)]
 #[must_use]
 pub fn group_turn_indices_deduped<T>(
     records: &[T],

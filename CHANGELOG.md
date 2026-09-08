@@ -42,6 +42,26 @@ surface change bumps the PATCH.
   draft rule still marks a recalled draft inside it. The step is worth taking anyway: coverage
   of a compacted transcript's conversation records is a median 9.4% without it and 46.5% with
   it. Recorded as claim MISC-043.
+- **`verbatim` replays LIVE turns only.** A turn the operator rewound past, or a prompt recalled
+  and re-typed, is counted in a per-session note with the `csift show --line` that fetches it,
+  and never re-emitted. The compaction summariser reads the in-memory message array, so it never
+  saw that turn either - replaying it would put text into a "what the compaction clipped"
+  reconstruction that no model ever read. Reconstruction still crosses a compaction cut, where
+  Claude Code's own loader stops; those units are flagged `pre-cut` rather than dropped.
+- **`files` and `recover` KEEP every abandoned mutation and mark it.** Disk truth is file order:
+  an Edit on a rewound branch landed. The row stays, its turn slot reads
+  `turn abandoned (root L<n>)`, and it carries an `[abandoned]` marker. A `--turn` window admits
+  it by the live turn it physically follows, so a window over a span never hides a write that
+  happened inside it.
+- **`image` lists an abandoned image, marked.** The bytes are on disk and `--out` writes the same
+  file; only `--turn`, which windows on numbered turns, leaves it out.
+- **`recover`'s external-write inference widened to the `--file` target.** The file-history
+  instrument now reports a version jump with no tool write on ANY path a recover run names, as
+  `external write (inferred, snapshot vN->vM, no tool record since L<line>)`. `files` still
+  reports it for the settings family only: the tracked set spans every written path, and a global
+  timeline row would flood the output (58,115 such jumps over 1,121 non-settings paths in one
+  measured corpus). Both `file-history-snapshot` and the per-write `file-history-delta` now feed
+  the version sequence.
 
 ### Added
 
@@ -77,6 +97,11 @@ surface change bumps the PATCH.
   chain totals per session and in the scope TOTAL: `abandoned_turns`, `rewound_turns` and
   `replay_copies`. They never window - an abandoned opener has no turn index to window on - and
   the line-type census stays the exact whole-file corruption authority.
+- **JSON on the file-oriented commands**: `survival` + `abandoned_root_line` on a `files` mutation
+  and boundary row (with a null `turn_index` when abandoned) and on a `recover` boundary;
+  `abandoned` on every grouped `files` row, a SHARE of `total` rather than a subtraction;
+  `abandoned_events` on a `recover` coverage/snapshot row; `abandoned_turns` in the `verbatim`
+  summary and `survival` on each of its units; `survival` on an `image` listing row.
 
 - **The compaction boundary shows what the compaction KEPT, and the two `/rewind` summarize
   modes are finally distinguishable.** A boundary record always carried more than the four

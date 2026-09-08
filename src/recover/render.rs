@@ -170,7 +170,15 @@ pub(crate) fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<
         // REAL home (transcript id + jsonl line) so display never loses the truth.
         let mut merged_line_origin: BTreeMap<usize, (String, usize)> = BTreeMap::new();
         let mut events: Vec<FileEvent> = Vec::with_capacity(tagged.len());
+        // The survival axis is re-keyed onto the synthetic coordinate in the same pass, so
+        // a merged row's stamp still describes the record it really came from.
+        let by_source: BTreeMap<&str, &ScanResult> =
+            group.iter().map(|s| (s.session_id.as_str(), s)).collect();
+        let mut stamps: BTreeMap<usize, EventStamp> = BTreeMap::new();
         for (i, (sid, mut e)) in tagged.into_iter().enumerate() {
+            if let Some(src) = by_source.get(sid.as_str()) {
+                stamps.insert(i + 1, src.stamp_at(e.line_no));
+            }
             merged_line_origin.insert(i + 1, (sid, e.line_no));
             e.line_no = i + 1;
             events.push(e);
@@ -188,6 +196,7 @@ pub(crate) fn merge_groups_for_reconstruction(sessions: Vec<ScanResult>) -> Vec<
             is_subagent: false,
             parent_session_id: merged_id,
             events,
+            stamps,
             opaque,
             merged_line_origin,
             skipped_lines: 0,

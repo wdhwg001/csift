@@ -227,11 +227,13 @@ pub(crate) fn transcript_line_info(path: &Path) -> Result<LineInfo> {
             }
         }
     }
-    // Turn index per line via the shared §6.4 delimiter (byte-consistent with turns/search).
-    for (ti, group) in crate::model::group_turn_indices_deduped(&records, |(_, r)| r)
-        .iter()
-        .enumerate()
-    {
+    // Turn index per line via the SURVIVAL AXIS, so `--turn` and the ambiguity list print the
+    // same numbering `search`/`show` print. The prefilter above admits every line, so the view
+    // already holds the whole DAG and needs no spliced spine rows. A record the chain no longer
+    // reaches belongs to no numbered turn, so it gets NO entry here - which is exactly how a
+    // `--turn` window leaves an abandoned image out while the flat listing still carries it.
+    let view = ChainView::build(&records, &[]);
+    for (ti, group) in view.turns().iter().enumerate() {
         for &ri in group {
             info.turn_of.insert(records[ri].0, ti);
         }

@@ -131,7 +131,14 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
     // single giant transcript is not scanned on one core. KEEP the parallel scan's exact jsonl
     // line numbers (aligned with `records` by index) - every `files` row + Edit-before-Read
     // boundary carries its `Lnnnn` so it joins back to the raw transcript like recover/search.
-    let (recs, skipped) = crate::parse::parse_candidates_parallel(bytes, line_is_files_candidate);
+    // The SURVIVAL AXIS needs the whole DAG, and the mutation prefilter drops the
+    // `attachment` / `system` lines it threads through, so the dropped lines are lifted to
+    // structural SPINE rows in the same pass (`parse_candidates_with_spine`). Without them a
+    // chain built from mutation candidates alone resolves nothing and every turn number
+    // would disagree with `search`'s.
+    let (recs, spine, skipped) =
+        crate::parse::parse_candidates_with_spine(bytes, line_is_files_candidate);
+    let view = ChainView::build(&recs, &spine);
     let line_nos: Vec<usize> = recs.iter().map(|(ln, _)| *ln).collect();
     let records: Vec<Record> = recs.into_iter().map(|(_, rec)| rec).collect();
 
@@ -142,11 +149,11 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
     let is_subagent = crate::subagent::is_subagent_path(path);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| session_id.clone());
-    let mut mutations = extract_mutations(&session_id, &records, &line_nos);
+    let mut mutations = extract_mutations(&session_id, &records, &line_nos, &view);
     // v0.9.4: settings-family external writes from the file-history instrument.
-    let externals = extract_external_writes(&session_id, &records, &line_nos, &mutations);
+    let externals = extract_external_writes(&session_id, &records, &line_nos, &mutations, &view);
     mutations.extend(externals);
-    let mut boundaries = extract_boundaries(&session_id, &records, &line_nos);
+    let mut boundaries = extract_boundaries(&session_id, &records, &line_nos, &view);
     if is_subagent {
         for tm in &mut mutations {
             tm.is_subagent = true;
@@ -157,9 +164,10 @@ pub(crate) fn scan_one_file(path: &Path) -> Result<FileResult> {
             tb.parent_session_id = parent_session_id.clone();
         }
     }
-    // Per-file turn count for resolving `--turn` open/from-end forms (same grouping
-    // `extract_mutations`/`extract_boundaries` used to assign each `turn_index`).
-    let turn_count = group_turn_indices_deduped(&records, |r| r).len();
+    // Per-file LIVE turn count for resolving `--turn` open/from-end forms (the same
+    // numbering `extract_mutations`/`extract_boundaries` stamped each row with, and the
+    // same numbering `search` prints).
+    let turn_count = view.turn_count();
     Ok(FileResult {
         mutations,
         boundaries,

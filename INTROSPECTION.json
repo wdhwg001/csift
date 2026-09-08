@@ -15643,8 +15643,8 @@
       "code": [
         {
           "path": "src/turns/build.rs",
-          "lines": "5-9",
-          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered\n/// records. Turn segmentation reuses the single shared engine\n/// [`group_turn_indices_deduped`], so an esc-cancel / edit-resend draft never surfaces as a\n/// phantom turn (\u00a76.4.1); a compaction summary is a turn MEMBER (it is excluded from\n/// genuine-user), so the walk is transparent to it."
+          "lines": "5-14",
+          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
           "path": "src/turns/select.rs",
@@ -16684,8 +16684,8 @@
         },
         {
           "path": "src/turns/build.rs",
-          "lines": "5-9",
-          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered\n/// records. Turn segmentation reuses the single shared engine\n/// [`group_turn_indices_deduped`], so an esc-cancel / edit-resend draft never surfaces as a\n/// phantom turn (\u00a76.4.1); a compaction summary is a turn MEMBER (it is excluded from\n/// genuine-user), so the walk is transparent to it."
+          "lines": "5-14",
+          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
         },
         {
           "path": "src/turns/select.rs",
@@ -23530,7 +23530,7 @@
       "id": "FH-015",
       "area": "freshness-file-history",
       "behavior": "Claude Code snapshots every Edit/Write-tracked file per prompt and bumps `trackedFileBackups[<path>].version` ONLY when the file's bytes changed - one measured path sat at v2 across 88 consecutive snapshots - so a version JUMP with no tool write of that path in the interval is an external write.",
-      "depends": "`files --by timeline` synthesizes its `external write` row from exactly that instrument and `recover` rebases its replay at a divergent snapshot; without it a replayed file reports a state that never existed on disk.",
+      "depends": "`files --by timeline` synthesizes its `external write` row from exactly that instrument and `recover` reads the same instrument on the ONE `--file` target: a version jump with no replayed write of that file since the previous marker becomes an `external_write` boundary naming the interval it bounds (`external write (inferred, snapshot vN->vM, no tool record since L<line>)`), and a snapshot whose stored content diverges rebases the replay. Without the instrument a replayed file reports a state that never existed on disk. The version pair and the previous marker's line are what make the row inspectable rather than an assertion.",
       "code": [
         {
           "path": "src/files/external.rs",
@@ -23570,6 +23570,16 @@
           "observed": "complete producer trace: trigger prompt submission: Ec(\"query_file_history_snapshot_start\"),ho.filter(DV).forEach(...tTt(...)) @181586250; gate async function K4n(e,n,r): the change test @162376469; gate function I3r(e,n,r): mode, size, mtime, then content @162376751; writer bX: reuse branch vs new backup at U=B+1 @162372780; writer async function XQt(e,n): the trackedFileBackups entry @162378288. writer excerpt: kupFileName===\"string\"&&JQ.test(I.backupFileName)&&W!==void 0&&!await K4n(C,I.backupFileName,j)){ave(f,v,I.realParentDir!==void 0&&W===I.version?I:{...I,version:W,realParentDir:I.realParentDir!==void 0?I.realParentDir:await tie(C)});return}ave(f,v,await XQt(C,U))}catch(C){t(`FileHistory: Failed to b specimen: 4134 snapshot lines carrying trackedFileBackups across 64 transcripts, 316158 (snapshot line, tracked path) pairs, 57587 adjacent-pair version changes, and a longest constant run of 1241 adjacent pairs at one version - so long stretches at a fixed version broken by single increments, exactly the sha",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One entry per (snapshot line, tracked path) pair in jsonl line order within one transcript; a run is a maximal stretch of adjacent pairs with an equal version and a change is one adjacent pair with unequal versions; only lines whose type is file-history-snapshot and whose snapshot.trackedFileBackups is an object are counted.",
           "note": "The bump is gated by K4n/I3r on mode, size, mtime and then bytes, with the reuse branch preserving the version in the unchanged case, and the corpus shows 57587 transitions against runs as long as 1241 - the signature of a content-gated counter rather than a per-snapshot one."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Built a synthetic two-snapshot fixture for one target path (v1 then v2, no tool write between, store pruned) and ran `csift recover @<session> --file <target> --coverage`; separately censused the live corpus for the same shape.",
+          "observed": "The fixture produced one AUTHORITATIVE boundary reading `external write (inferred, snapshot v1->v2, no tool record since L4)`. Corpus: 75 top-level transcripts, 43 carry file-history-snapshot lines, 31 carry at least one non-settings version jump with no structured tool write of that path in the interval - 58,115 such jumps over 1,121 distinct paths; the settings family alone has 47 jumps in 5 transcripts.",
+          "rule": "One version transition per (snapshot line, tracked path) pair; a decrease is a generation reset and is never a jump; a tool write is a Write/Edit/MultiEdit/NotebookEdit tool_use naming that path, counted in the open-closed interval between the two markers.",
+          "note": "The consumer widened: the row is now emitted for the recover TARGET on any path, not only for the settings family, and it names the version pair and the interval's low end."
         }
       ],
       "attribution": "end-to-end",
@@ -23747,13 +23757,13 @@
         },
         {
           "path": "src/files/external.rs",
-          "lines": "65-71",
+          "lines": "73-79",
           "snippet": "        for (path, entry) in tfb {\n            if !is_settings_family(path) {\n                continue;\n            }\n            let Some(version) = entry.get(\"version\").and_then(serde_json::Value::as_u64) else {\n                continue;\n            };"
         },
         {
           "path": "src/files/external.rs",
-          "lines": "84-88",
-          "snippet": "        for (line, turn, ts, version) in seq {\n            if let Some((prev_line, prev_v)) = prev {\n                // A DECREASE = a generation reset (the counter restarts on process\n                // restart); only same-generation jumps are readable here.\n                if *version > prev_v {"
+          "lines": "92-96",
+          "snippet": "        for (line, turn, stamp, survival, ts, version) in seq {\n            if let Some((prev_line, prev_v)) = prev {\n                // A DECREASE = a generation reset (the counter restarts on process\n                // restart); only same-generation jumps are readable here.\n                if *version > prev_v {"
         }
       ],
       "instrument": "For each snapshot line after the first, record `isSnapshotUpdate` and whether any tracked path's version differs from the previous snapshot, then cross-tabulate. Counting rule: one row per snapshot line after the first.",
@@ -24101,7 +24111,7 @@
       "id": "FH-021",
       "area": "freshness-file-history",
       "behavior": "The tracked-path set spans ordinary source files at scale: a census over the 59 transcripts carrying file-history snapshots found 1,739 distinct tracked-path keys against 11 settings-family keys (0.6%), and only 5 of those 59 transcripts (8.5%) tracked any settings file at all. Under a 200 MB transcript cutoff the same census reads 1,227 keys, 3 settings-family (0.2%), 3 of 56 transcripts (5.4%).",
-      "depends": "csift scope-limits external-write reporting to basenames `settings.json` and `settings.local.json` under a `.claude` parent precisely because wider reporting would flood every `files` timeline; the instrument is per-session evidence, not a corpus-wide sensor.",
+      "depends": "csift scope-limits `files` external-write reporting to basenames `settings.json` and `settings.local.json` under a `.claude` parent precisely because wider reporting would flood every `files` timeline; the instrument is per-session evidence, not a corpus-wide sensor. `recover` reads the same instrument on the SINGLE `--file` target, where the flood cannot arise - one path, one version sequence - which is why the target row carries no settings-family restriction.",
       "code": [
         {
           "path": "src/files/external.rs",
@@ -24136,6 +24146,16 @@
           "observed": "complete producer trace: trigger the structured appliers calling vTe once per edited path @163986750; gate JQt: the tracked KEY is cwd-relative when the path is under the session cwd, absolute otherwise @162382623; writer the reducer's track case writes the key into trackedFileBackups and the delta record @162371330. writer excerpt: _file_history_track_edit_failed\",{}),n({kind:\"touch\"});return}if(Ad(_.trackedFileBackups,d)){n({kind:\"touch\"});return}for(let I of f.snapshots)if(Ad(I.trackedFileBackups,d)){n({kind:\"touch\"});return}let v;try{v=await XQt(r,1)}catch(I){t(`FileHistory: failed to back up ${r}: ${I instanceof Error?I.message:String(I)}`,{l specimen: Claim check, corpus-wide: 1,739 distinct tracked-path keys, 11 settings-family (0.6%); 59 transcripts carry snapshots and 5 of them (8.5%) track any settings file; under a 200 MB transcript cutoff, 1,227 keys, 3 settings-family (0.2%), 3 of 56 transcripts (5.4%). Today, scoped to one project directo",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); One path per distinct tracked key string counted verbatim (a repo-relative and an absolute spelling of one file are two keys, which is exactly what JQt produces); one session per transcript file; a transcript tracks a settings file iff at least one of its snapshot records carries a settings-family key.",
           "note": "The population rule the open leg asked for is now read in the binary - only vTe registers, only the structured appliers call it, and JQt fixes the key spelling - and the distribution it predicts is what two independent censuses measure."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Re-ran the tracked-path census over the live corpus and, separately, counted the version jumps a per-path consumer would have to report if the settings scope were dropped from `files`.",
+          "observed": "58,115 non-settings version jumps with no structured tool write in the interval, over 1,121 distinct tracked paths in 31 of 75 top-level transcripts; the settings family has 47 jumps in 5 transcripts. A global timeline row is three orders of magnitude larger than the scoped one.",
+          "rule": "One jump per consecutive (version increase, tracked path) pair within one transcript; one path per distinct key string; the settings family is basename settings.json or settings.local.json under a `.claude` parent.",
+          "note": "The scope law now has a second half: it bounds the GLOBAL timeline, not a row about the one file a recover call named."
         }
       ],
       "attribution": "end-to-end",
@@ -38695,17 +38715,17 @@
       "id": "MISC-030",
       "area": "misc",
       "behavior": "Claude Code writes the artifacts a file-recovery scan needs - Read calls, tool_result bodies, integrity errors, edited_text_file attachments and file-history-snapshot lines - under distinct field spellings rather than one common key, so a recovery scanner needs one needle per spelling instead of a single structural hook. The divergence is structural, not incidental. One statement in the per-prompt external-edit scanner (byte 165752230) invokes the READ tool with the snake_case input {file_path:C} and returns the attachment {type:'edited_text_file',filename:C,snippet:j} - two spellings of the same path in one expression. The file-write tool reads its input as file_path (163984104) and keys its result data filePath (163988233, mapped at 163986018), and that result object rides the user record under toolUseResult (164457299) only when the keep predicate admits it (162742281). The file-history line is a third shape, {type:'file-history-snapshot',messageId,snapshot,isSnapshotUpdate}, built by its own store method (166106053) after the reducer's snapshot branch selects it over the delta branch (162368322 and 162369168). Integrity errors have NO single producer: the tag <tool_use_error> occurs 23 times in the binary - eleven inline literals at separate error branches, two named wrappers (162740449, 183501747), three strip sites and seven constant-table strings. The branch that writes most of them on disk is the tool executor's validate-input rejection, where gate and writer are one statement: `let ke=await e.validateInput?.(...)` (164440070) then `if(ke?.result===!1)` (164440324) returning a user message whose tool_result content is the whole string `<tool_use_error>MSG</tool_use_error>` with a block-level is_error, alongside a toolUseResult that is the plain string `Error: MSG` (164440920) - a fourth divergence, inside one record. The false results it tests are minted by the file tools themselves: File has not been read yet (return statement at 162415120, message literal at 162415217), File has been modified since read (162415561), String to replace not found (162415976), with the write and notebook twins at 163985590 and 164092928. On disk, 715 user records carry a tool_result block whose content STARTS with the tag: 218 file-not-read, 184 string-not-found, 33 modified-since-read (435 file-integrity messages from validate-input), 113 InputValidationError, 11 no-such-tool and 156 others; all 715 carry a STRING toolUseResult - 586 beginning 'Error: ', 113 beginning 'InputValidationError: ', 16 other - and none a structured one. The file-history line holds its shape exactly: 4,160 of 4,160 snapshot lines carry the four keys the writer builds and a nested snapshot of exactly messageId, trackedFileBackups and timestamp.",
-      "depends": "`csift recover` admits a line only when one of eleven literal byte needles is present (`toolUseResult`, `Edit`, `Write`, `Read`, `Bash`, `PowerShell`, `filePath`, `file_path`, `file-history-snapshot`, `edited_text_file`, `tool_use_error`) plus the tolerant user-role matcher, and builds its per-window opaque accounting from what survives; a mutating tool outside that set never enters the disclosure, so the opaque count UNDER-reports rather than over-reports - the one direction the no-silent-loss contract forbids.",
+      "depends": "`csift recover` admits a line only when one of eleven literal byte needles is present (`toolUseResult`, `Edit`, `Write`, `Read`, `Bash`, `PowerShell`, `filePath`, `file_path`, `file-history-`, `edited_text_file`, `tool_use_error`) plus the tolerant user-role matcher, and builds its per-window opaque accounting from what survives; a mutating tool outside that set never enters the disclosure. The file-history needle is the shared TYPE PREFIX rather than the full `file-history-snapshot` spelling, so the per-write `-delta` line is admitted by the same needle as the per-prompt snapshot table.",
       "code": [
         {
           "path": "src/recover/scan.rs",
-          "lines": "291-295",
+          "lines": "297-301",
           "snippet": "pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {\n    // R13: the genuine-user hook is serialization-tolerant (user-only, like files').\n    // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher\n    // every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         },
         {
           "path": "src/recover/scan.rs",
-          "lines": "298-311",
-          "snippet": "                memmem::Finder::new(b\"toolUseResult\"),\n                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Read\"),\n                memmem::Finder::new(b\"Bash\"),\n                // The opaque accounting counts PowerShell tool calls; an assistant\n                // record carrying one matches no other needle, so without this the\n                // P count silently missed the assistant-side records.\n                memmem::Finder::new(b\"PowerShell\"),\n                memmem::Finder::new(b\"filePath\"),\n                memmem::Finder::new(b\"file_path\"),\n                memmem::Finder::new(b\"file-history-snapshot\"),\n                memmem::Finder::new(b\"edited_text_file\"),\n                memmem::Finder::new(b\"tool_use_error\"),"
+          "lines": "304-321",
+          "snippet": "                memmem::Finder::new(b\"toolUseResult\"),\n                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Read\"),\n                memmem::Finder::new(b\"Bash\"),\n                // The opaque accounting counts PowerShell tool calls; an assistant\n                // record carrying one matches no other needle, so without this the\n                // P count silently missed the assistant-side records.\n                memmem::Finder::new(b\"PowerShell\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
       "instrument": "Code half: read `line_is_recover_candidate` in `src/recover/scan.rs`; the array is declared `[memmem::Finder<'static>; 11]` and its elements are the eleven literals, counting rule one needle per `memmem::Finder::new` call inside the `LazyLock` array. Corpus half: count jsonl lines per spelling with a fixed-string search (`rg -c -F`, one count per matching line summed over the transcripts of a project directory), then count the user records whose message.content holds a tool_result block whose content STARTS with `<tool_use_error>`, bucketed by message head and by the shape of the record's toolUseResult, counting rule one observation per record.",
@@ -38735,6 +38755,16 @@
           "observed": "715 records carrying the tag at the start of a tool_result block: 218 file-not-read, 184 string-not-found, 33 modified-since-read, 113 InputValidationError, 11 no-such-tool, 156 other; toolUseResult a string in all 715 (586 'Error: ', 113 'InputValidationError: ', 16 other), structured in none. 4,160 file-history-snapshot lines, all with the key set (isSnapshotUpdate, messageId, snapshot, type) and a nested snapshot of exactly (messageId, timestamp, trackedFileBackups); isSnapshotUpdate false on 3,574, true on 586. Spelling counts in one project directory: toolUseResult 7,986, filePath 2,727, file_path 2,734, file-history-snapshot 435, edited_text_file 295, tool_use_error 119, is_error 4,739",
           "rule": "One observation per user record for the tag census (a record counts once even when it carries several tagged blocks); one observation per line for the snapshot census, keys sorted and counted by distinct tuple; one count per matching LINE per file for the fixed-string spelling counts, summed over the directory.",
           "note": "The residual objection was that the integrity-error artifact - the one whose needle the depends clause names - had two writers and no trigger or gate, and that its cited writers are a minority producer. Both halves are now answered from the binary. The dominant producer is the executor's validate-input rejection, whose gate and writer are one statement (164440070 into 164440324 into 164440920) reached from the executor trigger the chain already cites, and the false results it tests are minted by the file tools' own validators (162415120 and its siblings); the named wrapper keeps its place as the deny-path sibling, with its gate at 162939180 and its single call site named. Enumerating all 23 occurrences of the tag refutes the implicit reading that a wrapper produces it: eleven are inline literals at separate branches, so the spelling is a per-branch shape rather than one builder's output, and the behavior text now says so. The second nit is answered inside the already-cited scanner gate: the Read-side witness at 165752230 calls the read tool with file_path and returns an attachment keyed filename, so the sentence naming Read calls is no longer carried by write-tool hops alone. No csift code relied on the old wording; the eleven needles and the under-report direction are unchanged."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the eleven-needle table in csift's recover prefilter and checked each spelling against the record shapes Claude Code writes for the artifacts a recovery scan needs.",
+          "observed": "The needle count is unchanged at eleven; one spelling widened from `file-history-snapshot` to the shared `file-history-` prefix, which admits both the snapshot and the delta line types.",
+          "rule": "One needle per distinct field or type spelling; a line is a candidate when any needle or the tolerant user-role matcher hits.",
+          "note": "The needle list in `depends` is restated at its current spelling."
         }
       ],
       "attribution": "end-to-end",
@@ -48544,7 +48574,7 @@
       "id": "QT-025",
       "area": "queue-and-telemetry",
       "behavior": "file-history-delta is a distinct line type from file-history-snapshot: it is written per tracked file per write, carries a top-level timestamp (which the snapshot form does not - the snapshot's instant is nested at snapshot.timestamp) and holds messageId, snapshotMessageId, trackingPath and a backup object. Only version and backupTime are non-null on every delta; backupFileName is present but NULL on 1,454 of 1,985 and realParentDir is absent on 934 of 1,985.",
-      "depends": "csift renders both forms under the gated leaf `harness.meta.snapshot` with the tracked paths and versions as matchable text, and the byte prefilter admits them on the shared `\"file-history-` type prefix; the finer-grained delta form is not yet consumed by `recover`.",
+      "depends": "csift renders both forms under the gated leaf `harness.meta.snapshot` with the tracked paths and versions as matchable text, and the byte prefilter admits them on the shared `\"file-history-` type prefix. `recover` consumes BOTH forms: its candidate needle is the same shared prefix and the delta's `trackingPath` + `backup.version` become a `HistorySnapshotMarker` for the target exactly as a snapshot entry does, so the external-write interval is bounded at the finer per-write grain rather than only at the per-prompt one.",
       "code": [
         {
           "path": "src/search/record_text.rs",
@@ -48584,6 +48614,16 @@
           "observed": "complete producer trace: trigger async function vTe (the tracking entry) @162371113; trigger the per-prompt snapshot trigger @181586295; gate reducer lV case track @162368322; writer async function L7n @166123148; writer insertFileHistorySnapshot / insertFileHistoryDelta @166106053; writer async function XQt (the backup entry builder) @162378288. writer excerpt: async function L7n(e,n,r,o,d){await Fi().insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)}async function yxr(e,n){await Fi().insertAtt specimen: 4,111 file-history-snapshot lines and 2,047 file-history-delta lines. Top-level timestamp on 0 of 4,111 snapshots and 2,047 of 2,047 deltas. Neither type carries message{}. Delta backup sub-keys: version non-null 2,047/2,047, backupTime non-null 2,047/2,047, backupFileName null 1,499 and non-null 54",
           "rule": "three hops (trigger, gate, writer) each a verbatim excerpt at a byte offset; attribution derives from the legs (complete + observed = end-to-end); one observation per matching jsonl line for the type, message and timestamp counts; for backup sub-keys, three disjoint buckets per delta record (non-null / present-but-null / absent).",
           "note": "The two writers are separate literals in the same store - the snapshot one built without a timestamp, the delta one appended with its own - and a raw on-disk delta matches L7n key for key with a backup object matching XQt key for key."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Counted the transcripts carrying `file-history-delta` lines in the live corpus, then read the delta arm csift now runs (`trackingPath` + `backup` -> HistorySnapshotMarker) against a synthetic delta fixture through `csift recover --coverage`.",
+          "observed": "21 of 75 top-level transcripts carry at least one `file-history-delta` line; the delta arm yields a marker for the target path with the delta's own `version` and top-level `timestamp`.",
+          "rule": "One transcript per file containing the literal `\"type\":\"file-history-delta\"`; one marker per delta line whose `trackingPath` matches the target by full path or basename suffix.",
+          "note": "The sentence saying the delta form is not yet consumed by recover no longer holds: it is."
         }
       ],
       "attribution": "end-to-end",
@@ -54170,7 +54210,7 @@
       "id": "REC-025",
       "area": "record-model",
       "behavior": "Claude Code writes a `type:\"file-history-delta\"` line - a sibling of `file-history-snapshot` carrying one path's version bump. Its fields are `{messageId, snapshotMessageId, trackingPath, backup:{backupFileName, version, backupTime}, timestamp}`; unlike the snapshot it DOES carry a top-level timestamp. 1,971 such lines corpus-wide.",
-      "depends": "`Record::promoted_class` maps both `file-history-snapshot` and `file-history-delta` to `harness.meta.snapshot`; omitting the delta arm loses roughly 1,971 corpus lines from the SEARCHABLE surface. It does not affect recover's backup instrument or files' ExternalWrite inference, which key on `file-history-snapshot` records and the on-disk store.",
+      "depends": "`Record::promoted_class` maps both `file-history-snapshot` and `file-history-delta` to `harness.meta.snapshot`; omitting the delta arm loses roughly 1,971 corpus lines from the SEARCHABLE surface. It also feeds recover's backup instrument: a delta whose `trackingPath` names the `--file` target contributes its `backup.version` to the same version sequence a snapshot entry does. `files`' ExternalWrite inference still keys on `file-history-snapshot` records alone (its per-path sequences come from the snapshot table), so the two consumers read the corpus at different grains on purpose.",
       "code": [
         {
           "path": "src/model/classify_promoted.rs",
@@ -54205,6 +54245,16 @@
           "observed": "complete producer trace: trigger vTe dispatching the track action @162371660; gate reducer lV case \"track\" early return @162368400; writer L7n building the delta entry @166123154. writer excerpt: function L7n(e,n,r,o,d){await Fi().insertFileHistoryDelta({type:\"file-history-delta\",messageId:e,snapshotMessageId:n,trackingPath:r,backup:o,timestamp:new Date().toISOString()},d)}async function yxr(e,n){await Fi().insertAttributionSnapshot(e,n)}asyn enumeration: 3 site(s) read: L7n call sites (whole binary) @166123154: grep 'L7n(' returns exactly two byte hits: the definition at 166123154 and one c; insertFileHistoryDelta call sites (whole binary) @166106053: grep 'insertFileHistoryDelta(' returns exactly two: the store method at 16610625; the delta gate @162368400: The Ad lookup early-return is the only suppression: no other branch in the reduc specimen: 2,056 records. One top-level key set on all of them: {backup, messageId, snapshotMessageId, timestamp, trackingPath, type}; a top-level timestamp on 2,056 of 2,056. The backup object has TWO shapes: {backupFileName, backupTime, realParentDir, version} on 1,122 and {backupFileName, backupTime, versio",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One count per raw jsonl line whose top-level type is file-history-delta; key-set counts are over the parsed object, and the backup sub-object is tabulated separately.",
           "note": "The delta literal with its own timestamp was read in the store wrapper, and the whole-binary call-site count shows exactly one path can produce it - matched by 2,056 on-disk lines carrying that literal's exact key set."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the delta arm in recover's per-record extraction against a synthetic fixture and confirmed `files` still builds its sequences from `snapshot.trackedFileBackups` only.",
+          "observed": "recover emits a HistorySnapshotMarker per matching delta line; `files` external-write extraction reads `rec.snapshot` and never `rec.tracking_path`, so its rows are unchanged.",
+          "rule": "One marker per delta line matching the target; one files row per (snapshot line, settings-family path) version increase.",
+          "note": "The sentence saying the delta form does not affect recover's backup instrument no longer holds; the files half of it still does."
         }
       ],
       "attribution": "end-to-end",
@@ -61401,12 +61451,12 @@
       "id": "REC-075",
       "area": "record-model",
       "behavior": "A tool_use and its result are joined only by the tool_use block's id echoed as the result block's tool_use_id, and the result always lands inside the same genuine-user turn as the call - by mechanism, not merely by observation. The scope has a name in the binary: the per-query tool queue's buildSameTurnToolUses(e) at 164581403 collects the sibling blocks already in that queue, grouped by their assistant message, and executeTool hands it to the executor as let v=S3(e.block,e.assistantMessage,this.canUseTool,{...this.toolUseContext,abortController:_,sameTurnToolUses:this.buildSameTurnToolUses(e)},this.now) at 164582353, so the object that joins a result to its call is the object that defines the turn. User input submitted while a turn is running never becomes a user record: the turn guard's tryStart returns null (181623439) and that arm re-enqueues every user message of the batch and returns before the batch's single append (181624300); the batch is buffered and never flushed once handed off (181586905); the queued input is drained back only while the guard is idle (181701890); and an item absorbed DURING the query is delivered as a queued_command attachment and consumed (164752640) rather than minted as a user record. Results drain back into the generator that issued the call (164583277), and the only join key written is the call id echoed on the result carrier (164578780). Corpus census over 8253 transcripts: 243386 joins resolved within one file - top-level 60196, other-subagent 35960, workflow 147230 - with 0 joins having a turn-opener candidate between call and result and 0 orphan results in every lane, 33 unreturned calls, and 15176 turn-opener candidates across 8200 of the 8253 files, so the test is not vacuous. Line ORDER within a turn is not guaranteed: 4 top-level joins have the result line 1-2 lines BEFORE the call line (two Read at 2.1.177 by one line, one Edit at 2.1.156 by one line, one Edit at 2.1.177 by two lines). ONE path in the binary re-runs a tool whose call record is already on disk, and it writes AHEAD of the next opener rather than behind it: the headless turn's deferred-tool / orphaned-permission resume. The headless turn entry Et (179106037) admits one turn at a time and delegates to the turn body, which enters the resume generator as if(yield*gu({orphanedPermission:...,deferredToolUse:...,hasPrompt:...}))return; at 179108922, ahead of the turn body's own prompt processing - await Nxe({input:we,mode:\"prompt\",...}) at 179109564, whose callee has a single definition in the binary at 169780397 - so nothing the prompt produces can be appended before the resume's own writes. gu returns falsy when there is no deferred tool (179094540) and when the resumed tool RAN to completion (179095195), so the appended result precedes everything that turn's prompt goes on to write; it returns truthy only to end the turn with no prompt processed at all - when the tool is no longer available (yield v(n,!0), stop_reason tool_deferred_unavailable) or when the tool is deferred again (stop_reason tool_deferred). No second tool_use record is written: HKn (163593735) locates the stored block with r.findLast over the loaded assistant records, re-executes that ONE block against its original assistant message (163594480), and pushes each yielded message onto the live array, persisting through the ordinary uuid-frontier append when session persistence is on (163594656; the flag is sessionPersistenceDisabled at 156814914). That append, Rw (166113249, the binary's only function of that name), inserts only the records absent from the CURRENT session id's on-disk uuid set, so the result lands in the file of the session id in force at resume time together with any loaded record that file lacks - the call included. The single entry is closed by enumeration: the identifier-bounded token gu( occurs 52 times - 11 function-definition heads (one of them this generator), this generator's one delegation, and 40 calls of the other same-named bindings, 26 of them with an empty argument list - and the delegation form yield*gu( occurs exactly once. HKn and its orphaned-permission twin IKn occur six times each: a definition, one call inside gu, and four name-table entries.",
-      "depends": "csift builds id_to_path, ids_with_result and failed_ids PER TURN and joins the carrier to the structured mutation within the turn (src/recover/scan.rs), so an id whose result landed in a later turn would be treated as carrier-less: files would lose its create-vs-edit accuracy and recover would fire the input-side fallback on an op that has an echo. The per-turn maps are sets keyed by id, built over the whole turn before any event is emitted, so the 4 reversed-order joins are harmless - order within a turn does not matter, only membership. The resume path does not break the join either: on the arms that produce a result, the result is appended into the same file as the call and ahead of the next opener, so the per-turn map still sees both. The one resume shape that leaves a call with no carrier is the arm where the tool is no longer available: it appends nothing, and csift then reports the op as carrier-less, which is the correct reading of that file.",
+      "depends": "csift builds id_to_path, ids_with_result and failed_ids PER EXTRACTION GROUP and joins the carrier to the structured mutation within that group (src/recover/scan.rs), so an id whose result landed in a later turn would be treated as carrier-less: files would lose its create-vs-edit accuracy and recover would fire the input-side fallback on an op that has an echo. A group is a LIVE TURN or a single abandoned branch - the same-turn guarantee holds inside a branch the conversation was later rewound past, and keeping the branch as its own scope stops its tool_use from joining a live turn's tool_result. The per-group maps are sets keyed by id, built over the group's own records.",
       "code": [
         {
           "path": "src/recover/scan.rs",
-          "lines": "397-399",
-          "snippet": "    for (turn_index, idxs) in turns.iter().enumerate() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
+          "lines": "421-423",
+          "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id \u2192 file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         }
       ],
       "instrument": "python3 walk of every *.jsonl under the projects root: per file record the line index of every tool_use block id and of the FIRST tool_result echoing it as tool_use_id, plus the indices of every turn-opener candidate, then bucket each join by whether an opener index lies strictly between call and result and count results whose id has no call in the same file. Counting rule: one count per (file, tool_use id) pair resolved within the same file, first result wins; the turn-opener predicate is the one stated in the specimen rule.",
@@ -61456,6 +61506,16 @@
           "observed": "8253 transcripts. 243386 joins resolved same-file: top-level 60196, other-subagent 35960, workflow 147230. opener_between 0 and orphan results 0 in EVERY lane; 33 unreturned calls (top-level 2, other-subagent 29, workflow 2); 15176 turn-opener candidates across 8200 of the 8253 files. Four top-level joins have the result line before the call line: two Read at 2.1.177 by one line, one Edit at 2.1.156 by one line, one Edit at 2.1.177 by two lines. | Every clause of the closing sentence is now either a read hop or gone. The ordering against the prompt processor is the delegation's position in the turn body; the re-emission is HKn's findLast plus the one-block re-execution; the append is Rw; the",
           "rule": "One count per (file, tool_use id) pair whose result appears in the same file; first result wins. TURN-OPENER CANDIDATE := type=='user' AND not isMeta AND not isCompactSummary AND (message.content is a string OR a block list with a text block and NO tool_result block) AND the leading text does not start with '<local-command-stdout>', '<command-name>', '<command-message>', '[Request interrupted by user', 'Caveat: The messages below' or '<system-reminder>'. 'opener_between' counts joins with at least one such index strictly between call and result.",
           "note": "The mechanism half of the claim is read at both ends rather than asserted. The same-turn scope is the per-query queue's own buildSameTurnToolUses (definition 164581403, its only call inside executeTool at 164582353). The resume exception is traced through the headless turn entry (179106037), the delegation placed ahead of the turn body's prompt processing (179108922, with the Nxe call at 179109564), the generator's two falsy returns (179094540 and 179095195), the re-execution of the stored block (163593735, 163594480) and its persistence through the uuid-frontier append (163594656, Rw at 166113249). Two statements are replaced by what those hops read. First, the resume re-executes a tool_use block already on disk and writes no second tool_use record. Second, it does not split a call from its result across files: Rw inserts every loaded record the target file lacks, so the file that receives the result also holds the call; the shape that leaves a call unreturned is instead the tool-no-longer-available arm, which appends nothing. The single-entry negative is closed by enumeration rather than by assertion: 52 identifier-bounded gu( occurrences with one delegation, and six occurrences each of HKn and IKn with one call apiece. The census reproduces under its own counting rule at the corpus's current size, opener_between 0 and orphan results 0 in all three lanes."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.11.2",
+          "date": "2026-09-08",
+          "verdict": "refined",
+          "instrument": "Read the per-group join maps in recover's extraction against a synthetic rewind fixture whose abandoned branch carries its own Edit call and result.",
+          "observed": "The branch's tool_use and tool_result join inside the branch's own scope; no id crosses between a live turn and an abandoned branch.",
+          "rule": "One join scope per extraction group; a group is one live turn or one abandoned branch.",
+          "note": "The scope wording follows the extraction groups, which now include the abandoned branches; the same-turn guarantee it rests on is unchanged."
         }
       ],
       "attribution": "end-to-end",
@@ -83620,7 +83680,7 @@
       "id": "CMP-020",
       "area": "compaction",
       "behavior": "A compaction summarises the IN-MEMORY message array, never the transcript file. The summarize entry `I8n` (2.1.258 @164837057) takes `direction` defaulting to `\"from\"` and splits the array it was handed - `W=_===\"up_to\"?e.slice(0,n):e.slice(n)` for the half to summarize, the complement for the half kept - and the array reaching it has already been trimmed to the newest compaction boundary by `ul` (@166032628: find the last boundary marker, `return r===-1?e:e.slice(r)`), which re-reads nothing. No filesystem read sits on that path: every `readFile` occurrence in the 40,000-byte window around the entry belongs to the read-file-state cache. The count that reaches the records is the length of that in-memory slice: the summary's `summarizeMetadata.messagesSummarized` and the boundary's `compactMetadata.messagesSummarized` are both `W.length` at the constructor call @164840137.",
-      "depends": "csift prints `messagesSummarized` verbatim in the boundary excerpt and never converts it into a line count, a record count or a turn count: it counts entries of an in-memory array that holds shapes the file does not (progress entries, non-loggable entries), which is the same reason `compactMetadata.preservedMessages.allUuids` carries uuids that resolve to no line. `verbatim` reconstructs the clipped turns from the FILE, so it recovers exactly the records that were written, not the array the summariser saw; equating the two would make the excerpt assert how many lines a compaction removed.",
+      "depends": "csift prints `messagesSummarized` verbatim in the boundary excerpt and never converts it into a line count, a record count or a turn count: it counts entries of an in-memory array that holds shapes the file does not (progress entries, non-loggable entries), which is the same reason `compactMetadata.preservedMessages.allUuids` carries uuids that resolve to no line. `verbatim` reconstructs the clipped turns from the FILE, so it recovers exactly the records that were written, not the array the summariser saw; equating the two would make the excerpt assert how many lines a compaction removed. `csift verbatim` rests on the same fact from the other side: it replays LIVE turns only, counting a turn the surviving conversation no longer reaches in a per-session note with a `csift show --line` pointer instead of re-emitting it. The command exists to restore what a compaction CLIPPED, and the summariser could not have seen a turn the in-memory array no longer held, so replaying one would put text into that reconstruction which no model ever read. The complementary half is that csift keeps reconstructing ACROSS a compaction cut, where those turns WERE the conversation when they were written, which is why a pre-cut unit is flagged rather than dropped.",
       "code": [
         {
           "path": "src/search/record_text.rs",
@@ -83631,6 +83691,16 @@
           "path": "src/model/compaction.rs",
           "lines": "5-12",
           "snippet": "//! Claude Code compacts a conversation three ways and writes the SAME two records for all\n//! three - a `compact_boundary` system record carrying the metrics and a `type:\"user\"`\n//! record carrying `isCompactSummary:true`. The two `/rewind` summarize gestures are\n//! distinguished by ONE key, and it sits on the SUMMARY, not the boundary: the writer\n//! emits `summarizeMetadata:{messagesSummarized, userContext, direction}` INSTEAD of\n//! `isVisibleInTranscriptOnly` (a genuine either/or), with `direction` reading `\"up_to\"`\n//! for \"Summarize up to here\" and `\"from\"` for \"Summarize from here\"."
+        },
+        {
+          "path": "src/turns/build.rs",
+          "lines": "5-14",
+          "snippet": "/// Build the per-turn slices + summary dedup sets from a session's line-numbered records.\n///\n/// Turn segmentation comes from the SURVIVAL AXIS ([`ChainView::turns`]), so only turns the\n/// surviving conversation still reaches are built - a recalled draft, a rewound turn, and\n/// a compaction re-anchor's replay copies never surface as phantom turns. That is not a\n/// display choice: the compaction summariser reads the IN-MEMORY message array (claim\n/// CMP-020), which by then no longer holds those turns, so replaying one would put text\n/// into a \"what the compaction clipped\" reconstruction that no model ever saw. A compaction\n/// summary is a turn MEMBER (it is excluded from genuine-user), so the walk is transparent\n/// to it."
+        },
+        {
+          "path": "src/turns/units.rs",
+          "lines": "195-201",
+          "snippet": "    /// The jsonl lines of the turn openers the surviving conversation no longer reaches - a\n    /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER\n    /// replayed: the compaction summariser's input is the in-memory message array, so it\n    /// never saw them either (claim CMP-020), and replaying them would put text into the\n    /// reconstruction that no model ever read. They are counted and pointed at instead.\n    pub(crate) abandoned_openers: Vec<usize>,"
         }
       ],
       "instrument": "Read the three hops at their offsets in the 2.1.258 executable and count `readFile` in the surrounding window; then, on the one corpus boundary carrying `compactMetadata.messagesSummarized`, compare that number against the uuid-bearing records preceding the boundary in the same file and against `preservedMessages.allUuids` entries that resolve to no line. Counting rule: one record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`.",
@@ -83684,6 +83754,16 @@
           "observed": "All four excerpts present verbatim. `readFile` occurrences in the window: 4, every one a read-file-state cache call, 0 on the summarize path. The specimen boundary sits at line 112 of a 134-line transcript with `messagesSummarized` 66; uuid-bearing records before it: 66 (43 attachment, 10 assistant, 7 user, 6 system); `preservedMessages.allUuids` 19 entries of which 2 resolve to no line in the file, `uuids` 17 of which 0 do.",
           "rule": "One record per raw line; a uuid-bearing record is a parsed line with a non-empty string `uuid`; an allUuids entry resolves when some line of the same file carries that uuid.",
           "note": "The count coincides with the on-disk record count on this specimen, while the same boundary's allUuids carries two entries the file never received - direct evidence the summarised array holds entries the transcript does not."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.0",
+          "date": "2026-09-08",
+          "verdict": "holds",
+          "instrument": "Byte-searched the three hop excerpts and the two enumeration excerpts in the 2.1.258 executable, taking each match's first byte; grepped `readFile` over the 60 KB window from 164820000 and read both hits; then resolved every corpus boundary's preservedMessages.allUuids against its own file's uuid set.",
+          "observed": "Each excerpt occurs exactly ONCE, at the offsets recorded above. The driver window holds exactly two `readFile` occurrences, both `readFileState`. Corpus: 245 compaction boundaries, 244 carrying preservedMessages.allUuids, 3,748 entries in total, of which 636 (17.0%) resolve to no line in the carrying file.",
+          "rule": "One occurrence per matched byte offset in the named window; one boundary per `type:\"system\"`/`subtype:\"compact_boundary\"` line over every top-level transcript; an entry resolves when the same file carries a line whose `uuid` equals it.",
+          "note": "A pass that re-read the transcript could not name a preserved message the file does not hold, which is what 17.0% of the entries do."
         }
       ]
     },

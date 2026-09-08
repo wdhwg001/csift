@@ -16,7 +16,14 @@ use super::*;
         Default action is to LIST (id · media-type · ~size · time). Pass `--out <PATH>` to EXTRACT: \
         a DIRECTORY keeps each image's SOURCE format (auto-named); a FILE path's extension CONVERTS \
         the single image to that format (`convert in.png out.jpg` idiom). A URL-source image has no \
-        inline bytes; it is reported, never fabricated.",
+        inline bytes; it is reported, never fabricated.\n\n\
+        THE SURVIVAL AXIS: an image pasted into a prompt the operator later rewound past, or \
+        into one recalled and re-typed, is still LISTED and still extractable - the bytes are \
+        on disk and `--out` writes the same file. It is only MARKED (`[abandoned]` in text, \
+        JSON `survival`), so you know it is not part of the conversation the model now sees; \
+        `[pre-cut]` marks one above a compaction cut. `--turn` is the exception: it windows \
+        on NUMBERED turns, using the live numbering `search` and `show` print, and an \
+        abandoned record belongs to no numbered turn - so a turn window leaves it out.",
     after_help = "EXAMPLES\n  \
           csift image @<uuid>                             # list every image (deduped)\n  \
           csift image . --format json                     # machine-readable listing\n  \
@@ -27,7 +34,9 @@ use super::*;
           Envelope: header → listing rows → summary. Listing rows: {kind:\"image\", handle \
         (the display `#N` / locator), seq, id, line, img_index, session_id, is_subagent, \
         parent_session_id, source_kind, media_type, b64_len, est_bytes, url, record_uuid, \
-        ts_utc, ts_local}. With `--out`, each written file adds {kind:\"extract\", handle, \
+        survival, ts_utc, ts_local} (`survival` is live | pre-cut | abandoned - the carrying \
+        record's place in the surviving conversation; an abandoned image is listed and \
+        extractable like any other). With `--out`, each written file adds {kind:\"extract\", handle, \
         seq, id, session_id, is_subagent, parent_session_id, path, bytes, media_type, \
         source_media_type, converted, notes}."
 )]

@@ -48,9 +48,11 @@ mod branches;
 mod leaf;
 mod nodes;
 mod relink;
+mod view;
 mod walk;
 
 pub(crate) use nodes::Builder;
+pub use view::{ChainView, TurnStamp};
 
 /// Where the chain's leaf came from - disclosed, because the leaf decides the whole
 /// answer and Claude Code's own pick has four gates on it.

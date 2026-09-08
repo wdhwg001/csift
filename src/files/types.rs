@@ -15,7 +15,16 @@ pub(crate) struct TaggedMutation {
     /// The re-feedable PARENT session uuid (the owning top-level session). Equals
     /// `session_id` for a top-level mutation. Defaults to `session_id`; set in `scan_one_file`.
     pub(crate) parent_session_id: String,
+    /// The live turn this mutation physically sits in. For a mutation on a record the
+    /// surviving conversation no longer reaches it is the nearest PRECEDING live turn - an
+    /// ordering key for the `--turn` window only, never printed (see `stamp`).
     pub(crate) turn_index: usize,
+    /// Where the mutating record sits in live turn numbering: `Live(n)`, or `Abandoned`
+    /// naming the branch head's line. Disk truth is FILE ORDER, so an abandoned mutation is
+    /// kept and marked, never dropped - the write happened.
+    pub(crate) stamp: crate::model::TurnStamp,
+    /// The wire spelling of the record's survival (`live` / `pre-cut` / `abandoned`).
+    pub(crate) survival: &'static str,
     /// The JSONL physical line number of the mutating record (1-based), so a `files` row joins
     /// back to the raw transcript exactly like `recover`/`search`/`turns` do.
     pub(crate) line_no: usize,
@@ -33,7 +42,10 @@ pub(crate) struct TaggedBoundary {
     pub(crate) parent_session_id: String,
     pub(crate) path: String,
     pub(crate) line_no: usize,
+    /// The ordering turn (see [`TaggedMutation::turn_index`]).
     pub(crate) turn_index: usize,
+    pub(crate) stamp: crate::model::TurnStamp,
+    pub(crate) survival: &'static str,
     pub(crate) kind: &'static str,
     pub(crate) timestamp_utc: Option<String>,
 }

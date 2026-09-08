@@ -123,9 +123,29 @@ use super::*;
         `external_write` boundary and the replay REBASES on the snapshot bytes - the \
         never-existed state a silent write used to produce is gone. Without the blob, \
         a version jump with no tool write since the previous snapshot still discloses \
-        the same boundary content-less (nothing rebased, trust ends there). A tool \
+        the same boundary content-less: `external write (inferred, snapshot vN->vM, no \
+        tool record since L<line>)`, naming the interval it bounds so you can go read it \
+        (nothing rebased, trust ends there). Both the per-prompt `file-history-snapshot` \
+        table and the per-write `file-history-delta` line feed that sequence, so the \
+        interval is as tight as the harness's own bookkeeping allows. This runs for the \
+        `--file` TARGET on ANY path; `csift files` reports the same inference only for \
+        the settings family, because a global timeline row per tracked path would flood \
+        the output. A tool \
         write and a silent write inside ONE snapshot interval merge into one bump; \
-        the content comparison is the complete detector, the number alone is not.\n\n\
+        the content comparison is the complete detector, the number alone is not. The \
+        motivating producer is /rewind \"Restore code\", which writes NOTHING to the \
+        transcript - the next prompt's `edited_text_file` attachment is the only other \
+        trace, and it stays the authoritative boundary it already was.\n\n\
+        THE SURVIVAL AXIS: the replay is FILE ORDER and stays that way. An Edit made on a \
+        branch the operator later rewound past DID hit the disk, so it is replayed like any \
+        other write - what changes is the reporting. Turn numbers are the LIVE ones (the \
+        same numbers `search` and `show` print, and what `--turn` / `--at @turn:` resolve \
+        against); an event or boundary from a record off the surviving conversation is \
+        stamped `turn abandoned (root L<n>)` instead of a number, JSON gives it a NULL \
+        `turn_index` plus `survival` and `abandoned_root_line`, and a one-line disclosure \
+        says how many such events the window held. A `--turn` window still admits them, by \
+        the live turn they physically follow: a window that silently dropped a real write \
+        would reconstruct a state the disk never had.\n\n\
         FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\n  \
           A Bash result's `staleReadFileStateHint` is Claude Code itself reporting \
         that the command modified files in its read set, BY NAME (paths relative to \
@@ -149,12 +169,19 @@ use super::*;
         reason}` row + the summary, then errors on stderr with a non-zero exit. \
         `--patches` emits `{kind:\"segment\",…}` + `{kind:\"boundary\",…}` rows; \
         `--coverage` emits `{kind:\"coverage\", covered_ranges, boundaries, \
-        hard_boundaries, soft_boundaries, events, fragments, recoverable_lines, \
+        hard_boundaries, soft_boundaries, events, abandoned_events, fragments, \
+        recoverable_lines, \
         opaque_commands, powershell_commands, suggested_search, …}`; `--at` and \
         `--salvage` emit `{kind:\"snapshot\", lines, gaps, seen_total_lines, \
-        boundaries, opaque_commands, powershell_commands, suggested_search, …}`. A \
-        boundary object is `{line, source_session_id, source_line, turn_index, \
-        ts_utc, ts_local, cause, confidence, detail}`: `line` is the replay/cutoff \
+        abandoned_events, \
+        boundaries, opaque_commands, powershell_commands, suggested_search, …}`. \
+        `abandoned_events` counts the replayed events that came from records off the \
+        surviving conversation - a share of what produced the coverage above, never \
+        subtracted from it. A \
+        boundary object is `{line, source_session_id, source_line, turn_index, survival, \
+        abandoned_root_line, \
+        ts_utc, ts_local, cause, confidence, detail}` (`turn_index` is NULL on an \
+        abandoned record and `abandoned_root_line` names its branch head): `line` is the replay/cutoff \
         coordinate (feed it to `--at @line:<N>`), `source_line` the REAL jsonl line in \
         `source_session_id` (feed those to `csift show`); the two pairs differ only \
         after a cross-transcript merge. Every per-session row carries the id-domain \

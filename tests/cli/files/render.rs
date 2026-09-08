@@ -217,12 +217,14 @@ fn files_timeline_is_chronological_with_heuristic_label() {
 
 #[test]
 fn files_timeline_keeps_every_row_when_a_branch_left_the_conversation() {
-    // The GOLDEN PIN for the interim wiring: `files` does not splice the structural spine
-    // rows of the lines its prefilter drops, so the chain it builds is missing the
-    // attachment and system nodes and cannot be trusted to call a whole BRANCH abandoned.
-    // Trusting it that far dropped every mutation on that branch from the timeline -
-    // measured on two real transcripts, 230 rows down to 92 and 4,778 down to 3,054. Every
-    // edit a session performed must still be listed here, whichever branch it happened on.
+    // The GOLDEN PIN on the ROW SET, and it holds either way the chain is built. `files`
+    // now splices the structural spine rows of the lines its prefilter drops (via
+    // `ChainView`), so its chain sees the whole DAG and CAN name the abandoned branch -
+    // and it still lists every row, because disk truth is file order: an Edit on a branch
+    // the operator later rewound past really did land. What survival changes is the turn
+    // slot and the marker, never the presence of a row. This is the pin that catches the
+    // regression a trusted-too-far chain caused before the splice - measured on two real
+    // transcripts, 230 rows down to 92 and 4,778 down to 3,054.
     let h = Home::new();
     let enc = "-Users-dev-example-quarry";
     let sess = "6b5a4938-2716-4c05-9d8e-7f6a5b4c3d2e";

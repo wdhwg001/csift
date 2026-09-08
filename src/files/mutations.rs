@@ -125,17 +125,22 @@ pub(crate) fn bash_file_mutation(
     }
 }
 
-/// Delimit turns over the parsed records, then for each turn extract structured + Bash
+/// Delimit turns over the parsed records, then for each GROUP extract structured + Bash
 /// mutations and JOIN the structured ones to their carriers for accurate `is_create`.
+///
+/// The groups are the live turns AND the abandoned branches ([`ChainView::groups`]): disk
+/// truth is FILE ORDER, so an Edit on a branch the conversation was later rewound past DID
+/// hit the disk and stays a row - marked, never dropped. Each group keeps its own carrier /
+/// failed-id join scope, so a branch's `tool_use` never joins a live turn's `tool_result`.
 pub(crate) fn extract_mutations(
     session_id: &str,
     records: &[Record],
     line_nos: &[usize],
+    view: &ChainView,
 ) -> Vec<TaggedMutation> {
-    let index_turns = group_turn_indices_deduped(records, |r| r);
     let mut out = Vec::new();
 
-    for (turn_index, idxs) in index_turns.iter().enumerate() {
+    for (stamp, idxs) in view.groups() {
         // Build the carrier join map for this turn: tool_use_id → (filePath, is_create).
         let mut carriers: BTreeMap<String, (String, bool)> = BTreeMap::new();
         // tool_use_ids whose RESULT was an error (`is_error:true`) - a failed Edit/Write, or a
@@ -195,7 +200,9 @@ pub(crate) fn extract_mutations(
                     // per-file values once (the path-derived discriminator lives there).
                     is_subagent: false,
                     parent_session_id: session_id.to_string(),
-                    turn_index,
+                    turn_index: view.order_turn(i),
+                    stamp,
+                    survival: view.survival(i).as_str(),
                     line_no: line_nos.get(i).copied().unwrap_or(0),
                     mutation: m,
                 });
@@ -208,7 +215,9 @@ pub(crate) fn extract_mutations(
                         session_id: session_id.to_string(),
                         is_subagent: false,
                         parent_session_id: session_id.to_string(),
-                        turn_index,
+                        turn_index: view.order_turn(i),
+                        stamp,
+                        survival: view.survival(i).as_str(),
                         line_no: line_nos.get(i).copied().unwrap_or(0),
                         mutation: bash_file_mutation(bm, rec, errored),
                     });
@@ -216,6 +225,10 @@ pub(crate) fn extract_mutations(
             }
         }
     }
+    // The abandoned branches are walked AFTER the live turns, so restore strict file order
+    // (a stable sort: within one line the structured-then-bash push order is preserved, and
+    // a transcript with no abandoned branch sorts to exactly what the turn walk produced).
+    out.sort_by_key(|m| m.line_no);
     out
 }
 
@@ -238,10 +251,10 @@ pub(crate) fn extract_boundaries(
     session_id: &str,
     records: &[Record],
     line_nos: &[usize],
+    view: &ChainView,
 ) -> Vec<TaggedBoundary> {
-    let index_turns = group_turn_indices_deduped(records, |r| r);
     let mut out = Vec::new();
-    for (turn_index, idxs) in index_turns.iter().enumerate() {
+    for (stamp, idxs) in view.groups() {
         // id → file_path for every Edit/Write tool_use in this turn (incl. failed ones - the
         // rejected edit's INPUT still carries its file_path).
         let mut tool_use_path: BTreeMap<String, String> = BTreeMap::new();
@@ -275,7 +288,9 @@ pub(crate) fn extract_boundaries(
                                 parent_session_id: session_id.to_string(),
                                 path: path.clone(),
                                 line_no: line_nos.get(i).copied().unwrap_or(0),
-                                turn_index,
+                                turn_index: view.order_turn(i),
+                                stamp,
+                                survival: view.survival(i).as_str(),
                                 kind: "modified_since_read",
                                 timestamp_utc: records[i].timestamp.clone(),
                             });
@@ -285,6 +300,7 @@ pub(crate) fn extract_boundaries(
             }
         }
     }
+    out.sort_by_key(|b| b.line_no);
     out
 }
 

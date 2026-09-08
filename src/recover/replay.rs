@@ -18,6 +18,9 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
     // event landed since the previous marker (the content-less silent-write test).
     let mut last_snap_version: Option<u64> = None;
     let mut writes_since_marker = false;
+    // The jsonl line of the previous marker - the LOW end of the interval an inferred
+    // external write is bounded by, so the row can say WHERE the silence started.
+    let mut last_snap_line: Option<usize> = None;
 
     #[allow(clippy::too_many_arguments)]
     let close_segment = |out: &mut Replay,
@@ -438,9 +441,14 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                     &buf,
                     writes_since_marker,
                 );
+                // The interval an inferred external write names runs from the PREVIOUS
+                // marker, so both ends are captured before the running state advances.
+                let prev_version = last_snap_version;
+                let prev_line = last_snap_line;
                 if version.is_some() {
                     last_snap_version = *version;
                 }
+                last_snap_line = Some(e.line_no);
                 match action {
                     SnapAction::Nothing => {}
                     SnapAction::Rebase => {
@@ -489,6 +497,21 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                             pre_state_known,
                             anchor_source,
                         );
+                        // The C-24 instrument, scoped to the RECOVER TARGET (never a global
+                        // timeline row - the corpus carries tens of thousands of these
+                        // across every tracked path, which is why `files` reports only the
+                        // settings family). The row names the exact interval it bounds so a
+                        // reader can go look: the version pair, and the line the silence
+                        // started at. The motivating producer is /rewind "Restore code",
+                        // which writes NOTHING to the transcript until the next prompt's
+                        // `edited_text_file` attachment - and that attachment stays the
+                        // authoritative boundary it already was.
+                        let ver =
+                            |v: Option<u64>| v.map_or_else(|| "?".to_string(), |n| n.to_string());
+                        let since = prev_line.map_or_else(
+                            || "the previous snapshot".to_string(),
+                            |l| format!("L{l}"),
+                        );
                         out.boundaries.push(Boundary {
                             line_no: e.line_no,
                             turn_index: e.turn_index,
@@ -496,12 +519,13 @@ pub(crate) fn replay(events: &[FileEvent], cutoff_line: Option<usize>) -> Replay
                             kind: "external_write",
                             confidence: Confidence::Authoritative,
                             detail: format!(
-                                "file-history version jumped to v{} with NO tool write of this \
-                                 file since the previous snapshot - a harness-side or \
-                                 out-of-band write; the snapshot content is unavailable \
-                                 (pruned, unverifiable, or never stored), so nothing is \
-                                 rebased and trust across this point ends",
-                                version.map_or_else(|| "?".to_string(), |v| v.to_string())
+                                "external write (inferred, snapshot v{}->v{}, no tool record \
+                                 since {since}) - a harness-side or out-of-band write; the \
+                                 snapshot content is unavailable (pruned, unverifiable, or \
+                                 never stored), so nothing is rebased and trust across this \
+                                 point ends",
+                                ver(prev_version),
+                                ver(*version)
                             ),
                         });
                         seg_open = None;

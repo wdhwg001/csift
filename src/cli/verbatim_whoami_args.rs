@@ -52,6 +52,23 @@ use super::*;
         calls, Z failed]` placeholder (only on runs longer than the mode's threshold; \
         default 6; `--profile heavy` 4 / `light` 8). `all` keeps every agent message. \
         `--profile heavy|light` is the WHOLE tuning surface (per-knob flags are gone).\n\n\
+        THE SURVIVAL AXIS: only LIVE turns are replayed - the turns Claude Code's own \
+        conversation chain still reaches. A turn the operator rewound past, or a prompt \
+        recalled and re-typed, is COUNTED in a per-session `abandoned  N turn(s) off the \
+        surviving conversation, not replayed: L…` note with the exact `csift show @<id> \
+        --line <n>` that fetches one, and JSON carries `abandoned_turns` in the trailing \
+        summary. It is not a display choice: the compaction summariser's input is the \
+        IN-MEMORY message array, which by then no longer held that turn, so replaying it \
+        would put text into a \"what the compaction clipped\" reconstruction that no model \
+        ever read. Turn numbers are the live ones - the same numbers `search` and `show` \
+        print, and what `--turn` / `--slice` index.\n\n\
+        ACROSS A COMPACTION CUT, csift keeps going, and Claude Code does not. The harness's \
+        loader stops its walk at a `compact_boundary` (its parentUuid is null), so on a \
+        resume the history above the cut is gone from the conversation; csift steps over \
+        the boundary through its `logicalParentUuid` and reconstructs anyway, because \
+        \"what the model saw at the time\" is the question this command answers. Such units \
+        are flagged, never hidden: JSON `survival` reads `pre-cut` for them and `live` \
+        otherwise.\n\n\
         DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
         summary)` and DEMOTED (selected only after non-dup turns); never silently dropped \
         (a false positive must not lose a real turn).\n\n\
@@ -139,8 +156,12 @@ use super::*;
           automation exists vs was rendered). Then one object PER emitted unit:\n  \
           {session_id, is_subagent, parent_session_id, turn_index, line_no, role, ts_utc,\n  \
           ts_local, tool_calls, full_chars, rendered_chars, truncated, elided_chars,\n  \
-          elided_lines, also_in_summary, compactions_before, text, is_automation} (is_subagent\n  \
-          flags a bare-hex subagent unit; re-feed parent_session_id, never the bare session_id);\n  \
+          elided_lines, also_in_summary, compactions_before, survival, text, is_automation}\n  \
+          (is_subagent\n  \
+          flags a bare-hex subagent unit; re-feed parent_session_id, never the bare session_id;\n  \
+          `survival` is `live`, or `pre-cut` for a unit ABOVE a compaction cut Claude Code's\n  \
+          own loader stops at - never `abandoned`, since those turns are counted rather than\n  \
+          replayed);\n  \
           an automation USER unit additionally\n  \
           carries {trigger_kind, task_id, status, event} (event = the Monitor/ScheduleWakeup\n  \
           outcome tag, null on non-monitor pulses). Boundary objects are tagged\n  \
@@ -149,7 +170,9 @@ use super::*;
           (`… summary at L<n> · summarize <direction> · …`) - a `/rewind` summarize IS a\n  \
           compaction, so the turns it clipped are reconstructed exactly like any other's;\n  \
           and a trailing\n  \
-          {kind:\"summary\", skipped_lines} ALWAYS closes the stream (even when 0). The envelope\n  \
+          {kind:\"summary\", skipped_lines, abandoned_turns} ALWAYS closes the stream (even when\n  \
+          0) - `abandoned_turns` counts the turn openers off the surviving conversation across\n  \
+          every session in scope, the machine twin of the per-session note. The envelope\n  \
           is UNIFORM tool-wide (envelope v2): EVERY command's stream is `{kind:\"header\",…}` →\n  \
           kind-tagged rows → `{kind:\"summary\",…}`, so `tail -1 | jq 'select(.kind==\
           \"summary\")'` reads the footer of ANY command identically."

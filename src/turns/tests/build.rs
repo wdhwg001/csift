@@ -85,7 +85,7 @@ fn build_produces_round_trip_with_tool_count_and_compaction() {
             ),
         ),
     ];
-    let (turns, summaries) = build(&records, &[]);
+    let (turns, summaries) = build(&records, &view_of(&records), &[]);
     assert_eq!(turns.len(), 2);
     // turn 0: round-trip, 2 tool calls, before the (one) summary → compactions_before 1.
     assert!(turns[0].is_round_trip());
@@ -119,7 +119,7 @@ fn build_pure_tool_call_turn_has_no_assistant_eot() {
             ),
         ),
     ];
-    let (turns, _s) = build(&records, &[]);
+    let (turns, _s) = build(&records, &view_of(&records), &[]);
     assert_eq!(turns.len(), 1);
     assert!(turns[0].user.is_some());
     assert!(
@@ -152,7 +152,7 @@ fn build_orphan_assistant_lead_has_no_user() {
             ),
         ),
     ];
-    let (turns, _s) = build(&records, &[]);
+    let (turns, _s) = build(&records, &view_of(&records), &[]);
     // The orphan lead folds into turn 0 (the first real user turn), so turn 0 has the
     // user AND carries the orphan assistant text as its EOT (last assistant in the turn).
     assert_eq!(turns.len(), 1);
@@ -183,7 +183,7 @@ fn build_summary_with_block_body_is_not_captured() {
             ),
         ),
     ];
-    let (turns, summaries) = build(&records, &[]);
+    let (turns, summaries) = build(&records, &view_of(&records), &[]);
     assert!(summaries.is_empty(), "block-bodied summary not captured");
     // The turn still builds; the block summary contributes no boundary.
     assert_eq!(turns[0].compactions_before, 0);
@@ -229,7 +229,7 @@ fn build_skips_non_genuine_user_opener() {
             ),
         ),
     ];
-    let (turns, _s) = build(&records, &[]);
+    let (turns, _s) = build(&records, &view_of(&records), &[]);
     assert_eq!(turns.len(), 1);
     assert_eq!(turns[0].user.as_ref().unwrap().text, "real opener");
     assert!(turns[0].assistant_eot().is_some());
@@ -272,7 +272,7 @@ fn build_skips_non_candidate_records_in_scan() {
             ),
         ),
     ];
-    let (turns, summaries) = build(&records, &[]);
+    let (turns, summaries) = build(&records, &view_of(&records), &[]);
     assert_eq!(turns.len(), 1);
     assert!(turns[0].is_round_trip());
     assert!(summaries.is_empty());

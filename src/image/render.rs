@@ -30,11 +30,18 @@ pub(crate) fn render_text(selected: &[&ImageRef], transcripts: usize, skipped_li
             Some(_) => format!("{:<5} {}", img.handle(), img.id()),
             None => img.id(),
         };
+        // The survival marker is the ONLY difference an off-chain image gets: it is listed
+        // and extractable like any other, because the bytes are on disk.
+        let survival = match img.survival {
+            "live" => String::new(),
+            other => format!("  [{other}]"),
+        };
         println!(
-            "{}  {}  {}{}",
+            "{}  {}  {}{}{}",
             label,
             size,
             format_timestamp(img.ts_utc.as_deref()),
+            survival,
             tag
         );
     }
@@ -74,6 +81,7 @@ pub(crate) fn render_json(selected: &[&ImageRef], transcripts: usize, skipped_li
                 "est_bytes": img.est_bytes,
                 "url": img.url,
                 "record_uuid": img.record_uuid,
+                "survival": img.survival,
                 "ts_utc": img.ts_utc,
                 "ts_local": img.ts_utc.as_deref().and_then(local_iso),
             })

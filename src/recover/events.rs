@@ -224,6 +224,33 @@ pub(crate) fn extract_from_record(
         }
     }
 
+    // ── (8b) file-history-delta: ONE path's version bump (`trackingPath` + `backup`) ──
+    // The same instrument as the snapshot table, at a finer grain: a delta lands whenever
+    // that one file's backed-up bytes changed. Reading both shapes is what lets the
+    // external-write inference name the exact interval it bounds instead of the whole gap
+    // between two per-prompt snapshots.
+    if let (Some(path), Some(backup)) = (rec.tracking_path.as_deref(), rec.backup.as_ref()) {
+        if path_matches(target_file, path) {
+            events.push(FileEvent {
+                line_no,
+                turn_index,
+                timestamp_utc: ts.clone(),
+                kind: EventKind::HistorySnapshotMarker {
+                    version: backup.get("version").and_then(serde_json::Value::as_u64),
+                    backup_file: backup
+                        .get("backupFileName")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string),
+                    backup_time: backup
+                        .get("backupTime")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string),
+                    content: None,
+                },
+            });
+        }
+    }
+
     // ── (7) attachment (edited_text_file external edit / file snapshot) ──
     // The raw blob is parsed to a full tree ON DEMAND (the model keeps it unparsed so
     // the scanning subcommands never pay for it; recover is the deep consumer).

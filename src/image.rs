@@ -21,7 +21,7 @@ use memchr::memmem;
 use serde_json::{json, Value};
 
 use crate::cli::{ImageArgs, ImageOutFormat, OutputFormat};
-use crate::model::{Block, Record};
+use crate::model::{Block, ChainView, Record};
 use crate::parse::{mmap_bytes, parse_candidates_parallel};
 use crate::timez::{format_timestamp, local_iso};
 

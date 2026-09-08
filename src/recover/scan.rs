@@ -33,16 +33,15 @@ pub(crate) fn scan_one_file_multi(
     present.sort_unstable();
     present.dedup();
 
-    let (records, skipped) =
-        crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
+    let (records, spine, skipped) =
+        crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
+    let view = ChainView::build(&records, &spine);
     // Scope accounting is per TRANSCRIPT (target-independent): collect once, share.
-    let opaque = collect_opaque_commands(&session_id, &records, &turns);
+    let opaque = collect_opaque_commands(&session_id, &records, &view);
 
     let mut out = Vec::new();
     for ti in present {
-        let mut events = extract_with_turns(&records, &turns, Some(&targets[ti]));
+        let (mut events, stamps) = extract_with_turns(&records, &view, Some(&targets[ti]));
         attach_snapshot_content(&mut events, path);
         if !events.is_empty() {
             out.push((
@@ -52,6 +51,7 @@ pub(crate) fn scan_one_file_multi(
                     is_subagent,
                     parent_session_id: parent_session_id.clone(),
                     events,
+                    stamps,
                     opaque: opaque.clone(),
                     merged_line_origin: std::collections::BTreeMap::new(),
                     skipped_lines: skipped,
@@ -230,6 +230,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
             is_subagent,
             parent_session_id,
             events: Vec::new(),
+            stamps: std::collections::BTreeMap::new(),
             opaque: Vec::new(),
             merged_line_origin: std::collections::BTreeMap::new(),
             skipped_lines: 0,
@@ -254,6 +255,7 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
                 is_subagent,
                 parent_session_id,
                 events: Vec::new(),
+                stamps: std::collections::BTreeMap::new(),
                 opaque: Vec::new(),
                 merged_line_origin: std::collections::BTreeMap::new(),
                 skipped_lines: 0,
@@ -264,21 +266,25 @@ pub(crate) fn scan_one_file(path: &Path, target_file: Option<&str>) -> Result<Sc
     // Parse all recover-candidate lines IN PARALLEL (newline-aligned chunks on the rayon pool),
     // preserving each record's exact 1-based line number (counts EVERY visited line, 1:1 with
     // jsonl) - a single giant transcript is no longer scanned on one core.
-    let (records, skipped) =
-        crate::parse::parse_candidates_parallel(bytes, line_is_recover_candidate);
-
-    let recs: Vec<&Record> = records.iter().map(|(_, r)| r).collect();
-    let turns = group_turn_indices_deduped(&recs, |r| *r);
-    let mut events = extract_with_turns(&records, &turns, target_file);
+    // The SURVIVAL AXIS needs the whole DAG; recover's prefilter keeps tool traffic and
+    // genuine-user lines, so the `attachment`/`system` records the chain threads through
+    // are lifted to structural SPINE rows in the same pass. Turn numbers then agree with
+    // `search`'s, and an event on a rewound branch is recognized as such instead of being
+    // numbered into a live turn it never belonged to.
+    let (records, spine, skipped) =
+        crate::parse::parse_candidates_with_spine(bytes, line_is_recover_candidate);
+    let view = ChainView::build(&records, &spine);
+    let (mut events, stamps) = extract_with_turns(&records, &view, target_file);
     // v0.9.4: attach mtime-verified file-history content to version-change markers
     // so the replay can detect and rebase across tool-record-less writes.
     attach_snapshot_content(&mut events, path);
-    let opaque = collect_opaque_commands(&session_id, &records, &turns);
+    let opaque = collect_opaque_commands(&session_id, &records, &view);
     Ok(ScanResult {
         session_id,
         is_subagent,
         parent_session_id,
         events,
+        stamps,
         opaque,
         merged_line_origin: std::collections::BTreeMap::new(),
         skipped_lines: skipped,
@@ -306,7 +312,11 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
                 memmem::Finder::new(b"PowerShell"),
                 memmem::Finder::new(b"filePath"),
                 memmem::Finder::new(b"file_path"),
-                memmem::Finder::new(b"file-history-snapshot"),
+                // Both file-history line shapes: the per-prompt `-snapshot` version table
+                // AND the `-delta` line that bumps ONE path's version. The delta carries
+                // the same instrument at a finer grain, which is what lets the target's
+                // external-write row name the exact interval it bounds.
+                memmem::Finder::new(b"file-history-"),
                 memmem::Finder::new(b"edited_text_file"),
                 memmem::Finder::new(b"tool_use_error"),
             ]
@@ -328,11 +338,12 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
 pub(crate) fn collect_opaque_commands(
     session_id: &str,
     records: &[(usize, Record)],
-    turns: &[Vec<usize>],
+    view: &ChainView,
 ) -> Vec<OpaqueCommand> {
     let mut out: Vec<OpaqueCommand> = Vec::new();
-    for (turn_index, idxs) in turns.iter().enumerate() {
+    for (_stamp, idxs) in view.groups() {
         for &i in idxs {
+            let turn_index = view.order_turn(i);
             let (line_no, rec) = (records[i].0, &records[i].1);
             let Some(blocks) = rec.blocks() else { continue };
             for b in blocks {
@@ -375,26 +386,39 @@ pub(crate) fn collect_opaque_commands(
             }
         }
     }
+    out.sort_by_key(|o| o.line_no);
     out
 }
 
-/// Extract `--file` events given PRE-COMPUTED turn groups. Batch reconstruction groups each
-/// transcript ONCE and calls this per target, so a transcript mentioning many manifest files
-/// is grouped a single time rather than once per file.
+/// Extract `--file` events given a PRE-COMPUTED survival view. Batch reconstruction builds
+/// the view for each transcript ONCE and calls this per target, so a transcript mentioning
+/// many manifest files is grouped a single time rather than once per file.
 ///
 /// Turn delimiting keys on the shared boundary predicate (SPEC 6.4) so file-event
 /// attribution lines up with `verbatim`/`search`. Intent<->result is joined by
-/// `tool_use_id` WITHIN a turn (never by adjacency - an integrity error can precede its
-/// own tool_use line): per turn, `tool_use_id -> file_path` maps let an integrity-error
+/// `tool_use_id` WITHIN a group (never by adjacency - an integrity error can precede its
+/// own tool_use line): per group, `tool_use_id -> file_path` maps let an integrity-error
 /// carrier with no inline path be attributed to `--file`.
+///
+/// The groups are the live turns AND the abandoned branches: an Edit on a branch the
+/// operator later rewound past DID hit the disk, so it is extracted and replayed like any
+/// other write. What changes is only how it is REPORTED - the returned stamp map says
+/// `abandoned (root L<n>)` where a live event says its turn number. Returns the events in
+/// strict file order plus that per-line stamp map.
 pub(crate) fn extract_with_turns(
     records: &[(usize, Record)],
-    turns: &[Vec<usize>],
+    view: &ChainView,
     target_file: Option<&str>,
-) -> Vec<FileEvent> {
+) -> (Vec<FileEvent>, BTreeMap<usize, EventStamp>) {
     let mut events: Vec<FileEvent> = Vec::new();
+    let mut stamps: BTreeMap<usize, EventStamp> = BTreeMap::new();
+    // A Bash content anchor lands at its own record line, so its ordering turn is looked
+    // up by line rather than inherited from the group.
+    let order_by_line: BTreeMap<usize, usize> = (0..records.len())
+        .map(|i| (records[i].0, view.order_turn(i)))
+        .collect();
 
-    for (turn_index, idxs) in turns.iter().enumerate() {
+    for (stamp, idxs) in view.groups() {
         // tool_use_id → file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.
         let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();
         // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -
@@ -437,6 +461,14 @@ pub(crate) fn extract_with_turns(
         let mut turn_events: Vec<FileEvent> = Vec::new();
         for &i in idxs {
             let (line_no, rec) = (&records[i].0, &records[i].1);
+            let turn_index = view.order_turn(i);
+            stamps.insert(
+                *line_no,
+                EventStamp {
+                    turn: stamp,
+                    survival: view.survival(i).as_str(),
+                },
+            );
             extract_from_record(
                 *line_no,
                 turn_index,
@@ -452,7 +484,7 @@ pub(crate) fn extract_with_turns(
             // input is never applied as a phantom mutation.
             extract_input_fallback(
                 *line_no,
-                turn_index,
+                view.order_turn(i),
                 rec,
                 target_file,
                 &ids_with_result,
@@ -472,7 +504,7 @@ pub(crate) fn extract_with_turns(
             });
         }
         for mut e in anchors.events.drain(..) {
-            e.turn_index = turn_index;
+            e.turn_index = order_by_line.get(&e.line_no).copied().unwrap_or_default();
             turn_events.push(e);
         }
         // Anchor events land at their own record lines; keep the replay stream in
@@ -481,5 +513,9 @@ pub(crate) fn extract_with_turns(
         events.extend(turn_events);
     }
 
-    events
+    // The abandoned branches are walked after the live turns, so restore strict file order -
+    // the replay IS file order. A stable sort leaves a fork-free transcript byte-identical
+    // (its live turns are contiguous ascending runs already).
+    events.sort_by_key(|e| e.line_no);
+    (events, stamps)
 }

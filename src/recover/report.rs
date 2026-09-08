@@ -96,6 +96,7 @@ pub(crate) fn render_coverage_text(ctx: &RenderCtx, sessions: &[ScanResult]) -> 
                 rep.counts.edit_unanchorable
             );
         }
+        print_abandoned_note(s);
         print_window_disclosure(s, ctx);
     }
     if !any {
@@ -117,12 +118,28 @@ pub(crate) fn print_boundary_lines(s: &ScanResult, boundaries: &[Boundary]) {
         println!(
             "    {sym} {}  turn {}  {}  {} ({})",
             boundary_loc(s, b.line_no),
-            b.turn_index,
+            s.stamp_at(b.line_no).turn.text(),
             format_timestamp(b.timestamp_utc.as_deref()),
             boundary_detail_with_clue(s, b),
             b.confidence.label()
         );
     }
+}
+
+/// The one-line abandoned-branch disclosure, printed whenever at least one replayed event
+/// came from a record the surviving conversation no longer reaches. It is NOT a warning
+/// that the reconstruction is wrong - the opposite: those writes reached the disk, so they
+/// are replayed, and this line says how many and where to look.
+pub(crate) fn print_abandoned_note(s: &ScanResult) {
+    let n = s.abandoned_events();
+    if n == 0 {
+        return;
+    }
+    println!(
+        "  abandoned branches: {n} replayed event(s) come from records off the surviving \
+         conversation (a rewind or a recalled prompt left them behind); the write still hit \
+         the disk, so it stays in the replay - each is stamped `turn abandoned (root L<n>)`"
+    );
 }
 
 /// The shared per-session window-disclosure text (coverage / at / salvage / patches):
@@ -229,7 +246,7 @@ pub(crate) fn render_patches_text(
                     println!(
                         "  {sym} INTEGRITY BOUNDARY  {}  turn {}  {}  {} ({})",
                         boundary_loc(s, b.line_no),
-                        b.turn_index,
+                        s.stamp_at(b.line_no).turn.text(),
                         format_timestamp(b.timestamp_utc.as_deref()),
                         boundary_detail_with_clue(s, b),
                         b.confidence.label()
@@ -237,6 +254,7 @@ pub(crate) fn render_patches_text(
                 }
             }
         }
+        print_abandoned_note(s);
         print_window_disclosure(s, ctx);
     }
 
@@ -296,6 +314,7 @@ pub(crate) fn render_at_text(
             );
             print_boundary_lines(s, &rep.boundaries);
         }
+        print_abandoned_note(s);
         print_window_disclosure(s, ctx);
         // The --out artifact: known lines + explicit gap markers (honest).
         out_blob.push_str(&render_snapshot_body(&known, total, false));

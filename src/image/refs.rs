@@ -36,6 +36,12 @@ pub(crate) struct ImageRef {
     pub(crate) url: Option<String>,
     pub(crate) ts_utc: Option<String>,
     pub(crate) record_uuid: Option<String>,
+    /// The wire spelling of the carrying record's survival (`live` / `pre-cut` /
+    /// `abandoned`). An image on an ABANDONED record - a prompt recalled and re-typed, a
+    /// turn the operator rewound past - is still LISTED and still extractable: the bytes are
+    /// on disk and `--out` writes the same file either way. It is only MARKED, so a reader
+    /// knows the image is not part of the conversation the model now sees.
+    pub(crate) survival: &'static str,
     /// The base64 payload - populated ONLY in extract mode (`--out`), to bound memory in the
     /// common list path.
     pub(crate) data: Option<String>,
@@ -207,6 +213,7 @@ pub(crate) fn image_ref_from_source(source: &Value, with_data: bool) -> Option<I
         url,
         ts_utc: None,
         record_uuid: None,
+        survival: "live",
         data,
     })
 }
@@ -370,10 +377,16 @@ pub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageR
     let Some(mmap) = mmap_bytes(path)? else {
         return Ok((Vec::new(), 0));
     };
-    let (records, skipped) = parse_candidates_parallel(&mmap, line_is_image_candidate);
+    // The image prefilter keeps only image-bearing lines, so the SURVIVAL AXIS is fed the
+    // structural spine of everything else in the same pass. Nothing here needs turn
+    // numbering - what it needs is the pure DAG fact "does the surviving conversation still
+    // reach this record", which the spine alone answers.
+    let (records, spine, skipped) =
+        crate::parse::parse_candidates_with_spine(&mmap, line_is_image_candidate);
+    let view = ChainView::build(&records, &spine);
 
     let mut out = Vec::new();
-    for (line_no, rec) in &records {
+    for (i, (line_no, rec)) in records.iter().enumerate() {
         for mut r in record_images(rec, with_data) {
             r.session_id = session_id.clone();
             r.is_subagent = is_subagent;
@@ -381,6 +394,7 @@ pub(crate) fn images_in_file(path: &Path, with_data: bool) -> Result<(Vec<ImageR
             r.line_no = *line_no;
             r.ts_utc = rec.timestamp.clone();
             r.record_uuid = rec.uuid.clone();
+            r.survival = view.survival(i).as_str();
             out.push(r);
         }
     }

@@ -94,8 +94,12 @@ fn content_less_jump_discloses_without_rebasing() {
         "--coverage",
     ]);
     assert!(cov.success, "stderr: {}", cov.stderr);
+    // The row names the exact interval it bounds: the version pair and the line the
+    // silence started at, so a reader can go inspect that span.
     assert!(
-        cov.stdout.contains("version jumped") && cov.stdout.contains("unavailable"),
+        cov.stdout
+            .contains("external write (inferred, snapshot v1->v2, no tool record since L4)")
+            && cov.stdout.contains("unavailable"),
         "the silent jump is disclosed even with the store pruned:\n{}",
         cov.stdout
     );

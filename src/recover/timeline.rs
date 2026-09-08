@@ -201,6 +201,10 @@ pub(crate) fn render_json(
                     "hard_boundaries": rep.boundaries_hard_count(),
                     "soft_boundaries": rep.boundaries_soft_count(),
                     "events": counts_json(&rep.counts),
+                    // The machine echo of the abandoned-branch disclosure line: replayed
+                    // events from records off the surviving conversation (the write hit the
+                    // disk, so they are IN the coverage above, never subtracted from it).
+                    "abandoned_events": s.abandoned_events(),
                     "boundaries": rep.boundaries.iter().map(|b| boundary_json_sourced(s, b)).collect::<Vec<_>>(),
                     "opaque_commands": d.opaque_classes,
                     "powershell_commands": d.powershell,
@@ -309,6 +313,7 @@ pub(crate) fn render_json(
                     })).collect::<Vec<_>>(),
                     "gaps": gaps.iter().map(|(a,b)| [*a,*b]).collect::<Vec<_>>(),
                     "seen_total_lines": total,
+                    "abandoned_events": s.abandoned_events(),
                     "boundaries": rep.boundaries.iter().map(|b| boundary_json_sourced(s, b)).collect::<Vec<_>>(),
                     "opaque_commands": d.opaque_classes,
                     "powershell_commands": d.powershell,
@@ -363,6 +368,8 @@ pub(crate) fn counts_json(c: &EventCounts) -> serde_json::Value {
 pub(crate) fn boundary_json(b: &Boundary) -> serde_json::Value {
     serde_json::json!({
         "line": b.line_no,
+        // Replaced by the survival-aware pair in `boundary_json_sourced` (the only caller
+        // in the emission path); kept here so the bare projector stays self-contained.
         "turn_index": b.turn_index,
         "ts_utc": b.timestamp_utc,
         "ts_local": b.timestamp_utc.as_deref().and_then(local_iso),
@@ -385,6 +392,12 @@ pub(crate) fn boundary_json_sourced(s: &ScanResult, b: &Boundary) -> serde_json:
     obj["source_session_id"] = serde_json::json!(sid);
     obj["source_line"] = serde_json::json!(real);
     obj["detail"] = serde_json::json!(boundary_detail_with_clue(s, b));
+    // A boundary on an ABANDONED record belongs to no numbered turn: `turn_index` is null
+    // and `abandoned_root_line` names its branch head instead.
+    let st = s.stamp_at(b.line_no);
+    obj["turn_index"] = serde_json::json!(st.turn.index());
+    obj["survival"] = serde_json::json!(st.survival);
+    obj["abandoned_root_line"] = serde_json::json!(st.turn.root_line());
     obj
 }
 

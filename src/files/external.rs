@@ -13,6 +13,13 @@
 //! listing "harness writes" beyond settings would flood every timeline (measured
 //! corpus: 1701 tracked paths, 11 settings-family).
 //!
+//! `recover` reads the SAME instrument on ONE path - the `--file` target - and the scope
+//! law is why the two differ: a global timeline row for every tracked path would drown the
+//! output (censused corpus-wide: 58,115 non-settings version jumps with no structured tool
+//! write in the interval, over 1,121 distinct paths in 31 of 75 top-level transcripts),
+//! while a row about the single file a caller asked to reconstruct is exactly the fact they
+//! came for.
+//!
 //! HONEST LIMITS (documented, disclosed in SPEC/SKILL): the version counter RESETS
 //! mid-session (a process restart starts a new generation) - jumps are only read
 //! within a generation, so a write hiding across a reset is not reported; a tool
@@ -40,17 +47,19 @@ pub(crate) fn extract_external_writes(
     records: &[Record],
     line_nos: &[usize],
     mutations: &[TaggedMutation],
+    view: &ChainView,
 ) -> Vec<TaggedMutation> {
-    // Per settings-family path: the (line, turn, ts, version) sequence.
-    type VersionSeq = Vec<(usize, usize, Option<String>, u64)>;
+    // Per settings-family path: the (line, ordering turn, stamp, survival, ts, version)
+    // sequence.
+    type VersionSeq = Vec<(
+        usize,
+        usize,
+        crate::model::TurnStamp,
+        &'static str,
+        Option<String>,
+        u64,
+    )>;
     let mut seqs: BTreeMap<String, VersionSeq> = BTreeMap::new();
-    let turns = group_turn_indices_deduped(records, |r| r);
-    let turn_of = |idx: usize| -> usize {
-        turns
-            .iter()
-            .position(|t| t.contains(&idx))
-            .unwrap_or_default()
-    };
     for (idx, rec) in records.iter().enumerate() {
         let Some(snap) = rec.snapshot.as_ref() else {
             continue;
@@ -71,7 +80,9 @@ pub(crate) fn extract_external_writes(
             };
             seqs.entry(path.clone()).or_default().push((
                 line_nos[idx],
-                turn_of(idx),
+                view.order_turn(idx),
+                view.stamp(idx),
+                view.survival(idx).as_str(),
                 ts.clone(),
                 version,
             ));
@@ -81,7 +92,7 @@ pub(crate) fn extract_external_writes(
     let mut out = Vec::new();
     for (path, seq) in &seqs {
         let mut prev: Option<(usize, u64)> = None; // (line, version)
-        for (line, turn, ts, version) in seq {
+        for (line, turn, stamp, survival, ts, version) in seq {
             if let Some((prev_line, prev_v)) = prev {
                 // A DECREASE = a generation reset (the counter restarts on process
                 // restart); only same-generation jumps are readable here.
@@ -98,6 +109,8 @@ pub(crate) fn extract_external_writes(
                             is_subagent: false,
                             parent_session_id: session_id.to_string(),
                             turn_index: *turn,
+                            stamp: *stamp,
+                            survival,
                             line_no: *line,
                             mutation: FileMutation {
                                 path: path.clone(),

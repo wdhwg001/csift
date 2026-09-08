@@ -44,6 +44,11 @@ pub(crate) struct OpCounts {
     pub(crate) bash: usize,
     /// Snapshot-inferred external writes (settings family; no tool record).
     pub(crate) external_write: usize,
+    /// How many of the above came from a record the surviving conversation no longer
+    /// reaches (a rewound branch, a recalled draft). Counted SEPARATELY, never subtracted:
+    /// the write hit the disk, and a reader deciding "what does this file look like" needs
+    /// both the total and the share that a rewind left behind.
+    pub(crate) abandoned: usize,
     /// Distinct file paths contributing to this group (for dir/bucket rows).
     pub(crate) files: std::collections::BTreeSet<String>,
     pub(crate) first_ts: Option<String>,
@@ -104,10 +109,13 @@ impl OpCounts {
             parts.push(format!("{} external write (inferred)", self.external_write));
         }
         if parts.is_empty() {
-            "0".to_string()
-        } else {
-            parts.join(", ")
+            return "0".to_string();
         }
+        let mut label = parts.join(", ");
+        if self.abandoned > 0 {
+            label.push_str(&format!(" ({} from abandoned branches)", self.abandoned));
+        }
+        label
     }
 }
 
@@ -169,7 +177,13 @@ pub(crate) fn group_by<F: Fn(&FileMutation) -> String>(
 ) -> BTreeMap<String, OpCounts> {
     let mut map: BTreeMap<String, OpCounts> = BTreeMap::new();
     for m in mutations {
-        map.entry(key(&m.mutation)).or_default().add(&m.mutation);
+        let entry = map.entry(key(&m.mutation)).or_default();
+        entry.add(&m.mutation);
+        // The survival share rides the TAGGED row (the axis is a property of the carrying
+        // record, not of the mutation), so it is counted here rather than inside `add`.
+        if m.stamp.is_abandoned() {
+            entry.abandoned += 1;
+        }
     }
     map
 }

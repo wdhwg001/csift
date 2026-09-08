@@ -5,10 +5,35 @@
 pub(crate) struct FileEvent {
     /// 1-based jsonl line (the new capability).
     pub(crate) line_no: usize,
-    /// Genuine-user turn index (`group_turn_indices`).
+    /// The LIVE turn this event sits in, or - for an event on a record the surviving
+    /// conversation no longer reaches - the nearest PRECEDING live turn. It is the ordering
+    /// key the `--turn` window and `--at @turn:` resolve against, never a printed number:
+    /// what a reader sees comes from [`ScanResult::stamps`], which says `abandoned (root
+    /// L<n>)` for such an event. Keeping an ordering key for every event is deliberate - a
+    /// write on an abandoned branch HIT THE DISK, so a window over the span it sits in must
+    /// still see it, or the reconstruction of that span would silently omit a real write.
     pub(crate) turn_index: usize,
     pub(crate) timestamp_utc: Option<String>,
     pub(crate) kind: EventKind,
+}
+
+/// What the SURVIVAL AXIS says about the record one jsonl line carries: its place in live
+/// turn numbering and the wire spelling of its survival. Held per transcript (keyed by
+/// line) rather than on every [`FileEvent`], because it is a property of the LINE - several
+/// events extracted from one record always share it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct EventStamp {
+    pub(crate) turn: crate::model::TurnStamp,
+    pub(crate) survival: &'static str,
+}
+
+impl Default for EventStamp {
+    fn default() -> Self {
+        EventStamp {
+            turn: crate::model::TurnStamp::Live(0),
+            survival: "live",
+        }
+    }
 }
 
 /// What a [`FileEvent`] does to the reconstructed buffer.
@@ -208,6 +233,11 @@ pub(crate) struct ScanResult {
     /// The re-feedable PARENT session uuid (= `session_id` for a top-level file).
     pub(crate) parent_session_id: String,
     pub(crate) events: Vec<FileEvent>,
+    /// The survival axis per jsonl LINE of this result (see [`EventStamp`]). After a
+    /// cross-transcript merge it is re-keyed to the synthetic line numbers, so a lookup by
+    /// an event's or a boundary's `line_no` is always correct for the result holding it. A
+    /// line with no entry reads live (the axis says nothing about a record it never saw).
+    pub(crate) stamps: std::collections::BTreeMap<usize, EventStamp>,
     /// Commands in THIS transcript whose file set is not lexically knowable (class
     /// markers + PowerShell calls) - per-window disclosure input, never content.
     pub(crate) opaque: Vec<OpaqueCommand>,
@@ -218,4 +248,20 @@ pub(crate) struct ScanResult {
     /// displayed location stays a real, inspectable transcript line.
     pub(crate) merged_line_origin: std::collections::BTreeMap<usize, (String, usize)>,
     pub(crate) skipped_lines: usize,
+}
+
+impl ScanResult {
+    /// The survival axis at one line of THIS result (live when the line carries no entry).
+    pub(crate) fn stamp_at(&self, line_no: usize) -> EventStamp {
+        self.stamps.get(&line_no).copied().unwrap_or_default()
+    }
+
+    /// How many of this result's events came from a record off the surviving conversation -
+    /// the disclosure figure. They are replayed all the same: the write hit the disk.
+    pub(crate) fn abandoned_events(&self) -> usize {
+        self.events
+            .iter()
+            .filter(|e| self.stamp_at(e.line_no).turn.is_abandoned())
+            .count()
+    }
 }

@@ -486,3 +486,5 @@ fn image_lists_a_queued_command_attachment_image() {
     assert_eq!(rows.len(), 1, "{}", json.stdout);
     assert_eq!(rows[0]["line"], 2);
 }
+
+mod survival;
