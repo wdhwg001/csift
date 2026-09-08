@@ -19,11 +19,11 @@
 //! never parsed and never allocated, and a snapshot attachment routinely embeds a whole
 //! file.
 //!
-//! The walk is factored apart from the [`Record`] build for that reason: `spine_fields`
+//! [`spine_fields`] is the shared seam, and it is `pub(crate)` for exactly that: it
 //! borrows the raw value spans out of the line and decodes nothing, so a caller that
 //! already has its own reason to look at the line (a line-type census, a candidate parse)
-//! could lift the chain fields out of the same pass instead of walking it twice. It is
-//! private to this module today; widening it is the shared seam those callers need.
+//! lifts the chain fields out of the same pass instead of walking it twice.
+//! [`spine_record`] is just the [`Record`] build on top of it.
 
 use super::*;
 
@@ -76,19 +76,19 @@ pub(crate) fn spine_record(line: &[u8]) -> Option<Record> {
 /// The RAW value spans of the keys the chain reads, borrowed straight out of the line.
 /// Nothing is decoded or allocated here, so a line the walk ends up rejecting costs its
 /// bytes and nothing else.
-#[derive(Default)]
-struct SpineFields<'a> {
-    r#type: &'a [u8],
-    subtype: Option<&'a [u8]>,
-    uuid: Option<&'a [u8]>,
-    parent_uuid: Option<&'a [u8]>,
-    logical_parent_uuid: Option<&'a [u8]>,
-    leaf_uuid: Option<&'a [u8]>,
-    timestamp: Option<&'a [u8]>,
-    is_sidechain: Option<&'a [u8]>,
-    explicit: Option<&'a [u8]>,
-    rewound: Option<&'a [u8]>,
-    compact_metadata: Option<&'a [u8]>,
+#[derive(Debug, Default)]
+pub(crate) struct SpineFields<'a> {
+    pub(crate) r#type: &'a [u8],
+    pub(crate) subtype: Option<&'a [u8]>,
+    pub(crate) uuid: Option<&'a [u8]>,
+    pub(crate) parent_uuid: Option<&'a [u8]>,
+    pub(crate) logical_parent_uuid: Option<&'a [u8]>,
+    pub(crate) leaf_uuid: Option<&'a [u8]>,
+    pub(crate) timestamp: Option<&'a [u8]>,
+    pub(crate) is_sidechain: Option<&'a [u8]>,
+    pub(crate) explicit: Option<&'a [u8]>,
+    pub(crate) rewound: Option<&'a [u8]>,
+    pub(crate) compact_metadata: Option<&'a [u8]>,
 }
 
 /// The depth-1 key walk itself. `type` is NOT an early exit for the OTHER keys: measured
@@ -96,7 +96,7 @@ struct SpineFields<'a> {
 /// admitted type while `uuid` and `timestamp` sit AFTER the payload key on 662,470 of them
 /// (claim REC-104) - so the walk has to reach the end of the object either way, and a
 /// "stop once the wanted keys are in hand" shortcut would stop on almost no line.
-fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {
+pub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {
     let payload = line_payload(line)?;
     let mut i = skip_ws(payload, 0);
     if payload.get(i) != Some(&b'{') {

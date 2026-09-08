@@ -65,3 +65,4 @@ mod tempfile_path {
 
 mod lines;
 mod readers;
+mod spine;
