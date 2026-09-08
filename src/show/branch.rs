@@ -1,22 +1,42 @@
 //! `show --branch-points`: conversation FORK facts for one transcript.
 //!
 //! A Claude Code rewind, retry, or parallel lane leaves one plain DAG fact: some record
-//! has MORE THAN ONE conversation child (a later `parentUuid` re-attach). Which side is
-//! "live" is NOT computable from the jsonl: a live/abandoned classifier was prototyped
-//! and refuted against real corpora (parallel tool fan-out makes sibling leaves that
-//! false-positive as abandoned branches on most sessions). So csift reports the facts
-//! and RANKS them by the widest inter-child time gap: a rewind usually shows a wide
-//! gap, a parallel lane a near-zero one. The reader applies judgment; csift never
-//! classifies.
+//! has MORE THAN ONE conversation child (a later `parentUuid` re-attach). csift reports
+//! those facts and RANKS them by the widest inter-child time gap: a rewind usually shows
+//! a wide gap, a parallel lane a near-zero one.
+//!
+//! Which child is LIVE is a fact too, since v0.12.0, and it comes from Claude Code rather
+//! than from the shape: the loader's own conversation chain ([`crate::model::Chain`])
+//! decides it. A classifier keyed on the DAG shape alone was prototyped and REFUTED
+//! against real corpora, and the family that refutes it is not parallel tool fan-out -
+//! whose carriers never reach the child predicate - but the repeated-uuid run, an append
+//! artifact wearing a fork's shape. So each fork names its live child and gives every
+//! other child the chain's verdict (`rewound` when it was answered, `draft` when nothing
+//! ever answered it, plain `abandoned` mid-branch, `pre-cut` above a compaction cut).
+//! Beyond what the chain resolves, csift still guesses nothing.
 //!
 //! A "conversation child" is a `user`/`assistant` record, EXCLUDING user records that
 //! carry a `tool_result` block (parallel tool results share a parent by construction),
-//! `isMeta` records, and compaction summaries.
+//! `isMeta` records, and compaction summaries. The PARENT, though, can be any record the
+//! loader admits, and usually IS one the role prefilter drops - a prompt submitted after a
+//! SessionStart hook is parented to that hook's `attachment` record - so the uuid is
+//! located over the structural spine rows too ([`crate::parse::spine_record`]), and the
+//! fork prints the parent's line AND type.
 
 use super::*;
-use crate::model::{Block, Record};
+use crate::model::{Block, Chain, Kind, Record, Survival};
 use crate::parse::LineVerdict;
 use serde_json::json;
+
+/// One parsed jsonl line: a full record, or the structural [`crate::parse::spine_record`]
+/// of a line the role prefilter drops (kept ONLY so the chain walk and the parent lookup
+/// can see the whole DAG - it carries no payload and is never a child).
+#[derive(Debug)]
+struct Row {
+    line: usize,
+    rec: Record,
+    spine: bool,
+}
 
 /// One child edge of a branch point.
 #[derive(Debug)]
@@ -25,16 +45,25 @@ struct Child {
     uuid: Option<String>,
     ts_utc: Option<String>,
     record_type: String,
+    /// This child's place in the surviving conversation (`live` | `pre-cut` |
+    /// `abandoned`).
+    survival: &'static str,
+    /// The finer read: `live` · `rewound` (answered, then rewound past) · `draft`
+    /// (nothing ever answered it) · `abandoned` (off-chain, not an opener) · `pre-cut`.
+    verdict: &'static str,
 }
 
 /// One record with 2+ conversation children.
 #[derive(Debug)]
 struct BranchPoint {
     uuid: String,
-    /// The parent record's own jsonl line; `None` when its uuid was not located among
-    /// the parsed role-candidate lines (a clipped parent, or a non-conversation line).
-    line: Option<usize>,
+    /// The parent record's own jsonl line and top-level `type`; `None` only when the uuid
+    /// names no line in this file at all (a clipped or forked-away parent).
+    parent: Option<(usize, String)>,
     children: Vec<Child>,
+    /// The line(s) of the children the conversation chain still reaches. Exactly one on
+    /// an ordinary fork; empty when the whole fork is off the surviving conversation.
+    live_child_lines: Vec<usize>,
     /// Widest gap between CONSECUTIVE children (file order), in whole seconds; `None`
     /// when any needed timestamp is absent or unparseable.
     widest_gap_secs: Option<i64>,
@@ -72,58 +101,119 @@ fn gap_label(secs: i64) -> String {
     }
 }
 
+/// One child's place in the surviving conversation, as the chain reads it: the coarse
+/// `survival` value plus the finer verdict a fork reader actually wants.
+fn survival_verdict(chain: &Chain, i: usize) -> (&'static str, &'static str) {
+    let survival = chain.survival(i);
+    let verdict = match survival {
+        Survival::Live => "live",
+        Survival::PreCut => "pre-cut",
+        Survival::Abandoned { .. } => match chain.kind(i) {
+            Some(Kind::Rewound { .. }) => "rewound",
+            Some(Kind::Draft { .. }) => "draft",
+            None => "abandoned",
+        },
+    };
+    (survival.as_str(), verdict)
+}
+
+/// Widest gap between CONSECUTIVE children in whole seconds; a single undated seam makes
+/// the whole ranking honest-unknown rather than silently narrower.
+fn widest_gap(children: &[Child]) -> Option<i64> {
+    let mut widest: Option<i64> = None;
+    for pair in children.windows(2) {
+        let (Some(a), Some(b)) = (pair[0].ts_utc.as_deref(), pair[1].ts_utc.as_deref()) else {
+            return None;
+        };
+        let (Some(ta), Some(tb)) = (parse_ts(a), parse_ts(b)) else {
+            return None;
+        };
+        let g = (tb.as_second() - ta.as_second()).unsigned_abs() as i64;
+        widest = Some(widest.map_or(g, |w: i64| w.max(g)));
+    }
+    widest
+}
+
 pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) -> Result<()> {
     let session_id = crate::subagent::session_id_from_path(file);
     let is_subagent = crate::subagent::is_subagent_path(file);
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(file).unwrap_or_else(|| session_id.clone());
 
-    let mut recs: Vec<(usize, Record)> = Vec::new();
+    let mut rows: Vec<Row> = Vec::new();
     let mut skipped = 0usize;
     if let Some(mmap) = mmap_bytes(file)? {
         let bytes: &[u8] = &mmap;
         let (kept, s) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
             if !crate::parse::line_has_role_marker(line) {
+                // The parent of a fork is often NOT a conversation record, and the chain
+                // walk threads through the same lines - so lift the structural fields of
+                // every line the role prefilter drops (never the payload).
+                if let Some(rec) = crate::parse::spine_record(line) {
+                    return LineVerdict::Keep(Row {
+                        line: line_no,
+                        rec,
+                        spine: true,
+                    });
+                }
                 return crate::parse::non_candidate_verdict(line);
             }
             match crate::parse::parse_line(line) {
-                Ok(Some(rec)) => LineVerdict::Keep((line_no, rec)),
+                Ok(Some(rec)) => LineVerdict::Keep(Row {
+                    line: line_no,
+                    rec,
+                    spine: false,
+                }),
                 Ok(None) => LineVerdict::Ignore,
                 Err(_) => LineVerdict::Skip,
             }
         });
-        recs = kept;
+        rows = kept;
         skipped = s;
     }
 
-    // uuid → own line, for locating each branch parent (ANY record can be a parent).
-    let line_of: std::collections::HashMap<&str, usize> = recs
+    // Claude Code's own conversation chain over the SAME rows: which child of a fork the
+    // conversation continued from, and what became of the others.
+    let chain = Chain::build_by(&rows, |r| &r.rec, None);
+
+    // uuid → (own line, own type), over EVERY parsed line - a fork parent can be an
+    // attachment, a turn_duration system record, or any other line the loader admits.
+    let line_of: std::collections::HashMap<&str, (usize, &str)> = rows
         .iter()
-        .filter_map(|(l, r)| r.uuid.as_deref().map(|u| (u, *l)))
+        .filter_map(|r| {
+            r.rec
+                .uuid
+                .as_deref()
+                .map(|u| (u, (r.line, r.rec.r#type.as_deref().unwrap_or("(untyped)"))))
+        })
         .collect();
     // parentUuid → conversation children, file order.
     let mut children_of: std::collections::HashMap<String, Vec<Child>> =
         std::collections::HashMap::new();
     let mut conversation_records = 0usize;
-    for (line, rec) in &recs {
-        if !is_conversation_record(rec) {
+    for (i, row) in rows.iter().enumerate() {
+        if row.spine || !is_conversation_record(&row.rec) {
             continue;
         }
         conversation_records += 1;
-        let Some(parent) = rec.parent_uuid.as_deref() else {
+        let Some(parent) = row.rec.parent_uuid.as_deref() else {
             continue;
         };
+        let (survival, verdict) = survival_verdict(&chain, i);
         children_of
             .entry(parent.to_string())
             .or_default()
             .push(Child {
-                line: *line,
-                uuid: rec.uuid.clone(),
-                ts_utc: rec.timestamp.clone(),
-                record_type: rec
+                line: row.line,
+                uuid: row.rec.uuid.clone(),
+                ts_utc: row.rec.timestamp.clone(),
+                record_type: row
+                    .rec
                     .r#type
                     .clone()
                     .unwrap_or_else(|| "(untyped)".to_string()),
+                survival,
+                verdict,
             });
     }
 
@@ -132,30 +222,19 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
         .filter(|(_, ch)| ch.len() >= 2)
         .map(|(uuid, mut children)| {
             children.sort_by_key(|c| c.line);
-            let mut widest: Option<i64> = None;
-            for pair in children.windows(2) {
-                let gap = match (pair[0].ts_utc.as_deref(), pair[1].ts_utc.as_deref()) {
-                    (Some(a), Some(b)) => match (parse_ts(a), parse_ts(b)) {
-                        (Some(ta), Some(tb)) => {
-                            Some((tb.as_second() - ta.as_second()).unsigned_abs() as i64)
-                        }
-                        _ => None,
-                    },
-                    _ => None,
-                };
-                match gap {
-                    // A single undated seam makes the whole ranking honest-unknown.
-                    None => {
-                        widest = None;
-                        break;
-                    }
-                    Some(g) => widest = Some(widest.map_or(g, |w: i64| w.max(g))),
-                }
-            }
+            let widest = widest_gap(&children);
+            let live_child_lines = children
+                .iter()
+                .filter(|c| c.survival == "live")
+                .map(|c| c.line)
+                .collect();
             BranchPoint {
-                line: line_of.get(uuid.as_str()).copied(),
+                parent: line_of
+                    .get(uuid.as_str())
+                    .map(|(l, t)| (*l, (*t).to_string())),
                 uuid,
                 children,
+                live_child_lines,
                 widest_gap_secs: widest,
             }
         })
@@ -188,6 +267,23 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
     Ok(())
 }
 
+/// The fork header's live-child clause. Exactly one live child is the ordinary case; zero
+/// means the whole fork sits off the surviving conversation, and more than one is possible
+/// where the chain's membership rules keep same-`message.id` siblings - stated, not folded.
+fn live_child_label(lines: &[usize]) -> String {
+    match lines {
+        [] => "live child: none (this fork is off the surviving conversation)".to_string(),
+        [one] => format!("live child: L{one}"),
+        many => format!(
+            "live children: {}",
+            many.iter()
+                .map(|l| format!("L{l}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+    }
+}
+
 fn render_branch_text(
     session_id: &str,
     conversation_records: usize,
@@ -205,26 +301,28 @@ fn render_branch_text(
         println!("  no forks: every conversation record has at most one conversation child");
     }
     for (i, p) in points.iter().enumerate() {
-        let loc = p.line.map_or_else(
-            || "(parent line not located)".to_string(),
-            |l| format!("L{l}"),
+        let loc = p.parent.as_ref().map_or_else(
+            || "parent uuid not in this file".to_string(),
+            |(l, t)| format!("L{l}  {t}"),
         );
         let gap = p
             .widest_gap_secs
             .map_or_else(|| "unknown (missing timestamps)".to_string(), gap_label);
         println!();
         println!(
-            "  #{}  uuid {}  {loc}  children {} · widest gap {gap}",
+            "  #{}  uuid {}  {loc}  children {} · widest gap {gap} · {}",
             i + 1,
             p.uuid,
-            p.children.len()
+            p.children.len(),
+            live_child_label(&p.live_child_lines)
         );
         for c in &p.children {
             println!(
-                "      L{}  {}  {}",
+                "      L{}  {}  {}  {}",
                 c.line,
                 crate::timez::format_timestamp(c.ts_utc.as_deref()),
-                c.record_type
+                c.record_type,
+                c.verdict
             );
         }
         if let Some(last) = p.children.last() {
@@ -235,8 +333,9 @@ fn render_branch_text(
         println!();
         println!(
             "  ranked by widest inter-child gap: a rewind or retry fork usually shows a \
-             wide gap, a parallel lane a near-zero one. csift reports fork FACTS; it does \
-             not guess which branch is live."
+             wide gap, a parallel lane a near-zero one. csift reports fork FACTS - the \
+             live child is one of them, decided by Claude Code's own conversation chain, \
+             and beyond what that chain resolves csift does not guess."
         );
     }
     if skipped > 0 {
@@ -271,15 +370,26 @@ fn render_branch_json(
                     "line": c.line,
                     "uuid": c.uuid,
                     "record_type": c.record_type,
+                    "survival": c.survival,
+                    "verdict": c.verdict,
                     "ts_utc": c.ts_utc,
                     "ts_local": c.ts_utc.as_deref().and_then(crate::timez::local_iso),
                 })
             })
             .collect();
+        let parent_line = p.parent.as_ref().map(|(l, _)| *l);
         let obj = json!({
             "kind": "branch-point",
             "uuid": p.uuid,
-            "line": p.line,
+            // `line` is the envelope's own line key; `parent_line`/`parent_type` name the
+            // same record explicitly, because on this row the record IS the fork parent.
+            "line": parent_line,
+            "parent_line": parent_line,
+            "parent_type": p.parent.as_ref().map(|(_, t)| t.clone()),
+            "live_child_line": match p.live_child_lines.as_slice() {
+                [one] => Some(*one),
+                _ => None,
+            },
             "children": children,
             "widest_gap_seconds": p.widest_gap_secs,
         });

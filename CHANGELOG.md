@@ -67,6 +67,16 @@ surface change bumps the PATCH.
 - **JSON**: `survival`, `abandoned_root_line` and `replay_copy_of` per hit and per `show` record;
   `abandoned_records`, `rewound_turns`, `replay_copies`, `boundary_cut_line` and `leaf_source` in
   the `search` summary. The text footer states every one of them.
+- **`show --branch-points` names the live child.** Each fork prints `live child: L<n>` from the
+  chain and labels every other child `rewound`, `draft`, `abandoned` or `pre-cut`. The fork parent
+  is now located over every line the loader admits, so a fork parented to a hook's attachment
+  record prints that line and its type; `parent uuid not in this file` replaces the old
+  `(parent line not located)` and means what it says. JSON branch-point rows gain `parent_line`,
+  `parent_type`, `live_child_line` and, per child, `survival` and `verdict`.
+- **`stats` counts LIVE turns**, the same numbering `search` prints, and adds three whole-file
+  chain totals per session and in the scope TOTAL: `abandoned_turns`, `rewound_turns` and
+  `replay_copies`. They never window - an abandoned opener has no turn index to window on - and
+  the line-type census stays the exact whole-file corruption authority.
 
 - **The compaction boundary shows what the compaction KEPT, and the two `/rewind` summarize
   modes are finally distinguishable.** A boundary record always carried more than the four

@@ -17,8 +17,9 @@ use super::*;
         reports the transcript's conversation FORK facts: every record with more than one \
         conversation child (a later parentUuid re-attach: a rewind, a retry, or a \
         parallel lane), ranked by the widest inter-child time gap (a rewind usually shows \
-        a wide gap, a parallel lane near zero). Facts only: which side is live is not \
-        computable from the jsonl, so csift does not guess.",
+        a wide gap, a parallel lane near zero). Each fork names the LIVE child and gives \
+        every other child the conversation chain's verdict; beyond what that chain \
+        resolves csift does not guess.",
     after_help = "EXAMPLES\n  \
           csift show @<uuid> --line 46550                # the record at line 46550, full\n  \
           csift show @<uuid> --line 87,495..500,992      # several lines + ranges\n  \
@@ -74,7 +75,18 @@ use super::*;
         boundary's own object verbatim, including the `preservedMessages` uuid lists the \
         one-line excerpt only counts. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
-        non_record_lines, skipped_lines, with_elicitation_sidecar}."
+        non_record_lines, skipped_lines, with_elicitation_sidecar}.\n\n  \
+          Under `--branch-points` the rows are {kind:\"branch-point\", uuid, line, \
+        parent_line, parent_type, live_child_line, children:[…], widest_gap_seconds} and \
+        the summary is {branch_points, conversation_records, skipped_lines}. `line` and \
+        `parent_line` are the SAME value - on this row the record IS the fork parent - and \
+        both are null when the parent uuid names no line in the file. `live_child_line` is \
+        the line of the child on the chain, and it is null unless EXACTLY one child is \
+        live: null with zero live children means the whole fork sits off the surviving \
+        conversation, and null with two (the chain's membership rules keep \
+        same-message.id assistant siblings) means the text named both. Each child is \
+        {line, uuid, record_type, survival (live | pre-cut | abandoned), verdict (live | \
+        rewound | draft | abandoned | pre-cut), ts_utc, ts_local}."
 )]
 pub struct ShowArgs {
     /// ONE transcript: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | a `*.jsonl` path.
@@ -131,12 +143,20 @@ pub struct ShowArgs {
 
     /// Report the transcript's conversation FORK facts instead of fetching records:
     /// every record with MORE THAN ONE conversation child (a later parentUuid
-    /// re-attach: a rewind, a retry, or a parallel lane), each child with its line and
-    /// timestamp, ranked by the WIDEST inter-child time gap (a rewind usually shows
-    /// hours, a parallel lane near zero). Tool-result carriers, isMeta records, and
-    /// compaction summaries never count as children (a parallel tool fan-out is not a
-    /// fork). FACTS ONLY: which branch is live is not computable from the jsonl, so
-    /// csift reports and ranks, never classifies.
+    /// re-attach: a rewind, a retry, or a parallel lane), each child with its line,
+    /// timestamp and verdict, ranked by the WIDEST inter-child time gap (a rewind
+    /// usually shows hours, a parallel lane near zero). Tool-result carriers, isMeta
+    /// records, and compaction summaries never count as children (a parallel tool
+    /// fan-out is not a fork); the PARENT can be any record the loader admits, so a
+    /// fork parented to a hook's attachment line prints that line and its type, and
+    /// `parent uuid not in this file` is reserved for a uuid no line here carries.
+    /// Each fork names its LIVE child from Claude Code's own conversation chain and
+    /// gives every child one of five verdicts: `live` (on the chain), `rewound`
+    /// (an opener that was answered, then rewound past), `draft` (an opener nothing
+    /// ever answered), `abandoned` (off the chain but not an opener - a retried
+    /// assistant record, say) or `pre-cut` (above a compaction boundary, where the
+    /// chain stops and csift keeps reading). Beyond what the chain resolves, csift
+    /// reports and ranks, never guesses.
     #[arg(long = "branch-points", conflicts_with_all = ["line", "uuid", "turn", "raw"])]
     pub branch_points: bool,
 
@@ -198,9 +218,20 @@ impl ShowArgs {
         are the majority of many transcripts' bytes and no other surface parses them. \
         Spans subagents \
         by default (each transcript is its own row; the scope TOTAL block sums them). \
-        `--since`/`--until` bound the counted records by timestamp. Under `--turn`/time \
-        windowing every figure windows EXCEPT `lines` and the `types` census, which stay \
-        file facts (physical line count / per-type line counts), not window facts.",
+        `--since`/`--until` bound the counted records by timestamp. `turns` counts the \
+        LIVE turns - the numbering that follows Claude Code's own conversation chain, the \
+        same one `search` prints as `tN` and `show --turn` addresses - so a `stats` turn \
+        count equals the row count of `search --count-by turn` over the same scope, and a \
+        `--turn` window resolves against that numbering. What LEFT the numbering is \
+        disclosed beside it, on one line printed only when there is something to say: \
+        `chain  abandoned turns N (M rewound) - replay copy lines K`. An ABANDONED turn is \
+        an opener the chain no longer reaches (a recalled draft, or a turn the operator \
+        rewound past); the REWOUND ones are the subset that drew a reply before the \
+        rewind; a REPLAY COPY is a line whose uuid a later line also carries, which a \
+        compaction re-anchor appends. Under `--turn`/time windowing every figure windows \
+        EXCEPT `lines`, the `types` census and those three chain totals, which stay file \
+        facts (physical line count / per-type line counts / whole-chain counts - an \
+        abandoned opener carries no turn index to window on), not window facts.",
     after_help = "EXAMPLES\n  \
           csift stats @<uuid>                    # one session + its subagents\n  \
           csift stats @<uuid> --no-subagents     # just the top-level thread\n  \
@@ -210,11 +241,13 @@ impl ShowArgs {
           Envelope: header → one {kind:\"session\", …} row per session → summary. Session \
         rows carry {session_id, is_subagent, parent_session_id, lines, line_types:{<type>:count}, \
         user_records, \
-        assistant_records, turns, compactions, first_utc, first_local, last_utc, last_local, \
+        assistant_records, turns, abandoned_turns, rewound_turns, replay_copies, \
+        compactions, first_utc, first_local, last_utc, last_local, \
         tokens:{<model>:{input, output, cache_read, cache_creation}}, \
         narration_blocks:{<model>:count}, unknown_thinking_tags, tools:{<name>:count}, \
         skipped_lines}. The summary adds the scope totals ({sessions, line_types, tokens, \
-        narration_blocks, unknown_thinking_tags, tools, turns, \
+        narration_blocks, unknown_thinking_tags, tools, turns, abandoned_turns, \
+        rewound_turns, replay_copies, \
         dropped_by_cap, skipped_lines}): `tail -1 | jq .tokens` is the one-liner for total \
         burn. `skipped_lines` here is a FULL-SCAN census (stats parses every line): the \
         corruption-census authority for \"does this transcript carry a torn/corrupt line \

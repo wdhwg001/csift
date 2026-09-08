@@ -14,8 +14,8 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use crate::cli::{OutputFormat, StatsArgs};
-use crate::model::{group_turn_indices_deduped, Block, Record};
-use crate::parse::{mmap_bytes, scan_lines_parallel, LineVerdict};
+use crate::model::{group_turn_indices_chained, Block, Chain, Record};
+use crate::parse::{line_type_and_spine, mmap_bytes, scan_lines_parallel, LineVerdict};
 use crate::path::{self, SubagentScope};
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -58,6 +58,13 @@ struct SessionStats {
     /// Thinking-signature tags that decoded to something OTHER than thinking or
     /// narration - a new tag value surfaces here without a csift release.
     unknown_thinking_tags: usize,
+    /// SURVIVAL-AXIS facts of the WHOLE file (like `lines` and `line_types`, never
+    /// windowed - an abandoned opener carries no turn index to window on): turn openers
+    /// Claude Code's conversation chain no longer reaches, how many of those were
+    /// ANSWERED before the rewind, and lines a compaction re-anchor re-appended.
+    abandoned_turns: usize,
+    rewound_turns: usize,
+    replay_copies: usize,
 }
 
 /// Entry point for `csift stats`.
@@ -111,33 +118,15 @@ fn line_is_stats_candidate(line: &[u8]) -> bool {
     crate::parse::line_has_role_marker(line)
 }
 
-/// One kept line from the stats scan: a fully parsed transcript record, or just the
-/// top-level `type` of a NON-candidate line (attachment / file-history-snapshot /
-/// system / …) - the line-type census keeps every physical line accountable without
-/// building full records for the non-record majority of bytes.
+/// One kept line from the stats scan: a fully parsed transcript record, or the top-level
+/// `type` of a NON-candidate line (attachment / file-history-snapshot / system / …) - the
+/// line-type census keeps every physical line accountable without building full records
+/// for the non-record majority of bytes. A non-candidate line ALSO yields its structural
+/// spine row when the line type is one the conversation chain walks through, so the
+/// SURVIVAL AXIS sees the whole DAG without the payload ever being parsed.
 enum StatsLine {
     Record(Box<Record>),
-    Other(String),
-}
-
-/// Minimal probe for a non-candidate line: full JSON syntax validation plus the top-level
-/// `type` value, without building a `Record`. This UPGRADES the O(1) shape check to an
-/// exact census for stats (the named corruption-census authority): a `{…}`-framed line
-/// with an invalid INTERIOR is now counted malformed too. Blank → `Ok(None)`; a typeless
-/// object → `"(untyped)"`.
-fn line_type_probe(line: &[u8]) -> std::result::Result<Option<String>, ()> {
-    if line.iter().all(u8::is_ascii_whitespace) {
-        return Ok(None);
-    }
-    #[derive(serde::Deserialize)]
-    struct TypeProbe {
-        #[serde(rename = "type")]
-        r#type: Option<String>,
-    }
-    match serde_json::from_slice::<TypeProbe>(line) {
-        Ok(p) => Ok(Some(p.r#type.unwrap_or_else(|| "(untyped)".to_string()))),
-        Err(_) => Err(()),
-    }
+    Other(String, Option<Box<Record>>),
 }
 
 fn stats_one_file(
@@ -166,10 +155,11 @@ fn stats_one_file(
 
     let (kept, skipped): (Vec<StatsLine>, usize) = scan_lines_parallel(bytes, |line, _| {
         if !line_is_stats_candidate(line) {
-            // Census every non-candidate line by its top-level `type` (full syntax
-            // validation, subsuming the R10 shape check - see [`line_type_probe`]).
-            return match line_type_probe(line) {
-                Ok(Some(t)) => LineVerdict::Keep(StatsLine::Other(t)),
+            // Census every non-candidate line by its top-level `type` AND lift its chain
+            // spine from the same parse (full syntax validation, subsuming the R10 shape
+            // check - see [`crate::parse::line_type_and_spine`]).
+            return match line_type_and_spine(line) {
+                Ok(Some((t, spine))) => LineVerdict::Keep(StatsLine::Other(t, spine.map(Box::new))),
                 Ok(None) => LineVerdict::Ignore,
                 Err(()) => LineVerdict::Skip,
             };
@@ -182,8 +172,11 @@ fn stats_one_file(
     });
     out.skipped_lines = skipped;
     // Split the kept lines: EVERY line lands in the type census (a file fact, like
-    // `lines`); only real records go on to the windowed aggregates below.
-    let mut records: Vec<Record> = Vec::new();
+    // `lines`); only real records go on to the windowed aggregates below. Spine rows ride
+    // along IN FILE ORDER so the chain walk sees the DAG, and are excluded from every
+    // aggregate (they carry no message, no usage, and their timestamps are not the
+    // conversation's - counting them would widen the span).
+    let mut rows: Vec<(Record, bool)> = Vec::new();
     for l in kept {
         match l {
             StatsLine::Record(rec) => {
@@ -192,20 +185,31 @@ fn stats_one_file(
                     .clone()
                     .unwrap_or_else(|| "(untyped)".to_string());
                 *out.line_types.entry(t).or_insert(0) += 1;
-                records.push(*rec);
+                rows.push((*rec, false));
             }
-            StatsLine::Other(t) => *out.line_types.entry(t).or_insert(0) += 1,
+            StatsLine::Other(t, spine) => {
+                *out.line_types.entry(t).or_insert(0) += 1;
+                if let Some(s) = spine {
+                    rows.push((*s, true));
+                }
+            }
         }
     }
 
-    // `--turn`: per-record turn membership on the FULL transcript's genuine-turn
-    // order (the SAME 0-based axis `search`/`files` window on), computed BEFORE the time
-    // filter so indices stay stable, then intersected (AND) with the window below.
+    // ONE chain, ONE grouping (§3.3): `turns` counts LIVE numbered turns - the exact
+    // numbering `search` prints as `·tN` and `show --turn` addresses - and the three
+    // survival totals are whole-file facts read straight off the chain.
+    let chain = Chain::build_by(&rows, |(r, _)| r, None);
+    out.abandoned_turns = chain.drafts + chain.rewound_turns;
+    out.rewound_turns = chain.rewound_turns;
+    out.replay_copies = chain.replay_copies;
+    let groups = group_turn_indices_chained(&rows, |(r, _)| r, &chain);
+
+    // `--turn`: per-record membership on the FULL transcript's LIVE turn order, computed
+    // BEFORE the time filter so indices stay stable, then intersected (AND) with it.
     let in_turn_range: Option<Vec<bool>> = turn_range.map(|spec| {
-        let all: Vec<&Record> = records.iter().collect();
-        let groups = group_turn_indices_deduped(&all, |r| *r);
         let (lo, hi) = spec.resolve(groups.len(), false);
-        let mut keep = vec![false; records.len()];
+        let mut keep = vec![false; rows.len()];
         for (ti, group) in groups.iter().enumerate() {
             if ti >= lo && ti <= hi {
                 for &i in group {
@@ -216,15 +220,17 @@ fn stats_one_file(
         keep
     });
 
-    // Windowed view for the counts; turn grouping runs over the SAME windowed set so
-    // `turns` reflects what the window admits.
-    let admitted: Vec<&Record> = records
-        .iter()
-        .enumerate()
-        .filter(|(i, r)| {
-            window.contains(r.timestamp.as_deref()) && in_turn_range.as_ref().is_none_or(|k| k[*i])
-        })
-        .map(|(_, r)| r)
+    // Windowed view for the counts; a turn counts when the window admits >=1 of ITS
+    // records, so `turns` reflects the window without re-deriving the numbering.
+    let admit = |i: usize| {
+        let (r, spine) = &rows[i];
+        !spine
+            && window.contains(r.timestamp.as_deref())
+            && in_turn_range.as_ref().is_none_or(|k| k[i])
+    };
+    let admitted: Vec<&Record> = (0..rows.len())
+        .filter(|&i| admit(i))
+        .map(|i| &rows[i].0)
         .collect();
 
     let mut usage_peak: HashMap<(String, String), [u64; 4]> = HashMap::new();
@@ -311,11 +317,15 @@ fn stats_one_file(
         sums.cache_read += vals[2];
         sums.cache_creation += vals[3];
     }
-    out.turns = group_turn_indices_deduped(&admitted, |r| *r).len();
+    out.turns = groups
+        .iter()
+        .filter(|g| g.iter().any(|&i| admit(i)))
+        .count();
     Ok(out)
 }
 
-/// Human-readable duration between two ISO timestamps (best-effort; None → "-").
+/// Human-readable duration between two ISO timestamps (best-effort; None → "-"). The
+/// rendering is the shared one (`agents` prints the same shapes), so the two never drift.
 fn duration_label(first: Option<&str>, last: Option<&str>) -> String {
     let (Some(f), Some(l)) = (first, last) else {
         return "-".to_string();
@@ -323,15 +333,7 @@ fn duration_label(first: Option<&str>, last: Option<&str>) -> String {
     let (Ok(a), Ok(b)) = (f.parse::<jiff::Timestamp>(), l.parse::<jiff::Timestamp>()) else {
         return "-".to_string();
     };
-    let secs = (b - a).get_seconds().max(0);
-    let (h, m, s) = (secs / 3600, (secs % 3600) / 60, secs % 60);
-    if h > 0 {
-        format!("{h}h{m:02}m")
-    } else if m > 0 {
-        format!("{m}m{s:02}s")
-    } else {
-        format!("{s}s")
-    }
+    crate::subagent::fmt_secs((b - a).get_seconds().max(0))
 }
 
 /// Scope law: usage dedupe is PER FILE (each row already deduped by message.id). The
@@ -352,34 +354,31 @@ fn merged_tokens(rows: &[SessionStats]) -> BTreeMap<String, TokenSums> {
     total
 }
 
-fn merged_narration(rows: &[SessionStats]) -> BTreeMap<String, usize> {
+/// Sum one per-session `key → count` census across the scope (tools, line types,
+/// narration blocks - one merge, so a fourth census cannot drift into its own copy).
+fn merged_counts<'a>(
+    rows: &'a [SessionStats],
+    pick: impl Fn(&'a SessionStats) -> &'a BTreeMap<String, usize>,
+) -> BTreeMap<String, usize> {
     let mut total: BTreeMap<String, usize> = BTreeMap::new();
     for r in rows {
-        for (model, n) in &r.narration_blocks {
-            *total.entry(model.clone()).or_insert(0) += n;
+        for (k, n) in pick(r) {
+            *total.entry(k.clone()).or_insert(0) += *n;
         }
     }
     total
 }
 
-fn merged_tools(rows: &[SessionStats]) -> BTreeMap<String, usize> {
-    let mut total: BTreeMap<String, usize> = BTreeMap::new();
-    for r in rows {
-        for (name, n) in &r.tools {
-            *total.entry(name.clone()).or_insert(0) += *n;
-        }
+/// The SURVIVAL-AXIS line: openers the conversation chain no longer reaches, and lines a
+/// compaction re-anchor re-appended. Printed only when there is something to say, so an
+/// ordinary transcript's block is unchanged.
+fn chain_line(abandoned: usize, rewound: usize, replays: usize) {
+    if abandoned > 0 || replays > 0 {
+        println!(
+            "  chain  abandoned turns {abandoned} ({rewound} rewound) · replay copy lines \
+             {replays}  (whole-file facts, outside `turns`)"
+        );
     }
-    total
-}
-
-fn merged_line_types(rows: &[SessionStats]) -> BTreeMap<String, usize> {
-    let mut total: BTreeMap<String, usize> = BTreeMap::new();
-    for r in rows {
-        for (t, n) in &r.line_types {
-            *total.entry(t.clone()).or_insert(0) += *n;
-        }
-    }
-    total
 }
 
 /// Count-desc `key×n` census line (`types` rows; the small closed-ish type space needs no
@@ -411,6 +410,7 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
         if !r.line_types.is_empty() {
             println!("  types  {}", line_types_line(&r.line_types));
         }
+        chain_line(r.abandoned_turns, r.rewound_turns, r.replay_copies);
         if let (Some(f), Some(l)) = (r.first_utc.as_deref(), r.last_utc.as_deref()) {
             println!(
                 "  span   {}  →  {}  ({})",
@@ -454,14 +454,14 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
     // Scope TOTAL block (only when >1 session - a single session IS its own total).
     if rows.len() > 1 {
         let tokens = merged_tokens(rows);
-        let tools = merged_tools(rows);
+        let tools = merged_counts(rows, |r| &r.tools);
         println!(
             "TOTAL  {} sessions ({} top-level + {} subagent)",
             rows.len(),
             top,
             sub
         );
-        let types = merged_line_types(rows);
+        let types = merged_counts(rows, |r| &r.line_types);
         if !types.is_empty() {
             println!("  types  {}", line_types_line(&types));
         }
@@ -472,13 +472,18 @@ fn render_text(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) {
             rows.iter().map(|r| r.turns).sum::<usize>(),
             rows.iter().map(|r| r.compactions).sum::<usize>(),
         );
+        chain_line(
+            rows.iter().map(|r| r.abandoned_turns).sum(),
+            rows.iter().map(|r| r.rewound_turns).sum(),
+            rows.iter().map(|r| r.replay_copies).sum(),
+        );
         for (model, t) in &tokens {
             println!(
                 "  tokens {model}: in {} · out {} · cache-read {} · cache-write {}",
                 t.input, t.output, t.cache_read, t.cache_creation
             );
         }
-        let narration = merged_narration(rows);
+        let narration = merged_counts(rows, |r| &r.narration_blocks);
         if !narration.is_empty() {
             println!("  narration blocks {}", line_types_line(&narration));
         }
@@ -549,6 +554,9 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) ->
             "user_records": r.user_records,
             "assistant_records": r.assistant_records,
             "turns": r.turns,
+            "abandoned_turns": r.abandoned_turns,
+            "rewound_turns": r.rewound_turns,
+            "replay_copies": r.replay_copies,
             "compactions": r.compactions,
             "tools": r.tools,
             "tokens": tokens_json(&r.tokens),
@@ -564,11 +572,14 @@ fn render_json(rows: &[SessionStats], top: usize, sub: usize, dropped: usize) ->
     }
     let summary = crate::text::envelope_summary(json!({
         "sessions": rows.len(),
-        "line_types": merged_line_types(rows),
+        "line_types": merged_counts(rows, |r| &r.line_types),
         "turns": rows.iter().map(|r| r.turns).sum::<usize>(),
-        "tools": merged_tools(rows),
+        "abandoned_turns": rows.iter().map(|r| r.abandoned_turns).sum::<usize>(),
+        "rewound_turns": rows.iter().map(|r| r.rewound_turns).sum::<usize>(),
+        "replay_copies": rows.iter().map(|r| r.replay_copies).sum::<usize>(),
+        "tools": merged_counts(rows, |r| &r.tools),
         "tokens": tokens_json(&merged_tokens(rows)),
-        "narration_blocks": merged_narration(rows),
+        "narration_blocks": merged_counts(rows, |r| &r.narration_blocks),
         "unknown_thinking_tags": rows.iter().map(|r| r.unknown_thinking_tags).sum::<usize>(),
         "skipped_lines": rows.iter().map(|r| r.skipped_lines).sum::<usize>(),
         "dropped_by_cap": dropped,

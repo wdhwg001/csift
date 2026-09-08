@@ -24,6 +24,11 @@
 //! already has its own reason to look at the line (a line-type census, a candidate parse)
 //! lifts the chain fields out of the same pass instead of walking it twice.
 //! [`spine_record`] is just the [`Record`] build on top of it.
+//!
+//! [`line_type_and_spine`] is that seam's one additive entry: `stats` already
+//! deserializes every non-candidate line in full for its exact line-type census, so the
+//! chain fields ride out of THAT parse into the same [`SpineFields`] and through the same
+//! [`spine_record_from`] build, rather than costing the line a second time.
 
 use super::*;
 
@@ -51,11 +56,17 @@ fn spine_type_wanted(raw: &[u8]) -> bool {
 /// and emits no hit - callers mark it with `Kept::spine` and skip it in every
 /// record-consuming pass. It exists only so the chain walk can see the DAG.
 pub(crate) fn spine_record(line: &[u8]) -> Option<Record> {
-    let f = spine_fields(line)?;
-    // The [`Record`] is built ONCE, at the end. It is a wide struct and the walk touches
-    // three lines in every four of a real transcript, so filling it field by field inside
-    // the loop paid for a default-zeroed struct even on the lines the walk then rejects.
-    Some(Record {
+    Some(spine_record_from(&spine_fields(line)?))
+}
+
+/// Decode one [`SpineFields`] into the [`Record`] the chain walks. Shared, so the walk
+/// entry and the census entry cannot drift into decoding a field differently.
+///
+/// The [`Record`] is built ONCE, at the end. It is a wide struct and the walk touches
+/// three lines in every four of a real transcript, so filling it field by field inside
+/// the loop paid for a default-zeroed struct even on the lines the walk then rejects.
+pub(crate) fn spine_record_from(f: &SpineFields<'_>) -> Record {
+    Record {
         r#type: str_value(f.r#type),
         subtype: f.subtype.and_then(str_value),
         uuid: f.uuid.and_then(str_value),
@@ -70,7 +81,7 @@ pub(crate) fn spine_record(line: &[u8]) -> Option<Record> {
             .compact_metadata
             .and_then(|raw| serde_json::from_slice(raw).ok()),
         ..Record::default()
-    })
+    }
 }
 
 /// The RAW value spans of the keys the chain reads, borrowed straight out of the line.
@@ -123,7 +134,12 @@ pub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {
         i = skip_ws(payload, i + 1);
         let start = i;
         i = skip_value(payload, i)?;
-        let raw = &payload[start..i];
+        // A scalar's span runs to the delimiter, so `true ,` would carry its trailing
+        // space into a byte-exact `bool_value` / `str_value` compare and read as ABSENT.
+        // Trimmed here, once, because the serde entry gets whitespace-free spans and the
+        // two must agree on `isSidechain` / `explicit` / `rewound` - the fields the leaf
+        // choice steers on.
+        let raw = payload[start..i].trim_ascii_end();
         match key {
             b"type" => {
                 if !spine_type_wanted(raw) {
@@ -145,6 +161,85 @@ pub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {
         }
     }
     (!out.r#type.is_empty()).then_some(out)
+}
+
+/// The line-type census and the chain spine out of ONE pass: full JSON syntax validation
+/// plus the top-level `type` value, and - for a line type the loader admits - the same
+/// [`SpineFields`] [`spine_fields`] borrows, decoded by the same [`spine_record_from`].
+/// Blank -> `Ok(None)`; a typeless object -> `"(untyped)"`; a malformed line -> `Err`.
+///
+/// This is the exact-census entry, and `stats` is the named corruption authority: a
+/// `{...}`-framed line with an invalid INTERIOR fails HERE, where the O(1) shape check and
+/// the tolerant [`spine_fields`] walk both pass it. That validation is a whole pass over
+/// the line, so the chain fields ride out of it rather than costing a second one: the
+/// UNFUSED shape - a narrow type probe plus a separate [`spine_record`] walk - measured
+/// about 40 ms of user CPU more on the largest transcript of a real corpus, 720 MB whose
+/// 91,975 lines include 49,902 attachments (medians of 16 and of 20 `csift stats` runs per
+/// arm, arms interleaved forwards and backwards each round, user CPU from `getrusage`
+/// deltas, same-binary control drifting 0.3-0.4%).
+///
+/// The two entries therefore differ in ONE thing only, the walk that finds the spans -
+/// `spine_fields` for a caller with no parse to ride on, serde for the caller that already
+/// validates - and a unit test pins them field for field.
+pub(crate) fn line_type_and_spine(
+    line: &[u8],
+) -> std::result::Result<Option<(String, Option<Record>)>, ()> {
+    if line.iter().all(u8::is_ascii_whitespace) {
+        return Ok(None);
+    }
+    // The same key set [`SpineFields`] holds, captured as borrowed `RawValue` spans so
+    // serde validates the whole line without decoding or allocating any of them.
+    #[derive(serde::Deserialize)]
+    struct Probe<'a> {
+        #[serde(rename = "type", borrow, default)]
+        r#type: Option<&'a serde_json::value::RawValue>,
+        #[serde(borrow, default)]
+        subtype: Option<&'a serde_json::value::RawValue>,
+        #[serde(borrow, default)]
+        uuid: Option<&'a serde_json::value::RawValue>,
+        #[serde(rename = "parentUuid", borrow, default)]
+        parent_uuid: Option<&'a serde_json::value::RawValue>,
+        #[serde(rename = "logicalParentUuid", borrow, default)]
+        logical_parent_uuid: Option<&'a serde_json::value::RawValue>,
+        #[serde(rename = "leafUuid", borrow, default)]
+        leaf_uuid: Option<&'a serde_json::value::RawValue>,
+        #[serde(borrow, default)]
+        timestamp: Option<&'a serde_json::value::RawValue>,
+        #[serde(rename = "isSidechain", borrow, default)]
+        is_sidechain: Option<&'a serde_json::value::RawValue>,
+        #[serde(borrow, default)]
+        explicit: Option<&'a serde_json::value::RawValue>,
+        #[serde(borrow, default)]
+        rewound: Option<&'a serde_json::value::RawValue>,
+        #[serde(rename = "compactMetadata", borrow, default)]
+        compact_metadata: Option<&'a serde_json::value::RawValue>,
+    }
+    let p: Probe = serde_json::from_slice(line).map_err(|_| ())?;
+    // `RawValue::get` is the value's RAW text, quotes included - exactly the span shape
+    // `SpineFields` carries, so the type gate and the decode below are the walk's own.
+    fn raw(v: Option<&serde_json::value::RawValue>) -> Option<&[u8]> {
+        v.map(|r| r.get().as_bytes())
+    }
+    let census = raw(p.r#type)
+        .and_then(str_value)
+        .unwrap_or_else(|| "(untyped)".to_string());
+    let Some(ty) = raw(p.r#type).filter(|t| spine_type_wanted(t)) else {
+        return Ok(Some((census, None)));
+    };
+    let fields = SpineFields {
+        r#type: ty,
+        subtype: raw(p.subtype),
+        uuid: raw(p.uuid),
+        parent_uuid: raw(p.parent_uuid),
+        logical_parent_uuid: raw(p.logical_parent_uuid),
+        leaf_uuid: raw(p.leaf_uuid),
+        timestamp: raw(p.timestamp),
+        is_sidechain: raw(p.is_sidechain),
+        explicit: raw(p.explicit),
+        rewound: raw(p.rewound),
+        compact_metadata: raw(p.compact_metadata),
+    };
+    Ok(Some((census, Some(spine_record_from(&fields)))))
 }
 
 fn skip_ws(b: &[u8], mut i: usize) -> usize {
