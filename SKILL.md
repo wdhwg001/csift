@@ -201,7 +201,21 @@ agent    .message · .thinking (redacted → "[redacted thinking]") · .tool.use
                                (tag hidden in the signature; renders "[narration summary]";
                                NOT the model's reasoning — pure reasoning = -t agent.thinking
                                -T agent.thinking.narration; excluded from verbatim replay)
-         .communication.{inbox,sent,signal}   peer msgs — rendered `from ⇨ to` (self = owner)
+         .communication.{inbox,sent,signal}   peer msgs — rendered `from ⇨ to` (self = owner).
+                    THREE inbound framings, all `type:"user"` string records that look human
+                    and are not: `<teammate-message teammate_id=…>` (a teammate),
+                    `<agent-message from=…>` (an agent relay), and `<cross-session-message
+                    from="uds:…" from-name=… from-mode=…>` (another SESSION messaging this
+                    one; `isMeta`, `promptSource:"system"`, a top-level `origin.kind:"peer"`).
+                    Direction is the sender NAME where there is one (`from-name` / `origin
+                    .name`), not the socket address. Bodies render tag-stripped everywhere —
+                    search, show, verbatim and list agree. SO: the wrapper attributes are
+                    UNSEARCHABLE — `search 'teammate_id='` / `'from-name='` return 0, and
+                    `--raw` does NOT bring them back (it only prints the source line of a hit
+                    the matcher already made). Search the BODY; read the wrapper by ADDRESS
+                    (`csift show @<id> --line N --raw`, which needs no match). The
+                    `queue-operation` enqueue line that precedes a delivery is a RIDER, never
+                    `user.queued`, so `-t user.message` and `-t user` stay pure human
          .communication.channel   a csift-channel DELIVERY: a message another lane (or a
                     sender outside Claude Code) had a hook inject into this one. Rendered
                     VERBATIM from its `[csift-channel v1 …]` envelope, direction from the
@@ -301,6 +315,7 @@ csift show TARGET ( (--line N|A..B|N..|-k,…)… | --turn N|A..B|N..|-k | (--uu
 - TARGET = exactly one transcript — `show` is the ONE targeting command with NO subagent-span pair (`--no-subagents`/`--subagents` are rejected with the rule, not a typo guess); to read a subagent, target its own `@<agent-id>`. One addressing mode is REQUIRED (no selector = a teaching error; csift never dumps a whole transcript by accident). `--turn N` fetches EVERY record of that turn — its whole back-and-forth — in the same numbering `search` prints (a `<tok>·t270` header ⇒ `--turn 270`, and the header's `<tok>` is the `@` target); `--turn -3..` is the tail-peek. A "turn" is everything since the last human-authored boundary — on a heavily-agentic session one turn can be DOZENS of records (a whole autonomous investigation); the 200-unit cap + drop report keep even a huge turn context-safe.
 - A superseded-draft record (see search's collapse disclosure) FETCHES by explicit `--line`/`--uuid`: it renders as its own annotated unit (`(superseded draft — … outside turn numbering)`; JSON `superseded_draft:true`, `turn_index:null`) — never a fabricated t<N>.
 - The v0.10.0 promoted non-record lines (a queue-operation with text, turn_duration, away_summary, stop_hook_summary, file-history-snapshot/-delta) render by explicit `--line`/`--uuid` address with no flag, labeled by their leaf. Still `--raw`-only: the session-state cache lines (last-prompt, mode, ai-title, agent-name, permission-mode), a content-less queue dequeue, and the unpromoted system subtypes; the miss error names them.
+- An address renders the record it names even when csift models NO leaf for it (v0.11.2): an `isMeta` pseudo-turn matching no harness marker, or a text-less block record, comes back as one UNLABELED unit — `? (no label)` in text, `"label": null` with `"labels": []` in JSON — instead of a miss. A plain SCAN still never surfaces it, so no `-t` result or `--count-by label` census moves; the address is the only way in.
 - Address misses error with the domain: `no such turn(s): t99 — the transcript has 2 turn(s) (t0..t1)`; open/from-end forms clamp (a `--turn -9..` on a 2-turn session is fine).
 - Renders FULL records through search's pipeline (labels, pairing, plan pointers, sidecar merge). A metadata/attachment line is not a record — a range covering some prints `N line(s) in the addressed range are not records (… — inspect with --raw)`; a single-line miss error points at `--raw`.
 - Cap: 200 record units by default; the drop prints `+N more record unit(s) … · continue: csift show @<id> --line A..B` (JSON `dropped_by_cap` + `refetch_remainder`). `--max-count N` / `0` = uncapped. `--raw` caps by line with the same stderr continuation.

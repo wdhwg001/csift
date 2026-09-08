@@ -5,6 +5,48 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.11.2] - 2026-09-08
+
+### Fixed
+
+- **An inbound cross-session message was invisible.** When one Claude Code session sends a
+  message to another, the receiver's transcript gets a `type:"user"` record whose content is
+  framed as `<cross-session-message from="uds:…" from-name="…" from-mode="…">` — a third peer
+  framing beside `<teammate-message>` and `<agent-message>`. csift knew the other two, so the
+  record matched no marker, its `isMeta` flag sent it down the "harness pseudo-turn" path, and
+  it came out with no label at all: no leaf, no census row, nothing under any `-t`, and
+  `csift show --line` on it answered `no such record(s)` even though `--raw` printed the line.
+  The framing now classifies `agent.communication.inbox` and opens a turn like its two
+  siblings. Its direction reads the sender's NAME (`from-name`, or the structured `origin.name`
+  the harness fills from the same attribute) rather than the socket path in `from`. Detection
+  is boundary-anchored like the others, so prose that merely quotes the tag — this repository's
+  own docs do — stays `user.message`. Recorded as claim TURN-031, traced from the socket
+  handler through the element template to the record stamps.
+- **The queue rider stopped being counted as your typing.** A `queue-operation` enqueue line
+  carries the same framed message one line earlier. `user.queued` means "the queue line carries
+  the human's text", and it asks the same peer predicate the records do — so widening that one
+  predicate takes the rider out of the human count with no second rule to keep in sync.
+- **`show --line` renders a record csift has no label for.** `classify` deliberately emits
+  nothing for a few real message shapes (an `isMeta` pseudo-turn matching no harness marker, a
+  block record with no text) rather than mislabel them as the user. An explicit address on such
+  a record used to bail. It now renders one unlabeled unit — `? (no label)` in text, `"label":
+  null` with an empty `"labels"` in JSON — because an address is a promise to show the record it
+  names. A plain scan still emits nothing, so no count, census or `-t` result changes; a line
+  that is no record at all (a session-state cache line, a torn line) is still a hard miss
+  pointing at `--raw`.
+
+### Changed
+
+- **Peer message bodies render the same way everywhere.** `verbatim` and `list` already stripped
+  the wrapper tags, the relay preamble and the security footer from an inbound peer message;
+  `search` and `show` printed the whole tagged section, so the same message read two different
+  ways depending on the command. All four now render the peer's own words. Know the consequence
+  before you rely on it: the wrapper attributes are no longer part of any text `search` can match,
+  so `search 'teammate_id='` and `search 'from-name='` find nothing at all — `--raw` does not
+  recover them, because it only prints the source line of a hit the matcher already made. The
+  peer's own words are matchable as before, the direction line still names the sender, and the
+  verbatim line of a record you can ADDRESS is still one `csift show @<id> --line N --raw` away.
+
 ## [0.11.1] - 2026-09-08
 
 ### Added
