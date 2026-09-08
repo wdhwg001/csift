@@ -263,7 +263,7 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 | attribution | claims | share | meaning |
 |---|---:|---:|---|
 | end-to-end | 514 | 78.8% | the writer, its gate and its trigger read in the shipped binary, and a specimen observed on disk or live |
-| &nbsp;&nbsp;of which chain traced and adversarially re-read | 514 | 78.8% | the three hops quoted at byte offsets in `producer_chain`, every excerpt re-read by an independent verifier |
+| &nbsp;&nbsp;of which chain traced | 514 | 78.8% | the three hops quoted at byte offsets in `producer_chain`; the anchors line below is the measured state of those offsets |
 | &nbsp;&nbsp;of which audit-graded, chain not yet traced | 0 | 0.0% | graded end-to-end from the release-audit checks (writer offsets cited there) before the three-hop tracing existed; the next audit traces them |
 | specimen-only | 43 | 6.6% | observed on disk or live; the writer not traced (or traced only in part) (28 of them with a partly traced writer) |
 | producer-only | 34 | 5.2% | the writer traced in full; no specimen exists in the corpus or could be produced here |
@@ -271,6 +271,12 @@ csift rests on hundreds of small facts about what Claude Code writes. Each one i
 | by-elimination | 0 | 0.0% | neither leg; attributed by exclusion or from csift's own design |
 | upstream | 14 | 2.1% | the producer lies outside the shipped binary by construction (the model or API side, the operating system, a native runtime binding); the client-side treatment is traced and a specimen observed |
 | total | 652 | 100.0% | one claim per Claude Code behavior csift depends on, verified at Claude Code 2.1.258 |
+
+A traced claim pins each hop at a byte offset in that build, and the gate re-reads every one of them:
+
+`anchors byte-exact at Claude Code 2.1.258: 6,121 of 6,734 (elided 343, absent 186, prefix-only 84)`
+
+An elided excerpt was quoted with an ellipsis, so it has no byte-exact form. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates.
 <!-- ledger-tally:end -->
 
 A claim that is not end-to-end lists the exact instrument that would close it, and a claim attributed by elimination can never be marked as holding.
