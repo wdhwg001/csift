@@ -64,5 +64,6 @@ mod tempfile_path {
 }
 
 mod lines;
+mod parallel;
 mod readers;
 mod spine;

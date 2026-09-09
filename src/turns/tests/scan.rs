@@ -35,6 +35,17 @@ fn window_admits_turn_range_and_time() {
         &unbounded
     ));
     assert!(!window_admits(6, None, tr, &unbounded));
+    // BOTH ends are inside the range: `A..B` is closed everywhere in the range grammar, so
+    // a window that quietly dropped its first or its last turn would under-report by one
+    // turn at each end on every windowed command.
+    assert!(
+        window_admits(2, Some("2026-06-07T05:00:00Z"), tr, &unbounded),
+        "the low end is in the window"
+    );
+    assert!(
+        window_admits(5, Some("2026-06-07T05:00:00Z"), tr, &unbounded),
+        "and so is the high end"
+    );
     // No turn, bounded time excludes timestamp-less.
     let bounded = TimeWindow::from_args(Some("2026-06-01"), None).unwrap();
     assert!(!window_admits(0, None, None, &bounded));
@@ -203,6 +214,28 @@ fn slice_windows_hard_split_an_oversized_line_on_char_boundaries() {
         assert!(c.chars().all(|ch| ch == '🛠'), "no broken char: {c:?}");
     }
     assert_eq!(chunks, vec!["🛠🛠", "🛠🛠", "🛠"]);
+}
+
+#[test]
+fn slice_windows_pack_up_to_the_window_and_never_past_it() {
+    // The packing test is a SUM against the window, and both halves of it matter. Lines that
+    // fill the window exactly still belong together - flushing a chunk early wastes a slice
+    // per document across a hook chain that is already budget-bound. And whatever the test
+    // is, it has to hold: no emitted chunk may exceed the window, because the harness spills
+    // an oversized additionalContext string to disk and leaves the model a preview.
+    assert_eq!(
+        slice_into_windows("ab\ncd", 5),
+        vec!["ab\ncd"],
+        "two lines summing to exactly the window are one chunk"
+    );
+    let chunks = slice_into_windows("\nabcd", 4);
+    assert_eq!(chunks.concat(), "\nabcd", "lossless");
+    for c in &chunks {
+        assert!(
+            c.chars().count() <= 4,
+            "no chunk may exceed the window: {c:?} in {chunks:?}"
+        );
+    }
 }
 
 #[test]

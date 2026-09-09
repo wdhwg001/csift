@@ -207,3 +207,83 @@ fn the_excluding_label_list_discloses_the_labels_it_could_not_show() {
         "the remainder is disclosed with its count: {line}"
     );
 }
+
+const GENC: &str = "-Users-dev-example-gate";
+const GSESS: &str = "7c6b5a49-3827-4160-8fed-cba987654321";
+
+#[test]
+fn a_gated_file_still_books_a_torn_marker_line_it_had_to_parse() {
+    // The whole-file gate returns without building records, so its malformed count IS the
+    // file's count and has to be exact. The one line it parses rather than validates is a
+    // synthesized-marker carrier (here a `<task-notification>`), because the gate has to
+    // re-render that marker's text before it can call the file a miss - and a torn one
+    // fails to parse right there. Booking it nowhere would report a clean file.
+    let h = Home::new();
+    h.write(
+        &format!("{GENC}/{GSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            // Role-bearing, marker-bearing, and truncated mid-object.
+            r#"{"type":"user","uuid":"n1","parentUuid":"u0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"<task-notification><task-id>b1a2b3c4d</task-id><summary>Background command finished</summary></task-notification>"#, "\n",
+        ),
+    );
+    let out = h.run(&[
+        "search",
+        "zzqxnotinthisfilezz",
+        &at(GSESS),
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let s: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "summary")
+        .expect("summary row");
+    assert_eq!(s["matched"], 0, "{}", out.stdout);
+    assert_eq!(
+        s["skipped_lines"], 1,
+        "the torn marker line is booked exactly once:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn a_gated_file_adds_its_sidecar_malformed_lines_to_its_own() {
+    // The gate proves the transcript cannot match, but the elicitation sidecar lives
+    // outside those bytes and is read anyway. Its unreadable lines are the transcript's
+    // count PLUS the sidecar's, and a clean transcript makes the first term zero - which
+    // is exactly where a subtraction would go negative instead of reporting one line.
+    let h = Home::new();
+    h.write(
+        &format!("{GENC}/{GSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{GENC}/{GSESS}/elicitations.jsonl"),
+        "{ this is not json at all\n",
+    );
+    let out = h.run(&[
+        "search",
+        "zzqxnotinthisfilezz",
+        &at(GSESS),
+        "--format",
+        "json",
+    ]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let s: serde_json::Value = out
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "summary")
+        .expect("summary row");
+    assert_eq!(s["matched"], 0, "{}", out.stdout);
+    assert_eq!(
+        s["skipped_lines"], 1,
+        "the sidecar's one unreadable line:\n{}",
+        out.stdout
+    );
+}

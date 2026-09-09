@@ -69,6 +69,26 @@ fn stats_cap_arithmetic_and_uncapped_zero() {
         "uncapped shows all four:\n{}",
         uncapped.stdout
     );
+    // The TEXT surface carries the same disclosure, and carries it only when a row was
+    // actually dropped: a "0 more session(s) not shown" footer on every run would be a
+    // standing lie about a cap that did not fire.
+    let capped_text = h.run(&[
+        "stats",
+        "-Users-testuser-Projects-statcap",
+        "--max-count",
+        "1",
+    ]);
+    assert!(
+        capped_text.stdout.contains("+3 more session(s) not shown"),
+        "the text footer names the drop:\n{}",
+        capped_text.stdout
+    );
+    let uncapped_text = h.run(&["stats", "-Users-testuser-Projects-statcap"]);
+    assert!(
+        !uncapped_text.stdout.contains("not shown"),
+        "and says nothing when nothing dropped:\n{}",
+        uncapped_text.stdout
+    );
 }
 
 #[test]

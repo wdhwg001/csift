@@ -487,4 +487,57 @@ fn image_lists_a_queued_command_attachment_image() {
     assert_eq!(rows[0]["line"], 2);
 }
 
+const NENC: &str = "-Users-dev-example-notes";
+const NSESS: &str = "2b1a0908-7766-4554-8332-110099887766";
+
+#[test]
+fn the_malformed_note_rides_both_image_listings_and_only_when_there_is_one() {
+    // `image` has two exits - the empty listing and the row listing - and the malformed law
+    // applies to both: a torn line is COUNTED wherever the command comes out, and a clean
+    // scan says nothing. A note printed at zero is a standing claim of corruption; a note
+    // withheld at one is the silence the law exists to prevent.
+    let clean_no_images = concat!(
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+        "\n",
+    );
+    let torn = "this line is not a record at all\n";
+    let with_image = {
+        let r = serde_json::json!({
+            "type":"user","uuid":"u1","parentUuid":null,
+            "timestamp":"2026-06-07T05:01:00.000Z",
+            "message":{"role":"user","content":[
+                {"type":"text","text":"one screenshot"}, img_block("image/png", PNG_1X1)]}
+        });
+        format!("{r}\n")
+    };
+    let case = |body: &str| -> String {
+        let h = Home::new();
+        h.write(&format!("{NENC}/{NSESS}.jsonl"), body);
+        let out = h.run(&["image", &at(NSESS)]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        out.stdout
+    };
+
+    let empty_clean = case(clean_no_images);
+    assert!(
+        empty_clean.contains("no images found") && !empty_clean.contains("malformed"),
+        "a clean empty listing claims no corruption:\n{empty_clean}"
+    );
+    let empty_torn = case(&format!("{clean_no_images}{torn}"));
+    assert!(
+        empty_torn.contains("no images found") && empty_torn.contains("1 malformed line(s)"),
+        "an empty listing still books the torn line:\n{empty_torn}"
+    );
+    let rows_clean = case(&with_image);
+    assert!(
+        rows_clean.contains("1 image(s)") && !rows_clean.contains("malformed"),
+        "a clean row listing claims no corruption:\n{rows_clean}"
+    );
+    let rows_torn = case(&format!("{with_image}{torn}"));
+    assert!(
+        rows_torn.contains("1 image(s)") && rows_torn.contains("1 malformed line(s)"),
+        "and a row listing books it in the tail:\n{rows_torn}"
+    );
+}
+
 mod survival;

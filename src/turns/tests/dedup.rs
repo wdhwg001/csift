@@ -290,3 +290,19 @@ fn dedup_flagged_middle_still_richness_gated() {
         "a rich dedup-flagged middle is kept carrying its flag"
     );
 }
+
+#[test]
+fn the_assistant_anchor_is_deduped_too_not_only_the_user_one() {
+    // A compaction summary quotes the REPLY as often as it quotes the ask, and both anchors
+    // of a live-region turn are checked against it. Leaving the assistant one unchecked
+    // spends budget re-rendering text the summary already carries verbatim.
+    let dup_reply = "the reply the summary already carries word for word";
+    let turns = vec![mk_turn(0, Some("a unique ask"), Some(dup_reply), 0, 0)];
+    let sums = vec![summary(900, vec![dup_reply], 9000)];
+    let sr = scan_with_turns(turns, sums);
+    let plan = plan_session(&sr, 40000, 0.5, 0, &cfg());
+    assert_eq!(
+        plan.dedup_demoted, 1,
+        "the assistant end-of-turn anchor is flagged"
+    );
+}

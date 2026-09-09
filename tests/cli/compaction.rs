@@ -432,6 +432,64 @@ fn a_summary_after_two_boundaries_pairs_with_the_second_only() {
     );
 }
 
+#[test]
+fn an_unrelated_system_record_between_the_two_does_not_break_the_pairing() {
+    // The pairing walks records looking for a BOUNDARY, and a boundary is a `compact_boundary`
+    // - not merely a record carrying a `subtype`. Every system record has one, and the
+    // harness writes plenty of them (`informational` here); treating any of them as a
+    // boundary would hand the summary's mode to a note and leave the real boundary unpaired.
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-0000000c3303";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef pass"}}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"cb1","parentUuid":null,"timestamp":"2026-06-07T05:10:00.000Z","content":"Conversation compacted","compactMetadata":{"trigger":"manual","preTokens":800}}"#, "\n",
+            r#"{"type":"system","subtype":"informational","uuid":"sy1","parentUuid":"u1","timestamp":"2026-06-07T05:10:01.000Z","level":"info","content":"a harness note"}"#, "\n",
+            r#"{"type":"user","uuid":"s1","parentUuid":"cb1","timestamp":"2026-06-07T05:10:02.000Z","isCompactSummary":true,"summarizeMetadata":{"messagesSummarized":3,"direction":"up_to"},"message":{"role":"user","content":"This session is being continued."}}"#, "\n",
+        ),
+    );
+    // Both leaves are named explicitly so the system catch-all is actually parsed - the note
+    // has to be IN the record set for it to be able to steal the pairing.
+    let json = h.run(&[
+        "search",
+        "",
+        at(sess).as_str(),
+        "-t",
+        "harness.compaction.boundary",
+        "-t",
+        "harness.meta.system",
+        "--format",
+        "json",
+    ]);
+    assert!(json.success, "stderr: {}", json.stderr);
+    let hits: Vec<serde_json::Value> = json
+        .stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter(|v| v["kind"] == "exchange")
+        .flat_map(|v| v["hits"].as_array().cloned().unwrap_or_default())
+        .collect();
+    let boundary = hits
+        .iter()
+        .find(|h| h["label"] == "harness.compaction.boundary")
+        .expect("the boundary hit");
+    assert_eq!(
+        boundary["mode"], "summarize-up-to-here",
+        "the boundary keeps the summary that follows it:\n{}",
+        json.stdout
+    );
+    let note = hits
+        .iter()
+        .find(|h| h["label"] == "harness.meta.system")
+        .expect("the informational record was parsed");
+    assert!(
+        note["mode"].is_null(),
+        "a note is not a compaction event:\n{}",
+        json.stdout
+    );
+}
+
 /// The §7f whole-file gate must not prune a file whose ONLY match is the FABRICATED boundary
 /// text: `messagesSummarized=66` appears nowhere in the raw line (the record carries
 /// `"messagesSummarized":66`), so the literal prefilter cannot see it and only the

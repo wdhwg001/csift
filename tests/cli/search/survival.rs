@@ -43,5 +43,6 @@ fn summary(out: &str) -> serde_json::Value {
 
 mod branches;
 mod census;
+mod disclosure;
 mod leaf;
 mod spine;

@@ -320,3 +320,54 @@ fn stats_total_block_merges_census_and_books_malformed_notes_exactly() {
         one.stdout
     );
 }
+
+#[test]
+fn the_total_tools_row_shows_fifteen_and_counts_the_rest_rather_than_dropping_them() {
+    // The scope TOTAL's merged tools row is capped for width, and a cap is silent
+    // truncation unless the remainder is stated. Fifteen fit, so nothing is elided; the
+    // sixteenth is disclosed rather than dropped.
+    let enc = "-Users-dev-Projects-stattools";
+    fn body(range: std::ops::Range<usize>) -> String {
+        range
+            .map(|i| {
+                format!(
+                    r#"{{"type":"assistant","uuid":"a{i}","timestamp":"2026-06-07T05:00:0{}.000Z","message":{{"role":"assistant","id":"m{i}","content":[{{"type":"tool_use","id":"t{i}","name":"ToolNo{i:02}","input":{{}}}}]}}}}"#,
+                    i % 10
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n"
+    }
+    let two_sessions = |second: std::ops::Range<usize>| -> Home {
+        let h = Home::new();
+        h.write(
+            &format!("{enc}/aaaa1111-bbbb-4ccc-8ddd-000000000001.jsonl"),
+            &body(0..8),
+        );
+        h.write(
+            &format!("{enc}/aaaa1111-bbbb-4ccc-8ddd-000000000002.jsonl"),
+            &body(second),
+        );
+        h
+    };
+    let fifteen = two_sessions(8..15).run(&["stats", enc]);
+    assert!(fifteen.success, "stderr: {}", fifteen.stderr);
+    let total = fifteen
+        .stdout
+        .split("TOTAL")
+        .nth(1)
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        total.contains("ToolNo00") && !total.contains("more tools"),
+        "fifteen fit with nothing elided:\n{}",
+        fifteen.stdout
+    );
+    let sixteen = two_sessions(8..16).run(&["stats", enc]);
+    assert!(
+        sixteen.stdout.contains("(+1 more tools)"),
+        "the sixteenth is counted, never silently dropped:\n{}",
+        sixteen.stdout
+    );
+}

@@ -161,6 +161,49 @@ fn stats_turns_are_live_turns_and_match_search() {
 }
 
 #[test]
+fn the_chain_line_is_printed_only_when_there_is_something_on_it() {
+    // An ordinary transcript's block has to stay what it was before the axis existed - a
+    // `chain abandoned turns 0 ... replay copy lines 0` row on every session in the corpus
+    // is a whole line of noise per session. The line's two triggers are independent, so
+    // each is pinned on its own: a replay copy with nothing abandoned still earns it.
+    let plain = Home::new();
+    plain.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+        ),
+    );
+    let quiet = plain.run(&["stats", &at(SESS)]);
+    assert!(quiet.success, "stderr: {}", quiet.stderr);
+    assert!(
+        !quiet.stdout.contains("chain "),
+        "nothing off the chain, nothing said:\n{}",
+        quiet.stdout
+    );
+
+    // The same two records written twice: the later pair is the survivor and the earlier
+    // pair is a replay copy, with nothing abandoned at all.
+    let replayed = Home::new();
+    replayed.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+        ),
+    );
+    let loud = replayed.run(&["stats", &at(SESS)]);
+    assert!(
+        loud.stdout
+            .contains("chain  abandoned turns 0 (0 rewound) · replay copy lines 2"),
+        "a replay copy alone earns the line:\n{}",
+        loud.stdout
+    );
+}
+
+#[test]
 fn stats_counts_the_survival_totals_and_sums_them() {
     let h = chain_stats_home();
     let out = h.run(&["stats", &at(SESS)]);

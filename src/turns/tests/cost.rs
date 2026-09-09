@@ -277,3 +277,26 @@ fn min_render_chars_none_when_turn_has_no_sides() {
     let sr = scan_with_turns(vec![sideless], Vec::new());
     assert_eq!(min_render_chars(&sr, 40000, &cfg()), None);
 }
+
+#[test]
+fn the_image_marker_line_and_the_cost_reserved_for_it_agree_to_the_character() {
+    // The renderer emits this line and the budget reserves for it; the two are the same
+    // function plus one newline, so a drifting reservation shows up as a plan that either
+    // overruns the budget or leaves a line's worth of it unused on every turn with images.
+    let one = vec!["img-a".to_string()];
+    let two = vec!["img-a".to_string(), "img-b".to_string()];
+    assert_eq!(image_marker_line(&one), "  [1 image: img-a]");
+    assert_eq!(
+        image_marker_line(&two),
+        "  [2 images: img-a, img-b]",
+        "the noun follows the count"
+    );
+    assert_eq!(
+        image_marker_cost(&one),
+        image_marker_line(&one).chars().count() + 1,
+        "the rendered line plus its newline"
+    );
+    assert_eq!(image_marker_cost(&one), 19);
+    assert_eq!(image_marker_cost(&two), 27);
+    assert_eq!(image_marker_cost(&[]), 0, "no images, no line, no cost");
+}

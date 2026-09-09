@@ -416,3 +416,34 @@ fn a_fork_clone_has_no_spawn_seed_but_a_genuine_child_does() {
     );
     assert_eq!(of(sess), vec!["user.message"], "{}", j.stdout);
 }
+
+const NAMED_SESS: &str = "00000000-0000-4000-8000-0000000000d4";
+
+#[test]
+fn a_single_section_peer_record_prefers_the_structured_sender_name() {
+    // Claude Code fills `origin.name` by re-parsing the tag it just wrote, so the two agree
+    // on real data - and the structured field is the one csift reads, because a tag scan is
+    // a scan. The preference is conditioned on the record carrying EXACTLY ONE peer section:
+    // `origin` describes one sender, so on a batched record each section answers for itself.
+    // Here the two are made to differ so the rule is observable at all.
+    let h = Home::new();
+    h.write(
+        &format!("{PEER_ENC}/{NAMED_SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"user","uuid":"p0","parentUuid":"u0","timestamp":"2026-06-07T05:00:02.000Z","isMeta":true,"origin":{"kind":"peer","from":"uds:/Users/dev/relay.sock","name":"harbour-survey"},"message":{"role":"user","content":"Another Claude session sent a message:\n<cross-session-message from=\"uds:/Users/dev/relay.sock\" from-name=\"relay-seven\">\nzzsingle the note\n</cross-session-message>\n\nThis came from another Claude session."}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["search", "zzsingle", &at(NAMED_SESS)]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("harbour-survey ⇨ self"),
+        "the structured name wins on a one-section record:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("relay-seven ⇨ self"),
+        "the tag attribute is the fallback, not the answer:\n{}",
+        out.stdout
+    );
+}

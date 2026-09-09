@@ -560,3 +560,32 @@ fn list_shows_with_elicitation_sidecar() {
     assert_eq!(row["with_elicitation_sidecar"], true);
     assert!(row["pending_elicitations"].as_array().unwrap().len() == 1);
 }
+
+#[test]
+fn verbatim_adds_the_sidecars_unreadable_lines_to_the_transcripts_own_count() {
+    // The sidecar is read from outside the transcript's bytes, so its unreadable lines are
+    // an ADDITION to whatever the scan found - and here the transcript is clean, which is
+    // exactly the case where a subtraction would go below zero instead of reporting one.
+    let h = Home::new();
+    let enc = "-Users-dev-example-sidecar";
+    let sess = "4c3b2a19-8877-4665-8443-221100ffeedd";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+        ),
+    );
+    h.write(
+        &format!("{enc}/{sess}/elicitations.jsonl"),
+        "{ this line is not json\n",
+    );
+    let at = format!("@{sess}");
+    let out = h.run(&["verbatim", &at]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains("1 malformed line(s) skipped"),
+        "the sidecar's one unreadable line is booked:\n{}",
+        out.stdout
+    );
+}

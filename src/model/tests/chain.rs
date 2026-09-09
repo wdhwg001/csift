@@ -563,3 +563,8 @@ fn a_sidechain_record_is_outside_the_axis() {
         "a sidechain lane is never called abandoned"
     );
 }
+
+// -- the loader hops that need their own fixtures --
+mod branches;
+mod leafgates;
+mod repair;

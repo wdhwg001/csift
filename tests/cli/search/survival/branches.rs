@@ -159,6 +159,49 @@ fn a_rewind_with_no_resend_leaves_the_branch_live() {
 }
 
 #[test]
+fn the_survival_marker_rides_the_hit_line_and_names_which_of_the_two_it_is() {
+    // The footer names both markers in one sentence of prose, so a whole-output `contains`
+    // proves nothing: the marker has to sit in the LABEL ZONE of the hit itself, and the
+    // two are not interchangeable - `[rewound]` says something answered the branch before
+    // the conversation left it, `[abandoned]` says nothing ever did.
+    let h = rewind_home();
+    let leaf = h.run(&["search", "depths.md", &at(SESS), "-t", "agent.tool.use"]);
+    let hit = leaf
+        .stdout
+        .lines()
+        .find(|l| l.contains("depths.md"))
+        .unwrap_or_else(|| panic!("the hit line:\n{}", leaf.stdout));
+    assert!(
+        hit.contains("[rewound]") && !hit.contains("[abandoned]"),
+        "an answered branch is [rewound] on its own line: {hit}"
+    );
+
+    // A DRAFT: the same axis, the other verdict. L3 was recalled and resent as L4, so
+    // nothing ever answered it.
+    let d = Home::new();
+    d.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting the lagoon"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"dredge the northern chanel"}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"dredge the northern channel"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"dredging"}]}}"#, "\n",
+        ),
+    );
+    let draft = d.run(&["search", "", &at(SESS), "-t", "user.unsent"]);
+    let dhit = draft
+        .stdout
+        .lines()
+        .find(|l| l.contains("user.unsent"))
+        .unwrap_or_else(|| panic!("the draft hit line:\n{}", draft.stdout));
+    assert!(
+        dhit.contains("[abandoned]") && !dhit.contains("[rewound]"),
+        "an unanswered branch is [abandoned] on its own line: {dhit}"
+    );
+}
+
+#[test]
 fn a_turn_window_suppresses_abandoned_units() {
     let h = rewind_home();
     let windowed = h.run(&["search", "", &at(SESS), "--turn", "0..5"]);

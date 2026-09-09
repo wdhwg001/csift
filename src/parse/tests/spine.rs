@@ -260,3 +260,82 @@ fn a_duplicate_top_level_key_parts_the_two_entries_and_the_census_says_malformed
     assert_eq!(w.uuid.as_deref(), Some("u-2"), "the last occurrence wins");
     assert_eq!(w.parent_uuid.as_deref(), Some("p-1"));
 }
+
+// -- the byte walk's own string handling: a torn line, and a reserialized one --
+
+#[test]
+fn a_key_truncated_mid_string_ends_the_walk_at_the_end_of_the_line() {
+    // Crash truncation loses the tail of a line, so the last key's closing quote never
+    // landed. The span reader has to stop AT the end of the buffer: one byte further is
+    // a read past the line rather than a torn-line verdict.
+    assert!(spine_record(br#"{"type":"user","parentUuid":"p-1","uuid"#).is_none());
+}
+
+#[test]
+fn a_scalar_truncated_at_the_end_of_the_line_ends_the_walk_too() {
+    // The same tear one value later: the scalar runs to the end with no delimiter after
+    // it, and the value skipper must stop there rather than step past the last byte.
+    assert!(spine_record(br#"{"type":"user","uuid":"u-1","tokens":123"#).is_none());
+}
+
+#[test]
+fn an_escape_inside_a_key_never_ends_that_key_early() {
+    // Claude Code's own writer emits no escaped key, but a reserialized line can carry
+    // one (the R13 law - escaping and whitespace do not make it a different record). Both
+    // shapes below hide a quote-looking byte inside the key: reading that key one byte
+    // short, or one pair long, leaves the walk staring at a byte that is not the `:` it
+    // needs, and every field after it is lost.
+    for line in [
+        r#"{"a\"b":1,"type":"user","uuid":"u-1","parentUuid":"p-1"}"#,
+        r#"{"a\\":1,"type":"user","uuid":"u-1","parentUuid":"p-1"}"#,
+    ] {
+        let rec = spine_record(line.as_bytes()).unwrap_or_else(|| panic!("a spine row: {line}"));
+        assert_eq!(rec.uuid.as_deref(), Some("u-1"), "{line}");
+        assert_eq!(rec.parent_uuid.as_deref(), Some("p-1"), "{line}");
+    }
+}
+
+#[test]
+fn an_escaped_quote_inside_a_value_never_closes_that_value() {
+    // A payload string ending in an escaped quote: closing the string on it would put the
+    // rest of the line's bytes back at top level, where they read as keys.
+    let line = r#"{"type":"user","uuid":"u-1","parentUuid":"p-1","note":"a\"b"}"#;
+    let rec = spine_record(line.as_bytes()).expect("a spine row");
+    assert_eq!(rec.uuid.as_deref(), Some("u-1"));
+    assert_eq!(rec.parent_uuid.as_deref(), Some("p-1"));
+}
+
+#[test]
+fn a_delimiter_inside_a_string_value_is_not_a_delimiter() {
+    // A comma inside a quoted value is payload, not the end of the value. Treating it as
+    // one cuts the span mid-string and the walk loses the rest of the line.
+    let line = r#"{"type":"user","uuid":"a,b","parentUuid":"p-1"}"#;
+    let rec = spine_record(line.as_bytes()).expect("a spine row");
+    assert_eq!(rec.uuid.as_deref(), Some("a,b"));
+    assert_eq!(rec.parent_uuid.as_deref(), Some("p-1"));
+}
+
+#[test]
+fn an_empty_string_value_is_a_present_field_not_an_absent_one() {
+    // `""` is the shortest string there is. Rejecting it on length would turn a written
+    // empty field into a missing one, and the leaf gates read `leafUuid` exactly that way
+    // - an empty leaf is not the same as no leaf at all.
+    let line = r#"{"type":"user","uuid":"","parentUuid":"p-1"}"#;
+    let rec = spine_record(line.as_bytes()).expect("a spine row");
+    assert_eq!(
+        rec.uuid.as_deref(),
+        Some(""),
+        "an empty uuid is Some of empty"
+    );
+    assert_eq!(rec.parent_uuid.as_deref(), Some("p-1"));
+}
+
+#[test]
+fn an_escaped_value_is_decoded_not_handed_back_raw() {
+    // The fast path copies the bytes only when there is no escape to decode; a value
+    // carrying one goes through the decoder, or the chain would key on the escape
+    // sequence itself and match no other surface's rendering of the same uuid.
+    let line = r#"{"type":"user","uuid":"p\"1","parentUuid":"p-1"}"#;
+    let rec = spine_record(line.as_bytes()).expect("a spine row");
+    assert_eq!(rec.uuid.as_deref(), Some("p\"1"));
+}

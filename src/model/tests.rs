@@ -19,6 +19,7 @@ impl SpawnLookup for FakeSpawn {
 mod automation;
 mod boundaries;
 mod chain;
+mod chain_relink;
 mod chain_view;
 mod classify_channel;
 mod classify_comm;
