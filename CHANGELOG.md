@@ -5,7 +5,7 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
-## [0.12.0] - unreleased
+## [0.12.0] - 2026-09-09
 
 ### Changed (breaking)
 
