@@ -17,6 +17,34 @@ surface change bumps the PATCH.
   fetches it whole. The visible fix is a queued prompt naming the literal, which used to be
   emitted and censused as `user.queued` on a flagless scan while the same run reported that
   leaf as unscanned.
+- **The survival axis got most of its cost back, and no output byte moved.** 0.12.0 put each
+  line's chain-structural spine row in the same vector as the records the command actually
+  wanted, so every element was sized to a full record. The two kinds now ride separate output
+  streams and the spine row is its own narrow type, 72 bytes against a record's 1184. Medians
+  of 21 reps on a 397 MiB transcript, this release against 0.12.0: `image` 29.2% faster,
+  `verbatim` 14.6%, `show --branch-points` 14.2%, `files` 8.1%, a heavy `-t user.unsent`
+  search 6.8%, `stats` 6.7%, `recover` 6.1%. The same-binary control arm drifted at most 1.1%
+  over those seven shapes, so the smallest win is five times the drift. A second, independent
+  run of the same driver read the same direction with larger margins (`image` 31.8%,
+  `verbatim` 16.0%). What remains against 0.11.1 is the axis itself: `image` 1.233x where
+  0.12.0 read 1.74x, `verbatim` 1.153x where it read 1.35x, and `files` 0.776x, still faster
+  than 0.11.1 because one chain build replaced four. Nothing a consumer reads changed, and
+  that is the checked part: stdout, stderr and exit code are byte-identical to the 0.12.0
+  binary on 851 (command, file) pairs over the 76 top-level transcripts of one corpus, and on
+  a further 1368 from a supplementary sweep of 18 more command shapes over the same files.
+
+### Fixed
+
+- **An orphan reconciliation pulse now renders every task id it closes, and names the kind.**
+  At the next session start Claude Code reconciles the tasks a previous session left open with
+  one `<task-notification>` carrying several `<task-id>` tags plus its own scan marker. csift
+  joined every id already, but the render read only the first, so a pulse closing five tasks
+  showed one and hid four, and the marker could take the id slot outright. The real ids now
+  render comma-joined in the label's id slot, the marker's kind renders as a trailing
+  `(orphan reconciliation: <kind>)`, and a `search` hit carries both as JSON `task_ids` (an
+  array) and `orphan_kind`. One helper is behind `search`, `show`, `list` and `verbatim`, so
+  every record surface follows. Rare and worth knowing: of 3076 notification sections on the
+  top-level transcripts of one corpus, 2 carry more than one `<task-id>`.
 
 ## [0.12.0] - 2026-09-09
 
@@ -97,7 +125,7 @@ surface change bumps the PATCH.
 
 - **The axis costs time, and the number is here, not in a footnote.** Every full-scan
   command now reads the lines its own prefilter drops, keeping the five structural fields the
-  chain needs and none of the payload. On a 397 MB transcript that is 100,387 structural rows
+  chain needs and none of the payload. On a 397 MiB transcript that is 100,387 structural rows
   against as few as 183 records the command itself wanted. Measured against 0.11.1 on that
   transcript, medians of 21 runs per arm on an interleaved CPU-time driver with rotated cells
   and a same-binary control drifting under 2%, the ratios quoted being wall clock: `image`
