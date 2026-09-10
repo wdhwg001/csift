@@ -15,7 +15,8 @@ fn survival_rows(out: &str) -> Vec<serde_json::Value> {
 /// A transcript whose history sits ABOVE a compaction cut: L1-L3 write the target, L4 is
 /// the `compact_boundary` (its own parentUuid null, `logicalParentUuid` naming L3), L5 the
 /// summary, L6-L8 the post-cut turn that edits the same file. Claude Code's loader stops at
-/// the boundary; csift steps over it and flags what it then reads `pre-cut`.
+/// the boundary and so does csift's walk; csift keeps reading the file above it and flags
+/// those records `pre-cut`.
 fn pre_cut_home() -> Home {
     let h = Home::new();
     h.write(

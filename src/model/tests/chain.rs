@@ -214,9 +214,10 @@ fn a_plain_boundary_cuts_the_chain_and_the_history_above_it_is_pre_cut() {
     ]);
     let c = Chain::build(&r, None);
     assert_eq!(c.boundary_cut, Some(2), "the walk stops at the boundary");
-    // csift steps over the cut through logicalParentUuid when there is one; with none,
-    // the records above are PRE-CUT, never abandoned - the reading is forensic, and the
-    // axis never claims abandonment in a region it could not resolve.
+    // The walk ends on the boundary (a null parentUuid breaks it before any other field
+    // is read), so the records above are PRE-CUT by the floor rule, never abandoned - the
+    // reading is forensic, and the axis never claims abandonment in a region it could not
+    // resolve.
     assert_eq!(
         survivals(&c, r.len()),
         vec!["pre-cut", "pre-cut", "live", "live", "live", "live"]
@@ -397,10 +398,13 @@ fn an_empty_record_set_yields_an_empty_chain() {
 }
 
 #[test]
-fn a_stepped_over_boundary_reads_the_history_above_it_as_pre_cut() {
-    // The boundary names a logicalParentUuid that IS on file, so csift crosses the cut and
-    // keeps reading. What it reads is forensic - Claude Code's own walk stopped here - so
-    // every record above the boundary is PRE-CUT, never live and never abandoned.
+fn a_null_parent_boundary_ends_the_walk_and_the_history_above_it_reads_pre_cut() {
+    // The boundary names a logicalParentUuid that IS on file, and the walk still ends on
+    // the boundary: its null parentUuid breaks the walk before the logicalParentUuid arm is
+    // reached (that arm is a guard for a boundary whose own parent is set and unresolvable;
+    // chain/nodes.rs pins it). csift keeps reading the file above the boundary, and what it
+    // reads is forensic - Claude Code's own walk stopped here too - so every record above
+    // the boundary is PRE-CUT by the floor rule, never live and never abandoned.
     let r = recs(&[
         &u("u0", "", "old prompt", "2026-06-07T05:00:00.000Z"),
         &a("a0", "u0", "old reply", "2026-06-07T05:00:05.000Z"),
@@ -413,17 +417,18 @@ fn a_stepped_over_boundary_reads_the_history_above_it_as_pre_cut() {
     assert_eq!(
         survivals(&c, r.len()),
         vec!["pre-cut", "pre-cut", "live", "live", "live"],
-        "the stepped-over history is read and flagged, not dropped and not abandoned"
+        "the history above the boundary is read and flagged pre-cut, not dropped and not abandoned"
     );
     assert_eq!(c.abandoned_records, 0);
 }
 
 #[test]
 fn a_boundary_naming_an_absent_logical_parent_leaves_a_blind_region_that_still_finds_drafts() {
-    // MISC-043: the pre-boundary records were deleted from disk, so the step-over has
-    // nowhere to land and the walk ends on the boundary. Everything above it is a region
-    // csift cannot resolve - PRE-CUT, never abandoned - and the measured same-parent
-    // opener rule is what still marks a recalled draft inside it.
+    // MISC-043: the pre-boundary records were deleted from disk. The walk ends on the
+    // boundary as it does for every null-parent boundary, and the dangling logicalParentUuid
+    // changes nothing. Everything above it is a region csift cannot resolve - PRE-CUT,
+    // never abandoned - and the measured same-parent opener rule is what still marks a
+    // recalled draft inside it.
     let r = recs(&[
         &u("u0", "", "old prompt", "2026-06-07T05:00:00.000Z"),
         &a("a0", "u0", "old reply", "2026-06-07T05:00:05.000Z"),
