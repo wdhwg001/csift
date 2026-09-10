@@ -451,3 +451,44 @@ fn compaction_boundary_surfaces_logical_parent_uuid() {
         shown.stdout
     );
 }
+
+#[test]
+fn a_trailing_last_prompt_line_still_decides_which_fork_child_is_live() {
+    // Claude Code records the conversation leaf on a `last-prompt` line, written with every
+    // batch. It carries no role marker, so it reaches the chain only as a spine row - and it
+    // is very often the LAST line of a live transcript, which puts it after every
+    // conversation record. Lose that tail and the leaf falls back to the file tail, which
+    // here is the OTHER fork child: the verdicts swap and nothing says so.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"dredge the northern channel"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"dredging"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"survey the southern shoal"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"surveying"}]}}"#, "\n",
+            r#"{"type":"last-prompt","leafUuid":"a1","lastPrompt":"dredge the northern channel"}"#, "\n",
+        ),
+    );
+    let j = h.run(&[
+        "show",
+        at(SESS).as_str(),
+        "--branch-points",
+        "--format",
+        "json",
+    ]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let bp = rows_of(&j.stdout)
+        .into_iter()
+        .find(|v| v["kind"] == "branch-point")
+        .expect("branch-point row");
+    // The recorded leaf hangs under L3, so L3 is the conversation and the LATER L5 fork is
+    // the one that was rewound past - the opposite of what file order alone would say.
+    assert_eq!(bp["live_child_line"], 3, "{}", j.stdout);
+    assert_eq!(bp["children"][0]["line"], 3, "{}", j.stdout);
+    assert_eq!(bp["children"][0]["verdict"], "live", "{}", j.stdout);
+    assert_eq!(bp["children"][1]["line"], 5, "{}", j.stdout);
+    assert_eq!(bp["children"][1]["verdict"], "rewound", "{}", j.stdout);
+}

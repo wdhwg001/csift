@@ -567,4 +567,5 @@ fn a_sidechain_record_is_outside_the_axis() {
 // -- the loader hops that need their own fixtures --
 mod branches;
 mod leafgates;
+mod nodes;
 mod repair;

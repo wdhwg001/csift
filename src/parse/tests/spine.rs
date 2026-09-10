@@ -332,6 +332,35 @@ fn demoting_a_parsed_record_lands_on_the_same_row_as_walking_its_line() {
     assert_eq!(leaf.rewound(), Some(false));
 }
 
+/// The rare fields are BOXED, and the box is what an ordinary row must not pay for: a
+/// `subtype` belongs to a `system` record, a `logicalParentUuid` and `compactMetadata` to a
+/// compaction boundary, a `leafUuid` to a `last-prompt` line, and three lines in four of a
+/// real transcript are none of those. So the ABSENCE is asserted - a row that always
+/// allocates the box is one heap allocation per dropped line, which on a 397 MB transcript
+/// is the cost the narrow row exists to remove.
+#[test]
+fn an_ordinary_row_carries_no_boxed_extra_and_a_rare_one_does() {
+    let plain = spine_record(L, FULL.as_bytes()).expect("an attachment lifts a row");
+    assert!(
+        plain.extra.is_none(),
+        "an ordinary attachment row carries none of the rare fields"
+    );
+    assert_eq!(
+        plain.subtype(),
+        None,
+        "and answers None for every one of them"
+    );
+    assert_eq!(plain.logical_parent_uuid(), None);
+    assert_eq!(plain.leaf_uuid(), None);
+    for line in [BOUNDARY, LAST_PROMPT] {
+        let rare = spine_record(L, line.as_bytes()).expect("a spine row");
+        assert!(
+            rare.extra.is_some(),
+            "a rare field has to be carried somewhere: {line}"
+        );
+    }
+}
+
 /// WIDTH is the reason the row exists, so it is asserted rather than assumed. The bound is
 /// deliberately loose (a field added later must still be paid for out of the same budget);
 /// what it forbids is the row drifting back toward a record's width.

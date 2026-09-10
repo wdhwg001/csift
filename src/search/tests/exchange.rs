@@ -59,6 +59,38 @@ fn started_utc_falls_back_to_first_hit_when_opener_lacks_timestamp() {
 }
 
 #[test]
+fn started_utc_is_the_turns_first_row_not_whichever_record_matched() {
+    // The chronological key is the turn's FIRST row - the opener - and the hit fallback is
+    // only for a turn whose first row carries no timestamp. Reading it off the matched
+    // record instead would key the exchange on the reply, and a reply written without a
+    // `timestamp` (they exist) would drop the whole exchange to the end of the combined
+    // timeline, where the None arm sorts.
+    let lines = vec![
+        r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#,
+        r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","message":{"role":"assistant","content":[{"type":"text","text":"charting the lagoon"}]}}"#,
+    ];
+    let mut a = args("charting");
+    a.labels = vec!["agent.message".to_string()];
+    let ex = search(&lines, &a);
+    assert_eq!(ex.len(), 1);
+    assert_eq!(
+        ex[0].hits.len(),
+        1,
+        "only the untimestamped reply matched: {:?}",
+        ex[0].hits
+    );
+    assert!(
+        ex[0].hits[0].timestamp_utc.is_none(),
+        "the matched record carries no timestamp of its own"
+    );
+    assert_eq!(
+        ex[0].started_utc.as_deref(),
+        Some("2026-06-07T05:00:00.000Z"),
+        "the opener's timestamp keys the turn"
+    );
+}
+
+#[test]
 fn timestamp_sort_key_orders_timestamped_first_none_last() {
     // ISO-8601 UTC strings sort chronologically as text; a None timestamp sorts LAST.
     let early = timestamp_sort_key(Some("2026-06-07T05:00:00.000Z"));

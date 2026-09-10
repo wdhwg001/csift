@@ -289,3 +289,91 @@ fn stats_turn_window_resolves_against_live_numbering() {
     // The chain totals are whole-file facts: a window never shrinks them.
     assert_eq!(row["abandoned_turns"], 2, "{}", out.stdout);
 }
+
+/// The one session row of a `stats --format json` run.
+fn session_row(out: &str) -> serde_json::Value {
+    out.lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .find(|v: &serde_json::Value| v["kind"] == "session")
+        .expect("session row")
+}
+
+#[test]
+fn a_last_prompt_line_below_the_final_record_still_decides_the_leaf() {
+    // The `last-prompt` line carries no role marker, so it reaches the chain only as a
+    // spine row, and on a live transcript it is usually the very last line - after every
+    // conversation record. It has to survive the merge that puts the two kinds back into
+    // one file order: it names the leaf, and the leaf decides which branch IS the
+    // conversation. Here the recorded leaf sits on the longer branch (L3-L6), so L7-L8 is
+    // the rewind; drop the line and the file tail wins instead, which inverts the answer
+    // and doubles the abandoned count.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"dredge the northern channel"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"dredging"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:01:30.000Z","message":{"role":"user","content":"sound the reef margin"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:01:35.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"sounding"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u3","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"survey the southern shoal"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","parentUuid":"u3","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m3","content":[{"type":"text","text":"surveying"}]}}"#, "\n",
+            r#"{"type":"last-prompt","leafUuid":"a2","lastPrompt":"sound the reef margin"}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &at(SESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let row = session_row(&out.stdout);
+    assert_eq!(
+        row["turns"], 3,
+        "three live turns on the recorded branch: {}",
+        out.stdout
+    );
+    assert_eq!(row["abandoned_turns"], 1, "{}", out.stdout);
+    assert_eq!(
+        row["rewound_turns"], 1,
+        "the L7 fork is what was rewound past: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn an_abandoned_reply_reached_through_an_attachment_still_reads_as_a_rewind() {
+    // The Draft/Rewound discriminator asks whether an assistant record hangs BELOW an
+    // abandoned opener, and it answers by walking the merged rows downwards - which is
+    // sound only while a parent really does sit above its children in that list. Here the
+    // reply hangs under a hook attachment, so the answer runs opener -> attachment (a spine
+    // row) -> reply: put the spine row anywhere but its own place in file order and the
+    // rewound turn is filed as a recalled draft instead.
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m0","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"d0","parentUuid":"a0","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"sound the reef"}}"#, "\n",
+            r#"{"type":"attachment","uuid":"x0","parentUuid":"d0","timestamp":"2026-06-07T05:01:02.000Z","attachment":{"type":"hook_additional_context","content":["session context"]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"r0","parentUuid":"x0","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"sounding"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u1","parentUuid":"a0","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"survey the southern shoal"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"surveying"}]}}"#, "\n",
+        ),
+    );
+    let out = h.run(&["stats", &at(SESS), "--format", "json"]);
+    assert!(out.success, "stderr: {}", out.stderr);
+    let row = session_row(&out.stdout);
+    assert_eq!(row["turns"], 2, "{}", out.stdout);
+    assert_eq!(row["abandoned_turns"], 1, "{}", out.stdout);
+    assert_eq!(
+        row["rewound_turns"], 1,
+        "the abandoned opener DID draw a reply, one hop further down: {}",
+        out.stdout
+    );
+    let text = h.run(&["stats", &at(SESS)]);
+    assert!(
+        text.stdout
+            .contains("chain  abandoned turns 1 (1 rewound) · replay copy lines 0"),
+        "the text disclosure says the same:\n{}",
+        text.stdout
+    );
+}

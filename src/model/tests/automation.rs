@@ -134,6 +134,40 @@ fn orphan_reconciliation_label_names_every_task_and_its_kind() {
 }
 
 #[test]
+fn the_first_orphan_kind_sentinel_wins_and_an_empty_one_names_nothing() {
+    // The kind slot is filled ONCE. A pulse that carries a second `__orphan_summary__:`
+    // tag must not have its marker rewritten by the later tag - the summary prose beside
+    // it describes the first - and a sentinel whose kind is empty names nothing at all, so
+    // it must leave the marker off rather than render `(orphan reconciliation: )`.
+    let two = parse(
+        r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>__orphan_summary__:agent</task-id>\n<task-id>bzz777777</task-id>\n<task-id>__orphan_summary__:shell</task-id>\n<status>stopped</status>\n<summary>Agent tasks reconciled</summary>\n</task-notification>"}}"#,
+    );
+    let ids = section_task_ids(&two.raw_message_text().unwrap());
+    assert_eq!(ids.ids, ["bzz777777"], "a marker is never a task");
+    assert_eq!(
+        ids.orphan_kind.as_deref(),
+        Some("agent"),
+        "the first sentinel names the kind"
+    );
+    assert_eq!(
+        two.automation_label().unwrap(),
+        "[agent bzz777777 stopped] (orphan reconciliation: agent) Agent tasks reconciled"
+    );
+
+    let empty = parse(
+        r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>__orphan_summary__:</task-id>\n<task-id>bzz888888</task-id>\n<status>stopped</status>\n<summary>Tasks reconciled</summary>\n</task-notification>"}}"#,
+    );
+    let ids = section_task_ids(&empty.raw_message_text().unwrap());
+    assert_eq!(ids.ids, ["bzz888888"], "still no task");
+    assert_eq!(ids.orphan_kind, None, "an empty kind names nothing");
+    assert_eq!(
+        empty.automation_label().unwrap(),
+        "[task bzz888888 stopped] Tasks reconciled",
+        "no marker where there is no kind"
+    );
+}
+
+#[test]
 fn monitor_cadence_event_replaces_fabricated_completed_status() {
     // A real-captured monitor shape: a Monitor pulse with NO <status> but a real
     // <event> outcome. The label must surface the EVENT (STAGE2_OUTPUT_READY), not fabricate
