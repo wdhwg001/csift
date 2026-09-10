@@ -246,13 +246,16 @@ pub(crate) fn collect_record_hits(
     };
 
     // One emission: locate the match, build the match-centered excerpt, carry class/labels/
-    // direction/tool_use_id. `pair` is filled later by the per-file pairing pass.
+    // direction/tool_use_id. `pair` is filled later by the per-file pairing pass. `notif`
+    // carries a notification SECTION's own task ids (a batched record's sections name
+    // different tasks, so this rides the call rather than the record); default elsewhere.
     let mut emit = |class: Class,
                     text: &str,
                     tool_name: Option<String>,
                     dir: Option<(String, String)>,
                     tuid: Option<String>,
-                    result_err: Option<bool>| {
+                    result_err: Option<bool>,
+                    notif: crate::model::TaskIds| {
         if let Some(span) = matcher.locate(text) {
             let (excerpt, truncated) = match_excerpt(text, span, excerpt_max);
             hits.push(Hit {
@@ -275,6 +278,8 @@ pub(crate) fn collect_record_hits(
                 from_sidecar: false,
                 queue_operation: queue_operation.clone(),
                 queue_reason: queue_reason.clone(),
+                task_ids: notif.ids,
+                orphan_kind: notif.orphan_kind,
                 delivery,
                 resume_paired,
                 survival: crate::model::Survival::Live,
@@ -308,13 +313,22 @@ pub(crate) fn collect_record_hits(
             } else {
                 None
             };
-            emit(class, &text, None, dir, None, None);
+            emit(
+                class,
+                &text,
+                None,
+                dir,
+                None,
+                None,
+                crate::model::TaskIds::default(),
+            );
         }
     } else {
         for crate::model::RecordTextSection {
             class,
             text,
             direction: dir,
+            task_ids,
         } in sections
         {
             if !filter.selected(class.path()) {
@@ -325,7 +339,7 @@ pub(crate) fn collect_record_hits(
             } else {
                 None
             };
-            emit(class, &text, None, dir, None, None);
+            emit(class, &text, None, dir, None, None, task_ids);
         }
     }
 
@@ -344,7 +358,15 @@ pub(crate) fn collect_record_hits(
     };
     if let Some(class) = user_dual {
         if let Some(text) = rec.reconstructed_user_text(Some(plan_index)) {
-            emit(class, &text, None, None, None, None);
+            emit(
+                class,
+                &text,
+                None,
+                None,
+                None,
+                None,
+                crate::model::TaskIds::default(),
+            );
         }
     }
 
@@ -366,6 +388,7 @@ pub(crate) fn collect_record_hits(
                 None,
                 None,
                 None,
+                crate::model::TaskIds::default(),
             );
         }
     }
@@ -379,7 +402,19 @@ pub(crate) fn collect_record_hits(
         &direction,
         resolve_persisted,
         tool_names,
-        &mut emit,
+        // A BLOCK never carries notification task ids - those are a record-SECTION fact - so
+        // the block sink keeps its own shape and this adapter supplies the empty set.
+        &mut |class, text, tool_name, dir, tuid, result_err| {
+            emit(
+                class,
+                text,
+                tool_name,
+                dir,
+                tuid,
+                result_err,
+                crate::model::TaskIds::default(),
+            );
+        },
     );
 }
 

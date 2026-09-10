@@ -1,5 +1,7 @@
 //! AutomationKind / AutomationTrigger -- the task-notification pulse model.
 
+use super::TASK_NOTIFICATION_CLOSE;
+
 /// The TRUE class of a `<task-notification>` automation trigger, parsed from the leading
 /// classifier of its `<summary>` (verified against real sessions: the summary opens with
 /// `Background command "…"`, `Dynamic workflow "…"`, or `Agent …`). This is the attribution
@@ -84,7 +86,8 @@ pub struct AutomationTrigger {
     /// The TRUE trigger class (parsed from the `<summary>` classifier) - the attribution the
     /// label renders, replacing the prior hardcoded `workflow`.
     pub kind: AutomationKind,
-    /// The `<task-id>` (the workflow / background-command id), if present.
+    /// The FIRST REAL `<task-id>` (the workflow / background-command id), if present -
+    /// never an orphan-reconciliation sentinel, which names no task ([`section_task_ids`]).
     pub task_id: Option<String>,
     /// The `<status>` (`completed` / `failed` / …), if present.
     pub status: Option<String>,
@@ -95,6 +98,71 @@ pub struct AutomationTrigger {
     /// the only outcome signal on a Monitor pulse (which usually has no `<status>`), so the
     /// label falls back to it instead of fabricating `completed`.
     pub event: Option<String>,
+}
+
+/// The PREFIX of every `<task-id>` tag that names no task. At the next session start Claude
+/// Code reconciles the tasks a previous session left open with ONE notification listing them
+/// all, and it lists two sentinels among their ids: `__orphan_summary__:<kind>` names the kind
+/// being reconciled, `__orphan_summary_live__:<id>` excludes a still-live task from the summary.
+/// The pulse's own summary calls them "internal scan markers, not tasks", so a rendered id list
+/// must never carry one.
+pub(crate) const ORPHAN_SENTINEL_PREFIX: &str = "__orphan_summary";
+
+/// The sentinel naming the reconciled KIND: `__orphan_summary__:<agent|shell|workflow>`.
+pub(crate) const ORPHAN_KIND_SENTINEL: &str = "__orphan_summary__:";
+
+/// The `<task-id>` tags of ONE `<task-notification>` section, split into the tasks and the
+/// markers: every REAL id in document order, plus the kind an orphan-reconciliation sentinel
+/// names. A reconciliation pulse closes SEVERAL tasks at once, so reading only the first id
+/// hides the rest - and the first can itself be a sentinel, which names no task at all.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskIds {
+    /// Every real task id the section names, sentinels excluded.
+    pub ids: Vec<String>,
+    /// The `agent` / `shell` / `workflow` an `__orphan_summary__:` sentinel names; `None` on
+    /// an ordinary completion pulse.
+    pub orphan_kind: Option<String>,
+}
+
+/// Split one `<task-notification>` section's `<task-id>` tags into [`TaskIds`]. Bounded to the
+/// FIRST section, so a WHOLE-RECORD call on a batched record reads the same section the rest of
+/// the label reads ([`extract_xml_tag`]'s first-occurrence semantics).
+pub(crate) fn section_task_ids(section: &str) -> TaskIds {
+    let scope = match section.find(TASK_NOTIFICATION_CLOSE) {
+        Some(end) => &section[..end],
+        None => section,
+    };
+    let mut out = TaskIds::default();
+    for tag in all_xml_tags(scope, "task-id") {
+        if let Some(kind) = tag.strip_prefix(ORPHAN_KIND_SENTINEL) {
+            if out.orphan_kind.is_none() && !kind.is_empty() {
+                out.orphan_kind = Some(kind.to_string());
+            }
+        } else if !tag.starts_with(ORPHAN_SENTINEL_PREFIX) {
+            out.ids.push(tag);
+        }
+    }
+    out
+}
+
+/// Every `<tag>…</tag>` value in order (an orphan summary carries several).
+pub(crate) fn all_xml_tags(s: &str, tag: &str) -> Vec<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    while let Some(i) = s[at..].find(&open) {
+        let start = at + i + open.len();
+        let Some(j) = s[start..].find(&close) else {
+            break;
+        };
+        let inner = s[start..start + j].trim();
+        if !inner.is_empty() {
+            out.push(inner.to_string());
+        }
+        at = start + j + close.len();
+    }
+    out
 }
 
 /// Extract the text between `<tag>` and `</tag>` in `s`, trimmed, or `None` when the tag

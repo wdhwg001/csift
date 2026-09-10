@@ -547,7 +547,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "439-442",
+          "lines": "442-445",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -1301,7 +1301,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "472-484",
+          "lines": "452-464",
           "snippet": "/// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.\n/// The latest carrier wins (an agent notifies again after a resume).\npub(crate) fn resolve_carriers(\n    tasks: &mut BTreeMap<String, BgTask>,\n    carriers: &[Carrier],\n    notes: &mut Vec<String>,\n) {\n    let mut by_id: BTreeMap<String, String> = BTreeMap::new();\n    for (tuid, t) in tasks.iter() {\n        if let Some(id) = &t.id {\n            by_id.insert(id.clone(), tuid.clone());\n        }\n    }"
         }
       ],
@@ -2201,7 +2201,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "180-184",
+          "lines": "182-186",
           "snippet": "    pub fn automation_label(&self) -> Option<String> {\n        let content = self.message.as_ref()?.content.as_ref()?;\n        let Content::Text(s) = content else {\n            return None;\n        };"
         },
         {
@@ -2404,12 +2404,12 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "502-515",
+          "lines": "482-495",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         },
         {
           "path": "src/model/automation.rs",
-          "lines": "93-97",
+          "lines": "96-100",
           "snippet": "    /// The `<event>` payload, if present - where a Monitor / ScheduleWakeup pulse carries its\n    /// real outcome (`STAGE2_OUTPUT_READY`, `[Monitor timed out - re-arm if needed.]`). Often\n    /// the only outcome signal on a Monitor pulse (which usually has no `<status>`), so the\n    /// label falls back to it instead of fabricating `completed`.\n    pub event: Option<String>,"
         }
       ],
@@ -2504,7 +2504,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "502-515",
+          "lines": "482-495",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         }
       ],
@@ -2706,7 +2706,7 @@
       "code": [
         {
           "path": "src/live/background_scan.rs",
-          "lines": "472-474",
+          "lines": "452-454",
           "snippet": "/// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.\n/// The latest carrier wins (an agent notifies again after a resume).\npub(crate) fn resolve_carriers("
         }
       ],
@@ -2833,7 +2833,7 @@
       "id": "BG-020",
       "area": "background-tasks",
       "behavior": "...plus a sentinel <task-id>__orphan_summary__:<kind></task-id> where kind is one of agent | shell | workflow (only :shell observed here), <status>stopped</status>, and a summary reading 'N background <kind> task(s) from the previous session have no completion record ... They may have been stopped (via the UI, Monitor timeout, or agent teardown \\u2014 these leave no transcript marker)' - an em dash, not a hyphen. The harness also uses a SECOND sentinel form, __orphan_summary_live__:<id>, to exclude a still-live task from the summary.",
-      "depends": "csift reads ALL `<task-id>` tags (not just the first), marks every named task `stopped` and discloses the count; that harness sentence is the honesty bound csift adopts - NOT RETURNED IS NOT PROOF OF STILL RUNNING - so absence of a completion is never reported as proof of liveness.",
+      "depends": "csift reads ALL `<task-id>` tags (not just the first), marks every named task `stopped` and discloses the count. The rendered notification label names EVERY real id of the pulse (`[<kind> <id>, <id>, <id> <status>]`) and never a sentinel: `__orphan_summary__:<kind>` is parsed into the reconciliation KIND, rendered as `(orphan reconciliation: <kind>)` and carried as JSON `orphan_kind` beside a `task_ids` array, and the parsed trigger's single `task_id` is the first REAL id. Reading one tag hid every other task the pulse closed and could put an internal scan marker in the id slot. That harness sentence is the honesty bound csift adopts - NOT RETURNED IS NOT PROOF OF STILL RUNNING - so absence of a completion is never reported as proof of liveness.",
       "code": [
         {
           "path": "src/live/background.rs",
@@ -2846,14 +2846,24 @@
           "snippet": "    for section in text.split(TASK_NOTIFICATION_PREFIX).skip(1) {\n        let task_ids = all_xml_tags(section, \"task-id\");\n        let orphan = task_ids.iter().any(|t| t.starts_with(\"__orphan_summary__\"));\n        carriers.push(Carrier {\n            task_ids,\n            tool_use_id: extract_xml_tag(section, \"tool-use-id\"),\n            status: extract_xml_tag(section, \"status\"),\n            event: extract_xml_tag(section, \"event\"),\n            ts: rec.timestamp.clone(),\n            orphan_summary: orphan,\n        });\n    }"
         },
         {
-          "path": "src/live/background_scan.rs",
-          "lines": "453-470",
+          "path": "src/model/automation.rs",
+          "lines": "149-166",
           "snippet": "pub(crate) fn all_xml_tags(s: &str, tag: &str) -> Vec<String> {\n    let open = format!(\"<{tag}>\");\n    let close = format!(\"</{tag}>\");\n    let mut out = Vec::new();\n    let mut at = 0usize;\n    while let Some(i) = s[at..].find(&open) {\n        let start = at + i + open.len();\n        let Some(j) = s[start..].find(&close) else {\n            break;\n        };\n        let inner = s[start..start + j].trim();\n        if !inner.is_empty() {\n            out.push(inner.to_string());\n        }\n        at = start + j + close.len();\n    }\n    out\n}"
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "523-529",
+          "lines": "503-509",
           "snippet": "    if orphaned > 0 {\n        notes.push(format!(\n            \"{orphaned} task(s) were reconciled as stopped by Claude Code at a later session \\\n             start (its orphan summary: no completion record; a UI stop, a Monitor timeout or \\\n             agent teardown leaves no transcript marker)\"\n        ));\n    }"
+        },
+        {
+          "path": "src/model/automation.rs",
+          "lines": "136-144",
+          "snippet": "    for tag in all_xml_tags(scope, \"task-id\") {\n        if let Some(kind) = tag.strip_prefix(ORPHAN_KIND_SENTINEL) {\n            if out.orphan_kind.is_none() && !kind.is_empty() {\n                out.orphan_kind = Some(kind.to_string());\n            }\n        } else if !tag.starts_with(ORPHAN_SENTINEL_PREFIX) {\n            out.ids.push(tag);\n        }\n    }"
+        },
+        {
+          "path": "src/model/classify_support.rs",
+          "lines": "53-56",
+          "snippet": "    let mut head = format!(\"[{} {id} {status}]\", kind.slug());\n    if let Some(k) = orphan_kind {\n        head.push_str(&format!(\" (orphan reconciliation: {k})\"));\n    }"
         }
       ],
       "instrument": "`rg -l '__orphan_summary__:' ~/.claude/projects --glob '*.jsonl'`, then parse a matching line and count its `<task-id>` tags; `csift status @<that session> --format json | jq '.background.notes'` shows the reconciliation note. Counting rule: one reconciliation record per matching line; a record with N real ids plus one `__orphan_summary__:` sentinel reconciles N tasks.",
@@ -2883,6 +2893,16 @@
           "observed": "complete producer trace: trigger the resume driver Yxe(e,n,o,r,i) @178947851; gate Yxe's body: Mn(c) rebuilds the inventory, then En / Fn / On reconcile agents, shells and workflows @178948348; gate Fn: the aggregate form is chosen only when more than one shell is orphaned @178958800; writer function st(e,n,o,r,i,d): the aggregate orphan-summary writer @178961139; writer the sentinel constants @178948512. writer excerpt: function st(e,n,o,r,i,d){let c=r.slice(0,Fe).map(i),f=[...c,`${tt}${n}`,...d.map((x)=>`${nt}${Bt(x)}`)].map((x)=>`<${Use}>${x}</${Use}>`).join(`\n`),C=e===\"failed\"?\"They were running when the previous Claude Code process exited and did not complete; their in-process state was lost. Check each worktre enumeration: 6 site(s) read: st() call site 1 (agents) @178952877: st(\"failed\",\"agent\",\"agent\",...) - kind 'agent'; st() call site 2 (shells) @178958882: st(\"stopped\",\"shell\",\"shell command\",...) - kind 'shell'; st() call site 3 (workflows) @178960350: st(\"stopped\",\"workflow\",\"workflow\",...) - kind 'workflow'; st() definition @178961139: the writer itself; a regex sweep of the whole resume-orphan module (bytes 178947; Mn's kind fold: summarizedKinds @178948860: the inventory side accepts exactly agent | shell | workflow when folding a summa; Pn: the agent 'stopped' AGGREGATE that carries NO sentinel @178956889: a fourth aggregate form whose id list is a bare map of agentIds - it reconciles  specimen: 2 genuine reconciliation events, each written twice - once as a queue-operation enqueue line and once as a type:\"user\" record about 90 ms later: one naming 3 real task ids and one naming 2, both with the single sentinel __orphan_summary__:shell and <status>stopped</status>. Zero __orphan_summary_liv",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One reconciliation record per matching line; a record with N real ids plus one __orphan_summary__: sentinel reconciles N tasks; a section with no <task-id> is prose quoting the marker and is dropped. Distinct events counted by (timestamp, summary).",
           "note": "The writer is read verbatim with both sentinel constants and the em-dash summary, a module-wide sweep finds exactly three st() call sites fixing the kind set at agent|shell|workflow, and the corpus shows two reconciliation events in exactly that shape."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-10",
+          "verdict": "refined",
+          "instrument": "`csift search '' -t harness.notification --raw --no-subagents` over every project under the projects root, then split each raw record's content into `<task-notification>` sections and partition each section's `<task-id>` tags into real ids and `__orphan_summary` sentinels; the render is read back with `csift search 'have no completion record' -t harness.notification --no-truncate --format json` (the label head, `task_ids`, `orphan_kind`).",
+          "observed": "3076 `<task-notification>` sections over the top-level transcripts. 2 carry more than one `<task-id>`, and both are orphan reconciliations - one naming 3 real ids, one naming 2 - each with a single `__orphan_summary__:shell` sentinel and `<status>stopped</status>`, in 2 distinct sessions; no section carries an `__orphan_summary_live__:` sentinel. On both, the label head now holds every real id (3 of 3, 2 of 2) plus `(orphan reconciliation: shell)`, the hit rows carry `task_ids` of length 3 and 2 and `orphan_kind` `shell`, and no sentinel reaches the id slot - the string survives only inside the pulse's own summary sentence about internal scan markers.",
+          "rule": "One pulse = one `<task-notification>` section; a pulse is multi-id when it carries more than one `<task-id>` tag; a section's tags split into real ids and `__orphan_summary` sentinels. Scope: top-level transcripts only.",
+          "note": "The mechanism holds; the reading of it gained the rest of the pulse. The label named only the first `<task-id>`, so a reconciliation closing several tasks showed one and hid the others, and a sentinel could stand in the id slot; it now lists every real id, renders the sentinel as the reconciliation kind, and exposes both as `task_ids` / `orphan_kind` on a hit row."
         }
       ],
       "attribution": "end-to-end",
@@ -2890,7 +2910,7 @@
       "producer_trace": "complete",
       "specimen": "observed",
       "residue": [
-        "Two csift-relevant gaps stand from the 2026-09-02 check and are confirmed at the binary: csift's `t.starts_with(\"__orphan_summary__\")` does not match the __orphan_summary_live__: form (0 corpus occurrences, so untested), and the agent aggregate Pn (178956950) reconciles orphans with NO sentinel at all, so sentinel-keyed detection is not a complete orphan detector.",
+        "The sentinel-keyed detection in the background scan matches `__orphan_summary__` only, not the `__orphan_summary_live__:` form (0 corpus occurrences, so untested in practice); the label render excludes both families by their shared `__orphan_summary` prefix. The agent aggregate Pn (178956950) reconciles orphans with NO sentinel at all, so sentinel-keyed detection is not a complete orphan detector.",
         "The kind can be agent or workflow, not only shell; only :shell has appeared on disk here."
       ],
       "producer_chain": [
@@ -2982,7 +3002,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "502-515",
+          "lines": "482-495",
           "snippet": "                let state = if c.orphan_summary {\n                    orphaned += 1;\n                    Some(BgState::Stopped)\n                } else if c.status.is_some() {\n                    Some(BgState::from_status(c.status.as_deref()))\n                } else if c\n                    .event\n                    .as_deref()\n                    .is_some_and(|e| e.to_ascii_lowercase().contains(\"timed out\"))\n                {\n                    Some(BgState::TimedOut)\n                } else {\n                    None // a Monitor event pulse: the monitor is still armed\n                };"
         }
       ],
@@ -3727,7 +3747,7 @@
         },
         {
           "path": "src/live/background_scan.rs",
-          "lines": "533-546",
+          "lines": "513-526",
           "snippet": "pub(crate) fn stat_output(t: &mut BgTask) {\n    let Some(p) = t.output_file.as_deref() else {\n        return;\n    };\n    let Ok(meta) = std::fs::metadata(p) else {\n        return;\n    };\n    t.output_bytes = Some(meta.len());\n    if let Ok(modified) = meta.modified() {\n        if let Ok(age) = std::time::SystemTime::now().duration_since(modified) {\n            t.output_age_secs = Some(i64::try_from(age.as_secs()).unwrap_or(i64::MAX));\n        }\n    }\n}"
         }
       ],
@@ -5915,7 +5935,7 @@
       "code": [
         {
           "path": "src/model/automation.rs",
-          "lines": "33-44",
+          "lines": "35-46",
           "snippet": "    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything\n    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`\n    /// LEADING prefixes route a Monitor-tool pulse or termination notice\n    /// (`Monitor event: \u2026` / `Monitor \"\u2026\" \u2026`) to [`AutomationKind::Monitor`]. A `Background\n    /// command \"\u2026\"` pulse is ALWAYS `background-command`, whatever its quoted name says\n    /// (v0.10.0: the former quoted-name heuristic - `monitor`/`re-arm`/`liveness` in the name\n    /// routed to `Monitor` - predates the real Monitor tool and double-booked; measured on one\n    /// project it produced 40 `monitor` records against zero genuine Monitor pulses). This\n    /// does NOT cover `ScheduleWakeup` wakeup-tick prompts (isMeta records that never reach\n    /// this classifier).\n    #[must_use]\n    pub fn from_summary(summary: Option<&str>) -> Self {"
         }
       ],
@@ -11089,17 +11109,17 @@
       "code": [
         {
           "path": "src/model/automation.rs",
-          "lines": "33-40",
+          "lines": "35-42",
           "snippet": "    /// Classify from the `<summary>`. Case-insensitive on the known leading prefixes; anything\n    /// else (or a missing summary) is [`AutomationKind::Task`]. The `monitor`/`scheduled`/`cron`\n    /// LEADING prefixes route a Monitor-tool pulse or termination notice\n    /// (`Monitor event: \u2026` / `Monitor \"\u2026\" \u2026`) to [`AutomationKind::Monitor`]. A `Background\n    /// command \"\u2026\"` pulse is ALWAYS `background-command`, whatever its quoted name says\n    /// (v0.10.0: the former quoted-name heuristic - `monitor`/`re-arm`/`liveness` in the name\n    /// routed to `Monitor` - predates the real Monitor tool and double-booked; measured on one\n    /// project it produced 40 `monitor` records against zero genuine Monitor pulses). This"
         },
         {
           "path": "src/model/automation.rs",
-          "lines": "44-63",
+          "lines": "46-65",
           "snippet": "    pub fn from_summary(summary: Option<&str>) -> Self {\n        let s = summary.unwrap_or(\"\").trim_start();\n        // The classifiers are a fixed leading phrase; match the longest-distinguishing\n        // prefix case-insensitively so a `Background command \"\u2026\"` is not mistaken for `task`.\n        let lower = s.to_ascii_lowercase();\n        if lower.starts_with(\"background command\") {\n            AutomationKind::BackgroundCommand\n        } else if lower.starts_with(\"dynamic workflow\") || lower.starts_with(\"workflow\") {\n            AutomationKind::Workflow\n        } else if lower.starts_with(\"monitor\")\n            || lower.starts_with(\"scheduled\")\n            || lower.starts_with(\"cron\")\n        {\n            AutomationKind::Monitor\n        } else if lower.starts_with(\"agent\") {\n            AutomationKind::Agent\n        } else {\n            AutomationKind::Task\n        }\n    }"
         },
         {
           "path": "src/model/automation.rs",
-          "lines": "67-75",
+          "lines": "69-77",
           "snippet": "    pub fn slug(self) -> &'static str {\n        match self {\n            AutomationKind::BackgroundCommand => \"background-command\",\n            AutomationKind::Workflow => \"workflow\",\n            AutomationKind::Agent => \"agent\",\n            AutomationKind::Monitor => \"monitor\",\n            AutomationKind::Task => \"task\",\n        }\n    }"
         }
       ],
@@ -11398,7 +11418,7 @@
       "code": [
         {
           "path": "src/model/automation.rs",
-          "lines": "93-97",
+          "lines": "96-100",
           "snippet": "    /// The `<event>` payload, if present - where a Monitor / ScheduleWakeup pulse carries its\n    /// real outcome (`STAGE2_OUTPUT_READY`, `[Monitor timed out - re-arm if needed.]`). Often\n    /// the only outcome signal on a Monitor pulse (which usually has no `<status>`), so the\n    /// label falls back to it instead of fabricating `completed`.\n    pub event: Option<String>,"
         }
       ],
@@ -13114,7 +13134,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "348-356",
+          "lines": "350-358",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;\n        }"
         },
         {
@@ -13201,7 +13221,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "318-321",
+          "lines": "320-323",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }"
         },
         {
@@ -13328,7 +13348,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "334-339",
+          "lines": "336-341",
           "snippet": "    pub fn attachment_payload_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        self.attachment.as_ref().map(|raw| raw.get().to_string())\n    }"
         },
         {
@@ -17137,12 +17157,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "248-252",
+          "lines": "250-254",
           "snippet": "    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled\u2026` / `<tool_use_error>\u2026` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "271-281",
+          "lines": "273-283",
           "snippet": "        if !has_non_errored_tool_result {\n            return false;\n        }\n        // Primary signal: structured, non-empty `toolUseResult.answers`, or the freeform\n        // `toolUseResult.response` (v0.10.3: the `The user responded:` branch writes\n        // the text there and leaves `answers` empty).\n        if self.has_auq_answers() || self.has_auq_response() {\n            return true;\n        }\n        // Fallback (older records without `toolUseResult`): the synthesized marker.\n        self.is_auq_answer()"
         }
       ],
@@ -17682,7 +17702,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "262-270",
+          "lines": "264-272",
           "snippet": "        let mut has_non_errored_tool_result = false;\n        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }"
         },
         {
@@ -19489,7 +19509,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "750-755",
+          "lines": "756-761",
           "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
         }
       ],
@@ -19955,12 +19975,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "748",
+          "lines": "754",
           "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
         },
         {
           "path": "SKILL.md",
-          "lines": "757-758",
+          "lines": "763-764",
           "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
         },
         {
@@ -20895,12 +20915,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "714",
+          "lines": "720",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "736",
+          "lines": "742",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21061,7 +21081,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "347-353",
+          "lines": "349-355",
           "snippet": "    #[must_use]\n    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;"
         },
         {
@@ -21071,12 +21091,12 @@
         },
         {
           "path": "SKILL.md",
-          "lines": "714",
+          "lines": "720",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
           "path": "SKILL.md",
-          "lines": "736",
+          "lines": "742",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -21259,7 +21279,7 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "780",
+          "lines": "786",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         },
         {
@@ -21526,12 +21546,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "716",
+          "lines": "722",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
           "path": "SKILL.md",
-          "lines": "780",
+          "lines": "786",
           "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
         }
       ],
@@ -21623,12 +21643,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "465",
+          "lines": "471",
           "snippet": "- Slicing (hook injection, \u226410000-char cap): `--slices N --slice i --window W` = fixed-fleet chunks, whole turns; out-of-range \u21d2 nothing, exit 0 (hook affordance). Text-only."
         },
         {
           "path": "SKILL.md",
-          "lines": "716",
+          "lines": "722",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         },
         {
@@ -35083,7 +35103,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "319",
+          "lines": "321",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -38363,12 +38383,12 @@
       "code": [
         {
           "path": "SKILL.md",
-          "lines": "708",
+          "lines": "714",
           "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
         },
         {
           "path": "SKILL.md",
-          "lines": "716",
+          "lines": "722",
           "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
         }
       ],
@@ -41027,7 +41047,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "415-417",
+          "lines": "450-452",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
@@ -48082,7 +48102,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "386-388",
+          "lines": "388-390",
           "snippet": "    pub fn reaches_gated(&self, c: Class) -> bool {\n        !self.labels.is_empty() && self.label_filter().selected(c.path())\n    }"
         },
         {
@@ -49673,7 +49693,7 @@
         },
         {
           "path": "src/cli/search_help.rs",
-          "lines": "106-110",
+          "lines": "110-114",
           "snippet": "        it. Nine leaves are invisible and need naming or a glob: `user.unsent` and\\n  \\\n        `user.rewound` (neither is in the surviving conversation - see AXIS 3 below),\\n  \\\n        `harness.compaction.boundary` (a metrics-only system record: no message field\\n  \\\n        at all), and the six gated leaves below. The glob form `-t 'user.*'` selects\\n  \\\n        EVERY leaf under the prefix, visibility ignored; an intermediate prefix\\n  \\"
         }
       ],
@@ -53586,7 +53606,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "318-322",
+          "lines": "320-324",
           "snippet": "    pub fn attachment_type(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;"
         }
       ],
@@ -53761,17 +53781,17 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "340-347",
+          "lines": "343-349",
           "snippet": "\n    /// Hook-injected `additionalContext` text: a `type:\"attachment\"` record whose payload is\n    /// `{\"type\":\"hook_additional_context\",\"content\":[\u2026],\u2026}` - the context a SessionStart /\n    /// UserPromptSubmit / \u2026 hook injected into the turn. `content` is a string ARRAY in real\n    /// data (one element per injected block; joined with `\\n`), tolerated as a bare string.\n    /// `None` for every other record shape. Cheap for non-attachment records (one type\n    /// compare before any parse).\n    #[must_use]"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "348-355",
+          "lines": "350-357",
           "snippet": "    pub fn hook_additional_context_text(&self) -> Option<String> {\n        if !self.is_type(\"attachment\") {\n            return None;\n        }\n        let v = self.attachment_value()?;\n        let att = v.as_object()?;\n        if att.get(\"type\").and_then(serde_json::Value::as_str) != Some(\"hook_additional_context\") {\n            return None;"
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "360-364",
+          "lines": "362-366",
           "snippet": "                (!s.is_empty()).then(|| s.to_string())\n            }\n            serde_json::Value::Array(parts) => {\n                let texts: Vec<&str> = parts.iter().filter_map(serde_json::Value::as_str).collect();\n                (!texts.is_empty()).then(|| texts.join(\"\\n\"))"
         },
         {
@@ -53781,7 +53801,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "319",
+          "lines": "321",
           "snippet": "    /// Also scan hook-injected `additionalContext`: the `attachment` records a SessionStart /"
         }
       ],
@@ -54222,7 +54242,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "248-250",
+          "lines": "250-252",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -55325,7 +55345,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "299-303",
+          "lines": "304-308",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -72007,12 +72027,12 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "240-252",
+          "lines": "242-254",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (\u00a74.4 / \u00a76.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary.\n    ///\n    /// A CANCELLED / rejected / validation-errored AUQ (no `answers`, `is_error:true`,\n    /// or a `Cancelled\u2026` / `<tool_use_error>\u2026` body) is NOT a boundary - those carry no\n    /// typed user message. Verified on real data: all 81 answered carriers have\n    /// non-empty `toolUseResult.answers`, the marker string, and `is_error` false; the\n    /// rejection/cancel carriers have none of the three."
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "254-262",
+          "lines": "256-264",
           "snippet": "    pub fn is_auq_answer_boundary(&self) -> bool {\n        if !self.is_type(\"user\") {\n            return false;\n        }\n        // The carrier must ride on a non-errored tool_result block.\n        let Some(blocks) = self.blocks() else {\n            return false;\n        };\n        let mut has_non_errored_tool_result = false;"
         }
       ],
@@ -72115,7 +72135,7 @@
       "code": [
         {
           "path": "src/model/predicates.rs",
-          "lines": "263-273",
+          "lines": "265-275",
           "snippet": "        for b in blocks {\n            if let Block::ToolResult { is_error, .. } = b {\n                if is_error.unwrap_or(false) {\n                    return false; // an errored AUQ result (cancel/reject) is never a boundary\n                }\n                has_non_errored_tool_result = true;\n            }\n        }\n        if !has_non_errored_tool_result {\n            return false;\n        }"
         }
       ],
@@ -72223,7 +72243,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "240-246",
+          "lines": "242-248",
           "snippet": "    /// True when this record is an ANSWERED AskUserQuestion carrier that should open a\n    /// turn (\u00a74.4 / \u00a76.4): a `type:\"user\"` record carrying a `tool_result` block whose\n    /// `is_error` is not true, AND it is a real answer - signalled by a non-empty\n    /// `toolUseResult.answers` object (the clean, structured source) OR, as a fallback\n    /// for an older record without `toolUseResult`, the synthesized AUQ-answer marker in\n    /// the tool_result content. The answer is a genuine USER message (the user's\n    /// selection + prose reasoning), so it is a turn boundary."
         }
       ],
@@ -77421,7 +77441,7 @@
         },
         {
           "path": "src/model/predicates.rs",
-          "lines": "286-292",
+          "lines": "288-294",
           "snippet": "    pub(crate) fn has_auq_response(&self) -> bool {\n        self.tur_probe()\n            .as_ref()\n            .and_then(|p| p.response.as_ref())\n            .and_then(serde_json::Value::as_str)\n            .is_some_and(|s| !s.trim().is_empty())\n    }"
         },
         {
@@ -82521,7 +82541,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "402-411",
+          "lines": "404-413",
           "snippet": "    /// True when the scan parses `type:\"system\"` candidate lines at all: an explicit\n    /// selector reaching `harness.meta.system`, or a bare `harness` role selector. THE\n    /// one predicate for that admission - the candidate gate and the \u00a77f whole-file\n    /// gate's synthesized-marker set must agree, or a pattern that can only match the\n    /// FABRICATED `[<subtype> <level>]` head would be gated away on a file that holds\n    /// it (a silent drop, the \u00a77 landmine).\n    #[must_use]\n    pub fn scans_system_lines(&self) -> bool {\n        self.reaches_gated(Class::MetaSystem) || self.bare_harness_role()\n    }"
         }
       ],
@@ -83067,7 +83087,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "123-127",
+          "lines": "125-129",
           "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) selects the leaves the model RECEIVED (excluding, on the first of THREE\n    /// axes below, `user.unsent` and `user.rewound`, which the surviving conversation no\n    /// longer reaches, `harness.compaction.boundary`, which carries no message at all, and"
         }
       ],
@@ -84411,7 +84431,7 @@
         },
         {
           "path": "src/search/hit_facts.rs",
-          "lines": "51-54",
+          "lines": "53-56",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],

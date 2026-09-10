@@ -33,7 +33,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 
 use crate::cli::{OutputFormat, StatusArgs, WaitArgs};
-use crate::model::{extract_xml_tag, Block, Content, Record, TASK_NOTIFICATION_PREFIX};
+use crate::model::{
+    all_xml_tags, extract_xml_tag, Block, Content, Record, TASK_NOTIFICATION_PREFIX,
+};
 use crate::parse::{mmap_bytes, read_range, read_tail};
 
 mod activity;

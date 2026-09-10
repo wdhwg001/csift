@@ -435,6 +435,9 @@ impl Record {
                     class: notification_class(kind),
                     text: label.clone(),
                     direction: None,
+                    // Every task THIS section closes, plus the orphan-reconciliation kind
+                    // when it is one - the structured form of the ids the label renders.
+                    task_ids: section_task_ids(section),
                 });
                 if section.contains(NOTIFICATION_RESULT_TAG) {
                     let child = extract_xml_tag(section, "tool-use-id")
@@ -450,6 +453,7 @@ impl Record {
                         class: Class::CommInbox,
                         text: report,
                         direction: Some((child, owner())),
+                        task_ids: TaskIds::default(),
                     });
                 }
                 notif_spans.push((offset, offset + section.len()));
@@ -473,6 +477,7 @@ impl Record {
                 },
                 text: peer_render_body(self, peer, single),
                 direction: Some((peer_sender(self, peer, single), owner())),
+                task_ids: TaskIds::default(),
             });
         }
         out

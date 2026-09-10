@@ -36,6 +36,8 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         from_sidecar: false,
         queue_operation: None,
         queue_reason: None,
+        task_ids: Vec::new(),
+        orphan_kind: None,
         delivery: rec.delivery_override(),
         // An unlabeled unit is by definition a record csift models no leaf for, so it is
         // never a resume placeholder (that shape has one).

@@ -512,6 +512,45 @@ fn search_subagent_scope_spawn_lookup_resolves_in_subagent_spawn_and_return() {
 }
 
 #[test]
+fn orphan_reconciliation_pulse_renders_every_task_id_and_its_kind() {
+    // ONE pulse closing SEVERAL tasks (the next session start reconciling what the previous
+    // one left open) plus the `__orphan_summary__:<kind>` sentinel, which names no task. The
+    // label must carry every real id and the reconciliation kind - never the sentinel - and
+    // the hit row must carry the same ids as data.
+    let h = Home::new();
+    let sess = "cccccccc-dddd-eeee-ffff-000000000000";
+    let pulse = "<task-notification>\\n<task-id>bzz111111</task-id>\\n<task-id>bzz222222</task-id>\\n<task-id>bzz333333</task-id>\\n<task-id>__orphan_summary__:shell</task-id>\\n<status>stopped</status>\\n<summary>3 background shell task(s) from the previous session have no completion record.</summary>\\n</task-notification>";
+    let line = format!(
+        r#"{{"type":"user","uuid":"n0","sessionId":"{sess}","cwd":"/Users/x/p","timestamp":"2026-06-07T06:00:00.000Z","message":{{"role":"user","content":"{pulse}"}}}}"#
+    );
+    h.write(&format!("-Users-x-p/{sess}.jsonl"), &(line + "\n"));
+    let args = ["search", "completion record", "-t", "harness.notification"];
+    let out = h.run(&[&args[..], &[at(sess).as_str()]].concat());
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout.contains(
+            "[task bzz111111, bzz222222, bzz333333 stopped] (orphan reconciliation: shell)"
+        ),
+        "every task id + the reconciliation kind belong in the label:\n{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("[task __orphan_summary__"),
+        "the sentinel names no task and must never hold the id slot:\n{}",
+        out.stdout
+    );
+    let js = h.run(&[&args[..], &[at(sess).as_str(), "--format", "json"]].concat());
+    assert!(js.success, "stderr: {}", js.stderr);
+    assert!(
+        js.stdout
+            .contains(r#""task_ids":["bzz111111","bzz222222","bzz333333"]"#)
+            && js.stdout.contains(r#""orphan_kind":"shell""#),
+        "the hit row carries every real id + the kind as data:\n{}",
+        js.stdout
+    );
+}
+
+#[test]
 fn search_finds_auq_option_descriptions_and_answer_notes_under_user() {
     let h = holes_home();
     // (1) A phrase that lives ONLY in an option's `description` must be searchable in the

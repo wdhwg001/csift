@@ -45,9 +45,11 @@ use super::*;
         spawned-agent / monitor COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
         OPENS a turn like a human message but classifies under `harness.notification.<kind>` \
         (kind = background-command | workflow | subagent | monitor | task, read from the \
-        summary). It renders as the parsed `[<kind> <task-id> <status>] <summary>` attribution \
-        label; never the raw `<task-id>`/`<output-file>` XML. Match it like any other text (e.g. \
-        `search 'background-command' -t harness.notification.background-command`).\n\n\
+        summary). It renders as the parsed `[<kind> <task-id>[, <task-id>…] <status>] <summary>` \
+        attribution label - every task the pulse closes, never the raw `<task-id>`/`<output-file>` \
+        XML, and never the internal scan marker, which becomes a trailing \
+        `(orphan reconciliation: <kind>)` instead (JSON `task_ids` / `orphan_kind`). Match it like \
+        any other text (e.g. `search 'background-command' -t harness.notification.background-command`).\n\n\
         WINDOWING: `--turn` takes the shared range grammar: `N` (one turn) · `A..B` \
         (closed) · `N..` (turn N → the end) · `..N` (start → N) · `-k` = k-th FROM THE END \
         (`-3..` = the last 3 turns), 0-based on turn-boundary order, and INTERSECTS with \

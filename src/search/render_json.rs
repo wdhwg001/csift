@@ -111,6 +111,12 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // v0.10.0 queue facts (a `user.queued` hit); null on every other hit.
         "queue_operation": h.queue_operation,
         "queue_reason": h.queue_reason,
+        // Every REAL task id this `harness.notification.*` pulse closes (empty array on every
+        // other hit) plus, when the pulse is an orphan RECONCILIATION, the kind its
+        // `__orphan_summary__:` sentinel names. A reconciliation closes several tasks at once,
+        // so the ids are data here as well as text in the label.
+        "task_ids": h.task_ids,
+        "orphan_kind": h.orphan_kind,
         // v0.12.0: does this `harness.resume.placeholder` close a repair PAIR (its parent is
         // a `harness.resume.prompt` record)? Null on every other hit - one writer produces
         // both forms, so the fact rides the hit instead of splitting the leaf.

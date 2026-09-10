@@ -169,6 +169,13 @@ pub struct Hit {
     /// `delivered_to_agent` - structural evidence the queued text was consumed); `None`
     /// otherwise. JSON `queue_reason`.
     pub queue_reason: Option<String>,
+    /// Every REAL task id a `harness.notification.*` hit's own section names (sentinels
+    /// excluded), so a pulse closing several tasks exposes them all as data and not only
+    /// inside the rendered label. EMPTY on every other hit. JSON `task_ids`.
+    pub task_ids: Vec<String>,
+    /// The kind an orphan-reconciliation pulse's `__orphan_summary__:` sentinel names
+    /// (`agent` / `shell` / `workflow`); `None` on every other hit. JSON `orphan_kind`.
+    pub orphan_kind: Option<String>,
     /// The source record's DELIVERY override ([`Record::delivery_override`]): `Some(_)`
     /// when Claude Code's request-assembler drop predicate disagrees with the leaf
     /// default, `None` when the leaf default stands. Drives the bare-role selection,

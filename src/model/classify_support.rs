@@ -18,20 +18,29 @@ pub(crate) fn notification_class(kind: AutomationKind) -> Class {
 /// (edge-fixtures G1): a `<result>` tag. A notification WITHOUT it is a bare launch-ack pulse.
 pub(crate) const NOTIFICATION_RESULT_TAG: &str = "<result>";
 
-/// Build the `[<kind> <id> <status>] <summary>` attribution label for ONE
+/// Build the `[<kind> <id>[, <id>…] <status>] <summary>` attribution label for ONE
 /// `<task-notification>…</task-notification>` section string. Shared by
 /// [`Record::automation_label`] (whole-record = the single section) and the batched per-section
 /// render ([`Record::record_text_sections`]) so the two never drift. The status slot prefers the
 /// explicit `<status>`; absent (the common Monitor/ScheduleWakeup case), the real outcome lives in
 /// `<event>` so render THAT rather than fabricating `completed`; only when BOTH are missing do we
 /// fall back to `completed`. A missing field is elided gracefully.
+///
+/// The id slot names EVERY task the pulse closes, not just the first: an orphan reconciliation
+/// closes several at once, and rendering one of them left the rest invisible on every record
+/// surface. Its `__orphan_summary__:<kind>` sentinel names no task, so it never enters the id
+/// list; it becomes the `(orphan reconciliation: <kind>)` marker instead ([`section_task_ids`]).
 pub(crate) fn automation_label_for_section(section: &str) -> String {
-    let task_id = extract_xml_tag(section, "task-id");
+    let TaskIds { ids, orphan_kind } = section_task_ids(section);
     let status = extract_xml_tag(section, "status");
     let summary = extract_xml_tag(section, "summary");
     let event = extract_xml_tag(section, "event");
     let kind = AutomationKind::from_summary(summary.as_deref());
-    let id = task_id.as_deref().unwrap_or("?");
+    let id = if ids.is_empty() {
+        "?".to_string()
+    } else {
+        ids.join(", ")
+    };
     let event_norm = event
         .as_deref()
         .filter(|e| !e.is_empty())
@@ -41,7 +50,10 @@ pub(crate) fn automation_label_for_section(section: &str) -> String {
         .map(str::to_string)
         .or(event_norm)
         .unwrap_or_else(|| "completed".to_string());
-    let head = format!("[{} {id} {status}]", kind.slug());
+    let mut head = format!("[{} {id} {status}]", kind.slug());
+    if let Some(k) = orphan_kind {
+        head.push_str(&format!(" (orphan reconciliation: {k})"));
+    }
     match summary.as_deref() {
         Some(sum) if !sum.is_empty() => format!("{head} {}", normalize_line(sum)),
         _ => head,
@@ -117,6 +129,11 @@ pub struct RecordTextSection {
     pub text: String,
     /// `from ⇨ to` for a communication leaf (GOLD §4); `None` for a `harness.notification.*`.
     pub direction: Option<(String, String)>,
+    /// THIS section's `<task-id>` tags, split into the real task ids and the orphan-
+    /// reconciliation kind ([`section_task_ids`]). Carried per SECTION because a batched
+    /// record's sections name different tasks; default (empty / `None`) on every non-
+    /// notification section.
+    pub task_ids: TaskIds,
 }
 
 /// A CLEAN inbound-communication preview of a peer/teammate turn-opener, for the `turns` / `list`

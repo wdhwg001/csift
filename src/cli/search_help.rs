@@ -83,10 +83,14 @@ pub(crate) const SEARCH_AFTER_HELP: &str = "EXAMPLES\n  \
           A machine `<task-notification>` (a background-command / workflow / spawned-agent / \
         monitor-tick COMPLETION pulse) OPENS a turn but classifies under \
         `harness.notification.<kind>` (NOT `user`). It renders as a PARSED attribution label \
-        `[<kind> <task-id> <status>] <summary>` (kind = background-command | workflow | subagent | \
-        monitor | task, read from the summary); never the raw XML. Match it like any text, e.g. \
-        `csift search 'background-command' -t harness.notification`. The `<kind>` prefix \
-        distinguishes a machine opener from a genuine human message.\n\n\
+        `[<kind> <task-id>[, <task-id>…] <status>] <summary>` (kind = background-command | \
+        workflow | subagent | monitor | task, read from the summary); never the raw XML. ONE \
+        pulse can close SEVERAL tasks - at the next session start Claude Code reconciles what \
+        the previous one left open - and the label then names EVERY task id, comma-joined, plus \
+        a `(orphan reconciliation: <shell|agent|workflow>)` marker for the internal scan marker \
+        that names the kind. JSON hit rows carry the same as `task_ids` and `orphan_kind`. Match \
+        it like any text, e.g. `csift search 'background-command' -t harness.notification`. The \
+        `<kind>` prefix distinguishes a machine opener from a genuine human message.\n\n\
         EMPTY RESULTS ARE AN ANSWER, NOT A FAILURE\n  \
           With NO `-t`/`--label`, EVERY label is searched. A ZERO-match result is a DEFINITIVE \
         absence (exit 0), never an error, and it SELF-DIAGNOSES on stderr: it echoes the active \

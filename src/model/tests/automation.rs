@@ -95,6 +95,45 @@ fn automation_kind_classifies_background_command_and_agent() {
 }
 
 #[test]
+fn orphan_reconciliation_label_names_every_task_and_its_kind() {
+    // At the next session start Claude Code reconciles the tasks a previous session left open
+    // with ONE pulse listing them all, plus an `__orphan_summary__:<kind>` sentinel that names
+    // no task at all. Rendering the first `<task-id>` alone hid every other task the pulse
+    // closed - and could put the marker in the id slot.
+    let pulse = parse(
+        r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>bzz111111</task-id>\n<task-id>bzz222222</task-id>\n<task-id>bzz333333</task-id>\n<task-id>__orphan_summary__:shell</task-id>\n<status>stopped</status>\n<summary>3 background shell task(s) from the previous session have no completion record.</summary>\n</task-notification>"}}"#,
+    );
+    let ids = section_task_ids(&pulse.raw_message_text().unwrap());
+    assert_eq!(ids.ids, ["bzz111111", "bzz222222", "bzz333333"]);
+    assert_eq!(ids.orphan_kind.as_deref(), Some("shell"));
+    assert_eq!(
+        pulse.automation_label().unwrap(),
+        "[task bzz111111, bzz222222, bzz333333 stopped] (orphan reconciliation: shell) \
+         3 background shell task(s) from the previous session have no completion record."
+    );
+    // The parsed trigger's single id is the first REAL one, whatever order the tags arrive
+    // in - a scan marker names no task, so it can never stand as THE id. Both sentinel
+    // families are excluded by their shared prefix.
+    let sentinel_first = parse(
+        r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>__orphan_summary__:agent</task-id>\n<task-id>bzz444444</task-id>\n<task-id>__orphan_summary_live__:bzz555555</task-id>\n<status>stopped</status>\n<summary>Agent tasks reconciled</summary>\n</task-notification>"}}"#,
+    );
+    let t = sentinel_first.automation_trigger().expect("a trigger");
+    assert_eq!(t.task_id.as_deref(), Some("bzz444444"));
+    assert_eq!(
+        sentinel_first.automation_label().unwrap(),
+        "[agent bzz444444 stopped] (orphan reconciliation: agent) Agent tasks reconciled"
+    );
+    // An ordinary one-task pulse is untouched: one id, no marker.
+    let plain = parse(
+        r#"{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>bzz666666</task-id>\n<status>completed</status>\n<summary>Background command \"build the docs\" completed (exit code 0)</summary>\n</task-notification>"}}"#,
+    );
+    assert_eq!(
+        plain.automation_label().unwrap(),
+        "[background-command bzz666666 completed] Background command \"build the docs\" completed (exit code 0)"
+    );
+}
+
+#[test]
 fn monitor_cadence_event_replaces_fabricated_completed_status() {
     // A real-captured monitor shape: a Monitor pulse with NO <status> but a real
     // <event> outcome. The label must surface the EVENT (STAGE2_OUTPUT_READY), not fabricate

@@ -243,7 +243,13 @@ harness  .notification.{workflow,monitor,subagent,background-command,task}  ← 
                     "[subagent stopped] …"; .monitor = the Monitor tool's own
                     pulses and termination notices ONLY — since v0.10.0 a
                     `Background command "…"` pulse is always .background-command,
-                    whatever its quoted name says)
+                    whatever its quoted name says). Renders `[<kind> <task-id> <status>]
+                    <summary>`, and ONE pulse can close SEVERAL tasks — the next session
+                    start reconciling what the previous one left open — so the id slot
+                    lists EVERY task id, comma-joined, and ends with
+                    `(orphan reconciliation: shell|agent|workflow)` for Claude Code's own
+                    `__orphan_summary__:` scan marker, which names a kind, not a task, and
+                    never stands as an id. JSON hits: `task_ids` (array) + `orphan_kind`.
          .compaction.{summary,boundary}   boundary is [not LLM-visible: outside `-t harness`;
                     reach via `-t harness.compaction` or the full leaf] — a metrics-only
                     system record. Its excerpt names every survivor field the record has:

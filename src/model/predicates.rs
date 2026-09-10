@@ -151,7 +151,9 @@ impl Record {
         if !s.starts_with(TASK_NOTIFICATION_PREFIX) {
             return None;
         }
-        let task_id = extract_xml_tag(s, "task-id");
+        // The FIRST REAL id: an orphan-reconciliation pulse lists internal scan markers among
+        // its `<task-id>` tags, and a marker names no task, so it can never stand as THE id.
+        let task_id = section_task_ids(s).ids.into_iter().next();
         let status = extract_xml_tag(s, "status");
         let summary = extract_xml_tag(s, "summary");
         // Monitor-class pulses carry their real outcome in `<event>` (e.g.

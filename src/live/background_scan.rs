@@ -449,26 +449,6 @@ pub(crate) fn delivered_pulse_labels(rec: &Record) -> Vec<String> {
         .collect()
 }
 
-/// Every `<tag>…</tag>` value in order (an orphan summary carries several).
-pub(crate) fn all_xml_tags(s: &str, tag: &str) -> Vec<String> {
-    let open = format!("<{tag}>");
-    let close = format!("</{tag}>");
-    let mut out = Vec::new();
-    let mut at = 0usize;
-    while let Some(i) = s[at..].find(&open) {
-        let start = at + i + open.len();
-        let Some(j) = s[start..].find(&close) else {
-            break;
-        };
-        let inner = s[start..start + j].trim();
-        if !inner.is_empty() {
-            out.push(inner.to_string());
-        }
-        at = start + j + close.len();
-    }
-    out
-}
-
 /// Join carriers to launches: `<tool-use-id>` first (exact), any `<task-id>` second.
 /// The latest carrier wins (an agent notifies again after a resume).
 pub(crate) fn resolve_carriers(
