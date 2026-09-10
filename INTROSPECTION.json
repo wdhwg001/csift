@@ -13344,7 +13344,7 @@
       "id": "CLS-021",
       "area": "classification",
       "behavior": "Claude Code 2.1.258 writes `type:\"attachment\"` records for 33+ payload kinds whose content is arbitrary nested JSON, up to at least 1699759 bytes (1.7 MB, kind `queued_command`), and they outnumber role-bearing message lines about 2.4:1 (59206 vs 25080 in one project dir). The 337988 hook_success figure is a whole-corpus count and was not re-derived here (scope rule); the rescoped equivalent is 45370 hook_success records in one project dir via `csift search '' . --count-by attachment`.",
-      "depends": "csift gates the attachment keep behind an `&&`-guarded SIMD needle, so no query that omits `--attachments` / `--additional-context` / `--count-by attachment` ever runs the attachment memmem, and the matched text is the VERBATIM payload JSON - a byte substring of the raw line - so the literal prefilter and the whole-file gate stay sound with no synthesized-marker machinery. The gate is not, however, the only way an attachment line becomes a candidate: under a match-all (no `-t`) scan the D7 `compact_boundary` needle is active, and because that needle is a bare byte substring it also admits any attachment line whose payload prose happens to contain it - measured at 82 of 59206 attachment records (0.14%) in one project dir, surfacing as 64 harness.meta.attachment plus 18 harness.meta.hook.",
+      "depends": "csift gates the attachment keep behind an `&&`-guarded SIMD needle, so no query that omits `--attachments` / `--additional-context` / `--count-by attachment` ever runs the attachment memmem, and the matched text is the VERBATIM payload JSON - a byte substring of the raw line - so the literal prefilter and the whole-file gate stay sound with no synthesized-marker machinery. The gate is not the only way an attachment line can become a candidate, but the other two doors are narrow and neither surfaces prose. The always-on csift-channel keep admits a real delivery. The D7 `compact_boundary` keep no longer admits a payload that merely names the literal: it requires the key-only bytes `\"subtype\"` beside the word, and no attachment line carries that key - 0 of the 189 attachment lines carrying the literal over one corpus of top-level transcripts. An attachment line some other keep does admit, and for which a flagless scan can reach no leaf, is reduced in place to a structural chain row, so it surfaces under neither harness.meta.attachment nor harness.meta.hook while the survival walk still reads through it.",
       "code": [
         {
           "path": "src/model/predicates.rs",
@@ -13353,7 +13353,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "471",
+          "lines": "484",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13384,6 +13384,16 @@
           "observed": "complete producer trace: trigger prompt-submit handler: Ec(\"query_attachment_loading_start\") then the Bne collector call @169789218; gate GSr, the per-prompt attachment collector with the kill-switch branch and the labelled generator fan-out @165728971; gate Bne: the emptiness gate and the per-payload wrap @165762781; writer Sn: the attachment record template @165765262; writer appendEntry routing (attachment -> dedup-transcript) then enqueueWrite and the JSONL serializer @166107380. writer excerpt: function Sn(e,n={now:()=>new Date().toISOString(),uuid:()=>ltr()}){return{attachment:e,type:\"attachment\",uuid:n.uuid(),timestamp:(e.type===\"queued_command\"||e.type===\"poll_events\")&&e.timestamp||n.now()}}function MQo(e){let n=-1,r=-1,o enumeration: 5 site(s) read: type:\"attachment\" literal @159753635: record factory O9t: builds an attachment record whose payload is {type:\"goal_sta; type:\"attachment\" literal @164566775: record factory hBn: wraps {type:\"batching_reminder\"|\"secondary_reminder\"} payloa; type:\"attachment\" literal @165765335: the GENERAL builder Sn - this is the site the per-prompt collector uses; the pay; type:\"attachment\" literal @180504933: fold-time replacement: N consecutive async_hook_response attachment records coll; type:\"attachment\" literal @180506103: fold-time replacement: N teammate task_status completions collapse into one team specimen: One project dir, top level: 61518 attachment records against 27388 role-marker lines = 2.25:1; 36 distinct payload kinds (hook_success 45752, hook_additional_context 9530, total_tokens_reminder 3081, batching_reminder_sent 900, task_reminder 704, bash_output_audience_note 463, queued_command 259, sk",
           "rule": "three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (complete + observed = end-to-end); One record per line whose parsed type is `attachment`; kinds keyed by attachment.type; payload size = len(json.dumps(record['attachment'])), maximum taken; role-marker lines = raw bytes matching /\"role\"\\s*:\\s*\"(user|assistant)\"/ (csift's own stage-1 needle); leak = attachment lines whose raw bytes contain b'compact_boundary', bucketed by payload kind, compared against the leaf counts of a flagless --count-by label over the identical scope.",
           "note": "The record shape is a single template (Sn) fed by a labelled collector fan-out whose payloads carry their own type, and the fresh census reproduces the check's numbers and the candidate-admission split to the record."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-10",
+          "verdict": "refined",
+          "instrument": "A --claude-home fixture transcript carrying a true compaction boundary, a `queue-operation` line and a `hook_additional_context` attachment whose payloads both name the literal `compact_boundary` beside a probe token used nowhere else in the file, driven through `csift search <token> @<session> --no-subagents`, `csift search '' @<session> --count-by label` and `csift show @<session> --line <n>`; plus a bytes-level pass over the top-level transcripts under the projects root that counts, among the lines carrying the literal, how many `type:\"attachment\"` lines also carry the key-only bytes `\"subtype\"`.",
+          "observed": "On the fixture the flagless scan for the probe token is a definitive absence, and the flagless label census carries harness.compaction.boundary and neither attachment leaf nor user.queued, while `-t user.queued` reaches the queued line and `show --line` renders the attachment with no flag. On the corpus, of 189 attachment lines carrying the literal, 0 carry `\"subtype\"`, so the narrowed keep admits none of them.",
+          "rule": "Matched exchanges and census rows for the fixture, one per invocation; one observation per raw line for the corpus pass.",
+          "note": "The old sentence counted the false admits by the leaf they surfaced under, and two changes have made that wrong: an admitted attachment with no flagless leaf is now reduced to a chain row and surfaces under none, and the narrowed D7 keep no longer admits a payload that only names the literal."
         }
       ],
       "attribution": "end-to-end",
@@ -13549,7 +13559,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "478-482",
+          "lines": "491-495",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14683,7 +14693,7 @@
       "id": "CMP-002",
       "area": "compaction",
       "behavior": "Beside the summary Claude Code writes a separate `type:\"system\"` record with `subtype:\"compact_boundary\"`, one per compaction event, carrying a top-level `content:\"Conversation compacted...\"` string plus `compactMetadata:{trigger:\"auto\"|\"manual\", preTokens, postTokens, durationMs, cumulativeDroppedTokens, preCompactDiscoveredTools[], preservedSegment:{headUuid,anchorUuid,tailUuid}, preservedMessages:{anchorUuid,uuids[],allUuids[]}}` and, on a summarize-mode compaction only, a ninth key `messagesSummarized`. Corpus key presence over 244 boundaries: trigger, preTokens, postTokens, durationMs, preservedSegment and preservedMessages on all 244; preCompactDiscoveredTools on 238; cumulativeDroppedTokens on 146; precomputed on 6; messagesSummarized on 1. Trigger splits 224 auto / 20 manual. The binary documents the newer scalars: `cumulative_dropped_tokens` is the running total of context tokens compaction has removed across this and every earlier compaction, each contribution approximately preTokens minus postTokens (written by the walk at @162516109, which takes the max over earlier boundaries and adds this one's delta); `preserved_segment` is relink information for the kept messages, unset when the compaction summarizes everything; and `preserved_messages.uuids` is the on-disk subset while `all_uuids` is the in-memory superset including non-loggable entries, which is why an allUuids entry can resolve to no line. Both preserved objects are written by one helper (@164831131) that the ordinary compaction path and the summarize path both call.",
-      "depends": "csift identifies the boundary purely by `type` + `subtype`, keeps `compactMetadata` as an unparsed value, and renders the present fields as `[compaction boundary: trigger=... preTokens=... postTokens=... durationMs=... messagesSummarized=... cumulativeDroppedTokens=... preserved=<N uuids, M allUuids, anchor <first8>> segment=<head first8>..<tail first8>]`, each field only when the key is there - so a boundary carrying only the four original scalars renders byte-for-byte what it always did. The full uuid lists ride JSON `compact_metadata` and the one-line excerpt counts them, because a boundary line has to stay scannable. The extra prefilter keep for this role-marker-less line is `-t`-gated behind `needs_compact_boundary`, so every other query pays zero.",
+      "depends": "csift identifies the boundary purely by `type` + `subtype`, keeps `compactMetadata` as an unparsed value, and renders the present fields as `[compaction boundary: trigger=... preTokens=... postTokens=... durationMs=... messagesSummarized=... cumulativeDroppedTokens=... preserved=<N uuids, M allUuids, anchor <first8>> segment=<head first8>..<tail first8>]`, each field only when the key is there - so a boundary carrying only the four original scalars renders byte-for-byte what it always did. The full uuid lists ride JSON `compact_metadata` and the one-line excerpt counts them, because a boundary line has to stay scannable. The extra prefilter keep for this role-marker-less line is `-t`-gated behind `needs_compact_boundary`, so every other query pays zero, and when it does run it is a CONJUNCTION: the rare literal `compact_boundary` AND the key-only bytes `\"subtype\"`, tested in that order. The literal alone is not the discriminator, because a payload can carry the word in ordinary prose. Over every top-level transcript of one corpus (76 files, 2661636749 bytes, lines split on \\n only) the conjunction admits 252 of 252 true boundaries, every one of which carries the key, and refuses 226 of 226 lines that carry the literal only in a payload and that no other flagless keep reaches (189 attachment lines and 37 `queue-operation` lines, 33287888 bytes on 5 files), none of which carries the key. The key needle is R13-safe by form, a quoted KEY surviving a reserialize, and the literal is tested first, so the second memmem runs only on the few lines carrying the rare word.",
       "code": [
         {
           "path": "src/model/record.rs",
@@ -14702,8 +14712,8 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "464",
-          "snippet": "        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())"
+          "lines": "475-477",
+          "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
       "instrument": "`jq -r 'select(.subtype==\"compact_boundary\") | (.compactMetadata|keys|join(\",\"))' <transcript> | sort | uniq -c` enumerates the metadata keys actually present, and the same pass tallies trigger values; `csift search '' @<session> -t harness.compaction.boundary` must print the excerpt with exactly the keys that boundary carries. Read the two survivor writers and the cumulative-total walk at their offsets in the executable. Counting rule: one boundary record per compaction event, counted per raw line over top-level transcripts; the boundary count must track the summary count on the same file.",
@@ -14743,6 +14753,16 @@
           "observed": "244 boundaries in 21 of 75 files. Key presence: trigger 244, preTokens 244, postTokens 244, durationMs 244, preservedMessages 244, preservedSegment 244, preCompactDiscoveredTools 238, cumulativeDroppedTokens 146, precomputed 6, messagesSummarized 1. Trigger: auto 224, manual 20. Seven distinct key sets, the largest (141 boundaries) being the eight-key shape without messagesSummarized. The preserved-object writer at @164831131 is called from both the reactive-compaction path (@163628586) and the summarize path (@164841141); the cumulative total is written at @162516109 as the max over earlier boundaries plus this one's preTokens minus postTokens.",
           "rule": "One boundary record per compaction event, counted per raw line over top-level transcripts; a key is present when it appears in that record's compactMetadata object.",
           "note": "Refined: the ninth key `messagesSummarized` marks a summarize-mode compaction, and the excerpt now renders the survivor fields the record already carried."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-10",
+          "verdict": "refined",
+          "instrument": "A bytes-level pass over every top-level transcript under the projects root (<projects>/<dir>/*.jsonl; subagent transcripts live below a <uuid>/subagents/ path and are excluded by construction), splitting lines on \\n only. Per line: BARE ADMIT = the bytes `compact_boundary` occur anywhere; TRUE BOUNDARY = the line parses as a JSON object with top-level `type` `system` and `subtype` `compact_boundary`; MARGINAL = a bare admit no other flagless keep would reach, meaning it carries neither a serialization-tolerant `\"role\"` marker valued `user` or `assistant` nor the always-on csift-channel literal; RESIDUAL = a marginal non-boundary that also carries the key-only bytes `\"subtype\"`, which is what would survive the conjunction. Run once over the project dirs of this repository and once over all the others, so neither scope can carry the result alone.",
+          "observed": "76 files, 2661636749 bytes, 25 project dirs, 847938 lines. 1155 lines carry the literal. 252 are true boundaries and all 252 carry `\"subtype\"`, 0 lack it. Of the non-boundaries, 226 are marginal - 189 attachment lines and 37 `queue-operation` lines, 33287888 bytes on 5 files - and 0 of the 226 carry `\"subtype\"`. Residual 0 in both scopes independently: the other-projects scope reads 225 true boundaries against 29 marginal false admits, this repository's dirs 27 against 197.",
+          "rule": "One observation per raw line. Every line carrying the literal is classified on two independent axes - true boundary or not, and marginal or already covered by another flagless keep - and the counts quoted are cells of that cross, so a line is counted once.",
+          "note": "The keep narrowed from the bare literal to the conjunction with the key-only `\"subtype\"` needle; the census is what licenses it, since no true boundary lacks the key and no marginal false admit carries it. The refusal also closes a defect on the `queue-operation` side, where a queued prompt whose content named the literal was admitted on a flagless scan, classified `user.queued`, emitted and censused, while the same run's honest-empties note reported that leaf as unscanned."
         }
       ],
       "attribution": "end-to-end",
@@ -48373,7 +48393,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "477-483",
+          "lines": "490-496",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48706,7 +48726,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "477-483",
+          "lines": "490-496",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -56046,8 +56066,8 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "451-456",
-          "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify).\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
+          "lines": "451-458",
+          "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
         }
       ],
       "instrument": "Write a fixture transcript whose lines carry `\"role\": \"user\"` (a default `json.dumps`) into a `--claude-home` tree and confirm `csift search` finds its content and `--count-by label` counts the record. Counting rule: matched records for one known needle, expected 1. The regression is pinned in the `search` e2e modules under `tests/cli/`.",
@@ -70499,7 +70519,7 @@
       "id": "QT-SYS-001",
       "area": "queue-and-telemetry",
       "behavior": "Claude Code writes `type:\"system\"` records for its own UI whose `subtype` falls outside the four csift models separately (`compact_boundary`, `turn_duration`, `away_summary`, `stop_hook_summary`). Measured 2026-09-04 over 8225 transcripts under the projects root (journal and elicitation-sidecar files excluded): 13087 system records under exactly 11 subtypes - stop_hook_summary 5798, turn_duration 4791, away_summary 1683, scheduled_task_fire 459, compact_boundary 235, model_refusal_fallback 51, api_error 29, local_command 15, informational 14, agents_killed 10, model_refusal_no_fallback 2. `informational` is a notice with a string `content` and a `level` (warning 9, notice 5); its live specimen is the Remote Control disconnect notice, composed at 181648256 - which also dedupes against the last transcript record - and reached from the bridge failure arm at 181655786. Every one of the 13087 carries `uuid`, `timestamp` and `parentUuid`, and NONE carries a `message{}` field. `isMeta` is NOT universal, which the old text asserted: the key is ABSENT on api_error (29 of 29), on stop_hook_summary (5798 of 5798) and on 134 of the 235 compaction boundaries, and is `false` on the remaining 7126. The constructors agree - the api_error constructor (166032184) returns {type, subtype, level:\"error\", error, retryInMs, retryAttempt, maxRetries, source, timestamp, uuid} with no isMeta field, and the stop_hook_summary constructor (166030639) likewise, while every other transcript-writing constructor in that cluster sets isMeta:false. A subtype the corpus has not yet seen is not guaranteed isMeta:false either: the file_snapshot record literal (163818846) writes isMeta:true. `parentUuid` is set by no system-record constructor at all - it is stamped by the shared envelope hop (166105359) after the write-policy table (166066498) routes type `system` to the transcript sink like user and assistant records - which is also why a compaction boundary is the one system record whose parentUuid is null. The 11 observed subtypes are a CORPUS property, not the shipped set: the 2.1.258 executable holds 92 adjacent `type:\"system\",subtype:\"...\"` literals over 48 DISTINCT subtype names, and the transcript-writing constructor cluster alone builds four with zero corpus specimens (permission_retry, bridge_status, cloud_session_status, memory_saved). Two of the eleven have a second literal outside that cluster and neither is a counterexample: an informational wire projection (163575905) whose only call site (179104884) spreads it into a control-protocol message carrying session_id and never appends a transcript record, and a local_command rehydration mapper (163578281) that supplies timestamp, uuid and isMeta explicitly. Only two literals in the whole executable put a `message` key inside a system-subtype object, both permission_denied (169797551, 178901181), and both are control-protocol wire projections with session_id and snake_case fields, never transcript records. The two model_refusal subtypes are inline yields in the query loop (164720173, 164725713) rather than factory functions, and model_refusal_fallback has a second producer on the banner path (164575450) that adds the `scope` key - so an audit reading only the constructor cluster would miss them.",
-      "depends": "`search -t harness.meta.system` (the v0.10.1 catch-all leaf, gated) classifies any system subtype other than the four modeled ones and renders `[<subtype> <level>] <content>`, falling back to `[<subtype>]` when the record carries no `level` (away_summary, turn_duration, scheduled_task_fire and agents_killed carry none; stop_hook_summary carries the unusual level `suggestion`) and to the head alone when there is no `content` (agents_killed carries neither); `show --line` renders such a line flag-free. Two csift laws rest on the record SHAPE rather than on the subtype list, which is exactly why the leaf is a catch-all and not an enumeration: the leaf DEFAULT is `llm_visible:false` because no such record carries a `message{}` field (0 of 13087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - and 48 distinct subtype names ship against 11 observed, so it will meet one. Neither law reads `isMeta`. The leaf default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the leaf is the harness sending a SECOND subtype (a new arm beside `UWt`) or moving a subtype into a differently-typed record.",
+      "depends": "`search -t harness.meta.system` (the v0.10.1 catch-all leaf, gated) classifies any system subtype other than the four modeled ones and renders `[<subtype> <level>] <content>`, falling back to `[<subtype>]` when the record carries no `level` (away_summary, turn_duration, scheduled_task_fire and agents_killed carry none; stop_hook_summary carries the unusual level `suggestion`) and to the head alone when there is no `content` (agents_killed carries neither); `show --line` renders such a line flag-free. Two csift laws rest on the record SHAPE rather than on the subtype list, which is exactly why the leaf is a catch-all and not an enumeration: the leaf DEFAULT is `llm_visible:false` because no such record carries a `message{}` field (0 of 13087, counting rule one per record), and the candidate needle is the key-only `\"subtype\"` byte form, which admits a subtype the corpus has never seen - and 48 distinct subtype names ship against 11 observed, so it will meet one. That key-only form has a second consumer: the D7 compaction-boundary keep tests it beside the literal `compact_boundary`, so one needle carries both the catch-all admission and the boundary's discriminator (CMP-002). Neither law reads `isMeta`. The leaf default is NOT the delivery verdict for every subtype under it: the request assembler re-mints a `system`/`local_command` record as a user message and sends it (CLS-026), so csift overrides the default per record for that one subtype and a bare `harness` role selector surfaces it, with the candidate gate widened under the same selector so those lines are parsed at all. What would break the leaf is the harness sending a SECOND subtype (a new arm beside `UWt`) or moving a subtype into a differently-typed record.",
       "code": [
         {
           "path": "src/model/classify_promoted.rs",
@@ -70513,7 +70533,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "455",
+          "lines": "457",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -79188,7 +79208,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "472-476",
+          "lines": "485-489",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -82935,7 +82955,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "454-455",
+          "lines": "456-457",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {

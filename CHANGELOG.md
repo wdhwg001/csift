@@ -5,6 +5,19 @@ entry per released version, written in that version's release commit. Pre-1.0
 SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
 surface change bumps the PATCH.
 
+## [0.12.1] - unreleased
+
+### Changed
+
+- **The compaction-boundary prefilter keep now requires the `"subtype"` key beside the
+  literal.** A `compact_boundary` record always carries that key and a payload that merely
+  writes the word in prose never does, so a flagless scan stops parsing attachment and
+  `queue-operation` lines it had no leaf to render them under. Every real boundary is still
+  admitted, a refused line is still a node of the survival chain, and an explicit address still
+  fetches it whole. The visible fix is a queued prompt naming the literal, which used to be
+  emitted and censused as `user.queued` on a flagless scan while the same run reported that
+  leaf as unscanned.
+
 ## [0.12.0] - 2026-09-09
 
 ### Changed (breaking)

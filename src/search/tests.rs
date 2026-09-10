@@ -122,3 +122,4 @@ mod hits;
 mod matcher;
 mod record_text;
 mod render;
+mod scan;

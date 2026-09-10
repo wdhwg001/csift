@@ -204,3 +204,114 @@ fn search_bare_uuid_is_a_literal_pattern_not_a_scope() {
         out.stderr
     );
 }
+
+/// L1 a prompt, L2 its reply, L3 a TRUE compaction boundary, L4 a prompt below it, L5 its
+/// reply, L6 a plain queued prompt and L7 a hook attachment - the last two carrying the
+/// literal `compact_boundary` in ordinary prose beside the probe token `zzwakeword`.
+///
+/// The probe token appears NOWHERE else, so a hit on it is proof that a payload was parsed.
+fn boundary_and_two_mentions_home() -> Home {
+    let h = Home::new();
+    h.write(
+        &format!("{ENC}/{SESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the lagoon"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"charting the lagoon"}]}}"#, "\n",
+            r#"{"type":"system","subtype":"compact_boundary","uuid":"b1","parentUuid":null,"logicalParentUuid":"a1","timestamp":"2026-06-07T05:01:00.000Z","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preTokens":900,"postTokens":90,"durationMs":40}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"b1","timestamp":"2026-06-07T05:02:00.000Z","message":{"role":"user","content":"survey the southern shoal"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"surveying the southern shoal"}]}}"#, "\n",
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-06-07T05:03:00.000Z","sessionId":"s","content":"explain what compact_boundary means zzwakeword"}"#, "\n",
+            r#"{"type":"attachment","uuid":"x1","parentUuid":"a2","timestamp":"2026-06-07T05:04:00.000Z","attachment":{"type":"hook_additional_context","content":["a note about compact_boundary metadata zzwakeword"]}}"#, "\n",
+        ),
+    );
+    h
+}
+
+#[test]
+fn the_boundary_keep_admits_the_boundary_and_not_a_payload_that_names_it() {
+    // The D7 keep is what lets a flagless scan reach a boundary at all, and it is the ONE
+    // keep whose needle is a word a payload can use in prose. Narrowed to the conjunction
+    // with the key-only `"subtype"` needle, it still admits every boundary and stops
+    // admitting the two line shapes no other flagless keep reaches.
+    let h = boundary_and_two_mentions_home();
+
+    // The keep still does its job, under the selector and in a flagless census.
+    let boundary = h.run(&[
+        "search",
+        "",
+        &at(SESS),
+        "-t",
+        "harness.compaction.boundary",
+        "--no-subagents",
+    ]);
+    assert!(boundary.success, "stderr: {}", boundary.stderr);
+    assert!(
+        boundary.stdout.contains("trigger=auto"),
+        "the boundary is still reachable by its own leaf:\n{}",
+        boundary.stdout
+    );
+    let census = h.run(&["search", "", &at(SESS), "--count-by", "label"]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        census.stdout.contains("harness.compaction.boundary"),
+        "and a flagless label census still counts it:\n{}",
+        census.stdout
+    );
+
+    // The two mentions are not admitted, so the probe token is a definitive absence and no
+    // gated leaf appears in the census the same flagless scan produces.
+    let probe = h.run(&["search", "zzwakeword", &at(SESS), "--no-subagents"]);
+    assert!(probe.success, "stderr: {}", probe.stderr);
+    assert!(
+        probe.stdout.contains("no matching exchanges"),
+        "a payload that merely names the literal is not parsed:\n{}",
+        probe.stdout
+    );
+    assert!(
+        probe.stderr.contains("DEFINITIVE absence"),
+        "and the absence is reported as one:\n{}",
+        probe.stderr
+    );
+    assert!(
+        !census.stdout.contains("user.queued"),
+        "the queued line joins no flagless census row:\n{}",
+        census.stdout
+    );
+    // The honest-empties note names `user.queued` among the leaves this scan did not read,
+    // and now that is true of the scan as well as of the gate.
+    assert!(
+        probe.stderr.contains("user.queued"),
+        "the note names the leaf whose line was left unread:\n{}",
+        probe.stderr
+    );
+}
+
+#[test]
+fn the_narrowed_keep_leaves_the_proper_gates_and_the_address_untouched() {
+    // Refusing a line from the D7 keep must not put it out of reach: the leaf's OWN gate
+    // still parses the queue line, and an address still renders the attachment flag-free.
+    let h = boundary_and_two_mentions_home();
+
+    let queued = h.run(&[
+        "search",
+        "zzwakeword",
+        &at(SESS),
+        "-t",
+        "user.queued",
+        "--no-subagents",
+    ]);
+    assert!(queued.success, "stderr: {}", queued.stderr);
+    assert!(
+        queued.stdout.contains("user.queued") && queued.stdout.contains("zzwakeword"),
+        "the proper gate still reaches the queued prompt:\n{}",
+        queued.stdout
+    );
+
+    let fetched = h.run(&["show", &at(SESS), "--line", "7"]);
+    assert!(fetched.success, "stderr: {}", fetched.stderr);
+    assert!(
+        fetched.stdout.contains("zzwakeword"),
+        "an addressed attachment renders with no flag (the refetch law):\n{}",
+        fetched.stdout
+    );
+}

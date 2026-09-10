@@ -450,7 +450,9 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"file-history-"));
     // v0.10.1 catch-all system subtypes: the key-only needle `"subtype"` (every system
     // record carries it; a quoted KEY survives a reserialize, and the classify arm
-    // decides which subtype it is - the already-modeled ones simply reclassify).
+    // decides which subtype it is - the already-modeled ones simply reclassify). Also the
+    // second half of the D7 boundary conjunction below, which narrows the same property to
+    // the one subtype it models.
     static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =
         std::sync::LazyLock::new(|| memmem::Finder::new(b"\"subtype\""));
     crate::parse::line_has_role_marker(line)
@@ -461,7 +463,18 @@ pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) 
         // `&&` short-circuits BEFORE the memmem, so a non-boundary search pays ZERO. When it IS run,
         // the `||` chain still reaches this memmem only on lines that already failed both role checks,
         // and boundary records are rare - so the §7 perf contract holds either way.
-        || (needs_compact_boundary && COMPACT_BOUNDARY_FINDER.find(line).is_some())
+        // The keep is a CONJUNCTION because the rare literal alone is not the discriminator:
+        // over every top-level transcript on one corpus (76 files, 2661636749 bytes, lines split
+        // on `\n` only) 252 of 252 true boundaries - a JSON object with top-level
+        // `type=="system"` and `subtype=="compact_boundary"` - carry the key-only bytes
+        // `"subtype"`, while 226 of 226 lines that carry the literal in a payload and would
+        // otherwise be admitted by D7 alone (attachments and `queue-operation` lines, which no
+        // other flagless keep reaches) carry it in none. The key needle is R13-safe by form (a
+        // quoted KEY survives a reserialize) and the boundary finder stays FIRST, so the second
+        // memmem runs only on the handful of lines carrying the rare literal.
+        || (needs_compact_boundary
+            && COMPACT_BOUNDARY_FINDER.find(line).is_some()
+            && SUBTYPE_FINDER.find(line).is_some())
         // Opt-in hook-injected additionalContext (`search --additional-context`, or an explicit
         // `show --line`/`--uuid` address - the refetch a search hit prints must resolve without
         // the flag). Same `&&`-gating law as the boundary: a default scan pays ZERO.
