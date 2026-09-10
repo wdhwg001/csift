@@ -36,19 +36,22 @@ use serde_json::json;
 #[derive(Debug, Clone, Copy)]
 enum Row<'a> {
     Full(usize, &'a Record),
-    Spine(usize, &'a Record),
+    Spine(&'a crate::parse::SpineRow),
 }
 
 impl<'a> Row<'a> {
     fn line(self) -> usize {
         match self {
-            Row::Full(l, _) | Row::Spine(l, _) => l,
+            Row::Full(l, _) => l,
+            Row::Spine(s) => s.line(),
         }
     }
 
-    fn rec(self) -> &'a Record {
+    /// This row as the chain reads it.
+    fn node(self) -> crate::model::ChainNode<'a> {
         match self {
-            Row::Full(_, r) | Row::Spine(_, r) => r,
+            Row::Full(_, r) => crate::model::ChainNode::Full(r),
+            Row::Spine(s) => crate::model::ChainNode::Spine(s),
         }
     }
 
@@ -56,7 +59,7 @@ impl<'a> Row<'a> {
     fn full(self) -> Option<&'a Record> {
         match self {
             Row::Full(_, r) => Some(r),
-            Row::Spine(..) => None,
+            Row::Spine(_) => None,
         }
     }
 }
@@ -164,7 +167,7 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
         crate::subagent::parent_session_id_from_path(file).unwrap_or_else(|| session_id.clone());
 
     let mut full: Vec<(usize, Record)> = Vec::new();
-    let mut spine: Vec<(usize, Record)> = Vec::new();
+    let mut spine: Vec<crate::parse::SpineRow> = Vec::new();
     let mut skipped = 0usize;
     if let Some(mmap) = mmap_bytes(file)? {
         let bytes: &[u8] = &mmap;
@@ -174,8 +177,8 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
                 // walk threads through the same lines - so lift the structural fields of
                 // every line the role prefilter drops (never the payload), onto its own
                 // stream.
-                if let Some(rec) = crate::parse::spine_record(line) {
-                    return crate::parse::SplitVerdict::Second((line_no, rec));
+                if let Some(row) = crate::parse::spine_record(line_no, line) {
+                    return crate::parse::SplitVerdict::Second(row);
                 }
                 return crate::parse::non_candidate_split(line);
             }
@@ -196,7 +199,7 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
         let (mut a, mut b) = (0usize, 0usize);
         while a < full.len() || b < spine.len() {
             let take_full = match (full.get(a), spine.get(b)) {
-                (Some((la, _)), Some((lb, _))) => la <= lb,
+                (Some((la, _)), Some(sb)) => *la <= sb.line(),
                 (Some(_), None) => true,
                 _ => false,
             };
@@ -204,7 +207,7 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
                 rows.push(Row::Full(full[a].0, &full[a].1));
                 a += 1;
             } else {
-                rows.push(Row::Spine(spine[b].0, &spine[b].1));
+                rows.push(Row::Spine(&spine[b]));
                 b += 1;
             }
         }
@@ -212,19 +215,16 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
 
     // Claude Code's own conversation chain over the SAME rows: which child of a fork the
     // conversation continued from, and what became of the others.
-    let chain = Chain::build_by(&rows, |r| r.rec(), None);
+    let chain = Chain::build_by(&rows, |r| r.node(), None);
 
     // uuid → (own line, own type), over EVERY parsed line - a fork parent can be an
     // attachment, a turn_duration system record, or any other line the loader admits.
     let line_of: std::collections::HashMap<&str, (usize, &str)> = rows
         .iter()
         .filter_map(|r| {
-            r.rec().uuid.as_deref().map(|u| {
-                (
-                    u,
-                    (r.line(), r.rec().r#type.as_deref().unwrap_or("(untyped)")),
-                )
-            })
+            let n = r.node();
+            n.uuid()
+                .map(|u| (u, (r.line(), n.kind().unwrap_or("(untyped)"))))
         })
         .collect();
     // parentUuid → conversation children, file order.

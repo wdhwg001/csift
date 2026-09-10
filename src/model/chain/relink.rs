@@ -105,7 +105,7 @@ fn boundaries(b: &Builder<'_>) -> (Option<Bnd>, Option<Bnd>) {
         };
         newest = Some(bnd);
         let last = slot.map_or(idx, |s| s.last);
-        if b.recs[last].compact_metadata.as_ref().is_some_and(|m| {
+        if b.recs[last].compact_metadata().is_some_and(|m| {
             m.get("preservedMessages").is_some() || m.get("preservedSegment").is_some()
         }) {
             with_meta = Some(bnd);
@@ -121,7 +121,7 @@ fn resolve(b: &Builder<'_>, idx: usize) -> Option<Preserved> {
         .uuid(idx)
         .and_then(|u| b.map.get(u))
         .map_or(idx, |s| s.last);
-    let meta = b.recs[last].compact_metadata.as_ref()?;
+    let meta = b.recs[last].compact_metadata()?;
     if let Some(list) = meta.get("preservedMessages") {
         let anchor = list.get("anchorUuid")?.as_str()?.to_string();
         let uuids = list

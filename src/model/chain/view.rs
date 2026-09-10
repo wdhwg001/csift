@@ -22,6 +22,7 @@
 //! turn does.
 
 use super::*;
+use crate::parse::SpineRow;
 
 /// Where a record sits in LIVE turn numbering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,28 +93,28 @@ impl ChainView {
     /// the lines the surface's prefilter dropped. Both slices must be in file order (every
     /// producer in the tree is); they are merged by line number.
     #[must_use]
-    pub fn build(records: &[(usize, Record)], spine: &[(usize, Record)]) -> ChainView {
+    pub fn build(records: &[(usize, Record)], spine: &[SpineRow]) -> ChainView {
         let n = records.len();
         let total = n + spine.len();
-        let mut combined: Vec<&Record> = Vec::with_capacity(total);
+        let mut combined: Vec<ChainNode<'_>> = Vec::with_capacity(total);
         let mut combined_line: Vec<usize> = Vec::with_capacity(total);
         // `origin[c]` = the surface index of combined row `c`, or `None` for a spine row.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(total);
         let (mut a, mut b) = (0usize, 0usize);
         while a < n || b < spine.len() {
             let take_record = match (records.get(a), spine.get(b)) {
-                (Some((la, _)), Some((lb, _))) => la <= lb,
+                (Some((la, _)), Some(sb)) => *la <= sb.line(),
                 (Some(_), None) => true,
                 _ => false,
             };
             if take_record {
-                combined.push(&records[a].1);
+                combined.push(ChainNode::Full(&records[a].1));
                 combined_line.push(records[a].0);
                 origin.push(Some(a));
                 a += 1;
             } else {
-                combined.push(&spine[b].1);
-                combined_line.push(spine[b].0);
+                combined.push(ChainNode::Spine(&spine[b]));
+                combined_line.push(spine[b].line());
                 origin.push(None);
                 b += 1;
             }
@@ -121,6 +122,7 @@ impl ChainView {
 
         let chain = Chain::build_by(&combined, |r| *r, None);
         let index_turns = group_turn_indices_chained(&combined, |r| *r, &chain);
+        // (the projector is the identity: `combined` already holds the ONE node shape)
 
         let mut survival = vec![Survival::Live; n];
         let mut stamp = vec![TurnStamp::Live(0); n];

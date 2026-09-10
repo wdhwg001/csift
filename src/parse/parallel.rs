@@ -67,14 +67,14 @@ pub type NumberedRecords = Vec<(usize, Record)>;
 pub fn parse_candidates_with_spine<F>(
     bytes: &[u8],
     prefilter: F,
-) -> (NumberedRecords, NumberedRecords, usize)
+) -> (NumberedRecords, Vec<SpineRow>, usize)
 where
     F: Fn(&[u8]) -> bool + Sync,
 {
     scan_lines_parallel_split(bytes, |line, line_no| {
         if !prefilter(line) {
-            if let Some(rec) = spine_record(line) {
-                return SplitVerdict::Second((line_no, rec));
+            if let Some(row) = spine_record(line_no, line) {
+                return SplitVerdict::Second(row);
             }
             return non_candidate_split(line);
         }

@@ -78,7 +78,7 @@ fn a_recalled_draft_is_abandoned_and_names_its_resend() {
     assert_eq!(c.rewound_turns, 0);
     assert_eq!(c.abandoned_root(2), Some(2));
     // Turn numbering skips it entirely.
-    let turns = group_turn_indices_deduped(&r, |x| x);
+    let turns = group_turn_indices_deduped(&r, |x| ChainNode::Full(x));
     assert_eq!(turns, vec![vec![0, 1], vec![3, 4]]);
 }
 
@@ -124,14 +124,14 @@ fn a_rewound_turn_carries_its_own_leaf_and_takes_its_subtree_with_it() {
     // Two grouping entry points, and the difference is deliberate. Given the chain built
     // from the WHOLE record set, the rewound branch belongs to no numbered turn at all.
     assert_eq!(
-        group_turn_indices_chained(&r, |x| x, &c),
+        group_turn_indices_chained(&r, |x| ChainNode::Full(x), &c),
         vec![vec![0, 1], vec![6, 7]]
     );
     // The chain-free entry point cannot know whether its caller's record set is whole, so
     // it drops the superseded OPENER and keeps every other record as a member. A
     // turn-keyed consumer built on it therefore loses no row.
     assert_eq!(
-        group_turn_indices_deduped(&r, |x| x),
+        group_turn_indices_deduped(&r, |x| ChainNode::Full(x)),
         vec![vec![0, 1, 3, 4, 5], vec![6, 7]]
     );
 }
@@ -540,12 +540,12 @@ fn a_reserialized_transcript_yields_the_same_chain_as_the_compact_one() {
     assert_eq!(a_chain.leaf_index, b_chain.leaf_index);
     // ...and the SPINE agrees on the same lines, which is where a byte-pair needle would
     // have silently dropped the record.
-    for (c, s) in compact.iter().zip(&spaced) {
-        let cs = crate::parse::spine_record(c.as_bytes()).expect("compact spine");
-        let ss = crate::parse::spine_record(s.as_bytes()).expect("spaced spine");
+    for (n, (c, s)) in compact.iter().zip(&spaced).enumerate() {
+        let cs = crate::parse::spine_record(n + 1, c.as_bytes()).expect("compact spine");
+        let ss = crate::parse::spine_record(n + 1, s.as_bytes()).expect("spaced spine");
         assert_eq!(cs.uuid, ss.uuid);
         assert_eq!(cs.parent_uuid, ss.parent_uuid);
-        assert_eq!(cs.r#type, ss.r#type);
+        assert_eq!(cs.kind_str(), ss.kind_str());
     }
 }
 

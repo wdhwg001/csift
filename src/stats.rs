@@ -14,7 +14,7 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use crate::cli::{OutputFormat, StatsArgs};
-use crate::model::{group_turn_indices_chained, Block, Chain, Record};
+use crate::model::{group_turn_indices_chained, Block, Chain, ChainNode, Record};
 use crate::parse::{line_type_and_spine, mmap_bytes};
 use crate::path::{self, SubagentScope};
 use crate::time_window::TimeWindow;
@@ -122,9 +122,8 @@ fn line_is_stats_candidate(line: &[u8]) -> bool {
 /// keeps every line accountable without building records for the non-record majority of
 /// bytes), and its chain spine row when the loader admits this line type.
 struct OtherLine {
-    line: usize,
     census: String,
-    spine: Option<Box<Record>>,
+    spine: Option<crate::parse::SpineRow>,
 }
 
 fn stats_one_file(
@@ -157,12 +156,10 @@ fn stats_one_file(
                 // Census every non-candidate line by its top-level `type` AND lift its
                 // chain spine from the same parse (full syntax validation, subsuming the
                 // R10 shape check - [`crate::parse::line_type_and_spine`]), own stream.
-                return match line_type_and_spine(line) {
-                    Ok(Some((census, spine))) => crate::parse::SplitVerdict::Second(OtherLine {
-                        line: line_no,
-                        census,
-                        spine: spine.map(Box::new),
-                    }),
+                return match line_type_and_spine(line_no, line) {
+                    Ok(Some((census, spine))) => {
+                        crate::parse::SplitVerdict::Second(OtherLine { census, spine })
+                    }
                     Ok(None) => crate::parse::SplitVerdict::Ignore,
                     Err(()) => crate::parse::SplitVerdict::Skip,
                 };
@@ -183,26 +180,26 @@ fn stats_one_file(
         let t = rec.r#type.as_deref().unwrap_or("(untyped)");
         *out.line_types.entry(t.to_string()).or_insert(0) += 1;
     }
-    let mut spine: Vec<(usize, &Record)> = Vec::new();
+    let mut spine: Vec<&crate::parse::SpineRow> = Vec::new();
     for o in &others {
         *out.line_types.entry(o.census.clone()).or_insert(0) += 1;
-        if let Some(r) = o.spine.as_deref() {
-            spine.push((o.line, r));
+        if let Some(r) = o.spine.as_ref() {
+            spine.push(r);
         }
     }
-    let mut rows: Vec<(&Record, bool)> = Vec::with_capacity(records.len() + spine.len());
+    let mut rows: Vec<ChainNode<'_>> = Vec::with_capacity(records.len() + spine.len());
     let (mut a, mut b) = (0usize, 0usize);
     while a < records.len() || b < spine.len() {
         let take_record = match (records.get(a), spine.get(b)) {
-            (Some((la, _)), Some((lb, _))) => la <= lb,
+            (Some((la, _)), Some(sb)) => *la <= sb.line(),
             (Some(_), None) => true,
             _ => false,
         };
         if take_record {
-            rows.push((&records[a].1, false));
+            rows.push(ChainNode::Full(&records[a].1));
             a += 1;
         } else {
-            rows.push((spine[b].1, true));
+            rows.push(ChainNode::Spine(spine[b]));
             b += 1;
         }
     }
@@ -210,11 +207,11 @@ fn stats_one_file(
     // ONE chain, ONE grouping (§3.3): `turns` counts LIVE numbered turns - the exact
     // numbering `search` prints as `·tN` and `show --turn` addresses - and the three
     // survival totals are whole-file facts read straight off the chain.
-    let chain = Chain::build_by(&rows, |(r, _)| *r, None);
+    let chain = Chain::build_by(&rows, |r| *r, None);
     out.abandoned_turns = chain.drafts + chain.rewound_turns;
     out.rewound_turns = chain.rewound_turns;
     out.replay_copies = chain.replay_copies;
-    let groups = group_turn_indices_chained(&rows, |(r, _)| *r, &chain);
+    let groups = group_turn_indices_chained(&rows, |r| *r, &chain);
 
     // `--turn`: per-record membership on the FULL transcript's LIVE turn order, computed
     // BEFORE the time filter so indices stay stable, then intersected (AND) with it.
@@ -234,14 +231,14 @@ fn stats_one_file(
     // Windowed view for the counts; a turn counts when the window admits >=1 of ITS
     // records, so `turns` reflects the window without re-deriving the numbering.
     let admit = |i: usize| {
-        let (r, spine) = &rows[i];
-        !spine
-            && window.contains(r.timestamp.as_deref())
+        rows[i]
+            .full()
+            .is_some_and(|r| window.contains(r.timestamp.as_deref()))
             && in_turn_range.as_ref().is_none_or(|k| k[i])
     };
     let admitted: Vec<&Record> = (0..rows.len())
         .filter(|&i| admit(i))
-        .map(|i| rows[i].0)
+        .filter_map(|i| rows[i].full())
         .collect();
 
     let mut usage_peak: HashMap<(String, String), [u64; 4]> = HashMap::new();

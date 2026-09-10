@@ -51,8 +51,8 @@ pub(crate) struct Kept {
 pub(crate) enum Row<'a> {
     /// A searchable record: the only kind that classifies, matches, or emits.
     Rec(&'a Kept),
-    /// A chain-only structural row (line number + the lifted record).
-    Spine(&'a (usize, Record)),
+    /// A chain-only structural row.
+    Spine(&'a crate::parse::SpineRow),
 }
 
 impl<'a> Row<'a> {
@@ -65,12 +65,11 @@ impl<'a> Row<'a> {
         }
     }
 
-    /// The underlying record. A spine row's carries the chain-structural fields and
-    /// nothing else.
-    pub(crate) fn rec(self) -> &'a Record {
+    /// This row as the chain reads it.
+    pub(crate) fn node(self) -> crate::model::ChainNode<'a> {
         match self {
-            Row::Rec(k) => &k.rec,
-            Row::Spine((_, r)) => r,
+            Row::Rec(k) => crate::model::ChainNode::Full(&k.rec),
+            Row::Spine(s) => crate::model::ChainNode::Spine(s),
         }
     }
 
@@ -78,23 +77,34 @@ impl<'a> Row<'a> {
     pub(crate) fn line_no(self) -> usize {
         match self {
             Row::Rec(k) => k.line_no,
-            Row::Spine((line, _)) => *line,
+            Row::Spine(s) => s.line(),
         }
+    }
+
+    /// This row's `uuid` - a spine row carries one too (it is what the chain keys on).
+    pub(crate) fn uuid(self) -> Option<&'a str> {
+        self.node().uuid()
+    }
+
+    /// This row's RAW timestamp: the turn's chronological key comes from its FIRST row,
+    /// which is a spine row whenever a turn's own opener was dropped by the prefilter.
+    pub(crate) fn timestamp(self) -> Option<&'a str> {
+        self.node().timestamp()
     }
 }
 
 /// Merge two ascending-by-line spine streams into one: the scan's own, and the rows the
 /// C-39 demotion produced from records the gates left unsearchable.
 pub(crate) fn merge_spine(
-    scanned: Vec<(usize, Record)>,
-    demoted: Vec<(usize, Record)>,
-) -> Vec<(usize, Record)> {
-    let mut out: Vec<(usize, Record)> = Vec::with_capacity(scanned.len() + demoted.len());
+    scanned: Vec<crate::parse::SpineRow>,
+    demoted: Vec<crate::parse::SpineRow>,
+) -> Vec<crate::parse::SpineRow> {
+    let mut out: Vec<crate::parse::SpineRow> = Vec::with_capacity(scanned.len() + demoted.len());
     let mut a = scanned.into_iter().peekable();
     let mut b = demoted.into_iter().peekable();
     loop {
         let take_a = match (a.peek(), b.peek()) {
-            (Some(x), Some(y)) => x.0 <= y.0,
+            (Some(x), Some(y)) => x.line() <= y.line(),
             (Some(_), None) => true,
             (None, Some(_)) => false,
             (None, None) => break,
@@ -112,13 +122,16 @@ pub(crate) fn merge_spine(
 /// ONE file-order list. Both inputs are ascending by line; the elicitation-sidecar records
 /// carry no line (0) and are appended by the caller AFTER the scanned ones, so the merge
 /// runs over the scanned prefix and the sidecar tail follows it unchanged.
-pub(crate) fn merge_rows<'a>(records: &'a [Kept], spine: &'a [(usize, Record)]) -> Vec<Row<'a>> {
+pub(crate) fn merge_rows<'a>(
+    records: &'a [Kept],
+    spine: &'a [crate::parse::SpineRow],
+) -> Vec<Row<'a>> {
     let mut out: Vec<Row<'a>> = Vec::with_capacity(records.len() + spine.len());
     let (mut a, mut b) = (0usize, 0usize);
     while a < records.len() && b < spine.len() {
         // A sidecar record (line 0) never wins the compare: it is not part of file order,
         // so it must land after every scanned row, which the drain below does.
-        if records[a].line_no > 0 && records[a].line_no <= spine[b].0 {
+        if records[a].line_no > 0 && records[a].line_no <= spine[b].line() {
             out.push(Row::Rec(&records[a]));
             a += 1;
         } else if records[a].line_no > 0 {

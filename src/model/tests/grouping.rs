@@ -118,7 +118,7 @@ fn superseded_drafts_collapse_same_parent_edit_resend() {
     );
     assert_eq!(chain.superseding(3), Some(4));
 
-    let turns = group_turn_indices_deduped(&records, |r| r);
+    let turns = group_turn_indices_deduped(&records, |r| ChainNode::Full(r));
     assert_eq!(
         turns,
         vec![vec![0, 1], vec![4, 5]],
@@ -141,7 +141,7 @@ fn superseded_drafts_exact_duplicate_collapses_to_one() {
         .collect();
     // Leading assistant (idx0) is a synthetic lead that folds into the first real turn.
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| r),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
         vec![vec![0, 3]],
         "3 identical drafts → 1 turn (opener idx3)"
     );
@@ -162,7 +162,7 @@ fn superseded_drafts_distinct_parents_not_merged() {
         .collect();
     assert_eq!(Chain::build(&records, None).drafts, 0);
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| r),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
         vec![vec![0, 1], vec![2]]
     );
 }
@@ -180,7 +180,7 @@ fn superseded_drafts_null_parent_never_grouped() {
     .collect();
     assert_eq!(Chain::build(&records, None).drafts, 0);
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| r),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
         vec![vec![0], vec![1]]
     );
 }
@@ -214,7 +214,7 @@ fn a_replayed_same_uuid_opener_is_not_a_draft() {
     assert!(c.opens(3));
     // ONE turn for the message, and the earlier copy stays a member rather than vanishing.
     assert_eq!(
-        group_turn_indices_deduped(&records, |r| r),
+        group_turn_indices_deduped(&records, |r| ChainNode::Full(r)),
         vec![vec![0, 1, 2, 3, 4]],
         "one turn; the earlier copy folds in as a member"
     );
@@ -276,7 +276,7 @@ fn deduped_grouping_matches_plain_when_no_drafts() {
         .map(|l| parse(l))
         .collect();
     let plain = group_turn_indices(&records, |r| r.opens_turn());
-    let deduped = group_turn_indices_deduped(&records, |r| r);
+    let deduped = group_turn_indices_deduped(&records, |r| ChainNode::Full(r));
     assert_eq!(plain, deduped);
     assert_eq!(deduped, vec![vec![0, 1], vec![2]]);
 }

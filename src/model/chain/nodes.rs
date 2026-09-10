@@ -1,7 +1,160 @@
 //! Admission + the uuid map: which records Claude Code's loader reasons about at all,
-//! and which physical line wins when a uuid appears twice.
+//! and which physical line wins when a uuid appears twice - plus [`ChainNode`], the ONE
+//! shape the walk reads a line through.
+//!
+//! Two very different rows reach the chain. A full [`Record`] is what the surface's own
+//! prefilter admitted; a [`SpineRow`] is the chain-structural lift of a line it dropped,
+//! a fraction of the width and carrying no payload at all. The walk needs the same dozen
+//! fields from either, so it reads both through one two-arm enum: the surfaces keep their
+//! two vectors apart (the whole point of the narrow row) and the chain never has to know
+//! which vector a row came from.
 
 use super::*;
+use crate::parse::SpineRow;
+
+/// One line as the chain reads it: a full record, or the narrow structural row of a line
+/// the surface's prefilter dropped.
+///
+/// Every accessor answers what a [`Record`] would have answered. A spine row carries no
+/// `message`, so the three message-derived answers ([`ChainNode::opens_turn`],
+/// [`ChainNode::message_id`], [`ChainNode::has_tool_result`]) are the same `false`/`None`
+/// a message-less record gave - which is what the pre-0.12.1 shape produced, since a spine
+/// row WAS a message-less record.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ChainNode<'a> {
+    Full(&'a Record),
+    Spine(&'a SpineRow),
+}
+
+impl<'a> ChainNode<'a> {
+    /// The full record, or `None` for a chain-only spine row.
+    pub(crate) fn full(self) -> Option<&'a Record> {
+        match self {
+            ChainNode::Full(r) => Some(r),
+            ChainNode::Spine(_) => None,
+        }
+    }
+
+    pub(crate) fn kind(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.r#type.as_deref(),
+            ChainNode::Spine(s) => Some(s.kind_str()),
+        }
+    }
+
+    pub(crate) fn subtype(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.subtype.as_deref(),
+            ChainNode::Spine(s) => s.subtype(),
+        }
+    }
+
+    pub(crate) fn uuid(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.uuid.as_deref(),
+            ChainNode::Spine(s) => s.uuid.as_deref(),
+        }
+    }
+
+    pub(crate) fn parent_uuid(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.parent_uuid.as_deref(),
+            ChainNode::Spine(s) => s.parent_uuid.as_deref(),
+        }
+    }
+
+    pub(crate) fn logical_parent_uuid(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.logical_parent_uuid.as_deref(),
+            ChainNode::Spine(s) => s.logical_parent_uuid(),
+        }
+    }
+
+    pub(crate) fn leaf_uuid(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.leaf_uuid.as_deref(),
+            ChainNode::Spine(s) => s.leaf_uuid(),
+        }
+    }
+
+    pub(crate) fn explicit(self) -> Option<bool> {
+        match self {
+            ChainNode::Full(r) => r.explicit,
+            ChainNode::Spine(s) => s.explicit(),
+        }
+    }
+
+    pub(crate) fn is_sidechain(self) -> Option<bool> {
+        match self {
+            ChainNode::Full(r) => r.is_sidechain,
+            ChainNode::Spine(s) => s.is_sidechain,
+        }
+    }
+
+    /// The RAW timestamp string. Parsed by the caller with the same
+    /// [`crate::timez::epoch_ms`] either kind would have gone through.
+    pub(crate) fn timestamp(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.timestamp.as_deref(),
+            ChainNode::Spine(s) => s.timestamp.as_deref(),
+        }
+    }
+
+    pub(crate) fn compact_metadata(self) -> Option<&'a serde_json::Value> {
+        match self {
+            ChainNode::Full(r) => r.compact_metadata.as_ref(),
+            ChainNode::Spine(s) => s.compact_metadata(),
+        }
+    }
+
+    pub(crate) fn message_id(self) -> Option<&'a str> {
+        match self {
+            ChainNode::Full(r) => r.message.as_ref().and_then(|m| m.id.as_deref()),
+            ChainNode::Spine(_) => None,
+        }
+    }
+
+    pub(crate) fn has_tool_result(self) -> bool {
+        match self {
+            ChainNode::Full(r) => r
+                .blocks()
+                .is_some_and(|bs| bs.iter().any(|x| matches!(x, Block::ToolResult { .. }))),
+            ChainNode::Spine(_) => false,
+        }
+    }
+
+    pub(crate) fn is_elicitation_marker(self) -> bool {
+        match self {
+            ChainNode::Full(r) => r.is_elicitation_marker(),
+            ChainNode::Spine(_) => false,
+        }
+    }
+
+    /// Only a `type:"user"` record can open a turn (all four cases are user records), so
+    /// the expensive predicate runs on those alone - and never on a spine row, which has
+    /// no `message` to open one with.
+    pub(crate) fn opens_turn(self) -> bool {
+        match self {
+            ChainNode::Full(r) => r.r#type.as_deref() == Some("user") && r.opens_turn(),
+            ChainNode::Spine(_) => false,
+        }
+    }
+
+    /// The compaction-MODE pair (C-33), which `search` builds over the same merged row
+    /// list: a boundary names itself here, a summary yields its mode. A spine row is
+    /// never a summary (a summary is a `role:user` record, so every prefilter admits it
+    /// whole), so the second answer is exactly the `false` a message-less record gave.
+    pub(crate) fn is_compact_boundary(self) -> bool {
+        self.kind() == Some("system") && self.subtype() == Some("compact_boundary")
+    }
+
+    pub(crate) fn summary_compaction_mode(self) -> Option<SummarizeMode> {
+        match self {
+            ChainNode::Full(r) => r.summary_compaction_mode(),
+            ChainNode::Spine(_) => None,
+        }
+    }
+}
 
 /// The two physical lines a uuid can occupy: the FIRST (Claude Code's Map keeps the
 /// insertion position there, which is what its pre-boundary cut compares) and the LAST
@@ -16,7 +169,7 @@ pub(crate) struct Slot {
 /// slices in `parent` point either into a record or at another record's uuid (the
 /// preserved-messages relink rewrites them).
 pub(crate) struct Builder<'a> {
-    pub(crate) recs: Vec<&'a Record>,
+    pub(crate) recs: Vec<ChainNode<'a>>,
     pub(crate) admit: Vec<bool>,
     pub(crate) parent: Vec<Option<&'a str>>,
     pub(crate) map: HashMap<&'a str, Slot>,
@@ -47,22 +200,22 @@ pub(crate) struct Builder<'a> {
 /// non-empty string uuid. A csift elicitation-sidecar record is EXCLUDED: it is a
 /// pending elicitation csift merged in, has no place in any on-disk DAG, and marking it
 /// off-chain would call a live question abandoned.
-pub(crate) fn chain_admits(r: &Record) -> bool {
+pub(crate) fn chain_admits(r: ChainNode<'_>) -> bool {
     if r.is_elicitation_marker() {
         return false;
     }
-    if r.uuid.as_deref().is_none_or(str::is_empty) {
+    if r.uuid().is_none_or(str::is_empty) {
         return false;
     }
     matches!(
-        r.r#type.as_deref(),
+        r.kind(),
         Some("user" | "assistant" | "attachment" | "system")
     )
 }
 
 impl<'a> Builder<'a> {
-    pub(crate) fn new<T>(records: &'a [T], rec: &impl Fn(&T) -> &Record) -> Builder<'a> {
-        let recs: Vec<&'a Record> = records.iter().map(rec).collect();
+    pub(crate) fn new<T>(records: &'a [T], node: &impl Fn(&T) -> ChainNode<'_>) -> Builder<'a> {
+        let recs: Vec<ChainNode<'a>> = records.iter().map(node).collect();
         let n = recs.len();
         let mut admit = Vec::with_capacity(n);
         let mut parent: Vec<Option<&'a str>> = Vec::with_capacity(n);
@@ -71,11 +224,11 @@ impl<'a> Builder<'a> {
         for (i, r) in recs.iter().copied().enumerate() {
             let ok = chain_admits(r);
             admit.push(ok);
-            parent.push(r.parent_uuid.as_deref().filter(|s| !s.is_empty()));
+            parent.push(r.parent_uuid().filter(|s| !s.is_empty()));
             if !ok {
                 continue;
             }
-            let Some(uuid) = r.uuid.as_deref() else {
+            let Some(uuid) = r.uuid() else {
                 continue;
             };
             match map.get_mut(uuid) {
@@ -92,16 +245,11 @@ impl<'a> Builder<'a> {
         // final survivor, not at its immediate successor - the survivor is what the
         // loader's map holds and what an address should reach.
         for (i, target) in &mut replay_of {
-            if let Some(last) = recs[*i].uuid.as_deref().and_then(|u| map.get(u)) {
+            if let Some(last) = recs[*i].uuid().and_then(|u| map.get(u)) {
                 *target = last.last;
             }
         }
-        // Only a `type:"user"` record can open a turn (all four cases are user records),
-        // so the expensive predicate runs on those alone.
-        let opens = recs
-            .iter()
-            .map(|r| r.r#type.as_deref() == Some("user") && r.opens_turn())
-            .collect();
+        let opens = recs.iter().map(|r| r.opens_turn()).collect();
         Builder {
             recs,
             admit,
@@ -179,22 +327,21 @@ impl<'a> Builder<'a> {
     }
 
     pub(crate) fn uuid(&self, i: usize) -> Option<&'a str> {
-        self.recs[i].uuid.as_deref()
+        self.recs[i].uuid()
     }
 
     pub(crate) fn is_conv(&self, i: usize) -> bool {
-        matches!(self.recs[i].r#type.as_deref(), Some("user" | "assistant"))
+        matches!(self.recs[i].kind(), Some("user" | "assistant"))
     }
 
     pub(crate) fn is_boundary(&self, i: usize) -> bool {
-        self.recs[i].r#type.as_deref() == Some("system")
-            && self.recs[i].subtype.as_deref() == Some("compact_boundary")
+        self.recs[i].is_compact_boundary()
     }
 
     /// A main-thread record. A `isSidechain:true` record belongs to a separate lane the
     /// main chain never contains, so the axis does not apply to it (it is never called
     /// abandoned).
     pub(crate) fn is_sidechain(&self, i: usize) -> bool {
-        self.recs[i].is_sidechain == Some(true)
+        self.recs[i].is_sidechain() == Some(true)
     }
 }

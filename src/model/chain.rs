@@ -52,6 +52,7 @@ mod view;
 mod walk;
 
 pub(crate) use nodes::Builder;
+pub(crate) use nodes::ChainNode;
 pub use view::{ChainView, TurnStamp};
 
 /// Where the chain's leaf came from - disclosed, because the leaf decides the whole
@@ -196,18 +197,21 @@ impl Chain {
     #[allow(dead_code)]
     #[must_use]
     pub fn build(records: &[Record], leaf_hint: Option<&str>) -> Chain {
-        Self::build_by(records, |r| r, leaf_hint)
+        Self::build_by(records, |r| ChainNode::Full(r), leaf_hint)
     }
 
-    /// [`Chain::build`] over any wrapper (`&Record`, the search `Kept`) via a projector -
-    /// the same shape [`group_turn_indices_deduped`] takes.
+    /// [`Chain::build`] over any wrapper (a `&Record`, a search `Row`, a stats row) via a
+    /// projector to the ONE shape the walk reads - the same shape
+    /// [`group_turn_indices_deduped`] takes. The projector is what lets a surface keep its
+    /// full records and its narrow spine rows in separate vectors and still hand the chain
+    /// one file-order list.
     #[must_use]
     pub fn build_by<T>(
         records: &[T],
-        rec: impl Fn(&T) -> &Record,
+        node: impl Fn(&T) -> ChainNode<'_>,
         leaf_hint: Option<&str>,
     ) -> Chain {
-        let mut b = Builder::new(records, &rec);
+        let mut b = Builder::new(records, &node);
         let anchor = relink::apply(&mut b);
         b.index_children();
         let (leaf, source) = leaf::pick(&b, leaf_hint, anchor);

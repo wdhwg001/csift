@@ -106,27 +106,39 @@ pub struct SummarizeIndex {
 }
 
 impl SummarizeIndex {
-    /// Build the pairing from a transcript's records IN FILE ORDER. One pass, one map that
+    /// Build the pairing from a transcript's records IN FILE ORDER, over records alone.
+    /// Production hands the merged ROW list to [`SummarizeIndex::from_nodes`]; this is the
+    /// documented plain form and what the unit matrix builds through (same retained-shape
+    /// rationale as `group_turn_indices`).
+    #[allow(dead_code)]
+    pub fn from_records<'a>(records: impl IntoIterator<Item = &'a Record>) -> Self {
+        Self::from_nodes(records.into_iter().map(ChainNode::Full))
+    }
+
+    /// The pairing over the merged ROW list a scan actually holds. One pass, one map that
     /// allocates only on the first pair (compactions are rare: the map stays empty on the
     /// overwhelming majority of transcripts).
+    ///
+    /// It reads ROWS, not records, because a boundary is a chain-only spine row under every
+    /// selector that does not reach the boundary leaf, and the pairing has to see it exactly
+    /// as it did when both kinds shared one vector. A spine row is never a SUMMARY - a
+    /// summary is a `role:user` record, so every prefilter admits it whole - so only the
+    /// boundary arm can fire on one.
     ///
     /// PERF (SPEC section 7): this runs on every record of every scanned file, so the loop
     /// body must be two enum-TAG loads on the common record and nothing more. A boundary is
     /// the only shape carrying a `subtype`, and `subtype.is_some()` is a discriminant read,
-    /// so it short-circuits the string compare inside [`Record::is_compact_boundary`] for
-    /// every user and assistant record; the summary arm compares an `Option<bool>` before
-    /// reaching [`Record::summary_compaction_mode`]. Never reorder these so the string
-    /// compare runs first.
-    pub fn from_records<'a>(records: impl IntoIterator<Item = &'a Record>) -> Self {
+    /// so it short-circuits the string compare inside [`ChainNode::is_compact_boundary`] for
+    /// every user and assistant record; the summary arm's own first statement compares an
+    /// `Option<bool>` before it reaches the direction string. Never reorder these so a
+    /// string compare runs first.
+    pub fn from_nodes<'a>(records: impl IntoIterator<Item = ChainNode<'a>>) -> Self {
         let mut by_boundary_uuid = HashMap::new();
         let mut pending: Option<&str> = None;
         for rec in records {
-            if rec.subtype.is_some() && rec.is_compact_boundary() {
+            if rec.subtype().is_some() && rec.is_compact_boundary() {
                 // A second boundary before any summary leaves the first one unpaired.
-                pending = rec.uuid.as_deref();
-                continue;
-            }
-            if rec.is_compact_summary != Some(true) {
+                pending = rec.uuid();
                 continue;
             }
             if let Some(mode) = rec.summary_compaction_mode() {

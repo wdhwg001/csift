@@ -208,7 +208,7 @@ fn assistant_below(b: &Builder<'_>) -> Vec<bool> {
         out[i] = b
             .children_of(i)
             .iter()
-            .any(|&c| out[c] || b.recs[c].r#type.as_deref() == Some("assistant"));
+            .any(|&c| out[c] || b.recs[c].kind() == Some("assistant"));
     }
     out
 }

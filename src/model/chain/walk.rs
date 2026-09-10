@@ -74,8 +74,7 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {
                 out.boundary.get_or_insert(i);
                 crossed = true;
                 b.recs[i]
-                    .logical_parent_uuid
-                    .as_deref()
+                    .logical_parent_uuid()
                     .and_then(|u| b.resolve(u))
                     .filter(|&j| !b.visited[j])
             }
@@ -92,18 +91,14 @@ pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {
 /// timestamp is closest at or before this record's, within 5 s. Measured to fire zero
 /// times over a 75-file corpus, so the sorted table it needs is built only on first use.
 fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {
-    let now = b.recs[i]
-        .timestamp
-        .as_deref()
-        .and_then(crate::timez::epoch_ms)?;
-    let side = b.recs[i].is_sidechain;
+    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;
+    let side = b.recs[i].is_sidechain();
     if b.ts_sorted.is_none() {
         let mut v: Vec<(i64, usize)> = (0..b.len())
             .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))
             .filter_map(|k| {
                 b.recs[k]
-                    .timestamp
-                    .as_deref()
+                    .timestamp()
                     .and_then(crate::timez::epoch_ms)
                     .map(|ms| (ms, k))
             })
@@ -119,7 +114,7 @@ fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {
         if now - ms > REPAIR_WINDOW_MS {
             return None;
         }
-        if !b.visited[k] && b.recs[k].is_sidechain == side {
+        if !b.visited[k] && b.recs[k].is_sidechain() == side {
             return Some(k);
         }
     }
@@ -132,8 +127,8 @@ fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {
 /// are re-interleaved on load, so they are Live.
 fn rescue_message_id(b: &mut Builder<'_>) {
     let ids: HashSet<&str> = (0..b.len())
-        .filter(|&i| b.on_chain[i] && b.recs[i].r#type.as_deref() == Some("assistant"))
-        .filter_map(|i| b.recs[i].message.as_ref().and_then(|m| m.id.as_deref()))
+        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some("assistant"))
+        .filter_map(|i| b.recs[i].message_id())
         .collect();
     if ids.is_empty() {
         return;
@@ -144,16 +139,12 @@ fn rescue_message_id(b: &mut Builder<'_>) {
                 && b.admit[i]
                 && !b.removed[i]
                 && b.is_survivor(i)
-                && b.recs[i].r#type.as_deref() == Some("assistant")
-                && b.recs[i]
-                    .message
-                    .as_ref()
-                    .and_then(|m| m.id.as_deref())
-                    .is_some_and(|id| ids.contains(id))
+                && b.recs[i].kind() == Some("assistant")
+                && b.recs[i].message_id().is_some_and(|id| ids.contains(id))
         })
         .collect();
     let mut group: HashSet<&str> = (0..b.len())
-        .filter(|&i| b.on_chain[i] && b.recs[i].r#type.as_deref() == Some("assistant"))
+        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some("assistant"))
         .filter_map(|i| b.uuid(i))
         .collect();
     for i in siblings {
@@ -169,11 +160,9 @@ fn rescue_message_id(b: &mut Builder<'_>) {
                 && b.admit[i]
                 && !b.removed[i]
                 && b.is_survivor(i)
-                && b.recs[i].r#type.as_deref() == Some("user")
+                && b.recs[i].kind() == Some("user")
                 && b.parent[i].is_some_and(|p| group.contains(p))
-                && b.recs[i]
-                    .blocks()
-                    .is_some_and(|bs| bs.iter().any(|x| matches!(x, Block::ToolResult { .. })))
+                && b.recs[i].has_tool_result()
         })
         .collect();
     for i in carriers {

@@ -116,13 +116,17 @@ pub fn group_turn_indices<T>(records: &[T], is_genuine: impl Fn(&T) -> bool) -> 
 #[must_use]
 pub fn group_turn_indices_deduped<T>(
     records: &[T],
-    rec: impl Fn(&T) -> &Record,
+    node: impl Fn(&T) -> ChainNode<'_>,
 ) -> Vec<Vec<usize>> {
-    let chain = Chain::build_by(records, &rec, None);
+    let chain = Chain::build_by(records, &node, None);
     let skip: std::collections::HashSet<usize> = (0..records.len())
         .filter(|&i| chain.kind(i).is_some())
         .collect();
-    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)
+    group_turn_indices_core(
+        records,
+        |i, x| node(x).opens_turn() && chain.opens(i),
+        &skip,
+    )
 }
 
 /// [`group_turn_indices_deduped`] with the chain already built - the path `search` takes,
@@ -131,13 +135,17 @@ pub fn group_turn_indices_deduped<T>(
 #[must_use]
 pub fn group_turn_indices_chained<T>(
     records: &[T],
-    rec: impl Fn(&T) -> &Record,
+    node: impl Fn(&T) -> ChainNode<'_>,
     chain: &Chain,
 ) -> Vec<Vec<usize>> {
     let skip: std::collections::HashSet<usize> = (0..records.len())
         .filter(|&i| !chain.survival(i).selectable())
         .collect();
-    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)
+    group_turn_indices_core(
+        records,
+        |i, x| node(x).opens_turn() && chain.opens(i),
+        &skip,
+    )
 }
 
 /// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index

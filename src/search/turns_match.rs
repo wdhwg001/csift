@@ -41,13 +41,13 @@ pub(crate) fn reconstruct_and_match(
     // re-anchor's earlier copies, and where the chain was cut. It is computed EXPLICITLY
     // (not inside the deduped grouper) so the answer can be DISCLOSED and an addressed
     // abandoned record can still be fetched.
-    let chain = crate::model::Chain::build_by(rows, |r| r.rec(), None);
+    let chain = crate::model::Chain::build_by(rows, |r| r.node(), None);
     // A replay copy's marker names the SURVIVING line, which only this layer can resolve
     // (the chain speaks in record indices, the render in physical jsonl lines).
     let survivor_lines: HashMap<usize, usize> = (0..rows.len())
         .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))
         .collect();
-    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.rec(), &chain);
+    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.node(), &chain);
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
     let plan_index = PlanIndex::from_records(rows.iter().filter_map(|r| r.kept()).map(|k| &k.rec));
@@ -58,7 +58,7 @@ pub(crate) fn reconstruct_and_match(
     // compaction leaf, because then no hit can ever read the pairing (SPEC section 7: a
     // `-t user`/`-t agent.*` scan pays nothing for a feature it cannot surface).
     let summarize_index = if wants_compaction_pairing(&filter) {
-        crate::model::SummarizeIndex::from_records(rows.iter().map(|r| r.rec()))
+        crate::model::SummarizeIndex::from_nodes(rows.iter().map(|r| r.node()))
     } else {
         crate::model::SummarizeIndex::default()
     };
@@ -182,7 +182,7 @@ pub(crate) fn reconstruct_and_match(
         let record_uuids = turn
             .records
             .iter()
-            .filter_map(|r| r.rec().uuid.clone())
+            .filter_map(|r| r.uuid().map(str::to_string))
             .collect();
 
         // Chronological key for the combined timeline: the turn-opening (genuine-user)
@@ -191,7 +191,7 @@ pub(crate) fn reconstruct_and_match(
         let started_utc = turn
             .records
             .first()
-            .and_then(|r| r.rec().timestamp.clone())
+            .and_then(|r| r.timestamp().map(str::to_string))
             .or_else(|| hits.iter().find_map(|h| h.timestamp_utc.clone()));
 
         let turn_line_nos: Vec<usize> = turn
@@ -308,7 +308,8 @@ fn draft_diff_for(
     let sent = rows.get(chain.superseding(draft_idx)?)?.kept()?;
     let draft_text = rows
         .get(draft_idx)?
-        .rec()
+        .kept()?
+        .rec
         .reconstructed_user_text(Some(plan_index))?;
     let sent_text = sent.rec.reconstructed_user_text(Some(plan_index))?;
     let d = crate::chardiff::char_diff(&draft_text, &sent_text);

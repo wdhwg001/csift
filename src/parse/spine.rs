@@ -12,7 +12,7 @@
 //! So the non-candidate arm of a full scan lifts the five fields the walk reads -
 //! `type`, `uuid`, `parentUuid`, `timestamp`, `isSidechain` - plus `subtype`,
 //! `logicalParentUuid` and `compactMetadata` for the compaction boundary, into a
-//! [`Record`] carrying NOTHING else. The walk is depth-1 over the top-level object and
+//! [`SpineRow`] carrying NOTHING else. The walk is depth-1 over the top-level object and
 //! its cost is the line's LENGTH: a record's `type` is written after its payload on 87%
 //! of lines and its `uuid` and `timestamp` on 98% (claim REC-104), so there is no early
 //! exit to take. What the walk does not pay for is the payload itself - it is skipped,
@@ -23,7 +23,7 @@
 //! borrows the raw value spans out of the line and decodes nothing, so a caller that
 //! already has its own reason to look at the line (a line-type census, a candidate parse)
 //! lifts the chain fields out of the same pass instead of walking it twice.
-//! [`spine_record`] is just the [`Record`] build on top of it.
+//! [`spine_record`] is just the [`SpineRow`] build on top of it.
 //!
 //! [`line_type_and_spine`] is that seam's one additive entry: `stats` already
 //! deserializes every non-candidate line in full for its exact line-type census, so the
@@ -37,7 +37,7 @@ use super::*;
 /// A spine row for any other line is pointless, so the walk stops the moment it reads a
 /// `type` outside this set. The argument is the RAW value span, quotes included, so no
 /// value is decoded before it is known to be wanted.
-fn spine_type_wanted(raw: &[u8]) -> bool {
+pub(crate) fn spine_type_wanted(raw: &[u8]) -> bool {
     matches!(
         raw,
         br#""user""#
@@ -48,46 +48,189 @@ fn spine_type_wanted(raw: &[u8]) -> bool {
     )
 }
 
-/// Lift one raw jsonl line's chain-structural fields into an otherwise EMPTY
-/// [`Record`]. `None` when the line is blank, is not a `{…}` object, is malformed, or
-/// carries a `type` outside [`spine_type_wanted`].
-///
-/// The returned record has no `message`, so it classifies to nothing, opens no turn
-/// and emits no hit - callers mark it with `Kept::spine` and skip it in every
-/// record-consuming pass. It exists only so the chain walk can see the DAG.
-pub(crate) fn spine_record(line: &[u8]) -> Option<Record> {
-    Some(spine_record_from(&spine_fields(line)?))
+/// The five line types the loader admits into its uuid map, as a TAG rather than a
+/// decoded string: a spine row's type is always one of these (that is what
+/// [`spine_type_wanted`] gates), so there is nothing to allocate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpineKind {
+    User,
+    Assistant,
+    Attachment,
+    System,
+    LastPrompt,
 }
 
-/// Decode one [`SpineFields`] into the [`Record`] the chain walks. Shared, so the walk
-/// entry and the census entry cannot drift into decoding a field differently.
+impl SpineKind {
+    /// The verbatim top-level `type` value, so every reader compares the same bytes a
+    /// [`Record`] would have carried.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SpineKind::User => "user",
+            SpineKind::Assistant => "assistant",
+            SpineKind::Attachment => "attachment",
+            SpineKind::System => "system",
+            SpineKind::LastPrompt => "last-prompt",
+        }
+    }
+
+    /// The tag for a RAW `type` value span (quotes included); `None` for a line type the
+    /// chain has no use for. A unit test pins this against [`spine_type_wanted`], which
+    /// states the same set for the walk and must not drift from it.
+    pub(crate) fn from_raw(raw: &[u8]) -> Option<SpineKind> {
+        match raw {
+            br#""user""# => Some(SpineKind::User),
+            br#""assistant""# => Some(SpineKind::Assistant),
+            br#""attachment""# => Some(SpineKind::Attachment),
+            br#""system""# => Some(SpineKind::System),
+            br#""last-prompt""# => Some(SpineKind::LastPrompt),
+            _ => None,
+        }
+    }
+
+    /// The tag for an already-DECODED `type` value (the [`Record`] path).
+    pub(crate) fn from_type(t: Option<&str>) -> Option<SpineKind> {
+        match t? {
+            "user" => Some(SpineKind::User),
+            "assistant" => Some(SpineKind::Assistant),
+            "attachment" => Some(SpineKind::Attachment),
+            "system" => Some(SpineKind::System),
+            "last-prompt" => Some(SpineKind::LastPrompt),
+            _ => None,
+        }
+    }
+}
+
+/// The rare fields: a `subtype` (only a `system` record), a `logicalParentUuid` and
+/// `compactMetadata` (only a compaction boundary), a `leafUuid` with its two flags (only a
+/// `last-prompt` line). Boxed together and absent on the ordinary row, which is what keeps
+/// a `SpineRow` a fifth the width of a pointer-heavy struct carrying them inline.
+#[derive(Debug, Default)]
+pub struct SpineExtra {
+    pub(crate) subtype: Option<Box<str>>,
+    pub(crate) logical_parent_uuid: Option<Box<str>>,
+    pub(crate) leaf_uuid: Option<Box<str>>,
+    pub(crate) explicit: Option<bool>,
+    pub(crate) rewound: Option<bool>,
+    pub(crate) compact_metadata: Option<serde_json::Value>,
+}
+
+impl SpineExtra {
+    fn is_empty(&self) -> bool {
+        self.subtype.is_none()
+            && self.logical_parent_uuid.is_none()
+            && self.leaf_uuid.is_none()
+            && self.explicit.is_none()
+            && self.rewound.is_none()
+            && self.compact_metadata.is_none()
+    }
+}
+
+/// One jsonl line as the conversation chain sees it: its physical line, its type tag, and
+/// the fields the walk reads. NOTHING else - no `message`, no `toolUseResult`, no
+/// attachment payload - so it classifies to nothing, opens no turn and emits no hit. It
+/// exists for [`crate::model::Chain`] alone, and every surface skips it in every
+/// record-consuming pass.
 ///
-/// The [`Record`] is built ONCE, at the end. It is a wide struct and the walk touches
-/// three lines in every four of a real transcript, so filling it field by field inside
-/// the loop paid for a default-zeroed struct even on the lines the walk then rejects.
-pub(crate) fn spine_record_from(f: &SpineFields<'_>) -> Record {
-    Record {
-        r#type: str_value(f.r#type),
-        subtype: f.subtype.and_then(str_value),
-        uuid: f.uuid.and_then(str_value),
-        parent_uuid: f.parent_uuid.and_then(str_value),
-        logical_parent_uuid: f.logical_parent_uuid.and_then(str_value),
-        leaf_uuid: f.leaf_uuid.and_then(str_value),
-        timestamp: f.timestamp.and_then(str_value),
-        is_sidechain: f.is_sidechain.and_then(bool_value),
+/// WIDTH is the whole point. Three lines in four of a real transcript are spine, and a
+/// `Record` is 1184 bytes: carrying the spine at that width cost about 120 MB of serial
+/// moves per hand-off on a 397 MB transcript, and it grew the chain build from 1 ms over
+/// 183 nodes to 46 ms over 100,570.
+#[derive(Debug)]
+pub struct SpineRow {
+    /// 1-based physical jsonl line.
+    pub(crate) line: usize,
+    pub(crate) kind: SpineKind,
+    pub(crate) is_sidechain: Option<bool>,
+    pub(crate) uuid: Option<Box<str>>,
+    pub(crate) parent_uuid: Option<Box<str>>,
+    /// Kept as the RAW string, not an instant: the chain parses it with
+    /// [`crate::timez::epoch_ms`] exactly where it parses a [`Record`]'s, so the two kinds
+    /// cannot answer a timestamp question differently.
+    pub(crate) timestamp: Option<Box<str>>,
+    pub(crate) extra: Option<Box<SpineExtra>>,
+}
+
+impl SpineRow {
+    /// The verbatim top-level `type` value.
+    #[must_use]
+    pub fn kind_str(&self) -> &'static str {
+        self.kind.as_str()
+    }
+
+    /// The 1-based physical jsonl line this row was lifted from.
+    #[must_use]
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    fn extra(&self) -> Option<&SpineExtra> {
+        self.extra.as_deref()
+    }
+
+    pub(crate) fn subtype(&self) -> Option<&str> {
+        self.extra()?.subtype.as_deref()
+    }
+
+    pub(crate) fn logical_parent_uuid(&self) -> Option<&str> {
+        self.extra()?.logical_parent_uuid.as_deref()
+    }
+
+    pub(crate) fn leaf_uuid(&self) -> Option<&str> {
+        self.extra()?.leaf_uuid.as_deref()
+    }
+
+    pub(crate) fn explicit(&self) -> Option<bool> {
+        self.extra()?.explicit
+    }
+
+    /// Lifted for parity with [`SpineFields`] and pinned by the field-for-field test; no
+    /// chain stage reads it yet (same targeted-tolerance rationale as `Record`'s unread
+    /// fields).
+    #[allow(dead_code)]
+    pub(crate) fn rewound(&self) -> Option<bool> {
+        self.extra()?.rewound
+    }
+
+    pub(crate) fn compact_metadata(&self) -> Option<&serde_json::Value> {
+        self.extra()?.compact_metadata.as_ref()
+    }
+}
+
+/// Lift one raw jsonl line's chain-structural fields into a [`SpineRow`]. `None` when the
+/// line is blank, is not a `{…}` object, is malformed, or carries a `type` outside
+/// [`spine_type_wanted`].
+pub(crate) fn spine_record(line_no: usize, line: &[u8]) -> Option<SpineRow> {
+    spine_record_from(line_no, &spine_fields(line)?)
+}
+
+/// Decode one [`SpineFields`] into the [`SpineRow`] the chain walks. Shared, so the walk
+/// entry and the census entry cannot drift into decoding a field differently.
+pub(crate) fn spine_record_from(line_no: usize, f: &SpineFields<'_>) -> Option<SpineRow> {
+    let kind = SpineKind::from_raw(f.r#type)?;
+    let extra = SpineExtra {
+        subtype: f.subtype.and_then(boxed_str),
+        logical_parent_uuid: f.logical_parent_uuid.and_then(boxed_str),
+        leaf_uuid: f.leaf_uuid.and_then(boxed_str),
         explicit: f.explicit.and_then(bool_value),
         rewound: f.rewound.and_then(bool_value),
         compact_metadata: f
             .compact_metadata
             .and_then(|raw| serde_json::from_slice(raw).ok()),
-        ..Record::default()
-    }
+    };
+    Some(SpineRow {
+        line: line_no,
+        kind,
+        is_sidechain: f.is_sidechain.and_then(bool_value),
+        uuid: f.uuid.and_then(boxed_str),
+        parent_uuid: f.parent_uuid.and_then(boxed_str),
+        timestamp: f.timestamp.and_then(boxed_str),
+        extra: (!extra.is_empty()).then(|| Box::new(extra)),
+    })
 }
 
 /// Reduce an ALREADY-PARSED [`Record`] to the same chain-structural row
-/// [`spine_record`] lifts off the raw line: the chain fields cloned, everything else
-/// dropped (no `message`, no `toolUseResult`, no attachment payload), so the result
-/// classifies to nothing, opens no turn and emits no hit.
+/// [`spine_record`] lifts off the raw line.
 ///
 /// The caller is a scan that already paid for the full parse and then found the record
 /// unsearchable under its gates. DELETING it there is what breaks the chain - the walk
@@ -96,21 +239,26 @@ pub(crate) fn spine_record_from(f: &SpineFields<'_>) -> Record {
 /// the output. Demoting it is the only answer that is right on both axes.
 ///
 /// A unit test pins this field for field against [`spine_record`] on the same line, so
-/// the two ways into a spine row cannot drift.
-pub(crate) fn spine_from_record(rec: &Record) -> Record {
-    Record {
-        r#type: rec.r#type.clone(),
-        subtype: rec.subtype.clone(),
-        uuid: rec.uuid.clone(),
-        parent_uuid: rec.parent_uuid.clone(),
-        logical_parent_uuid: rec.logical_parent_uuid.clone(),
-        leaf_uuid: rec.leaf_uuid.clone(),
-        timestamp: rec.timestamp.clone(),
-        is_sidechain: rec.is_sidechain,
+/// the two ways into a spine row cannot drift. The only caller demotes a
+/// `type:"attachment"` record (both gated-leaf probes test that type first), which is why
+/// an unmodeled type reads as one rather than widening the row with a type string.
+pub(crate) fn spine_from_record(line_no: usize, rec: &Record) -> SpineRow {
+    let extra = SpineExtra {
+        subtype: rec.subtype.as_deref().map(Box::from),
+        logical_parent_uuid: rec.logical_parent_uuid.as_deref().map(Box::from),
+        leaf_uuid: rec.leaf_uuid.as_deref().map(Box::from),
         explicit: rec.explicit,
         rewound: rec.rewound,
         compact_metadata: rec.compact_metadata.clone(),
-        ..Record::default()
+    };
+    SpineRow {
+        line: line_no,
+        kind: SpineKind::from_type(rec.r#type.as_deref()).unwrap_or(SpineKind::Attachment),
+        is_sidechain: rec.is_sidechain,
+        uuid: rec.uuid.as_deref().map(Box::from),
+        parent_uuid: rec.parent_uuid.as_deref().map(Box::from),
+        timestamp: rec.timestamp.as_deref().map(Box::from),
+        extra: (!extra.is_empty()).then(|| Box::new(extra)),
     }
 }
 
@@ -212,8 +360,9 @@ pub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {
 /// `spine_fields` for a caller with no parse to ride on, serde for the caller that already
 /// validates - and a unit test pins them field for field.
 pub(crate) fn line_type_and_spine(
+    line_no: usize,
     line: &[u8],
-) -> std::result::Result<Option<(String, Option<Record>)>, ()> {
+) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {
     if line.iter().all(u8::is_ascii_whitespace) {
         return Ok(None);
     }
@@ -269,7 +418,7 @@ pub(crate) fn line_type_and_spine(
         rewound: raw(p.rewound),
         compact_metadata: raw(p.compact_metadata),
     };
-    Ok(Some((census, Some(spine_record_from(&fields)))))
+    Ok(Some((census, spine_record_from(line_no, &fields))))
 }
 
 fn skip_ws(b: &[u8], mut i: usize) -> usize {
@@ -363,6 +512,13 @@ fn str_value(raw: &[u8]) -> Option<String> {
         return std::str::from_utf8(inner).ok().map(str::to_string);
     }
     serde_json::from_slice(raw).ok()
+}
+
+/// A JSON string value's decoded content, boxed: a spine row keeps only the fields the
+/// chain reads, so the 8 bytes a `String`'s capacity costs per field are 8 bytes of pure
+/// carry across the whole non-record majority of a transcript.
+fn boxed_str(raw: &[u8]) -> Option<Box<str>> {
+    str_value(raw).map(String::into_boxed_str)
 }
 
 /// A JSON boolean value (`None` for any other shape).

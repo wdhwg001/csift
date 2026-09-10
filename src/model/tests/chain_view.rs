@@ -10,7 +10,13 @@ use super::*;
 
 /// The two sides a prefilter splits a transcript into: what it KEPT, and the structural
 /// rows of what it dropped.
-type Split = (Vec<(usize, Record)>, Vec<(usize, Record)>);
+type Split = (Vec<(usize, Record)>, Vec<crate::parse::SpineRow>);
+
+/// A spine row built the way the production scan builds one - off the raw line, through
+/// the same key walk, so the fixture cannot drift from what a real scan would hand in.
+fn spine_row(line: usize, raw: &str) -> crate::parse::SpineRow {
+    crate::parse::spine_record(line, raw.as_bytes()).expect("a spine row")
+}
 
 /// The rewind shape, split the way a prefilter splits it. Physical lines:
 /// L1 opener · L2 its reply · L3 a hook attachment · L4 the REWOUND opener · L5 its reply ·
@@ -38,29 +44,21 @@ fn split_fixture() -> Split {
         ),
     ];
     let spine = vec![
-        (
+        spine_row(
             2,
-            parse(
-                r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z"}"#,
-            ),
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:05.000Z"}"#,
         ),
-        (
+        spine_row(
             3,
-            parse(
-                r#"{"type":"attachment","uuid":"x0","parentUuid":"a0","timestamp":"2026-06-07T05:00:50.000Z"}"#,
-            ),
+            r#"{"type":"attachment","uuid":"x0","parentUuid":"a0","timestamp":"2026-06-07T05:00:50.000Z"}"#,
         ),
-        (
+        spine_row(
             5,
-            parse(
-                r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z"}"#,
-            ),
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:01:05.000Z"}"#,
         ),
-        (
+        spine_row(
             7,
-            parse(
-                r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z"}"#,
-            ),
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:02:05.000Z"}"#,
         ),
     ];
     (records, spine)
@@ -163,9 +161,15 @@ fn a_surface_holding_only_an_abandoned_opener_still_numbers_the_live_turns() {
     let (records, spine) = split_fixture();
     let only_abandoned = vec![records[1].clone()];
     let mut full_spine = spine;
-    full_spine.push(records[0].clone());
-    full_spine.push(records[2].clone());
-    full_spine.sort_by_key(|(line, _)| *line);
+    full_spine.push(spine_row(
+        1,
+        r#"{"type":"user","uuid":"u0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z"}"#,
+    ));
+    full_spine.push(spine_row(
+        6,
+        r#"{"type":"user","uuid":"u2","parentUuid":"x0","timestamp":"2026-06-07T05:02:00.000Z"}"#,
+    ));
+    full_spine.sort_by_key(crate::parse::SpineRow::line);
     let view = ChainView::build(&only_abandoned, &full_spine);
     assert!(
         matches!(view.survival(0), Survival::Abandoned { .. }),

@@ -83,16 +83,16 @@ fn recorded<'a>(b: &Builder<'a>) -> Recorded<'a> {
             out.explicit = false;
             continue;
         }
-        if r.r#type.as_deref() != Some("last-prompt") {
+        if r.kind() != Some("last-prompt") {
             continue;
         }
-        match r.leaf_uuid.as_deref() {
+        match r.leaf_uuid() {
             Some(u) if !u.is_empty() => {
-                out.explicit = r.explicit == Some(true) || (out.explicit && Some(u) == out.leaf);
+                out.explicit = r.explicit() == Some(true) || (out.explicit && Some(u) == out.leaf);
                 out.leaf = Some(u);
                 out.cleared = false;
             }
-            _ if r.explicit == Some(true) => {
+            _ if r.explicit() == Some(true) => {
                 out.cleared = true;
                 out.leaf = None;
                 out.explicit = false;
@@ -196,11 +196,7 @@ fn newest(b: &Builder<'_>) -> Option<usize> {
         if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_sidechain(i) {
             continue;
         }
-        let Some(ms) = b.recs[i]
-            .timestamp
-            .as_deref()
-            .and_then(crate::timez::epoch_ms)
-        else {
+        let Some(ms) = b.recs[i].timestamp().and_then(crate::timez::epoch_ms) else {
             continue;
         };
         if best.is_none_or(|(bm, _)| ms > bm) {

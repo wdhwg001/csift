@@ -16524,7 +16524,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "267-273",
+          "lines": "264-270",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -39974,7 +39974,7 @@
         },
         {
           "path": "src/stats.rs",
-          "lines": "317-318",
+          "lines": "314-315",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41173,7 +41173,7 @@
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "337-339",
+          "lines": "338-340",
           "snippet": "    if class == Class::AgentThinkingNarration {\n        return Some(1);\n    }"
         }
       ],
@@ -41283,7 +41283,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "306-308",
+          "lines": "303-305",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -49827,8 +49827,8 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "214-246",
-          "snippet": "pub(crate) fn line_type_and_spine(\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<Record>)>, ()> {\n    if line.iter().all(u8::is_ascii_whitespace) {\n        return Ok(None);\n    }\n    // The same key set [`SpineFields`] holds, captured as borrowed `RawValue` spans so\n    // serde validates the whole line without decoding or allocating any of them.\n    #[derive(serde::Deserialize)]\n    struct Probe<'a> {\n        #[serde(rename = \"type\", borrow, default)]\n        r#type: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        subtype: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"parentUuid\", borrow, default)]\n        parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"logicalParentUuid\", borrow, default)]\n        logical_parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"leafUuid\", borrow, default)]\n        leaf_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        timestamp: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"isSidechain\", borrow, default)]\n        is_sidechain: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        explicit: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        rewound: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"compactMetadata\", borrow, default)]\n        compact_metadata: Option<&'a serde_json::value::RawValue>,\n    }"
+          "lines": "362-394",
+          "snippet": "pub(crate) fn line_type_and_spine(\n    line_no: usize,\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {\n    if line.iter().all(u8::is_ascii_whitespace) {\n        return Ok(None);\n    }\n    // The same key set [`SpineFields`] holds, captured as borrowed `RawValue` spans so\n    // serde validates the whole line without decoding or allocating any of them.\n    #[derive(serde::Deserialize)]\n    struct Probe<'a> {\n        #[serde(rename = \"type\", borrow, default)]\n        r#type: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        subtype: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"parentUuid\", borrow, default)]\n        parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"logicalParentUuid\", borrow, default)]\n        logical_parent_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"leafUuid\", borrow, default)]\n        leaf_uuid: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        timestamp: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"isSidechain\", borrow, default)]\n        is_sidechain: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        explicit: Option<&'a serde_json::value::RawValue>,\n        #[serde(borrow, default)]\n        rewound: Option<&'a serde_json::value::RawValue>,\n        #[serde(rename = \"compactMetadata\", borrow, default)]\n        compact_metadata: Option<&'a serde_json::value::RawValue>,"
         }
       ],
       "instrument": "`csift stats <project-dir> --format json --max-count 0` and read the whole-file line-type census (counting rule = one observation per LINE, every line syntax-validated); then `rg -m1 '\"type\":\"last-prompt\"' <transcript> | jq 'keys'` shows the absent uuid, timestamp and message.",
@@ -49926,8 +49926,8 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "214-216",
-          "snippet": "pub(crate) fn line_type_and_spine(\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<Record>)>, ()> {"
+          "lines": "362-365",
+          "snippet": "pub(crate) fn line_type_and_spine(\n    line_no: usize,\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {"
         }
       ],
       "instrument": "`cd ~/.claude/projects && rg -oNI -uu --no-messages '\"subtype\":\"[A-Za-z_]+\"' -g '*.jsonl' . | sort | uniq -c`; counting rule = one observation per MATCH. The total must equal the `system` line count from `csift stats --format json --max-count 0` read in the same minute and the full-parse record census over the same tree - all three read 13,172 together, which also shows every system record carries a subtype and no other line type does. The corpus is live, so the three numbers rise together; only their agreement is stable. Binary side: `grep -abo 'type:\"system\",subtype:\"' <executable>` walks the 92 adjacent-form occurrences over 48 distinct values, and each site is classified by whether its emitter is a transcript append or the enqueue helper at 158424073.",
@@ -50372,8 +50372,8 @@
         },
         {
           "path": "src/parse/spine.rs",
-          "lines": "214-216",
-          "snippet": "pub(crate) fn line_type_and_spine(\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<Record>)>, ()> {"
+          "lines": "362-365",
+          "snippet": "pub(crate) fn line_type_and_spine(\n    line_no: usize,\n    line: &[u8],\n) -> std::result::Result<Option<(String, Option<SpineRow>)>, ()> {"
         }
       ],
       "instrument": "`csift stats <project-dir> --format json --max-count 0` line-type census; counting rule = one observation per LINE. Cross-check a single type with `rg -cNI '\"type\":\"fork-context-ref\"' -g '*.jsonl'`.",
@@ -51408,7 +51408,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "275-280",
+          "lines": "272-277",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51590,12 +51590,12 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "324",
+          "lines": "321",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/stats.rs",
-          "lines": "275-280",
+          "lines": "272-277",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51903,17 +51903,17 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "267-273",
+          "lines": "264-270",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/stats.rs",
-          "lines": "275-280",
+          "lines": "272-277",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/stats.rs",
-          "lines": "324",
+          "lines": "321",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -51988,12 +51988,12 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "267-273",
+          "lines": "264-270",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/stats.rs",
-          "lines": "324",
+          "lines": "321",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52544,7 +52544,7 @@
         },
         {
           "path": "src/stats.rs",
-          "lines": "257-260",
+          "lines": "254-257",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -53514,7 +53514,7 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "237-244",
+          "lines": "245-252",
           "snippet": "/// Scrape the inline persisted-output pointer (\u00a74.6 fallback): the line\n/// `Full output saved to: <ABSOLUTE_PATH>` inside a `<persisted-output>` block.\n/// Returns the trimmed path, or `None` if the marker is absent.\npub(crate) fn scrape_persisted_path(text: &str) -> Option<String> {\n    const MARKER: &str = \"Full output saved to:\";\n    let idx = text.find(MARKER)?;\n    let rest = &text[idx + MARKER.len()..];\n    // The path runs to end-of-line."
         },
         {
@@ -54016,7 +54016,7 @@
         },
         {
           "path": "src/stats.rs",
-          "lines": "266-273",
+          "lines": "263-270",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54105,7 +54105,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "265-266",
+          "lines": "262-263",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54180,7 +54180,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "274",
+          "lines": "271",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55690,7 +55690,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "269-273",
+          "lines": "266-270",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -55787,7 +55787,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "350-353",
+          "lines": "347-350",
           "snippet": "/// Scope law: usage dedupe is PER FILE (each row already deduped by message.id). The\n/// same id CAN recur across a session's transcripts - the spawn message is copied into\n/// each child's opening context with its own usage - and each copy is a genuine\n/// per-transcript fact, so the TOTAL row sums them; it never dedupes across files."
         }
       ],
@@ -64428,7 +64428,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "257-264",
+          "lines": "254-261",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -65546,7 +65546,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "275-280",
+          "lines": "272-277",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65634,7 +65634,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "324",
+          "lines": "321",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -74215,7 +74215,7 @@
       "code": [
         {
           "path": "src/model/chain.rs",
-          "lines": "125-136",
+          "lines": "126-137",
           "snippet": "/// What an ABANDONED turn-opener was. The discriminator is whether anything under it\n/// ever answered: a recalled prompt has no assistant descendant, a rewound turn does.\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum Kind {\n    /// A prompt that was recalled into the input box (or otherwise left behind) and never\n    /// drew a reply. `superseded_by` is the surviving opener that replaced it, when the\n    /// two share a `parentUuid`.\n    Draft { superseded_by: Option<usize> },\n    /// A prompt that WAS answered, and the conversation was later rewound past it.\n    /// `resend` is the surviving opener the conversation continued from instead.\n    Rewound { resend: Option<usize> },\n}"
         },
         {
@@ -74235,8 +74235,8 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "132-145",
-          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)\n}\n\n/// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index\n/// in `skip` is omitted entirely (`continue`) - neither a turn boundary nor a member - which\n/// is how superseded drafts are dropped. With an empty `skip` the behaviour is identical to"
+          "lines": "136-149",
+          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    node: impl Fn(&T) -> ChainNode<'_>,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(\n        records,\n        |i, x| node(x).opens_turn() && chain.opens(i),\n        &skip,\n    )\n}"
         }
       ],
       "instrument": "Group all turn-opening user records of one transcript by `parentUuid` and count groups of size greater than one (counting rule: drafts = group size minus one, one per group), then cross-validate against csift's own `N superseded draft(s)` footer. Measured draft rates over four sessions: 11% (62 genuine / 7 drafts), 26% (1,216 / 317), 6% (86 / 5), 3% (32 / 1).",
@@ -82165,13 +82165,13 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "81-90",
+          "lines": "234-243",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         },
         {
           "path": "src/search/turns_match.rs",
           "lines": "44-50",
-          "snippet": "    let chain = crate::model::Chain::build_by(rows, |r| r.rec(), None);\n    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();\n    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.rec(), &chain);"
+          "snippet": "    let chain = crate::model::Chain::build_by(rows, |r| r.node(), None);\n    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();\n    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.node(), &chain);"
         }
       ],
       "instrument": "Pairs: `csift search '' -t user.unsent --no-subagents --max-count 0 --format json`; for each exchange row read the draft record at its hit line and the record its `superseding_line` names, from the transcript `csift list --format json` gives the `path` of, and compare their top-level keys and values - a pair whose two records carry the SAME uuid is this shape, not an edit-resend. Whole file: count top-level uuid values occurring more than once in that transcript and group them by the record `type` of their lines. Counting rules: one observation per duplicated uuid; 'same parentUuid' counts duplicated uuids whose two lines carry equal parentUuid; the type census attributes a duplicated uuid to the type its lines carry; the field comparison is over top-level keys only.",
@@ -82249,7 +82249,7 @@
         },
         {
           "path": "src/model/chain.rs",
-          "lines": "265-267",
+          "lines": "269-271",
           "snippet": "    pub fn superseding(&self, i: usize) -> Option<usize> {\n        self.kinds.get(&i).and_then(|k| k.survivor())\n    }"
         }
       ],
@@ -83481,12 +83481,12 @@
       "code": [
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "50-61",
-          "snippet": "pub(crate) fn chain_admits(r: &Record) -> bool {\n    if r.is_elicitation_marker() {\n        return false;\n    }\n    if r.uuid.as_deref().is_none_or(str::is_empty) {\n        return false;\n    }\n    matches!(\n        r.r#type.as_deref(),\n        Some(\"user\" | \"assistant\" | \"attachment\" | \"system\")\n    )\n}"
+          "lines": "203-214",
+          "snippet": "pub(crate) fn chain_admits(r: ChainNode<'_>) -> bool {\n    if r.is_elicitation_marker() {\n        return false;\n    }\n    if r.uuid().is_none_or(str::is_empty) {\n        return false;\n    }\n    matches!(\n        r.kind(),\n        Some(\"user\" | \"assistant\" | \"attachment\" | \"system\")\n    )\n}"
         },
         {
           "path": "src/model/chain/nodes.rs",
-          "lines": "81-90",
+          "lines": "234-243",
           "snippet": "            match map.get_mut(uuid) {\n                Some(slot) => {\n                    replay_of.insert(slot.last, i);\n                    slot.last = i;\n                }\n                None => {\n                    map.insert(uuid, Slot { first: i, last: i });\n                }\n            }\n        }"
         }
       ],
@@ -83626,13 +83626,13 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "39-78",
-          "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {\n    let mut out = Walked {\n        floor: leaf.unwrap_or(0),\n        boundary: None,\n    };\n    let Some(leaf) = leaf else {\n        // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no\n        // record is on the chain, and the survival pass turns that into PreCut.\n        out.floor = b.len();\n        return out;\n    };\n    let mut crossed = false;\n    let mut cur = Some(leaf);\n    while let Some(i) = cur {\n        if b.visited[i] {\n            break; // cycle guard\n        }\n        b.visited[i] = true;\n        b.on_chain[i] = true;\n        b.precut[i] = crossed;\n        out.floor = i;\n        let Some(pu) = b.parent[i] else {\n            if b.is_boundary(i) {\n                out.boundary.get_or_insert(i);\n            }\n            break;\n        };\n        b.chain_child.entry(pu).or_insert(i);\n        let next = match b.resolve(pu) {\n            Some(j) if !b.visited[j] => Some(j),\n            _ => repair(b, i),\n        };\n        let next = match next {\n            Some(j) => Some(j),\n            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]\n                    .logical_parent_uuid\n                    .as_deref()"
+          "lines": "39-76",
+          "snippet": "pub(crate) fn run(b: &mut Builder<'_>, leaf: Option<usize>) -> Walked {\n    let mut out = Walked {\n        floor: leaf.unwrap_or(0),\n        boundary: None,\n    };\n    let Some(leaf) = leaf else {\n        // No leaf: nothing is claimed. The floor stays at 0 only in the sense that no\n        // record is on the chain, and the survival pass turns that into PreCut.\n        out.floor = b.len();\n        return out;\n    };\n    let mut crossed = false;\n    let mut cur = Some(leaf);\n    while let Some(i) = cur {\n        if b.visited[i] {\n            break; // cycle guard\n        }\n        b.visited[i] = true;\n        b.on_chain[i] = true;\n        b.precut[i] = crossed;\n        out.floor = i;\n        let Some(pu) = b.parent[i] else {\n            if b.is_boundary(i) {\n                out.boundary.get_or_insert(i);\n            }\n            break;\n        };\n        b.chain_child.entry(pu).or_insert(i);\n        let next = match b.resolve(pu) {\n            Some(j) if !b.visited[j] => Some(j),\n            _ => repair(b, i),\n        };\n        let next = match next {\n            Some(j) => Some(j),\n            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "94-105",
-          "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i]\n        .timestamp\n        .as_deref()\n        .and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain;\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp"
+          "lines": "93-104",
+          "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
       "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line` and the `survival` values above and below it.",
@@ -83754,12 +83754,12 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "133-146",
-          "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].r#type.as_deref() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message.as_ref().and_then(|m| m.id.as_deref()))\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
+          "lines": "128-141",
+          "snippet": "fn rescue_message_id(b: &mut Builder<'_>) {\n    let ids: HashSet<&str> = (0..b.len())\n        .filter(|&i| b.on_chain[i] && b.recs[i].kind() == Some(\"assistant\"))\n        .filter_map(|i| b.recs[i].message_id())\n        .collect();\n    if ids.is_empty() {\n        return;\n    }\n    let siblings: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            !b.visited[i]\n                && b.admit[i]\n                && !b.removed[i]\n                && b.is_survivor(i)"
         },
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "188-199",
+          "lines": "177-188",
           "snippet": "fn rescue_leaf_descendants<'a>(b: &mut Builder<'a>, leaf: usize) {\n    let Some(root) = b.uuid(leaf) else {\n        return;\n    };\n    let mut kids: HashMap<&'a str, Vec<usize>> = HashMap::new();\n    for i in 0..b.len() {\n        if !b.admit[i] || b.removed[i] || !b.is_survivor(i) || b.is_conv(i) {\n            continue;\n        }\n        if let Some(p) = b.parent[i] {\n            kids.entry(p).or_default().push(i);\n        }"
         }
       ],
@@ -84082,7 +84082,7 @@
         {
           "path": "src/model/chain/branches.rs",
           "lines": "205-216",
-          "snippet": "fn assistant_below(b: &Builder<'_>) -> Vec<bool> {\n    let mut out = vec![false; b.len()];\n    for i in (0..b.len()).rev() {\n        out[i] = b\n            .children_of(i)\n            .iter()\n            .any(|&c| out[c] || b.recs[c].r#type.as_deref() == Some(\"assistant\"));\n    }\n    out\n}\n\n/// The surviving opener that replaced an abandoned one: the chain's own child of the"
+          "snippet": "fn assistant_below(b: &Builder<'_>) -> Vec<bool> {\n    let mut out = vec![false; b.len()];\n    for i in (0..b.len()).rev() {\n        out[i] = b\n            .children_of(i)\n            .iter()\n            .any(|&c| out[c] || b.recs[c].kind() == Some(\"assistant\"));\n    }\n    out\n}\n\n/// The surviving opener that replaced an abandoned one: the chain's own child of the"
         }
       ],
       "instrument": "Group turn-opening user records by non-null `parentUuid` over every top-level transcript, take the earlier member of each pair, and test whether any assistant record is reachable by walking parentUuid links downward from it; cross-check against `csift search \"\" -t user.rewound --count-by session`.",
@@ -84124,8 +84124,8 @@
         },
         {
           "path": "src/model/grouping.rs",
-          "lines": "132-145",
-          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    rec: impl Fn(&T) -> &Record,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(records, |i, x| rec(x).opens_turn() && chain.opens(i), &skip)\n}\n\n/// Shared engine for [`group_turn_indices`] and [`group_turn_indices_deduped`]. Every index\n/// in `skip` is omitted entirely (`continue`) - neither a turn boundary nor a member - which\n/// is how superseded drafts are dropped. With an empty `skip` the behaviour is identical to"
+          "lines": "136-149",
+          "snippet": "pub fn group_turn_indices_chained<T>(\n    records: &[T],\n    node: impl Fn(&T) -> ChainNode<'_>,\n    chain: &Chain,\n) -> Vec<Vec<usize>> {\n    let skip: std::collections::HashSet<usize> = (0..records.len())\n        .filter(|&i| !chain.survival(i).selectable())\n        .collect();\n    group_turn_indices_core(\n        records,\n        |i, x| node(x).opens_turn() && chain.opens(i),\n        &skip,\n    )\n}"
         }
       ],
       "instrument": "Take a transcript whose last conversation record is a user prompt with no reply and no later same-parent opener, and read csift's `leaf_source`, the record's `survival` and its leaf: `csift show @<id> --line <n> --format json`.",
@@ -84226,8 +84226,8 @@
       "code": [
         {
           "path": "src/model/chain/walk.rs",
-          "lines": "73-81",
-          "snippet": "            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]\n                    .logical_parent_uuid\n                    .as_deref()\n                    .and_then(|u| b.resolve(u))\n                    .filter(|&j| !b.visited[j])\n            }"
+          "lines": "72-79",
+          "snippet": "            Some(j) => Some(j),\n            None if b.is_boundary(i) => {\n                out.boundary.get_or_insert(i);\n                crossed = true;\n                b.recs[i]\n                    .logical_parent_uuid()\n                    .and_then(|u| b.resolve(u))\n                    .filter(|&j| !b.visited[j])"
         },
         {
           "path": "src/model/chain/branches.rs",
@@ -84288,12 +84288,12 @@
       "code": [
         {
           "path": "src/parse/spine.rs",
-          "lines": "135-140",
+          "lines": "283-288",
           "snippet": "/// The depth-1 key walk itself. `type` is NOT an early exit for the OTHER keys: measured\n/// over a real corpus, `parentUuid` is the first key of every one of 673,710 lines of an\n/// admitted type while `uuid` and `timestamp` sit AFTER the payload key on 662,470 of them\n/// (claim REC-104) - so the walk has to reach the end of the object either way, and a\n/// \"stop once the wanted keys are in hand\" shortcut would stop on almost no line.\npub(crate) fn spine_fields(line: &[u8]) -> Option<SpineFields<'_>> {"
         },
         {
           "path": "src/parse/tests/spine.rs",
-          "lines": "42-50",
+          "lines": "47-55",
           "snippet": "    let filler = \"y\".repeat(2000);\n    let line = format!(\n        concat!(\n            r#\"{{\"parentUuid\":\"p-2\",\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"api_error\",\"#,\n            r#\"\"content\":{{\"pad\":\"{}\",\"error\":{{\"type\":\"overloaded_error\"}},\"uuid\":\"NOPE\"}},\"#,\n            r#\"\"timestamp\":\"2026-06-07T05:01:00.000Z\",\"uuid\":\"u-2\"}}\"#\n        ),\n        filler\n    );"
         }
       ],
