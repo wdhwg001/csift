@@ -15,7 +15,7 @@ use serde_json::json;
 
 use crate::cli::{OutputFormat, StatsArgs};
 use crate::model::{group_turn_indices_chained, Block, Chain, Record};
-use crate::parse::{line_type_and_spine, mmap_bytes, scan_lines_parallel, LineVerdict};
+use crate::parse::{line_type_and_spine, mmap_bytes};
 use crate::path::{self, SubagentScope};
 use crate::time_window::TimeWindow;
 use crate::timez::{format_timestamp, local_iso};
@@ -118,15 +118,13 @@ fn line_is_stats_candidate(line: &[u8]) -> bool {
     crate::parse::line_has_role_marker(line)
 }
 
-/// One kept line from the stats scan: a fully parsed transcript record, or the top-level
-/// `type` of a NON-candidate line (attachment / file-history-snapshot / system / …) - the
-/// line-type census keeps every physical line accountable without building full records
-/// for the non-record majority of bytes. A non-candidate line ALSO yields its structural
-/// spine row when the line type is one the conversation chain walks through, so the
-/// SURVIVAL AXIS sees the whole DAG without the payload ever being parsed.
-enum StatsLine {
-    Record(Box<Record>),
-    Other(String, Option<Box<Record>>),
+/// One NON-CANDIDATE line: its 1-based line, its top-level `type` for the census (which
+/// keeps every line accountable without building records for the non-record majority of
+/// bytes), and its chain spine row when the loader admits this line type.
+struct OtherLine {
+    line: usize,
+    census: String,
+    spine: Option<Box<Record>>,
 }
 
 fn stats_one_file(
@@ -153,57 +151,70 @@ fn stats_one_file(
     out.lines = memchr::memchr_iter(b'\n', bytes).count()
         + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n"));
 
-    let (kept, skipped): (Vec<StatsLine>, usize) = scan_lines_parallel(bytes, |line, _| {
-        if !line_is_stats_candidate(line) {
-            // Census every non-candidate line by its top-level `type` AND lift its chain
-            // spine from the same parse (full syntax validation, subsuming the R10 shape
-            // check - see [`crate::parse::line_type_and_spine`]).
-            return match line_type_and_spine(line) {
-                Ok(Some((t, spine))) => LineVerdict::Keep(StatsLine::Other(t, spine.map(Box::new))),
-                Ok(None) => LineVerdict::Ignore,
-                Err(()) => LineVerdict::Skip,
-            };
-        }
-        match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => LineVerdict::Keep(StatsLine::Record(Box::new(rec))),
-            Ok(None) => LineVerdict::Ignore,
-            Err(_) => LineVerdict::Skip,
-        }
-    });
+    let (records, others, skipped): (Vec<(usize, Record)>, Vec<OtherLine>, usize) =
+        crate::parse::scan_lines_parallel_split(bytes, |line, line_no| {
+            if !line_is_stats_candidate(line) {
+                // Census every non-candidate line by its top-level `type` AND lift its
+                // chain spine from the same parse (full syntax validation, subsuming the
+                // R10 shape check - [`crate::parse::line_type_and_spine`]), own stream.
+                return match line_type_and_spine(line) {
+                    Ok(Some((census, spine))) => crate::parse::SplitVerdict::Second(OtherLine {
+                        line: line_no,
+                        census,
+                        spine: spine.map(Box::new),
+                    }),
+                    Ok(None) => crate::parse::SplitVerdict::Ignore,
+                    Err(()) => crate::parse::SplitVerdict::Skip,
+                };
+            }
+            match crate::parse::parse_line(line) {
+                Ok(Some(rec)) => crate::parse::SplitVerdict::First((line_no, rec)),
+                Ok(None) => crate::parse::SplitVerdict::Ignore,
+                Err(_) => crate::parse::SplitVerdict::Skip,
+            }
+        });
     out.skipped_lines = skipped;
-    // Split the kept lines: EVERY line lands in the type census (a file fact, like
-    // `lines`); only real records go on to the windowed aggregates below. Spine rows ride
-    // along IN FILE ORDER so the chain walk sees the DAG, and are excluded from every
-    // aggregate (they carry no message, no usage, and their timestamps are not the
-    // conversation's - counting them would widen the span).
-    let mut rows: Vec<(Record, bool)> = Vec::new();
-    for l in kept {
-        match l {
-            StatsLine::Record(rec) => {
-                let t = rec
-                    .r#type
-                    .clone()
-                    .unwrap_or_else(|| "(untyped)".to_string());
-                *out.line_types.entry(t).or_insert(0) += 1;
-                rows.push((*rec, false));
-            }
-            StatsLine::Other(t, spine) => {
-                *out.line_types.entry(t).or_insert(0) += 1;
-                if let Some(s) = spine {
-                    rows.push((*s, true));
-                }
-            }
+    // EVERY line lands in the type census (a file fact, like `lines`); only real records
+    // reach the windowed aggregates. Spine rows ride along IN FILE ORDER so the chain walk
+    // sees the DAG, and are excluded from every aggregate (no message, no usage, and their
+    // timestamps are not the conversation's). The merge is BORROWED: the wide records are
+    // never copied and the narrow spine never enters their vector.
+    for (_, rec) in &records {
+        let t = rec.r#type.as_deref().unwrap_or("(untyped)");
+        *out.line_types.entry(t.to_string()).or_insert(0) += 1;
+    }
+    let mut spine: Vec<(usize, &Record)> = Vec::new();
+    for o in &others {
+        *out.line_types.entry(o.census.clone()).or_insert(0) += 1;
+        if let Some(r) = o.spine.as_deref() {
+            spine.push((o.line, r));
+        }
+    }
+    let mut rows: Vec<(&Record, bool)> = Vec::with_capacity(records.len() + spine.len());
+    let (mut a, mut b) = (0usize, 0usize);
+    while a < records.len() || b < spine.len() {
+        let take_record = match (records.get(a), spine.get(b)) {
+            (Some((la, _)), Some((lb, _))) => la <= lb,
+            (Some(_), None) => true,
+            _ => false,
+        };
+        if take_record {
+            rows.push((&records[a].1, false));
+            a += 1;
+        } else {
+            rows.push((spine[b].1, true));
+            b += 1;
         }
     }
 
     // ONE chain, ONE grouping (§3.3): `turns` counts LIVE numbered turns - the exact
     // numbering `search` prints as `·tN` and `show --turn` addresses - and the three
     // survival totals are whole-file facts read straight off the chain.
-    let chain = Chain::build_by(&rows, |(r, _)| r, None);
+    let chain = Chain::build_by(&rows, |(r, _)| *r, None);
     out.abandoned_turns = chain.drafts + chain.rewound_turns;
     out.rewound_turns = chain.rewound_turns;
     out.replay_copies = chain.replay_copies;
-    let groups = group_turn_indices_chained(&rows, |(r, _)| r, &chain);
+    let groups = group_turn_indices_chained(&rows, |(r, _)| *r, &chain);
 
     // `--turn`: per-record membership on the FULL transcript's LIVE turn order, computed
     // BEFORE the time filter so indices stay stable, then intersected (AND) with it.
@@ -230,7 +241,7 @@ fn stats_one_file(
     };
     let admitted: Vec<&Record> = (0..rows.len())
         .filter(|&i| admit(i))
-        .map(|i| &rows[i].0)
+        .map(|i| rows[i].0)
         .collect();
 
     let mut usage_peak: HashMap<(String, String), [u64; 4]> = HashMap::new();

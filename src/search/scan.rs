@@ -229,39 +229,34 @@ pub(crate) fn search_one_file(
     // `harness.compaction.boundary` (or no `-t` = match-all). A `-t user` / `-t agent.*` search can
     // never match a boundary, so it pays ZERO for the extra check - the hard `-t` filter PRUNES the
     // byte-scan instead of taxing it (computed once above the whole-file gate, captured here).
-    let (mut records, mut skipped) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
-        if !line_is_transcript_candidate(line, &gates) {
-            // The SURVIVAL AXIS needs the DAG, and the DAG threads through the
-            // `attachment` / `system` lines this prefilter drops - a prompt submitted
-            // after a SessionStart hook is parented to that hook's attachment record. So
-            // the non-candidate arm lifts the five structural fields (never the payload)
-            // into a spine row. It is not a searchable record: `spine` keeps it out of
-            // every emission pass.
-            if let Some(rec) = crate::parse::spine_record(line) {
-                return crate::parse::LineVerdict::Keep(Kept {
+    let (mut records, mut spine, mut skipped): (Vec<Kept>, Vec<(usize, Record)>, usize) =
+        crate::parse::scan_lines_parallel_split(bytes, |line, line_no| {
+            if !line_is_transcript_candidate(line, &gates) {
+                // The SURVIVAL AXIS needs the DAG, and the DAG threads through the
+                // `attachment` / `system` lines this prefilter drops - a prompt submitted
+                // after a SessionStart hook is parented to that hook's attachment record.
+                // So the non-candidate arm lifts the five structural fields (never the
+                // payload) into a spine row, on its OWN output stream: it is not a
+                // searchable record, and keeping the two kinds apart is what stops the
+                // narrow row from being carried at a full record's width.
+                if let Some(rec) = crate::parse::spine_record(line) {
+                    return crate::parse::SplitVerdict::Second((line_no, rec));
+                }
+                // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
+                return crate::parse::non_candidate_split(line);
+            }
+            let can_hit = matcher.line_may_match(line);
+            match crate::parse::parse_line(line) {
+                Ok(Some(rec)) => crate::parse::SplitVerdict::First(Kept {
                     rec,
-                    can_hit: false,
+                    can_hit,
                     line_no,
                     from_sidecar: false,
-                    spine: true,
-                });
+                }),
+                Ok(None) => crate::parse::SplitVerdict::Ignore,
+                Err(_) => crate::parse::SplitVerdict::Skip,
             }
-            // R10: obviously-corrupt non-candidates are COUNTED (the malformed law).
-            return crate::parse::non_candidate_verdict(line);
-        }
-        let can_hit = matcher.line_may_match(line);
-        match crate::parse::parse_line(line) {
-            Ok(Some(rec)) => crate::parse::LineVerdict::Keep(Kept {
-                rec,
-                can_hit,
-                line_no,
-                from_sidecar: false,
-                spine: false,
-            }),
-            Ok(None) => crate::parse::LineVerdict::Ignore,
-            Err(_) => crate::parse::LineVerdict::Skip,
-        }
-    });
+        });
 
     // A DEFAULT-ON needle admits attachment lines this scan cannot search. The channel
     // needle is the v0.11.0 one - it keeps any line carrying the envelope literal, so a hook
@@ -281,17 +276,20 @@ pub(crate) fn search_one_file(
     // invisible to every emission pass and visible to the chain. An address or either
     // attachment flag admits it whole, as before.
     if !gates.hook_context && !gates.attachments && address.is_none() {
-        for k in &mut records {
-            if k.spine {
-                continue;
-            }
+        let mut demoted: Vec<(usize, Record)> = Vec::new();
+        records.retain(|k| {
             let gated_attachment = k.rec.hook_additional_context_text().is_some()
                 || k.rec.attachment_payload_text().is_some();
             if gated_attachment && k.rec.csift_channel_text().is_none() {
-                k.rec = crate::parse::spine_from_record(&k.rec);
-                k.can_hit = false;
-                k.spine = true;
+                demoted.push((k.line_no, crate::parse::spine_from_record(&k.rec)));
+                return false;
             }
+            true
+        });
+        // `retain` visits in order, so `demoted` is ascending by line and merges with the
+        // scan's own spine stream in one linear pass.
+        if !demoted.is_empty() {
+            spine = merge_spine(std::mem::take(&mut spine), demoted);
         }
     }
 
@@ -311,7 +309,6 @@ pub(crate) fn search_one_file(
                 can_hit: true, // no physical line to prefilter - let the matcher decide.
                 line_no: 0,
                 from_sidecar: true,
-                spine: false,
             });
         }
     }
@@ -323,9 +320,10 @@ pub(crate) fn search_one_file(
         .unwrap_or(bytes.len())
         .min(4096);
     let head_is_fork = memchr::memmem::find(&bytes[..head_end], b"fork-context-ref").is_some();
+    let rows = merge_rows(&records, &spine);
     let (mut exchanges, turn_count, chain_counts) = reconstruct_and_match(
         path,
-        &records,
+        &rows,
         args,
         matcher,
         turn_range,

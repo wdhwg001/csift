@@ -85,9 +85,10 @@ fn search(lines: &[&str], a: &SearchArgs) -> Vec<Exchange> {
     // no subagents - an empty spawn map (lookup miss ⇒ `None`) reproduces exactly what the
     // former per-file `build_spawn_lookup` returned here.
     let spawn_map: HashMap<PathBuf, Option<Arc<DiscoveredSpawns>>> = HashMap::new();
+    let rows = merge_rows(&kept, &[]);
     let (exchanges, _turn_count, _drafts) = reconstruct_and_match(
         std::path::Path::new("/x/0a1b2c3d-0000-0000-0000-000000000000.jsonl"),
-        &kept,
+        &rows,
         a,
         &matcher,
         tr,
@@ -111,7 +112,6 @@ fn kept_fixture(lines: &[&str], matcher: &Matcher) -> Vec<Kept> {
                 can_hit: matcher.line_may_match(raw),
                 line_no: 1,
                 from_sidecar: false,
-                spine: false,
             }
         })
         .collect()

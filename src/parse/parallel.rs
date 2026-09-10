@@ -58,6 +58,12 @@ pub type NumberedRecords = Vec<(usize, Record)>;
 /// both vectors are in file order, keyed by their 1-based jsonl line, DISJOINT by
 /// construction, and the malformed count still books every obviously-corrupt line exactly
 /// once (a line that yields no spine row falls through to [`non_candidate_verdict`]).
+///
+/// The two kinds ride SEPARATE output streams from the scan down (`SplitVerdict`), never a
+/// merged vector split afterwards. A spine row is a fraction of a record's width and three
+/// lines in four of a real transcript are spine, so a shared vector sized every element to
+/// the record and moved the whole thing twice - measured at ~120 MB per move on a 397 MB
+/// transcript, which is the serial carry this shape removes.
 pub fn parse_candidates_with_spine<F>(
     bytes: &[u8],
     prefilter: F,
@@ -65,29 +71,19 @@ pub fn parse_candidates_with_spine<F>(
 where
     F: Fn(&[u8]) -> bool + Sync,
 {
-    let (rows, skipped) = scan_lines_parallel(bytes, |line, line_no| {
+    scan_lines_parallel_split(bytes, |line, line_no| {
         if !prefilter(line) {
             if let Some(rec) = spine_record(line) {
-                return LineVerdict::Keep((line_no, rec, true));
+                return SplitVerdict::Second((line_no, rec));
             }
-            return non_candidate_verdict(line);
+            return non_candidate_split(line);
         }
         match parse_line(line) {
-            Ok(Some(rec)) => LineVerdict::Keep((line_no, rec, false)),
-            Ok(None) => LineVerdict::Ignore,
-            Err(_) => LineVerdict::Skip,
+            Ok(Some(rec)) => SplitVerdict::First((line_no, rec)),
+            Ok(None) => SplitVerdict::Ignore,
+            Err(_) => SplitVerdict::Skip,
         }
-    });
-    let mut records: Vec<(usize, Record)> = Vec::with_capacity(rows.len());
-    let mut spine: Vec<(usize, Record)> = Vec::new();
-    for (line_no, rec, is_spine) in rows {
-        if is_spine {
-            spine.push((line_no, rec));
-        } else {
-            records.push((line_no, rec));
-        }
-    }
-    (records, spine, skipped)
+    })
 }
 
 /// The verdict for a line a byte-prefilter rejected: `Skip` (⇒ counted malformed) when the
@@ -99,6 +95,19 @@ pub fn non_candidate_verdict<T>(line: &[u8]) -> LineVerdict<T> {
         LineVerdict::Skip
     } else {
         LineVerdict::Ignore
+    }
+}
+
+/// [`non_candidate_verdict`] for a TWO-STREAM scan. Same rule, same single source
+/// ([`line_shape_malformed`]) - only the verdict type differs, because a `SplitVerdict`
+/// carries two item types and cannot be produced by a `From` on the one-stream form
+/// without inventing an item.
+#[must_use]
+pub fn non_candidate_split<A, B>(line: &[u8]) -> SplitVerdict<A, B> {
+    if line_shape_malformed(line) {
+        SplitVerdict::Skip
+    } else {
+        SplitVerdict::Ignore
     }
 }
 
@@ -116,6 +125,43 @@ pub fn line_shape_malformed(line: &[u8]) -> bool {
     !t.is_empty() && (t[0] != b'{' || t[t.len() - 1] != b'}')
 }
 
+/// One line's verdict for a TWO-STREAM scan: the two kinds are collected into their own
+/// vectors and never share one. [`LineVerdict`]'s `Skip`/`Ignore` arms carry over.
+#[derive(Debug)]
+pub enum SplitVerdict<A, B> {
+    /// An item for the FIRST stream.
+    First(A),
+    /// An item for the SECOND stream.
+    Second(B),
+    /// A candidate line that failed to parse - counted in the returned malformed total.
+    Skip,
+    /// Not a candidate (or blank) - neither kept nor counted.
+    Ignore,
+}
+
+/// [`scan_lines_parallel`] with TWO output streams: `visit` routes each line to one of
+/// them, and each is collected in file order into its own vector. Identical chunking,
+/// numbering and malformed accounting.
+///
+/// The point is WIDTH. A caller that keeps two row kinds of very different sizes (a full
+/// record and a chain-structural spine row) would otherwise size every element of one
+/// vector to the wider kind and move the whole thing on every hand-off. Keeping the streams
+/// apart from the scan down is what lets the narrow row stay narrow.
+pub fn scan_lines_parallel_split<A, B, F>(bytes: &[u8], visit: F) -> (Vec<A>, Vec<B>, usize)
+where
+    F: Fn(&[u8], usize) -> SplitVerdict<A, B> + Sync,
+    A: Send,
+    B: Send,
+{
+    const MIN_PARALLEL_BYTES: usize = 4 * 1024 * 1024;
+    let target_chunks = if bytes.len() < MIN_PARALLEL_BYTES {
+        1
+    } else {
+        (rayon::current_num_threads() * 4).max(1)
+    };
+    scan_lines_parallel_split_chunked(bytes, &visit, target_chunks)
+}
+
 /// Core of [`scan_lines_parallel`] with an explicit chunk target, so a test can force multi-chunk
 /// splitting on a tiny input and assert identical output to a single serial pass.
 pub(crate) fn scan_lines_parallel_chunked<T, F>(
@@ -127,8 +173,36 @@ where
     F: Fn(&[u8], usize) -> LineVerdict<T> + Sync,
     T: Send,
 {
+    // The single-stream form IS the two-stream one with an uninhabited second stream, so
+    // there is one chunking + line-numbering + malformed-accounting implementation, not two.
+    // `Vec<Infallible>` never allocates and its merge is a no-op.
+    let (kept, _empty, skipped): (Vec<T>, Vec<std::convert::Infallible>, usize) =
+        scan_lines_parallel_split_chunked(
+            bytes,
+            &|line: &[u8], line_no: usize| match visit(line, line_no) {
+                LineVerdict::Keep(t) => SplitVerdict::First(t),
+                LineVerdict::Skip => SplitVerdict::Skip,
+                LineVerdict::Ignore => SplitVerdict::Ignore,
+            },
+            target_chunks,
+        );
+    (kept, skipped)
+}
+
+/// Core of [`scan_lines_parallel_split`] with an explicit chunk target (see
+/// [`scan_lines_parallel_chunked`]).
+pub(crate) fn scan_lines_parallel_split_chunked<A, B, F>(
+    bytes: &[u8],
+    visit: &F,
+    target_chunks: usize,
+) -> (Vec<A>, Vec<B>, usize)
+where
+    F: Fn(&[u8], usize) -> SplitVerdict<A, B> + Sync,
+    A: Send,
+    B: Send,
+{
     if bytes.is_empty() {
-        return (Vec::new(), 0);
+        return (Vec::new(), Vec::new(), 0);
     }
     // ── Newline-aligned chunk boundaries. Each interior bound is the first byte AFTER a
     //    newline (a line start), so no line is ever split across a chunk. ──
@@ -174,32 +248,36 @@ where
 
     // ── Parallel scan; rayon's ordered collect keeps chunk order, and each chunk's items are
     //    already in ascending line order, so the flattened result is in exact file order. ──
-    let per_chunk: Vec<(Vec<T>, usize)> = chunks
+    let per_chunk: Vec<(Vec<A>, Vec<B>, usize)> = chunks
         .par_iter()
         .enumerate()
         .map(|(ci, &(s, e))| {
             let base = start_line[ci];
-            let mut kept: Vec<T> = Vec::new();
+            let mut first: Vec<A> = Vec::new();
+            let mut second: Vec<B> = Vec::new();
             let mut skipped = 0usize;
             let mut j = 0usize;
             let _ = scan_lines_bytes(&bytes[s..e], |line| {
                 let line_no = base + j;
                 j += 1;
                 match visit(line, line_no) {
-                    LineVerdict::Keep(t) => kept.push(t),
-                    LineVerdict::Skip => skipped += 1,
-                    LineVerdict::Ignore => {}
+                    SplitVerdict::First(t) => first.push(t),
+                    SplitVerdict::Second(t) => second.push(t),
+                    SplitVerdict::Skip => skipped += 1,
+                    SplitVerdict::Ignore => {}
                 }
             });
-            (kept, skipped)
+            (first, second, skipped)
         })
         .collect();
 
-    let mut all: Vec<T> = Vec::new();
+    let mut all_first: Vec<A> = Vec::new();
+    let mut all_second: Vec<B> = Vec::new();
     let mut skipped_total = 0usize;
-    for (kept, sk) in per_chunk {
-        all.extend(kept);
+    for (first, second, sk) in per_chunk {
+        all_first.extend(first);
+        all_second.extend(second);
         skipped_total += sk;
     }
-    (all, skipped_total)
+    (all_first, all_second, skipped_total)
 }

@@ -8,7 +8,7 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn reconstruct_and_match(
     path: &Path,
-    records: &[Kept],
+    rows: &[Row<'_>],
     args: &SearchArgs,
     matcher: &Matcher,
     turn_range: Option<crate::text::RangeSpec>,
@@ -41,16 +41,16 @@ pub(crate) fn reconstruct_and_match(
     // re-anchor's earlier copies, and where the chain was cut. It is computed EXPLICITLY
     // (not inside the deduped grouper) so the answer can be DISCLOSED and an addressed
     // abandoned record can still be fetched.
-    let chain = crate::model::Chain::build_by(records, |k| &k.rec, None);
+    let chain = crate::model::Chain::build_by(rows, |r| r.rec(), None);
     // A replay copy's marker names the SURVIVING line, which only this layer can resolve
     // (the chain speaks in record indices, the render in physical jsonl lines).
-    let survivor_lines: HashMap<usize, usize> = (0..records.len())
-        .filter_map(|i| chain.replay_of(i).map(|s| (s, records[s].line_no)))
+    let survivor_lines: HashMap<usize, usize> = (0..rows.len())
+        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))
         .collect();
-    let index_turns = crate::model::group_turn_indices_chained(records, |k| &k.rec, &chain);
+    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.rec(), &chain);
     // ExitPlanMode plan pointers for this session (§4.2.4) - a rejection-with-message
     // hit surfaces a `[plan: <path>]` pointer. Cheap; empty in a no-plan session.
-    let plan_index = PlanIndex::from_records(records.iter().map(|k| &k.rec));
+    let plan_index = PlanIndex::from_records(rows.iter().filter_map(|r| r.kept()).map(|k| &k.rec));
     let filter = args.label_filter();
     // C-33: pair each `compact_boundary` with the compaction SUMMARY that follows it, so a
     // boundary hit can name the gesture that minted it. One pass, empty on a transcript that
@@ -58,18 +58,18 @@ pub(crate) fn reconstruct_and_match(
     // compaction leaf, because then no hit can ever read the pairing (SPEC section 7: a
     // `-t user`/`-t agent.*` scan pays nothing for a feature it cannot surface).
     let summarize_index = if wants_compaction_pairing(&filter) {
-        crate::model::SummarizeIndex::from_records(records.iter().map(|k| &k.rec))
+        crate::model::SummarizeIndex::from_records(rows.iter().map(|r| r.rec()))
     } else {
         crate::model::SummarizeIndex::default()
     };
 
     // `tool_use_id → tool name` across the whole file, so a `tool-response` (a bare
     // `tool_result` carrying only the id) can name the tool it answers (e.g. `tool-response Edit`).
-    let tool_names = build_tool_name_index(records);
+    let tool_names = build_tool_name_index(rows);
     // The `▹` pairing id sets (GOLD §7): every `tool_use` id + every `tool_result` `tool_use_id`
     // in this transcript, joined GLOBALLY (not by contiguity) so a use↔result pair resolves across
     // records / parallel calls. A use with no result-id ⇒ pending; a result with no use-id ⇒ orphan.
-    let (use_ids, result_ids) = tool_pair_ids(records);
+    let (use_ids, result_ids) = tool_pair_ids(rows);
     // Cross-record classify context (GOLD §6): owner identity, subagent-ness, parent id, the first
     // turn-opener line (the subagent spawn-prompt seed), and a spawn lookup. The lookup is HOISTED
     // (GOLD §3): `run_search` built one `DiscoveredSpawns` per DISTINCT discovery-root up front, so
@@ -83,12 +83,12 @@ pub(crate) fn reconstruct_and_match(
     let first_opener_line = if head_is_fork {
         None
     } else {
-        records
-            .iter()
+        rows.iter()
+            .filter_map(|r| r.kept())
             .find(|k| k.rec.opens_turn())
             .map(|k| k.line_no)
     };
-    let resume_prompts = resume_prompt_uuids(records);
+    let resume_prompts = resume_prompt_uuids(rows);
     let env = ClassifyEnv {
         owner_id: &session_id,
         is_subagent,
@@ -132,7 +132,7 @@ pub(crate) fn reconstruct_and_match(
 
         let turn = Turn {
             index: turn_index,
-            records: idxs.iter().map(|&i| &records[i]).collect(),
+            records: idxs.iter().map(|&i| rows[i]).collect(),
             indices: idxs.to_vec(),
         };
 
@@ -182,7 +182,7 @@ pub(crate) fn reconstruct_and_match(
         let record_uuids = turn
             .records
             .iter()
-            .filter_map(|k| k.rec.uuid.clone())
+            .filter_map(|r| r.rec().uuid.clone())
             .collect();
 
         // Chronological key for the combined timeline: the turn-opening (genuine-user)
@@ -191,13 +191,13 @@ pub(crate) fn reconstruct_and_match(
         let started_utc = turn
             .records
             .first()
-            .and_then(|k| k.rec.timestamp.clone())
+            .and_then(|r| r.rec().timestamp.clone())
             .or_else(|| hits.iter().find_map(|h| h.timestamp_utc.clone()));
 
         let turn_line_nos: Vec<usize> = turn
             .records
             .iter()
-            .map(|k| k.line_no)
+            .map(|r| r.line_no())
             .filter(|&n| n > 0)
             .collect();
         let turn_lines = match (turn_line_nos.iter().min(), turn_line_nos.iter().max()) {
@@ -214,9 +214,9 @@ pub(crate) fn reconstruct_and_match(
         let abandoned_root_line = head
             .filter(|_| abandoned)
             .and_then(|i| chain.abandoned_root(i))
-            .map(|r| records[r].line_no);
+            .map(|r| rows[r].line_no());
         let draft_diff = if abandoned && want_diff {
-            head.and_then(|i| draft_diff_for(records, i, &chain, &plan_index))
+            head.and_then(|i| draft_diff_for(rows, i, &chain, &plan_index))
         } else {
             None
         };
@@ -248,7 +248,7 @@ pub(crate) fn reconstruct_and_match(
     // (a small file's join overhead isn't worth it). An ordered collect keeps the
     // output byte-identical to the serial walk.
     const PAR_TURNS_MIN_RECORDS: usize = 1024;
-    let mut out: Vec<Exchange> = if inner_parallel && records.len() >= PAR_TURNS_MIN_RECORDS {
+    let mut out: Vec<Exchange> = if inner_parallel && rows.len() >= PAR_TURNS_MIN_RECORDS {
         index_turns
             .par_iter()
             .enumerate()
@@ -270,7 +270,7 @@ pub(crate) fn reconstruct_and_match(
     // answered; a lone recalled draft is a one-record branch, exactly as before.
     if address.is_some() || turn_bounds.is_none() {
         let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-        for i in 0..records.len() {
+        for i in 0..rows.len() {
             if let Some(root) = chain.abandoned_root(i) {
                 branches.entry(root).or_default().push(i);
             }
@@ -285,7 +285,7 @@ pub(crate) fn reconstruct_and_match(
         drafts: chain.drafts,
         rewound_turns: chain.rewound_turns,
         replay_copies: chain.replay_copies,
-        boundary_cut_line: chain.boundary_cut.map(|i| records[i].line_no),
+        boundary_cut_line: chain.boundary_cut.map(|i| rows[i].line_no()),
         leaf_source: Some(chain.leaf_source.as_str()),
     };
     // The turn COUNT rides along as the `--turn` resolution domain (show's miss reporting).
@@ -300,15 +300,15 @@ pub(crate) fn reconstruct_and_match(
 /// `None` when the survivor is not in this file's records (only reachable if a caller
 /// hands in a partial record set) or when either side has no reconstructed text.
 fn draft_diff_for(
-    records: &[Kept],
+    rows: &[Row<'_>],
     draft_idx: usize,
     chain: &crate::model::Chain,
     plan_index: &PlanIndex,
 ) -> Option<DraftDiff> {
-    let sent = records.get(chain.superseding(draft_idx)?)?;
-    let draft_text = records
+    let sent = rows.get(chain.superseding(draft_idx)?)?.kept()?;
+    let draft_text = rows
         .get(draft_idx)?
-        .rec
+        .rec()
         .reconstructed_user_text(Some(plan_index))?;
     let sent_text = sent.rec.reconstructed_user_text(Some(plan_index))?;
     let d = crate::chardiff::char_diff(&draft_text, &sent_text);
@@ -353,7 +353,7 @@ pub(crate) fn sibling_cap(class: Class) -> Option<usize> {
 /// under it, in file order).
 pub(crate) struct Turn<'a> {
     pub(crate) index: usize,
-    pub(crate) records: Vec<&'a Kept>,
+    pub(crate) records: Vec<Row<'a>>,
     /// The same records' indices in the file-order record list - the key the SURVIVAL
     /// AXIS is addressed by.
     pub(crate) indices: Vec<usize>,
@@ -488,9 +488,9 @@ pub(crate) fn wants_compaction_pairing(filter: &LabelFilter<'_>) -> bool {
 /// it closes a repair pair. One pass, and the set stays empty (allocating nothing) on the
 /// overwhelming majority of transcripts - a resume repair is rare, and only a prompt records
 /// a uuid here.
-pub(crate) fn resume_prompt_uuids(records: &[Kept]) -> HashSet<String> {
+pub(crate) fn resume_prompt_uuids(rows: &[Row<'_>]) -> HashSet<String> {
     let mut out = HashSet::new();
-    for k in records {
+    for k in rows.iter().filter_map(|r| r.kept()) {
         if k.rec.is_resume_prompt() {
             if let Some(uuid) = k.rec.uuid.as_deref() {
                 out.insert(uuid.to_string());
@@ -506,9 +506,9 @@ pub(crate) fn resume_prompt_uuids(records: &[Kept]) -> HashSet<String> {
 /// Build the `tool_use_id → tool name` index for a file's records: every `tool_use` block's
 /// `{id, name}`. A later `tool_result` (which carries only the `tool_use_id`) looks its tool up
 /// here so a `tool-response` row can say WHICH tool it answers. First write wins (ids are unique).
-pub(crate) fn build_tool_name_index(records: &[Kept]) -> HashMap<String, String> {
+pub(crate) fn build_tool_name_index(rows: &[Row<'_>]) -> HashMap<String, String> {
     let mut map: HashMap<String, String> = HashMap::new();
-    for k in records {
+    for k in rows.iter().filter_map(|r| r.kept()) {
         if let Some(blocks) = k.rec.blocks() {
             for b in blocks {
                 if let Block::ToolUse {
@@ -528,10 +528,10 @@ pub(crate) fn build_tool_name_index(records: &[Kept]) -> HashMap<String, String>
 /// The `▹` pairing id sets for a file (GOLD §7): every `tool_use` block's `id` and every
 /// `tool_result` block's `tool_use_id`. Joined GLOBALLY (membership, not contiguity) so a use
 /// pairs with its result across records / parallel calls.
-pub(crate) fn tool_pair_ids(records: &[Kept]) -> (HashSet<String>, HashSet<String>) {
+pub(crate) fn tool_pair_ids(rows: &[Row<'_>]) -> (HashSet<String>, HashSet<String>) {
     let mut uses = HashSet::new();
     let mut results = HashSet::new();
-    for k in records {
+    for k in rows.iter().filter_map(|r| r.kept()) {
         if let Some(blocks) = k.rec.blocks() {
             for b in blocks {
                 match b {

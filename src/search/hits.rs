@@ -22,12 +22,12 @@ pub(crate) fn collect_turn_hits(
 ) -> (Vec<Hit>, Vec<usize>) {
     let mut hits = Vec::new();
     let mut hit_idxs = Vec::new();
-    for (i, kept) in turn.records.iter().enumerate() {
-        // A SPINE row is not a record: it carries five structural fields so the chain can
-        // see the DAG, and nothing to match, classify or render.
-        if kept.spine {
+    for (i, row) in turn.records.iter().enumerate() {
+        // A SPINE row is not a record: it carries the chain-structural fields so the chain
+        // can see the DAG, and nothing to match, classify or render.
+        let Some(kept) = row.kept() else {
             continue;
-        }
+        };
         // Addressing (`--line`/`--uuid`): only the ADDRESSED records are eligible to hit - the
         // selector that turns `search` into the message-getter. (Applied before the keyword
         // prefilter so an addressed record is fetched regardless of the pattern literal.)
@@ -111,8 +111,11 @@ pub(crate) fn collect_turn_siblings(
     let pure = Matcher::pure();
     let all = LabelFilter::all(); // every label is eligible - siblings ignore -t/-T
     let mut sibs = Vec::new();
-    for (i, kept) in turn.records.iter().enumerate() {
-        if kept.spine || hit_idxs.contains(&i) {
+    for (i, row) in turn.records.iter().enumerate() {
+        let Some(kept) = row.kept() else {
+            continue;
+        };
+        if hit_idxs.contains(&i) {
             continue;
         }
         let before = sibs.len();

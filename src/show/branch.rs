@@ -25,17 +25,40 @@
 
 use super::*;
 use crate::model::{Block, Chain, Kind, Record, Survival};
-use crate::parse::LineVerdict;
 use serde_json::json;
 
 /// One parsed jsonl line: a full record, or the structural [`crate::parse::spine_record`]
 /// of a line the role prefilter drops (kept ONLY so the chain walk and the parent lookup
 /// can see the whole DAG - it carries no payload and is never a child).
-#[derive(Debug)]
-struct Row {
-    line: usize,
-    rec: Record,
-    spine: bool,
+///
+/// The two kinds are scanned into SEPARATE streams and re-merged by line here, so the
+/// narrow spine row is never carried at a record's width.
+#[derive(Debug, Clone, Copy)]
+enum Row<'a> {
+    Full(usize, &'a Record),
+    Spine(usize, &'a Record),
+}
+
+impl<'a> Row<'a> {
+    fn line(self) -> usize {
+        match self {
+            Row::Full(l, _) | Row::Spine(l, _) => l,
+        }
+    }
+
+    fn rec(self) -> &'a Record {
+        match self {
+            Row::Full(_, r) | Row::Spine(_, r) => r,
+        }
+    }
+
+    /// The full record, or `None` for a chain-only spine row (never a fork CHILD).
+    fn full(self) -> Option<&'a Record> {
+        match self {
+            Row::Full(_, r) => Some(r),
+            Row::Spine(..) => None,
+        }
+    }
 }
 
 /// One child edge of a branch point.
@@ -140,51 +163,68 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
     let parent_session_id =
         crate::subagent::parent_session_id_from_path(file).unwrap_or_else(|| session_id.clone());
 
-    let mut rows: Vec<Row> = Vec::new();
+    let mut full: Vec<(usize, Record)> = Vec::new();
+    let mut spine: Vec<(usize, Record)> = Vec::new();
     let mut skipped = 0usize;
     if let Some(mmap) = mmap_bytes(file)? {
         let bytes: &[u8] = &mmap;
-        let (kept, s) = crate::parse::scan_lines_parallel(bytes, |line, line_no| {
+        let (f, sp, s) = crate::parse::scan_lines_parallel_split(bytes, |line, line_no| {
             if !crate::parse::line_has_role_marker(line) {
                 // The parent of a fork is often NOT a conversation record, and the chain
                 // walk threads through the same lines - so lift the structural fields of
-                // every line the role prefilter drops (never the payload).
+                // every line the role prefilter drops (never the payload), onto its own
+                // stream.
                 if let Some(rec) = crate::parse::spine_record(line) {
-                    return LineVerdict::Keep(Row {
-                        line: line_no,
-                        rec,
-                        spine: true,
-                    });
+                    return crate::parse::SplitVerdict::Second((line_no, rec));
                 }
-                return crate::parse::non_candidate_verdict(line);
+                return crate::parse::non_candidate_split(line);
             }
             match crate::parse::parse_line(line) {
-                Ok(Some(rec)) => LineVerdict::Keep(Row {
-                    line: line_no,
-                    rec,
-                    spine: false,
-                }),
-                Ok(None) => LineVerdict::Ignore,
-                Err(_) => LineVerdict::Skip,
+                Ok(Some(rec)) => crate::parse::SplitVerdict::First((line_no, rec)),
+                Ok(None) => crate::parse::SplitVerdict::Ignore,
+                Err(_) => crate::parse::SplitVerdict::Skip,
             }
         });
-        rows = kept;
+        full = f;
+        spine = sp;
         skipped = s;
+    }
+    // Back into ONE file-order list: the chain's index space, and the order the fork
+    // children are collected in.
+    let mut rows: Vec<Row<'_>> = Vec::with_capacity(full.len() + spine.len());
+    {
+        let (mut a, mut b) = (0usize, 0usize);
+        while a < full.len() || b < spine.len() {
+            let take_full = match (full.get(a), spine.get(b)) {
+                (Some((la, _)), Some((lb, _))) => la <= lb,
+                (Some(_), None) => true,
+                _ => false,
+            };
+            if take_full {
+                rows.push(Row::Full(full[a].0, &full[a].1));
+                a += 1;
+            } else {
+                rows.push(Row::Spine(spine[b].0, &spine[b].1));
+                b += 1;
+            }
+        }
     }
 
     // Claude Code's own conversation chain over the SAME rows: which child of a fork the
     // conversation continued from, and what became of the others.
-    let chain = Chain::build_by(&rows, |r| &r.rec, None);
+    let chain = Chain::build_by(&rows, |r| r.rec(), None);
 
     // uuid → (own line, own type), over EVERY parsed line - a fork parent can be an
     // attachment, a turn_duration system record, or any other line the loader admits.
     let line_of: std::collections::HashMap<&str, (usize, &str)> = rows
         .iter()
         .filter_map(|r| {
-            r.rec
-                .uuid
-                .as_deref()
-                .map(|u| (u, (r.line, r.rec.r#type.as_deref().unwrap_or("(untyped)"))))
+            r.rec().uuid.as_deref().map(|u| {
+                (
+                    u,
+                    (r.line(), r.rec().r#type.as_deref().unwrap_or("(untyped)")),
+                )
+            })
         })
         .collect();
     // parentUuid → conversation children, file order.
@@ -192,11 +232,11 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
         std::collections::HashMap::new();
     let mut conversation_records = 0usize;
     for (i, row) in rows.iter().enumerate() {
-        if row.spine || !is_conversation_record(&row.rec) {
+        let Some(rec) = row.full().filter(|r| is_conversation_record(r)) else {
             continue;
-        }
+        };
         conversation_records += 1;
-        let Some(parent) = row.rec.parent_uuid.as_deref() else {
+        let Some(parent) = rec.parent_uuid.as_deref() else {
             continue;
         };
         let (survival, verdict) = survival_verdict(&chain, i);
@@ -204,11 +244,10 @@ pub(crate) fn run_branch_points(file: &std::path::Path, format: OutputFormat) ->
             .entry(parent.to_string())
             .or_default()
             .push(Child {
-                line: row.line,
-                uuid: row.rec.uuid.clone(),
-                ts_utc: row.rec.timestamp.clone(),
-                record_type: row
-                    .rec
+                line: row.line(),
+                uuid: rec.uuid.clone(),
+                ts_utc: rec.timestamp.clone(),
+                record_type: rec
                     .r#type
                     .clone()
                     .unwrap_or_else(|| "(untyped)".to_string()),

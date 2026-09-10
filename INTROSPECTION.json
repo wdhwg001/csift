@@ -13139,7 +13139,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "422-423",
+          "lines": "420-421",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         }
       ],
@@ -13226,7 +13226,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "428-429",
+          "lines": "426-427",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -13353,7 +13353,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "484",
+          "lines": "482",
           "snippet": "        || (needs_attachments && ATTACHMENT_FINDER.find(line).is_some())"
         }
       ],
@@ -13485,7 +13485,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "424-427",
+          "lines": "422-425",
           "snippet": "    // Quoted needle: `\"attachment\"` appears verbatim as the record's `\"type\"` VALUE (and as\n    // its payload KEY); an in-content quote is escaped to `\\\"` in raw bytes, so prose that\n    // merely mentions the word never false-keeps. Serialization-tolerant (the quoted value\n    // survives a reserialize; R13)."
         }
       ],
@@ -13559,7 +13559,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "491-495",
+          "lines": "489-493",
           "snippet": "        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())"
         }
       ],
@@ -14336,7 +14336,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "399",
+          "lines": "397",
           "snippet": "/// v0.10.0: `file-history-snapshot` + `file-history-delta` lines."
         }
       ],
@@ -14712,7 +14712,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "475-477",
+          "lines": "473-475",
           "snippet": "        || (needs_compact_boundary\n            && COMPACT_BOUNDARY_FINDER.find(line).is_some()\n            && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -16524,7 +16524,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "256-262",
+          "lines": "267-273",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -22153,7 +22153,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "436-440",
+          "lines": "434-438",
           "snippet": "    // v0.10.0 promoted lines. Quoted-value / bare-value needles per the R13 law: the\n    // `type` values `\"queue-operation\"` and `\"file-history-` (a prefix covering both\n    // `-snapshot` and `-delta`), and the bare `subtype` values for the three system\n    // records (a value substring survives a reserialize; prose quoting the word lands\n    // on a role line and is harmless - it already parses)."
         }
       ],
@@ -39974,7 +39974,7 @@
         },
         {
           "path": "src/stats.rs",
-          "lines": "306-307",
+          "lines": "317-318",
           "snippet": "                        Some(\"thinking\") | None => {}\n                        Some(_) => out.unknown_thinking_tags += 1,"
         }
       ],
@@ -41067,7 +41067,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "450-452",
+          "lines": "453-455",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
@@ -41283,7 +41283,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "295-297",
+          "lines": "306-308",
           "snippet": "                if let Block::Thinking { signature, .. } = b {\n                    match crate::model::thinking_signature_tag(signature.as_deref()).as_deref() {\n                        Some(crate::model::NARRATION_TAG) => {"
         },
         {
@@ -46247,7 +46247,7 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "212-222",
+          "lines": "215-225",
           "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
         },
         {
@@ -48393,7 +48393,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "490-496",
+          "lines": "488-494",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         }
       ],
@@ -48726,7 +48726,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "490-496",
+          "lines": "488-494",
           "snippet": "        // v0.10.0 promoted lines, each behind its own explicit-selector gate.\n        || (gates.queued && QUEUED_FINDER.find(line).is_some())\n        || (gates.turn_duration && TURN_DURATION_FINDER.find(line).is_some())\n        || (gates.away_summary && AWAY_SUMMARY_FINDER.find(line).is_some())\n        || (gates.stop_hooks && STOP_HOOKS_FINDER.find(line).is_some())\n        || (gates.snapshot && SNAPSHOT_FINDER.find(line).is_some())\n        || (gates.system && SUBTYPE_FINDER.find(line).is_some())"
         },
         {
@@ -50850,12 +50850,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "380-386",
+          "lines": "378-384",
           "snippet": "pub(crate) struct CandidateGates {\n    /// D7: the `compact_boundary` metrics record (selected label).\n    pub(crate) compact_boundary: bool,\n    /// `--additional-context` (or an address): hook-injected context attachments.\n    pub(crate) hook_context: bool,\n    /// `--attachments` / the attachment axis (or an address): every attachment line.\n    pub(crate) attachments: bool,"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "410-413",
+          "lines": "408-411",
           "snippet": "pub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {\n    let needs_compact_boundary = gates.compact_boundary;\n    let needs_hook_context = gates.hook_context;\n    let needs_attachments = gates.attachments;"
         }
       ],
@@ -51408,7 +51408,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "264-269",
+          "lines": "275-280",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51590,12 +51590,12 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "313",
+          "lines": "324",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         },
         {
           "path": "src/stats.rs",
-          "lines": "264-269",
+          "lines": "275-280",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -51903,17 +51903,17 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "256-262",
+          "lines": "267-273",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/stats.rs",
-          "lines": "264-269",
+          "lines": "275-280",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         },
         {
           "path": "src/stats.rs",
-          "lines": "313",
+          "lines": "324",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -51988,12 +51988,12 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "256-262",
+          "lines": "267-273",
           "snippet": "                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         },
         {
           "path": "src/stats.rs",
-          "lines": "313",
+          "lines": "324",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -52155,7 +52155,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "405-410",
+          "lines": "403-408",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         }
       ],
@@ -52544,7 +52544,7 @@
         },
         {
           "path": "src/stats.rs",
-          "lines": "246-249",
+          "lines": "257-260",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }"
         },
         {
@@ -53711,12 +53711,12 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "405-410",
+          "lines": "403-408",
           "snippet": "/// \u00a77d stage-1 category prefilter on raw bytes: keep a line only if it could be a\n/// transcript message (user/assistant role marker) - drops `attachment`,\n/// `file-history-*`, `queue-operation`, and metadata noise pre-JSON unless the\n/// matching [`CandidateGates`] flag admits them. Kept deliberately permissive\n/// (substring, not structural) so no genuine turn is lost.\npub(crate) fn line_is_transcript_candidate(line: &[u8], gates: &CandidateGates) -> bool {"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "428-429",
+          "lines": "426-427",
           "snippet": "    static ATTACHMENT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"attachment\\\"\"));"
         }
       ],
@@ -53816,7 +53816,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "422-423",
+          "lines": "420-421",
           "snippet": "    static HOOK_CONTEXT_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"hook_additional_context\"));"
         },
         {
@@ -54016,7 +54016,7 @@
         },
         {
           "path": "src/stats.rs",
-          "lines": "255-262",
+          "lines": "266-273",
           "snippet": "            if let Some(u) = msg.token_usage() {\n                // CC repeats the IDENTICAL message.usage on every per-block record of\n                // one API message; summing per record over-reports 2.2-3.5x (measured).\n                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -54105,7 +54105,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "254-255",
+          "lines": "265-266",
           "snippet": "        if let Some(msg) = rec.message.as_ref() {\n            if let Some(u) = msg.token_usage() {"
         }
       ],
@@ -54180,7 +54180,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "263",
+          "lines": "274",
           "snippet": "                let model = msg.model_id().unwrap_or(\"(unknown)\").to_string();"
         }
       ],
@@ -55247,11 +55247,11 @@
         {
           "path": "src/search/turns_match.rs",
           "lines": "83-90",
-          "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        records\n            .iter()\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
+          "snippet": "    let first_opener_line = if head_is_fork {\n        None\n    } else {\n        rows.iter()\n            .filter_map(|r| r.kept())\n            .find(|k| k.rec.opens_turn())\n            .map(|k| k.line_no)\n    };"
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "322-323",
+          "lines": "319-320",
           "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
         }
       ],
@@ -55350,13 +55350,13 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "179-187",
+          "lines": "182-190",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
           "path": "src/search/turns_match.rs",
-          "lines": "265-282",
-          "snippet": "    // An ABANDONED record is a real record OUTSIDE turn numbering. A scan emits its BRANCH\n    // as one annotated unit when it hits (searchable; an opener labeled `user.unsent` or\n    // `user.rewound`) - except under a `--turn` window, which asks about NUMBERED turns and\n    // an abandoned branch belongs to none. An explicit address always reaches it (refetch\n    // law). Grouping by branch head keeps a rewound turn's reply beside the prompt it\n    // answered; a lone recalled draft is a one-record branch, exactly as before.\n    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..records.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }\n"
+          "lines": "271-281",
+          "snippet": "    if address.is_some() || turn_bounds.is_none() {\n        let mut branches: BTreeMap<usize, Vec<usize>> = BTreeMap::new();\n        for i in 0..rows.len() {\n            if let Some(root) = chain.abandoned_root(i) {\n                branches.entry(root).or_default().push(i);\n            }\n        }\n        for (_, idxs) in branches {\n            out.extend(build_exchange(0, &idxs, true));\n        }\n    }"
         },
         {
           "path": "src/model/taxonomy.rs",
@@ -55365,7 +55365,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "304-308",
+          "lines": "307-311",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -55690,7 +55690,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "258-262",
+          "lines": "269-273",
           "snippet": "                // Dedupe per FILE by message.id, taking the per-field MAX across the\n                // id's admitted records: identical on clean data, and immune to the\n                // compaction-replay shape where a replayed copy carries ZEROED usage\n                // (first-wins would depend on traversal order). An id-less record\n                // counts on its own, as before."
         }
       ],
@@ -55787,7 +55787,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "339-342",
+          "lines": "350-353",
           "snippet": "/// Scope law: usage dedupe is PER FILE (each row already deduped by message.id). The\n/// same id CAN recur across a session's transcripts - the spawn message is copied into\n/// each child's opening context with its own usage - and each copy is a genuine\n/// per-transcript fact, so the TOTAL row sums them; it never dedupes across files."
         }
       ],
@@ -56066,7 +56066,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "451-458",
+          "lines": "449-456",
           "snippet": "    // v0.10.1 catch-all system subtypes: the key-only needle `\"subtype\"` (every system\n    // record carries it; a quoted KEY survives a reserialize, and the classify arm\n    // decides which subtype it is - the already-modeled ones simply reclassify). Also the\n    // second half of the D7 boundary conjunction below, which narrows the same property to\n    // the one subtype it models.\n    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));\n    crate::parse::line_has_role_marker(line)"
         }
       ],
@@ -64428,7 +64428,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "246-253",
+          "lines": "257-264",
           "snippet": "        if let Some(ts) = rec.timestamp.as_deref() {\n            if out.first_utc.as_deref().is_none_or(|f| ts < f) {\n                out.first_utc = Some(ts.to_string());\n            }\n            if out.last_utc.as_deref().is_none_or(|l| ts > l) {\n                out.last_utc = Some(ts.to_string());\n            }\n        }"
         },
         {
@@ -65546,7 +65546,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "264-269",
+          "lines": "275-280",
           "snippet": "                let vals = [\n                    u.input_tokens.unwrap_or(0),\n                    u.output_tokens.unwrap_or(0),\n                    u.cache_read_input_tokens.unwrap_or(0),\n                    u.cache_creation_input_tokens.unwrap_or(0),\n                ];"
         }
       ],
@@ -65634,7 +65634,7 @@
       "code": [
         {
           "path": "src/stats.rs",
-          "lines": "313",
+          "lines": "324",
           "snippet": "    for ((model, _), vals) in usage_peak {"
         }
       ],
@@ -70533,7 +70533,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "457",
+          "lines": "455",
           "snippet": "std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         }
       ],
@@ -74330,7 +74330,7 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "184-187",
+          "lines": "187-190",
           "snippet": "    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -79208,7 +79208,7 @@
         },
         {
           "path": "src/search/scan.rs",
-          "lines": "485-489",
+          "lines": "483-487",
           "snippet": "        // v0.11.0: a csift-channel delivery, kept under a DEFAULT scan (the label gate is on\n        // whenever a selector can reach the leaf). Same `&&` shape as the keeps above, so it\n        // still runs only on a line that failed both role checks, and a `-t` that cannot\n        // reach the leaf short-circuits before the memmem.\n        || (gates.channel && CHANNEL_FINDER.find(line).is_some())"
         }
       ],
@@ -82171,7 +82171,7 @@
         {
           "path": "src/search/turns_match.rs",
           "lines": "44-50",
-          "snippet": "    let chain = crate::model::Chain::build_by(records, |k| &k.rec, None);\n    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..records.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, records[s].line_no)))\n        .collect();\n    let index_turns = crate::model::group_turn_indices_chained(records, |k| &k.rec, &chain);"
+          "snippet": "    let chain = crate::model::Chain::build_by(rows, |r| r.rec(), None);\n    // A replay copy's marker names the SURVIVING line, which only this layer can resolve\n    // (the chain speaks in record indices, the render in physical jsonl lines).\n    let survivor_lines: HashMap<usize, usize> = (0..rows.len())\n        .filter_map(|i| chain.replay_of(i).map(|s| (s, rows[s].line_no())))\n        .collect();\n    let index_turns = crate::model::group_turn_indices_chained(rows, |r| r.rec(), &chain);"
         }
       ],
       "instrument": "Pairs: `csift search '' -t user.unsent --no-subagents --max-count 0 --format json`; for each exchange row read the draft record at its hit line and the record its `superseding_line` names, from the transcript `csift list --format json` gives the `path` of, and compare their top-level keys and values - a pair whose two records carry the SAME uuid is this shape, not an edit-resend. Whole file: count top-level uuid values occurring more than once in that transcript and group them by the record `type` of their lines. Counting rules: one observation per duplicated uuid; 'same parentUuid' counts duplicated uuids whose two lines carry equal parentUuid; the type census attributes a duplicated uuid to the type its lines carry; the field comparison is over top-level keys only.",
@@ -82244,7 +82244,7 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "179-187",
+          "lines": "182-190",
           "snippet": "    // An ABANDONED turn-opener (the scan layer computed the set - a pure per-record\n    // classify cannot see the DAG around the record) carries ONE label whatever kind of\n    // opener it was: `user.unsent` for a recalled draft, `user.rewound` for a turn the\n    // conversation was rewound past. Neither is part of the surviving conversation, so\n    // neither ever rides `user.message` (whose counts stay pure).\n    let labels = match opener_override {\n        Some(c) => vec![c],\n        None => rec.classify(ctx),\n    };"
         },
         {
@@ -82955,7 +82955,7 @@
       "code": [
         {
           "path": "src/search/scan.rs",
-          "lines": "456-457",
+          "lines": "454-455",
           "snippet": "    static SUBTYPE_FINDER: std::sync::LazyLock<memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memmem::Finder::new(b\"\\\"subtype\\\"\"));"
         },
         {

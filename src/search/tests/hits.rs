@@ -330,12 +330,11 @@ fn collect_record_hits_can_hit_false_is_skipped_via_collect_turn_hits() {
         can_hit: m.line_may_match(raw),
         line_no: 1,
         from_sidecar: false,
-        spine: false,
     };
     assert!(!kept.can_hit);
     let turn = Turn {
         index: 0,
-        records: vec![&kept],
+        records: vec![Row::Rec(&kept)],
         indices: vec![0],
     };
     let tw = TimeWindow::default();
@@ -368,11 +367,10 @@ fn collect_turn_hits_excludes_record_outside_time_window() {
         can_hit: m.line_may_match(raw),
         line_no: 1,
         from_sidecar: false,
-        spine: false,
     };
     let turn = Turn {
         index: 0,
-        records: vec![&kept],
+        records: vec![Row::Rec(&kept)],
         indices: vec![0],
     };
     // Window starting AFTER the record's timestamp → excluded.

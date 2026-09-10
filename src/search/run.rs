@@ -502,30 +502,3 @@ pub(crate) struct FileResult {
     /// paths (no chain was built, so nothing is claimed).
     pub(crate) chain: ChainCounts,
 }
-
-/// A retained record. `can_hit` is the §7d keyword-prefilter verdict on the raw
-/// line: when `false`, the line provably lacks the required literal, so it can
-/// never be a regex hit and we skip the (more expensive) per-block regex matching
-/// on it - but it is STILL retained so it can appear as a sibling record in a
-/// matched turn's complete round-trip (SPEC §6.4). When the matcher has no
-/// anchorable literal (case-insensitive or regex-with-metachars) every record is
-/// `can_hit`.
-pub(crate) struct Kept {
-    pub(crate) rec: Record,
-    pub(crate) can_hit: bool,
-    /// 1-based PHYSICAL line number of this record in its source jsonl (from the scanner) -
-    /// a stable address (jsonl is append-only), surfaced per hit so `csift show --line N` (and
-    /// raw `sed -n 'Np'`) can re-fetch the exact record. `0` for a merged elicitation-sidecar
-    /// record (it has no physical transcript line - see `from_sidecar`).
-    pub(crate) line_no: usize,
-    /// True when this record was merged from the elicitation SIDECAR (§3.10), not scanned from
-    /// the native jsonl. Such a record has no physical `line_no` (0); its hits render
-    /// `(elicitation sidecar)` instead of `Lnnnn`.
-    pub(crate) from_sidecar: bool,
-    /// True for a SPINE row: a `attachment`/`system`/`last-prompt` line the §7d candidate
-    /// prefilter drops, lifted to its five chain-structural fields ONLY
-    /// ([`crate::parse::spine_record`]) so the conversation chain can see the DAG it
-    /// walks. Such a row carries no `message`, classifies to nothing and must be skipped
-    /// by every record-consuming pass - it exists for [`crate::model::Chain`] alone.
-    pub(crate) spine: bool,
-}
