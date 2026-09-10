@@ -25,15 +25,15 @@
 //! `tool_result` carriers parented to them - are Live, and every NON-conversation
 //! descendant of the leaf is Live.
 //!
-//! FAIL-OPEN, always - and the reason is csift's OWN forensic step, not a gap in the
-//! record set. Claude Code's walk STOPS at a `compact_boundary` (its `parentUuid` is
-//! null and the loader never reads `logicalParentUuid`), so it never asks whether that
-//! logical parent still exists. csift crosses the cut through exactly that field to keep
-//! reading what the model saw before it - and on a real corpus 52 of 245 boundary
-//! records, spread over 14 of 75 transcripts, name a `logicalParentUuid` that matches no
-//! `uuid` on ANY line of their own file, because the pre-compaction records were deleted
-//! from disk. Thirteen of those files end csift's walk on such a boundary. Everything
-//! physically above that point is a region csift cannot resolve, and it is not empty.
+//! FAIL-OPEN, always - and the reason is where the walk STOPS. Claude Code's walk ends at
+//! a `compact_boundary` (its `parentUuid` is null and the loader never reads
+//! `logicalParentUuid`), and csift's walk ends on the same record: every corpus boundary
+//! carries a null `parentUuid`, so the null-parent arm fires first and the walk's
+//! `logicalParentUuid` arm stays a guard for a shape with no specimens. Claim MISC-043
+//! measures what that guard would meet if it fired: 52 of 255 boundary records, over 14 of
+//! the 21 compacted transcripts, name a `logicalParentUuid` matching no `uuid` on ANY line
+//! of their own file. csift keeps the region above the terminating record and flags it
+//! instead of dropping it, which is the whole difference, and that region is not empty.
 //!
 //! So the walk's terminating record is a FLOOR: an off-chain record physically above it
 //! is `PreCut`, never `Abandoned` - csift declines to call a record abandoned in a region

@@ -64,11 +64,11 @@ use super::*;
         print, and what `--turn` / `--slice` index.\n\n\
         ACROSS A COMPACTION CUT, csift keeps going, and Claude Code does not. The harness's \
         loader stops its walk at a `compact_boundary` (its parentUuid is null), so on a \
-        resume the history above the cut is gone from the conversation; csift steps over \
-        the boundary through its `logicalParentUuid` and reconstructs anyway, because \
-        \"what the model saw at the time\" is the question this command answers. Such units \
-        are flagged, never hidden: JSON `survival` reads `pre-cut` for them and `live` \
-        otherwise.\n\n\
+        resume the history above the cut is gone from the conversation. csift's own walk \
+        stops there too. What differs is that csift reads the transcript in FILE ORDER and \
+        replays those turns anyway, because \"what the model saw at the time\" is the \
+        question this command answers. Such units are flagged, never hidden: JSON \
+        `survival` reads `pre-cut` for them and `live` otherwise.\n\n\
         DEDUP: a turn the NEWEST summary already quotes verbatim is flagged `(also in \
         summary)` and DEMOTED (selected only after non-dup turns); never silently dropped \
         (a false positive must not lose a real turn).\n\n\

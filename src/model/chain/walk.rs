@@ -3,18 +3,18 @@
 //!
 //! `parentUuid` ONLY - `logicalParentUuid` is never read by the loader, so a
 //! `compact_boundary` (whose own `parentUuid` is null) ends the reconstruction and every
-//! record above it is gone from the resumed conversation. csift's reading is forensic,
-//! not a replay, so it STEPS OVER that cut through the boundary's own
-//! `logicalParentUuid` - the predecessor the compaction recorded - and flags everything
-//! it then reaches as `PreCut`. Without that step a compacted transcript would report its
-//! whole history as unresolved.
+//! record above it is gone from the resumed conversation. csift's walk ends on that same
+//! record: the null-parent arm below breaks before any other field is consulted, and
+//! every corpus boundary carries a null `parentUuid` (260 of 260 over one projects root).
+//! What csift does differently sits AFTER the walk - it keeps the region above the
+//! terminating record and flags it `PreCut` instead of dropping it.
 //!
-//! The step can FAIL, and that failure is the reason the floor exists (claim MISC-043):
-//! the loader never reads the field, so nothing keeps its target on disk, and 52 of 245
-//! boundary records in a real corpus name a `logicalParentUuid` that matches no `uuid` on
-//! any line of their own file. `resolve` then yields nothing, the walk ends on the
-//! boundary, and everything physically above it is a region csift could not resolve -
-//! never abandoned, only `PreCut`.
+//! The `logicalParentUuid` arm below is a GUARD, not the path: it is reached only when a
+//! boundary's OWN `parentUuid` is non-null and resolves to no record, a shape with zero
+//! corpus specimens, and renaming the field on five compacted transcripts moves no output
+//! byte. Claim MISC-043 is what it would meet: 52 of 255 boundary records name a
+//! `logicalParentUuid` on no line of their own file. Either way the terminating record is
+//! a FLOOR: everything physically above it is unresolved - never abandoned, only `PreCut`.
 //!
 //! Repairs and rescues, each mirroring one loader hop: a parent uuid that names no
 //! record (or one already visited) falls back to the nearest UNVISITED record with the

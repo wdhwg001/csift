@@ -2,13 +2,13 @@
 //! its branch heads, which of them were ANSWERED, and which surviving opener replaced
 //! each one.
 //!
-//! Two guards keep the answer honest where csift's own forensic step could not land. A
-//! record physically ABOVE the walk's terminating record sits in a region the chain did
-//! not resolve - most often because the boundary csift tried to step over names a
-//! `logicalParentUuid` that is no longer on disk (claim MISC-043) - so it is `PreCut`,
-//! never `Abandoned`. And inside that blind region the measured same-parent opener rule
-//! still applies: an opener with a LATER opener sharing its `parentUuid` was recalled and
-//! re-sent, which is a fact about the two records alone and needs no chain.
+//! Two guards keep the answer honest where the walk could not reach. A record physically
+//! ABOVE the walk's terminating record sits in a region the chain did not resolve, usually
+//! because the walk ended on a `compact_boundary`, whose own `parentUuid` is null on every
+//! corpus specimen - so it is `PreCut`, never `Abandoned`. And inside that blind region the
+//! measured same-parent opener rule still applies: an opener with a LATER opener sharing
+//! its `parentUuid` was recalled and re-sent, which is a fact about the two records alone
+//! and needs no chain.
 
 use super::*;
 

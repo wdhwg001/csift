@@ -46,6 +46,21 @@ surface change bumps the PATCH.
   every record surface follows. Rare and worth knowing: of 3076 notification sections on the
   top-level transcripts of one corpus, 2 carry more than one `<task-id>`.
 
+### Documentation
+
+- **The compaction step-over is a guard, not the path the walk takes.** The maintenance
+  manual, the spec, the chain module comments, the `verbatim --help` text and four ledger
+  claims said csift steps over a compaction cut through the boundary's own
+  `logicalParentUuid`, but a `compact_boundary` carries a null `parentUuid` on every corpus
+  specimen (260 of 260), so the walk ends on the boundary and never consults that field,
+  and everything physically above the terminating record reads `pre-cut` from the floor
+  rule alone. Renaming the field on five real compacted transcripts of 9 to 21 MB leaves
+  the per-hit `survival` census, the `stats` chain totals and the search-summary
+  disclosures byte-identical, which is how the corrected reading was checked and why no
+  output moved. The coverage figure that justified the step (a median 9.4% against 46.5%)
+  measured a walk that consults the field at a null-parent boundary rather than the shipped
+  one, so it is out of the maintenance docs and recorded as a residue on the claim.
+
 ## [0.12.0] - 2026-09-09
 
 ### Changed (breaking)

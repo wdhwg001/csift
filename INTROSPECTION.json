@@ -83622,7 +83622,7 @@
       "id": "MISC-036",
       "area": "misc",
       "behavior": "The reconstruction walk reads `parentUuid` and nothing else (2.1.258 @166143634). A record with no parentUuid ends it, which is why a `compact_boundary` - whose own parentUuid is null - is an absolute cut: `logicalParentUuid` sits on that record but no reader on the load path consults it. Two repairs ride the walk: a cycle is detected by a visited set and stops it with a partial transcript (the message literal at @166143713), and a parent that names no record, or one already visited, falls back to the nearest UNVISITED record with the SAME `isSidechain` whose timestamp is at most 5000 ms earlier and closest (@166145374).",
-      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader. It then departs in ONE documented way: at a boundary it steps over the cut through that record's own `logicalParentUuid` and flags everything above as `pre-cut` rather than dropping it, because \"what the model saw at the time\" is the question a transcript archive answers. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record - off the chain in a region the walk did resolve - is skipped by a bare role selector.",
+      "depends": "csift walks the same links, guards the same cycle and implements the same 5 s repair, so its answer for which records the conversation still reaches matches the loader, and it ends on a `compact_boundary` for the same reason the loader does. It departs in ONE documented way, and the departure sits after the walk rather than inside it: csift keeps every record the walk did not reach and flags everything above the terminating record as `pre-cut` instead of dropping it, because \"what the model saw at the time\" is the question a transcript archive answers. Its walk does carry a `logicalParentUuid` arm, but that arm is a guard for a boundary whose OWN `parentUuid` is non-null and resolves to no record, and no corpus boundary has that shape. A pre-cut record is selectable by every selector exactly as before; only an ABANDONED record - off the chain in a region the walk did resolve - is skipped by a bare role selector.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
@@ -83635,7 +83635,7 @@
           "snippet": "fn repair(b: &mut Builder<'_>, i: usize) -> Option<usize> {\n    let now = b.recs[i].timestamp().and_then(crate::timez::epoch_ms)?;\n    let side = b.recs[i].is_sidechain();\n    if b.ts_sorted.is_none() {\n        let mut v: Vec<(i64, usize)> = (0..b.len())\n            .filter(|&k| b.admit[k] && !b.removed[k] && b.is_survivor(k))\n            .filter_map(|k| {\n                b.recs[k]\n                    .timestamp()\n                    .and_then(crate::timez::epoch_ms)\n                    .map(|ms| (ms, k))\n            })"
         }
       ],
-      "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line` and the `survival` values above and below it.",
+      "instrument": "Read the walk at 2.1.258 @166143634 (its cycle message at @166143713) and the 5 s repair at @166145374, and confirm no `logicalParentUuid` read appears in either. Then take a transcript with a compaction boundary and read csift's `boundary_cut_line` and the `survival` values above and below it. To confirm the arm csift carries is never taken, rename `\"logicalParentUuid\"` in a twin of that transcript and confirm the per-hit `survival` census and the `stats` chain totals do not move.",
       "located": {
         "claude_code": "2.1.258",
         "csift": "0.12.0",
@@ -83679,6 +83679,16 @@
           "observed": "The walk reads parentUuid only and the boundary ends it; csift reports the cut line and marks the history above it pre-cut rather than abandoned.",
           "rule": "One read per hop; one boundary_cut_line per transcript.",
           "note": "The forensic continuation across the cut is csift's own, and it is stated as such."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Read the walk at 2.1.258 @166143634 and the 5 s repair at @166145374, then read the arm order in csift's own walk and compared `csift search` and `csift stats` output on compacted transcripts against twins with `logicalParentUuid` renamed.",
+          "observed": "The loader reads `parentUuid` only. csift's walk takes the null-parent break before the arm that would read `logicalParentUuid`, and every boundary record in the corpus carries a null `parentUuid` (260 of 260), so that arm never runs. Five renamed twins of 9 to 21 MB produced `survival` censuses and chain totals identical to their originals.",
+          "rule": "One read per hop; one comparison per twin file.",
+          "note": "The claim said csift departs from the loader by stepping over the cut. The departure is the retention of what the walk does not reach, not a link followed across the boundary."
         }
       ]
     },
@@ -83999,7 +84009,7 @@
           "snippet": "fn assign_kinds(b: &Builder<'_>, out: &mut Chain, has_reply: &[bool]) {\n    let openers: Vec<usize> = (0..b.len())\n        .filter(|&i| {\n            matches!(out.survival(i), Survival::Abandoned { .. })\n                && b.opens[i]\n                && !out.replay_of.contains_key(&i)\n        })\n        .collect();\n    // The surviving opener per parent uuid, in ONE pass: a per-opener rescan would be\n    // O(records x abandoned openers), which on a session with hundreds of recalled drafts\n    // is the whole scan's cost over again.\n    let mut last_opener: HashMap<&str, usize> = HashMap::new();\n    for k in 0..b.len() {\n        if out.survival(k).selectable()"
         }
       ],
-      "instrument": "Run csift's chain rule (`Chain::build`) over every top-level transcript under the projects root and count, one observation per record: records carrying two or more distinct conversation children, and pairs of turn-opening user records sharing a parentUuid, splitting the earlier member of each pair by whether an assistant record hangs below it and by whether it is on the final chain. The rule is the loader hops mirrored with exactly two differences, both of which widen what is counted rather than narrow it: csift crosses a compaction cut through the boundary's logicalParentUuid (the loader never reads that field, so its walk stops there), and csift keeps every record the walk does not reach, flagged, where the loader drops it.",
+      "instrument": "Run csift's chain rule (`Chain::build`) over every top-level transcript under the projects root and count, one observation per record: records carrying two or more distinct conversation children, and pairs of turn-opening user records sharing a parentUuid, splitting the earlier member of each pair by whether an assistant record hangs below it and by whether it is on the final chain. The rule is the loader hops mirrored with exactly ONE difference, and it widens what is counted rather than narrowing it: csift keeps every record the walk does not reach, flagged, where the loader drops it. The walk itself stops where the loader's stops, a `compact_boundary` carrying a null parentUuid, so no link is followed across a cut.",
       "located": {
         "claude_code": "2.1.258",
         "csift": "0.12.0",
@@ -84022,6 +84032,16 @@
           "observed": "2,645 branch points over 44 files; 910 shared-parent opener pairs over 32 files = 858 without an assistant descendant, 52 with one, 0 on the final chain. Scope: 75 top-level transcripts under the projects root (subagent transcripts excluded), 74 of them carrying at least one conversation record, 0 unparsable lines.",
           "rule": "A branch point is a conversation anchor with two or more DISTINCT conversation children; a pair is one earlier member of an opener group sharing a non-null parentUuid.",
           "note": "The zero on the chain side is what makes the axis safe to ship over the draft rule."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Re-read the chain rule this census runs against the loader hops and tested whether its `logicalParentUuid` arm can be reached at all, by censusing `parentUuid` on every `compact_boundary` record under the projects root.",
+          "observed": "260 of 260 boundary records carry a null `parentUuid`, so the arm is unreachable on this corpus and the census walk stops at every boundary exactly as the loader's does. The branch-point and opener-pair counts are unaffected and stand as recorded.",
+          "rule": "One observation per boundary record.",
+          "note": "The instrument described two differences from the loader. Only one is real, the retention of unreached records; the crossing was never taken."
         }
       ]
     },
@@ -84221,8 +84241,8 @@
     {
       "id": "MISC-043",
       "area": "misc",
-      "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The loader never reads the field - its walk follows `parentUuid`, which the boundary carries as null, so the reconstruction simply ends there - and nothing on the write path keeps the named record alive: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 75 uuid-named top-level transcripts under the projects root, one observation per boundary record: 245 `compact_boundary` records, of which 52 carry a `logicalParentUuid` matching no `uuid` on ANY line of their own file, spread over 14 files; on 13 of those files a walk that tries to cross such a boundary ends on it.",
-      "depends": "csift does NOT stop at a compaction cut: it steps over the boundary through `logicalParentUuid` and flags what it then reads `PreCut`, because an archive is asked what the model had read at the time. That step is csift's own, so its failure is csift's own too - and it is the reason the survival axis carries a FLOOR. When the named record is absent the walk ends on the boundary and every record physically above it sits in a region csift could not resolve, so it is `PreCut` and never `Abandoned`; the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the step landing. The step is still worth taking: over the 21 compacted transcripts in the same corpus, the share of a file's conversation records the walk reaches is a median 9.4% (mean 16.9%, 11 of 21 files under 10%) without the step and a median 46.5% (mean 54.6%, 2 of 21 under 10%) with it.",
+      "behavior": "A `compact_boundary` record's `logicalParentUuid` names the record the compaction re-anchored onto, and that record is frequently NOT on disk any more. The boundary's own `parentUuid` is null on every specimen (260 of 260 boundary records over every transcript under one projects root), so a reader that walks `parentUuid` ends on the boundary whatever the logical parent says, and the loader never reads the field. Nothing on the write path keeps the named record alive either: the same relink pass that computes the anchor DELETES every pre-boundary entry outside the preserved set from the map it is building (2.1.258 @166142644, the writer MISC-037 already cites), and the armed local GC rewrites the file on compaction (MISC-020). Censused over 77 uuid-named top-level transcripts under the projects root, one observation per boundary record: 255 `compact_boundary` records across the 21 compacted files, of which 52 carry a `logicalParentUuid` matching no `uuid` on ANY line of their own file, spread over 14 files.",
+      "depends": "csift does not stop READING at a compaction cut, and it does not cross one either: its walk ends on the boundary exactly where the loader's does, because the null `parentUuid` arm fires before any other field is consulted. The difference sits after the walk. csift keeps the region above the terminating record and flags it `PreCut` instead of dropping it, because an archive is asked what the model had read at the time. That terminating record is the FLOOR the survival axis carries: an off-chain record physically above it is `PreCut` and never `Abandoned`, and the measured same-parent opener rule still marks a recalled draft inside that region, so draft detection does not depend on the chain reaching further. The walk's `logicalParentUuid` arm is a guard for one shape only, a boundary whose own `parentUuid` is non-null and resolves to no record, and no corpus boundary has that shape. This claim records what that guard would meet if it ever fired, which is why the dangling census is worth keeping even though no shipped answer turns on it.",
       "code": [
         {
           "path": "src/model/chain/walk.rs",
@@ -84235,7 +84255,7 @@
           "snippet": "    if b.removed[i] || i < floor {\n        return Survival::PreCut;\n    }\n    Survival::Abandoned { root: i }"
         }
       ],
-      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set. Counting rule: one observation per boundary record; a file counts once if it holds at least one dangling boundary. For the coverage split, run the walk twice per compacted file - once following `logicalParentUuid` at a boundary and once not - and report reached conversation records over conversation records in the file, a conversation record being a `user` or `assistant` line with a string uuid counted once at its last line.",
+      "instrument": "Over every uuid-named top-level transcript under the projects root, collect the set of every `uuid` value appearing on ANY line of the file, then for each `type:\"system\"` record with `subtype:\"compact_boundary\"` test whether its `logicalParentUuid` is in that set and record whether its own `parentUuid` is null. Counting rule: one observation per boundary record; a file counts once if it holds at least one dangling boundary. To test whether the field reaches any shipped answer, build a twin of a compacted transcript with `\"logicalParentUuid\"` renamed and compare, twin against original, the per-hit `survival` counts and the trailing-summary fields of `csift search '' <file> --format json` and the chain totals of `csift stats <file> --format json`.",
       "located": {
         "claude_code": "2.1.258",
         "csift": null,
@@ -84249,7 +84269,8 @@
         "Which writer removed each named record is not pinned per specimen: the relink pass's pre-boundary deletion (2.1.258 @166142644) and the armed local GC (MISC-020) are both traced producers of pre-boundary removal, but nothing in a transcript says which one ran. Closing it needs a live trial that compacts a session with the GC armed and with it disarmed and re-runs the census on both files."
       ],
       "residue": [
-        "Whether a build ever wrote a boundary whose logical parent was absent at write time, rather than deleted afterwards, is a question for the historical builds: bisect on the relink function's literal."
+        "Whether a build ever wrote a boundary whose logical parent was absent at write time, rather than deleted afterwards, is a question for the historical builds: bisect on the relink function's literal.",
+        "The coverage split this claim once carried - the share of a file's conversation records a walk reaches with and without consulting `logicalParentUuid` at a boundary - measures a walk that consults the field where the shipped one stops, so it describes what the guard would reach and not any csift output. Re-running it needs a patched walk built beside the shipped one, which is why the number is no longer carried in the maintenance documents."
       ],
       "producer_chain": [
         {
@@ -84277,6 +84298,16 @@
           "observed": "245 compact_boundary records over 75 top-level transcripts; 52 of them name a logicalParentUuid absent from every line of their own file, across 14 files; 13 files end their walk on such a boundary. Three of those files: 32 boundaries / 3 dangling / 15 crossings / 33.6% of conversation records reached; 11 / 3 / 0 crossings / 3.2%; 6 / 1 / 1 crossing / 23.0% where the same file reaches 9.4% with no step-over. Over the 21 compacted files, coverage without the step-over is a median 9.4% and with it a median 46.5%.",
           "rule": "One observation per boundary record for the dangling count; a file counts once if it holds at least one. Coverage is reached conversation records over conversation records in the file, a conversation record being a user or assistant line with a string uuid counted once at its last line.",
           "note": "This is the fact behind the survival axis floor: the unresolvable region is produced by csift's own forensic step over a cut, not by the record set csift reads."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Ran the dangling-boundary census over every uuid-named top-level transcript under the projects root, added a `parentUuid` census over every transcript under it, then built renamed twins (`\"logicalParentUuid\"` to `\"logicalParentUuiX\"`) of five compacted transcripts of 9 to 21 MB and compared `csift search '' <file> --format json` and `csift stats <file> --format json` between each twin and its original.",
+          "observed": "260 of 260 `compact_boundary` records carry `\"parentUuid\":null`, none a non-null value and none an absent key. Restricted to the 77 uuid-named top-level transcripts: 255 boundary records over the 21 compacted files, 52 of them naming a `logicalParentUuid` absent from every line of their own file, across 14 files. On all five twins the per-hit `survival` counts, the summary `boundary_cut_line`, `abandoned_records`, `rewound_turns`, `replay_copies` and `superseded_drafts`, and the `stats` `turns`, `abandoned_turns`, `rewound_turns` and `replay_copies` were identical to the original's.",
+          "rule": "One observation per boundary record for both censuses; a file counts once if it holds at least one dangling boundary. One comparison per twin file, a difference in any compared field counting as a difference.",
+          "note": "The text said the step over the cut was csift's path and that the step's failure was the reason for the floor. The walk ends on the boundary before that field is read, so the floor follows from the null `parentUuid` alone and the `logicalParentUuid` arm is a guard with no corpus specimen. The dangling census is unchanged in kind and re-counted on the current corpus; the coverage split it carried moves to residue because it measures a walk that consults the field where the shipped one stops."
         }
       ]
     },
@@ -84598,7 +84629,7 @@
       "id": "REC-102",
       "area": "record-model",
       "behavior": "A branch the conversation left behind stays on disk in full, and it is not small. Census over 75 top-level transcripts (834,912 lines, 672,983 uuid-bearing records, 0 unparsable): 1,481 abandoned roots in 44 of the 75 files - 1,307 user and 174 assistant - whose subtrees hold 11,142 records (1,912 user, 716 assistant, 8,391 attachment, 123 system) carrying 422 `tool_use` blocks. Of the 1,307 user roots, 57 have an assistant descendant (a branch that drew a reply before the conversation moved elsewhere) and 1,250 have none (a recalled prompt). The shape follows from the rewind writing nothing: the array is truncated in memory and the next prompt is chained onto the same parent, so the old branch simply stops being extended, with every one of its records still present, still addressable, and still the true account of what hit the disk at the time.",
-      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` when `parentUuid` is null - csift's forensic reading, NOT Claude Code's rule: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, and of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader.",
+      "depends": "csift walks a transcript in FILE ORDER, so an abandoned record is counted, matched, addressable and attributable exactly like any other: a tool call made on a branch that was later left DID run, and a file it wrote is on disk, so `files` and `recover` must replay file order rather than a surviving chain. The census's own surviving chain follows `logicalParentUuid` when `parentUuid` is null, which is the census walk's rule and neither Claude Code's nor csift's: the loader's walk reads `parentUuid` only and stops at a boundary's null parent, of the 12 occurrences of `logicalParentUuid` in the 2.1.258 executable none is a load-path reader, and csift's own walk stops on that same record and flags what sits above it `pre-cut` rather than calling it abandoned. So the census partitions a compacted file differently from the shipped axis, and its counts are a statement about record shapes on disk, not a reproduction of the `survival` values csift prints.",
       "code": [
         {
           "path": "src/show/branch.rs",
@@ -84655,6 +84686,16 @@
           "observed": "75 files, 834,912 lines, 672,983 uuid-bearing records, 0 unparsable, 210,956 conversation records. 1,481 abandoned roots in 44 files (user 1,307, assistant 174); subtrees 11,142 records (attachment 8,391, user 1,912, assistant 716, system 123) with 422 tool_use blocks; user roots with an assistant descendant 57, without 1,250. The loader walk reads `Dr.parentUuid` only, guarded by `tengu_transcript_parent_cycle`; of 12 `logicalParentUuid` occurrences, 7 are writes, 4 are the fork copier's uuid remap and 1 is a schema name table - none continues a walk.",
           "rule": "One record per parsed line carrying a non-empty string uuid; a conversation record is type user or assistant; an abandoned root is a conversation record off the surviving chain whose parent uuid is on it, both uuids occupying exactly one line; a subtree is the downward parentUuid closure of a root, each uuid counted once, chain members excluded.",
           "note": "The census's logicalParentUuid fallback is csift's forensic reading and is stated as such; Claude Code's own walk has no such step."
+        },
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.1",
+          "date": "2026-09-11",
+          "verdict": "refined",
+          "instrument": "Compared the census walk's rule with the shipped chain walk: censused `parentUuid` on every `compact_boundary` record under the projects root and read the null-parent arm of csift's walk.",
+          "observed": "Every boundary carries a null `parentUuid` (260 of 260), so the shipped walk ends on the boundary while the census walk continues through `logicalParentUuid`. The abandoned-root counts stand as a census of record shapes on disk and are not the `survival` partition csift prints.",
+          "rule": "One observation per boundary record.",
+          "note": "The text attributed the census walk's step to csift. The step belongs to the census instrument alone."
         }
       ]
     },
