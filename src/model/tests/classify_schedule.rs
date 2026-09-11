@@ -118,6 +118,23 @@ fn classify_scheduled_fire_prompt() {
         typed.classify(&ClassifyCtx::top_level()),
         vec![Class::UserMessage]
     );
+    // The SAME law where it actually bites: the submit path stamps `system` on a
+    // non-isMeta submission too (its other branch tests the caller, not the author), so a
+    // record carrying that value with NO isMeta is still the operator's and keeps its turn.
+    // isMeta is the half that protects a person, exactly as on the resume-prompt leaf.
+    let system_no_meta = parse(
+        r#"{"type":"user","promptSource":"system","message":{"role":"user","content":"reply with the single word PEONY and nothing else"}}"#,
+    );
+    assert!(!system_no_meta.is_scheduled_fire_prompt());
+    assert_eq!(
+        system_no_meta.classify(&ClassifyCtx::top_level()),
+        vec![Class::UserMessage]
+    );
+    // And the type half: only a `type:"user"` record is a submitted prompt at all.
+    let not_a_user = parse(
+        r#"{"type":"system","subtype":"informational","isMeta":true,"promptSource":"system","content":"the remote control disconnected"}"#,
+    );
+    assert!(!not_a_user.is_scheduled_fire_prompt());
 }
 
 #[test]
