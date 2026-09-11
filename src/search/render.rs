@@ -50,7 +50,13 @@ pub(crate) fn render_label(h: &Hit) -> String {
         (crate::model::Survival::Abandoned { .. }, false, _) => " [abandoned]".to_string(),
         _ => String::new(),
     };
-    let nd = format!("{nd}{sv}");
+    // The harness's own `toolDenialKind`: a rejected call's tool_result is an ERROR like
+    // any other, and this says WHY it never ran. Display-only, like the markers above.
+    let dk = match (class, h.denial_kind.as_deref()) {
+        (Class::AgentToolResult, Some(kind)) => format!(" [denied: {kind}]"),
+        _ => String::new(),
+    };
+    let nd = format!("{nd}{sv}{dk}");
     let nd = nd.as_str();
     match (class, h.pair) {
         (Class::AgentToolUse | Class::AgentToolResult, Some(Pairing::Paired)) => {

@@ -212,6 +212,10 @@ pub(crate) fn collect_record_hits(
         .map(str::to_string);
     let attachment_type = rec.attachment_type();
     let version = rec.version.clone();
+    // The harness's own reason a tool call did not run, stamped on the record that
+    // carries the rejection's tool_result. Per-record like `delivery`, because the
+    // field is top-level and applies to the whole carrier.
+    let denial_kind = rec.tool_denial_kind.clone();
     // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).
     let queue_operation = if rec.is_type("queue-operation") {
         rec.operation.clone()
@@ -282,6 +286,7 @@ pub(crate) fn collect_record_hits(
                 attachment_type: attachment_type.clone(),
                 version: version.clone(),
                 is_error: result_err,
+                denial_kind: denial_kind.clone(),
                 direction: dir,
                 tool_use_id: tuid,
                 pair: None,

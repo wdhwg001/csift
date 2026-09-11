@@ -95,6 +95,17 @@ pub struct Record {
     #[serde(default, rename = "isVirtual")]
     pub is_virtual: Option<bool>,
 
+    /// Why a tool call did not run, stamped top-level beside `toolUseResult` on the
+    /// user record the harness synthesises for a call it refused. Four values are
+    /// written: `user-rejected` (a human answered no at the prompt), `interrupted`
+    /// (the turn was aborted), `cancelled` (the call was moved to the background) and
+    /// `permission-rule` (a hook denied it). The classifier's own REASON - the sentence
+    /// naming which removal arm fired - is rendered into the prompt only and never
+    /// reaches disk, so a transcript can show THAT a call was refused and never which
+    /// reason tail fired. Open set, kept as a String; additive and tolerant.
+    #[serde(default, rename = "toolDenialKind")]
+    pub tool_denial_kind: Option<String>,
+
     /// True on the assistant record Claude Code fabricates in place of a failed API
     /// call. Paired with `message.model == "<synthetic>"` it is the request
     /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is

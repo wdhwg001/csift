@@ -336,3 +336,68 @@ fn json_carries_delivered_on_every_hit_and_leaves_labels_alone() {
     }
     assert!(seen >= 5, "expected the whole fixture, saw {seen} hit(s)");
 }
+
+#[test]
+fn a_rejected_tool_call_says_which_denial_kind_the_harness_stamped() {
+    // A refused call leaves an errored `tool_result` whose carrier records the harness's
+    // own `toolDenialKind`. The classifier's REASON never reaches disk, so this field is
+    // the whole on-disk answer to why the call did not run.
+    let enc = "-Users-dev-example-project";
+    let sess = "7f6e5d4c-3b2a-4190-8f7e-6d5c4b3a2190";
+    let h = Home::new();
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"11111111-1111-4111-8111-111111111111","parentUuid":null,"timestamp":"2026-06-26T09:00:00.000Z","message":{"role":"user","content":"clear the scratch dir"}}"#,
+            "\n",
+            r#"{"type":"assistant","uuid":"22222222-2222-4222-8222-222222222222","parentUuid":"11111111-1111-4111-8111-111111111111","timestamp":"2026-06-26T09:00:10.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_reject1","name":"Bash","input":{"command":"rm -rf $SCRATCH/*"}}]}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"33333333-3333-4333-8333-333333333333","parentUuid":"22222222-2222-4222-8222-222222222222","timestamp":"2026-06-26T09:04:00.000Z","toolUseResult":"User rejected tool use","toolDenialKind":"user-rejected","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_reject1","is_error":true,"content":"The user doesn't want to proceed with this tool use."}]}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"44444444-4444-4444-8444-444444444444","parentUuid":"33333333-3333-4333-8333-333333333333","timestamp":"2026-06-26T09:05:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_plain1","content":"ordinary output"}]}}"#,
+            "\n"
+        ),
+    );
+
+    let txt = h.run(&["search", "doesn't want to proceed", &format!("@{sess}")]);
+    assert!(txt.success, "stderr: {}", txt.stderr);
+    assert!(
+        txt.stdout.contains("[denied: user-rejected]"),
+        "the label zone names the denial kind:\n{}",
+        txt.stdout
+    );
+
+    let js = h.run(&["search", "", &format!("@{sess}"), "--format", "json"]);
+    assert!(js.success, "stderr: {}", js.stderr);
+    let mut denied = 0;
+    let mut plain = 0;
+    for line in js.stdout.lines() {
+        let v: serde_json::Value = serde_json::from_str(line).expect("jsonl");
+        for hit in v["hits"].as_array().into_iter().flatten() {
+            match hit["denial_kind"].as_str() {
+                Some("user-rejected") => denied += 1,
+                Some(other) => panic!("unexpected denial kind {other}: {hit}"),
+                None => plain += 1,
+            }
+        }
+    }
+    assert_eq!(denied, 1, "exactly the rejected carrier is marked");
+    assert!(plain >= 2, "every other hit carries a null denial_kind");
+
+    // A denial is an ERROR result, so the `result` census keeps its two keys.
+    let census = h.run(&[
+        "search",
+        "",
+        &format!("@{sess}"),
+        "--count-by",
+        "result",
+        "--format",
+        "json",
+    ]);
+    assert!(census.success, "stderr: {}", census.stderr);
+    assert!(
+        census.stdout.contains("\"key\":\"error\"") && census.stdout.contains("\"key\":\"ok\""),
+        "the result axis is unchanged by the denial field:\n{}",
+        census.stdout
+    );
+}

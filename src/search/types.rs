@@ -130,6 +130,13 @@ pub struct Hit {
     /// `[error]` decoration, JSON `is_error`, and the `--count-by result` axis (pairing
     /// answers "did a result come back"; this answers "was it good").
     pub is_error: Option<bool>,
+    /// The harness's own `toolDenialKind` on the record that carries this tool_result:
+    /// `user-rejected` (a human answered no), `interrupted` (the turn was aborted),
+    /// `cancelled` (the call was backgrounded) or `permission-rule` (a hook denied it).
+    /// The REASON a classifier gave is rendered into the prompt only and never reaches
+    /// disk, so this field is the whole forensic answer to "why did that call not run".
+    /// `None` on every record that carries no such field.
+    pub denial_kind: Option<String>,
     /// `from ⇨ to` comm direction ([`Record::direction`]) when the hit is `agent.communication.*`
     /// (GOLD §4); `None` otherwise. Rendered as `<from> ⇨ <to>`, JSON `from`/`to`.
     pub direction: Option<(String, String)>,

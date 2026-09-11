@@ -26,6 +26,7 @@ pub(crate) fn unlabeled_hit(rec: &Record, matcher: &Matcher, excerpt_max: usize)
         attachment_type: rec.attachment_type(),
         version: rec.version.clone(),
         is_error: None,
+        denial_kind: rec.tool_denial_kind.clone(),
         direction: None,
         tool_use_id: None,
         pair: None,

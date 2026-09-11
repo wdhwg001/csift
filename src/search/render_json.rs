@@ -107,6 +107,7 @@ pub(crate) fn hit_json(ex: &Exchange, h: &Hit) -> serde_json::Value {
         // non-tool hit.
         "pairing": pairing,
         "is_error": h.is_error,
+        "denial_kind": h.denial_kind,
         "tool_use_id": h.tool_use_id,
         // v0.10.0 queue facts (a `user.queued` hit); null on every other hit.
         "queue_operation": h.queue_operation,

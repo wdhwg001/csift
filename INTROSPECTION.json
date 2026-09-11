@@ -4291,7 +4291,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "249-256",
+          "lines": "260-267",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,\n\n    /// `turn_duration`: workflows still running at turn end. Optional (~5%).\n    #[serde(default, rename = \"pendingWorkflowCount\")]\n    pub pending_workflow_count: Option<serde_json::Value>,"
         },
         {
@@ -7192,12 +7192,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "195-196",
+          "lines": "206-207",
           "snippet": "    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "378-380",
+          "lines": "389-391",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,\n    pub(crate) status: Option<serde_json::Value>,"
         }
       ],
@@ -9969,7 +9969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "365-371",
+          "lines": "376-382",
           "snippet": "/// Typed probe of the SMALL `toolUseResult` fields the hot paths consult (see\n/// [`Record::tur_probe`]). Every field is an `Option<Value>` - a tiny scalar/map tree\n/// that accepts ANY JSON type, so one oddly-typed field can never fail the whole probe\n/// (each accessor then applies the same `as_str`/`as_bool`/`as_object` coercion the\n/// former `.get(\u2026)` chains did - byte-identical semantics). Crucially, the blob's HUGE\n/// unlisted values (file bodies, stdout echoes, structured patches) are skipped by\n/// serde's ignore path without ever being allocated."
         }
       ],
@@ -13101,7 +13101,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "423",
+          "lines": "434",
           "snippet": "/// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible"
         },
         {
@@ -14753,7 +14753,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "141-146",
+          "lines": "152-157",
           "snippet": "    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate\n    /// compaction points and inspect what each clipped. Absent on every other record. Tolerant.\n    #[serde(default, rename = \"compactMetadata\")]\n    pub compact_metadata: Option<serde_json::Value>,\n"
         },
         {
@@ -14899,7 +14899,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "176-181",
+          "lines": "187-192",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         },
         {
@@ -18919,7 +18919,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "293-296",
+          "lines": "304-307",
           "snippet": "    /// The sidecar pairing KEY (tool_use_id / elicitation_id / MCP server) - groups a\n    /// `pending` with its later `resolved`. `None` on a native record.\n    #[serde(default, rename = \"csiftKey\")]\n    pub csift_key: Option<String>,"
         }
       ],
@@ -20061,7 +20061,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "282-286",
+          "lines": "293-297",
           "snippet": "    /// The sidecar record's pairing PHASE - `\"pending\"` (an unanswered elicitation,\n    /// missing from the native transcript) or `\"resolved\"` (a lightweight close marker\n    /// used only for pairing). Read by [`crate::elicitation`]. `None` on a native record.\n    #[serde(default, rename = \"csiftPhase\")]\n    pub csift_phase: Option<String>,"
         },
         {
@@ -21979,7 +21979,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "207-215",
+          "lines": "218-226",
           "snippet": "    /// `file-history-snapshot` payload (a top-level sibling). Carries\n    /// `{messageId, trackedFileBackups: {<path>: {backupFileName, version, backupTime}}}`.\n    /// Read only by `recover` to know a disk backup EXISTED for a path at a time\n    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant.\n    #[serde(default)]\n    pub snapshot: Option<serde_json::Value>,"
         }
       ],
@@ -22099,7 +22099,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "210-213",
+          "lines": "221-224",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -22194,7 +22194,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "217-225",
+          "lines": "228-236",
           "snippet": "    /// `file-history-delta` (v0.10.0): the ONE path this delta line tracks, beside the\n    /// `backup` object below. Absent everywhere else. Additive + tolerant.\n    #[serde(default, rename = \"trackingPath\")]\n    pub tracking_path: Option<String>,\n\n    /// `file-history-delta` `backup` object: `{backupFileName, version, backupTime,\n    /// realParentDir?}`. Kept as a `Value` (tiny); read by the promoted-leaf render.\n    #[serde(default)]\n    pub backup: Option<serde_json::Value>,"
         },
         {
@@ -35268,7 +35268,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "378-379",
+          "lines": "389-390",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -36614,7 +36614,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "210-213",
+          "lines": "221-224",
           "snippet": "    /// (a coverage annotation). `backupFileName` is usually present (measured 83-98%\n    /// across real corpora), but the store it names is PRUNED and its content has no\n    /// transcript anchor, so it is never used to fabricate content; `recover\n    /// --list-backups` lists the store itself. Additive + tolerant."
         }
       ],
@@ -41123,7 +41123,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "465-467",
+          "lines": "470-472",
           "snippet": "                    // Signature-only split (narration vs reasoning); adjacency is never\n                    // consulted, and a mixed multi-block record splits per BLOCK.\n                    let class = crate::model::thinking_block_class(signature.as_deref());"
         },
         {
@@ -41224,7 +41224,7 @@
       "code": [
         {
           "path": "src/search/render.rs",
-          "lines": "70-73",
+          "lines": "76-79",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -45850,7 +45850,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "227-231",
+          "lines": "238-242",
           "snippet": "    /// `queue-operation` (v0.10.0): the queue event - `enqueue` | `dequeue` | `remove` |\n    /// `popAll` (open set; measured those four). The human-typed (or automation) text\n    /// rides top-level `content` on every operation except `dequeue`.\n    #[serde(default)]\n    pub operation: Option<String>,"
         }
       ],
@@ -46102,7 +46102,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "233-237",
+          "lines": "244-248",
           "snippet": "    /// `queue-operation` `remove` reason - measured values `absorbed_mid_turn` and\n    /// `delivered_to_agent`, both STRUCTURAL evidence that the queued text was\n    /// consumed. Absent on every other line. Open set, kept verbatim.\n    #[serde(default)]\n    pub reason: Option<String>,"
         }
       ],
@@ -46303,12 +46303,12 @@
       "code": [
         {
           "path": "src/search/hits.rs",
-          "lines": "215-225",
+          "lines": "219-229",
           "snippet": "    // v0.10.0: the queue facts ride only a queue-operation record (None elsewhere).\n    let queue_operation = if rec.is_type(\"queue-operation\") {\n        rec.operation.clone()\n    } else {\n        None\n    };\n    let queue_reason = if rec.is_type(\"queue-operation\") {\n        rec.reason.clone()\n    } else {\n        None\n    };"
         },
         {
           "path": "src/search/render.rs",
-          "lines": "75-83",
+          "lines": "81-89",
           "snippet": "    // v0.10.0: a queued line names its queue event (and a remove's reason) in the label\n    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -47020,7 +47020,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "249-252",
+          "lines": "260-263",
           "snippet": "    /// `turn_duration`: background agents still running at turn end (the REPL's\n    /// \"Waiting for N agents\" line). Optional; measured on ~3% of records.\n    #[serde(default, rename = \"pendingBackgroundAgentCount\")]\n    pub pending_background_agent_count: Option<serde_json::Value>,"
         },
         {
@@ -48574,7 +48574,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "267-273",
+          "lines": "278-284",
           "snippet": "    /// `stop_hook_summary`: the hooks that errored (an array; empty on most records).\n    #[serde(default, rename = \"hookErrors\")]\n    pub hook_errors: Option<serde_json::Value>,\n\n    /// `stop_hook_summary`: true when a Stop hook blocked the turn from ending.\n    #[serde(default, rename = \"preventedContinuation\")]\n    pub prevented_continuation: Option<bool>,"
         }
       ],
@@ -51000,12 +51000,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "342-347",
+          "lines": "353-358",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "353-356",
+          "lines": "364-367",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -51132,12 +51132,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "353-356",
+          "lines": "364-367",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "342-347",
+          "lines": "353-358",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -52350,7 +52350,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "183-185",
+          "lines": "194-196",
           "snippet": "    /// The role-bearing message payload (present on user/assistant records).\n    #[serde(default)]\n    pub message: Option<Message>,"
         }
       ],
@@ -52501,7 +52501,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "136-143",
+          "lines": "147-154",
           "snippet": "    /// `system` record inline content (e.g. away_summary text, or the `compact_boundary`\n    /// `\"Conversation compacted \u2026\"` line). Read by `search` as the message-less fallback text (D7).\n    #[serde(default)]\n    pub content: Option<serde_json::Value>,\n\n    /// `compact_boundary` metrics (\u00a73.5 / D7): `{trigger, preTokens, postTokens, durationMs}` on a\n    /// `type:\"system\"`/`subtype:\"compact_boundary\"` record. Kept RAW; `search` renders it as a\n    /// readable excerpt (`record_raw_text`) so `-t harness.compaction.boundary` can enumerate"
         }
       ],
@@ -52838,7 +52838,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "333-335",
+          "lines": "344-346",
           "snippet": "    /// `Record::tool_use_result`): only `stats` reads it, via [`Message::token_usage`].\n    #[serde(default)]\n    pub usage: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53089,12 +53089,12 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "417",
+          "lines": "428",
           "snippet": "    Thinking {"
         },
         {
           "path": "src/model/record.rs",
-          "lines": "439-444",
+          "lines": "450-455",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         },
         {
@@ -53201,7 +53201,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "439-444",
+          "lines": "450-455",
           "snippet": "    ToolResult {\n        #[serde(default, rename = \"tool_use_id\")]\n        tool_use_id: Option<String>,\n        /// String OR array of {type:text,text}/{type:image} - keep raw.\n        #[serde(default)]\n        content: Option<serde_json::Value>,"
         }
       ],
@@ -53290,7 +53290,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "423-425",
+          "lines": "434-436",
           "snippet": "    /// A `redacted_thinking` block - encrypted/opaque reasoning CC emits in place of a visible\n    /// `thinking` block (no readable text, only an opaque `data` payload). Classified\n    /// `agent.thinking` exactly like a normal thinking block"
         },
         {
@@ -53391,7 +53391,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "194-196",
+          "lines": "205-207",
           "snippet": "    /// tree on demand via [`Record::tool_use_result_value`].\n    #[serde(default, rename = \"toolUseResult\")]\n    pub tool_use_result: Option<Box<serde_json::value::RawValue>>,"
         }
       ],
@@ -53473,7 +53473,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "187-191",
+          "lines": "198-202",
           "snippet": "    /// Structured echo on tool-result carriers (\u00a74.6). Kept as UNPARSED raw JSON text\n    /// (`Box<RawValue>`) rather than a built `Value` tree: this blob routinely carries\n    /// the full file/output content a tool returned (\u224820-25% of a candidate line's\n    /// bytes), and eagerly tree-building it for EVERY carrier dominated the parse cost\n    /// of every scanning subcommand."
         }
       ],
@@ -53575,7 +53575,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "378-379",
+          "lines": "389-390",
           "snippet": "    #[serde(rename = \"persistedOutputPath\")]\n    pub(crate) persisted_output_path: Option<serde_json::Value>,"
         }
       ],
@@ -53677,7 +53677,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "198-201",
+          "lines": "209-212",
           "snippet": "    /// Top-level `attachment` payload (a sibling of `message`, not a content block).\n    /// Real records carry attachments for hook output, `edited_text_file` external\n    /// edits, `file` snapshots, etc. Kept as UNPARSED raw JSON text (same rationale as\n    /// `tool_use_result` - attachments embed whole file snapshots)"
         },
         {
@@ -53969,7 +53969,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "319-324",
+          "lines": "330-335",
           "snippet": "    /// `stop_reason` on assistant messages (`tool_use` / `end_turn` / `stop_sequence` /\n    /// `max_tokens` / `refusal` / null). Persisted per record; trustworthy on the MAIN\n    /// lane (measured 0.0-0.3% null), NORMALLY null mid-message on subagent lanes (which\n    /// flush per content block). Read by the live-truth surfaces. Additive + tolerant.\n    #[serde(default, rename = \"stop_reason\")]\n    pub stop_reason: Option<String>,"
         },
         {
@@ -54067,7 +54067,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "326-330",
+          "lines": "337-341",
           "snippet": "    /// The API message id (`msg_...`). One API message spans MULTIPLE records (CC\n    /// writes one line per content block and repeats the message envelope on each),\n    /// so this is the usage-dedupe key for `stats`. Additive + tolerant.\n    #[serde(default)]\n    pub id: Option<String>,"
         },
         {
@@ -54937,7 +54937,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "176-181",
+          "lines": "187-192",
           "snippet": "    /// `logicalParentUuid` (top-level on `compact_boundary` system records): the TRUE\n    /// predecessor record the compaction re-links to (`parentUuid` is null on a\n    /// boundary) - harness ground truth for the post-compaction chain. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"logicalParentUuid\")]\n    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -55421,7 +55421,7 @@
         },
         {
           "path": "src/search/hits.rs",
-          "lines": "319-323",
+          "lines": "324-328",
           "snippet": "    let sections = if opener_override.is_some() {\n        Vec::new()\n    } else {\n        rec.record_text_sections(ctx)\n    };"
         }
       ],
@@ -60120,7 +60120,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "372-377",
+          "lines": "383-388",
           "snippet": "#[derive(Debug, Default, Deserialize)]\n#[serde(default)]\npub(crate) struct TurProbe {\n    pub(crate) r#type: Option<serde_json::Value>,\n    #[serde(rename = \"filePath\")]\n    pub(crate) file_path: Option<serde_json::Value>,"
         }
       ],
@@ -64664,7 +64664,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "181",
+          "lines": "192",
           "snippet": "    pub logical_parent_uuid: Option<String>,"
         }
       ],
@@ -65262,7 +65262,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "342-347",
+          "lines": "353-358",
           "snippet": "pub struct TokenUsage {\n    pub input_tokens: Option<u64>,\n    pub output_tokens: Option<u64>,\n    pub cache_read_input_tokens: Option<u64>,\n    pub cache_creation_input_tokens: Option<u64>,\n}"
         }
       ],
@@ -65427,7 +65427,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "353-356",
+          "lines": "364-367",
           "snippet": "    pub fn token_usage(&self) -> Option<TokenUsage> {\n        let raw = self.usage.as_ref()?;\n        serde_json::from_str(raw.get()).ok()\n    }"
         }
       ],
@@ -87056,7 +87056,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "98-104",
+          "lines": "109-115",
           "snippet": "    /// True on the assistant record Claude Code fabricates in place of a failed API\n    /// call. Paired with `message.model == \"<synthetic>\"` it is the request\n    /// assembler's third drop arm ([`Record::delivery_override`]): the placeholder is\n    /// on disk and rendered to the human, never sent back to the model. Additive +\n    /// tolerant.\n    #[serde(default, rename = \"isApiErrorMessage\")]\n    pub is_api_error_message: Option<bool>,\n"
         },
         {
@@ -88211,7 +88211,7 @@
       "code": [
         {
           "path": "src/model/record.rs",
-          "lines": "148-153",
+          "lines": "159-164",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         },
         {
@@ -88441,7 +88441,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "148-153",
+          "lines": "159-164",
           "snippet": "    /// `last-prompt` (a metadata line, no uuid of its own): the uuid Claude Code's\n    /// loader starts its conversation-chain walk from, re-snapshotted with every write\n    /// batch. Read by [`crate::model::Chain`] as the leaf HINT; a `compact_boundary`\n    /// seen later in the file wipes it, exactly as the loader does. Additive + tolerant.\n    #[serde(default, rename = \"leafUuid\")]\n    pub leaf_uuid: Option<String>,"
         }
       ],
@@ -88860,12 +88860,12 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "166-169",
+          "lines": "177-180",
           "snippet": "    /// `summarizeMetadata` on a compaction SUMMARY record: `{messagesSummarized, direction,\n    /// userContext?}`. Claude Code writes it INSTEAD of `isVisibleInTranscriptOnly` (a genuine\n    /// either/or in the writer) when the compaction came from a `/rewind` summarize gesture, so\n    /// its presence is what separates the two summarize modes from an ordinary compaction."
         },
         {
           "path": "src/search/hit_facts.rs",
-          "lines": "55-58",
+          "lines": "56-59",
           "snippet": "/// The C-33 [`CompactionHit`] for a compaction BOUNDARY or SUMMARY record; `None` for anything\n/// else. The boundary hands over its `compactMetadata` verbatim (JSON keeps the full uuid lists\n/// the one-line excerpt only counts) plus the mode the per-file [`crate::model::SummarizeIndex`]\n/// paired to it; the summary hands over its own mode and the verbatim `direction`."
         }
       ],
@@ -89559,7 +89559,7 @@
         },
         {
           "path": "src/model/record.rs",
-          "lines": "113-114",
+          "lines": "124-125",
           "snippet": "    #[serde(default, rename = \"promptSource\")]\n    pub prompt_source: Option<String>,"
         }
       ],
@@ -91197,6 +91197,80 @@
           "observed": "The array has one reader and that reader has one caller, a hook-agent wrapper whose return is a deny; `Bash.checkPermissions` does not reach it. `--delete` occurs thirteen times and no occurrence is a removal pattern.",
           "rule": "one verdict per occurrence of the predicate; raw byte occurrences for the flag",
           "note": "Lands with the port, which is why it models rm and rmdir only."
+        }
+      ]
+    },
+    {
+      "id": "BASH-040",
+      "area": "bash-shell",
+      "behavior": "When a tool call does not run, the harness synthesises the user-side record and stamps a top-level `toolDenialKind` beside `toolUseResult` (the persisted field list is at @165936300). Four values are written: `user-rejected` and `interrupted` from one writer (@164580046), `cancelled` for a call moved to the background from the same writer, and `permission-rule` from a hook denial (@162939226). On the rejection path the `tool_result` block carries `is_error:true` and `toolUseResult` is the bare string `User rejected tool use` (@161462819) when the human typed nothing, or an `Error: ...` body carrying what they typed when they did. The classifier's REASON - the sentence naming which removal arm fired - is rendered into the prompt only and never reaches disk, so a transcript shows THAT a call was refused and never which reason tail fired.",
+      "depends": "csift models the field on `Record` and surfaces it on a tool-result hit as a `[denied: <kind>]` marker and a `denial_kind` JSON key, which is the whole on-disk answer to why a call did not run. Without it a rejected call is indistinguishable from any other errored result. It also bounds what the removal prediction can ever be checked against: the reason tail is not on disk, so a past hoist cannot be confirmed arm by arm from a transcript.",
+      "code": [
+        {
+          "path": "src/model/record.rs",
+          "lines": "106-107",
+          "snippet": "    #[serde(default, rename = \"toolDenialKind\")]\n    pub tool_denial_kind: Option<String>,"
+        },
+        {
+          "path": "src/search/render.rs",
+          "lines": "55-58",
+          "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
+        }
+      ],
+      "instrument": "Read the writer at @164580046, the persisted field list at @165936300, the hook-denial variant at @162939226 and the rejection constant at @161462819 in the verified build; then count the lines carrying `toolDenialKind` across every transcript under the projects root, grouped by value. Counting rule: one line per occurrence of the key, grouped by the value it carries.",
+      "located": {
+        "claude_code": "2.1.258",
+        "csift": "0.12.2",
+        "source": "AGENTS.md section 3.9"
+      },
+      "first_seen_claude_code": null,
+      "producer_trace": "complete",
+      "specimen": "observed",
+      "attribution": "end-to-end",
+      "open_legs": [],
+      "residue": [
+        "Two of the four values have no specimen locally: `cancelled` and `permission-rule` are zero of 47 observed lines, so their shape is read from the writer only."
+      ],
+      "producer_chain": [
+        {
+          "role": "writer",
+          "name": "the rejection record",
+          "offset": 164580046,
+          "excerpt": "return xe({content:[{type:\"tool_result\",content:h$(Hw),is_error:!0,tool_use_id:e}],toolUseResult:ZZ,toolDenialKind:\"user-rejected\",interruptedByShutdo",
+          "note": "the synthesised user record with the field on it"
+        },
+        {
+          "role": "gate",
+          "name": "the hook-denial variant",
+          "offset": 162939226,
+          "excerpt": "Pe=(ot)=>Ie(ot,{toolDenialKind:\"permission-rule\"}),De=(ot)=>",
+          "note": "the fourth value, written on a different path"
+        },
+        {
+          "role": "writer",
+          "name": "the persisted field list",
+          "offset": 165936300,
+          "excerpt": "oolUseResult:F,classifierMetaLines:Ge,hostClassifierContext:ot,toolDen",
+          "note": "the field reaches disk beside toolUseResult"
+        },
+        {
+          "role": "trigger",
+          "name": "the rejection constant",
+          "offset": 161462819,
+          "excerpt": "YS=\"The user doesn't want to take this action right now. STOP what you are doing and wait for the user to tell you how t",
+          "note": "the bare string the rejection path writes as toolUseResult"
+        }
+      ],
+      "checks": [
+        {
+          "claude_code": "2.1.258",
+          "csift": "0.12.2",
+          "date": "2026-09-11",
+          "verdict": "holds",
+          "instrument": "Read the four offsets above in the verified build, then scan every jsonl under the projects root for lines carrying the key and group them by value and by file.",
+          "observed": "47 lines carry the key across 27 files: 45 `user-rejected` and 2 `interrupted`, with no `cancelled` and no `permission-rule` locally. Beside the 45, `toolUseResult` is the bare `User rejected tool use` on 34 and an `Error: ...` body on the remaining 11.",
+          "rule": "one line per occurrence of the key, grouped by value; files counted by distinct path",
+          "note": "Lands with the record field and its two surfaces. The two unobserved values are recorded as residue rather than asserted from the corpus."
         }
       ]
     }
