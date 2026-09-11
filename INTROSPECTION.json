@@ -10259,7 +10259,7 @@
       "code": [
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "108-111",
+          "lines": "109-112",
           "snippet": "        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \\\n        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \\\n        hours/days is overwhelmingly \\\"parent session ended, nobody is coming back\\\", not \\\n        in-flight work: weigh `pending_since_utc` against now yourself; \\"
         }
       ],
@@ -68333,7 +68333,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "124",
+          "lines": "131",
           "snippet": "\\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\"
         },
         {
@@ -68343,7 +68343,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "123-129",
+          "lines": "130-136",
           "snippet": "        SEMANTICS: it answers \\\"what did the ORCHESTRATOR record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
         }
       ],

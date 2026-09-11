@@ -100,6 +100,7 @@ pub enum AgentKindFilter {
         workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
         started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
         depth, status, pending_tool_use_id, pending_tool_name, pending_classification, \
+        pending_reason, pending_checker, \
         pending_since_utc/_local, skipped_lines, fork_parent_last_uuid, \
         fork_context_length} (+ control_hint and routing_id on a teammate row, and only \
         there; the fork_* pair is non-null \
@@ -109,6 +110,12 @@ pub enum AgentKindFilter {
         abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \
         hours/days is overwhelmingly \"parent session ended, nobody is coming back\", not \
         in-flight work: weigh `pending_since_utc` against now yourself; \
+        WHY the classification reads as it does: `pending_reason` is the harness's own \
+        reason tail for a predicted hoist, or csift's note `removal target needs the \
+        filesystem state at the time` when the deciding arm resolves paths csift does \
+        not have, and `pending_checker` names the path, the checker and the Claude Code \
+        generation the prediction ran under (`gen2 assumed` when the record carries no \
+        version); both are null on a pending call these lexical layers do not model; \
         completed_utc/_local and duration are non-null ONLY when status is `completed`; \
         a frozen/running lane is NOT done, and its tail instant lives in \
         last_activity_utc/_local, which every timestamped lane carries (on a frozen lane \
